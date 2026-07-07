@@ -105,9 +105,7 @@ export const memoryEntriesFormationModule: FormationModule = {
       memoryId,
       content: properties.content as string,
       sourceType: toOptionalString(properties.source_type) as
-        | 'manual'
-        | 'agent'
-        | undefined,
+        'manual' | 'agent' | undefined,
     });
 
     log(

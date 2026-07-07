@@ -36,11 +36,7 @@ export const mapDocument = (
     metadata: parseMetadata(doc.metadata),
     tags: doc.tags ?? undefined,
     status: doc.status as
-      | 'pending'
-      | 'processing'
-      | 'ready'
-      | 'failed'
-      | undefined,
+      'pending' | 'processing' | 'ready' | 'failed' | undefined,
     createdAt: doc.createdAt,
     updatedAt: doc.updatedAt,
   };

@@ -10,7 +10,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -442,7 +442,7 @@ const renderIndexPage = (
 
 const main = () => {
   const raw = fs.readFileSync(FORMATIONS_YAML, 'utf-8');
-  const spec = yaml.load(raw) as OpenApiSpec;
+  const spec = load(raw) as OpenApiSpec;
   const schemas = spec.components?.schemas ?? {};
 
   // Canonical order from the ResourceDeclaration enum

@@ -94,8 +94,7 @@ export const initFormData = (
 };
 
 export type BodyBuildResult =
-  | { ok: true; body: JsonObject }
-  | { ok: false; error: string };
+  { ok: true; body: JsonObject } | { ok: false; error: string };
 
 type FieldConvertResult = { value: JsonValue } | { error: string };
 

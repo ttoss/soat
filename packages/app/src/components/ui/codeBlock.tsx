@@ -34,7 +34,7 @@ export const CodeBlock = ({
   return (
     <div
       className={cn(
-        'overflow-hidden rounded-lg border border-border font-mono shadow-sm',
+        'overflow-hidden rounded-lg border border-border font-mono shadow-xs',
         className
       )}
     >

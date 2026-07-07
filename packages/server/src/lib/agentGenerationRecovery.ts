@@ -167,8 +167,7 @@ export const recoverPendingFromDb = async (args: {
 }): Promise<PendingGeneration | undefined> => {
   const gen = await getGeneration({ publicId: args.generationId });
   const pendingState = gen?.metadata?.pendingState as
-    | PendingStateDb
-    | undefined;
+    PendingStateDb | undefined;
 
   if (!gen || !pendingState || gen.agentId !== args.agentId) {
     return undefined;

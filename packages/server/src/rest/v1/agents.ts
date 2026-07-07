@@ -76,8 +76,7 @@ const parseInlineToolDefinition = (
       mcp: coerceToJsonObject(mcp) as object | undefined,
       actions: Array.isArray(actions) ? (actions as string[]) : undefined,
       presetParameters: coerceToJsonObject(presetParameters) as
-        | object
-        | undefined,
+        object | undefined,
       pipeline: coerceToJsonObject(pipeline) as object | undefined,
       outputMapping: coerceToJsonObject(outputMapping) as object | undefined,
     };

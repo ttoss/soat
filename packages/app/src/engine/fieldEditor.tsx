@@ -38,7 +38,7 @@ const TextareaField = ({
       }}
       placeholder={placeholder}
       rows={4}
-      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
+      className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs placeholder:text-muted-foreground focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 font-mono"
     />
   );
 };
@@ -61,7 +61,7 @@ const SelectField = ({
       onChange={(e) => {
         return onChange(e.target.value);
       }}
-      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
     >
       <option value={''}>{'— select —'}</option>
       {options.map((opt) => {
@@ -107,7 +107,7 @@ const RefSelectField = ({
       onChange={(e) => {
         return onChange(e.target.value);
       }}
-      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
     >
       <option value={''}>{'— select —'}</option>
       {options.map((opt) => {
@@ -202,7 +202,7 @@ const MultiRefField = ({
         onChange={(e) => {
           if (e.target.value) setSelected([...selected, e.target.value]);
         }}
-        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-xs focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
       >
         <option value={''}>
           {available.length > 0 ? '— add —' : 'All options selected'}

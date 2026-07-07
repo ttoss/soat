@@ -30,8 +30,7 @@ export type ConverterFile = {
  * deliver the result later via the ingestion-callback endpoint).
  */
 export type ConverterOutcome =
-  | { status: 'ready'; pages: SourcePage[] }
-  | { status: 'pending' };
+  { status: 'ready'; pages: SourcePage[] } | { status: 'pending' };
 
 /**
  * A tool converter's `{ status: "pending" }` deferral, enriched with the

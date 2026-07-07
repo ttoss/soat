@@ -91,8 +91,7 @@ const findTraceId = async (
 ): Promise<number | null> => {
   if (!publicId) return null;
   return ((await db.Trace.findOne({ where: { publicId } }))?.id ?? null) as
-    | number
-    | null;
+    number | null;
 };
 
 const findFileId = async (
@@ -100,8 +99,7 @@ const findFileId = async (
 ): Promise<number | null> => {
   if (!publicId) return null;
   return ((await db.File.findOne({ where: { publicId } }))?.id ?? null) as
-    | number
-    | null;
+    number | null;
 };
 
 type CreateTraceArgs = {

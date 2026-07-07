@@ -137,8 +137,7 @@ export const webhooksFormationModule: FormationModule = {
       description: toNullableString(properties.description) ?? undefined,
       url: toOptionalString(properties.url) ?? undefined,
       events: (toNullableArray(properties.events) ?? undefined) as
-        | string[]
-        | undefined,
+        string[] | undefined,
     });
 
     log('updated webhook from formation: id=%s', physicalResourceId);

@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -56,7 +56,7 @@ const main = async () => {
 
   for (const file of specFiles) {
     const content = fs.readFileSync(file, 'utf-8');
-    const spec = yaml.load(content) as OpenApiSpec;
+    const spec = load(content) as OpenApiSpec;
 
     if (merged.servers?.length === 0 && spec.servers?.length) {
       merged.servers = spec.servers;

@@ -101,11 +101,9 @@ export const documentsFormationModule: FormationModule = {
       filename: toOptionalString(properties.filename) ?? undefined,
       title: toOptionalString(properties.title) ?? undefined,
       metadata: (toNullableObject(properties.metadata) ?? undefined) as
-        | Record<string, unknown>
-        | undefined,
+        Record<string, unknown> | undefined,
       tags: (toNullableObject(properties.tags) ?? undefined) as
-        | Record<string, string>
-        | undefined,
+        Record<string, string> | undefined,
     });
 
     log(

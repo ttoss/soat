@@ -19,8 +19,7 @@ type AgentRecord = {
 };
 
 export type ProvisionResult =
-  | { ok: true; agentId: string }
-  | { ok: false; error: string };
+  { ok: true; agentId: string } | { ok: false; error: string };
 
 const GUIDE_UNAVAILABLE =
   'The guide is unavailable for you. Ask an admin to grant agent and tool permissions in this project.';

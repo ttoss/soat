@@ -3,7 +3,7 @@ import * as path from 'node:path';
 import * as url from 'node:url';
 
 import createDebug from 'debug';
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 import type { ValidationError } from '../formationsTypes';
 import type { FieldSpec, SchemaFields } from '../openapiSchemaFields';
@@ -145,7 +145,7 @@ export const loadModuleSpec = (args: {
     specPath
   );
   const raw = fs.readFileSync(specPath, 'utf-8');
-  const spec = yaml.load(raw) as OpenApiSpec;
+  const spec = load(raw) as OpenApiSpec;
   const schema = spec.components?.schemas?.[args.schemaName];
 
   /* istanbul ignore next */

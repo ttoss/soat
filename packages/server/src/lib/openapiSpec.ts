@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import yaml from 'js-yaml';
+import { load } from 'js-yaml';
 
 import type { SchemaFields, SchemaWithProperties } from './openapiSchemaFields';
 import {
@@ -40,7 +40,7 @@ const getSpecDir = (): string => {
 
 const loadSpecFile = (filePath: string): SpecFile | null => {
   try {
-    return yaml.load(fs.readFileSync(filePath, 'utf-8')) as SpecFile;
+    return load(fs.readFileSync(filePath, 'utf-8')) as SpecFile;
   } catch {
     return null;
   }

@@ -815,8 +815,7 @@ export const resolveEphemeralAgentTool = async (args: {
     actions: args.definition.actions ?? null,
     presetParameters:
       (args.definition.presetParameters as
-        | Record<string, unknown>
-        | undefined) ?? null,
+        Record<string, unknown> | undefined) ?? null,
     outputMapping:
       (args.definition.outputMapping as Record<string, unknown> | undefined) ??
       null,
