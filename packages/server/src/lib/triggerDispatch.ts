@@ -258,26 +258,26 @@ const assertFireInputValid = async (args: {
   }
 };
 
+export type PreparedFiring = {
+  firing: InstanceType<(typeof db)['TriggerFiring']>;
+  trigger: InstanceType<(typeof db)['Trigger']>;
+  effectiveInput: Record<string, unknown>;
+  authHeader: string;
+};
+
 /**
- * Executes a trigger firing end to end and returns the terminal firing record.
- *
- * Pre-flight checks throw `DomainError` (surfaced as HTTP errors for a manual
- * fire, or handled before a `202` for a webhook fire): inactive trigger,
- * unavailable creator, revoked target-start permission, and invalid input.
- * Once the firing record exists, target-execution errors are *recorded* on the
- * firing (status `failed`) rather than thrown — a firing that reaches the target
- * always yields an auditable record.
+ * Runs the synchronous pre-flight for a firing and creates a `pending` firing
+ * record. Throws `DomainError` — surfaced as an HTTP error for a manual fire,
+ * or returned before a webhook fire's `202`: inactive trigger, unavailable
+ * creator, revoked target-start permission, invalid input. The returned handle
+ * is executed by {@link runFiringDispatch}.
  */
-export const fireTriggerNow = async (args: {
+export const prepareFiring = async (args: {
   triggerPublicId: string;
   source: string;
   fireInput?: Record<string, unknown> | null;
-}) => {
-  log(
-    'fireTriggerNow: trigger=%s source=%s',
-    args.triggerPublicId,
-    args.source
-  );
+}): Promise<PreparedFiring> => {
+  log('prepareFiring: trigger=%s source=%s', args.triggerPublicId, args.source);
 
   const trigger = await db.Trigger.findOne({
     where: { publicId: args.triggerPublicId },
@@ -315,7 +315,27 @@ export const fireTriggerNow = async (args: {
     input: effectiveInput,
   });
 
+  return { firing, trigger, effectiveInput, authHeader };
+};
+
+/**
+ * Executes a prepared firing against its target and finalizes the record. Once
+ * the firing record exists, target-execution errors are *recorded* (status
+ * `failed`) rather than thrown — a firing that reaches the target always yields
+ * an auditable record. Safe to run in the background (webhook/schedule) or
+ * awaited (manual).
+ */
+export const runFiringDispatch = async (
+  prepared: PreparedFiring
+): Promise<ReturnType<typeof mapTriggerFiring>> => {
+  const { firing, trigger, effectiveInput, authHeader } = prepared;
+
+  // Everything is guarded so this never rejects — callers can `void` it as a
+  // fire-and-forget background task (webhook/schedule) or await it (manual).
   try {
+    firing.status = 'running';
+    firing.startedAt = new Date();
+    await firing.save();
     const result = await dispatchToTarget({
       targetType: trigger.targetType as string,
       targetId: trigger.targetId as string,
@@ -325,12 +345,31 @@ export const fireTriggerNow = async (args: {
       authHeader,
     });
     await finalizeFiringSucceeded({ firing, result });
-    log('fireTriggerNow: firing=%s succeeded', firing.publicId);
+    log('runFiringDispatch: firing=%s succeeded', firing.publicId);
   } catch (error) {
     await finalizeFiringFailed({ firing, error: toErrorObject(error) });
-    log('fireTriggerNow: firing=%s failed %o', firing.publicId, error);
+    log('runFiringDispatch: firing=%s failed %o', firing.publicId, error);
   }
 
-  const finalized = await getFiringById({ internalId: firing.id as number });
-  return finalized ?? mapTriggerFiring(firing);
+  try {
+    const finalized = await getFiringById({ internalId: firing.id as number });
+    if (finalized) return finalized;
+  } catch {
+    // Fall back to the in-memory instance if the re-fetch fails.
+  }
+  return mapTriggerFiring(firing);
+};
+
+/**
+ * Fires a trigger synchronously (manual fire) and returns the terminal firing
+ * record. Webhook/schedule starters instead call {@link prepareFiring} then run
+ * {@link runFiringDispatch} in the background.
+ */
+export const fireTriggerNow = async (args: {
+  triggerPublicId: string;
+  source: string;
+  fireInput?: Record<string, unknown> | null;
+}) => {
+  const prepared = await prepareFiring(args);
+  return runFiringDispatch(prepared);
 };
