@@ -1,13 +1,26 @@
+import type { Server } from 'node:http';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import type { Tool } from 'ai';
+import { jsonSchema, tool } from 'ai';
+import { db } from 'src/db';
 import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
+import { buildModel } from 'src/lib/agentModel';
+// Statically imported (real `ai`, real DB) for the stub-server test below;
+// the doMock('ai') tests use the dynamic loadNonStreamModule instead.
+import { runNonStreamGeneration as runNonStreamGenerationReal } from 'src/lib/agentNonStreamGeneration';
 
 const loadNonStreamModule = async () => {
   return import('src/lib/agentNonStreamGeneration');
 };
 
-const loadHelpersModule = async () => {
-  return import('src/lib/agentGenerationHelpers');
-};
+// Real project/agent so buildCompletedGenerationResult's awaited saveTrace
+// (which looks up the agent by publicId) succeeds against the real DB — no
+// mocking of the trace/generation helpers needed.
+let realProjectId: number;
+let realProjectPublicId: string;
+let realAgentPublicId: string;
 
 const buildTypedAgent = () => {
   return {
@@ -21,12 +34,32 @@ const buildTypedAgent = () => {
     stepRules: [{ step: 1, toolChoice: { type: 'tool', toolName: 'forced' } }],
     boundaryPolicy: null,
     temperature: null,
-    project: { id: 1, publicId: 'prj_test' },
+    project: { id: realProjectId, publicId: realProjectPublicId },
     aiProvider: { publicId: 'aip_test' },
   } as never;
 };
 
 describe('agentNonStreamGeneration', () => {
+  beforeAll(async () => {
+    const project = await db.Project.create({ name: 'NonStreamGen Lib Test' });
+    realProjectId = project.id;
+    realProjectPublicId = project.publicId;
+
+    const aiProvider = await db.AiProvider.create({
+      projectId: project.id,
+      name: 'NonStream Provider',
+      provider: 'ollama',
+      defaultModel: 'mock-model',
+    });
+
+    const agent = await db.Agent.create({
+      projectId: project.id,
+      aiProviderId: aiProvider.id,
+      name: 'NonStream Agent',
+    });
+    realAgentPublicId = agent.publicId;
+  });
+
   afterEach(() => {
     jest.unmock('ai');
     jest.resetModules();
@@ -107,6 +140,10 @@ describe('agentNonStreamGeneration', () => {
   });
 
   test('runNonStreamGeneration returns requires_action result when pending client tools exist', async () => {
+    // A client tool is a resolvedTool with no `execute`; the real
+    // findPendingClientTools picks the returned tool call up and the real
+    // savePendingGeneration produces the requires_action result — no helper
+    // mocking, only the sanctioned `ai` stub controls the model output.
     jest.doMock('ai', () => {
       const actual = jest.requireActual('ai');
       return {
@@ -127,86 +164,21 @@ describe('agentNonStreamGeneration', () => {
     });
 
     const { runNonStreamGeneration } = await loadNonStreamModule();
-    const helpersModule = await loadHelpersModule();
-
-    const findPendingSpy = jest
-      .spyOn(helpersModule, 'findPendingClientTools')
-      .mockReturnValue([{ toolCallId: 'tc_1', toolName: 'client', input: {} }]);
-    const savePendingSpy = jest
-      .spyOn(helpersModule, 'savePendingGeneration')
-      .mockReturnValue({
-        id: 'gen_1',
-        traceId: 'trc_1',
-        status: 'requires_action',
-        requiredAction: {
-          type: 'submit_tool_outputs',
-          toolCalls: [{ id: 'tc_1', toolName: 'client', args: {} }],
-        },
-      });
 
     const result = await runNonStreamGeneration({
       model: {} as never,
       allMessages: [{ role: 'user', content: 'hi' }],
       resolvedTools: { client: {} as Tool },
       typedAgent: buildTypedAgent(),
-      generationId: 'gen_1',
-      traceId: 'trc_1',
-      agentId: 'agt_1',
+      generationId: 'gen_nonstream_ra',
+      traceId: 'trc_nonstream_ra',
+      agentId: realAgentPublicId,
     });
 
-    expect(findPendingSpy).toHaveBeenCalled();
-    expect(savePendingSpy).toHaveBeenCalled();
     expect(result.status).toBe('requires_action');
-  });
-
-  test('runNonStreamGeneration falls back to no-tools generation when tool call fails', async () => {
-    jest.doMock('ai', () => {
-      const actual = jest.requireActual('ai');
-      const mockedGenerateText = jest
-        .fn()
-        .mockRejectedValueOnce(new Error('malformed tool xml'))
-        .mockResolvedValueOnce({
-          steps: [],
-          response: { modelId: 'fallback-model' },
-          text: 'fallback answer',
-          finishReason: 'stop',
-        });
-
-      return {
-        ...actual,
-        generateText: mockedGenerateText,
-      };
-    });
-
-    const { runNonStreamGeneration } = await loadNonStreamModule();
-    const helpersModule = await loadHelpersModule();
-
-    jest.spyOn(helpersModule, 'findPendingClientTools').mockReturnValue([]);
-    const completedSpy = jest
-      .spyOn(helpersModule, 'buildCompletedGenerationResult')
-      .mockResolvedValue({
-        id: 'gen_2',
-        traceId: 'trc_2',
-        status: 'completed',
-        output: {
-          model: 'fallback-model',
-          content: 'fallback answer',
-          finishReason: 'stop',
-        },
-      });
-
-    const result = await runNonStreamGeneration({
-      model: {} as never,
-      allMessages: [{ role: 'user', content: 'hi' }],
-      resolvedTools: { client: {} as Tool },
-      typedAgent: buildTypedAgent(),
-      generationId: 'gen_2',
-      traceId: 'trc_2',
-      agentId: 'agt_2',
-    });
-
-    expect(completedSpy).toHaveBeenCalled();
-    expect(result.status).toBe('completed');
+    expect(result.requiredAction?.toolCalls).toEqual([
+      { id: 'tc_1', toolName: 'client', args: {} },
+    ]);
   });
 
   test('runNonStreamGeneration throws when no-tools generation fails', async () => {
@@ -374,5 +346,137 @@ describe('agentNonStreamGeneration', () => {
         finishReason: 'stop',
       },
     });
+  });
+});
+
+// Exercises runNonStreamGeneration's real tool-failure fallback (the
+// with-tools call fails, it retries without tools and completes) end-to-end:
+// real `generateText` against a local OpenAI-compatible stub, real DB, real
+// buildCompletedGenerationResult -> saveTrace. No `ai` mock and no
+// resetModules here (both would sever the real DB), so this uses the
+// statically-imported runNonStreamGeneration. This is the same local-fake-
+// server pattern discussionCompletion.test.ts uses.
+describe('runNonStreamGeneration tool-failure fallback (stub server)', () => {
+  let stubServer: Server;
+  let stubBaseUrl: string;
+  let withToolsRequestCount = 0;
+  let projectDbId: number;
+  let projectPublicId: string;
+  let agentPublicId: string;
+
+  const startStubServer = async (): Promise<string> => {
+    stubServer = createServer((req, res) => {
+      let raw = '';
+      req.on('data', (chunk) => {
+        raw += chunk;
+      });
+      req.on('end', () => {
+        const body = JSON.parse(raw || '{}') as { tools?: unknown[] };
+        // The first (with-tools) call fails; the no-tools retry succeeds.
+        if (Array.isArray(body.tools) && body.tools.length > 0) {
+          withToolsRequestCount += 1;
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'tool call failed' } }));
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            id: 'chatcmpl-fallback',
+            object: 'chat.completion',
+            created: 0,
+            model: 'mock-model',
+            choices: [
+              {
+                index: 0,
+                message: { role: 'assistant', content: 'fallback answer' },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+          })
+        );
+      });
+    });
+    await new Promise<void>((resolve) => {
+      stubServer.listen(0, '127.0.0.1', resolve);
+    });
+    const { port } = stubServer.address() as AddressInfo;
+    return `http://127.0.0.1:${port}`;
+  };
+
+  beforeAll(async () => {
+    stubBaseUrl = await startStubServer();
+
+    const project = await db.Project.create({
+      name: 'NonStream Fallback Project',
+    });
+    projectDbId = project.id;
+    projectPublicId = project.publicId;
+
+    const aiProvider = await db.AiProvider.create({
+      projectId: project.id,
+      name: 'Fallback Provider',
+      provider: 'ollama',
+      defaultModel: 'mock-model',
+      baseUrl: stubBaseUrl,
+    });
+
+    const agent = await db.Agent.create({
+      projectId: project.id,
+      aiProviderId: aiProvider.id,
+      name: 'Fallback Agent',
+    });
+    agentPublicId = agent.publicId;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      stubServer.close((err) => {
+        return err ? reject(err) : resolve();
+      });
+    });
+  });
+
+  test('falls back to a no-tools generation and completes when the tool call fails', async () => {
+    const model = buildModel({
+      provider: 'ollama',
+      secretValue: null,
+      model: 'mock-model',
+      baseUrl: stubBaseUrl,
+    });
+
+    const result = await runNonStreamGenerationReal({
+      model,
+      allMessages: [{ role: 'user', content: 'hi' }],
+      resolvedTools: {
+        lookup: tool({
+          description: 'A client tool with no execute',
+          inputSchema: jsonSchema({ type: 'object', properties: {} }),
+        }) as Tool,
+      },
+      typedAgent: {
+        instructions: null,
+        model: 'mock-model',
+        toolIds: null,
+        maxSteps: 3,
+        toolChoice: 'auto',
+        stopConditions: null,
+        activeToolIds: null,
+        stepRules: null,
+        boundaryPolicy: null,
+        temperature: null,
+        outputSchema: null,
+        project: { id: projectDbId, publicId: projectPublicId },
+        aiProvider: { publicId: 'aip_fallback' },
+      } as never,
+      generationId: 'gen_nonstream_fallback',
+      traceId: 'trc_nonstream_fallback',
+      agentId: agentPublicId,
+    });
+
+    expect(withToolsRequestCount).toBeGreaterThan(0);
+    expect(result.status).toBe('completed');
+    expect(result.output?.content).toBe('fallback answer');
   });
 });
