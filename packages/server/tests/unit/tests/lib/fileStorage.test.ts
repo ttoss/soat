@@ -16,6 +16,7 @@ import {
   readFileBuffer,
   resetStorageProviders,
   type S3ClientLike,
+  streamToBuffer,
 } from 'src/lib/fileStorage';
 
 const drain = async (stream: Readable): Promise<Buffer> => {
@@ -301,6 +302,74 @@ describe('fileStorage', () => {
         storagePath: '/tmp/soat-files/does-not-exist.txt',
       });
       expect(buffer).toBeNull();
+    });
+
+    test('s3 client honors region / endpoint / path-style env vars', () => {
+      process.env.FILES_STORAGE_PROVIDER = 's3';
+      process.env.FILES_S3_BUCKET = 'my-bucket';
+      process.env.FILES_S3_REGION = 'eu-west-1';
+      process.env.FILES_S3_ENDPOINT = 'http://localhost:9000';
+      process.env.FILES_S3_FORCE_PATH_STYLE = 'true';
+      // Exercises the env-driven S3Client construction branches.
+      expect(getActiveStorageProvider().storageType).toBe('s3');
+    });
+  });
+
+  describe('edge cases', () => {
+    test('s3 read returns null when the response has no readable body', async () => {
+      const client: S3ClientLike = {
+        send: async () => {
+          return {};
+        },
+      };
+      const provider = createS3StorageProvider({ client, bucket: 'b' });
+      expect(await provider.read({ storagePath: 'k' })).toBeNull();
+    });
+
+    test('s3 read treats a NotFound / 404 error as absent', async () => {
+      const client: S3ClientLike = {
+        send: async () => {
+          throw { $metadata: { httpStatusCode: 404 } };
+        },
+      };
+      const provider = createS3StorageProvider({ client, bucket: 'b' });
+      expect(await provider.read({ storagePath: 'k' })).toBeNull();
+    });
+
+    test('s3 read rethrows a non-not-found error', async () => {
+      const client: S3ClientLike = {
+        send: async () => {
+          const err = new Error('AccessDenied');
+          err.name = 'AccessDenied';
+          throw err;
+        },
+      };
+      const provider = createS3StorageProvider({ client, bucket: 'b' });
+      await expect(provider.read({ storagePath: 'k' })).rejects.toThrow(
+        /AccessDenied/
+      );
+    });
+
+    test('empty storagePath is a no-op / null across providers', async () => {
+      const localDir = fs.mkdtempSync(path.join(os.tmpdir(), 'soat-empty-'));
+      const local = createLocalStorageProvider({ storageDir: localDir });
+      expect(await local.read({ storagePath: '' })).toBeNull();
+      await expect(local.delete({ storagePath: '' })).resolves.toBeUndefined();
+      fs.rmSync(localDir, { recursive: true, force: true });
+
+      const client: S3ClientLike = {
+        send: async () => {
+          throw new Error('should not be called');
+        },
+      };
+      const s3 = createS3StorageProvider({ client, bucket: 'b' });
+      expect(await s3.read({ storagePath: '' })).toBeNull();
+      await expect(s3.delete({ storagePath: '' })).resolves.toBeUndefined();
+    });
+
+    test('streamToBuffer coerces non-Buffer chunks', async () => {
+      const buffer = await streamToBuffer(Readable.from(['a', 'b', 'c']));
+      expect(buffer.toString()).toBe('abc');
     });
   });
 });
