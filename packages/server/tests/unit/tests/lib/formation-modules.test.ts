@@ -277,6 +277,21 @@ const CASES: RoundTripCase[] = [
     },
   },
   {
+    resourceType: 'policy',
+    build: (seed) => {
+      const document = {
+        statement: [{ effect: 'Allow', action: ['tools:ListTools'] }],
+      };
+      return {
+        create: { name: `Pol ${seed}`, description: 'a policy', document },
+        expectRead: { name: `Pol ${seed}`, description: 'a policy' },
+        // Policy update revalidates the document, so it must be resent.
+        update: { name: `Pol ${seed} updated`, document },
+        expectAfterUpdate: { name: `Pol ${seed} updated` },
+      };
+    },
+  },
+  {
     resourceType: 'memory_entry',
     build: () => {
       return {
