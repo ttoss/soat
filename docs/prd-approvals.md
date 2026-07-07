@@ -60,11 +60,17 @@ not log lines.
   expired approvals, and an explicit `file-exception` operation for agents
   and orchestration nodes
 - Severity levels (`info` \| `warning` \| `critical`); resolution lifecycle
-  (`open → acknowledged → resolved`) with notes
-- Webhook events: `approvals.created`, `approvals.expired`,
-  `exceptions.created` — payload includes severity so receivers can fan
-  `critical` items into an operator channel while routine items go to the
-  product queue
+  (`open → acknowledged → resolved`) with notes. The single
+  `POST /exceptions/{id}/resolve` endpoint drives every transition via a
+  `{ status: "acknowledged" | "resolved", note?: string }` body; `open →
+  resolved` directly is allowed (acknowledge is optional), and there is no
+  reopen path in v1
+- Webhook events: `approvals.created`, `approvals.resolved`,
+  `approvals.expired`, `exceptions.created`, `exceptions.resolved` — the
+  `exceptions.*` payloads include severity so receivers can fan `critical`
+  items into an operator channel while routine items go to the product queue,
+  and the `*.resolved` events let receivers clear a notification or drive
+  downstream automation without polling
 
 **Unlocks:** Hybrid alert routing (customer queue + operator escalation)
 without polling.
@@ -79,9 +85,16 @@ stays auditable.
 - `ActivityEntry` model: one entry per autonomously executed action
   (guardrail class B), per approval resolution, per exception, per schedule
   fire — a project-scoped, append-only feed
-- `GET /api/v1/activity` with cursor pagination and type/severity filters
+- `GET /api/v1/activity` with cursor pagination and a `kind` filter. Cursor
+  (rather than the `limit`/`offset` the other list endpoints use) is a
+  deliberate deviation: an append-only feed takes concurrent inserts at the
+  head, and offset paging would skip or double-count rows as the feed grows
+  under the reader. `ActivityEntry` has no `severity` of its own — severity
+  lives on the linked exception, reachable via `ref_id`
 - Entries link back to their run, node, agent, and (where applicable) the
   guardrail policy version that allowed the action
+- Retention: the feed is unbounded and append-only in v1; a retention/rollup
+  policy is explicitly deferred (call it out rather than let it grow silently)
 
 **Unlocks:** The "what did the agents do today" surface — thin clients render
 the feed directly from REST/MCP.
@@ -125,6 +138,12 @@ sweeper resolves overdue items as `expired` (routing the run down its
 `on_expired` edge), and the execution path re-checks expiry so a race can
 never execute an expired action.
 
+Resolution is single-shot regardless of the reason: only a `pending` item can
+be resolved. Any resolve against an item already in a terminal state
+(`approved` \| `rejected` \| `expired` \| `superseded`) returns `409`, so two
+humans racing to approve — or a human approving an item the sweeper just
+expired — resolves deterministically to the first writer.
+
 ### Rejection Reasons Feed Learning
 
 Rejecting requires a reason; editing-then-approving preserves the diff. Both
@@ -145,6 +164,10 @@ orchestration node fields):
 | `reasoning`        | object \| null  | Optional JSON Logic mapping resolved into the item's `reasoning`              |
 | `evidence`         | object \| null  | Optional JSON Logic mapping resolved into the item's `evidence`               |
 | `predicted_impact` | object \| null  | Optional JSON Logic mapping resolved into the item's `predicted_impact`       |
+
+**Required properties:** `tool_id`, `arguments`, and `expires_in` are required;
+the rest are optional. `expires_in` has no default — a template must set it
+explicitly, so no approval item is ever emitted without a hard expiry gate.
 
 **Snapshot semantics:** all mappings are resolved against the run state and
 frozen onto the `ApprovalItem` at emit time, together with provenance
@@ -187,16 +210,35 @@ consume via `input_mapping` (snake_case, like every run/REST payload):
   proposed action (edited args if present), and `result` carries the tool
   output; `null` on `rejected`/`expired`
 
+**Execution timing:** the `POST /approve` request only records the decision
+(status → `approved`) and re-enqueues the run; it returns immediately and does
+**not** run the tool inside the HTTP request. The proposed action executes when
+the scheduler next resumes the run, so `result` is a property of run/node state,
+not of the approve response — an approve returns before any tool output exists.
+This keeps arbitrary tool latency out of the request path and gives the action
+the run's normal retry and tracing machinery.
+
+**Execution failure:** if the approved action fails, it is retried under the
+node's ordinary retry policy. On final failure the node follows the same path
+any failed node does — a `run_failed` `ExceptionItem` is filed and the run ends
+unless an edge handles the failure. An approval that was resolved `approved` is
+never re-opened; the failure is an exception, not a re-decision.
+
 ### Edited Args Are Re-Validated and Re-Classified
 
 On edit-then-approve, the edited arguments are (1) re-validated against the
 tool's input schema and (2) re-classified by the guardrail policy
 ([prd-guardrails.md](./prd-guardrails.md)) exactly as a fresh proposal would
 be. If the edited args classify to a **higher** action class than the original
-proposal, the item cannot be resolved as-is — the resolve returns `409` and a
-**new** approval item is created for the edited proposal. Rationale: without
+proposal, the item cannot be resolved as-is — the resolve returns `409`, the
+original item transitions to `superseded`, and a **new** `pending` approval
+item is created for the edited proposal with the run re-parked on it. The `409`
+body carries the new item's ID (also stored as `superseded_by` on the original)
+so the caller can pick up the fresh decision. Rationale: without
 re-classification, editing an open item would be an approval-time privilege
-escalation path around the classifier.
+escalation path around the classifier; superseding (rather than mutating the
+open item in place) keeps every proposal a discrete, auditable record and gives
+the run exactly one live item to wait on.
 
 ### Who May Resolve (v1)
 
@@ -206,11 +248,40 @@ targeting or assignment. This is deliberate: the guardrail policy decides
 *what* needs a human, and the existing project policy layer decides *who*
 counts as one — no new authorization concept until real demand.
 
+**Resolution requires a user principal.** The resolve endpoints
+(`/approve`, `/reject`) reject API-key authentication with `403` — only a
+logged-in user may resolve. Without this, an agent whose project key carried
+`approvals:ResolveApproval` could approve its own class-C proposals through the
+MCP `approve-approval` tool, silently defeating the human-in-the-loop gate the
+guardrail policy routed the action into. `approvals:ResolveApproval` must
+therefore never be interpreted as an agent-grantable capability; the human seam
+is enforced at the transport layer, not left to policy hygiene. (v1 does allow
+the same user who initiated a run to approve that run's proposals — self-review
+across users is a Phase 4 `approver_policy` concern, not a v1 gate.)
+
 Targeting/assignment is a listed future phase
 ([Phase 4](#phase-4--approver-targeting--assignment--future)): an optional
 `approver_policy` (policy ref that the resolver must additionally satisfy) or
 an `assignees` list on the `approval` node, stamped onto the item at emit
 time and enforced at resolution.
+
+### Origination: Orchestration Runs and Direct Agent Calls
+
+An approval item has two origination paths, which is why `run_id` / `node_id`
+are nullable:
+
+- **Orchestration run** — an `approval` node emits the item; the resolution
+  re-enqueues the parked run and its decision output flows to downstream nodes
+  as described above. This is the path Phase 1 delivers end-to-end.
+- **Direct agent tool call** — the guardrail classifier
+  ([prd-guardrails.md](./prd-guardrails.md)) routes a class-C tool call from an
+  agent that is **not** running inside an orchestration. Here `run_id` /
+  `node_id` are `null`; on `approved`, the agent's generation resumes through
+  the existing tool-outputs mechanism (the same `requires_action` →
+  tool-outputs seam agent generations already use), not the scheduler. On
+  `rejected` / `expired`, the tool call is reported back to the agent as a
+  denied/expired result. The item's REST/MCP surface and resolution rules are
+  identical across both paths; only the resume mechanism differs.
 
 ## Data Model
 
@@ -220,7 +291,7 @@ time and enforced at resolution.
 | -------------------- | -------------- | ------------------------------------------------------------------ |
 | `id`                 | string         | Public ID (`apr_` prefix)                                          |
 | `project_id`         | string         | Owning project                                                     |
-| `status`             | string         | `pending` \| `approved` \| `rejected` \| `expired`                 |
+| `status`             | string         | `pending` \| `approved` \| `rejected` \| `expired` \| `superseded` |
 | `proposed_action`    | object         | `{ tool_id, arguments }`                                           |
 | `reasoning`          | string \| null | Why the agent proposes this                                        |
 | `evidence`           | object \| null | Structured supporting data                                         |
@@ -233,6 +304,7 @@ time and enforced at resolution.
 | `resolved_by`        | string \| null | User who resolved                                                  |
 | `resolution_reason`  | string \| null | Required on `rejected`                                             |
 | `edited_arguments`   | object \| null | Set on edit-then-approve; original preserved in `proposed_action`  |
+| `superseded_by`      | string \| null | Set when an edit escalated the action class; points at the replacement `apr_` item |
 | `created_at` / `updated_at` | string  |                                                                    |
 
 ### ExceptionItem
@@ -244,7 +316,8 @@ time and enforced at resolution.
 | `status`      | string         | `open` \| `acknowledged` \| `resolved`                  |
 | `severity`    | string         | `info` \| `warning` \| `critical`                       |
 | `kind`        | string         | `run_failed` \| `guardrail_tripwire` \| `approval_expired` \| `manual` |
-| `title` / `detail` | string    | Human-readable description + structured detail          |
+| `title`       | string         | Human-readable one-line description                     |
+| `detail`      | object \| null | Structured detail payload                               |
 | `run_id` / `node_id` / `agent_id` | string \| null | Provenance                          |
 | `resolved_by` / `resolution_note` | string \| null | Resolution audit                    |
 | `created_at` / `updated_at` | string |                                                        |
@@ -273,6 +346,7 @@ Indexes: `(project_id, status, expires_at)` on ApprovalItem;
 | `approvals:GetApproval`           | `GET /api/v1/approvals/{approval_id}`                |
 | `approvals:ResolveApproval`       | `POST /api/v1/approvals/{approval_id}/approve` and `/reject` |
 | `exceptions:ListExceptions`       | `GET /api/v1/exceptions`                           |
+| `exceptions:GetException`         | `GET /api/v1/exceptions/{exception_id}`              |
 | `exceptions:ResolveException`     | `POST /api/v1/exceptions/{exception_id}/resolve`     |
 | `activity:ListActivity`           | `GET /api/v1/activity`                             |
 
@@ -288,10 +362,15 @@ routing), not via a public create endpoint.
 | POST   | `/api/v1/approvals/{approval_id}/approve`    | Approve; optional `arguments` for edit-then-approve (re-validated + re-classified) |
 | POST   | `/api/v1/approvals/{approval_id}/reject`     | Reject; `reason` required                             |
 | GET    | `/api/v1/exceptions`                       | List/filter (`status`, `severity`)                    |
-| POST   | `/api/v1/exceptions/{exception_id}/resolve`  | Acknowledge/resolve with a note                       |
+| GET    | `/api/v1/exceptions/{exception_id}`          | Get one item with full detail                         |
+| POST   | `/api/v1/exceptions/{exception_id}/resolve`  | Move through the lifecycle: `{ status, note? }`       |
 | GET    | `/api/v1/activity`                         | Project activity feed, cursor-paginated               |
 
-MCP tools (`list-approvals`, `approve-approval`, `reject-approval`,
-`list-exceptions`, `resolve-exception`, `list-activity`) derive automatically
-from the OpenAPI spec — external assistants get the same queue surface as the
-product UI.
+MCP tools (`list-approvals`, `get-approval`, `approve-approval`,
+`reject-approval`, `list-exceptions`, `get-exception`, `resolve-exception`,
+`list-activity`) derive automatically from the OpenAPI spec — the `get-*` tools
+follow from the `GET /{id}` endpoints, so external assistants get the same queue
+surface as the product UI. Note `approve-approval`/`reject-approval` are still
+gated to user principals server-side (see
+[Who May Resolve](#who-may-resolve-v1)), so an agent seeing the tool cannot use
+it to self-approve.
