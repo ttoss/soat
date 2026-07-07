@@ -2354,6 +2354,170 @@ $SOAT_CLI delete-webhook --webhook-id "$WEBHOOK_ID"
 echo "Webhook deleted."
 echo "Webhooks coverage: OK"
 
+# ── Triggers ──────────────────────────────────────────────────────────────
+
+echo ""
+echo "=== Triggers ==="
+
+# A dedicated orchestration target: a single transform node runs synchronously,
+# so a manual fire reaches a terminal state without any LLM/external boundary.
+echo "--- Creating trigger target orchestration ---"
+TRIGGER_ORCH_RESP=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-trigger-orchestration" \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"cycle"},"output_mapping":{"result":"state.cycle"}}]' \
+  --edges '[]')
+TRIGGER_ORCH_ID=$(printf '%s\n' "$TRIGGER_ORCH_RESP" | jq -r '.id')
+if [ -z "$TRIGGER_ORCH_ID" ] || [ "$TRIGGER_ORCH_ID" = "null" ]; then
+  echo "ERROR: Failed to create trigger target orchestration" >&2
+  printf '%s\n' "$TRIGGER_ORCH_RESP" >&2
+  exit 1
+fi
+echo "Trigger target orchestration: $TRIGGER_ORCH_ID"
+
+# Create a manual trigger bound to the orchestration
+echo "--- Creating manual trigger ---"
+TRIGGER_CREATE_RESP=$($SOAT_CLI create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-manual-trigger" \
+  --type manual \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID" \
+  --input '{"cycle":"daily"}')
+TRIGGER_ID=$(printf '%s\n' "$TRIGGER_CREATE_RESP" | jq -r '.id')
+if [ -z "$TRIGGER_ID" ] || [ "$TRIGGER_ID" = "null" ]; then
+  echo "ERROR: Failed to create trigger" >&2
+  printf '%s\n' "$TRIGGER_CREATE_RESP" >&2
+  exit 1
+fi
+echo "Trigger created: $TRIGGER_ID"
+
+# List triggers
+echo "--- Listing triggers ---"
+TRIGGER_LIST_RESP=$($SOAT_CLI list-triggers --project-id "$PROJECT_PUBLIC_ID")
+if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+  echo "ERROR: list-triggers did not include the created trigger" >&2
+  printf '%s\n' "$TRIGGER_LIST_RESP" >&2
+  exit 1
+fi
+echo "Triggers listed."
+
+# Get trigger
+echo "--- Getting trigger ---"
+TRIGGER_GET_RESP=$($SOAT_CLI get-trigger --trigger-id "$TRIGGER_ID")
+if ! printf '%s\n' "$TRIGGER_GET_RESP" | jq -e --arg id "$TRIGGER_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: get-trigger returned an unexpected payload" >&2
+  printf '%s\n' "$TRIGGER_GET_RESP" >&2
+  exit 1
+fi
+echo "Trigger retrieved."
+
+# Update trigger
+echo "--- Updating trigger ---"
+TRIGGER_UPDATE_RESP=$($SOAT_CLI update-trigger --trigger-id "$TRIGGER_ID" \
+  --name "smoke-manual-trigger-updated")
+if ! printf '%s\n' "$TRIGGER_UPDATE_RESP" | jq -e '.name == "smoke-manual-trigger-updated"' >/dev/null 2>&1; then
+  echo "ERROR: update-trigger did not persist the new name" >&2
+  printf '%s\n' "$TRIGGER_UPDATE_RESP" >&2
+  exit 1
+fi
+echo "Trigger updated."
+
+# Fire trigger (synchronous; the orchestration target runs to a terminal state)
+echo "--- Firing trigger ---"
+TRIGGER_FIRE_RESP=$($SOAT_CLI fire-trigger --trigger-id "$TRIGGER_ID" \
+  --input '{"cycle":"smoke"}')
+FIRING_ID=$(printf '%s\n' "$TRIGGER_FIRE_RESP" | jq -r '.id')
+if [ -z "$FIRING_ID" ] || [ "$FIRING_ID" = "null" ]; then
+  echo "ERROR: fire-trigger did not return a firing record" >&2
+  printf '%s\n' "$TRIGGER_FIRE_RESP" >&2
+  exit 1
+fi
+FIRING_STATUS=$(printf '%s\n' "$TRIGGER_FIRE_RESP" | jq -r '.status')
+if [ "$FIRING_STATUS" != "succeeded" ] && [ "$FIRING_STATUS" != "failed" ]; then
+  echo "ERROR: firing did not reach a terminal status (got '$FIRING_STATUS')" >&2
+  printf '%s\n' "$TRIGGER_FIRE_RESP" >&2
+  exit 1
+fi
+echo "Trigger fired: $FIRING_ID ($FIRING_STATUS)"
+
+# List firings
+echo "--- Listing trigger firings ---"
+FIRINGS_RESP=$($SOAT_CLI list-trigger-firings --trigger-id "$TRIGGER_ID")
+if ! printf '%s\n' "$FIRINGS_RESP" | jq -e '((type == "array") or (type == "object" and (.data | type == "array")))' >/dev/null 2>&1; then
+  echo "ERROR: list-trigger-firings did not return firings" >&2
+  printf '%s\n' "$FIRINGS_RESP" >&2
+  exit 1
+fi
+echo "Trigger firings listed."
+
+# Get firing
+echo "--- Getting trigger firing ---"
+FIRING_GET_RESP=$($SOAT_CLI get-trigger-firing --firing-id "$FIRING_ID")
+if ! printf '%s\n' "$FIRING_GET_RESP" | jq -e --arg id "$FIRING_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: get-trigger-firing returned an unexpected payload" >&2
+  printf '%s\n' "$FIRING_GET_RESP" >&2
+  exit 1
+fi
+echo "Trigger firing retrieved."
+
+# Webhook trigger: secret get + rotate (webhook triggers get a signing secret)
+echo "--- Creating webhook trigger ---"
+WEBHOOK_TRIGGER_RESP=$($SOAT_CLI create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-webhook-trigger" \
+  --type webhook \
+  --target-type orchestration \
+  --target-id "$TRIGGER_ORCH_ID")
+WEBHOOK_TRIGGER_ID=$(printf '%s\n' "$WEBHOOK_TRIGGER_RESP" | jq -r '.id')
+WEBHOOK_TRIGGER_SECRET=$(printf '%s\n' "$WEBHOOK_TRIGGER_RESP" | jq -r '.secret')
+if [ -z "$WEBHOOK_TRIGGER_ID" ] || [ "$WEBHOOK_TRIGGER_ID" = "null" ]; then
+  echo "ERROR: Failed to create webhook trigger" >&2
+  printf '%s\n' "$WEBHOOK_TRIGGER_RESP" >&2
+  exit 1
+fi
+if [ -z "$WEBHOOK_TRIGGER_SECRET" ] || [ "$WEBHOOK_TRIGGER_SECRET" = "null" ]; then
+  echo "ERROR: webhook trigger create did not return a secret" >&2
+  printf '%s\n' "$WEBHOOK_TRIGGER_RESP" >&2
+  exit 1
+fi
+echo "Webhook trigger created: $WEBHOOK_TRIGGER_ID"
+
+echo "--- Getting webhook trigger secret ---"
+TRIGGER_SECRET_RESP=$($SOAT_CLI get-trigger-secret --trigger-id "$WEBHOOK_TRIGGER_ID")
+if ! printf '%s\n' "$TRIGGER_SECRET_RESP" | jq -e '.secret | type == "string"' >/dev/null 2>&1; then
+  echo "ERROR: get-trigger-secret did not return a secret" >&2
+  printf '%s\n' "$TRIGGER_SECRET_RESP" >&2
+  exit 1
+fi
+echo "Webhook trigger secret retrieved."
+
+echo "--- Rotating webhook trigger secret ---"
+TRIGGER_ROTATE_RESP=$($SOAT_CLI rotate-trigger-secret --trigger-id "$WEBHOOK_TRIGGER_ID")
+ROTATED_SECRET=$(printf '%s\n' "$TRIGGER_ROTATE_RESP" | jq -r '.secret')
+if [ -z "$ROTATED_SECRET" ] || [ "$ROTATED_SECRET" = "null" ]; then
+  echo "ERROR: rotate-trigger-secret did not return a new secret" >&2
+  printf '%s\n' "$TRIGGER_ROTATE_RESP" >&2
+  exit 1
+fi
+if [ "$ROTATED_SECRET" = "$WEBHOOK_TRIGGER_SECRET" ]; then
+  echo "ERROR: rotate-trigger-secret returned the same secret" >&2
+  exit 1
+fi
+echo "Webhook trigger secret rotated."
+
+# Guard: only webhook triggers have a secret
+echo "--- Verifying a manual trigger has no secret ---"
+expect_cli_error_status 400 get-trigger-secret --trigger-id "$TRIGGER_ID"
+echo "Manual trigger secret correctly rejected."
+
+# Delete triggers
+echo "--- Deleting triggers ---"
+$SOAT_CLI delete-trigger --trigger-id "$WEBHOOK_TRIGGER_ID"
+$SOAT_CLI delete-trigger --trigger-id "$TRIGGER_ID"
+echo "Triggers deleted."
+echo "Triggers coverage: OK"
+
 # ── Agent Formations ──────────────────────────────────────────────────────────
 
 echo ""
