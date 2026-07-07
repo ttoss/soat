@@ -235,8 +235,10 @@ consume via `input_mapping` (snake_case, like every run/REST payload):
 
 ## Example
 
-An `approval` node inside an orchestration, with explicit `rejected` and
-`expired` edges (the unlabeled edge to `charge` is the `approved` path):
+An `approval` node inside an orchestration. The node **executes `tool_refund`
+itself** when approved — its output lands in `gate.result` — so there is no
+separate tool node; downstream nodes just consume the result. The unlabeled
+edge is the `approved` path; `rejected` and `expired` are routed explicitly:
 
 <Tabs groupId="client">
 <TabItem value="sdk" label="TypeScript SDK">
@@ -262,16 +264,18 @@ const { data, error } = await soat.orchestrations.createOrchestration({
           reasoning: { var: 'refund.reason' },
         },
       },
+      // Approved: the refund already ran inside `gate`; just confirm it.
       {
-        id: 'charge',
-        type: 'tool',
-        tool_id: 'tool_refund',
-        input_mapping: { amount: { var: 'gate.result.amount' } },
+        id: 'notify_done',
+        type: 'agent',
+        agent_id: 'agent_xyz',
+        input_mapping: { result: { var: 'gate.result' } },
       },
+      // Rejected or expired: the refund never ran.
       { id: 'notify_denied', type: 'agent', agent_id: 'agent_xyz' },
     ],
     edges: [
-      { from: 'gate', to: 'charge' },
+      { from: 'gate', to: 'notify_done' },
       { from: 'gate', to: 'notify_denied', condition: 'rejected' },
       { from: 'gate', to: 'notify_denied', condition: 'expired' },
     ],
