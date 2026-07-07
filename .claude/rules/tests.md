@@ -111,6 +111,25 @@ The dividing line is ownership, not convenience:
 
 6. **Set up DB state through the API, not through mocks.** If a test needs a conversation with specific messages, call `POST /api/v1/conversations` and `POST /api/v1/conversations/:id/messages` in `beforeAll`. The assertion then calls the endpoint under test with real data.
 
+### Sanctioned exceptions to "never mock internal code"
+
+Two narrow cases are allowed, each documented inline at the mock site:
+
+1. **The `ai` package** (`streamText` / `generateText`) — non-configurable exports that
+   `jest.spyOn` cannot wrap, so `jest.mock` / `jest.doMock` is used. It is an external
+   dependency, not code you own (`agentNonStreamGeneration.test.ts`,
+   `agentGenerationHelpers.test.ts`).
+2. **Force-failure stubs for `.catch()` resilience branches.** When a lib function fires
+   a write fire-and-forget behind a `.catch()` (e.g. `saveTrace` /
+   `updateGenerationRecord` in `agentGenerationHelpers`), the swallow branch can only be
+   exercised by making that write **reject** — and no real DB write fails
+   deterministically. A minimal `jest.spyOn(...).mockRejectedValueOnce(...)` is permitted
+   **solely** to drive that branch; the happy path must still run against the real DB, and
+   deleting the test instead would drop branch coverage below the enforced threshold.
+
+Everything else internal: no mocks — reach it through an entry point, or test the pure
+function directly with real inputs.
+
 ### Correct pattern (integration test with minimal mock)
 
 ```ts
@@ -252,6 +271,48 @@ expect(response.body.password).toBeUndefined(); // sensitive fields must be abse
 
 Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
 
+### Beware vacuous (always-passing) assertions
+
+Response bodies are **snake_case** — the `caseTransform` middleware converts every
+outbound `/api/v1` body. Asserting on a **camelCase** field of a response body therefore
+reads `undefined` and the assertion silently passes no matter what the route does:
+
+```ts
+// ❌ vacuous — `documentId` is always undefined on a snake_case body, so this
+// passes whether or not the message was actually deleted
+expect(res.body.data.some((m) => m.documentId === id)).toBe(false);
+
+// ✅ assert the real (snake_case) field
+expect(res.body.data.some((m) => m.document_id === id)).toBe(false);
+```
+
+The only response body that legitimately stays camelCase is the OpenAPI spec endpoint
+(`/openapi.json`), which bypasses `caseTransform`. Whenever an assertion looks like it
+"can never fail," prove it can: break the production path locally and confirm the test
+goes red before trusting it (red/green).
+
+### Pin status codes
+
+Assert the exact expected status. Avoid loose `expect([403, 404]).toContain(res.status)`
+or `expect(res.status).not.toBe(400)` — they mask real regressions (e.g. a `403`→`404`
+flip). Keep a range **only** when the outcome legitimately depends on scheduling or a live
+LLM/provider, and add a one-line comment justifying the nondeterminism:
+
+```ts
+// Ollama isn't running in unit CI, so the call either succeeds (200) or fails
+// upstream (502) — never 400, which is what this test actually verifies.
+expect([200, 502]).toContain(res.status);
+```
+
+### Keep tests independent and single-purpose
+
+A test should be runnable on its own (`--testNamePattern`). Prefer per-test fixtures over
+threading a `let sharedId` assigned in one test and consumed by the next — that chain means
+a single test can't run in isolation and an early failure cascades. When several operations
+must share an expensive resource, create it once in `beforeAll` and give each operation its
+own `test`, rather than packing many operations into one giant `test` where it's unclear
+which step regressed.
+
 ## Spying on Modules Loaded at App Startup
 
 Some lib modules (e.g., `agents.ts`, `conversations.ts`) are loaded transitively by `app.ts` during `setupFilesAfterEnv`. This happens **before** any test file executes, which means `jest.mock(...)` — even though it is hoisted by Babel — creates a _new_ mock object that is never seen by the already-loaded module. As a result, the original function is still called and the mock is silently ignored.
@@ -330,6 +391,17 @@ describe('something that pauses async work', () => {
 
 - **Supertest requests are lazy.** A request built with `.post(...).send(...)` does not reliably start server processing until it is consumed (for example with `await`, `.then(...)`, or `.end(...)`). In coordination tests, start the request first, then await your synchronization signal.
 - **Prefer Promise-based signaling over timer polling.** In tests that may run alongside fake timers, avoid `setTimeout`/`setImmediate` polling loops. Use a Promise signal (for example `signalStarted` / `started`) triggered inside the mocked function to coordinate progress deterministically.
+- **No fixed real-time settling sleeps.** Never `await setTimeout(300)` hoping a
+  fire-and-forget path has finished — it is timing-dependent and flaky under CI load.
+  Resolve a Promise inside the dispatch boundary (as `rest/sessions.test.ts` does) or poll
+  a bounded predicate on the observable side effect — a delivery row, a mock call, a DB
+  column change (as `generationLifecycle.test.ts` does). For TTL / expiry behavior, advance
+  an injected clock rather than sleeping past the TTL.
+- **Never leak global singleton state.** A listener registered on a shared bus
+  (`onEvent` on the `eventBus` singleton) or a mutated shared registry must be torn down in
+  `finally` / `afterEach`, or it leaks into every later test and breaks the suite under
+  randomized file order (`orchestrationScheduler.test.ts` shows `eventBus.off(...)` in a
+  `finally`). Every test must pass both in isolation and in a randomized order.
 
 ## MCP Tool Tests
 
