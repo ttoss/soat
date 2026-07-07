@@ -456,6 +456,12 @@ reachable branch remains after P2-2), `generations` (record-writer half only).
 | `webhookDispatcher.test.ts` | `db.WebhookDelivery.create` reject stub + fixed sleeps | real DB + promise signaling (also P1-4) |
 | `eventBus.test.ts` | leaked singleton listener | register/unregister in lifecycle (also P1-5) |
 
-> Note: `agentGenerationHelpers.test.ts` and `agentNonStreamGeneration.test.ts` mock only
-> the external `ai` package (`streamText`/`generateText` are non-configurable) — that is the
-> one sanctioned `jest.mock` exception, kept and documented at the mock site, not rewritten.
+> Note: `agentNonStreamGeneration.test.ts` mocks only the external `ai` package
+> (`streamText`/`generateText` are non-configurable) — the one sanctioned `jest.mock`
+> exception, kept and documented at the mock site. `agentGenerationHelpers.test.ts` uses the
+> same `ai` mock and additionally stubs `traces.saveTrace` / `generations.updateGenerationRecord`
+> as **force-failure companions**: its remaining internal stubs exist only to make those
+> fire-and-forget writes reject on demand, exercising the `.catch()` resilience branches that
+> no real DB write can be made to fail deterministically. Deleting those tests would drop
+> branch coverage below the enforced threshold, so the file is kept-and-documented rather than
+> rewritten onto the real DB.

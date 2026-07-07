@@ -4,88 +4,110 @@ import {
   applyUpdateChange,
   failFormationOperation,
 } from 'src/lib/formationsApplyHelpers';
-import * as resourceHandlers from 'src/lib/formationsResourceHandlers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
+import { createMemory, getMemory } from 'src/lib/memories';
+
+// These tests drive the real formation-apply helpers against the real database
+// and the real resource handlers — no `db.*` stubbing and no internal-module
+// mocks. `memory` is used as the physical resource because its create/update
+// surface is minimal (`name` + `description`), which lets the merge/no-op
+// decision logic be asserted through the real resource state it produces.
+
+type ResourceRowWithId = InstanceType<(typeof db)['FormationResource']> & {
+  physicalResourceId: string;
+};
+
+let projectId: number;
+let formationId: number;
+let counter = 0;
+
+const uniqueName = (prefix: string) => {
+  counter += 1;
+  return `${prefix}-${counter}`;
+};
+
+const memoryExists = async (id: string): Promise<boolean> => {
+  const found = await db.Memory.findOne({ where: { publicId: id } });
+  return found !== null;
+};
 
 describe('formationsApplyHelpers', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
+  beforeAll(async () => {
+    const project = await db.Project.create({
+      name: 'Formations Apply Helpers Test Project',
+    });
+    projectId = project.id as number;
+
+    const formation = await db.Formation.create({
+      projectId,
+      name: 'formations-apply-helpers-test',
+      status: 'creating',
+    });
+    formationId = formation.id as number;
   });
 
-  test('applyCreateChange creates resource, updates row, and tracks event', async () => {
-    const resourceRow = db.FormationResource.build({
-      publicId: 'fmr_create',
-      formationId: 1,
-      logicalId: 'provider',
-      resourceType: 'ai_provider',
+  test('applyCreateChange creates the real resource, updates the row, and tracks the event', async () => {
+    const resourceRow = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('create-logical'),
+      resourceType: 'memory',
       status: 'pending',
       physicalResourceId: null,
       lastAppliedProperties: null,
+      deletionPolicy: 'delete',
     });
 
-    const resourceUpdate = jest
-      .spyOn(resourceRow, 'update')
-      .mockResolvedValue(resourceRow);
-    jest
-      .spyOn(resourceHandlers, 'applyCreateResource')
-      .mockResolvedValue('aip_1');
-
+    const memoryName = uniqueName('created-mem');
     const resolvedIds = new Map<string, string>();
     const events: FormationEvent[] = [];
 
     await applyCreateChange({
       resourceRow,
-      resourceType: 'ai_provider',
-      resolvedProperties: { name: 'Provider 1' },
-      projectId: 1,
+      resourceType: 'memory',
+      resolvedProperties: { name: memoryName },
+      projectId,
       logicalId: 'provider',
       resolvedIds,
       events,
     });
 
-    expect(resolvedIds.get('provider')).toBe('aip_1');
-    expect(resourceUpdate).toHaveBeenCalledWith({
-      physicalResourceId: 'aip_1',
-      status: 'created',
-      lastAppliedProperties: { name: 'Provider 1' },
-    });
+    const physicalId = resolvedIds.get('provider');
+    expect(physicalId).toMatch(/^mem_/);
+    expect(await memoryExists(physicalId as string)).toBe(true);
+
+    await resourceRow.reload();
+    expect(resourceRow.physicalResourceId).toBe(physicalId);
+    expect(resourceRow.status).toBe('created');
+    expect(resourceRow.lastAppliedProperties).toEqual({ name: memoryName });
+
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       logicalId: 'provider',
-      resourceType: 'ai_provider',
+      resourceType: 'memory',
       action: 'create',
       status: 'succeeded',
-      physicalResourceId: 'aip_1',
+      physicalResourceId: physicalId,
     });
   });
 
-  test('applyUpdateChange updates resource when properties changed', async () => {
-    const existing = db.FormationResource.build({
-      publicId: 'fmr_existing',
-      formationId: 1,
-      logicalId: 'memory',
+  test('applyUpdateChange updates the real resource when properties changed', async () => {
+    const memory = await createMemory({ projectId, name: 'Old Name' });
+    const resourceRow = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('update-logical'),
       resourceType: 'memory',
       status: 'active',
-      physicalResourceId: 'mem_1',
+      physicalResourceId: memory.id,
       lastAppliedProperties: { name: 'Old Name' },
+      deletionPolicy: 'delete',
     });
-
-    const resourceRow = existing;
-    const resourceUpdate = jest
-      .spyOn(resourceRow, 'update')
-      .mockResolvedValue(resourceRow);
-    const updateResource = jest
-      .spyOn(resourceHandlers, 'applyUpdateResource')
-      .mockResolvedValue(undefined);
 
     const resolvedIds = new Map<string, string>();
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
       resourceRow,
-      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
-        physicalResourceId: string;
-      },
+      existing: resourceRow as ResourceRowWithId,
       resourceType: 'memory',
       resolvedProperties: { name: 'New Name' },
       logicalId: 'memory',
@@ -93,151 +115,149 @@ describe('formationsApplyHelpers', () => {
       events,
     });
 
-    expect(resolvedIds.get('memory')).toBe('mem_1');
-    expect(updateResource).toHaveBeenCalledWith({
-      resourceType: 'memory',
-      physicalResourceId: 'mem_1',
-      resolvedProperties: { name: 'New Name' },
-    });
-    expect(resourceUpdate).toHaveBeenCalledWith({
-      status: 'updated',
-      lastAppliedProperties: { name: 'New Name' },
-    });
+    expect(resolvedIds.get('memory')).toBe(memory.id);
+    const updated = await getMemory({ id: memory.id });
+    expect(updated?.name).toBe('New Name');
+
+    await resourceRow.reload();
+    expect(resourceRow.status).toBe('updated');
+    expect(resourceRow.lastAppliedProperties).toEqual({ name: 'New Name' });
+
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       action: 'update',
       status: 'succeeded',
-      physicalResourceId: 'mem_1',
+      physicalResourceId: memory.id,
     });
   });
 
-  test('applyUpdateChange records no-op when properties did not change', async () => {
-    const existing = db.FormationResource.build({
+  test('applyUpdateChange records a no-op when properties did not change', async () => {
+    const memory = await createMemory({ projectId, name: 'No-op Mem' });
+    // An unsaved instance is enough: the no-op branch never persists the row.
+    const resourceRow = db.FormationResource.build({
       publicId: 'fmr_noop',
-      formationId: 1,
-      logicalId: 'agent',
-      resourceType: 'agent',
+      formationId,
+      logicalId: 'noop',
+      resourceType: 'memory',
       status: 'active',
-      physicalResourceId: 'agt_1',
-      lastAppliedProperties: { name: 'Agent' },
+      physicalResourceId: memory.id,
+      lastAppliedProperties: { name: 'No-op Mem' },
     });
-
-    const updateResource = jest.spyOn(resourceHandlers, 'applyUpdateResource');
-    const resourceUpdate = jest.spyOn(existing, 'update');
 
     const resolvedIds = new Map<string, string>();
     const events: FormationEvent[] = [];
 
     await applyUpdateChange({
-      resourceRow: existing,
-      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
-        physicalResourceId: string;
-      },
-      resourceType: 'agent',
-      resolvedProperties: { name: 'Agent' },
-      logicalId: 'agent',
+      resourceRow,
+      existing: resourceRow as ResourceRowWithId,
+      resourceType: 'memory',
+      resolvedProperties: { name: 'No-op Mem' },
+      logicalId: 'noop',
       resolvedIds,
       events,
     });
 
-    expect(resolvedIds.get('agent')).toBe('agt_1');
-    expect(updateResource).not.toHaveBeenCalled();
-    expect(resourceUpdate).not.toHaveBeenCalled();
+    expect(resolvedIds.get('noop')).toBe(memory.id);
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       action: 'no-op',
       status: 'succeeded',
-      physicalResourceId: 'agt_1',
+      physicalResourceId: memory.id,
     });
+    // The resource is untouched by a no-op.
+    expect((await getMemory({ id: memory.id }))?.name).toBe('No-op Mem');
   });
 
   test('applyUpdateChange treats a dropped (use-previous) field as a no-op', async () => {
-    // A secret's value resolves to undefined when kept; lastApplied has no
-    // `value` (it is sanitized), so the merged props equal lastApplied.
-    const existing = db.FormationResource.build({
-      publicId: 'fmr_secret',
-      formationId: 1,
-      logicalId: 'secret',
-      resourceType: 'secret',
+    // A kept field resolves to `undefined`; when it is also absent from
+    // lastApplied it is dropped entirely, so the merged props equal lastApplied.
+    const resourceRow = db.FormationResource.build({
+      publicId: 'fmr_dropped',
+      formationId,
+      logicalId: 'dropped',
+      resourceType: 'memory',
       status: 'active',
-      physicalResourceId: 'sec_1',
-      lastAppliedProperties: { name: 'my-secret' },
+      physicalResourceId: 'mem_dropped',
+      lastAppliedProperties: { name: 'kept' },
     });
-
-    const updateResource = jest.spyOn(resourceHandlers, 'applyUpdateResource');
-    const resourceUpdate = jest.spyOn(existing, 'update');
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
-      resourceRow: existing,
-      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
-        physicalResourceId: string;
-      },
-      resourceType: 'secret',
-      resolvedProperties: { name: 'my-secret', value: undefined },
-      logicalId: 'secret',
+      resourceRow,
+      existing: resourceRow as ResourceRowWithId,
+      resourceType: 'memory',
+      resolvedProperties: { name: 'kept', description: undefined },
+      logicalId: 'dropped',
       resolvedIds: new Map<string, string>(),
       events,
     });
 
-    expect(updateResource).not.toHaveBeenCalled();
-    expect(resourceUpdate).not.toHaveBeenCalled();
     expect(events[0]).toMatchObject({ action: 'no-op' });
   });
 
   test('applyUpdateChange reuses the last-applied value for a kept field when another field changes', async () => {
-    const existing = db.FormationResource.build({
-      publicId: 'fmr_tool',
-      formationId: 1,
-      logicalId: 'tool',
-      resourceType: 'tool',
-      status: 'active',
-      physicalResourceId: 'tool_1',
-      lastAppliedProperties: { name: 'old-name', url: 'https://kept.example' },
+    const memory = await createMemory({
+      projectId,
+      name: 'old-name',
+      description: 'kept-desc',
     });
-
-    const updateResource = jest
-      .spyOn(resourceHandlers, 'applyUpdateResource')
-      .mockResolvedValue(undefined);
-    jest.spyOn(existing, 'update').mockResolvedValue(existing);
+    const resourceRow = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('merge-logical'),
+      resourceType: 'memory',
+      status: 'active',
+      physicalResourceId: memory.id,
+      lastAppliedProperties: { name: 'old-name', description: 'kept-desc' },
+      deletionPolicy: 'delete',
+    });
 
     const events: FormationEvent[] = [];
     await applyUpdateChange({
-      resourceRow: existing,
-      existing: existing as InstanceType<(typeof db)['FormationResource']> & {
-        physicalResourceId: string;
-      },
-      resourceType: 'tool',
-      // name changed; url's param was kept (resolves to undefined).
-      resolvedProperties: { name: 'new-name', url: undefined },
-      logicalId: 'tool',
+      resourceRow,
+      existing: resourceRow as ResourceRowWithId,
+      resourceType: 'memory',
+      // name changed; description's param was kept (resolves to undefined) and
+      // must be reused from lastApplied rather than dropped.
+      resolvedProperties: { name: 'new-name', description: undefined },
+      logicalId: 'merge',
       resolvedIds: new Map<string, string>(),
       events,
     });
 
-    expect(updateResource).toHaveBeenCalledWith({
-      resourceType: 'tool',
-      physicalResourceId: 'tool_1',
-      resolvedProperties: { name: 'new-name', url: 'https://kept.example' },
+    const updated = await getMemory({ id: memory.id });
+    expect(updated?.name).toBe('new-name');
+    expect(updated?.description).toBe('kept-desc');
+
+    await resourceRow.reload();
+    expect(resourceRow.lastAppliedProperties).toEqual({
+      name: 'new-name',
+      description: 'kept-desc',
     });
     expect(events[0]).toMatchObject({ action: 'update' });
   });
 
-  test('failFormationOperation records event and marks operation/formation as failed', async () => {
-    const operation = {
-      update: jest.fn().mockResolvedValue(undefined),
-    } as unknown as InstanceType<(typeof db)['FormationOperation']>;
-    const formation = {
-      update: jest.fn().mockResolvedValue(undefined),
-    } as unknown as InstanceType<(typeof db)['Formation']>;
-    const events: FormationEvent[] = [];
+  test('failFormationOperation records the event and marks operation/formation as failed', async () => {
+    const formation = await db.Formation.create({
+      projectId,
+      name: uniqueName('fail-formation'),
+      status: 'creating',
+    });
+    const operation = await db.FormationOperation.create({
+      formationId: formation.id as number,
+      operationType: 'create',
+      status: 'running',
+      events: null,
+      plan: null,
+      error: null,
+    });
 
+    const events: FormationEvent[] = [];
     await failFormationOperation({
       operation,
       formation,
       events,
       logicalId: 'provider',
-      resourceType: 'ai_provider',
+      resourceType: 'memory',
       action: 'create',
       errorMessage: 'creation failed',
     });
@@ -245,16 +265,20 @@ describe('formationsApplyHelpers', () => {
     expect(events).toHaveLength(1);
     expect(events[0]).toMatchObject({
       logicalId: 'provider',
-      resourceType: 'ai_provider',
+      resourceType: 'memory',
       action: 'create',
       status: 'failed',
       error: 'creation failed',
     });
-    expect(operation.update).toHaveBeenCalledWith({
-      status: 'failed',
-      events,
-      error: { message: 'creation failed', logicalId: 'provider' },
+
+    await operation.reload();
+    await formation.reload();
+    expect(operation.status).toBe('failed');
+    expect(operation.error).toEqual({
+      message: 'creation failed',
+      logicalId: 'provider',
     });
-    expect(formation.update).toHaveBeenCalledWith({ status: 'failed' });
+    expect(operation.events).toEqual(events);
+    expect(formation.status).toBe('failed');
   });
 });
