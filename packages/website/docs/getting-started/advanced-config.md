@@ -116,16 +116,19 @@ If an external tool server does not respond within this window, the call is abor
 
 ### Embeddings
 
-SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddings.
+SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddings, and also supports [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html).
 
-| Variable               | Default                  | Description                                              |
-| ---------------------- | ------------------------ | -------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider. Currently only `ollama` is supported |
-| `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Ollama model name for embeddings                         |
-| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model)       |
-| `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance                          |
+| Variable               | Default                  | Description                                                                                    |
+| ---------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                           |
+| `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                           |
+| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model)                                             |
+| `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                                |
+| `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`     |
+| `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                            |
+| `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                             |
 
-To use a different embedding model, update all three `EMBEDDING_*` variables together — the model name and dimension count must be consistent.
+To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
 ## Docker Compose Example
 

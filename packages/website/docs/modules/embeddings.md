@@ -9,18 +9,27 @@ Generate numeric vector representations of text using the server's configured em
 
 The Embeddings module exposes the server's embedding model as a REST endpoint. A single call accepts one or more text strings and returns the corresponding floating-point vectors. These vectors capture semantic meaning and can be used for downstream tasks such as similarity scoring, clustering, classification, or feeding a custom search index.
 
-The embedding model is configured server-side via environment variables (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`). Callers do not choose the model at request time; the server always uses the configured model so all vectors in a deployment share the same space.
+The embedding model is configured server-side via environment variables (`EMBEDDING_PROVIDER`, `EMBEDDING_MODEL`). `ollama`, `openai`, and `bedrock` (Amazon Bedrock) are supported backends. Callers do not choose the model at request time; the server always uses the configured model so all vectors in a deployment share the same space.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Configuration
 
-| Environment Variable  | Required | Description                                                                           |
-| --------------------- | -------- | ------------------------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`  | Yes      | Embedding backend. Currently `ollama` is supported.                                   |
-| `EMBEDDING_MODEL`     | Yes      | Model identifier for the embedding backend (e.g. `qwen3-embedding:0.6b`).             |
-| `EMBEDDING_DIMENSIONS`| No       | Vector dimensionality. Must match the model output (default: `1024`).                 |
-| `OLLAMA_BASE_URL`     | No       | Ollama server URL. Defaults to `http://localhost:11434`.                              |
+| Environment Variable  | Required | Description                                                                                              |
+| --------------------- | -------- | -------------------------------------------------------------------------------------------------------- |
+| `EMBEDDING_PROVIDER`  | Yes      | Embedding backend: `ollama`, `openai`, or `bedrock`.                                                     |
+| `EMBEDDING_MODEL`     | Yes      | Model identifier for the backend (e.g. `qwen3-embedding:0.6b`, `text-embedding-3-small`, `amazon.titan-embed-text-v2:0`). |
+| `EMBEDDING_DIMENSIONS`| No       | Vector dimensionality. Must match the model output (default: `1024`).                                    |
+| `OLLAMA_BASE_URL`     | No       | Ollama server URL (`ollama` only). Defaults to `http://localhost:11434`.                                 |
+| `EMBEDDING_API_KEY`   | No       | API key for the backend: the OpenAI key (`openai`), or a Bedrock `ABSK…` bearer token (`bedrock`). For `openai`, falls back to `OPENAI_API_KEY`. |
+| `EMBEDDING_BASE_URL`  | No       | Override the base URL for any OpenAI-compatible endpoint (`openai` only).                                 |
+| `EMBEDDING_REGION`    | No       | AWS region for Bedrock (`bedrock` only). Falls back to `AWS_REGION`, then `us-east-1`.                    |
+
+### Provider selection
+
+- **`ollama`** — local models via the [Ollama](https://ollama.com) client at `OLLAMA_BASE_URL`. No credentials required.
+- **`openai`** — the [OpenAI](https://platform.openai.com/docs/guides/embeddings) embeddings API (or any OpenAI-compatible endpoint via `EMBEDDING_BASE_URL`), authenticated with `EMBEDDING_API_KEY`.
+- **`bedrock`** — [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html) embedding models. Authenticate with an `ABSK…` bearer token in `EMBEDDING_API_KEY`, or leave it unset to use the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
 ## Data Model
 
