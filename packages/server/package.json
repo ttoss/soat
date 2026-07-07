@@ -36,7 +36,6 @@
     "dotenv": "^17.4.2",
     "json-logic-engine": "^5.0.7",
     "jsonwebtoken": "^9.0.3",
-    "ollama": "^0.6.3",
     "pg": "^8.21.0",
     "unpdf": "^1.6.2"
   },

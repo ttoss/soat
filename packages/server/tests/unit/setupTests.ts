@@ -7,8 +7,15 @@ export const storageDir = fs.mkdtempSync(
 );
 
 process.env.FILES_STORAGE_DIR = storageDir;
-process.env.EMBEDDING_PROVIDER = 'ollama';
-process.env.EMBEDDING_MODEL = 'qwen3-embedding:0.6b';
+// Embeddings run through the AI SDK against an OpenAI-compatible endpoint. The
+// suite uses the `openai` provider pointed at a local stub server (started in
+// setupTestsAfterEnv, which sets EMBEDDING_BASE_URL); this exercises the real
+// request serialization without a live backend. `openai` is chosen over
+// `ollama` so OLLAMA_BASE_URL stays unset and `agentModel`'s default-URL tests
+// remain valid.
+process.env.EMBEDDING_PROVIDER = 'openai';
+process.env.EMBEDDING_MODEL = 'text-embedding-3-small';
+process.env.EMBEDDING_API_KEY = 'test-embedding-key';
 process.env.EMBEDDING_DIMENSIONS = '1024';
 process.env.SECRETS_ENCRYPTION_KEY = '0'.repeat(64);
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';

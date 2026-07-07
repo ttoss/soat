@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { getEmbedding } from './embedding';
+import { getEmbeddings } from './embedding';
 
 const log = createDebug('soat:embeddings');
 
@@ -17,11 +17,7 @@ export const createEmbeddings = async (args: {
     );
   }
 
-  const embeddings = await Promise.all(
-    args.inputs.map((text) => {
-      return getEmbedding({ text });
-    })
-  );
+  const embeddings = await getEmbeddings({ texts: args.inputs });
 
   log('createEmbeddings: done count=%d', embeddings.length);
   return embeddings;
