@@ -23,6 +23,7 @@
     "@ai-sdk/groq": "^4.0.5",
     "@ai-sdk/openai": "^4.0.8",
     "@ai-sdk/xai": "^4.0.7",
+    "@aws-sdk/client-s3": "^3.1029.0",
     "@soat/postgresdb": "workspace:*",
     "@ttoss/auth-core": "^0.10.0",
     "@ttoss/http-server": "^0.7.1",

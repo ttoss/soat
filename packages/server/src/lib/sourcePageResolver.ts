@@ -1,9 +1,8 @@
-import fs from 'node:fs';
-
 import type { db } from '../db';
 import { DomainError } from '../errors';
 import type { SourcePage } from './chunking';
 import { invokeConverter } from './converterInvocation';
+import { readFileBuffer } from './fileStorage';
 import {
   type MappedIngestionRule,
   resolveIngestionRule,
@@ -30,7 +29,16 @@ export type ResolvedSourcePages =
 const extractNativePages = async (
   file: IngestedFile
 ): Promise<SourcePage[]> => {
-  const buffer = fs.readFileSync(file.storagePath);
+  const buffer = await readFileBuffer({
+    storageType: file.storageType,
+    storagePath: file.storagePath,
+  });
+  if (!buffer) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `File '${file.publicId}' bytes are missing from storage.`
+    );
+  }
 
   if (file.contentType === 'application/pdf') {
     const rawPages = await extractPdfPages({ buffer });

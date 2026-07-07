@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import { db } from '../db';
@@ -11,6 +10,8 @@ import {
   prefixFromPath,
   rebuildKey,
 } from './filePaths';
+import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
+import { persistFileBytes } from './fileStorageLayout';
 import {
   type CompiledPolicy,
   compilePolicy,
@@ -28,14 +29,6 @@ registerResourceFieldMap({
   pathColumn: { column: 'path' },
   tagsColumn: { column: 'tags' },
 });
-
-const getStorageDir = () => {
-  const dir = process.env.FILES_STORAGE_DIR;
-  if (!dir) {
-    throw new Error('FILES_STORAGE_DIR environment variable is not set');
-  }
-  return dir;
-};
 
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
@@ -131,7 +124,7 @@ export const uploadFile = async (args: {
   contentType?: string;
   metadata?: string;
 }) => {
-  const storageDir = getStorageDir();
+  const provider = getActiveStorageProvider();
 
   const normalizedPath =
     args.path !== undefined
@@ -145,10 +138,8 @@ export const uploadFile = async (args: {
     (await resolveProjectPublicId({ projectId: args.projectId }));
 
   const category = categoryFromPath(normalizedPath);
-  const fileStorageDir = path.join(storageDir, projectPublicId, category);
-  fs.mkdirSync(fileStorageDir, { recursive: true });
 
-  // Create DB record first to get publicId for the filename
+  // Create DB record first to get publicId for the storage location.
   let file;
   try {
     file = await db.File.create({
@@ -157,7 +148,7 @@ export const uploadFile = async (args: {
       filename,
       contentType: args.contentType,
       size: args.fileBuffer.length,
-      storageType: 'local' as const,
+      storageType: provider.storageType,
       storagePath: '', // filled in below after we know the publicId
       metadata: args.metadata,
     });
@@ -174,11 +165,14 @@ export const uploadFile = async (args: {
     throw error;
   }
 
-  const ext = filename ? path.extname(filename) : '';
-  const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
-  fs.writeFileSync(storagePath, args.fileBuffer);
-
-  await file.update({ storagePath, size: args.fileBuffer.length });
+  await persistFileBytes({
+    provider,
+    file,
+    projectPublicId,
+    category,
+    buffer: args.fileBuffer,
+    contentType: args.contentType,
+  });
 
   const mapped = mapFile(file);
 
@@ -210,27 +204,28 @@ export const upsertFileByPath = async (args: {
   contentType: string;
   filename?: string;
 }) => {
-  const storageDir = getStorageDir();
   const normalizedPath = normalizePath(args.path);
   const category = categoryFromPath(normalizedPath);
-  const fileStorageDir = path.join(storageDir, args.projectPublicId, category);
-  fs.mkdirSync(fileStorageDir, { recursive: true });
 
   const existing = await db.File.findOne({
     where: { projectId: args.projectId, path: normalizedPath },
   });
 
   if (existing) {
-    // Overwrite on disk
-    fs.writeFileSync(existing.storagePath, args.fileBuffer);
-    await existing.update({
-      size: args.fileBuffer.length,
+    // Overwrite in place, on whichever backend already stores this file.
+    await persistFileBytes({
+      provider: getStorageProvider({ storageType: existing.storageType }),
+      file: existing,
+      projectPublicId: args.projectPublicId,
+      category,
+      buffer: args.fileBuffer,
       contentType: args.contentType,
     });
     return mapFile(existing);
   }
 
-  // Create new record
+  // Create new record on the active backend.
+  const provider = getActiveStorageProvider();
   const filename = args.filename ?? path.basename(normalizedPath);
   const file = await db.File.create({
     projectId: args.projectId,
@@ -238,14 +233,18 @@ export const upsertFileByPath = async (args: {
     filename,
     contentType: args.contentType,
     size: args.fileBuffer.length,
-    storageType: 'local' as const,
+    storageType: provider.storageType,
     storagePath: '',
   });
 
-  const ext = path.extname(filename);
-  const storagePath = path.join(fileStorageDir, `${file.publicId}${ext}`);
-  fs.writeFileSync(storagePath, args.fileBuffer);
-  await file.update({ storagePath });
+  await persistFileBytes({
+    provider,
+    file,
+    projectPublicId: args.projectPublicId,
+    category,
+    buffer: args.fileBuffer,
+    contentType: args.contentType,
+  });
 
   return mapFile(file);
 };
@@ -257,21 +256,18 @@ export const downloadFile = async (args: { id: string }) => {
     return null;
   }
 
-  if (file.storageType !== 'local') {
-    throw new Error(
-      `Storage type '${file.storageType}' download not supported`
-    );
-  }
+  const provider = getStorageProvider({ storageType: file.storageType });
+  const object = await provider.read({ storagePath: file.storagePath });
 
-  if (!fs.existsSync(file.storagePath)) {
+  if (!object) {
     return null;
   }
 
   return {
-    stream: fs.createReadStream(file.storagePath),
+    stream: object.stream,
     filename: file.filename ?? filenameFromPath(file.path),
     contentType: file.contentType,
-    size: file.size,
+    size: file.size ?? object.size,
   };
 };
 
@@ -348,13 +344,14 @@ export const createFile = async (args: {
   metadata?: string;
 }) => {
   // The full key (`path`) is built from `prefix` (directory, defaults to `/`)
-  // and `filename`. Storage backend is system-managed (see FILES_STORAGE_DIR);
-  // a metadata-only record uses local storage with an empty storagePath,
-  // filled in when bytes are uploaded.
+  // and `filename`. Storage backend is system-managed (see the active storage
+  // provider); a metadata-only record records the active backend's storageType
+  // with an empty storagePath, filled in when bytes are uploaded.
   const normalizedPath = buildPath({
     prefix: args.prefix,
     filename: args.filename,
   });
+  const provider = getActiveStorageProvider();
   let file;
   try {
     file = await db.File.create({
@@ -364,7 +361,7 @@ export const createFile = async (args: {
       contentType: args.contentType,
       size: args.size,
       metadata: args.metadata,
-      storageType: 'local' as const,
+      storageType: provider.storageType,
       storagePath: '',
     });
   } catch (error) {
@@ -417,12 +414,9 @@ export const deleteFile = async (args: { id: string }) => {
     );
   }
 
-  if (file.storageType === 'local' && file.storagePath) {
-    try {
-      fs.unlinkSync(file.storagePath);
-    } catch {
-      // Ignore missing file errors — record may still need to be cleaned up
-    }
+  if (file.storagePath) {
+    const provider = getStorageProvider({ storageType: file.storageType });
+    await provider.delete({ storagePath: file.storagePath });
   }
 
   const filePublicId = file.publicId;

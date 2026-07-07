@@ -1,11 +1,10 @@
-import fs from 'node:fs';
-
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { createGeneration } from './agents';
 import type { SourcePage } from './chunking';
 import { buildFileDownloadUrl } from './fileDownloadToken';
+import { readFileBuffer } from './fileStorage';
 import { buildIngestionCallbackBlock } from './ingestionCallbackToken';
 import type { MappedIngestionRule } from './ingestionRules';
 import { callTool } from './tools';
@@ -21,7 +20,26 @@ export type ConverterFile = {
   filename?: string | null;
   contentType?: string | null;
   size?: number | null;
+  storageType: string;
   storagePath: string;
+};
+
+/**
+ * Reads a converter's source file bytes as base64 through its storage backend.
+ * Throws if the object is missing so a converter never sees empty content.
+ */
+const readFileBase64 = async (file: ConverterFile): Promise<string> => {
+  const buffer = await readFileBuffer({
+    storageType: file.storageType,
+    storagePath: file.storagePath,
+  });
+  if (!buffer) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `File '${file.publicId}' bytes are missing from storage.`
+    );
+  }
+  return buffer.toString('base64');
 };
 
 /**
@@ -96,12 +114,12 @@ export const parseConverterOutput = (raw: unknown): ConverterOutcome => {
   );
 };
 
-const buildToolConverterInput = (args: {
+const buildToolConverterInput = async (args: {
   file: ConverterFile;
   rule: MappedIngestionRule;
   documentId: string;
   attemptId: string;
-}): Record<string, unknown> => {
+}): Promise<Record<string, unknown>> => {
   const fileInput: Record<string, unknown> = {
     id: args.file.publicId,
     filename: args.file.filename ?? null,
@@ -114,9 +132,7 @@ const buildToolConverterInput = (args: {
       fileId: args.file.publicId,
     });
   } else {
-    fileInput['data_base64'] = fs
-      .readFileSync(args.file.storagePath)
-      .toString('base64');
+    fileInput['data_base64'] = await readFileBase64(args.file);
   }
 
   const input: Record<string, unknown> = {
@@ -145,7 +161,7 @@ const invokeToolConverter = async (args: {
   documentId: string;
   attemptId: string;
 }): Promise<InvokeConverterResult> => {
-  const input = buildToolConverterInput(args);
+  const input = await buildToolConverterInput(args);
   let raw: unknown;
   try {
     raw = await callTool({
@@ -179,11 +195,11 @@ const invokeToolConverter = async (args: {
   return outcome;
 };
 
-const buildAgentContentParts = (args: {
+const buildAgentContentParts = async (args: {
   file: ConverterFile;
-}): Array<Record<string, unknown>> => {
+}): Promise<Array<Record<string, unknown>>> => {
   const contentType = args.file.contentType ?? 'application/octet-stream';
-  const base64 = fs.readFileSync(args.file.storagePath).toString('base64');
+  const base64 = await readFileBase64(args.file);
   const dataUrl = `data:${contentType};base64,${base64}`;
   const filePart = contentType.startsWith('image/')
     ? { type: 'image', image: dataUrl }
@@ -202,7 +218,10 @@ const invokeAgentConverter = async (args: {
       projectIds: [args.projectId],
       agentId: args.rule.agentId!,
       messages: [
-        { role: 'user', content: buildAgentContentParts({ file: args.file }) },
+        {
+          role: 'user',
+          content: await buildAgentContentParts({ file: args.file }),
+        },
       ],
     });
   } catch (error) {

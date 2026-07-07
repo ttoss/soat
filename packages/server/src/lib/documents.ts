@@ -1,11 +1,13 @@
-import fs from 'node:fs';
-import path from 'node:path';
-
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
 import { emitEvent } from './eventBus';
+import {
+  getActiveStorageProvider,
+  getStorageProvider,
+  streamToBuffer,
+} from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
@@ -26,13 +28,6 @@ registerResourceFieldMap({
   pathColumn: { column: 'path', alias: 'file' },
   tagsColumn: { column: 'tags' },
 });
-
-const getStorageDir = () => {
-  const dir = process.env.FILES_STORAGE_DIR;
-  if (!dir)
-    throw new Error('FILES_STORAGE_DIR environment variable is not set');
-  return dir;
-};
 
 const normalizePath = (filePath: string): string => {
   if (!filePath) return '/';
@@ -288,9 +283,16 @@ export const getDocument = async (args: { id: string }) => {
   }
 
   // Fallback: try reading from file for legacy documents without chunks
-  if (doc.file?.storagePath && fs.existsSync(doc.file.storagePath)) {
-    const content = fs.readFileSync(doc.file.storagePath, 'utf-8');
-    return { ...mapped, content };
+  const legacyFile = doc.file;
+  if (legacyFile?.storagePath) {
+    const provider = getStorageProvider({
+      storageType: legacyFile.storageType,
+    });
+    const object = await provider.read({ storagePath: legacyFile.storagePath });
+    if (object) {
+      const content = (await streamToBuffer(object.stream)).toString('utf-8');
+      return { ...mapped, content };
+    }
   }
 
   return { ...mapped, content: null };
@@ -332,8 +334,7 @@ export const createDocument = async (args: {
 }) => {
   log('createDocument: projectId=%d', args.projectId);
 
-  const storageDir = getStorageDir();
-  fs.mkdirSync(storageDir, { recursive: true });
+  const provider = getActiveStorageProvider();
 
   const effectivePath = args.path ?? args.filename ?? null;
   const file = await db.File.create({
@@ -342,12 +343,15 @@ export const createDocument = async (args: {
     filename: args.filename ?? 'document.txt',
     contentType: 'text/plain',
     size: Buffer.byteLength(args.content, 'utf-8'),
-    storageType: 'local' as const,
+    storageType: provider.storageType,
     storagePath: '',
   });
 
-  const storagePath = path.join(storageDir, `${file.publicId}.txt`);
-  fs.writeFileSync(storagePath, args.content, 'utf-8');
+  const { storagePath } = await provider.write({
+    objectPath: `${file.publicId}.txt`,
+    buffer: Buffer.from(args.content, 'utf-8'),
+    contentType: 'text/plain',
+  });
   await file.update({
     storagePath,
     size: Buffer.byteLength(args.content, 'utf-8'),
@@ -385,13 +389,10 @@ export const deleteDocument = async (args: { id: string }) => {
 
   if (!doc) return null;
 
-  const storagePath = doc.file?.storagePath;
-  if (storagePath) {
-    try {
-      fs.unlinkSync(storagePath);
-    } catch {
-      // Ignore missing file errors
-    }
+  const file = doc.file;
+  if (file?.storagePath) {
+    const provider = getStorageProvider({ storageType: file.storageType });
+    await provider.delete({ storagePath: file.storagePath });
   }
 
   const docPublicId = doc.publicId;
@@ -413,11 +414,16 @@ const updateDocumentContent = async (args: {
   doc: LoadedDoc;
   content: string;
 }) => {
-  if (args.doc.file?.storagePath) {
-    fs.writeFileSync(args.doc.file.storagePath, args.content, 'utf-8');
-    await args.doc.file.update({
-      size: Buffer.byteLength(args.content, 'utf-8'),
+  const file = args.doc.file;
+  if (file?.storagePath) {
+    const provider = getStorageProvider({ storageType: file.storageType });
+    // Overwrite in place — reuse the existing publicId-based object location.
+    await provider.write({
+      objectPath: `${file.publicId}.txt`,
+      buffer: Buffer.from(args.content, 'utf-8'),
+      contentType: 'text/plain',
     });
+    await file.update({ size: Buffer.byteLength(args.content, 'utf-8') });
   }
 
   // Re-chunk: destroy existing chunks and create a single new one

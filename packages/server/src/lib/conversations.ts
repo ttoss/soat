@@ -326,5 +326,10 @@ export const listConversationMessages = async (args: {
     offset,
   });
 
-  return { data: rows.map(mapMessage), total: count, limit, offset };
+  const data = await Promise.all(
+    rows.map((row) => {
+      return mapMessage(row);
+    })
+  );
+  return { data, total: count, limit, offset };
 };

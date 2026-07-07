@@ -11,6 +11,8 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+To run an agent automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: agent`.
+
 ## Related Tutorials
 
 - [Chat with an LLM - Step 4 (Create an agent)](/docs/tutorials/chat-with-llm#step-4--create-an-agent)

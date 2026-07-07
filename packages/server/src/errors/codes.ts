@@ -273,6 +273,11 @@ export const ERROR_CODES = {
     description:
       'An ingestion rule with file_delivery: download_url requires SOAT_BASE_URL to be set — the URL is fetched by an external converter that cannot resolve a relative or localhost address.',
   },
+  FILE_STORAGE_MISCONFIGURED: {
+    httpStatus: 500,
+    description:
+      'The file storage backend is not configured correctly — an unknown FILES_STORAGE_PROVIDER, an unsupported storage type, or a missing required variable (e.g. FILES_STORAGE_DIR for local, FILES_S3_BUCKET for s3).',
+  },
   INGESTION_CALLBACK_INVALID_TOKEN: {
     httpStatus: 401,
     description:
