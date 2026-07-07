@@ -119,6 +119,25 @@ weeks later. This module makes human decisions **product state**: approval
 queues with expiry, exception queues with severity, and an activity feed —
 all per project, all queryable via REST/MCP, all pushed via webhooks.
 
+### `human` vs `approval` — When to Use Which
+
+`approval` is a superset of the `human` node's **run-parking machinery**, not of
+its **semantics**, and it does not deprecate `human`. The two stay distinct:
+
+| Node       | Purpose                          | Response                     | Has evidence / expiry / execution? |
+| ---------- | -------------------------------- | ---------------------------- | ---------------------------------- |
+| `human`    | Generic input pause              | Arbitrary data / branch pick | No — output is only run state      |
+| `approval` | Sign-off on a proposed action    | `approved`/`rejected`/edit   | Yes — snapshot, expiry, auto-exec  |
+
+Use `human` to collect free-form or structured data, to have a person pick a
+branch (`options` → a `condition` label), or for a plain continue/yes-no gate
+with nothing to execute. Use `approval` only when a human is deciding on a
+**specific tool call** — where a `proposed_action`, evidence snapshot, hard
+expiry, and on-approve execution all apply. Decision: keep `human` as the input
+primitive and layer `approval` on top of it; do not fold one into the other, as
+each covers a case the other models awkwardly (a data prompt has no
+`proposed_action`; a bare `human` gate has no evidence, expiry, or execution).
+
 ## Key Concepts
 
 ### Approval Item

@@ -24,6 +24,28 @@ continues automatically down the matching edge.
 This is manage-by-exception operation: agents propose, humans decide from a
 queue, runs continue on their own.
 
+### `human` vs `approval` — When to Use Which
+
+`approval` builds on the `human` node's run-parking machinery but is **not** a
+replacement for it. Keep `human` for arbitrary input; reach for `approval` only
+when a human is signing off on a specific proposed action:
+
+| You need to…                                                        | Use        |
+| ------------------------------------------------------------------- | ---------- |
+| Collect free-form or structured **data** into run state             | `human`    |
+| Have a person **pick a branch** (`options` → a `condition` label)   | `human`    |
+| Pause on a plain **continue? / yes-no** gate with nothing to run    | `human`    |
+| Get sign-off on a **specific tool call** (approve / edit / reject)  | `approval` |
+| Enforce **expiry**, snapshot **evidence**, or auto-**execute** on approve | `approval` |
+
+The distinction is semantic, not just mechanical: `human` produces only run
+state (nothing enumerates it across runs, carries evidence, or gates on
+staleness — the gap this module closes), whereas `approval` promotes the
+decision to product state with a queue, expiry, and execution. Modeling a data
+prompt as an `approval` (there is no `proposed_action` to approve) or a refund
+sign-off as a bare `human` node (no evidence, expiry, or execution) is a
+mismatch in both directions.
+
 > See the [Permissions Reference](../permissions.md) for the IAM action strings
 > for this module.
 
