@@ -173,4 +173,5 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'secret',
   'session',
   'webhook',
+  'trigger',
 ]);

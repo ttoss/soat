@@ -882,6 +882,67 @@ components:
             type: string
           description: Event types to subscribe to (e.g. memory.updated)
 
+    TriggerResourceProperties:
+      description: >-
+        Binds a starter (manual, webhook, or schedule) to an executable target
+        (orchestration, agent, or tool). Firings run under the project owner's
+        confined run-as identity.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - type
+        - target_type
+        - target_id
+      properties:
+        name:
+          type: string
+          description: Trigger display name (unique within the project)
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        type:
+          type: string
+          enum:
+            - manual
+            - webhook
+            - schedule
+          description: Starter type. Immutable after creation
+        target_type:
+          type: string
+          enum:
+            - orchestration
+            - agent
+            - tool
+          description: The kind of resource this trigger activates
+        target_id:
+          type: string
+          description: >-
+            Public ID of the target resource. Use { "ref": "LogicalId" } to
+            reference an orchestration, agent, or tool defined in the template.
+        action:
+          type: string
+          nullable: true
+          description: Tool targets only — the action for soat/mcp tools
+        input:
+          type: object
+          nullable: true
+          description: Static input shallow-merged under each firing's runtime input
+        cron:
+          type: string
+          nullable: true
+          description: 5-field cron expression (UTC). Required when type is schedule
+        active:
+          type: boolean
+          description: Whether the trigger fires (default true)
+        policy_id:
+          x-soat-ref: policies
+          type: string
+          nullable: true
+          description: >-
+            Optional boundary policy that further confines the run-as identity
+
     ApiKeyResourceProperties:
       description: >-
         Creates an API key scoped to the formation's project and optionally
@@ -1216,6 +1277,7 @@ components:
             - secret
             - session
             - webhook
+            - trigger
           description: Resource type
         properties:
           oneOf:
@@ -1237,6 +1299,7 @@ components:
             - $ref: '#/components/schemas/SecretResourceProperties'
             - $ref: '#/components/schemas/SessionResourceProperties'
             - $ref: '#/components/schemas/WebhookResourceProperties'
+            - $ref: '#/components/schemas/TriggerResourceProperties'
           description: >
             Resource properties. Values may use `{ "ref": "logicalId" }` to
             reference physical IDs of other resources in the template,
