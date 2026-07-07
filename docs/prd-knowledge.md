@@ -154,7 +154,7 @@ All entity parameters are optional and compose with existing vector/memory/docum
 
 **Deliverables (as implemented — see prd-memories.md Phase 4 for full details):**
 
-- ✅ Fire-and-forget extraction trigger after completed turns — non-blocking; fired from `conversationGeneration.ts` (covers conversations and sessions) and the direct `POST /agents/:id/generate` route. *(Design deviation: the trigger lives at the post-completion call sites instead of inside `createGeneration()`, keeping the generation pipeline extraction-free and the trigger covered by REST integration tests.)*
+- ✅ Fire-and-forget extraction trigger after completed turns — non-blocking; fired from `conversationGeneration.ts` (covers conversations and sessions) and the direct `POST /agents/{agent_id}/generate` route. *(Design deviation: the trigger lives at the post-completion call sites instead of inside `createGeneration()`, keeping the generation pipeline extraction-free and the trigger covered by REST integration tests.)*
 - ✅ Trigger condition: **opt-in** — agent's `knowledgeConfig` has `extraction: true` and a `write_memory_id` (the write target). *(Design deviation: opt-in rather than opt-out, so enabling memory retrieval never silently adds LLM extraction cost.)*
 - ✅ `runMemoryExtraction()` in `memoryExtraction.ts` — runs the extraction completion (`memoryExtractionCompletion.ts`, plain completion on the agent's own provider/model), then `writeMemoryEntry()` for each candidate with `source: 'extraction'`
 - ✅ Extraction result (`{ candidates, created, updated, skipped }`) stored on the generation record's `metadata.extraction`

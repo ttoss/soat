@@ -9,7 +9,7 @@
 | MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                                |
 | Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; manual writes still concatenate on merge                                    |
 | Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`), concat fallback; manual REST writes still concatenate (Phase 5) |
-| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries`; POST returns `action` field                                            |
+| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/{memory_id}/entries`; POST returns `action` field                                            |
 | Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                             |
 | `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                                |
 | Extraction (post-conversation) | ✅ Implemented | `runMemoryExtraction()` in `memoryExtraction.ts`; opt-in via `knowledge_config.extraction: true` + `write_memory_id`; summary on generation `metadata.extraction` |
@@ -37,7 +37,7 @@
 - `writeMemoryEntry()` lib function with two-threshold dedup/merge/skip algorithm
 - `mergeEntryContent()` concatenating existing and incoming content
 - `POST/GET/PUT/DELETE /api/v1/memories` — memory CRUD
-- `POST/GET/PUT/DELETE /api/v1/memories/:memoryId/entries` — entry CRUD; POST returns `action` field
+- `POST/GET/PUT/DELETE /api/v1/memories/{memory_id}/entries` — entry CRUD; POST returns `action` field
 - OpenAPI spec, permissions (`WriteMemoryEntry`, `ReadMemoryEntry`, etc.), tests
 
 **Unlocks:** Manual memory management via REST. Developers can build their own write workflows.
@@ -82,7 +82,7 @@
 
 **Deliverables:**
 
-- ✅ Post-generation extraction pipeline (fire-and-forget, non-blocking) — `fireMemoryExtraction()` in `src/lib/memoryExtraction.ts`, triggered after completed conversation/session generations (`conversationGeneration.ts`) and direct `POST /agents/:id/generate` calls
+- ✅ Post-generation extraction pipeline (fire-and-forget, non-blocking) — `fireMemoryExtraction()` in `src/lib/memoryExtraction.ts`, triggered after completed conversation/session generations (`conversationGeneration.ts`) and direct `POST /agents/{agent_id}/generate` calls
 - ✅ LLM prompt to extract atomic facts from the completed turn — runs as a plain completion against the agent's own provider/model (`memoryExtractionCompletion.ts`), with no tools and no knowledge injection, so extraction cannot trigger agent side effects
 - ✅ Each candidate (max 20 per turn) runs through the standard `writeMemoryEntry()` write algorithm with `source: 'extraction'`
 - ✅ Extraction trigger: **opt-in** via `knowledge_config.extraction` + `write_memory_id` — the designated write target, reusing the `write_memory` tool's semantics. *(Design deviation: the original plan keyed extraction off `memory_ids`, but those define the read scope and can be plural; the single write target is unambiguous.)*
@@ -206,7 +206,7 @@ atomic, superseded knowledge remains auditable, and every fact traces to its sou
 - `MemoryEntityEdge` model — a first-class **entity → entity** edge: `{ subjectEntityId, predicate, objectEntityId, entryId, invalidatedAt }`. The entry is the edge's **provenance** (which fact asserted it), not a party to it. This keeps triples unambiguous: "Pedro owns Company X and Maria owns Company Y" in one entry produces two edges whose subject/object pairing is explicit — an entry↔entity join table would produce four same-verb mention rows that cannot be re-paired into triples
 - **Canonical predicates** — extraction normalizes verbs to a canonical snake_case predicate before storage (`"is the owner of"` → `owns`). Free-form labels fragment the graph and make `predicate` filters miss; the predicate set is open, but normalization is mandatory
 - **Edge validity** — edges carry `invalidatedAt`; when an entry is superseded (Phase 5b) or deleted, the edges it asserted are invalidated/removed with it
-- CRUD endpoints for entities: `GET/PUT/DELETE /api/v1/entities` (project-scoped, not nested under memories), plus `GET /api/v1/entities/:entityId/edges`
+- CRUD endpoints for entities: `GET/PUT/DELETE /api/v1/entities` (project-scoped, not nested under memories), plus `GET /api/v1/entities/{entity_id}/edges`
 - Entity deduplication by embedding similarity within a project (same two-threshold pattern as entries)
 
 #### 6b — Async entity extraction on write
@@ -334,7 +334,7 @@ periodically.
   Eviction enforcement runs fire-and-forget after any write that leaves the memory above
   `max_entries` (no LLM call — a cheap ORDER BY delete), evicting until the count is back at the
   cap. `ttl_days` expiry is enforced by the daily sweep below.
-- Compaction: `POST /api/v1/memories/:memoryId/compact` clusters near-duplicate valid entries and
+- Compaction: `POST /api/v1/memories/{memory_id}/compact` clusters near-duplicate valid entries and
   merges each cluster through the v2 arbitration path. **Trigger cadence:** (a) manual via the
   endpoint, (b) enqueued fire-and-forget when a write leaves the memory's valid-entry count above
   the `max_entries` watermark, and (c) a daily scheduled sweep over memories with a retention
@@ -694,7 +694,7 @@ POST /api/v1/memories/mem_abc/entries
 
 ### 1. Manual Write (REST API)
 
-The user calls `POST /api/v1/memories/:memoryId/entries` with `{ "content": "..." }`. The write algorithm runs within that memory and returns the action taken plus the entry.
+The user calls `POST /api/v1/memories/{memory_id}/entries` with `{ "content": "..." }`. The write algorithm runs within that memory and returns the action taken plus the entry.
 
 ### 2. Agent Write (soat-tool)
 
@@ -878,30 +878,30 @@ fields) lives in the knowledge PRD — see
 | ----------------------- | ----------------------------------- |
 | `memories:CreateMemory` | `POST /api/v1/memories`             |
 | `memories:ListMemories` | `GET /api/v1/memories`              |
-| `memories:GetMemory`    | `GET /api/v1/memories/:memoryId`    |
-| `memories:UpdateMemory` | `PUT /api/v1/memories/:memoryId`    |
-| `memories:DeleteMemory` | `DELETE /api/v1/memories/:memoryId` |
+| `memories:GetMemory`    | `GET /api/v1/memories/{memory_id}`    |
+| `memories:UpdateMemory` | `PUT /api/v1/memories/{memory_id}`    |
+| `memories:DeleteMemory` | `DELETE /api/v1/memories/{memory_id}` |
 
 ### Entry Operations
 
 | Permission                   | Endpoint                                             |
 | ---------------------------- | ---------------------------------------------------- |
-| `memories:WriteMemoryEntry`  | `POST /api/v1/memories/:memoryId/entries`            |
-| `memories:ListMemoryEntries` | `GET /api/v1/memories/:memoryId/entries`             |
-| `memories:GetMemoryEntry`    | `GET /api/v1/memories/:memoryId/entries/:entryId`    |
-| `memories:UpdateMemoryEntry` | `PUT /api/v1/memories/:memoryId/entries/:entryId`    |
-| `memories:DeleteMemoryEntry` | `DELETE /api/v1/memories/:memoryId/entries/:entryId` |
+| `memories:WriteMemoryEntry`  | `POST /api/v1/memories/{memory_id}/entries`            |
+| `memories:ListMemoryEntries` | `GET /api/v1/memories/{memory_id}/entries`             |
+| `memories:GetMemoryEntry`    | `GET /api/v1/memories/{memory_id}/entries/{entry_id}`    |
+| `memories:UpdateMemoryEntry` | `PUT /api/v1/memories/{memory_id}/entries/{entry_id}`    |
+| `memories:DeleteMemoryEntry` | `DELETE /api/v1/memories/{memory_id}/entries/{entry_id}` |
 
 ### Entity Operations
 
 | Permission                    | Endpoint                            |
 | ----------------------------- | ----------------------------------- |
 | `memories:ListMemoryEntities` | `GET /api/v1/entities`                      |
-| `memories:GetMemoryEntity`    | `GET /api/v1/entities/:entityId`            |
-| `memories:UpdateMemoryEntity` | `PUT /api/v1/entities/:entityId`            |
-| `memories:DeleteMemoryEntity` | `DELETE /api/v1/entities/:entityId`         |
-| `memories:ListEntityEntries`  | `GET /api/v1/entities/:entityId/entries`    |
-| `memories:ListEntityEdges`    | `GET /api/v1/entities/:entityId/edges`      |
+| `memories:GetMemoryEntity`    | `GET /api/v1/entities/{entity_id}`            |
+| `memories:UpdateMemoryEntity` | `PUT /api/v1/entities/{entity_id}`            |
+| `memories:DeleteMemoryEntity` | `DELETE /api/v1/entities/{entity_id}`         |
+| `memories:ListEntityEntries`  | `GET /api/v1/entities/{entity_id}/entries`    |
+| `memories:ListEntityEdges`    | `GET /api/v1/entities/{entity_id}/edges`      |
 
 Entity and edge creation is automatic (via async extraction during `writeMemoryEntry`). No `CreateMemoryEntity` permission needed — it piggybacks on `WriteMemoryEntry`.
 
@@ -919,19 +919,19 @@ All body fields use `snake_case` per project convention.
 | ------ | ---------------------------- | ------------------------------------ |
 | POST   | `/api/v1/memories`           | Create a memory                      |
 | GET    | `/api/v1/memories`           | List memories in accessible projects |
-| GET    | `/api/v1/memories/:memoryId` | Get a memory by ID                   |
-| PUT    | `/api/v1/memories/:memoryId` | Update a memory                      |
-| DELETE | `/api/v1/memories/:memoryId` | Delete a memory and all its entries  |
+| GET    | `/api/v1/memories/{memory_id}` | Get a memory by ID                   |
+| PUT    | `/api/v1/memories/{memory_id}` | Update a memory                      |
+| DELETE | `/api/v1/memories/{memory_id}` | Delete a memory and all its entries  |
 
 ### Entry Operations
 
 | Method | Path                                          | Description                                            |
 | ------ | --------------------------------------------- | ------------------------------------------------------ |
-| POST   | `/api/v1/memories/:memoryId/entries`          | Write content (system decides: create, merge, or skip) |
-| GET    | `/api/v1/memories/:memoryId/entries`          | List entries in a memory                               |
-| GET    | `/api/v1/memories/:memoryId/entries/:entryId` | Get an entry by ID                                     |
-| PUT    | `/api/v1/memories/:memoryId/entries/:entryId` | Manually update an entry (bypasses dedup)              |
-| DELETE | `/api/v1/memories/:memoryId/entries/:entryId` | Delete an entry                                        |
+| POST   | `/api/v1/memories/{memory_id}/entries`          | Write content (system decides: create, merge, or skip) |
+| GET    | `/api/v1/memories/{memory_id}/entries`          | List entries in a memory                               |
+| GET    | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Get an entry by ID                                     |
+| PUT    | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Manually update an entry (bypasses dedup)              |
+| DELETE | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Delete an entry                                        |
 
 Phase 5 adds `superseded` to the `action` values returned by the write endpoint and an
 `include_invalidated` query parameter on entry listing (invalidated entries are excluded by
@@ -942,11 +942,11 @@ default).
 | Method | Path                                 | Description                                     |
 | ------ | ------------------------------------ | ----------------------------------------------- |
 | GET    | `/api/v1/entities`                   | List entities in accessible projects            |
-| GET    | `/api/v1/entities/:entityId`         | Get an entity by ID                             |
-| PUT    | `/api/v1/entities/:entityId`         | Update entity (name, type, properties, actorId) |
-| DELETE | `/api/v1/entities/:entityId`         | Delete an entity and its entry links            |
-| GET    | `/api/v1/entities/:entityId/entries` | List entries linked to an entity                |
-| GET    | `/api/v1/entities/:entityId/edges`   | List edges (subject → predicate → object) touching an entity |
+| GET    | `/api/v1/entities/{entity_id}`         | Get an entity by ID                             |
+| PUT    | `/api/v1/entities/{entity_id}`         | Update entity (name, type, properties, actorId) |
+| DELETE | `/api/v1/entities/{entity_id}`         | Delete an entity and its entry links            |
+| GET    | `/api/v1/entities/{entity_id}/entries` | List entries linked to an entity                |
+| GET    | `/api/v1/entities/{entity_id}/edges`   | List edges (subject → predicate → object) touching an entity |
 
 Entities and edges are created automatically during `writeMemoryEntry()` (async, best-effort) — no `POST` endpoint. Users can update or delete extracted entities via `PUT`/`DELETE`. Entities are project-scoped; filter by `project_id` query parameter on `GET /api/v1/entities`.
 
@@ -956,4 +956,4 @@ No separate endpoints — use the standard agent update endpoint:
 
 | Method | Path                      | Description                               |
 | ------ | ------------------------- | ----------------------------------------- |
-| PUT    | `/api/v1/agents/:agentId` | Update agent including `knowledge_config` |
+| PUT    | `/api/v1/agents/{agent_id}` | Update agent including `knowledge_config` |
