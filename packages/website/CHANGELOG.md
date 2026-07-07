@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.1](https://127.0.0.1/41729/git/ttoss/compare/v0.14.0...v0.14.1) (2026-07-07)
+
+### Features
+
+* **server:** implement S3 file storage provider ([#472](https://127.0.0.1/41729/git/ttoss/issues/472)) ([b90e721](https://127.0.0.1/41729/git/ttoss/commits/b90e721cb6835e0d994e7500a35aabd68638415f))
+* **server:** support OpenAI and Bedrock embedding providers ([#473](https://127.0.0.1/41729/git/ttoss/issues/473)) ([b5d7fcf](https://127.0.0.1/41729/git/ttoss/commits/b5d7fcf41804e160b46d1cbe16f4453f87f34836))
+
 # [0.14.0](https://127.0.0.1/41729/git/ttoss/compare/v0.13.20...v0.14.0) (2026-07-05)
 
 ### Features
