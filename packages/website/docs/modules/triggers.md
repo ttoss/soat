@@ -27,6 +27,10 @@ firing record is the source of truth for the outcome.
 > See the [Permissions Reference](../permissions.md) for the IAM action strings
 > for this module.
 
+## Related Tutorials
+
+- [Automate a Flow with Triggers](/docs/tutorials/automate-a-flow-with-triggers) — bind one orchestration to manual, schedule, and webhook starters.
+
 ## Data Model
 
 ### Trigger
