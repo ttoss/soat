@@ -1,0 +1,562 @@
+openapi: 3.0.3
+info:
+  title: SOAT Triggers API
+  version: 1.0.0
+  description: API for managing triggers that activate orchestrations, agents, and tools
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Triggers
+    description: Manage triggers and inspect firings
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/triggers:
+    get:
+      description: Lists triggers. Filter by project, starter type, or target type.
+      tags:
+        - Triggers
+      summary: List triggers
+      operationId: listTriggers
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - manual
+              - webhook
+              - schedule
+        - name: target_type
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - orchestration
+              - agent
+              - tool
+      responses:
+        '200':
+          description: A list of triggers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Trigger'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      description: Creates a new trigger for a project
+      tags:
+        - Triggers
+      summary: Create a trigger
+      operationId: createTrigger
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTriggerRequest'
+      responses:
+        '201':
+          description: Trigger created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerWithSecret'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
+  /api/v1/triggers/{trigger_id}:
+    get:
+      description: Retrieves the details of a specific trigger
+      tags:
+        - Triggers
+      summary: Get a trigger
+      operationId: getTrigger
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trigger details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trigger'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+    patch:
+      description: Updates an existing trigger's configuration. The type is immutable.
+      tags:
+        - Triggers
+      summary: Update a trigger
+      operationId: updateTrigger
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTriggerRequest'
+      responses:
+        '200':
+          description: Trigger updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trigger'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+    delete:
+      description: Deletes a trigger
+      tags:
+        - Triggers
+      summary: Delete a trigger
+      operationId: deleteTrigger
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Trigger deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+
+  /api/v1/triggers/{trigger_id}/fire:
+    post:
+      description: Fires a trigger synchronously and returns the terminal firing record.
+      tags:
+        - Triggers
+      summary: Fire a trigger
+      operationId: fireTrigger
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FireTriggerRequest'
+      responses:
+        '200':
+          description: Terminal firing record
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerFiring'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+        '409':
+          description: Trigger inactive or creator unavailable
+
+  /api/v1/triggers/{trigger_id}/secret:
+    get:
+      description: Retrieves the signing secret for a webhook trigger
+      tags:
+        - Triggers
+      summary: Get trigger secret
+      operationId: getTriggerSecret
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Trigger secret
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerSecretResponse'
+        '400':
+          description: Trigger is not a webhook trigger
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+
+  /api/v1/triggers/{trigger_id}/rotate-secret:
+    post:
+      description: Rotates the signing secret for a webhook trigger
+      tags:
+        - Triggers
+      summary: Rotate trigger secret
+      operationId: rotateTriggerSecret
+      parameters:
+        - name: trigger_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Secret rotated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerWithSecret'
+        '400':
+          description: Trigger is not a webhook trigger
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+
+  /api/v1/trigger-firings:
+    get:
+      description: Lists firings for a trigger (trigger_id is required).
+      tags:
+        - Triggers
+      summary: List trigger firings
+      operationId: listTriggerFirings
+      parameters:
+        - name: trigger_id
+          in: query
+          required: true
+          description: Trigger to list firings for (trg_...)
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: A list of firings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerFiringListResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Trigger not found
+
+  /api/v1/trigger-firings/{firing_id}:
+    get:
+      description: Retrieves the details of a specific trigger firing
+      tags:
+        - Triggers
+      summary: Get a trigger firing
+      operationId: getTriggerFiring
+      parameters:
+        - name: firing_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Firing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TriggerFiring'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Firing not found
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    Trigger:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          x-soat-ref: projects
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum:
+            - manual
+            - webhook
+            - schedule
+        target_type:
+          type: string
+          enum:
+            - orchestration
+            - agent
+            - tool
+        target_id:
+          type: string
+          description: Public ID of the target resource (orchestration, agent, or tool)
+        action:
+          type: string
+          nullable: true
+          description: Tool targets only — the action for soat/mcp tools
+        input:
+          type: object
+          nullable: true
+          description: Static input, shallow-merged under fire-time input
+        cron:
+          type: string
+          nullable: true
+          description: 5-field cron expression (UTC). Present only for schedule triggers
+        active:
+          type: boolean
+        policy_id:
+          x-soat-ref: policies
+          type: string
+          nullable: true
+          description: Optional boundary policy that further restricts firings
+        next_fire_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: Read-only, schedule triggers only. Server-computed next fire time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TriggerWithSecret:
+      allOf:
+        - $ref: '#/components/schemas/Trigger'
+        - type: object
+          properties:
+            secret:
+              type: string
+              description: Webhook triggers only. Returned only on create and rotate
+
+    CreateTriggerRequest:
+      type: object
+      required:
+        - name
+        - type
+        - target_type
+        - target_id
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the project. Optional when authenticating with a project-scoped API key, which defaults to the key's project; required otherwise.
+        name:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+          enum:
+            - manual
+            - webhook
+            - schedule
+        target_type:
+          type: string
+          enum:
+            - orchestration
+            - agent
+            - tool
+        target_id:
+          type: string
+        action:
+          type: string
+          description: Tool targets only — the action for soat/mcp tools
+        input:
+          type: object
+        cron:
+          type: string
+          description: 5-field cron expression (UTC). Required when type is schedule
+        active:
+          type: boolean
+          default: true
+        policy_id:
+          x-soat-ref: policies
+          type: string
+
+    UpdateTriggerRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        target_type:
+          type: string
+          enum:
+            - orchestration
+            - agent
+            - tool
+        target_id:
+          type: string
+        action:
+          type: string
+          nullable: true
+        input:
+          type: object
+          nullable: true
+        cron:
+          type: string
+          nullable: true
+        active:
+          type: boolean
+        policy_id:
+          x-soat-ref: policies
+          type: string
+          nullable: true
+
+    FireTriggerRequest:
+      type: object
+      properties:
+        input:
+          type: object
+          description: Fire-time input, shallow-merged over the trigger's static input
+
+    TriggerSecretResponse:
+      type: object
+      properties:
+        secret:
+          type: string
+
+    TriggerFiring:
+      type: object
+      properties:
+        id:
+          type: string
+        trigger_id:
+          x-soat-ref: triggers
+          type: string
+        project_id:
+          x-soat-ref: projects
+          type: string
+        source:
+          type: string
+          enum:
+            - manual
+            - webhook
+            - schedule
+        status:
+          type: string
+          enum:
+            - pending
+            - running
+            - succeeded
+            - failed
+        input:
+          type: object
+          nullable: true
+        result:
+          type: object
+          nullable: true
+          description: '{ target_type, result_id, status, output } — output truncated'
+        error:
+          type: object
+          nullable: true
+          description: '{ code, message, meta }'
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    TriggerFiringListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/TriggerFiring'
+        total:
+          type: integer
+        limit:
+          type: integer
+        offset:
+          type: integer

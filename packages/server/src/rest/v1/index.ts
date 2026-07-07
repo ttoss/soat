@@ -26,6 +26,7 @@ import { secretsRouter } from './secrets';
 import { sessionsRouter } from './sessions';
 import { toolsRouter } from './tools';
 import { tracesRouter } from './traces';
+import { triggersRouter } from './triggers';
 import { usersRouter } from './users';
 import { webhooksRouter } from './webhooks';
 
@@ -56,6 +57,7 @@ v1Router.use(secretsRouter.routes());
 v1Router.use(orchestrationsRouter.routes());
 v1Router.use(toolsRouter.routes());
 v1Router.use(tracesRouter.routes());
+v1Router.use(triggersRouter.routes());
 v1Router.use(usersRouter.routes());
 v1Router.use(webhooksRouter.routes());
 v1Router.use(openapiRouter.routes());

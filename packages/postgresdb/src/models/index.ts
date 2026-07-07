@@ -32,6 +32,8 @@ export { Secret } from './Secret';
 export { Session } from './Session';
 export { Tool } from './Tool';
 export { Trace } from './Trace';
+export { Trigger } from './Trigger';
+export { TriggerFiring } from './TriggerFiring';
 export { UploadToken } from './UploadToken';
 export { User } from './User';
 export { Webhook } from './Webhook';

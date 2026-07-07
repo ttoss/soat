@@ -37,6 +37,8 @@ export const PUBLIC_ID_PREFIXES = {
   discussion: 'disc_',
   discussionParticipant: 'dpt_',
   discussionRun: 'drn_',
+  trigger: 'trg_',
+  triggerFiring: 'trg_fire_',
 } as const;
 
 /**

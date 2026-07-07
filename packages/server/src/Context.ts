@@ -38,6 +38,11 @@ export type AuthUser = {
   apiKeyProjectPublicId?: string;
   /** Public string id of the project an OAuth token is scoped to. */
   oauthProjectPublicId?: string;
+  /**
+   * True when the caller authenticated with a trigger run-as token (`trg`
+   * claim). Used by the fire endpoint to reject trigger→trigger recursion.
+   */
+  isTriggerToken?: boolean;
 };
 
 export type Context = {

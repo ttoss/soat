@@ -288,6 +288,44 @@ export const ERROR_CODES = {
     description:
       'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
   },
+  INVALID_CRON_EXPRESSION: {
+    httpStatus: 400,
+    description:
+      'The cron expression is invalid. Triggers require a strict 5-field cron expression evaluated in UTC.',
+  },
+  TRIGGER_TYPE_IMMUTABLE: {
+    httpStatus: 400,
+    description: 'A trigger’s type cannot be changed after creation.',
+  },
+  TRIGGER_TARGET_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'The trigger target does not exist in the project, or its type does not match target_type.',
+  },
+  TRIGGER_ACTION_NOT_ALLOWED: {
+    httpStatus: 400,
+    description:
+      'A trigger field is incompatible with its type: `action` is only valid for tool targets (and required for soat/mcp tools), and `cron` is required for schedule triggers and rejected otherwise.',
+  },
+  TRIGGER_INPUT_INVALID: {
+    httpStatus: 400,
+    description:
+      'The effective input is invalid for the target (empty agent input, or an orchestration input_schema violation).',
+  },
+  TRIGGER_NOT_ACTIVE: {
+    httpStatus: 409,
+    description: 'The trigger is inactive and cannot fire.',
+  },
+  TRIGGER_CREATOR_UNAVAILABLE: {
+    httpStatus: 409,
+    description:
+      'The trigger creator no longer exists, so the firing identity cannot be resolved.',
+  },
+  TRIGGER_RECURSION_FORBIDDEN: {
+    httpStatus: 403,
+    description:
+      'A trigger-scoped credential cannot fire a trigger, preventing unbounded trigger→trigger loops.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

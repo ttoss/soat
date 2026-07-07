@@ -1,0 +1,55 @@
+{
+  "module": "triggers",
+  "operations": [
+    {
+      "operationId": "listTriggers",
+      "action": "triggers:ListTriggers",
+      "description": "List triggers in a project"
+    },
+    {
+      "operationId": "createTrigger",
+      "action": "triggers:CreateTrigger",
+      "description": "Create a new trigger"
+    },
+    {
+      "operationId": "getTrigger",
+      "action": "triggers:GetTrigger",
+      "description": "Get a trigger by ID"
+    },
+    {
+      "operationId": "updateTrigger",
+      "action": "triggers:UpdateTrigger",
+      "description": "Update a trigger"
+    },
+    {
+      "operationId": "deleteTrigger",
+      "action": "triggers:DeleteTrigger",
+      "description": "Delete a trigger"
+    },
+    {
+      "operationId": "fireTrigger",
+      "action": "triggers:FireTrigger",
+      "description": "Fire a trigger manually"
+    },
+    {
+      "operationId": "getTriggerSecret",
+      "action": "triggers:GetTriggerSecret",
+      "description": "Retrieve the signing secret for a webhook trigger"
+    },
+    {
+      "operationId": "rotateTriggerSecret",
+      "action": "triggers:RotateTriggerSecret",
+      "description": "Rotate the signing secret for a webhook trigger"
+    },
+    {
+      "operationId": "listTriggerFirings",
+      "action": "triggers:ListTriggerFirings",
+      "description": "List firings for a trigger"
+    },
+    {
+      "operationId": "getTriggerFiring",
+      "action": "triggers:GetTriggerFiring",
+      "description": "Get details of a specific trigger firing"
+    }
+  ]
+}
