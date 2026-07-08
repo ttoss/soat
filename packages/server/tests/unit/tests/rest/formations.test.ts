@@ -223,6 +223,14 @@ resources:
       expect(res.body.changes[0].action).toBe('create');
       expect(res.body.changes[0].physical_resource_id).toBeUndefined();
     });
+
+    test('invalid template returns 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({ project_id: projectId, template: invalidTemplate });
+
+      expect(res.status).toBe(400);
+    });
   });
 
   // ── Create ────────────────────────────────────────────────────────────────
@@ -401,6 +409,14 @@ resources:
 
       expect(res.status).toBe(401);
     });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken)
+        .get('/api/v1/formations')
+        .query({ project_id: projectId });
+
+      expect(res.status).toBe(403);
+    });
   });
 
   // ── Get ───────────────────────────────────────────────────────────────────
@@ -573,11 +589,33 @@ resources:
       );
       expect(res.status).toBe(401);
     });
+
+    test('no permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/formations/${formationId}/events`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 
   // ── Delete ────────────────────────────────────────────────────────────────
 
   describe('DELETE /api/v1/formations/:formation_id', () => {
+    test('no permission returns 403', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: 'delete-perm-check',
+          template: simpleTemplate,
+        });
+
+      const res = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/formations/${createRes.body.id}`
+      );
+      expect(res.status).toBe(403);
+    });
+
     test('deletes the formation and returns 200 with success', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${formationId}`

@@ -82,6 +82,44 @@ describe('OAuth consent API', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('400 when selection is not an object', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({ project_id: projectId, selection: 'not-an-object' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('400 when selection.kind is unrecognized', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({ project_id: projectId, selection: { kind: 'bogus' } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('400 when selection.modules is not an array', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'modules', modules: 'agents' },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('400 when selection.actions is not an array', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/oauth/consent')
+        .send({
+          project_id: projectId,
+          selection: { kind: 'actions', actions: 'agents:Nope' },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('400 when project_id is missing', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/oauth/consent')

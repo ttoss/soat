@@ -412,6 +412,34 @@ describe('Sessions', () => {
       expect(response.body.error.message).toMatch(/message/);
     });
 
+    test('non-string message returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
+        .send({ message: 123 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('non-string document_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
+        .send({ document_id: 123 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('message and document_id are mutually exclusive', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${sessionId}/messages`)
+        .send({ message: 'Hello', document_id: 'doc_x' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/mutually exclusive/);
+    });
+
     describe('idempotency_key', () => {
       test('first call with idempotency_key returns 201', async () => {
         const response = await authenticatedTestClient(userToken)

@@ -454,6 +454,19 @@ describe('Webhooks', () => {
       targetWebhookId = hookRes.body.id;
     });
 
+    test('POST /webhooks with an empty events array returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'No events',
+          url: 'https://example.com/hook',
+          events: [],
+        });
+
+      expect(response.status).toBe(400);
+    });
+
     test('POST /webhooks with an invalid policy_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/webhooks')
@@ -546,6 +559,26 @@ describe('Webhooks', () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/webhook-deliveries')
         .query({ webhookId: targetWebhookId });
+
+      expect(response.status).toBe(403);
+    });
+
+    test('GET /webhook-deliveries/:deliveryId without permission returns 403', async () => {
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: targetWebhookId },
+      });
+      const delivery = await db.WebhookDelivery.create({
+        webhookId: webhook!.id as number,
+        eventType: 'files.created',
+        payload: {},
+        status: 'success',
+        statusCode: 200,
+        attempts: 1,
+      });
+
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/webhook-deliveries/${delivery.publicId}`
+      );
 
       expect(response.status).toBe(403);
     });

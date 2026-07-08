@@ -255,6 +255,14 @@ describe('Conversations', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/conversations/${conversationId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PATCH /api/v1/conversations/:id', () => {
@@ -600,6 +608,18 @@ describe('Conversations', () => {
       );
 
       expect(response.status).toBe(404);
+    });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/conversations')
+        .send({ project_id: projectId });
+
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/conversations/${createRes.body.id}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 

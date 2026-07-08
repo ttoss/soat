@@ -462,6 +462,13 @@ describe('Triggers', () => {
       const res = await testClient.get('/api/v1/triggers');
       expect(res.status).toBe(401);
     });
+
+    test('user without permission scoped to project_id returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/triggers?project_id=${projectId}`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/triggers/:trigger_id', () => {
@@ -541,6 +548,44 @@ describe('Triggers', () => {
       expect(res.status).toBe(200);
       expect(res.body.target_type).toBe('tool');
       expect(res.body.target_id).toBe(httpToolId);
+    });
+
+    test('changing target_type without the new target-start action returns 403', async () => {
+      const orchTrigger = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'patch-no-escalation',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['triggers:UpdateTrigger', 'triggers:GetTrigger'],
+              },
+            ],
+          },
+        });
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No CallTool Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(keyRes.body.key as string)
+        .patch(`/api/v1/triggers/${orchTrigger.body.id}`)
+        .send({ target_type: 'tool', target_id: httpToolId });
+      expect(res.status).toBe(403);
     });
 
     test('updating a schedule trigger with an invalid cron returns 400', async () => {
@@ -1180,6 +1225,13 @@ describe('Triggers', () => {
         '/api/v1/trigger-firings/trg_fire_missing'
       );
       expect(res.status).toBe(404);
+    });
+
+    test('getting a firing by id without permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/trigger-firings/${firingId}`
+      );
+      expect(res.status).toBe(403);
     });
 
     test('unauthenticated firings list returns 401', async () => {

@@ -61,6 +61,14 @@ describe('Projects', () => {
       expect(response.status).toBe(400);
     });
 
+    test('non-string name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 123 });
+
+      expect(response.status).toBe(400);
+    });
+
     test('unknown body field returns 400 VALIDATION_FAILED', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
@@ -376,6 +384,14 @@ describe('Projects', () => {
       const response = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/projects/${projectId}`)
         .send({});
+
+      expect(response.status).toBe(400);
+    });
+
+    test('non-string name returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ name: 123 });
 
       expect(response.status).toBe(400);
     });

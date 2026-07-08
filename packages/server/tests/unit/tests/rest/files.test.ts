@@ -457,6 +457,14 @@ describe('Files', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('returns 403 without DownloadFile permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/files/${fileId}/download/base64`
+      );
+
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /api/v1/files/upload/base64', () => {
@@ -619,6 +627,15 @@ describe('Files', () => {
         .send({ project_id: projectId });
 
       expect(response.status).toBe(403);
+    });
+
+    test('returns 400 for a well-formed but non-existent project_id', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/presigned-url')
+        .send({ project_id: 'proj_nonexistent12345', filename: 'x.txt' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid project ID');
     });
   });
 
@@ -967,6 +984,21 @@ describe('Files', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get('/api/v1/files');
+
+      expect(response.status).toBe(401);
+    });
+
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files?project_id=${secondProjectId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
   });
 

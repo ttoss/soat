@@ -116,6 +116,40 @@ describe('Orchestrations', () => {
     noPermToken = setup.noPermToken as string;
   });
 
+  // Creates a project-scoped API key whose policy excludes `excludedAction`,
+  // used to exercise the `projectIds === null` (403) branch on routes that
+  // don't take a `project_id` param (unlike `noPermToken`, which resolves to
+  // an empty project list and 404s instead).
+  const createRestrictedApiKey = async (excludedAction: string) => {
+    const allowedActions = [
+      'orchestrations:CreateOrchestration',
+      'orchestrations:ListOrchestrations',
+      'orchestrations:GetOrchestration',
+      'orchestrations:UpdateOrchestration',
+      'orchestrations:DeleteOrchestration',
+      'orchestrations:StartRun',
+      'orchestrations:ListRuns',
+      'orchestrations:GetRun',
+    ].filter((action) => {
+      return action !== excludedAction;
+    });
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: { statement: [{ effect: 'Allow', action: allowedActions }] },
+      });
+
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: `No ${excludedAction} Key`,
+        project_id: projectId,
+        policy_ids: [policyRes.body.id],
+      });
+    expect(keyRes.status).toBe(201);
+    return keyRes.body.key as string;
+  };
+
   describe('POST /api/v1/orchestrations', () => {
     test('authenticated user with permission can create an orchestration', async () => {
       const response = await authenticatedTestClient(userToken)
@@ -164,6 +198,34 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestrations')
         .send({ ...withoutEdges, project_id: projectId });
       expect(response.status).toBe(400);
+    });
+
+    test('non-string name returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...simpleOrchestration, name: 123, project_id: projectId });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('name is required');
+    });
+
+    test('non-array nodes returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          nodes: 'not-an-array',
+          project_id: projectId,
+        });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('nodes must be an array');
+    });
+
+    test('non-array edges returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...simpleOrchestration, edges: {}, project_id: projectId });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('edges must be an array');
     });
 
     test('invalid graph (dangling edge) returns 400 with validation error', async () => {
@@ -336,6 +398,16 @@ describe('Orchestrations', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('project-scoped API key without GetOrchestration permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey(
+        'orchestrations:GetOrchestration'
+      );
+      const response = await authenticatedTestClient(rawKey).get(
+        `/api/v1/orchestrations/${orchestrationId}`
+      );
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('PATCH /api/v1/orchestrations/:orchestration_id', () => {
@@ -387,6 +459,39 @@ describe('Orchestrations', () => {
       expect(response.body.description).toBeNull();
     });
 
+    test('can update description to a string', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/orchestrations/${orchestrationId}`)
+        .send({ description: 'An updated description' });
+      expect(response.status).toBe(200);
+      expect(response.body.description).toBe('An updated description');
+    });
+
+    test('can update state_schema and input_schema', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/orchestrations/${orchestrationId}`)
+        .send({
+          state_schema: { type: 'object' },
+          input_schema: { type: 'object', properties: {} },
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.state_schema).toEqual({ type: 'object' });
+      expect(response.body.input_schema).toEqual({
+        type: 'object',
+        properties: {},
+      });
+    });
+
+    test('project-scoped API key without UpdateOrchestration permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey(
+        'orchestrations:UpdateOrchestration'
+      );
+      const response = await authenticatedTestClient(rawKey)
+        .patch(`/api/v1/orchestrations/${orchestrationId}`)
+        .send({ name: 'X' });
+      expect(response.status).toBe(403);
+    });
+
     test('non-existent orchestration returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch('/api/v1/orchestrations/orch_notexist12345678')
@@ -413,6 +518,14 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: orchestrationId, input: {} });
       expect(response.status).toBe(403);
+    });
+
+    test('missing orchestration_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: 123, input: {} });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('orchestration_id is required');
     });
 
     test('project-scoped API key without StartRun permission returns 403', async () => {
@@ -1133,6 +1246,14 @@ describe('Orchestrations', () => {
         );
         expect(response.status).toBe(404);
       });
+
+      test('project-scoped API key without GetRun permission returns 403', async () => {
+        const rawKey = await createRestrictedApiKey('orchestrations:GetRun');
+        const response = await authenticatedTestClient(rawKey).get(
+          `/api/v1/orchestration-runs/${runId}`
+        );
+        expect(response.status).toBe(403);
+      });
     });
   });
 
@@ -1245,6 +1366,16 @@ describe('Orchestrations', () => {
         `/api/v1/orchestrations/${orchestrationId}`
       );
       expect(response.status).toBe(404);
+    });
+
+    test('project-scoped API key without DeleteOrchestration permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey(
+        'orchestrations:DeleteOrchestration'
+      );
+      const response = await authenticatedTestClient(rawKey).delete(
+        `/api/v1/orchestrations/${orchestrationId}`
+      );
+      expect(response.status).toBe(403);
     });
   });
 

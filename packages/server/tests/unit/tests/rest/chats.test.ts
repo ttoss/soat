@@ -60,6 +60,15 @@ describe('Chats', () => {
       expect(response.body.error).toBeDefined();
     });
 
+    test('non-string aiProviderId returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ project_id: projectId, ai_provider_id: 123 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/chats')
