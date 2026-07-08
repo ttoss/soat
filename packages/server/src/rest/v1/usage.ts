@@ -1,8 +1,20 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { listPrices, upsertPrices } from 'src/lib/priceBook';
 import { listUsageMeters } from 'src/lib/usage';
 
 export const usageRouter = new Router<Context>();
+
+type UpsertPricesBody = {
+  prices?: Array<{
+    provider: string;
+    model: string;
+    inputPricePerM: number;
+    outputPricePerM: number;
+    cachedPricePerM?: number | null;
+    effectiveFrom: string;
+  }>;
+};
 
 /**
  * @openapi
@@ -47,4 +59,46 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   });
 
   ctx.body = result;
+});
+
+/**
+ * @openapi
+ * GET /api/v1/usage/prices
+ * operationId: getPriceBook
+ * Returns the global price book — the versioned per-provider/model unit prices
+ * used to compute usage cost. Readable by any authenticated user.
+ */
+usageRouter.get('/usage/prices', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  ctx.body = await listPrices();
+});
+
+/**
+ * @openapi
+ * PUT /api/v1/usage/prices
+ * operationId: upsertPriceBook
+ * Upserts price rows keyed on (provider, model, effective_from). Admin only.
+ * effective_from must be in the future — past prices are immutable so recorded
+ * costs stay explainable.
+ */
+usageRouter.put('/usage/prices', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  if (ctx.authUser.role !== 'admin') {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const body = ctx.request.body as UpsertPricesBody;
+  ctx.body = await upsertPrices({ prices: body.prices ?? [] });
 });

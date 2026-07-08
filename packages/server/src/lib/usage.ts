@@ -3,6 +3,7 @@ import type { LanguageModelUsage } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { computeCostUsd, getEffectivePrice } from './priceBook';
 
 const log = createDebug('soat:usage');
 
@@ -135,9 +136,15 @@ const writeGenerationMeter = async (args: {
   const tokens = extractUsageTokens(args.usage);
   const aiProvider = generation.agent?.aiProvider ?? null;
   const provider = aiProvider?.provider ?? 'unknown';
+  const model = args.model || 'unknown';
   const metadata = generation.metadata ?? {};
   const actionId = metadataString(metadata, 'actionId');
   const triggerId = metadataString(metadata, 'triggerId');
+
+  // Price at write time from the row effective now; frozen onto the meter so
+  // later price changes never alter this recorded cost. Null when unpriced.
+  const price = await getEffectivePrice({ provider, model, at: new Date() });
+  const costUsd = computeCostUsd({ price, ...tokens });
 
   const [, created] = await db.UsageMeter.findOrCreate({
     where: { idempotencyKey: args.generationId },
@@ -153,12 +160,12 @@ const writeGenerationMeter = async (args: {
       triggerId,
       actionId,
       provider,
-      model: args.model || 'unknown',
+      model,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
       cachedTokens: tokens.cachedTokens,
       reasoningTokens: tokens.reasoningTokens,
-      costUsd: null,
+      costUsd,
       idempotencyKey: args.generationId,
     },
   });

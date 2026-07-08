@@ -37,8 +37,23 @@ Every meter row links back to the resources it attributes spend to: the [generat
 | `output_tokens`    | number          | Output (completion) tokens reported by the provider                                          |
 | `cached_tokens`    | number          | Cached input tokens read, when the provider reports them (else `0`)                          |
 | `reasoning_tokens` | number          | Reasoning tokens the provider reports separately (else `0`)                                  |
-| `cost_usd`         | number \| null  | Cost in USD computed at write time from the price book; `null` when tokens are not yet priced |
+| `cost_usd`         | number \| null  | Cost in USD computed at write time from the price book; `null` when no price row covers the model |
 | `created_at`       | string          | ISO 8601 creation timestamp                                                                  |
+
+### PriceBook
+
+Global, versioned unit prices used to compute `cost_usd`. Keyed by `(provider, model, effective_from)`; for a given provider/model the row with the latest `effective_from <= now()` applies.
+
+| Field                | Type            | Description                                                        |
+| -------------------- | --------------- | ------------------------------------------------------------------ |
+| `id`                 | string          | Public identifier for the price row (`price_` prefix)              |
+| `provider`           | string          | AI provider slug (e.g. `openai`)                                   |
+| `model`              | string          | Model identifier                                                   |
+| `input_price_per_m`  | number          | USD per one million input (prompt) tokens                          |
+| `output_price_per_m` | number          | USD per one million output (completion) tokens                     |
+| `cached_price_per_m` | number \| null  | USD per one million cached input tokens; `null` falls back to input |
+| `effective_from`     | string          | ISO 8601; the latest row `<= now()` prices a call                  |
+| `created_at`         | string          | ISO 8601 creation timestamp                                        |
 
 ## Key Concepts
 
@@ -56,7 +71,9 @@ Usage is metered for agent generations — including [conversations](./conversat
 
 ### Pricing
 
-`cost_usd` is `null` until a versioned price book prices the captured tokens. A `null` cost means "tokens captured, not yet priced" — it does not mean the call was free. Pricing correlates through `ai_provider_id` (the specific [AI provider](./ai-providers.md) instance billed), so two providers that share a slug but differ in configuration can be priced independently. The denormalized `provider`/`model` snapshot keeps the receipt accurate even if the provider is later deleted (`ai_provider_id` → `null`).
+`cost_usd` is computed at write time from the price book: the row for the meter's `(provider, model)` whose `effective_from <= now()`. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Cached input tokens are billed at `cached_price_per_m` (falling back to the input rate); reasoning tokens are part of the output count. `cost_usd` is `null` only when no price row covers the model — the tokens are still captured, it does not mean the call was free.
+
+SOAT ships **default prices** for common provider/model pairs (seeded at startup) so cost is computed out of the box; operators override them with future-dated rows via `PUT /api/v1/usage/prices`. Past-effective prices are immutable — corrections ship as new future-dated rows.
 
 ## Examples
 
@@ -82,6 +99,34 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/usage/meters?generation_id=gen_V1StGXR8Z5jdHi6B" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Read the price book:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-price-book
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.getPriceBook();
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/usage/prices" \
   -H "Authorization: Bearer <token>"
 ```
 
