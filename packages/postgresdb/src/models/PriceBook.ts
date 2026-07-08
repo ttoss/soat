@@ -13,10 +13,9 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
   tableName: 'price_books',
   timestamps: true,
   updatedAt: false,
-  indexes: [
-    { unique: true, fields: ['provider', 'model', 'effective_from'] },
-    { fields: ['provider', 'model', 'effective_from'] },
-  ],
+  // The unique composite also serves effective-price lookups by its
+  // (provider, model) leftmost prefix, so no separate index is needed.
+  indexes: [{ unique: true, fields: ['provider', 'model', 'effective_from'] }],
   hooks: {
     beforeValidate: (instance: PriceBook) => {
       if (!instance.publicId) {
