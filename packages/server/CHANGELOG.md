@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.2](https://127.0.0.1/41729/git/ttoss/compare/v0.14.1...v0.14.2) (2026-07-08)
+
+### Bug Fixes
+
+* **tools/formations:** preserve http tool input casing; support { ref } tool_id; cover inline-tool name validation ([#479](https://127.0.0.1/41729/git/ttoss/issues/479)) ([959b491](https://127.0.0.1/41729/git/ttoss/commits/959b4912dc886cd14145b892b3ae67c3d10dc80f))
+
 ## [0.14.1](https://127.0.0.1/41729/git/ttoss/compare/v0.14.0...v0.14.1) (2026-07-07)
 
 ### Bug Fixes
