@@ -477,6 +477,48 @@ describe('Documents', () => {
       );
       expect(response.status).toBe(401);
     });
+
+    test('GET tags returns 404 for a non-existent document', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/documents/doc_nonexistent/tags'
+      );
+      expect(response.status).toBe(404);
+    });
+
+    test('PUT tags returns 404 for a non-existent document', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put('/api/v1/documents/doc_nonexistent/tags')
+        .send({ region: 'us' });
+      expect(response.status).toBe(404);
+    });
+
+    test('PATCH tags returns 404 for a non-existent document', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch('/api/v1/documents/doc_nonexistent/tags')
+        .send({ version: '2' });
+      expect(response.status).toBe(404);
+    });
+
+    test('GET tags without GetDocument permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/documents/${tagDocId}/tags`
+      );
+      expect(response.status).toBe(403);
+    });
+
+    test('PUT tags without UpdateDocument permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .put(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ region: 'us' });
+      expect(response.status).toBe(403);
+    });
+
+    test('PATCH tags without UpdateDocument permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ version: '2' });
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /api/v1/documents (plain text creates exactly 1 chunk)', () => {
@@ -1119,6 +1161,20 @@ describe('Documents', () => {
         '/api/v1/documents/doc_nonexistent/status'
       );
       expect(res.status).toBe(404);
+    });
+
+    test('without GetDocument permission returns 403', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'x',
+          filename: 'status-perm.txt',
+        });
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/documents/${createRes.body.id}/status`
+      );
+      expect(res.status).toBe(403);
     });
 
     test('self-recovers a document stuck in processing (issue #4)', async () => {

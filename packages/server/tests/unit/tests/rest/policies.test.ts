@@ -113,6 +113,20 @@ describe('Policies', () => {
       expect(response.body.updated_at).toBeDefined();
     });
 
+    test('returns 400 for a document with an invalid effect', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Invalid Effect Policy',
+          document: {
+            statement: [{ effect: 'MaybeAllow', action: ['files:GetFile'] }],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
     test('returns 400 when document is missing', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
@@ -252,6 +266,19 @@ describe('Policies', () => {
         .send({ document: { statement: [] } });
 
       expect(response.status).toBe(403);
+    });
+
+    test('returns 400 for a document with an invalid effect', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/policies/${policyId}`)
+        .send({
+          document: {
+            statement: [{ effect: 'MaybeAllow', action: ['files:GetFile'] }],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
     });
 
     test('returns 404 for non-existent policy', async () => {

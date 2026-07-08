@@ -131,6 +131,19 @@ describe('API Keys', () => {
       expect(response.body.key).toMatch(/^sk_/);
     });
 
+    test('empty policy_ids array creates a policy-less key', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No Policies Key',
+          project_id: projectId,
+          policy_ids: [],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^key_/);
+    });
+
     test('admin can also create an API key', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/api-keys')
@@ -295,6 +308,14 @@ describe('API Keys', () => {
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/api-keys/${keyId}`)
         .send({ project_id: null });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('invalid policy_ids on update returns 400', async () => {
+      const response = await authenticatedTestClient(aliceToken)
+        .put(`/api/v1/api-keys/${keyId}`)
+        .send({ policy_ids: ['pol_nonexistent12345'] });
 
       expect(response.status).toBe(400);
     });

@@ -343,6 +343,15 @@ describe('Agents', () => {
       expect(response.body.error).toBeDefined();
     });
 
+    test('non-string aiProviderId returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({ project_id: projectId, ai_provider_id: 123 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBeDefined();
+    });
+
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/agents')
@@ -557,6 +566,48 @@ describe('Agents', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/tools/i);
     });
+
+    test('non-object inline tool definition returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: [123],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('non-array tools returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tools: 'not-an-array',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('creates an agent with stop_conditions, active_tool_ids, step_rules, and single_session_per_actor', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          stop_conditions: [],
+          active_tool_ids: [],
+          step_rules: [],
+          single_session_per_actor: true,
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.single_session_per_actor).toBe(true);
+    });
   });
 
   describe('GET /api/v1/agents', () => {
@@ -700,6 +751,15 @@ describe('Agents', () => {
       expect(response.body.tool_ids).toEqual([toolId]);
     });
 
+    test('non-array tools returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}`)
+        .send({ tools: 'not-an-array' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('can update agent with an ephemeral inline tool', async () => {
       const freshAgentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
@@ -812,6 +872,28 @@ describe('Agents', () => {
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/prompt/);
+    });
+
+    test('non-array tools returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({ tools: 'not-an-array' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('can update ai_provider_id and single_session_per_actor via PATCH', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
+        .send({
+          ai_provider_id: aiProviderId,
+          single_session_per_actor: true,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.ai_provider_id).toBe(aiProviderId);
+      expect(response.body.single_session_per_actor).toBe(true);
     });
   });
 

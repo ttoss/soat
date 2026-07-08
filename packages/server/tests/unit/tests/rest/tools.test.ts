@@ -59,6 +59,38 @@ describe('Tools', () => {
     clientToolId = clientToolRes.body.id;
   });
 
+  // Creates a project-scoped API key whose policy excludes `excludedAction`,
+  // used to exercise the `projectIds === null` (403) branch on routes that
+  // don't take a `project_id` param (unlike `noPermToken`, which resolves to
+  // an empty project list and 404s instead).
+  const createRestrictedApiKey = async (excludedAction: string) => {
+    const allowedActions = [
+      'tools:CreateTool',
+      'tools:ListTools',
+      'tools:GetTool',
+      'tools:UpdateTool',
+      'tools:DeleteTool',
+      'tools:CallTool',
+    ].filter((action) => {
+      return action !== excludedAction;
+    });
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: { statement: [{ effect: 'Allow', action: allowedActions }] },
+      });
+
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: `No ${excludedAction} Key`,
+        project_id: projectId,
+        policy_ids: [policyRes.body.id],
+      });
+    expect(keyRes.status).toBe(201);
+    return keyRes.body.key as string;
+  };
+
   describe('POST /api/v1/tools — execute.headers case preservation', () => {
     test('HTTP headers in execute config are preserved exactly as given (not case-transformed)', async () => {
       const response = await authenticatedTestClient(adminToken)
@@ -125,6 +157,13 @@ describe('Tools', () => {
         .send({ project_id: projectId });
       expect(response.status).toBe(400);
     });
+
+    test('non-string name returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({ project_id: projectId, name: 123 });
+      expect(response.status).toBe(400);
+    });
   });
 
   describe('GET /api/v1/tools', () => {
@@ -179,6 +218,14 @@ describe('Tools', () => {
         '/api/v1/tools/tool_nonexistent'
       );
       expect(response.status).toBe(404);
+    });
+
+    test('project-scoped API key without GetTool permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey('tools:GetTool');
+      const response = await authenticatedTestClient(rawKey).get(
+        `/api/v1/tools/${toolId}`
+      );
+      expect(response.status).toBe(403);
     });
   });
 
@@ -247,6 +294,14 @@ describe('Tools', () => {
       );
       expect(response.status).toBe(404);
     });
+
+    test('project-scoped API key without DeleteTool permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey('tools:DeleteTool');
+      const response = await authenticatedTestClient(rawKey).delete(
+        `/api/v1/tools/${toolId}`
+      );
+      expect(response.status).toBe(403);
+    });
   });
 
   describe('POST /api/v1/tools/:tool_id/call', () => {
@@ -270,6 +325,14 @@ describe('Tools', () => {
         .post('/api/v1/tools/tool_nonexistent/call')
         .send({ action: 'list-tools' });
       expect(response.status).toBe(404);
+    });
+
+    test('project-scoped API key without CallTool permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey('tools:CallTool');
+      const response = await authenticatedTestClient(rawKey)
+        .post(`/api/v1/tools/${soatToolId}/call`)
+        .send({ action: 'list-tools' });
+      expect(response.status).toBe(403);
     });
 
     test('calling a client tool returns 422', async () => {

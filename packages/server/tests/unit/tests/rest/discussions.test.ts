@@ -159,6 +159,13 @@ describe('Discussions', () => {
       const res = await testClient.get('/api/v1/discussions');
       expect(res.status).toBe(401);
     });
+
+    test('user without permission scoped to project_id returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/discussions?project_id=${projectId}`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/discussions/:id', () => {
@@ -244,6 +251,14 @@ describe('Discussions', () => {
       expect(res.status).toBe(400);
     });
 
+    test('non-string topic returns 400', async () => {
+      const created = await createDiscussion();
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/discussions/${created.body.id}/runs`)
+        .send({ topic: 123 });
+      expect(res.status).toBe(400);
+    });
+
     test('lists and gets runs', async () => {
       const created = await createDiscussion();
       const runRes = await authenticatedTestClient(userToken)
@@ -262,6 +277,19 @@ describe('Discussions', () => {
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.id).toBe(runRes.body.id);
+    });
+
+    test('getting a run without permission returns 403', async () => {
+      const created = await createDiscussion();
+      const runRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/discussions/${created.body.id}/runs`)
+        .send({ topic: 'Topic B' });
+      expect(runRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/discussions/runs/${runRes.body.id}`
+      );
+      expect(res.status).toBe(403);
     });
 
     test('unauthenticated run request returns 401', async () => {

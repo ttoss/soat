@@ -298,4 +298,19 @@ describe('Admin user operations', () => {
       expect(response.status).toBe(204);
     });
   });
+
+  describe('PUT /api/v1/users/:id/policies', () => {
+    test('non-array policy_ids returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'policyuser', password: 'pass' });
+      const { id } = createRes.body;
+
+      const response = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${id}/policies`)
+        .send({ policy_ids: 'not-an-array' });
+
+      expect(response.status).toBe(400);
+    });
+  });
 });
