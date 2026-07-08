@@ -85,6 +85,15 @@ You can also pass the API key directly in the provider's `config` object as `api
 { "api_key": "ABSK..." }
 ```
 
+### Price overrides
+
+A project can price its own provider instances without a global admin. A **per-provider price override** is a [price-book](./usage.md#pricebook) row bound to a specific AI provider — an enterprise-negotiated rate or a gateway with markup — that wins over the global default when [usage](./usage.md) cost is computed for that provider. Manage them with:
+
+- `GET /api/v1/ai-providers/{ai_provider_id}/prices` — list this provider's overrides
+- `PUT /api/v1/ai-providers/{ai_provider_id}/prices` — upsert them, keyed on `(model, effective_from)`
+
+Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates — unlike the global price book, which lists defaults only. The `provider` slug is taken from the AI provider itself (an override matches only when its slug equals the provider's), so you supply just the model, rates, and `effective_from`. `effective_from` must be in the future; past prices are immutable, so ship corrections as new future-dated rows. See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
+
 ## Examples
 
 ### Create an AI provider
@@ -169,6 +178,59 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl https://api.example.com/api/v1/ai-providers?project_id=proj_ABC \
   -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Set a per-provider price override
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-ai-provider-prices \
+  --ai-provider-id aip_ABC \
+  --prices '[{"model":"gpt-4o","input_price_per_m":5,"output_price_per_m":15,"effective_from":"2099-01-01T00:00:00.000Z"}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.aiProviders.updateAiProviderPrices({
+  path: { ai_provider_id: 'aip_ABC' },
+  body: {
+    prices: [
+      {
+        model: 'gpt-4o',
+        input_price_per_m: 5,
+        output_price_per_m: 15,
+        effective_from: '2099-01-01T00:00:00.000Z',
+      },
+    ],
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PUT https://api.example.com/api/v1/ai-providers/aip_ABC/prices \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prices": [
+      {
+        "model": "gpt-4o",
+        "input_price_per_m": 5,
+        "output_price_per_m": 15,
+        "effective_from": "2099-01-01T00:00:00.000Z"
+      }
+    ]
+  }'
 ```
 
 </TabItem>

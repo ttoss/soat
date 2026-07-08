@@ -2054,6 +2054,27 @@ if [ "$PRICES_TOTAL" -lt 1 ]; then
 fi
 echo "Price book endpoint (defaults seeded): OK ($PRICES_TOTAL rows)"
 
+# 34d. Per-provider price override — a project prices its own provider instance
+echo "--- Verifying per-provider price override ---"
+OVERRIDE_PUT=$($SOAT_CLI update-ai-provider-prices \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --prices '[{"model":"qwen2.5:0.5b","input_price_per_m":7,"output_price_per_m":21,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  | sanitize_json)
+OVERRIDE_OK=$(printf '%s\n' "$OVERRIDE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id != null) and (.prices[0].input_price_per_m == 7)')
+if [ "$OVERRIDE_OK" != "true" ]; then
+  echo "ERROR: update-ai-provider-prices did not return the upserted override" >&2
+  echo "$OVERRIDE_PUT" >&2
+  exit 1
+fi
+OVERRIDE_GET=$($SOAT_CLI get-ai-provider-prices --ai_provider_id "$AI_PROVIDER_ID" | sanitize_json)
+OVERRIDE_GET_OK=$(printf '%s\n' "$OVERRIDE_GET" | jq -r '[.prices[] | select(.model == "qwen2.5:0.5b")] | length >= 1')
+if [ "$OVERRIDE_GET_OK" != "true" ]; then
+  echo "ERROR: get-ai-provider-prices did not return the override" >&2
+  echo "$OVERRIDE_GET" >&2
+  exit 1
+fi
+echo "Per-provider price override: OK"
+
 # 35. Client-tool agent is delete-blocked after generation persists trace data
 echo "--- Verifying client-tool agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"

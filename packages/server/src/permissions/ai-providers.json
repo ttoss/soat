@@ -25,6 +25,16 @@
       "operationId": "deleteAiProvider",
       "action": "ai-providers:DeleteAiProvider",
       "description": "Delete an AI provider"
+    },
+    {
+      "operationId": "getAiProviderPrices",
+      "action": "ai-providers:GetAiProviderPrices",
+      "description": "List per-provider price overrides for an AI provider"
+    },
+    {
+      "operationId": "updateAiProviderPrices",
+      "action": "ai-providers:ManageAiProviderPrices",
+      "description": "Upsert per-provider price overrides for an AI provider"
     }
   ]
 }
