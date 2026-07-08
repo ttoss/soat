@@ -1,3 +1,4 @@
+import { db } from '../../../../src/db';
 import * as agentsModule from '../../../../src/lib/agents';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -1147,6 +1148,52 @@ describe('Sessions', () => {
       );
       expect(recoveryRes.status).toBe(200);
     });
+
+    test('stale generatingAt in the DB blocks a new generate call within the timeout window, but is ignored once the timeout has elapsed', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, name: 'stale-generating-at-test' });
+      const staleSessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${staleSessionId}/messages`)
+        .send({ message: 'Initial message' });
+
+      // Simulate a crashed/restarted process: generatingAt is set in the DB
+      // but there is no in-memory AbortController for this session (the map
+      // is empty for a session that never generated in this process).
+      const session = await db.Session.findOne({
+        where: { publicId: staleSessionId },
+      });
+      await session!.update({ generatingAt: new Date() });
+
+      // Within the 5-minute timeout window, the guard should reject the call.
+      const blockedRes = await authenticatedTestClient(userToken).post(
+        `/api/v1/sessions/${staleSessionId}/generate`
+      );
+      expect(blockedRes.status).toBe(409);
+      expect(blockedRes.body.error.code).toBe('GENERATION_ALREADY_IN_PROGRESS');
+
+      // Once the timeout window has elapsed, the stale generatingAt is
+      // ignored and generation proceeds normally.
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_stale_01',
+        traceId: 'trc_stale_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Recovered',
+          finishReason: 'stop',
+        },
+      });
+
+      const recoveredRes = await withAdvancedClock(6 * 60 * 1000, () => {
+        return authenticatedTestClient(userToken).post(
+          `/api/v1/sessions/${staleSessionId}/generate`
+        );
+      });
+      expect(recoveredRes.status).toBe(200);
+    });
   });
 
   describe('autoGenerate', () => {
@@ -1996,6 +2043,41 @@ describe('Sessions', () => {
         .send({});
 
       expect(genRes.status).toBe(200);
+    });
+
+    test('generate on a session with no prior message falls back to createdAt, and re-checking an already-expired session does not re-update its status', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId, inactivity_ttl_seconds: 1 });
+      expect(sessionRes.status).toBe(201);
+      const sessionId = sessionRes.body.id;
+      // No message has ever been posted, so last_activity_at is still null —
+      // the expiry check must fall back to createdAt.
+      expect(sessionRes.body.last_activity_at).toBeNull();
+
+      // Advance the clock past the 1-second TTL and call generate twice: the
+      // first call transitions the session to 'expired', the second call
+      // must still reject with SESSION_EXPIRED without re-writing the status.
+      const { first, second } = await withAdvancedClock(1500, async () => {
+        const firstRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .send({});
+        const secondRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .send({});
+        return { first: firstRes, second: secondRes };
+      });
+
+      expect(first.status).toBe(410);
+      expect(first.body.error.code).toBe('SESSION_EXPIRED');
+      expect(second.status).toBe(410);
+      expect(second.body.error.code).toBe('SESSION_EXPIRED');
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions/${sessionId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('expired');
     });
 
     test('GET session returns persisted inactivity_ttl_seconds', async () => {

@@ -13,11 +13,11 @@ export default jestUnitConfig({
     global: {
       branches: 89,
       functions: 100,
-      lines: 94,
-      statements: 93,
+      lines: 95,
+      statements: 95,
     },
     './src/**/*.ts': {
-      branches: 75,
+      branches: 80,
       lines: 80,
       statements: 80,
     },

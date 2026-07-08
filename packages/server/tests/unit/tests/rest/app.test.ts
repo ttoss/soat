@@ -14,6 +14,7 @@ beforeAll(() => {
   );
   mkdirSync(join(distDir, 'assets'));
   writeFileSync(join(distDir, 'assets', 'main.js'), 'console.log("main")');
+  writeFileSync(join(distDir, 'assets', 'data.bin'), 'binary-ish content');
   process.env.APP_DIST_PATH = distDir;
 });
 
@@ -47,6 +48,18 @@ describe('SPA static serving at /app', () => {
     const res = await testClient.get('/app/assets/main.js');
     expect(res.status).toBe(200);
     expect(res.type).toMatch(/javascript/);
+  });
+
+  test('GET /app/assets/data.bin falls back to a generic content type', async () => {
+    const res = await testClient.get('/app/assets/data.bin');
+    expect(res.status).toBe(200);
+    expect(res.type).toBe('application/octet-stream');
+  });
+
+  test('GET / redirects to /app', async () => {
+    const res = await testClient.get('/');
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe('/app');
   });
 
   test('non-/app paths are not handled by the SPA middleware', async () => {

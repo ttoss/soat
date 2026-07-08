@@ -107,6 +107,47 @@ describe('OAuth authorization server (SPA consent)', () => {
     });
   });
 
+  // ── /authorize without a state param (state is optional) ──────────────────
+  describe('GET /authorize without a state param', () => {
+    test('redirects to the app consent screen without a state param', async () => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+      });
+      const { challenge } = pkce();
+      const res = await testClient.get('/authorize').query({
+        client_id: reg.body.client_id,
+        redirect_uri: REDIRECT_URI,
+        response_type: 'code',
+        scope: 'mcp:access',
+        code_challenge: challenge,
+        code_challenge_method: 'S256',
+      });
+      expect(res.status).toBe(302);
+      expect(res.headers.location).toContain('/app/oauth/consent');
+    });
+  });
+
+  // ── /token rejects an authorization code that was never issued ─────────────
+  describe('POST /token with an unknown authorization code', () => {
+    test('rejects with invalid_grant', async () => {
+      const reg = await testClient.post('/register').send({
+        redirect_uris: [REDIRECT_URI],
+        token_endpoint_auth_method: 'none',
+      });
+      const { verifier } = pkce();
+
+      const res = await testClient.post('/token').type('form').send({
+        grant_type: 'authorization_code',
+        code: 'never-issued-code',
+        redirect_uri: REDIRECT_URI,
+        client_id: reg.body.client_id,
+        code_verifier: verifier,
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
   // ── consent grant is single-use ──────────────────────────────────────────
   describe('GET /authorize after grant consumed', () => {
     test('second /authorize call redirects back to consent screen', async () => {

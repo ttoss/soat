@@ -11,6 +11,7 @@ import type {
   FormationTemplate,
 } from 'src/lib/formationsTypes';
 import { createMemory } from 'src/lib/memories';
+import { createWebhook } from 'src/lib/webhooks';
 
 // These tests drive the real formation-apply helpers against the real database
 // and the real resource handlers — no `db.*` stubbing and no internal-module
@@ -91,6 +92,9 @@ describe('formationsApply', () => {
         providerId: { ref: 'provider' },
         greeting: 'hello',
         unresolved: { ref: 'missing' },
+        // A non-ref_attr output whose resolved value isn't a string (e.g. a
+        // raw number in the template) is dropped rather than coerced.
+        retries: 3,
       },
     };
     const resolvedIds = new Map<string, string>([['provider', 'aip_1']]);
@@ -101,6 +105,52 @@ describe('formationsApply', () => {
       providerId: 'aip_1',
       greeting: 'hello',
     });
+  });
+
+  test('resolveFormationOutputs skips a ref_attr whose logical id is absent from the template resources', async () => {
+    // `resolvedIds` still has a stale entry for "Ghost" (e.g. left over from a
+    // prior apply), but the current template no longer declares that
+    // resource — there is no `type` to resolve a formation module from.
+    const template: FormationTemplate = {
+      resources: {},
+      outputs: {
+        ghostAttr: { ref_attr: 'Ghost.secret' },
+      },
+    };
+    const resolvedIds = new Map<string, string>([['Ghost', 'whk_stale']]);
+
+    await expect(
+      resolveFormationOutputs(template, resolvedIds)
+    ).resolves.toEqual({});
+  });
+
+  test('resolveFormationOutputs resolves a ref_attr for a real resource attribute', async () => {
+    const webhook = await createWebhook({
+      projectId,
+      name: uniqueName('formations-apply-webhook'),
+      url: 'https://example.com/hook',
+      events: ['*'],
+    });
+    const template: FormationTemplate = {
+      resources: {
+        MyWebhook: {
+          type: 'webhook',
+          properties: {
+            name: webhook.name,
+            url: webhook.url,
+            events: webhook.events,
+          },
+        },
+      },
+      outputs: {
+        webhookSecret: { ref_attr: 'MyWebhook.secret' },
+      },
+    };
+    const resolvedIds = new Map<string, string>([['MyWebhook', webhook.id]]);
+
+    const result = await resolveFormationOutputs(template, resolvedIds);
+
+    expect(result.webhookSecret).toBe(webhook.secret);
   });
 
   test('resolveFormationOutputs resolves ref_attr expressions using getAttributes', async () => {
@@ -237,6 +287,29 @@ describe('formationsApply', () => {
 
     await alreadyGone.reload();
     expect(alreadyGone.status).toBe('deleted');
+    expect(result.hasError).toBe(false);
+    expect(result.events).toHaveLength(1);
+    expect(result.events[0].status).toBe('succeeded');
+  });
+
+  test('performResourceDeletions treats an already-gone chat as deleted', async () => {
+    // `deleteChat` throws RESOURCE_NOT_FOUND for a nonexistent chat id, which
+    // the helper treats as an idempotent success — exercises the chat
+    // module's own not-found guard (unreachable via REST, which pre-checks
+    // existence with `getChat` before ever calling `deleteChat`).
+    const alreadyGoneChat = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('gone-chat'),
+      resourceType: 'chat',
+      physicalResourceId: 'chat_does_not_exist',
+      status: 'active',
+      deletionPolicy: 'delete',
+    });
+
+    const result = await performResourceDeletions([alreadyGoneChat]);
+
+    await alreadyGoneChat.reload();
+    expect(alreadyGoneChat.status).toBe('deleted');
     expect(result.hasError).toBe(false);
     expect(result.events).toHaveLength(1);
     expect(result.events[0].status).toBe('succeeded');

@@ -911,6 +911,31 @@ describe('Documents', () => {
       ).toBe('FILE_PARSE_FAILED');
     });
 
+    test('?async=false sets failure reason RESOURCE_NOT_FOUND when file bytes are missing from storage', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'bytes-missing.pdf',
+        contentType: 'application/pdf',
+      });
+
+      // Simulate the stored bytes disappearing (e.g. manual storage cleanup)
+      // while the File row still exists.
+      const fileRecord = await db.File.findOne({
+        where: { publicId: fileId },
+      });
+      fs.unlinkSync(fileRecord!.storagePath);
+
+      const ingestRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest?async=false')
+        .send({ file_id: fileId, project_id: projectId });
+
+      expect(ingestRes.status).toBe(201);
+      expect(ingestRes.body.status).toBe('failed');
+      expect(
+        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
+      ).toBe('RESOURCE_NOT_FOUND');
+    });
+
     test('failure_reason never serializes to [object Object] (issue #3)', async () => {
       // A non-Error rejection (plain object) must not leak as "[object Object]".
       extractPdfPagesSpy.mockRejectedValueOnce({ unexpected: 'shape' });
