@@ -128,6 +128,22 @@ describe('Usage', () => {
       expect(response.status).toBe(403);
     });
 
+    test('admin without project scoping lists across all projects', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/usage/meters'
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?limit=1&offset=0'
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
     test('records a meter row with reasoning and cached tokens', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/meters?generation_id=${generationId}`

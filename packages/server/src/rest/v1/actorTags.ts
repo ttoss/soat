@@ -9,10 +9,8 @@ const buildActorTagContext = (actor: {
   tags?: Record<string, unknown> | null;
 }): Record<string, string> => {
   const context: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      context[`soat:ResourceTag/${k}`] = v as string;
-    }
+  for (const [k, v] of Object.entries(actor.tags!)) {
+    context[`soat:ResourceTag/${k}`] = v as string;
   }
   return context;
 };
@@ -25,11 +23,6 @@ actorTagsRouter.get('/actors/:actor_id/tags', async (ctx: Context) => {
   }
 
   const actor = await getActor({ id: ctx.params.actor_id });
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
 
   const srn = buildSrn({
     projectPublicId: actor.projectId!,
@@ -59,11 +52,6 @@ actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
   }
 
   const actor = await getActor({ id: ctx.params.actor_id });
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
 
   const srn = buildSrn({
     projectPublicId: actor.projectId!,
@@ -98,11 +86,6 @@ actorTagsRouter.patch('/actors/:actor_id/tags', async (ctx: Context) => {
   }
 
   const actor = await getActor({ id: ctx.params.actor_id });
-  if (!actor) {
-    ctx.status = 404;
-    ctx.body = { error: 'Actor not found' };
-    return;
-  }
 
   const srn = buildSrn({
     projectPublicId: actor.projectId!,

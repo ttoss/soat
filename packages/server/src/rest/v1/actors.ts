@@ -108,10 +108,8 @@ actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
     resourceId: actor.id,
   });
   const contextGet: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      contextGet[`soat:ResourceTag/${k}`] = v as string;
-    }
+  for (const [k, v] of Object.entries(actor.tags!)) {
+    contextGet[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.projectId!,
@@ -227,10 +225,8 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
     resourceId: actor.id,
   });
   const contextDel: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      contextDel[`soat:ResourceTag/${k}`] = v as string;
-    }
+  for (const [k, v] of Object.entries(actor.tags!)) {
+    contextDel[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.projectId!,
@@ -263,10 +259,8 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     resourceId: actor.id,
   });
   const contextUpd: Record<string, string> = { 'soat:ResourceType': 'actor' };
-  if (actor.tags) {
-    for (const [k, v] of Object.entries(actor.tags)) {
-      contextUpd[`soat:ResourceTag/${k}`] = v as string;
-    }
+  for (const [k, v] of Object.entries(actor.tags!)) {
+    contextUpd[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: actor.projectId!,

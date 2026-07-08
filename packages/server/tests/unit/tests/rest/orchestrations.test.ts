@@ -162,6 +162,14 @@ describe('Orchestrations', () => {
       orchestrationId = response.body.id;
     });
 
+    test('admin without project scoping and no project_id returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...simpleOrchestration, name: 'No Project Admin' });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('project_id is required');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/orchestrations')
@@ -259,6 +267,15 @@ describe('Orchestrations', () => {
   });
 
   describe('POST /api/v1/orchestrations/validate', () => {
+    test('missing nodes and edges default to empty arrays', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({});
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(true);
+      expect(response.body.errors).toEqual([]);
+    });
+
     test('returns valid=true for a sound graph', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations/validate')
@@ -357,6 +374,14 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(401);
     });
 
+    test('admin without project scoping and no project_id returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        '/api/v1/orchestrations'
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('project_id is required');
+    });
+
     test('user without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/orchestrations')
@@ -373,6 +398,16 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(200);
       expect(response.body.id).toBe(orchestrationId);
       expect(response.body.name).toBe('Simple Pipeline');
+    });
+
+    // An admin's JWT resolveProjectIds returns `undefined` (not `[]`) when no
+    // project scope is given, so the lib call runs unfiltered across projects.
+    test('admin can get an orchestration without project scoping', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/orchestrations/${orchestrationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(orchestrationId);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -417,6 +452,14 @@ describe('Orchestrations', () => {
         .send({ name: 'Updated Pipeline' });
       expect(response.status).toBe(200);
       expect(response.body.name).toBe('Updated Pipeline');
+    });
+
+    test('admin can update an orchestration without project scoping', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/orchestrations/${orchestrationId}`)
+        .send({ name: 'Updated By Admin' });
+      expect(response.status).toBe(200);
+      expect(response.body.name).toBe('Updated By Admin');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -1254,6 +1297,14 @@ describe('Orchestrations', () => {
         );
         expect(response.status).toBe(403);
       });
+
+      test('admin can get a run without project scoping', async () => {
+        const response = await authenticatedTestClient(adminToken).get(
+          `/api/v1/orchestration-runs/${runId}`
+        );
+        expect(response.status).toBe(200);
+        expect(response.body.id).toBe(runId);
+      });
     });
   });
 
@@ -1265,6 +1316,15 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
       // At least the run started in POST /runs tests
+      expect(response.body.length).toBeGreaterThan(0);
+    });
+
+    test('admin can list runs without project scoping', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body)).toBe(true);
       expect(response.body.length).toBeGreaterThan(0);
     });
 
@@ -1287,6 +1347,22 @@ describe('Orchestrations', () => {
   });
 
   describe('DELETE /api/v1/orchestrations/:orchestration_id', () => {
+    test('admin can delete an orchestration without project scoping', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          ...simpleOrchestration,
+          name: 'To Delete By Admin',
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const deleteRes = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/orchestrations/${createRes.body.id}`
+      );
+      expect(deleteRes.status).toBe(204);
+    });
+
     test('authenticated user with permission can delete an orchestration', async () => {
       // Create a fresh one to delete
       const createRes = await authenticatedTestClient(userToken)
@@ -1479,6 +1555,27 @@ describe('Orchestrations', () => {
         .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
         .send({ output: { choice: 'approve' } });
       expect(response.status).toBe(400);
+    });
+
+    test('non-string node_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${humanRunId}/human-input`)
+        .send({ node_id: 123, output: { choice: 'approve' } });
+      expect(response.status).toBe(400);
+    });
+
+    test('non-object output defaults to an empty object', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...humanNodeOrchestration, project_id: projectId });
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
+        .send({ node_id: 'approval', output: 'not-an-object' });
+      expect(response.status).toBe(200);
     });
 
     test('submitting human input for a non-existent run returns 404', async () => {

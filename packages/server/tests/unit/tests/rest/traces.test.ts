@@ -227,6 +227,14 @@ describe('Traces REST API', () => {
         .query({ projectId });
       expect(res.status).toBe(403);
     });
+
+    test('accepts limit and offset query params', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .get('/api/v1/traces')
+        .query({ projectId, limit: 1, offset: 0 });
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
   });
 
   describe('GET /api/v1/traces/:trace_id', () => {
@@ -263,6 +271,29 @@ describe('Traces REST API', () => {
       expect(res.body.parent_trace_id).toBe(traceId);
       expect(res.body.root_trace_id).toBe(traceId);
     });
+
+    test('project-scoped API key without GetTrace permission returns 403', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['traces:ListTraces'] }],
+          },
+        });
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No GetTrace Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(keyRes.body.key as string).get(
+        `/api/v1/traces/${traceId}`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('GET /api/v1/traces/:trace_id/tree', () => {
@@ -296,6 +327,29 @@ describe('Traces REST API', () => {
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(traceId);
       expect(res.body.children).toHaveLength(1);
+    });
+
+    test('project-scoped API key without GetTraceTree permission returns 403', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['traces:ListTraces'] }],
+          },
+        });
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No GetTraceTree Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(keyRes.body.key as string).get(
+        `/api/v1/traces/${traceId}/tree`
+      );
+      expect(res.status).toBe(403);
     });
   });
 

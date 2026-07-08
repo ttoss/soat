@@ -421,6 +421,13 @@ describe('Triggers', () => {
   });
 
   describe('GET /api/v1/triggers', () => {
+    test('admin without project scoping gets an empty list', async () => {
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/triggers');
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
+
     test('lists triggers in the project', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/triggers?project_id=${projectId}`
@@ -539,6 +546,32 @@ describe('Triggers', () => {
       expect(res.status).toBe(200);
       expect(res.body.name).toBe('patch-one-renamed');
       expect(res.body.active).toBe(false);
+    });
+
+    test('attaches a policy_id', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              { effect: 'Allow', action: ['orchestrations:StartRun'] },
+            ],
+          },
+        });
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ policy_id: policyRes.body.id });
+      expect(res.status).toBe(200);
+      expect(res.body.policy_id).toBe(policyRes.body.id);
+    });
+
+    test('clears a policy_id with null', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/triggers/${triggerId}`)
+        .send({ policy_id: null });
+      expect(res.status).toBe(200);
+      expect(res.body.policy_id).toBeNull();
     });
 
     test('changing target_type re-validates the target and re-checks permission', async () => {
@@ -1211,6 +1244,14 @@ describe('Triggers', () => {
       expect(res.status).toBe(400);
     });
 
+    test('accepts limit and offset query params', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1&offset=0`
+      );
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
     test('gets a firing by id', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/trigger-firings/${firingId}`
@@ -1232,6 +1273,11 @@ describe('Triggers', () => {
         `/api/v1/trigger-firings/${firingId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    test('unauthenticated get firing by id returns 401', async () => {
+      const res = await testClient.get(`/api/v1/trigger-firings/${firingId}`);
+      expect(res.status).toBe(401);
     });
 
     test('unauthenticated firings list returns 401', async () => {

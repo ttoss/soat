@@ -1070,6 +1070,34 @@ describe('IngestionRules', () => {
       expect(res.status).toBe(403);
     });
 
+    test('project-scoped API key without GetIngestionRule permission returns 403', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['ingestion-rules:ListIngestionRules'],
+              },
+            ],
+          },
+        });
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No GetIngestionRule Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(keyRes.body.key as string).get(
+        `/api/v1/ingestion-rules/${ruleId}`
+      );
+      expect(res.status).toBe(403);
+    });
+
     test('get is 401 unauthenticated and 404 without permission (no accessible projects)', async () => {
       expect(
         (await testClient.get(`/api/v1/ingestion-rules/${ruleId}`)).status
@@ -1114,6 +1142,40 @@ describe('IngestionRules', () => {
           )
         ).status
       ).toBe(404);
+    });
+
+    test('project-scoped API key without UpdateIngestionRule/DeleteIngestionRule permission returns 403', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['ingestion-rules:ListIngestionRules'],
+              },
+            ],
+          },
+        });
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'No Update/Delete IngestionRule Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const rawKey = keyRes.body.key as string;
+
+      const patchRes = await authenticatedTestClient(rawKey)
+        .patch(`/api/v1/ingestion-rules/${ruleId}`)
+        .send({ chunk_strategy: 'whole' });
+      expect(patchRes.status).toBe(403);
+
+      const deleteRes = await authenticatedTestClient(rawKey).delete(
+        `/api/v1/ingestion-rules/${ruleId}`
+      );
+      expect(deleteRes.status).toBe(403);
     });
   });
 

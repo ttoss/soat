@@ -101,6 +101,31 @@ describe('Chats', () => {
       expect(response.body.project_id).toBe(projectId);
     });
 
+    test('project-scoped API key creates a chat without an explicit project_id', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['chats:CreateChat'] }],
+          },
+        });
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'Chat Creator Key',
+          project_id: projectId,
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+
+      const response = await authenticatedTestClient(keyRes.body.key as string)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.project_id).toBe(projectId);
+    });
+
     test('creates a chat with optional fields', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
@@ -140,6 +165,14 @@ describe('Chats', () => {
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body)).toBe(true);
+    });
+
+    test('admin without project scoping gets an empty list', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/chats');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
     });
   });
 
