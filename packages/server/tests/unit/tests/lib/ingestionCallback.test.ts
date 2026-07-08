@@ -55,6 +55,13 @@ describe('isIngestionStale', () => {
     expect(isIngestionStale(buildDoc({ updatedAt: past5Min }))).toBe(true);
   });
 
+  test('a valid custom INGESTION_STALL_TIMEOUT_MS is honored instead of the default', () => {
+    process.env.INGESTION_STALL_TIMEOUT_MS = '1000';
+    const past2Sec = new Date(Date.now() - 2000);
+    expect(isIngestionStale(buildDoc({ updatedAt: past2Sec }))).toBe(true);
+    expect(isIngestionStale(buildDoc({ updatedAt: new Date() }))).toBe(false);
+  });
+
   test('a non-numeric CONVERSION_STALL_TIMEOUT_MS falls back to the 30-minute default', () => {
     process.env.CONVERSION_STALL_TIMEOUT_MS = 'nope';
     const past30Min = new Date(Date.now() - 31 * 60 * 1000);

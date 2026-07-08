@@ -882,6 +882,18 @@ describe('filesFormationModule', () => {
       })
     ).rejects.toThrow(/storage_type/);
   });
+
+  // Unlike sessions, file deletion is idempotent: if the physical resource
+  // was already removed out-of-band (drift), `deleteFile` resolves to `null`
+  // instead of throwing, and the formation module ignores the return value.
+  test('delete is idempotent when the file is already gone', async () => {
+    await expect(
+      applyDeleteResource({
+        resourceType: 'file',
+        physicalResourceId: 'fil_missing_zzz',
+      })
+    ).resolves.toBeUndefined();
+  });
 });
 
 // ── policy document validation ──────────────────────────────────────────────

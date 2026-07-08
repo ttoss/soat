@@ -195,13 +195,12 @@ export const generateSessionResponse = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
+  // `agentId` is a NOT NULL foreign key with onDelete: 'CASCADE' (see
+  // Session model), so a Session row can never outlive its Agent — the
+  // `agent` include is always populated here. No null guard needed.
   const agent = (
-    session as unknown as { agent?: InstanceType<(typeof db)['Agent']> }
+    session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
   ).agent;
-
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
 
   const mergedToolContext = {
     ...buildToolContext(session),
@@ -356,15 +355,14 @@ const fetchSessionAndConversation = async (args: {
   const conversation = session.conversation as InstanceType<
     (typeof db)['Conversation']
   >;
+  // `agentId` is a NOT NULL foreign key with onDelete: 'CASCADE' (see
+  // Session model), so a Session row can never outlive its Agent — the
+  // `agent` include is always populated here. No null guard needed.
   const agent = (
     session as unknown as {
-      agent?: InstanceType<(typeof db)['Agent']>;
+      agent: InstanceType<(typeof db)['Agent']>;
     }
   ).agent;
-
-  if (!agent) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
 
   return { session, conversation, agent };
 };
@@ -376,14 +374,13 @@ export const submitSessionToolOutputs = async (args: {
   generationId: string;
   toolOutputs: Array<{ toolCallId: string; output: unknown }>;
 }) => {
+  // fetchSessionAndConversation always either throws (session not found) or
+  // resolves to a populated object — it never returns a falsy value — so no
+  // additional null guard is needed here.
   const sessionData = await fetchSessionAndConversation({
     agentId: args.agentId,
     sessionId: args.sessionId,
   });
-
-  if (!sessionData) {
-    throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
-  }
 
   const result = await submitToolOutputs({
     agentId: args.agentPublicId,

@@ -67,6 +67,22 @@ describe('Embeddings', () => {
       expect(response.body.embedding).toBeUndefined();
     });
 
+    test('returns 503 when embedding provider is not configured', async () => {
+      const prevProvider = process.env.EMBEDDING_PROVIDER;
+      delete process.env.EMBEDDING_PROVIDER;
+
+      try {
+        const response = await authenticatedTestClient(adminToken)
+          .post('/api/v1/embeddings')
+          .send({ input: 'hello world' });
+
+        expect(response.status).toBe(503);
+        expect(response.body.error.code).toBe('EMBEDDING_NOT_CONFIGURED');
+      } finally {
+        process.env.EMBEDDING_PROVIDER = prevProvider;
+      }
+    });
+
     test('both input and inputs returns both fields', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/embeddings')

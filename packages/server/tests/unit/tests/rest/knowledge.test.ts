@@ -183,6 +183,28 @@ describe('Knowledge', () => {
       expect(memResult.source_type).toBe('memory');
     });
 
+    test('returns memory entries when searching by memory_tags without a project_id (admin, cross-project)', async () => {
+      // An admin JWT with no project_id resolves projectIds to `undefined`
+      // (see createJwtResolveProjectIds), which exercises the
+      // unscoped/cross-project branch of resolveMemoryIdsByGlobTags and
+      // buildMemoryIncludeWhere in src/lib/knowledgeMemory.ts — every other
+      // test in this file passes an explicit project_id.
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          memory_tags: ['knowledge-test'],
+        });
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.results)).toBe(true);
+      const memResult = response.body.results.find(
+        (r: { source_type: string }) => {
+          return r.source_type === 'memory';
+        }
+      );
+      expect(memResult).toBeDefined();
+      expect(memResult.memory_id).toBe(memoryId);
+    });
+
     test('returns mixed results when searching with query, document_filters, and memory_ids', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

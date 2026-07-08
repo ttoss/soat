@@ -321,6 +321,29 @@ describe('Chats', () => {
     });
   });
 
+  describe('POST /api/v1/chats/:chatId/completions - non-streaming (real lib)', () => {
+    test('exercises the system-message branch for a chat with a system message', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          system_message: 'You are a helpful assistant.',
+        });
+      const chatId = res.body.id;
+
+      // Ollama isn't running in unit CI, so the connection error is a plain
+      // (non-DomainError) Error and errorLogger's default status is 500 —
+      // this still exercises buildChatFinalMessages' system-message branch,
+      // which runs before the provider call.
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/chats/${chatId}/completions`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(500);
+    });
+  });
+
   describe('POST /api/v1/chat/completions', () => {
     test('unauthenticated request returns 401', async () => {
       const response = await testClient

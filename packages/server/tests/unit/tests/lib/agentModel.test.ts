@@ -101,6 +101,20 @@ describe('buildModel', () => {
     );
   });
 
+  test('builds azure model with defaults when secretValue and resourceName are not provided', () => {
+    const model = asConfigured(
+      buildModel({
+        provider: 'azure',
+        secretValue: null,
+        model: 'gpt-4o',
+      })
+    );
+    expect(model.modelId).toBe('gpt-4o');
+    expect(model.config.url({ path: '/responses', modelId: 'gpt-4o' })).toBe(
+      'https://.openai.azure.com/openai/v1/responses?api-version=v1'
+    );
+  });
+
   test('builds ollama model wired to the default local base URL', () => {
     const model = asConfigured(
       buildModel({

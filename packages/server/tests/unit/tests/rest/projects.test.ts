@@ -178,6 +178,41 @@ describe('Projects', () => {
       });
     });
 
+    describe('api key scoped to project without ListProjects permission sees no projects', () => {
+      let noPermProjectId: string;
+      let noPermRawApiKey: string;
+
+      beforeAll(async () => {
+        // Explicitly clear the user's policies so the key carries no
+        // projects:ListProjects grant, regardless of prior test state.
+        await authenticatedTestClient(adminToken)
+          .put(`/api/v1/users/${userId}/policies`)
+          .send({ policy_ids: [] });
+
+        const projRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: 'No Permission Scope Project' });
+        noPermProjectId = projRes.body.id;
+
+        const apiKeyRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/api-keys')
+          .send({ name: 'No Permission Key', project_id: noPermProjectId });
+
+        noPermRawApiKey = apiKeyRes.body.key;
+      });
+
+      test('api key without permission sees an empty project list', async () => {
+        const response =
+          await authenticatedTestClient(noPermRawApiKey).get(
+            '/api/v1/projects'
+          );
+
+        expect(response.status).toBe(200);
+        expect(Array.isArray(response.body)).toBe(true);
+        expect(response.body.length).toBe(0);
+      });
+    });
+
     describe('OAuth token scoped to project sees only that project', () => {
       let oauthScopedProjectId: string;
       let otherProjectId: string;
