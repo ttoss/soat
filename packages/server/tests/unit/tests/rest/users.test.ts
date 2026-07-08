@@ -269,6 +269,15 @@ describe('Admin user operations', () => {
       expect(response.status).toBe(401);
     });
 
+    test('returns 404 for a non-existent user', async () => {
+      const response = await authenticatedTestClient(adminToken).delete(
+        '/api/v1/users/usr_nonexistent12345'
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('User not found');
+    });
+
     test('non-admin user cannot delete a user', async () => {
       const aliceToken = await loginAs('alice', 'alicepass');
       const listRes =

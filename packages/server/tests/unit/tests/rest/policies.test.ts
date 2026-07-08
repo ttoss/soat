@@ -268,6 +268,19 @@ describe('Policies', () => {
       expect(response.status).toBe(403);
     });
 
+    test('keeps the existing name when name is omitted', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .put(`/api/v1/policies/${policyId}`)
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+          },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.name).toBe('Updated Policy');
+    });
+
     test('returns 400 for a document with an invalid effect', async () => {
       const response = await authenticatedTestClient(adminToken)
         .put(`/api/v1/policies/${policyId}`)

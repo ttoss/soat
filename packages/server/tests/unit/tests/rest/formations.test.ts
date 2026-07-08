@@ -417,6 +417,14 @@ resources:
 
       expect(res.status).toBe(403);
     });
+
+    test('admin without project scoping gets an empty list', async () => {
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/formations');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([]);
+    });
   });
 
   // ── Get ───────────────────────────────────────────────────────────────────
