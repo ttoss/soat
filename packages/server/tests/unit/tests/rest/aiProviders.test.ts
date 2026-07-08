@@ -298,6 +298,15 @@ describe('AI Providers', () => {
       expect(response.body.secret_id).toBe(secretId);
     });
 
+    test('returns 400 when updating with an invalid secret ID', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/ai-providers/${aiProviderId}`)
+        .send({ secret_id: 'sec_nonexistent12345' });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid secret ID');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/ai-providers/${aiProviderId}`)

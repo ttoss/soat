@@ -2,6 +2,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Memories', () => {
+  let adminToken: string;
   let userToken: string;
   let projectId: string;
   let otherProjectId: string;
@@ -25,6 +26,7 @@ describe('Memories', () => {
       createOtherProject: true,
     });
 
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     projectId = setup.projectId;
     otherProjectId = setup.otherProjectId as string;
@@ -116,6 +118,14 @@ describe('Memories', () => {
         .query({ projectId: otherProjectId });
 
       expect(response.status).toBe(403);
+    });
+
+    test('admin without project scoping gets an empty list', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/memories');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
     });
   });
 
