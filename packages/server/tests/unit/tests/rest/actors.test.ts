@@ -159,6 +159,15 @@ describe('Actors', () => {
       expect(response.body.total).toBeGreaterThanOrEqual(2);
     });
 
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
     test('listing without projectId returns all accessible actors', async () => {
       const response =
         await authenticatedTestClient(userToken).get('/api/v1/actors');

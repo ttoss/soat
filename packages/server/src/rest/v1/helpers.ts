@@ -23,10 +23,9 @@ export const resolveProjectIdsWithAction = async (args: {
   projectPublicId?: string;
   action: string;
 }): Promise<number[] | null | undefined> => {
-  if (!args.ctx.authUser) {
-    return null;
-  }
-  const projectIds = await args.ctx.authUser.resolveProjectIds({
+  // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
+  // always defined here.
+  const projectIds = await args.ctx.authUser!.resolveProjectIds({
     projectPublicId: args.projectPublicId,
     action: args.action,
   });
@@ -38,32 +37,6 @@ export const resolveProjectIdsWithAction = async (args: {
   }
 
   return projectIds;
-};
-
-/**
- * Gets the target project ID (from resolved list or API key project)
- */
-export const getTargetProjectId = (args: {
-  projectIds?: number[];
-  apiKeyProjectId?: number;
-}): number | null => {
-  const targetProjectId = args.projectIds?.[0] ?? args.apiKeyProjectId;
-  return targetProjectId ?? null;
-};
-
-/**
- * Returns error response if no target project ID
- */
-export const checkProjectId = (args: {
-  ctx: Context;
-  projectId: number | null;
-}): boolean => {
-  if (!args.projectId) {
-    args.ctx.status = 400;
-    args.ctx.body = { error: 'projectId is required' };
-    return false;
-  }
-  return true;
 };
 
 /**
@@ -87,17 +60,15 @@ export const resolveWriteProjectId = async (args: {
   action: string;
 }): Promise<number | null> => {
   const { ctx, action } = args;
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
+  // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
+  // always defined here.
+  const authUser = ctx.authUser!;
 
   // Without an explicit project id, a project-scoped API key or OAuth token supplies a default.
   const projectPublicId =
     args.projectPublicId ??
-    ctx.authUser.apiKeyProjectPublicId ??
-    ctx.authUser.oauthProjectPublicId;
+    authUser.apiKeyProjectPublicId ??
+    authUser.oauthProjectPublicId;
 
   if (!projectPublicId) {
     ctx.status = 400;
@@ -106,8 +77,11 @@ export const resolveWriteProjectId = async (args: {
   }
 
   // resolveProjectIds runs the permission check and, for a scoped key, returns null
-  // when projectPublicId does not match the key's project (→ 403).
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  // when projectPublicId does not match the key's project (→ 403). Every
+  // resolveProjectIds implementation, given a truthy projectPublicId (guaranteed
+  // above), either returns null or a single-element array — so the resolved id is
+  // always defined here.
+  const projectIds = await authUser.resolveProjectIds({
     projectPublicId,
     action,
   });
@@ -118,34 +92,5 @@ export const resolveWriteProjectId = async (args: {
     return null;
   }
 
-  const targetProjectId =
-    projectIds?.[0] ?? ctx.authUser.apiKeyProjectId ?? null;
-
-  if (targetProjectId === null) {
-    ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
-    return null;
-  }
-
-  return targetProjectId;
-};
-
-/**
- * Validates that a user has permission to access a resource
- */
-export const checkResourcePermission = (args: {
-  ctx: Context;
-  resourceUserId: string;
-  adminOnly?: boolean;
-}): boolean => {
-  const isOwner = args.resourceUserId === args.ctx.authUser?.publicId;
-  const isAdmin = args.ctx.authUser?.role === 'admin';
-
-  if (!isOwner && !isAdmin) {
-    args.ctx.status = 403;
-    args.ctx.body = { error: 'Forbidden' };
-    return false;
-  }
-
-  return true;
+  return projectIds![0];
 };

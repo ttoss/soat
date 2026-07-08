@@ -136,6 +136,14 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
+    test('searches without an explicit project_id', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ document_paths: ['/'] });
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.results)).toBe(true);
+    });
+
     test('returns memory entries when searching by memory_ids', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

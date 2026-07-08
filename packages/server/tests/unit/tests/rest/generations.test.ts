@@ -166,6 +166,22 @@ describe('Generations', () => {
       expect(response.body.data).toEqual([]);
       expect(response.body.total).toBe(0);
     });
+
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations?agent_id=${agentId}&limit=1&offset=0`
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    test('admin without project scoping lists across all projects', async () => {
+      const response = await authenticatedTestClient(adminToken).get(
+        `/api/v1/generations?agent_id=${agentId}`
+      );
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
   });
 
   describe('GET /api/v1/generations/:generation_id', () => {

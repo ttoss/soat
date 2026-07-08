@@ -170,6 +170,15 @@ describe('Sessions', () => {
       }
     });
 
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/sessions?agent_id=${agentId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
     test('can filter by actorId', async () => {
       // Create an actor to use for filtering
       const actorRes = await authenticatedTestClient(adminToken)
@@ -247,6 +256,19 @@ describe('Sessions', () => {
       const response = await testClient.get(`/api/v1/sessions/${sessionId}`);
 
       expect(response.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'sessgetnoperm', password: 'sessgetnopass' });
+      const unprivilegedToken = await loginAs('sessgetnoperm', 'sessgetnopass');
+
+      const response = await authenticatedTestClient(unprivilegedToken).get(
+        `/api/v1/sessions/${sessionId}`
+      );
+
+      expect(response.status).toBe(403);
     });
   });
 

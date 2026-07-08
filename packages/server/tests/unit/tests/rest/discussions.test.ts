@@ -155,6 +155,15 @@ describe('Discussions', () => {
       expect(res.body.total).toBeGreaterThan(0);
     });
 
+    test('lists discussions without a project_id filter', async () => {
+      await createDiscussion();
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/discussions?limit=1&offset=0'
+      );
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get('/api/v1/discussions');
       expect(res.status).toBe(401);

@@ -122,6 +122,14 @@ describe('Webhooks', () => {
 
       expect(response.status).toBe(401);
     });
+
+    test('admin without project scoping gets an empty list', async () => {
+      const response =
+        await authenticatedTestClient(adminToken).get('/api/v1/webhooks');
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual([]);
+    });
   });
 
   describe('GET /api/v1/webhooks/:webhookId', () => {
@@ -339,6 +347,15 @@ describe('Webhooks', () => {
       expect(response.body.total).toBeDefined();
     });
 
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhook-deliveries?webhook_id=${webhookId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
     test('lists a delivery with its mapped fields', async () => {
       const webhook = await db.Webhook.findOne({
         where: { publicId: webhookId },
@@ -380,6 +397,35 @@ describe('Webhooks', () => {
   });
 
   describe('GET /api/v1/webhook-deliveries/:deliveryId', () => {
+    test('authenticated user with permission can get a delivery by id', async () => {
+      const hookRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Get Delivery Test',
+          url: 'https://example.com/get-delivery',
+          events: ['*'],
+        });
+      const webhook = await db.Webhook.findOne({
+        where: { publicId: hookRes.body.id },
+      });
+      const delivery = await db.WebhookDelivery.create({
+        webhookId: webhook!.id as number,
+        eventType: 'files.created',
+        payload: {},
+        status: 'success',
+        statusCode: 200,
+        attempts: 1,
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhook-deliveries/${delivery.publicId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(delivery.publicId);
+    });
+
     test('returns 404 for non-existent delivery', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/webhook-deliveries/wdh_nonexistent`

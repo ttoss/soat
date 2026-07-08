@@ -115,6 +115,15 @@ describe('Documents', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents?project_id=${projectId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
     test('admin with OAuth project-scoped token can list documents by project_id', async () => {
       // Simulate the OAuth token with a `prj` field — this is what the SOAT CLI issues
       // when an admin authenticates via OAuth with a project scope.
@@ -475,6 +484,20 @@ describe('Documents', () => {
       const response = await testClient.get(
         `/api/v1/documents/${tagDocId}/tags`
       );
+      expect(response.status).toBe(401);
+    });
+
+    test('unauthenticated PUT tags returns 401', async () => {
+      const response = await testClient
+        .put(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ region: 'us' });
+      expect(response.status).toBe(401);
+    });
+
+    test('unauthenticated PATCH tags returns 401', async () => {
+      const response = await testClient
+        .patch(`/api/v1/documents/${tagDocId}/tags`)
+        .send({ version: '2' });
       expect(response.status).toBe(401);
     });
 

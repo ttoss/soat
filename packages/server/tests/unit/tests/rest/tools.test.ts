@@ -164,6 +164,14 @@ describe('Tools', () => {
         .send({ project_id: projectId, name: 123 });
       expect(response.status).toBe(400);
     });
+
+    test('admin without project scoping and no project_id returns 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({ name: 'No Project Tool' });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('projectId is required');
+    });
   });
 
   describe('GET /api/v1/tools', () => {
@@ -239,6 +247,24 @@ describe('Tools', () => {
       expect(response.body.name).toBe('Updated Tool Name');
     });
 
+    test('accepts a JSON-encoded string for parameters', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${toolId}`)
+        .send({ parameters: '{"message":{"type":"string"}}' });
+      expect(response.status).toBe(200);
+      expect(response.body.parameters).toEqual({
+        message: { type: 'string' },
+      });
+    });
+
+    test('clears parameters with an explicit null', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${toolId}`)
+        .send({ parameters: null });
+      expect(response.status).toBe(200);
+      expect(response.body.parameters).toBeNull();
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .patch(`/api/v1/tools/${toolId}`)
@@ -259,6 +285,30 @@ describe('Tools', () => {
         .patch('/api/v1/tools/tool_nonexistent')
         .send({ name: 'X' });
       expect(response.status).toBe(404);
+    });
+
+    test('can update description', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${toolId}`)
+        .send({ description: 'An updated description' });
+      expect(response.status).toBe(200);
+      expect(response.body.description).toBe('An updated description');
+    });
+
+    test('clears description with an explicit null', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tools/${toolId}`)
+        .send({ description: null });
+      expect(response.status).toBe(200);
+      expect(response.body.description).toBeNull();
+    });
+
+    test('project-scoped API key without UpdateTool permission returns 403', async () => {
+      const rawKey = await createRestrictedApiKey('tools:UpdateTool');
+      const response = await authenticatedTestClient(rawKey)
+        .patch(`/api/v1/tools/${toolId}`)
+        .send({ name: 'X' });
+      expect(response.status).toBe(403);
     });
   });
 

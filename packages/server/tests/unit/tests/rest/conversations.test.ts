@@ -179,6 +179,23 @@ describe('Conversations', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
+    test('accepts limit and offset query params', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/conversations?project_id=${projectId}&limit=1&offset=0`
+      );
+
+      expect(response.status).toBe(200);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+
+    test('user without permission scoped to project_id returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/conversations?project_id=${projectId}`
+      );
+
+      expect(response.status).toBe(403);
+    });
+
     test('can filter by actorId', async () => {
       const secondActorRes = await authenticatedTestClient(userToken)
         .post('/api/v1/actors')
@@ -307,6 +324,14 @@ describe('Conversations', () => {
         .send({ status: 'open' });
 
       expect(response.status).toBe(404);
+    });
+
+    test('returns 403 for a user without conversation permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/conversations/${conversationId}`)
+        .send({ status: 'open' });
+
+      expect(response.status).toBe(403);
     });
   });
 
