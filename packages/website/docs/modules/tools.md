@@ -158,6 +158,8 @@ Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes 
 
 #### Request body encoding (`body_mode`)
 
+The `input` a caller passes to an `http` tool becomes its request body **verbatim** — SOAT does not case-transform the body keys, so `{ "input": { "fundamental_truth": "…" } }` is sent as `{"fundamental_truth":"…"}`, not `{"fundamentalTruth":"…"}`. Author the input in whatever casing the target API expects. (Elsewhere the REST API converts request bodies from snake_case to camelCase internally; a tool's `input` is exempt, because it is an opaque payload forwarded to the target, not a SOAT resource field.)
+
 For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type: application/json`). Set `execute.body_mode` to `"multipart"` for APIs that require `multipart/form-data` (many audio, OCR, and file-upload endpoints reject JSON outright). In multipart mode:
 
 - Scalar fields (string, number, boolean) become plain form fields.
@@ -278,7 +280,7 @@ The `pipeline` config has a `steps` array and an optional `output`:
 
 Each step's full output is captured under `steps.<id>`. A step may reference only **earlier** steps — forward references are rejected at create time — which keeps the sequence linear and deterministic. Execution is **fail-fast**: the first failing step aborts the pipeline with `PIPELINE_STEP_FAILED`. A `tool_id` step that targets another `pipeline` tool is bounded by a maximum nesting depth (`PIPELINE_DEPTH_EXCEEDED`); an inline `tool` step cannot be of type `pipeline` at all (no nested ephemeral pipelines). Steps cannot target `client` tools, which cannot run server-side.
 
-> **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). Step `input` keys and `var` paths use **camelCase** — the runtime form (e.g. `{ "var": "input.documentId" }`), matching the input shape `callTool` passes to the underlying tools.
+> **Case convention.** Structural keys are snake_case (`tool_id`, `steps`, `input`, `output`). A step's `input` mapping is a **tool payload, not a SOAT field**: its keys are preserved **verbatim** — SOAT does not case-transform them — and become the sub-tool's arguments (for an `http` step, the literal request-body keys). Author them in the exact casing the target expects (e.g. `{ "fundamental_truth": … }` for a snake_case API). A `var` path must match the casing of the data it reads: `{ "var": "input.<field>" }` matches your tool's own `parameters` property names, and `{ "var": "steps.<id>.<field>" }` matches the upstream step's output.
 
 For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orchestrations.md), which share the same JSON Logic mapping model.
 

@@ -72,29 +72,59 @@ const isMetadataPassthroughPath = (path: string): boolean => {
   });
 };
 
+// A tool's `input` is not part of SOAT's own resource contract — it is an
+// opaque payload the tool forwards to its target (an `http` tool serializes it
+// as the request body verbatim; a `pipeline` step's `input` mapping keys become
+// the sub-tool's body keys). Case-transforming it would rewrite the field names
+// a caller authored in snake_case (e.g. `fundamental_truth` → `fundamentalTruth`)
+// before they reach the target API, which then rejects them. So on the tools
+// routes `input` rounds-trips verbatim in both directions, exactly like
+// `execute` and document `metadata`.
+const TOOL_INPUT_PASSTHROUGH_PATH_PREFIX = '/api/v1/tools';
+
+const isToolInputPassthroughPath = (path: string): boolean => {
+  return (
+    path === TOOL_INPUT_PASSTHROUGH_PATH_PREFIX ||
+    path.startsWith(`${TOOL_INPUT_PASSTHROUGH_PATH_PREFIX}/`)
+  );
+};
+
+// The inbound (snake→camel) pass-through keys for a given path.
+// 'template' is a pass-through user document (formation templates),
+// 'presetParameters' (the camelCase form of the request's preset_parameters
+// field) is verbatim converter-tool input, and 'execute' is a pass-through
+// tool execute config whose inner keys (HTTP header names, `body_mode`, …) must
+// be preserved verbatim. 'metadata' (documents) and 'input' (tools) are
+// path-scoped pass-throughs. This mirrors the outbound set below so each key
+// round-trips unchanged.
+const buildBodySkipKeys = (path: string): Set<string> => {
+  const keys = new Set(['template', 'presetParameters', 'execute']);
+  if (isMetadataPassthroughPath(path)) keys.add('metadata');
+  if (isToolInputPassthroughPath(path)) keys.add('input');
+  return keys;
+};
+
+// The outbound (camel→snake) pass-through keys — the mirror of the inbound set.
+// 'preset_parameters' is the snake_case form of the response's presetParameters.
+const buildResponseSkipKeys = (path: string): Set<string> => {
+  const keys = new Set(['execute', 'preset_parameters']);
+  if (isMetadataPassthroughPath(path)) keys.add('metadata');
+  if (isToolInputPassthroughPath(path)) keys.add('input');
+  return keys;
+};
+
 export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   if (!ctx.path.startsWith('/api/v1') || ctx.path === OPENAPI_SPEC_PATH) {
     await next();
     return;
   }
 
-  const metadataPassthrough = isMetadataPassthroughPath(ctx.path);
-
-  // Transform incoming request body from snake_case to camelCase
-  // The 'template' key is a pass-through user document (formation templates),
-  // 'presetParameters' (the camelCase form of the request's preset_parameters
-  // field) is verbatim converter-tool input, and 'execute' is a pass-through
-  // tool execute config whose inner keys (HTTP header names, `body_mode`, …)
-  // must be preserved verbatim — none may have their inner keys transformed.
-  // This mirrors the outbound RESPONSE_SKIP_KEYS below so execute round-trips
-  // unchanged in snake_case.
-  const BODY_SKIP_KEYS = new Set(['template', 'presetParameters', 'execute']);
-  if (metadataPassthrough) BODY_SKIP_KEYS.add('metadata');
+  // Transform incoming request body from snake_case to camelCase.
   if (isPlainObject(ctx.request.body) || Array.isArray(ctx.request.body)) {
     ctx.request.body = transformKeys(
       ctx.request.body,
       snakeToCamel,
-      BODY_SKIP_KEYS
+      buildBodySkipKeys(ctx.path)
     ) as typeof ctx.request.body;
   }
 
@@ -107,14 +137,11 @@ export const caseTransformMiddleware = async (ctx: Context, next: Next) => {
   await next();
 
   // Transform outgoing response body from camelCase to snake_case.
-  // The 'execute' key is a pass-through user document (tool execute configs)
-  // whose inner keys (e.g. HTTP headers like Content-Type) must not be
-  // transformed — they are arbitrary user-defined strings, not camelCase
-  // fields. 'preset_parameters' (the snake_case form of the response's
-  // presetParameters field) is the same verbatim converter-tool input.
-  const RESPONSE_SKIP_KEYS = new Set(['execute', 'preset_parameters']);
-  if (metadataPassthrough) RESPONSE_SKIP_KEYS.add('metadata');
   if (isPlainObject(ctx.body) || Array.isArray(ctx.body)) {
-    ctx.body = transformKeys(ctx.body, camelToSnake, RESPONSE_SKIP_KEYS);
+    ctx.body = transformKeys(
+      ctx.body,
+      camelToSnake,
+      buildResponseSkipKeys(ctx.path)
+    );
   }
 };
