@@ -32,7 +32,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     return;
   }
 
-  const { agentId, generationId, limit, offset } = ctx.query as Record<
+  const { agentId, generationId, traceId, limit, offset } = ctx.query as Record<
     string,
     string | undefined
   >;
@@ -41,6 +41,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     projectIds: projectIds ?? undefined,
     agentId,
     generationId,
+    traceId,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });

@@ -27,6 +27,7 @@ Usage relates to [generations](./generations.md) (each row links back to the gen
 | `node_id`          | string \| null  | Orchestration node within the run, when applicable                                           |
 | `agent_id`         | string \| null  | Agent that ran the generation                                                                |
 | `generation_id`    | string \| null  | Generation this usage was recorded for                                                       |
+| `trace_id`         | string \| null  | Trace this usage belongs to (reconcile against the trace tree)                               |
 | `ai_provider_id`   | string \| null  | AI provider instance billed; correlates the meter to the price book                          |
 | `provider`         | string          | Denormalized as-billed provider slug (e.g. `openai`), retained if the provider is deleted    |
 | `model`            | string          | Model identifier the provider billed                                                         |
