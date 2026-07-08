@@ -38,6 +38,7 @@ Every meter row links back to the resources it attributes spend to: the [generat
 | `cached_tokens`    | number          | Cached input tokens read, when the provider reports them (else `0`)                          |
 | `reasoning_tokens` | number          | Reasoning tokens the provider reports separately (else `0`)                                  |
 | `cost_usd`         | number \| null  | Cost in USD computed at write time from the price book; `null` when no price row covers the model |
+| `price_id`         | string \| null  | Price-book row that produced `cost_usd` (the price-table version); `null` when unpriced       |
 | `created_at`       | string          | ISO 8601 creation timestamp                                                                  |
 
 ### PriceBook
@@ -74,7 +75,13 @@ Usage is metered for agent generations — including [conversations](./conversat
 
 `cost_usd` is computed at write time from the price book: the row for the meter's `(provider, model)` whose `effective_from <= now()`. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Cached input tokens are billed at `cached_price_per_m` (falling back to the input rate); reasoning tokens are part of the output count. `cost_usd` is `null` only when no price row covers the model — the tokens are still captured, it does not mean the call was free.
 
+Each meter records `price_id` — the exact price-book row that produced its `cost_usd`. Because cost is frozen and the price row is versioned, a receipt is auditable to the precise price applied even after prices change.
+
 SOAT ships **global default prices** for common provider/model pairs (seeded at startup) so cost is computed out of the box. Admins add or correct prices with future-dated rows via `PUT /api/v1/usage/prices` (include `ai_provider_id` to record a **per-provider override** instead of a global default). Past-effective prices are immutable — corrections ship as new future-dated rows. `GET /api/v1/usage/prices` returns the global defaults; per-provider overrides are not listed there, to avoid exposing one project's negotiated rates to another.
+
+### Receipts and reconciliation
+
+`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: per-model line items (tokens in/out, the `price_id` version that priced them, and cost) plus totals. Because every line carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it. Per-**run** receipts (summing a run's generations) follow once run-scoping lands.
 
 ## Examples
 
@@ -100,6 +107,36 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/usage/meters?generation_id=gen_V1StGXR8Z5jdHi6B" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Get a generation's receipt:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-usage-receipt --generation-id gen_V1StGXR8Z5jdHi6B
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.getUsageReceipt({
+  query: { generation_id: 'gen_V1StGXR8Z5jdHi6B' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/usage/receipt?generation_id=gen_V1StGXR8Z5jdHi6B" \
   -H "Authorization: Bearer <token>"
 ```
 

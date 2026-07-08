@@ -7,6 +7,11 @@
       "description": "List raw usage-meter rows, optionally filtered by agent or generation"
     },
     {
+      "operationId": "getUsageReceipt",
+      "action": "usage:GetReceipt",
+      "description": "Get a billing receipt for a generation"
+    },
+    {
       "operationId": "getPriceBook",
       "action": "usage:GetPriceBook",
       "description": "Read the global price book"

@@ -72,6 +72,7 @@ describe('Usage', () => {
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
         'usage:ListUsageMeters',
+        'usage:GetReceipt',
       ],
     });
     adminToken = setup.adminToken;
@@ -475,6 +476,8 @@ describe('Usage', () => {
       expect(meters.status).toBe(200);
       // (10-4)*1 + 4*0.5 + 20*2 = 48 → 48 / 1e6 USD
       expect(meters.body.data[0].cost_usd).toBeCloseTo(0.000048, 9);
+      // The applied price row is linked for auditability.
+      expect(meters.body.data[0].price_id).toMatch(/^price_/);
     });
 
     test('admin upserts a per-provider override', async () => {
@@ -555,6 +558,89 @@ describe('Usage', () => {
       // Override rate: (10-4)*10 + 4*10 + 20*20 = 500 → 500 / 1e6 USD.
       // The cheaper global default (26 / 1e6) must not win.
       expect(meters.body.data[0].cost_usd).toBeCloseTo(0.0005, 9);
+    });
+  });
+
+  describe('GET /api/v1/usage/receipt', () => {
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get(
+        '/api/v1/usage/receipt?generation_id=gen_x'
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        '/api/v1/usage/receipt?generation_id=gen_x'
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('missing generation_id returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/receipt'
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('unknown generation returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/receipt?generation_id=gen_doesNotExist01'
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('returns a priced receipt for a completed generation', async () => {
+      // A global default price covers the stub model so the line is priced.
+      await db.PriceBook.findOrCreate({
+        where: {
+          aiProviderId: null,
+          provider: 'ollama',
+          model: 'stub-model',
+          effectiveFrom: new Date('2020-01-01T00:00:00.000Z'),
+        },
+        defaults: {
+          aiProviderId: null,
+          provider: 'ollama',
+          model: 'stub-model',
+          inputPricePerM: '1',
+          outputPricePerM: '1',
+          cachedPricePerM: null,
+          effectiveFrom: new Date('2020-01-01T00:00:00.000Z'),
+        },
+      });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'receipt' }] });
+      expect(genRes.status).toBe(200);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?generation_id=${genRes.body.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.generation_id).toBe(genRes.body.id);
+      expect(res.body.currency).toBe('USD');
+      expect(Array.isArray(res.body.line_items)).toBe(true);
+      expect(res.body.line_items.length).toBeGreaterThan(0);
+
+      const line = res.body.line_items[0];
+      expect(line.provider).toBe('ollama');
+      expect(line.model).toBe('stub-model');
+      expect(line.price_id).toMatch(/^price_/);
+      expect(line.input_tokens).toBe(10);
+      expect(line.output_tokens).toBe(20);
+      expect(line.cached_tokens).toBe(4);
+      expect(line.reasoning_tokens).toBe(7);
+      expect(line.cost_usd).toBeGreaterThan(0);
+
+      expect(res.body.total_input_tokens).toBe(10);
+      expect(res.body.total_output_tokens).toBe(20);
+      expect(res.body.total_cached_tokens).toBe(4);
+      expect(res.body.total_reasoning_tokens).toBe(7);
+      expect(res.body.total_cost_usd).toBeGreaterThan(0);
     });
   });
 });

@@ -112,6 +112,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/usage/receipt:
+    get:
+      tags:
+        - Usage
+      summary: Get a generation's billing receipt
+      description: >
+        Returns a billing receipt for a completed generation: per-model line
+        items (tokens, the price-book version that priced them, and cost) plus
+        totals.
+      operationId: getUsageReceipt
+      parameters:
+        - name: generation_id
+          in: query
+          required: true
+          description: Generation public ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The generation's usage receipt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageReceipt'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/usage/prices:
     get:
       tags:
@@ -272,9 +315,61 @@ components:
           description: >
             Cost in USD computed at write time from the versioned price book.
             Null when the tokens are captured but not yet priced.
+        price_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the price-book row that produced `cost_usd` (the
+            price-table version). Null when no price applied.
         created_at:
           type: string
           format: date-time
+
+    UsageReceipt:
+      type: object
+      properties:
+        generation_id:
+          x-soat-ref: generations
+          type: string
+        currency:
+          type: string
+          example: USD
+        line_items:
+          type: array
+          items:
+            type: object
+            properties:
+              provider:
+                type: string
+              model:
+                type: string
+              price_id:
+                type: string
+                nullable: true
+                description: Price-book version that priced this line
+              input_tokens:
+                type: integer
+              output_tokens:
+                type: integer
+              cached_tokens:
+                type: integer
+              reasoning_tokens:
+                type: integer
+              cost_usd:
+                type: number
+                nullable: true
+        total_input_tokens:
+          type: integer
+        total_output_tokens:
+          type: integer
+        total_cached_tokens:
+          type: integer
+        total_reasoning_tokens:
+          type: integer
+        total_cost_usd:
+          type: number
+          nullable: true
+          description: Sum of priced line costs; null when no line is priced
 
     Price:
       type: object
