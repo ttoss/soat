@@ -217,6 +217,10 @@ The CLI accepts `--parameter` (repeatable) instead of a JSON `--parameters` obje
 
 The shell expands `$VAR` to an empty string before the CLI process starts, so `--env-file` loading always arrives too late when variables are not exported in the calling shell. Use `@VAR_NAME` or the bare-key syntax instead — neither is interpreted by the shell.
 
+**Unset `@VAR_NAME` / bare-`KEY` variables omit the parameter, not fail the command**
+
+If the referenced environment variable is not found (in `--env-file` or the shell), the CLI omits that parameter from the request instead of erroring — the server then decides: it reuses the formation's previously stored value for parameters declared `use_previous_value: true` (see [Reusing Previously Stored Values](#reusing-previously-stored-values)), or returns `400 Missing required parameters` if no previous value exists. `Key=$VAR` and `Key=${VAR}` keep failing fast in the CLI on an unset variable, since they are not tied to this fallback.
+
 **Example — deploying with secrets from an `.env` file:**
 
 Given `.env`:
