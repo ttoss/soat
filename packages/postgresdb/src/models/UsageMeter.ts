@@ -14,6 +14,7 @@ import { AiProvider } from './AiProvider';
 import { Generation } from './Generation';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
+import { Trace } from './Trace';
 
 /**
  * Append-only, billing-grade record of a single LLM call's token usage. One
@@ -108,6 +109,23 @@ export class UsageMeter extends Model {
     { onDelete: 'SET NULL' }
   )
   declare generation: Generation | null;
+
+  // Trace the metered call belongs to, for reconciliation against the trace
+  // tree. SET NULL on delete so an old meter never blocks trace removal.
+  @Index
+  @ForeignKey(() => {
+    return Trace;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare traceId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Trace;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare trace: Trace | null;
 
   // The specific AI provider instance billed. Correlates the meter to the
   // price book (a project may have several providers with the same slug).

@@ -44,6 +44,7 @@ export type PersistedUsageMeter = {
   nodeId: string | null;
   agentId: string | null;
   generationId: string | null;
+  traceId: string | null;
   aiProviderId: string | null;
   provider: string;
   model: string;
@@ -67,6 +68,7 @@ const mapUsageMeter = (
     agent?: InstanceType<(typeof db)['Agent']> | null;
     generation?: InstanceType<(typeof db)['Generation']> | null;
     run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
+    trace?: InstanceType<(typeof db)['Trace']> | null;
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
   }
 ): PersistedUsageMeter => {
@@ -81,6 +83,7 @@ const mapUsageMeter = (
     nodeId: meter.nodeId,
     agentId: assocPublicId(meter.agent),
     generationId: assocPublicId(meter.generation),
+    traceId: assocPublicId(meter.trace),
     aiProviderId: assocPublicId(meter.aiProvider),
     provider: meter.provider,
     model: meter.model,
@@ -130,6 +133,7 @@ const writeGenerationMeter = async (args: {
       nodeId: null,
       agentId: generation.agentId,
       generationId: generation.id,
+      traceId: generation.traceId,
       aiProviderId: aiProvider?.id ?? null,
       provider,
       model: args.model || 'unknown',
@@ -195,12 +199,17 @@ const resolveScopedId = async (
   return row?.id ?? null;
 };
 
-// Resolves agent/generation publicId filters into `where` (mutating it).
+// Resolves agent/generation/trace publicId filters into `where` (mutating it).
 // Returns false when a referenced resource does not exist in scope.
 const applyUsageScopeFilters = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   where: Record<string, any>,
-  args: { agentId?: string; generationId?: string; projectIds?: number[] }
+  args: {
+    agentId?: string;
+    generationId?: string;
+    traceId?: string;
+    projectIds?: number[];
+  }
 ): Promise<boolean> => {
   if (args.agentId !== undefined) {
     const agentId = await resolveScopedId(
@@ -224,6 +233,17 @@ const applyUsageScopeFilters = async (
     if (generationId === null) return false;
     where.generationId = generationId;
   }
+  if (args.traceId !== undefined) {
+    const traceId = await resolveScopedId(
+      (w) => {
+        return db.Trace.findOne({ where: w });
+      },
+      args.traceId,
+      args.projectIds
+    );
+    if (traceId === null) return false;
+    where.traceId = traceId;
+  }
   return true;
 };
 
@@ -231,6 +251,7 @@ export const listUsageMeters = async (args: {
   projectIds?: number[];
   agentId?: string;
   generationId?: string;
+  traceId?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -249,6 +270,7 @@ export const listUsageMeters = async (args: {
   const resolved = await applyUsageScopeFilters(where, {
     agentId: args.agentId,
     generationId: args.generationId,
+    traceId: args.traceId,
     projectIds: args.projectIds,
   });
   if (!resolved) return empty;
@@ -260,6 +282,7 @@ export const listUsageMeters = async (args: {
       { model: db.Agent, as: 'agent' },
       { model: db.Generation, as: 'generation' },
       { model: db.OrchestrationRun, as: 'run' },
+      { model: db.Trace, as: 'trace' },
       { model: db.AiProvider, as: 'aiProvider' },
     ],
     order: [['createdAt', 'DESC']],

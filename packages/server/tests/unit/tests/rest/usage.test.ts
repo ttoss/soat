@@ -23,6 +23,7 @@ describe('Usage', () => {
   let agentId: string;
   let aiProviderId: string;
   let generationId: string;
+  let traceId: string;
   let stubServer: Server;
 
   const startStubServer = async (): Promise<string> => {
@@ -103,6 +104,7 @@ describe('Usage', () => {
     expect(genRes.status).toBe(200);
     expect(genRes.body.status).toBe('completed');
     generationId = genRes.body.id;
+    traceId = genRes.body.trace_id;
   }, 60000);
 
   afterAll(async () => {
@@ -139,6 +141,7 @@ describe('Usage', () => {
       expect(meter.agent_id).toBe(agentId);
       expect(meter.project_id).toBe(projectId);
       expect(meter.ai_provider_id).toBe(aiProviderId);
+      expect(meter.trace_id).toBe(traceId);
       expect(meter.provider).toBe('ollama');
       expect(meter.model).toBe('stub-model');
       expect(meter.input_tokens).toBe(10);
@@ -174,6 +177,24 @@ describe('Usage', () => {
     test('unknown agent_id filter returns an empty page', async () => {
       const response = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/meters?agent_id=agent_doesnotexist0'
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
+    });
+
+    test('filters by trace_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?trace_id=${traceId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0].trace_id).toBe(traceId);
+    });
+
+    test('unknown trace_id filter returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?trace_id=trace_doesnotexist'
       );
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
@@ -217,6 +238,7 @@ describe('Usage', () => {
         nodeId: null,
         agentId: null,
         generationId: null,
+        traceId: null,
         aiProviderId: null,
         provider: 'openai',
         model: 'gpt-4o',
@@ -238,6 +260,7 @@ describe('Usage', () => {
       expect(seeded).toBeDefined();
       expect(seeded.agent_id).toBeNull();
       expect(seeded.generation_id).toBeNull();
+      expect(seeded.trace_id).toBeNull();
       expect(seeded.ai_provider_id).toBeNull();
       expect(seeded.run_id).toBeNull();
       expect(seeded.cost_usd).toBe(2.5);

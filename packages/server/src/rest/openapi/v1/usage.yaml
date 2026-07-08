@@ -51,6 +51,12 @@ paths:
           description: Filter by generation public ID
           schema:
             type: string
+        - name: trace_id
+          in: query
+          required: false
+          description: Filter by trace public ID
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -133,6 +139,11 @@ components:
           type: string
           nullable: true
           description: Public ID of the generation this usage was recorded for
+        trace_id:
+          x-soat-ref: traces
+          type: string
+          nullable: true
+          description: Public ID of the trace this usage belongs to
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
