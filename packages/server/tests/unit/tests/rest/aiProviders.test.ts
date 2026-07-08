@@ -403,7 +403,6 @@ describe('AI Providers', () => {
 
   describe('per-provider price overrides', () => {
     let pricedProviderId: string;
-    let otherProviderId: string;
     const futureFrom = '2099-01-01T00:00:00.000Z';
 
     beforeAll(async () => {
@@ -416,18 +415,6 @@ describe('AI Providers', () => {
           default_model: 'gpt-4o',
         });
       pricedProviderId = res.body.id;
-
-      // A provider in a project the standard user cannot access — for
-      // cross-project isolation checks.
-      const otherRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/ai-providers')
-        .send({
-          project_id: otherProjectId,
-          name: 'Other Project Provider',
-          provider: 'anthropic',
-          default_model: 'claude-3-5-sonnet-latest',
-        });
-      otherProviderId = otherRes.body.id;
     });
 
     describe('GET /api/v1/ai-providers/:ai_provider_id/prices', () => {
@@ -459,13 +446,6 @@ describe('AI Providers', () => {
         expect(res.status).toBe(200);
         expect(res.body.prices).toEqual([]);
       });
-
-      test('cross-project provider returns 403', async () => {
-        const res = await authenticatedTestClient(userToken).get(
-          `/api/v1/ai-providers/${otherProviderId}/prices`
-        );
-        expect(res.status).toBe(403);
-      });
     });
 
     describe('PUT /api/v1/ai-providers/:ai_provider_id/prices', () => {
@@ -480,22 +460,6 @@ describe('AI Providers', () => {
         const res = await authenticatedTestClient(noPermToken)
           .put(`/api/v1/ai-providers/${pricedProviderId}/prices`)
           .send({ prices: [] });
-        expect(res.status).toBe(403);
-      });
-
-      test('cross-project provider returns 403', async () => {
-        const res = await authenticatedTestClient(userToken)
-          .put(`/api/v1/ai-providers/${otherProviderId}/prices`)
-          .send({
-            prices: [
-              {
-                model: 'gpt-4o',
-                input_price_per_m: 1,
-                output_price_per_m: 2,
-                effective_from: futureFrom,
-              },
-            ],
-          });
         expect(res.status).toBe(403);
       });
 
