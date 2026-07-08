@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.3](https://github.com/ttoss/soat/compare/v0.14.2...v0.14.3) (2026-07-08)
+
+### Features
+
+* **usage:** per-generation token metering with reasoning tokens ([#483](https://github.com/ttoss/soat/issues/483)) ([#489](https://github.com/ttoss/soat/issues/489)) ([5c397f5](https://github.com/ttoss/soat/commit/5c397f566d32358daee89462a41883343d842fa2)), closes [#482](https://github.com/ttoss/soat/issues/482)
+
 ## [0.14.2](https://github.com/ttoss/soat/compare/v0.14.1...v0.14.2) (2026-07-08)
 
 **Note:** Version bump only for package @soat/sdk

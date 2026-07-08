@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.3](https://127.0.0.1/41729/git/ttoss/compare/v0.14.2...v0.14.3) (2026-07-08)
+
+### Features
+
+* **usage:** attribute usage meters to trace_id ([#484](https://127.0.0.1/41729/git/ttoss/issues/484)) ([#490](https://127.0.0.1/41729/git/ttoss/issues/490)) ([a46f70d](https://127.0.0.1/41729/git/ttoss/commits/a46f70dcdd2d5e2be2ac60e4769aa9b893b4509b)), closes [#482](https://127.0.0.1/41729/git/ttoss/issues/482)
+* **usage:** attribute usage meters to trigger and logical action id ([#485](https://127.0.0.1/41729/git/ttoss/issues/485)) ([#491](https://127.0.0.1/41729/git/ttoss/issues/491)) ([a00b0e5](https://127.0.0.1/41729/git/ttoss/commits/a00b0e593ef3ebff56823c28650157b7f63ca9a7)), closes [#486](https://127.0.0.1/41729/git/ttoss/issues/486) [#482](https://127.0.0.1/41729/git/ttoss/issues/482)
+* **usage:** per-generation token metering with reasoning tokens ([#483](https://127.0.0.1/41729/git/ttoss/issues/483)) ([#489](https://127.0.0.1/41729/git/ttoss/issues/489)) ([5c397f5](https://127.0.0.1/41729/git/ttoss/commits/5c397f566d32358daee89462a41883343d842fa2)), closes [#482](https://127.0.0.1/41729/git/ttoss/issues/482)
+* **usage:** price book + write-time cost + default prices ([#488](https://127.0.0.1/41729/git/ttoss/issues/488)) ([#493](https://127.0.0.1/41729/git/ttoss/issues/493)) ([3063e64](https://127.0.0.1/41729/git/ttoss/commits/3063e640c454e1f02c5d1c7dd7a2f3307fb36f29)), closes [#482](https://127.0.0.1/41729/git/ttoss/issues/482) [#483](https://127.0.0.1/41729/git/ttoss/issues/483) [#483](https://127.0.0.1/41729/git/ttoss/issues/483) [#484](https://127.0.0.1/41729/git/ttoss/issues/484) [#485](https://127.0.0.1/41729/git/ttoss/issues/485) [#486](https://127.0.0.1/41729/git/ttoss/issues/486) [#482](https://127.0.0.1/41729/git/ttoss/issues/482)
+
 ## [0.14.2](https://127.0.0.1/41729/git/ttoss/compare/v0.14.1...v0.14.2) (2026-07-08)
 
 **Note:** Version bump only for package @soat/postgresdb
