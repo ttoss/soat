@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.4](https://127.0.0.1/41729/git/ttoss/compare/v0.14.3...v0.14.4) (2026-07-08)
+
+### Features
+
+* **pricing:** project + provider-slug price tier (3-tier pricing) ([#502](https://127.0.0.1/41729/git/ttoss/issues/502)) ([#504](https://127.0.0.1/41729/git/ttoss/issues/504)) ([b427abe](https://127.0.0.1/41729/git/ttoss/commits/b427abe1b84f7478dba510d0c4285970b66e7052))
+* **usage:** per-generation billing receipt and price_id link ([#487](https://127.0.0.1/41729/git/ttoss/issues/487)) ([#496](https://127.0.0.1/41729/git/ttoss/issues/496)) ([55a4ee7](https://127.0.0.1/41729/git/ttoss/commits/55a4ee7ea89db7976b28b994ea55e3adaaa1ca21))
+
 ## [0.14.3](https://127.0.0.1/41729/git/ttoss/compare/v0.14.2...v0.14.3) (2026-07-08)
 
 ### Features
