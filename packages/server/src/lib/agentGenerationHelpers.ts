@@ -1,10 +1,17 @@
-import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
+import type {
+  LanguageModel,
+  LanguageModelUsage,
+  ModelMessage,
+  Tool,
+  ToolChoice,
+} from 'ai';
 import { isStepCount, streamText } from 'ai';
 import createDebug from 'debug';
 
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { saveTrace, serializeSteps } from './traces';
+import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
 
@@ -179,7 +186,7 @@ export const runStreamGeneration = (args: {
     prepareStep,
     stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
-    onEnd: ({ steps, finishReason }) => {
+    onEnd: ({ steps, finishReason, usage }) => {
       saveTrace({
         traceId: args.traceId,
         projectId: args.typedAgent.project.id as number,
@@ -194,6 +201,11 @@ export const runStreamGeneration = (args: {
         status: 'completed',
         completedAt: new Date(),
         stopReason: finishReason,
+      }).catch(() => {});
+      recordGenerationUsage({
+        generationId: args.generationId,
+        model: args.typedAgent.model ?? '',
+        usage,
       }).catch(() => {});
     },
   });
@@ -356,6 +368,7 @@ export const buildCompletedGenerationResult = async (args: {
     text: string;
     finishReason: string;
     object?: unknown;
+    usage?: LanguageModelUsage;
   };
   typedAgent: TypedAgent;
   agentId: string;
@@ -379,12 +392,14 @@ export const buildCompletedGenerationResult = async (args: {
     stopReason: args.result.finishReason,
   }).catch(() => {});
 
+  const model = args.result.response?.modelId ?? args.typedAgent.model ?? '';
+
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: args.traceId,
     status: 'completed',
     output: {
-      model: args.result.response?.modelId ?? args.typedAgent.model ?? '',
+      model,
       content: args.result.text,
       finishReason: args.result.finishReason,
       responseMessages: args.result.response?.messages,
@@ -393,6 +408,12 @@ export const buildCompletedGenerationResult = async (args: {
         : {}),
     },
   };
+
+  await recordGenerationUsage({
+    generationId: args.generationId,
+    model,
+    usage: args.result.usage,
+  });
 
   emitEvent({
     type: 'agents.generation.completed',

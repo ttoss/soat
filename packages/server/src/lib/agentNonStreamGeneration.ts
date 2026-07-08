@@ -1,5 +1,11 @@
 /* eslint-disable max-lines */
-import type { LanguageModel, ModelMessage, Tool, ToolChoice } from 'ai';
+import type {
+  LanguageModel,
+  LanguageModelUsage,
+  ModelMessage,
+  Tool,
+  ToolChoice,
+} from 'ai';
 import { generateText, isStepCount } from 'ai';
 import createDebug from 'debug';
 
@@ -122,6 +128,7 @@ type GenerateTextResult = {
   text: string;
   finishReason: string;
   output?: unknown;
+  usage?: LanguageModelUsage;
 };
 
 const resolveGenerationResult = async (args: {
@@ -183,6 +190,7 @@ const resolveGenerationResult = async (args: {
       text: args.result.text,
       response: args.result.response,
       object: args.typedAgent.outputSchema ? args.result.output : undefined,
+      usage: args.result.usage,
     },
     typedAgent: args.typedAgent,
     agentId: args.agentId,

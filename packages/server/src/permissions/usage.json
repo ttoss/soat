@@ -1,0 +1,10 @@
+{
+  "module": "usage",
+  "operations": [
+    {
+      "operationId": "listUsageMeters",
+      "action": "usage:ListUsageMeters",
+      "description": "List raw usage-meter rows, optionally filtered by agent or generation"
+    }
+  ]
+}

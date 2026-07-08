@@ -21,6 +21,7 @@ import {
   Tools as ToolsSdk,
   Traces as TracesSdk,
   Triggers as TriggersSdk,
+  Usage as UsageSdk,
   Users as UsersSdk,
   Webhooks as WebhooksSdk,
 } from './generated/sdk.gen.js';
@@ -113,6 +114,7 @@ export class SoatClient {
   readonly tools: typeof ToolsSdk;
   readonly traces: typeof TracesSdk;
   readonly triggers: typeof TriggersSdk;
+  readonly usage: typeof UsageSdk;
   readonly users: typeof UsersSdk;
   readonly webhooks: typeof WebhooksSdk;
 
@@ -148,6 +150,7 @@ export class SoatClient {
     this.tools = bindResource(ToolsSdk, httpClient);
     this.traces = bindResource(TracesSdk, httpClient);
     this.triggers = bindResource(TriggersSdk, httpClient);
+    this.usage = bindResource(UsageSdk, httpClient);
     this.users = bindResource(UsersSdk, httpClient);
     this.webhooks = bindResource(WebhooksSdk, httpClient);
   }
