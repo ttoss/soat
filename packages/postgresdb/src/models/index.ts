@@ -35,6 +35,7 @@ export { Trace } from './Trace';
 export { Trigger } from './Trigger';
 export { TriggerFiring } from './TriggerFiring';
 export { UploadToken } from './UploadToken';
+export { UsageMeter } from './UsageMeter';
 export { User } from './User';
 export { Webhook } from './Webhook';
 export { WebhookDelivery } from './WebhookDelivery';

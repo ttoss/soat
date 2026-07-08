@@ -1,0 +1,194 @@
+openapi: 3.0.3
+info:
+  title: Usage API
+  version: 1.0.0
+  description: >
+    Billing-grade usage metering. One append-only usage-meter row is recorded
+    per completed LLM generation, capturing the provider's reported token
+    counts — input, output, cached, and reasoning tokens — attributed to the
+    project, agent, and generation. Rows are immutable, so historical usage
+    never changes after the fact.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Usage
+    description: Inspect LLM token-usage meter rows
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/usage/meters:
+    get:
+      tags:
+        - Usage
+      summary: List usage meters
+      description: >
+        Returns the raw usage-meter rows the caller can access, most recent
+        first, optionally filtered by agent and generation. Each row is the
+        per-generation token usage as reported by the provider, for audit and
+        reconciliation.
+      operationId: listUsageMeters
+      parameters:
+        - name: agent_id
+          in: query
+          required: false
+          description: Filter by agent public ID
+          schema:
+            type: string
+        - name: generation_id
+          in: query
+          required: false
+          description: Filter by generation public ID
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: Paginated list of usage-meter rows
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UsageMeter'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    UsageMeter:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the usage-meter row
+          example: um_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the project the usage is attributed to
+        run_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the orchestration run that initiated the call, when
+            the generation ran inside a run. Null for standalone generations.
+        node_id:
+          type: string
+          nullable: true
+          description: Orchestration node ID within the run, when applicable
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          nullable: true
+          description: Public ID of the agent that ran the generation
+        generation_id:
+          x-soat-ref: generations
+          type: string
+          nullable: true
+          description: Public ID of the generation this usage was recorded for
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+          description: >
+            Public ID of the AI provider instance billed. Correlates the meter
+            to the price book. Null if the provider was later deleted; the
+            `provider`/`model` snapshot still records what was billed.
+        provider:
+          type: string
+          description: >
+            Denormalized as-billed provider slug, retained even if the AI
+            provider is later deleted
+          example: openai
+        model:
+          type: string
+          description: Model identifier the provider billed
+          example: gpt-4o
+        input_tokens:
+          type: integer
+          description: Input (prompt) tokens reported by the provider
+        output_tokens:
+          type: integer
+          description: Output (completion) tokens reported by the provider
+        cached_tokens:
+          type: integer
+          description: Cached input tokens read, when the provider reports them
+        reasoning_tokens:
+          type: integer
+          description: >
+            Reasoning tokens the provider reports separately (e.g. OpenAI
+            `completion_tokens_details.reasoning_tokens`). 0 when unreported.
+        cost_usd:
+          type: number
+          nullable: true
+          description: >
+            Cost in USD computed at write time from the versioned price book.
+            Null when the tokens are captured but not yet priced.
+        created_at:
+          type: string
+          format: date-time
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          oneOf:
+            - type: string
+              description: Generic error message (e.g. "Internal Server Error")
+            - type: object
+              description: Structured domain error
+              properties:
+                code:
+                  type: string
+                  example: RESOURCE_NOT_FOUND
+                message:
+                  type: string
+                meta:
+                  type: object

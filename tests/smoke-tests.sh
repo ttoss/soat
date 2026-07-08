@@ -2000,6 +2000,30 @@ else
   exit 1
 fi
 
+# 34b. Usage metering — a meter row is recorded per completed generation
+echo "--- Verifying usage metering ---"
+USAGE_METERS_RESP=$($SOAT_CLI list-usage-meters | sanitize_json)
+USAGE_IS_ARRAY=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r 'if (.data | type) == "array" then "yes" else "no" end')
+if [ "$USAGE_IS_ARRAY" != "yes" ]; then
+  echo "ERROR: list-usage-meters did not return a data array" >&2
+  echo "$USAGE_METERS_RESP" >&2
+  exit 1
+fi
+USAGE_TOTAL=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '.total // 0')
+echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
+
+# When at least one generation has completed, the row must carry the token
+# columns (values depend on the live provider, so only their shape is checked).
+if [ "$USAGE_TOTAL" -ge 1 ]; then
+  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '(.data[0] | (.id | startswith("um_")) and (.provider | length > 0) and (.input_tokens | type == "number") and (.reasoning_tokens | type == "number"))')
+  if [ "$USAGE_ROW_OK" != "true" ]; then
+    echo "ERROR: usage-meter row missing expected token fields" >&2
+    echo "$USAGE_METERS_RESP" >&2
+    exit 1
+  fi
+  echo "Usage meter row shape (tokens incl. reasoning): OK"
+fi
+
 # 35. Client-tool agent is delete-blocked after generation persists trace data
 echo "--- Verifying client-tool agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"
