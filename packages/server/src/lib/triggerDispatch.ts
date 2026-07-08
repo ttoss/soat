@@ -135,6 +135,7 @@ const dispatchToTarget = async (args: {
   projectId: number;
   input: Record<string, unknown>;
   authHeader: string;
+  triggerId: string;
 }): Promise<Record<string, unknown>> => {
   if (args.targetType === 'orchestration') {
     const run = await startOrchestrationRun({
@@ -159,6 +160,7 @@ const dispatchToTarget = async (args: {
       messages: buildAgentMessages(args.input),
       stream: false,
       authHeader: args.authHeader,
+      triggerId: args.triggerId,
     });
     // stream:false always resolves to a GenerationResult.
     const result = generation as {
@@ -343,6 +345,7 @@ export const runFiringDispatch = async (
       projectId: trigger.projectId as number,
       input: effectiveInput,
       authHeader,
+      triggerId: trigger.publicId as string,
     });
     await finalizeFiringSucceeded({ firing, result });
     log('runFiringDispatch: firing=%s succeeded', firing.publicId);

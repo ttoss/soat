@@ -146,6 +146,19 @@ export class UsageMeter extends Model {
   )
   declare aiProvider: AiProvider | null;
 
+  // Public id of the trigger firing that initiated the generation (agent-target
+  // triggers). A denormalized as-billed snapshot rather than an FK — it arrives
+  // via generation metadata and must survive trigger deletion. Null when the
+  // generation was not started by a trigger.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare triggerId: string | null;
+
+  // Logical action being billed — the caller-supplied action label passed
+  // through the generation's metadata. Lets spend roll up per action
+  // independent of the agent/generation. Null when the caller did not label it.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actionId: string | null;
+
   // Denormalized as-billed provider slug (e.g. `openai`), retained even if the
   // AI provider row is later deleted so historical receipts stay accurate.
   @Column({ type: DataType.STRING, allowNull: false })

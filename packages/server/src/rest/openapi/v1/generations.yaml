@@ -236,12 +236,23 @@ components:
           type: object
           nullable: true
           description: >
-            Non-sensitive metadata recorded about the generation. Currently
-            only includes `extraction` — set when the agent's
+            Non-sensitive metadata recorded about the generation. May include
+            `action_id` (the logical action label supplied on the generate
+            request) and `trigger_id` (set when a trigger initiated the
+            generation), plus `extraction` — set when the agent's
             `knowledge_config.extraction` produced a memory-extraction summary
             for this turn (`candidates`, `created`, `updated`, `skipped`).
             Internal recovery state is never included here.
           properties:
+            action_id:
+              type: string
+              nullable: true
+              description: Logical action label supplied on the generate request
+            trigger_id:
+              x-soat-ref: triggers
+              type: string
+              nullable: true
+              description: Trigger that initiated the generation, when applicable
             extraction:
               type: object
               nullable: true

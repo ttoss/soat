@@ -116,6 +116,7 @@ agentGenerationRouter.post(
       maxCallDepth,
       toolContext,
       knowledgeConfig,
+      actionId,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -125,6 +126,7 @@ agentGenerationRouter.post(
       maxCallDepth?: unknown;
       toolContext?: Record<string, string>;
       knowledgeConfig?: object;
+      actionId?: string;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -149,6 +151,7 @@ agentGenerationRouter.post(
       authUser: ctx.authUser,
       toolContext,
       knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
+      actionId: typeof actionId === 'string' ? actionId : undefined,
     });
 
     fireExtractionForCompletedResult({

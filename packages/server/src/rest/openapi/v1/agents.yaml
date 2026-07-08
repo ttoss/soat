@@ -903,6 +903,9 @@ components:
             type: string
           nullable: true
           description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+        action_id:
+          type: string
+          description: Logical action label recorded on the generation's usage meter, so spend can be rolled up per action (e.g. an A/B/C/D operating action).
         knowledge_config:
           type: object
           nullable: true

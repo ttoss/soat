@@ -46,6 +46,8 @@ export type PersistedUsageMeter = {
   generationId: string | null;
   traceId: string | null;
   aiProviderId: string | null;
+  triggerId: string | null;
+  actionId: string | null;
   provider: string;
   model: string;
   inputTokens: number;
@@ -60,6 +62,14 @@ const assocPublicId = (
   assoc: { publicId: string } | null | undefined
 ): string | null => {
   return assoc?.publicId ?? null;
+};
+
+const metadataString = (
+  metadata: Record<string, unknown>,
+  key: string
+): string | null => {
+  const value = metadata[key];
+  return typeof value === 'string' ? value : null;
 };
 
 const mapUsageMeter = (
@@ -85,6 +95,8 @@ const mapUsageMeter = (
     generationId: assocPublicId(meter.generation),
     traceId: assocPublicId(meter.trace),
     aiProviderId: assocPublicId(meter.aiProvider),
+    triggerId: meter.triggerId,
+    actionId: meter.actionId,
     provider: meter.provider,
     model: meter.model,
     inputTokens: meter.inputTokens,
@@ -123,6 +135,9 @@ const writeGenerationMeter = async (args: {
   const tokens = extractUsageTokens(args.usage);
   const aiProvider = generation.agent?.aiProvider ?? null;
   const provider = aiProvider?.provider ?? 'unknown';
+  const metadata = generation.metadata ?? {};
+  const actionId = metadataString(metadata, 'actionId');
+  const triggerId = metadataString(metadata, 'triggerId');
 
   const [, created] = await db.UsageMeter.findOrCreate({
     where: { idempotencyKey: args.generationId },
@@ -135,6 +150,8 @@ const writeGenerationMeter = async (args: {
       generationId: generation.id,
       traceId: generation.traceId,
       aiProviderId: aiProvider?.id ?? null,
+      triggerId,
+      actionId,
       provider,
       model: args.model || 'unknown',
       inputTokens: tokens.inputTokens,
@@ -252,6 +269,8 @@ export const listUsageMeters = async (args: {
   agentId?: string;
   generationId?: string;
   traceId?: string;
+  triggerId?: string;
+  actionId?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -266,6 +285,10 @@ export const listUsageMeters = async (args: {
     if (args.projectIds.length === 0) return empty;
     where.projectId = args.projectIds;
   }
+
+  // triggerId/actionId are denormalized string columns — filter directly.
+  if (args.triggerId !== undefined) where.triggerId = args.triggerId;
+  if (args.actionId !== undefined) where.actionId = args.actionId;
 
   const resolved = await applyUsageScopeFilters(where, {
     agentId: args.agentId,

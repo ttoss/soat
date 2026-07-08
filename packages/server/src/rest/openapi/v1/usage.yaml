@@ -57,6 +57,18 @@ paths:
           description: Filter by trace public ID
           schema:
             type: string
+        - name: trigger_id
+          in: query
+          required: false
+          description: Filter by the trigger that initiated the generation
+          schema:
+            type: string
+        - name: action_id
+          in: query
+          required: false
+          description: Filter by logical action id
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -152,6 +164,19 @@ components:
             Public ID of the AI provider instance billed. Correlates the meter
             to the price book. Null if the provider was later deleted; the
             `provider`/`model` snapshot still records what was billed.
+        trigger_id:
+          x-soat-ref: triggers
+          type: string
+          nullable: true
+          description: >
+            Public ID of the trigger that initiated the generation (agent-target
+            triggers). Null when not started by a trigger.
+        action_id:
+          type: string
+          nullable: true
+          description: >
+            Caller-supplied logical action label, for rolling spend up per
+            action. Null when the caller did not label the action.
         provider:
           type: string
           description: >
