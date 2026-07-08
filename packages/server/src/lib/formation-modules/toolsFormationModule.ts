@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../../errors';
+import { isRef } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   findUnreferencedPipelineParams,
@@ -27,6 +28,33 @@ const SCHEMA_NAME = 'ToolResourceProperties';
 const RESOURCE_LABEL = 'tool';
 
 // ── Property validation ──────────────────────────────────────────────────
+
+// A pipeline step's `tool_id` may be a formation `{ ref: ResourceName }`
+// reference, which is resolved to the physical tool id at deploy time (by
+// `resolveRefs`, after the referenced tool is created first per the dependency
+// graph). Structural validation via `validatePipelineConfig` requires a string
+// `tool_id`, so replace any ref-shaped `tool_id` with a placeholder before
+// validating — this checks the rest of the pipeline shape without rejecting a
+// legitimate reference. The referenced resource's existence is already checked
+// by the template-wide ref validation in `formationsValidation`.
+const REF_TOOL_ID_PLACEHOLDER = '__formation_ref__';
+
+const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
+  if (!isObjectRecord(pipeline) || !Array.isArray(pipeline.steps)) {
+    return pipeline;
+  }
+  return {
+    ...pipeline,
+    steps: pipeline.steps.map((step) => {
+      if (!isObjectRecord(step)) return step;
+      const rawToolId = step.tool_id ?? step.toolId;
+      if (!isRef(rawToolId)) return step;
+      const { toolId: _toolId, ...rest } = step;
+      void _toolId;
+      return { ...rest, tool_id: REF_TOOL_ID_PLACEHOLDER };
+    }),
+  };
+};
 
 const validateToolProperties = (args: {
   properties: unknown;
@@ -59,7 +87,9 @@ const validateToolProperties = (args: {
 
   if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
     try {
-      validatePipelineConfig(properties.pipeline);
+      validatePipelineConfig(
+        normalizePipelineRefsForValidation(properties.pipeline)
+      );
     } catch (error) {
       const message =
         error instanceof DomainError ? error.message : String(error);

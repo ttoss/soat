@@ -1400,6 +1400,73 @@ resources:
       );
     });
 
+    const pipelineRefTemplate = {
+      resources: {
+        GetTruth: {
+          type: 'tool',
+          properties: {
+            name: 'get-truth',
+            type: 'http',
+            execute: { url: 'https://api.example.com/truth', method: 'GET' },
+          },
+        },
+        MyPipeline: {
+          type: 'tool',
+          properties: {
+            name: 'my-pipeline-with-ref',
+            type: 'pipeline',
+            pipeline: {
+              steps: [{ id: 'fetchTruth', tool_id: { ref: 'GetTruth' } }],
+            },
+          },
+        },
+      },
+    };
+
+    test('validates a pipeline step tool_id that is a { ref } to another resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: pipelineRefTemplate });
+
+      expect(res.status).toBe(200);
+      // A `{ ref: ResourceName }` tool_id is a valid formation reference, not a
+      // malformed step — it is resolved to the physical tool id at deploy time.
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    test('deploys a pipeline whose step tool_id is a { ref }, resolving it to the physical id', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `pipeline-ref-formation-${Date.now()}`,
+          template: pipelineRefTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+
+      const truth = res.body.resources.find((r: { logical_id: string }) => {
+        return r.logical_id === 'GetTruth';
+      });
+      const pipeline = res.body.resources.find((r: { logical_id: string }) => {
+        return r.logical_id === 'MyPipeline';
+      });
+      // Both resources deploy successfully. The pipeline reaching `created`
+      // proves the ref resolved: an unresolved `{ ref }` tool_id would make
+      // `createTool` → `validatePipelineConfig` reject the step, failing the
+      // resource instead.
+      expect(truth.status).toBe('created');
+      expect(truth.physical_resource_id).toMatch(/^tool_/);
+      expect(pipeline.status).toBe('created');
+      expect(pipeline.physical_resource_id).toMatch(/^tool_/);
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${res.body.id}`
+      );
+    });
+
     test('deletes formation and cleans up tool resource', async () => {
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${agentToolFormationId}`
