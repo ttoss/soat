@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.4](https://github.com/ttoss/soat/compare/v0.14.3...v0.14.4) (2026-07-08)
+
+### Bug Fixes
+
+* **server:** boot on Aurora PostgreSQL 18.3 and surface DB connect errors ([#506](https://github.com/ttoss/soat/issues/506)) ([3078bb6](https://github.com/ttoss/soat/commit/3078bb69a38cae0b2517616124bb07bd1d1faf60))
+
+### Features
+
+* **ai-providers:** project self-service per-provider price overrides ([#498](https://github.com/ttoss/soat/issues/498)) ([#501](https://github.com/ttoss/soat/issues/501)) ([2880cf1](https://github.com/ttoss/soat/commit/2880cf1800f5972ac2c567af561cb28099df3df8))
+* **pricing:** project + provider-slug price tier (3-tier pricing) ([#502](https://github.com/ttoss/soat/issues/502)) ([#504](https://github.com/ttoss/soat/issues/504)) ([b427abe](https://github.com/ttoss/soat/commit/b427abe1b84f7478dba510d0c4285970b66e7052))
+* **usage:** per-generation billing receipt and price_id link ([#487](https://github.com/ttoss/soat/issues/487)) ([#496](https://github.com/ttoss/soat/issues/496)) ([55a4ee7](https://github.com/ttoss/soat/commit/55a4ee7ea89db7976b28b994ea55e3adaaa1ca21))
+
 ## [0.14.3](https://github.com/ttoss/soat/compare/v0.14.2...v0.14.3) (2026-07-08)
 
 ### Features

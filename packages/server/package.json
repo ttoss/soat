@@ -1,6 +1,6 @@
 {
   "name": "@soat/server",
-  "version": "0.14.3",
+  "version": "0.14.4",
   "main": "dist/server.mjs",
   "scripts": {
     "build": "tsdown",
