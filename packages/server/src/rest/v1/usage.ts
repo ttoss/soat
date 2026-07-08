@@ -32,16 +32,16 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     return;
   }
 
-  const { agentId, generationId, traceId, limit, offset } = ctx.query as Record<
-    string,
-    string | undefined
-  >;
+  const { agentId, generationId, traceId, triggerId, actionId, limit, offset } =
+    ctx.query as Record<string, string | undefined>;
 
   const result = await listUsageMeters({
     projectIds: projectIds ?? undefined,
     agentId,
     generationId,
     traceId,
+    triggerId,
+    actionId,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });

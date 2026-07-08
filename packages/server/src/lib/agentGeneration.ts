@@ -75,6 +75,19 @@ const dispatchGeneration = (args: {
   });
 };
 
+// Builds the generation's creation-time metadata from usage-attribution
+// inputs. Only defined keys are stored; returns null when there is nothing to
+// attribute, preserving the previous `metadata: null` default.
+const buildGenerationMetadata = (args: {
+  actionId?: string;
+  triggerId?: string;
+}): Record<string, unknown> | null => {
+  const metadata: Record<string, unknown> = {};
+  if (args.actionId !== undefined) metadata.actionId = args.actionId;
+  if (args.triggerId !== undefined) metadata.triggerId = args.triggerId;
+  return Object.keys(metadata).length > 0 ? metadata : null;
+};
+
 const resolveContextAndRecord = async (args: {
   agentId: string;
   projectIds?: number[];
@@ -88,6 +101,8 @@ const resolveContextAndRecord = async (args: {
   initiatorGenerationId?: string | null;
   remainingDepth?: number;
   knowledgeConfig?: object;
+  actionId?: string;
+  triggerId?: string;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -113,6 +128,10 @@ const resolveContextAndRecord = async (args: {
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
+    metadata: buildGenerationMetadata({
+      actionId: args.actionId,
+      triggerId: args.triggerId,
+    }),
   }).catch((error) => {
     log(
       'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',
@@ -139,6 +158,8 @@ export const createGeneration = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   knowledgeConfig?: object;
+  actionId?: string;
+  triggerId?: string;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -179,6 +200,8 @@ export const createGeneration = async (args: {
     initiatorGenerationId: args.initiatorGenerationId,
     remainingDepth: maxDepth,
     knowledgeConfig: args.knowledgeConfig,
+    actionId: args.actionId,
+    triggerId: args.triggerId,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

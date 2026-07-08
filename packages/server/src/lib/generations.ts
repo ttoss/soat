@@ -130,6 +130,7 @@ export const createGenerationRecord = async (args: {
   initiatorGenerationId?: string | null;
   startedByPrincipalType?: string | null;
   startedByPrincipalId?: string | null;
+  metadata?: Record<string, unknown> | null;
 }) => {
   const [agent, initiatorGeneration] = await Promise.all([
     db.Agent.findOne({
@@ -168,7 +169,7 @@ export const createGenerationRecord = async (args: {
     lastActivityAt: null,
     stopReason: null,
     error: null,
-    metadata: null,
+    metadata: args.metadata ?? null,
   });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {

@@ -29,6 +29,8 @@ Usage relates to [generations](./generations.md) (each row links back to the gen
 | `generation_id`    | string \| null  | Generation this usage was recorded for                                                       |
 | `trace_id`         | string \| null  | Trace this usage belongs to (reconcile against the trace tree)                               |
 | `ai_provider_id`   | string \| null  | AI provider instance billed; correlates the meter to the price book                          |
+| `trigger_id`       | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
+| `action_id`        | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
 | `provider`         | string          | Denormalized as-billed provider slug (e.g. `openai`), retained if the provider is deleted    |
 | `model`            | string          | Model identifier the provider billed                                                         |
 | `input_tokens`     | number          | Input (prompt) tokens reported by the provider                                               |
@@ -47,6 +49,10 @@ Each row separates the provider's token report into four counts. `cached_tokens`
 ### Coverage
 
 Usage is metered for agent generations — including conversations and orchestration agent nodes, which run through the same agent-completion path. `run_id` and `node_id` are reserved for orchestration attribution and are `null` for standalone generations.
+
+### Trigger and action attribution
+
+`action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the generation and copied onto its meter so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when an **agent-target** trigger initiates the generation. Filter the raw meter list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action. (Trigger attribution for generations produced inside an orchestration run is tracked with the run-scoping work and is `null` until then.)
 
 ### Pricing
 

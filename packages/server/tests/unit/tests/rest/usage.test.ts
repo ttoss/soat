@@ -4,6 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { createGeneration } from 'src/lib/agents';
 import { recordGenerationUsage } from 'src/lib/usage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -150,6 +151,8 @@ describe('Usage', () => {
       expect(meter.reasoning_tokens).toBe(7);
       expect(meter.cost_usd).toBeNull();
       expect(meter.run_id).toBeNull();
+      expect(meter.trigger_id).toBeNull();
+      expect(meter.action_id).toBeNull();
     });
 
     test('does not expose internal numeric IDs', async () => {
@@ -202,6 +205,59 @@ describe('Usage', () => {
     });
   });
 
+  describe('trigger and action attribution', () => {
+    test('records a caller-supplied action_id and filters by it', async () => {
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'labelled' }],
+          action_id: 'action-A',
+        });
+      expect(genRes.status).toBe(200);
+      const actionGenerationId = genRes.body.id;
+
+      const byGeneration = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${actionGenerationId}`
+      );
+      expect(byGeneration.status).toBe(200);
+      expect(byGeneration.body.total).toBe(1);
+      expect(byGeneration.body.data[0].action_id).toBe('action-A');
+      expect(byGeneration.body.data[0].trigger_id).toBeNull();
+
+      const byAction = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?action_id=action-A'
+      );
+      expect(byAction.status).toBe(200);
+      expect(byAction.body.total).toBe(1);
+      expect(byAction.body.data[0].action_id).toBe('action-A');
+    });
+
+    test('records trigger_id when a trigger initiates the generation', async () => {
+      // Mirrors how trigger dispatch calls createGeneration with a triggerId;
+      // exercises the metadata -> meter plumbing without a full trigger fire.
+      const triggerPublicId = generatePublicId(PUBLIC_ID_PREFIXES.trigger);
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const generation = (await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'from trigger' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        triggerId: triggerPublicId,
+      })) as { id: string };
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?trigger_id=${triggerPublicId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0].generation_id).toBe(generation.id);
+      expect(response.body.data[0].trigger_id).toBe(triggerPublicId);
+    });
+  });
+
   describe('recordGenerationUsage attribution and idempotency', () => {
     test('re-recording the same generation is a no-op (idempotent)', async () => {
       await recordGenerationUsage({
@@ -240,6 +296,8 @@ describe('Usage', () => {
         generationId: null,
         traceId: null,
         aiProviderId: null,
+        triggerId: null,
+        actionId: null,
         provider: 'openai',
         model: 'gpt-4o',
         inputTokens: 3,
