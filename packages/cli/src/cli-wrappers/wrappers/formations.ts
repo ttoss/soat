@@ -86,20 +86,27 @@ const readTemplateFromPath = (args: { templatePath: string }): unknown => {
   }
 };
 
+// Sentinel returned when a `@VAR` / bare-KEY reference has no env value.
+// The parameter is then omitted from the request body entirely, so the
+// server falls back to its own resolution: reuse a formation's previous
+// value when the parameter declares `use_previous_value`, or error if no
+// previous value exists (see formationsHelpers.ts `paramHasValue`).
+const OMIT_PARAMETER = Symbol('omit-parameter');
+
 const resolveEnvRef = (args: {
   value: string;
   env: Record<string, string | undefined>;
-}): string => {
+}): string | typeof OMIT_PARAMETER => {
   const { value, env } = args;
 
-  // @ENV_VAR_NAME — shell-safe reference; the shell does not expand @ prefixes
+  // @ENV_VAR_NAME — shell-safe reference; the shell does not expand @ prefixes.
+  // A missing var is not an error here: the whole point of `@VAR` is to
+  // reference a formation parameter's value by name, and an unset var means
+  // "use whatever the server resolves" (previous value, or its own error).
   const atRef = /^@([A-Za-z_][A-Za-z0-9_]*)$/.exec(value);
   if (atRef) {
     const resolved = env[atRef[1]];
-    if (resolved === undefined) {
-      throw new Error(`Missing environment variable: ${atRef[1]}`);
-    }
-    return resolved;
+    return resolved === undefined ? OMIT_PARAMETER : resolved;
   }
 
   const simple = /^\$([A-Za-z_][A-Za-z0-9_]*)$/.exec(value);
@@ -126,7 +133,7 @@ const resolveEnvRef = (args: {
 const resolveParameterPair = (args: {
   pair: string;
   env: Record<string, string | undefined>;
-}): { key: string; value: string } => {
+}): { key: string; value: string | typeof OMIT_PARAMETER } => {
   const { pair, env } = args;
   const eqIdx = pair.indexOf('=');
 
@@ -137,7 +144,8 @@ const resolveParameterPair = (args: {
   }
 
   if (eqIdx === -1) {
-    // No '=' — use the token itself as the env var name to look up
+    // No '=' — use the token itself as the env var name to look up. Same
+    // "omit, let the server decide" behavior as `@VAR` when unset.
     const key = pair.trim();
     if (!key) {
       throw new Error(
@@ -145,10 +153,7 @@ const resolveParameterPair = (args: {
       );
     }
     const resolved = env[key];
-    if (resolved === undefined) {
-      throw new Error(`Missing environment variable: ${key}`);
-    }
-    return { key, value: resolved };
+    return { key, value: resolved === undefined ? OMIT_PARAMETER : resolved };
   }
 
   const key = pair.slice(0, eqIdx).trim();
@@ -177,7 +182,7 @@ export const formationsWrapper: Wrapper = {
     {
       name: 'parameter',
       description:
-        'Template parameter in key=value format (repeatable). Values support env var references: $VAR, ${VAR}, or @VAR_NAME (shell-safe). Omit the value entirely (--parameter KEY) to auto-read KEY from the merged env.',
+        'Template parameter in key=value format (repeatable). Values support env var references: $VAR, ${VAR}, or @VAR_NAME (shell-safe). Omit the value entirely (--parameter KEY) to auto-read KEY from the merged env. For @VAR_NAME and bare KEY, an unset env var omits the parameter instead of failing, so the server reuses a previous value (formation parameters declared `use_previous_value`) or errors if none exists.',
       required: false,
       type: 'string',
     },
@@ -244,7 +249,9 @@ export const formationsWrapper: Wrapper = {
 
       for (const pair of parameterValues) {
         const { key, value } = resolveParameterPair({ pair, env: mergedEnv });
-        resolvedParameters[key] = value;
+        if (value !== OMIT_PARAMETER) {
+          resolvedParameters[key] = value;
+        }
       }
 
       forcedBody[PARAMETERS_FIELD] = resolvedParameters;

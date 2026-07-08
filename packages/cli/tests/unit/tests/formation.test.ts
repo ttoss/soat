@@ -234,34 +234,63 @@ describe('formation wrapper endpoint integration', () => {
     }
   });
 
-  test('--parameter KEY (no =) throws when env var is missing', async () => {
-    await expect(
-      cliTestClient.call([
-        'create-formation',
-        '--project-id',
-        'proj_test',
-        '--name',
-        'missing-env-stack',
-        '--template-path',
-        templatePath,
-        '--parameter',
-        'MISSING_VAR',
-      ])
-    ).rejects.toThrow('Missing environment variable: MISSING_VAR');
+  test('--parameter KEY (no =) omits the parameter when env var is missing, deferring to the server (use-previous-value or error)', async () => {
+    const requests = await cliTestClient.call([
+      'create-formation',
+      '--project-id',
+      'proj_test',
+      '--name',
+      'missing-env-stack',
+      '--template-path',
+      templatePath,
+      '--parameter',
+      'MISSING_VAR',
+    ]);
+
+    expect(requests).toHaveLength(1);
+    const body = requests[0]?.body as {
+      parameters?: Record<string, string>;
+    };
+    expect(body.parameters?.['MISSING_VAR']).toBeUndefined();
+    expect(
+      body.parameters ? Object.hasOwn(body.parameters, 'MISSING_VAR') : false
+    ).toBe(false);
   });
 
-  test('--parameter Key=@ENV_VAR_NAME throws when env var is missing', async () => {
+  test('--parameter Key=@ENV_VAR_NAME omits the parameter when env var is missing, deferring to the server (use-previous-value or error)', async () => {
+    const requests = await cliTestClient.call([
+      'create-formation',
+      '--project-id',
+      'proj_test',
+      '--name',
+      'missing-at-ref-stack',
+      '--template-path',
+      templatePath,
+      '--parameter',
+      'apiKey=@MISSING_SECRET',
+    ]);
+
+    expect(requests).toHaveLength(1);
+    const body = requests[0]?.body as {
+      parameters?: Record<string, string>;
+    };
+    expect(
+      body.parameters ? Object.hasOwn(body.parameters, 'apiKey') : false
+    ).toBe(false);
+  });
+
+  test('--parameter Key=$ENV_VAR_NAME (simple substitution) still throws when env var is missing', async () => {
     await expect(
       cliTestClient.call([
         'create-formation',
         '--project-id',
         'proj_test',
         '--name',
-        'missing-at-ref-stack',
+        'missing-simple-ref-stack',
         '--template-path',
         templatePath,
         '--parameter',
-        'apiKey=@MISSING_SECRET',
+        'apiKey=$MISSING_SECRET',
       ])
     ).rejects.toThrow('Missing environment variable: MISSING_SECRET');
   });
