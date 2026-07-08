@@ -20,6 +20,35 @@ This page covers all environment variables available for the SOAT server, along 
 
 The database must have the [pgvector](https://github.com/pgvector/pgvector) extension installed. Use the official `pgvector/pgvector` Docker image or install the extension manually.
 
+#### Standard `PG*` environment variables
+
+The `DATABASE_*` variables above set the host, port, name, user, and password. For anything else — most commonly TLS behavior — SOAT relies on the underlying [`node-postgres`](https://node-postgres.com/features/connecting#environment-variables) driver, which honors the standard [libpq `PG*` environment variables](https://www.postgresql.org/docs/current/libpq-envars.html). Set any of them alongside the `DATABASE_*` variables when you need finer-grained control over the connection.
+
+| Variable    | Description                                                                                              |
+| ----------- | -------------------------------------------------------------------------------------------------------- |
+| `PGSSLMODE` | SSL negotiation mode: `disable`, `prefer`, `require`, `verify-ca`, `verify-full`, or `no-verify`         |
+| `PGSSLROOTCERT` | Path to a CA certificate bundle used to verify the server certificate (required for `verify-full`)   |
+| `PGCONNECT_TIMEOUT` | Connection timeout in seconds                                                                     |
+| `PGOPTIONS` | Command-line options to send to the server at connection time                                            |
+
+The full list is documented in the [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html) reference. These take effect without any SOAT-specific configuration.
+
+:::tip Managed PostgreSQL with forced SSL
+
+Managed providers such as **Amazon Aurora / RDS** may set `rds.force_ssl=1`, which rejects any non-TLS connection. SOAT connects in plaintext by default, so the connection is refused and the server exits at startup. Set `PGSSLMODE` to enable TLS:
+
+```yaml
+services:
+  server:
+    environment:
+      # ... DATABASE_* variables
+      PGSSLMODE: no-verify
+```
+
+`no-verify` encrypts the connection but skips certificate verification, so it works against a managed CA without shipping a CA bundle. For stricter security, use `PGSSLMODE=verify-full` and point `PGSSLROOTCERT` at the provider's CA bundle (for RDS, the [Amazon RDS CA bundle](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.SSL.html)).
+
+:::
+
 ### Server
 
 | Variable                  | Default | Description                                                  |
