@@ -13,6 +13,7 @@ import { Agent } from './Agent';
 import { AiProvider } from './AiProvider';
 import { Generation } from './Generation';
 import { OrchestrationRun } from './OrchestrationRun';
+import { PriceBook } from './PriceBook';
 import { Project } from './Project';
 import { Trace } from './Trace';
 
@@ -186,6 +187,24 @@ export class UsageMeter extends Model {
   // priced" rather than "free".
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare costUsd: string | null;
+
+  // The exact price-book row that produced `costUsd` — the "price-table
+  // version" for an auditable receipt. Null when no price applied. SET NULL on
+  // delete: `costUsd` is already frozen, so a removed price row never changes
+  // the recorded cost, only the ability to trace which row explains it.
+  @ForeignKey(() => {
+    return PriceBook;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare priceId: number | null;
+
+  @BelongsTo(
+    () => {
+      return PriceBook;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare price: PriceBook | null;
 
   @Column({ type: DataType.STRING, unique: true, allowNull: false })
   declare idempotencyKey: string;

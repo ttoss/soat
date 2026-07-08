@@ -1,7 +1,8 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
-import { listUsageMeters } from 'src/lib/usage';
+import { getReceipt, listUsageMeters } from 'src/lib/usage';
 
 export const usageRouter = new Router<Context>();
 
@@ -60,6 +61,55 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   });
 
   ctx.body = result;
+});
+
+/**
+ * @openapi
+ * GET /api/v1/usage/receipt
+ * operationId: getUsageReceipt
+ * Returns a billing receipt for a completed generation: per-model line items
+ * (tokens, the price-book version that priced them, and cost) plus totals.
+ */
+usageRouter.get('/usage/receipt', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'usage:GetReceipt',
+  });
+
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const { generationId } = ctx.query as Record<string, string | undefined>;
+  if (!generationId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'generation_id query parameter is required.'
+    );
+  }
+
+  const receipt = await getReceipt({
+    generationId,
+    projectIds: projectIds ?? undefined,
+  });
+  if (!receipt) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${generationId}' not found.`
+    );
+  }
+
+  ctx.body = receipt;
 });
 
 /**
