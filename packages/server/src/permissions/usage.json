@@ -5,6 +5,16 @@
       "operationId": "listUsageMeters",
       "action": "usage:ListUsageMeters",
       "description": "List raw usage-meter rows, optionally filtered by agent or generation"
+    },
+    {
+      "operationId": "getPriceBook",
+      "action": "usage:GetPriceBook",
+      "description": "Read the global price book"
+    },
+    {
+      "operationId": "upsertPriceBook",
+      "action": "usage:ManagePriceBook",
+      "description": "Upsert price-book rows (admin only)"
     }
   ]
 }

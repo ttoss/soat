@@ -3,6 +3,7 @@ import type { LanguageModelUsage } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { computeCostUsd, getEffectivePrice } from './priceBook';
 
 const log = createDebug('soat:usage');
 
@@ -108,6 +109,33 @@ const mapUsageMeter = (
   };
 };
 
+// Pulls the meter's attribution off the loaded generation: the billed AI
+// provider (internal id + slug) and the caller-supplied action / initiating
+// trigger carried in the generation's metadata.
+const resolveMeterAttribution = (
+  generation: InstanceType<(typeof db)['Generation']> & {
+    agent?:
+      | (InstanceType<(typeof db)['Agent']> & {
+          aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
+        })
+      | null;
+  }
+): {
+  aiProviderId: number | null;
+  provider: string;
+  actionId: string | null;
+  triggerId: string | null;
+} => {
+  const aiProvider = generation.agent?.aiProvider ?? null;
+  const metadata = generation.metadata ?? {};
+  return {
+    aiProviderId: aiProvider?.id ?? null,
+    provider: aiProvider?.provider ?? 'unknown',
+    actionId: metadataString(metadata, 'actionId'),
+    triggerId: metadataString(metadata, 'triggerId'),
+  };
+};
+
 const writeGenerationMeter = async (args: {
   generationId: string;
   model: string;
@@ -133,11 +161,19 @@ const writeGenerationMeter = async (args: {
   }
 
   const tokens = extractUsageTokens(args.usage);
-  const aiProvider = generation.agent?.aiProvider ?? null;
-  const provider = aiProvider?.provider ?? 'unknown';
-  const metadata = generation.metadata ?? {};
-  const actionId = metadataString(metadata, 'actionId');
-  const triggerId = metadataString(metadata, 'triggerId');
+  const attribution = resolveMeterAttribution(generation);
+  const model = args.model || 'unknown';
+
+  // Price at write time from the row effective now — a per-provider override
+  // wins over the global default. Frozen onto the meter so later price changes
+  // never alter this recorded cost. Null when unpriced.
+  const price = await getEffectivePrice({
+    provider: attribution.provider,
+    model,
+    aiProviderId: attribution.aiProviderId,
+    at: new Date(),
+  });
+  const costUsd = computeCostUsd({ price, ...tokens });
 
   const [, created] = await db.UsageMeter.findOrCreate({
     where: { idempotencyKey: args.generationId },
@@ -149,16 +185,16 @@ const writeGenerationMeter = async (args: {
       agentId: generation.agentId,
       generationId: generation.id,
       traceId: generation.traceId,
-      aiProviderId: aiProvider?.id ?? null,
-      triggerId,
-      actionId,
-      provider,
-      model: args.model || 'unknown',
+      aiProviderId: attribution.aiProviderId,
+      triggerId: attribution.triggerId,
+      actionId: attribution.actionId,
+      provider: attribution.provider,
+      model,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
       cachedTokens: tokens.cachedTokens,
       reasoningTokens: tokens.reasoningTokens,
-      costUsd: null,
+      costUsd,
       idempotencyKey: args.generationId,
     },
   });

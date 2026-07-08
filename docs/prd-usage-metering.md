@@ -8,19 +8,29 @@
 
 ## Implementation Status
 
-| Component                                  | Status         | Notes                                                                |
-| ------------------------------------------ | -------------- | ---------------------------------------------------------------------|
-| `UsageMeter` model (append-only)           | ❌ Not started | One row per LLM call; unique idempotency key                          |
-| Provider-call wrapper instrumentation      | ❌ Not started | Single write site covering all providers/paths                        |
-| Price book + write-time cost computation   | ❌ Not started | Cost frozen at write time with the then-current price                 |
-| Aggregation endpoint                       | ❌ Not started | Per project/period, grouped by model/agent/orchestration              |
-| `usage.threshold_crossed` webhook event    | ❌ Not started | For downstream billing/alerting pipelines                             |
-| Threshold config (`UsageThreshold` table)  | ❌ Not started | Per-project thresholds + fire state driving `usage.threshold_crossed` |
-| `usage.*` guard context provider           | ❌ Not started | Budget ceilings enforceable by the guardrail evaluator                |
+| Component                                  | Status                     | Notes                                                                |
+| ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
+| `UsageMeter` model (append-only)           | ✅ Done (#483)              | One row per completed generation; unique idempotency key on the generation |
+| Provider-call instrumentation              | 🚧 Agent path (#483)        | Wired for agent generations, conversations, and orchestration agent nodes; extraction/discussions/chats still pending |
+| Reasoning-token breakdown                  | ✅ Done (#483)              | `reasoning_tokens` (and cached) captured from the provider report     |
+| `trace_id` attribution                     | ✅ Done (#484)              | Meter links to its trace; filterable                                  |
+| Trigger + logical action-id attribution    | 🚧 Agent-target (#485)      | `trigger_id`/`action_id` on the meter; in-orchestration-run trigger attribution pending run-scoping |
+| Price book + write-time cost computation   | ✅ Done (#488)              | Cost frozen at write time from the effective price row                |
+| Default price seeding                      | ✅ Done (#488)              | Common provider/model defaults seeded idempotently at startup         |
+| Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
+| `usage.threshold_crossed` webhook event    | ❌ Not started              | For downstream billing/alerting pipelines                             |
+| Threshold config (`UsageThreshold` table)  | ❌ Not started              | Per-project thresholds + fire state driving `usage.threshold_crossed` |
+| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([prd-guardrails.md](./prd-guardrails.md)), which is unbuilt |
 
 ## Implementation Phases
 
-### Phase 1 — Meter Rows + Idempotency ❌ Not started
+### Phase 1 — Meter Rows + Idempotency ✅ Done (#483)
+
+> Delivered for the agent-completion path (agent generations, conversations,
+> orchestration agent nodes). Idempotency is keyed on the generation; the
+> node-level idempotency key from the orchestration queue is pending
+> run-scoping. Reasoning/cached token breakdown (#483), `trace_id` (#484), and
+> trigger/action attribution (#485) were added on top via epic #482.
 
 **Goal:** Every LLM call produces exactly one attribution-complete usage row —
 including under at-least-once redelivery.
@@ -42,7 +52,12 @@ including under at-least-once redelivery.
 **Unlocks:** Trustworthy raw usage data; the acceptance test "replayed nodes
 produce exactly one row per LLM call".
 
-### Phase 2 — Price Book + Cost ❌ Not started
+### Phase 2 — Price Book + Cost ✅ Done (#488)
+
+> Meters with no matching price row record `cost_usd = null` and are visible
+> through the standard meter list (no separate "missing price" admin view).
+> SOAT ships default prices, seeded at startup, that operators override with
+> future-dated rows.
 
 **Goal:** Cost in USD computed at write time, immune to later price changes.
 
@@ -61,6 +76,10 @@ the consuming product bills.
 
 ### Phase 3 — Aggregation + Events ❌ Not started
 
+> A raw meter list (`GET /api/v1/usage/meters`) with agent/generation/trace/
+> trigger/action filters exists; the grouped aggregation endpoint, thresholds,
+> and the `usage.threshold_crossed` webhook are not yet built.
+
 **Goal:** Usage is queryable and pushable, not just stored.
 
 **Deliverables:**
@@ -78,7 +97,11 @@ the consuming product bills.
 **Unlocks:** Unit-economics reporting per project/cycle/role and proactive
 budget alerts without polling.
 
-### Phase 4 — Budget Guard Integration ❌ Not started
+### Phase 4 — Budget Guard Integration ⏭️ Deferred
+
+> Blocked on the guardrail evaluator and `usage.*` guard context
+> ([prd-guardrails.md](./prd-guardrails.md)), which are unbuilt. The per-run
+> token-ceiling issue (#486) was deferred for the same reason.
 
 **Goal:** Runaway cycles trip fail-closed like any other guard.
 

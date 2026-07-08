@@ -324,4 +324,221 @@ describe('Usage', () => {
       expect(seeded.cost_usd).toBe(2.5);
     });
   });
+
+  describe('price book and cost', () => {
+    test('GET /usage/prices requires authentication', async () => {
+      const res = await testClient.get('/api/v1/usage/prices');
+      expect(res.status).toBe(401);
+    });
+
+    test('a non-admin cannot upsert prices', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put('/api/v1/usage/prices')
+        .send({ prices: [] });
+      expect(res.status).toBe(403);
+    });
+
+    test('an admin upserts a future-dated price and reads it back', async () => {
+      const effectiveFrom = new Date(Date.now() + 86_400_000).toISOString();
+      const put = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'usage-test-model',
+              input_price_per_m: 1,
+              output_price_per_m: 2,
+              cached_price_per_m: 0.5,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(put.status).toBe(200);
+      expect(put.body.prices[0].id).toMatch(/^price_/);
+      expect(put.body.prices[0].model).toBe('usage-test-model');
+      expect(put.body.prices[0].input_price_per_m).toBe(1);
+
+      const get = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/prices'
+      );
+      expect(get.status).toBe(200);
+      const models = get.body.prices.map((price: { model: string }) => {
+        return price.model;
+      });
+      expect(models).toContain('usage-test-model');
+    });
+
+    test('rejects a past-dated price (immutable history)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'usage-test-past',
+              input_price_per_m: 1,
+              output_price_per_m: 2,
+              effective_from: '2020-01-01T00:00:00.000Z',
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects an invalid effective_from', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'usage-test-invalid',
+              input_price_per_m: 1,
+              output_price_per_m: 2,
+              effective_from: 'not-a-date',
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('re-upserting a key updates in place and can clear the cached rate', async () => {
+      const effectiveFrom = new Date(Date.now() + 2 * 86_400_000).toISOString();
+      const send = (price: Record<string, unknown>) => {
+        return authenticatedTestClient(adminToken)
+          .put('/api/v1/usage/prices')
+          .send({ prices: [{ ...price, effective_from: effectiveFrom }] });
+      };
+
+      await send({
+        provider: 'openai',
+        model: 'usage-test-update',
+        input_price_per_m: 1,
+        output_price_per_m: 2,
+        cached_price_per_m: 0.5,
+      });
+      const second = await send({
+        provider: 'openai',
+        model: 'usage-test-update',
+        input_price_per_m: 5,
+        output_price_per_m: 6,
+      });
+      expect(second.status).toBe(200);
+
+      const get = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/prices'
+      );
+      const updated = get.body.prices.find((price: { model: string }) => {
+        return price.model === 'usage-test-update';
+      });
+      expect(updated.input_price_per_m).toBe(5);
+      expect(updated.cached_price_per_m).toBeNull();
+    });
+
+    test('computes cost_usd on a metered generation from the price book', async () => {
+      await db.PriceBook.create({
+        provider: 'ollama',
+        model: 'stub-model',
+        inputPricePerM: '1',
+        outputPricePerM: '2',
+        cachedPricePerM: '0.5',
+        effectiveFrom: new Date('2020-01-01T00:00:00.000Z'),
+      });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'priced' }] });
+      expect(genRes.status).toBe(200);
+
+      const meters = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${genRes.body.id}`
+      );
+      expect(meters.status).toBe(200);
+      // (10-4)*1 + 4*0.5 + 20*2 = 48 → 48 / 1e6 USD
+      expect(meters.body.data[0].cost_usd).toBeCloseTo(0.000048, 9);
+    });
+
+    test('admin upserts a per-provider override', async () => {
+      const effectiveFrom = new Date(Date.now() + 3 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: aiProviderId,
+              provider: 'ollama',
+              model: 'override-put-model',
+              input_price_per_m: 9,
+              output_price_per_m: 9,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.prices[0].ai_provider_id).toBe(aiProviderId);
+    });
+
+    test('rejects an override for an unknown provider', async () => {
+      const effectiveFrom = new Date(Date.now() + 3 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: 'aip_doesNotExist01',
+              provider: 'ollama',
+              model: 'x',
+              input_price_per_m: 1,
+              output_price_per_m: 1,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+    });
+
+    test('a per-provider override wins over the global default for cost', async () => {
+      const providerRow = await db.AiProvider.findOne({
+        where: { publicId: aiProviderId },
+      });
+      const past = new Date('2020-01-01T00:00:00.000Z');
+      // The stub always reports model 'stub-model', so both rows price that.
+      // Global default — the cheaper rate.
+      await db.PriceBook.create({
+        aiProviderId: null,
+        provider: 'ollama',
+        model: 'stub-model',
+        inputPricePerM: '1',
+        outputPricePerM: '1',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+      // Override for this provider instance — the pricier rate that must win.
+      await db.PriceBook.create({
+        aiProviderId: providerRow?.id as number,
+        provider: 'ollama',
+        model: 'stub-model',
+        inputPricePerM: '10',
+        outputPricePerM: '20',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'override' }] });
+      expect(genRes.status).toBe(200);
+
+      const meters = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${genRes.body.id}`
+      );
+      // Override rate: (10-4)*10 + 4*10 + 20*20 = 500 → 500 / 1e6 USD.
+      // The cheaper global default (26 / 1e6) must not win.
+      expect(meters.body.data[0].cost_usd).toBeCloseTo(0.0005, 9);
+    });
+  });
 });

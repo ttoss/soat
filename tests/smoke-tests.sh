@@ -2024,6 +2024,23 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   echo "Usage meter row shape (tokens incl. reasoning): OK"
 fi
 
+# 34c. Price book — default prices are seeded and readable
+echo "--- Verifying price book ---"
+PRICES_RESP=$($SOAT_CLI get-price-book | sanitize_json)
+PRICES_IS_ARRAY=$(printf '%s\n' "$PRICES_RESP" | jq -r 'if (.prices | type) == "array" then "yes" else "no" end')
+if [ "$PRICES_IS_ARRAY" != "yes" ]; then
+  echo "ERROR: get-price-book did not return a prices array" >&2
+  echo "$PRICES_RESP" >&2
+  exit 1
+fi
+PRICES_TOTAL=$(printf '%s\n' "$PRICES_RESP" | jq -r '.prices | length')
+if [ "$PRICES_TOTAL" -lt 1 ]; then
+  echo "ERROR: price book is empty — default prices were not seeded" >&2
+  echo "$PRICES_RESP" >&2
+  exit 1
+fi
+echo "Price book endpoint (defaults seeded): OK ($PRICES_TOTAL rows)"
+
 # 35. Client-tool agent is delete-blocked after generation persists trace data
 echo "--- Verifying client-tool agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"

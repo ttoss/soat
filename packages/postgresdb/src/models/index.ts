@@ -27,6 +27,7 @@ export { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
 export { OrchestrationNodeExecution } from './OrchestrationNodeExecution';
 export { OrchestrationRun } from './OrchestrationRun';
 export { Policy } from './Policy';
+export { PriceBook } from './PriceBook';
 export { Project } from './Project';
 export { Secret } from './Secret';
 export { Session } from './Session';

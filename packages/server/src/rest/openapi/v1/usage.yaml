@@ -112,6 +112,71 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/usage/prices:
+    get:
+      tags:
+        - Usage
+      summary: Get the price book
+      description: >
+        Returns the global price book — the versioned per-provider/model unit
+        prices used to compute usage cost at write time. Readable by any
+        authenticated user.
+      operationId: getPriceBook
+      responses:
+        '200':
+          description: The current price book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceBookResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    put:
+      tags:
+        - Usage
+      summary: Upsert price-book rows
+      description: >
+        Upserts price rows keyed on (provider, model, effective_from). Admin
+        only. `effective_from` must be in the future — past prices are immutable
+        so recorded costs stay explainable; ship corrections as new
+        future-dated rows.
+      operationId: upsertPriceBook
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertPricesRequest'
+      responses:
+        '200':
+          description: The upserted price rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PriceBookResponse'
+        '400':
+          description: Bad Request (e.g. non-future effective_from)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -210,6 +275,91 @@ components:
         created_at:
           type: string
           format: date-time
+
+    Price:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the price row
+          example: price_V1StGXR8Z5jdHi6B
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+          description: >
+            Null for a global default price. Set when this row is a
+            per-provider override for a specific AI provider instance.
+        provider:
+          type: string
+          example: openai
+        model:
+          type: string
+          example: gpt-4o
+        input_price_per_m:
+          type: number
+          description: USD per one million input (prompt) tokens
+        output_price_per_m:
+          type: number
+          description: USD per one million output (completion) tokens
+        cached_price_per_m:
+          type: number
+          nullable: true
+          description: USD per one million cached input tokens; null falls back to the input price
+        effective_from:
+          type: string
+          format: date-time
+          description: The row with the latest effective_from <= now() prices a call
+        created_at:
+          type: string
+          format: date-time
+
+    PriceBookResponse:
+      type: object
+      properties:
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/Price'
+
+    UpsertPricesRequest:
+      type: object
+      required:
+        - prices
+      properties:
+        prices:
+          type: array
+          items:
+            type: object
+            required:
+              - provider
+              - model
+              - input_price_per_m
+              - output_price_per_m
+              - effective_from
+            properties:
+              ai_provider_id:
+                x-soat-ref: ai-providers
+                type: string
+                nullable: true
+                description: >
+                  Omit for a global default price; set to a provider public ID
+                  to record a per-provider override.
+              provider:
+                type: string
+              model:
+                type: string
+              input_price_per_m:
+                type: number
+              output_price_per_m:
+                type: number
+              cached_price_per_m:
+                type: number
+                nullable: true
+              effective_from:
+                type: string
+                format: date-time
+                description: Must be in the future; past prices are immutable
 
     ErrorResponse:
       type: object
