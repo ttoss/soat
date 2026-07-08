@@ -4,7 +4,7 @@ import createDebug from 'debug';
 
 import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
-import { initializeDatabase } from './db';
+import { initializeDatabase, logDatabaseConnectionError } from './db';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { seedDefaultPrices } from './lib/priceBook';
 import { startTriggerScheduler } from './lib/triggerScheduler';
@@ -32,7 +32,10 @@ const startServer = async () => {
     // occurrences whose next_fire_at elapsed while the server was down).
     startTriggerScheduler();
   } catch (error) {
-    log('startServer: failed to connect to database error=%o', error);
+    // This is a fatal, process-terminating failure, so print to stderr
+    // unconditionally rather than via the opt-in `debug` logger — otherwise the
+    // process would `exit 1` with no output unless DEBUG happened to be set.
+    logDatabaseConnectionError(error);
     process.exit(1);
   }
 
