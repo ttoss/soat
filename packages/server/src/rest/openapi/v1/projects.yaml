@@ -196,6 +196,79 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/projects/{project_id}/prices:
+    get:
+      tags:
+        - Projects
+      summary: List a project's price rows
+      description: >
+        Returns the project's per-provider-slug price rows — the middle pricing
+        tier that covers every one of the project's instances of a given
+        provider slug. At cost time a per-provider-instance override wins over
+        these, and these win over the global default. Authorized by the caller's
+        access to the project.
+      operationId: getProjectPrices
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The project's price rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPricesResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
+    put:
+      tags:
+        - Projects
+      summary: Upsert a project's price rows
+      description: >
+        Upserts project + provider-slug price rows, keyed on
+        (provider, model, effective_from). A row covers all of the project's
+        instances of that provider slug. Authorized by the caller's access to
+        the project. `effective_from` must be in the future — past prices are
+        immutable, so ship corrections as new future-dated rows.
+      operationId: updateProjectPrices
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          description: Project public ID (proj_ prefix)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertProjectPricesRequest'
+      responses:
+        '200':
+          description: The upserted price rows
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectPricesResponse'
+        '400':
+          description: Bad Request (e.g. non-future effective_from)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Project not found
 components:
   securitySchemes:
     bearerAuth:
@@ -221,6 +294,85 @@ components:
           type: string
           format: date-time
           example: '2024-01-01T00:00:00.000Z'
+    ProjectPrice:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the price row
+          example: price_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: The project this price is scoped to
+          example: proj_V1StGXR8Z5jdHi6B
+        ai_provider_id:
+          type: string
+          nullable: true
+          description: Always null for a project + provider-slug price
+        provider:
+          type: string
+          example: openai
+        model:
+          type: string
+          example: gpt-4o
+        input_price_per_m:
+          type: number
+          description: USD per one million input (prompt) tokens
+        output_price_per_m:
+          type: number
+          description: USD per one million output (completion) tokens
+        cached_price_per_m:
+          type: number
+          nullable: true
+          description: USD per one million cached input tokens; null falls back to the input price
+        effective_from:
+          type: string
+          format: date-time
+          description: The row with the latest effective_from <= now() prices a call
+        created_at:
+          type: string
+          format: date-time
+    ProjectPricesResponse:
+      type: object
+      properties:
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProjectPrice'
+    UpsertProjectPricesRequest:
+      type: object
+      required:
+        - prices
+      properties:
+        prices:
+          type: array
+          items:
+            type: object
+            required:
+              - provider
+              - model
+              - input_price_per_m
+              - output_price_per_m
+              - effective_from
+            properties:
+              provider:
+                type: string
+                example: openai
+              model:
+                type: string
+                example: gpt-4o
+              input_price_per_m:
+                type: number
+              output_price_per_m:
+                type: number
+              cached_price_per_m:
+                type: number
+                nullable: true
+              effective_from:
+                type: string
+                format: date-time
+                description: Must be in the future; past prices are immutable
     ErrorResponse:
       type: object
       required:

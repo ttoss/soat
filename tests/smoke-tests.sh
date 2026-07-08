@@ -2075,6 +2075,27 @@ if [ "$OVERRIDE_GET_OK" != "true" ]; then
 fi
 echo "Per-provider price override: OK"
 
+# 34e. Project + provider-slug price — the middle pricing tier
+echo "--- Verifying project + provider-slug price ---"
+PROJECT_PRICE_PUT=$($SOAT_CLI update-project-prices \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","input_price_per_m":3,"output_price_per_m":9,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  | sanitize_json)
+PROJECT_PRICE_OK=$(printf '%s\n' "$PROJECT_PRICE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].project_id != null) and (.prices[0].ai_provider_id == null) and (.prices[0].input_price_per_m == 3)')
+if [ "$PROJECT_PRICE_OK" != "true" ]; then
+  echo "ERROR: update-project-prices did not return the upserted project price" >&2
+  echo "$PROJECT_PRICE_PUT" >&2
+  exit 1
+fi
+PROJECT_PRICE_GET=$($SOAT_CLI get-project-prices --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
+PROJECT_PRICE_GET_OK=$(printf '%s\n' "$PROJECT_PRICE_GET" | jq -r '[.prices[] | select(.model == "qwen2.5:0.5b")] | length >= 1')
+if [ "$PROJECT_PRICE_GET_OK" != "true" ]; then
+  echo "ERROR: get-project-prices did not return the project price" >&2
+  echo "$PROJECT_PRICE_GET" >&2
+  exit 1
+fi
+echo "Project + provider-slug price: OK"
+
 # 35. Client-tool agent is delete-blocked after generation persists trace data
 echo "--- Verifying client-tool agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"

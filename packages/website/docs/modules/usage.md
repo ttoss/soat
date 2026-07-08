@@ -43,12 +43,13 @@ Every meter row links back to the resources it attributes spend to: the [generat
 
 ### PriceBook
 
-Versioned unit prices used to compute `cost_usd`, in two scopes within one table. A **global default** (`ai_provider_id: null`) is keyed by `(provider, model, effective_from)`; an optional **per-provider override** (`ai_provider_id` set) prices a specific [AI provider](./ai-providers.md) instance — e.g. an enterprise-negotiated rate or a gateway with markup. Cost lookup prefers the override, then falls back to the global default; within each scope the latest `effective_from <= now()` applies.
+Versioned unit prices used to compute `cost_usd`, in **three scopes** within one table, resolved most-specific first. A **per-provider override** (`ai_provider_id` set) prices one specific [AI provider](./ai-providers.md) instance — e.g. an enterprise-negotiated rate or a gateway with markup. A **project + provider-slug** price (`project_id` set, `ai_provider_id` null) covers every one of a [project](./projects.md)'s instances of a slug. A **global default** (both null) is keyed by `(provider, model, effective_from)`. Cost lookup prefers instance → project+slug → global; within each scope the latest `effective_from <= now()` applies.
 
 | Field                | Type            | Description                                                        |
 | -------------------- | --------------- | ------------------------------------------------------------------ |
 | `id`                 | string          | Public identifier for the price row (`price_` prefix)              |
-| `ai_provider_id`     | string \| null  | `null` for a global default; set for a per-provider override        |
+| `ai_provider_id`     | string \| null  | Set for a per-provider override; `null` otherwise                   |
+| `project_id`         | string \| null  | Set for a project + provider-slug price; `null` otherwise           |
 | `provider`           | string          | AI provider slug (e.g. `openai`)                                   |
 | `model`              | string          | Model identifier                                                   |
 | `input_price_per_m`  | number          | USD per one million input (prompt) tokens                          |
@@ -73,11 +74,17 @@ Usage is metered for agent generations — including [conversations](./conversat
 
 ### Pricing
 
-`cost_usd` is computed at write time from the price book: the row for the meter's `(provider, model)` whose `effective_from <= now()`. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Cached input tokens are billed at `cached_price_per_m` (falling back to the input rate); reasoning tokens are part of the output count. `cost_usd` is `null` only when no price row covers the model — the tokens are still captured, it does not mean the call was free.
+`cost_usd` is computed at write time from the effective price row for the meter's `(provider, model)`, resolved most-specific first: the AI provider instance → the project's rate for that slug → the global default. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Cached input tokens are billed at `cached_price_per_m` (falling back to the input rate); reasoning tokens are part of the output count. `cost_usd` is `null` only when no price row covers the model — the tokens are still captured, it does not mean the call was free.
 
 Each meter records `price_id` — the exact price-book row that produced its `cost_usd`. Because cost is frozen and the price row is versioned, a receipt is auditable to the precise price applied even after prices change.
 
-SOAT ships **global default prices** for common provider/model pairs (seeded at startup) so cost is computed out of the box. Admins add or correct prices with future-dated rows via `PUT /api/v1/usage/prices` (include `ai_provider_id` to record a **per-provider override** instead of a global default). Past-effective prices are immutable — corrections ship as new future-dated rows. `GET /api/v1/usage/prices` returns the global defaults; per-provider overrides are not listed there, to avoid exposing one project's negotiated rates to another.
+SOAT ships **global default prices** for common provider/model pairs (seeded at startup) so cost is computed out of the box. Prices are managed where their scope lives:
+
+- **Global defaults** — admins via `PUT /api/v1/usage/prices`. `GET /api/v1/usage/prices` lists only these, so no project sees another's rates.
+- **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md), pricing all of a project's instances of a slug at once.
+- **Per-provider override** — project members via [`PUT /api/v1/ai-providers/{ai_provider_id}/prices`](./ai-providers.md#price-overrides), pricing one instance.
+
+Past-effective prices are immutable — corrections ship as new future-dated rows.
 
 ### Receipts and reconciliation
 

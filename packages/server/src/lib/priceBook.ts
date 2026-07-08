@@ -3,6 +3,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  DEFAULT_PRICE_EFFECTIVE_FROM,
+  DEFAULT_PRICES,
+} from './priceBookDefaults';
+
+export {
+  DEFAULT_PRICE_EFFECTIVE_FROM,
+  DEFAULT_PRICES,
+} from './priceBookDefaults';
 
 const log = createDebug('soat:priceBook');
 
@@ -11,6 +20,7 @@ const PER_MILLION = 1_000_000;
 export type PersistedPrice = {
   id: string;
   aiProviderId: string | null;
+  projectId: string | null;
   provider: string;
   model: string;
   inputPricePerM: number;
@@ -23,11 +33,13 @@ export type PersistedPrice = {
 const mapPrice = (
   price: InstanceType<(typeof db)['PriceBook']> & {
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
+    project?: InstanceType<(typeof db)['Project']> | null;
   }
 ): PersistedPrice => {
   return {
     id: price.publicId,
     aiProviderId: price.aiProvider?.publicId ?? null,
+    projectId: price.project?.publicId ?? null,
     provider: price.provider,
     model: price.model,
     inputPricePerM: Number(price.inputPricePerM),
@@ -40,67 +52,6 @@ const mapPrice = (
 };
 
 /**
- * Default price rows SOAT ships so cost is computed out of the box. Values are
- * USD per million tokens and are indicative — operators override them with
- * future-dated rows via `PUT /api/v1/usage/prices`. Seeded at a fixed past
- * `effectiveFrom` so they apply to every run until overridden.
- */
-export const DEFAULT_PRICE_EFFECTIVE_FROM = new Date(
-  '2020-01-01T00:00:00.000Z'
-);
-
-export const DEFAULT_PRICES: Array<{
-  provider: string;
-  model: string;
-  inputPricePerM: number;
-  outputPricePerM: number;
-  cachedPricePerM: number | null;
-}> = [
-  {
-    provider: 'openai',
-    model: 'gpt-4o',
-    inputPricePerM: 2.5,
-    outputPricePerM: 10,
-    cachedPricePerM: 1.25,
-  },
-  {
-    provider: 'openai',
-    model: 'gpt-4o-mini',
-    inputPricePerM: 0.15,
-    outputPricePerM: 0.6,
-    cachedPricePerM: 0.075,
-  },
-  {
-    provider: 'openai',
-    model: 'o3-mini',
-    inputPricePerM: 1.1,
-    outputPricePerM: 4.4,
-    cachedPricePerM: 0.55,
-  },
-  {
-    provider: 'anthropic',
-    model: 'claude-3-5-sonnet-latest',
-    inputPricePerM: 3,
-    outputPricePerM: 15,
-    cachedPricePerM: 0.3,
-  },
-  {
-    provider: 'anthropic',
-    model: 'claude-3-5-haiku-latest',
-    inputPricePerM: 0.8,
-    outputPricePerM: 4,
-    cachedPricePerM: 0.08,
-  },
-  {
-    provider: 'google',
-    model: 'gemini-2.0-flash',
-    inputPricePerM: 0.1,
-    outputPricePerM: 0.4,
-    cachedPricePerM: 0.025,
-  },
-];
-
-/**
  * Idempotently inserts the shipped default price rows. Existing rows for a
  * `(provider, model, effectiveFrom)` key are left untouched, so re-running on
  * startup never overwrites operator changes.
@@ -110,12 +61,14 @@ export const seedDefaultPrices = async (): Promise<void> => {
     await db.PriceBook.findOrCreate({
       where: {
         aiProviderId: null,
+        projectId: null,
         provider: price.provider,
         model: price.model,
         effectiveFrom: DEFAULT_PRICE_EFFECTIVE_FROM,
       },
       defaults: {
         aiProviderId: null,
+        projectId: null,
         provider: price.provider,
         model: price.model,
         inputPricePerM: String(price.inputPricePerM),
@@ -133,17 +86,20 @@ export const seedDefaultPrices = async (): Promise<void> => {
 };
 
 /**
- * Returns the price row that applies to a call. A per-provider override
- * (`aiProviderId` set) wins over the global default (`aiProviderId` null); in
- * each scope the latest row with `effectiveFrom <= at` applies. Null when no
- * row covers it (the caller records tokens with `cost_usd = null`).
+ * Returns the price row that applies to a call, resolving most-specific first:
+ * a per-provider override (`aiProviderId` set) → a project + provider-slug
+ * price (`projectId` set, `aiProviderId` null) → the global default (both
+ * null). Within each scope the latest row with `effectiveFrom <= at` applies.
+ * Null when no row covers it (the caller records tokens with `cost_usd = null`).
  */
 export const getEffectivePrice = async (args: {
   provider: string;
   model: string;
   aiProviderId: number | null;
+  projectId: number | null;
   at: Date;
 }): Promise<InstanceType<(typeof db)['PriceBook']> | null> => {
+  // Tier 1 — a specific AI provider instance.
   if (args.aiProviderId !== null) {
     const override = await db.PriceBook.findOne({
       where: {
@@ -157,9 +113,26 @@ export const getEffectivePrice = async (args: {
     if (override) return override;
   }
 
+  // Tier 2 — the project's rate for this provider slug.
+  if (args.projectId !== null) {
+    const projectPrice = await db.PriceBook.findOne({
+      where: {
+        aiProviderId: null,
+        projectId: args.projectId,
+        provider: args.provider,
+        model: args.model,
+        effectiveFrom: { [Op.lte]: args.at },
+      },
+      order: [['effectiveFrom', 'DESC']],
+    });
+    if (projectPrice) return projectPrice;
+  }
+
+  // Tier 3 — the global default.
   return db.PriceBook.findOne({
     where: {
       aiProviderId: null,
+      projectId: null,
       provider: args.provider,
       model: args.model,
       effectiveFrom: { [Op.lte]: args.at },
@@ -200,11 +173,12 @@ export const computeCostUsd = (args: {
   return cost.toFixed(6);
 };
 
-// Lists the global default prices only. Per-provider overrides are not exposed
-// here to avoid leaking one project's negotiated rates to another.
+// Lists the global default prices only. Per-provider overrides and project +
+// provider-slug prices are not exposed here — they're read through their own
+// project-scoped endpoints, so one project never sees another's rates.
 export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
   const rows = await db.PriceBook.findAll({
-    where: { aiProviderId: null },
+    where: { aiProviderId: null, projectId: null },
     order: [
       ['provider', 'ASC'],
       ['model', 'ASC'],
@@ -247,6 +221,7 @@ const resolveAiProviderId = async (
 // as new future-dated rows rather than edits to historical prices.
 const writePriceRow = async (args: {
   aiProviderId: number | null;
+  projectId: number | null;
   provider: string;
   model: string;
   inputPricePerM: number;
@@ -265,6 +240,7 @@ const writePriceRow = async (args: {
 
   const values = {
     aiProviderId: args.aiProviderId,
+    projectId: args.projectId,
     provider: args.provider,
     model: args.model,
     inputPricePerM: String(args.inputPricePerM),
@@ -279,6 +255,7 @@ const writePriceRow = async (args: {
   const [row, created] = await db.PriceBook.findOrCreate({
     where: {
       aiProviderId: args.aiProviderId,
+      projectId: args.projectId,
       provider: values.provider,
       model: values.model,
       effectiveFrom: values.effectiveFrom,
@@ -304,6 +281,7 @@ const upsertPriceRow = async (args: {
   const aiProviderId = await resolveAiProviderId(args.price.aiProviderId);
   return writePriceRow({
     aiProviderId,
+    projectId: null,
     provider: args.price.provider,
     model: args.price.model,
     inputPricePerM: args.price.inputPricePerM,
@@ -398,6 +376,7 @@ export const upsertProviderPrices = async (args: {
     ids.push(
       await writePriceRow({
         aiProviderId: id,
+        projectId: null,
         provider,
         model: price.model,
         inputPricePerM: price.inputPricePerM,
@@ -411,6 +390,89 @@ export const upsertProviderPrices = async (args: {
   const rows = await db.PriceBook.findAll({
     where: { id: ids },
     include: [{ model: db.AiProvider, as: 'aiProvider' }],
+  });
+  return { prices: rows.map(mapPrice) };
+};
+
+// Resolves a project public ID to its internal id, or throws when missing.
+const getProjectForPricing = async (projectId: string): Promise<number> => {
+  const project = await db.Project.findOne({ where: { publicId: projectId } });
+  if (!project) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Project '${projectId}' not found.`
+    );
+  }
+  return project.id as number;
+};
+
+export type ProjectPriceInput = {
+  provider: string;
+  model: string;
+  inputPricePerM: number;
+  outputPricePerM: number;
+  cachedPricePerM?: number | null;
+  effectiveFrom: string;
+};
+
+/**
+ * Lists the project + provider-slug price rows for one project — the middle
+ * pricing tier that covers every one of the project's instances of a given
+ * provider slug. Scoped to the project, so no cross-tenant leak.
+ */
+export const listProjectPrices = async (args: {
+  projectId: string;
+}): Promise<{ prices: PersistedPrice[] }> => {
+  log('listProjectPrices: projectId=%s', args.projectId);
+  const id = await getProjectForPricing(args.projectId);
+  const rows = await db.PriceBook.findAll({
+    where: { projectId: id, aiProviderId: null },
+    include: [{ model: db.Project, as: 'project' }],
+    order: [
+      ['provider', 'ASC'],
+      ['model', 'ASC'],
+      ['effectiveFrom', 'DESC'],
+    ],
+  });
+  return { prices: rows.map(mapPrice) };
+};
+
+/**
+ * Upserts project + provider-slug price rows, keyed on
+ * `(project, provider, model, effectiveFrom)`. Unlike the per-provider path the
+ * caller supplies `provider` explicitly — the price covers all of the project's
+ * instances of that slug, not one instance. Future-date-only.
+ */
+export const upsertProjectPrices = async (args: {
+  projectId: string;
+  prices: ProjectPriceInput[];
+}): Promise<{ prices: PersistedPrice[] }> => {
+  log(
+    'upsertProjectPrices: projectId=%s count=%d',
+    args.projectId,
+    args.prices.length
+  );
+  const id = await getProjectForPricing(args.projectId);
+  const now = new Date();
+  const ids: number[] = [];
+  for (const price of args.prices) {
+    ids.push(
+      await writePriceRow({
+        aiProviderId: null,
+        projectId: id,
+        provider: price.provider,
+        model: price.model,
+        inputPricePerM: price.inputPricePerM,
+        outputPricePerM: price.outputPricePerM,
+        cachedPricePerM: price.cachedPricePerM,
+        effectiveFrom: price.effectiveFrom,
+        now,
+      })
+    );
+  }
+  const rows = await db.PriceBook.findAll({
+    where: { id: ids },
+    include: [{ model: db.Project, as: 'project' }],
   });
   return { prices: rows.map(mapPrice) };
 };

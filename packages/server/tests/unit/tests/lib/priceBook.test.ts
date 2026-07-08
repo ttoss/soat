@@ -68,6 +68,7 @@ describe('priceBook', () => {
         provider: 'openai',
         model: 'gpt-4o',
         aiProviderId: null,
+        projectId: null,
         at: new Date(),
       });
       expect(gpt4o).not.toBeNull();
@@ -111,6 +112,7 @@ describe('priceBook', () => {
         provider,
         model,
         aiProviderId: null,
+        projectId: null,
         at: new Date('2024-06-01T00:00:00.000Z'),
       });
       expect(effective?.inputPricePerM).toBe('2');
@@ -122,9 +124,91 @@ describe('priceBook', () => {
           provider: 'nope',
           model: 'no-model',
           aiProviderId: null,
+          projectId: null,
           at: new Date(),
         })
       ).toBeNull();
+    });
+
+    test('resolves instance > project+slug > global in priority order', async () => {
+      const provider = 'tiertest';
+      const model = 'tier-model';
+      const past = new Date('2020-01-01T00:00:00.000Z');
+
+      const project = await db.Project.create({ name: 'tier-price-project' });
+      const aiProvider = await db.AiProvider.create({
+        projectId: project.id,
+        name: 'tier-price-provider',
+        provider,
+        defaultModel: model,
+      });
+
+      // Global default.
+      await db.PriceBook.create({
+        aiProviderId: null,
+        projectId: null,
+        provider,
+        model,
+        inputPricePerM: '1',
+        outputPricePerM: '1',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+
+      const at = new Date('2024-06-01T00:00:00.000Z');
+      const base = { provider, model, at };
+
+      // Only the global exists → global wins.
+      const globalHit = await getEffectivePrice({
+        ...base,
+        aiProviderId: aiProvider.id,
+        projectId: project.id,
+      });
+      expect(globalHit?.inputPricePerM).toBe('1');
+
+      // Add a project+slug price → it wins over global.
+      await db.PriceBook.create({
+        aiProviderId: null,
+        projectId: project.id,
+        provider,
+        model,
+        inputPricePerM: '5',
+        outputPricePerM: '5',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+      const projectHit = await getEffectivePrice({
+        ...base,
+        aiProviderId: aiProvider.id,
+        projectId: project.id,
+      });
+      expect(projectHit?.inputPricePerM).toBe('5');
+
+      // Add a per-instance override → it wins over both.
+      await db.PriceBook.create({
+        aiProviderId: aiProvider.id,
+        projectId: null,
+        provider,
+        model,
+        inputPricePerM: '9',
+        outputPricePerM: '9',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+      const instanceHit = await getEffectivePrice({
+        ...base,
+        aiProviderId: aiProvider.id,
+        projectId: project.id,
+      });
+      expect(instanceHit?.inputPricePerM).toBe('9');
+
+      // A caller with no instance/project still gets the global.
+      const globalOnly = await getEffectivePrice({
+        ...base,
+        aiProviderId: null,
+        projectId: null,
+      });
+      expect(globalOnly?.inputPricePerM).toBe('1');
     });
   });
 
