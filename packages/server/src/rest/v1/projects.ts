@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
 import {
   createProject,
   deleteProject,
@@ -9,6 +10,47 @@ import {
 } from 'src/lib/projects';
 
 const projectsRouter = new Router<Context>();
+
+type ProjectPriceBody = {
+  provider?: string;
+  model?: string;
+  inputPricePerM?: number;
+  outputPricePerM?: number;
+  cachedPricePerM?: number | null;
+  effectiveFrom?: string;
+};
+
+// Authorizes a project-scoped price request against the project itself.
+// Returns the project public ID, or null when a 401/403 response has already
+// been set on ctx and the caller should return. The lib resolves existence and
+// throws RESOURCE_NOT_FOUND (404) for an unknown project the caller can reach.
+const authorizeProjectPrices = async (args: {
+  ctx: Context;
+  action: string;
+}): Promise<string | null> => {
+  const { ctx, action } = args;
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return null;
+  }
+
+  const projectPublicId = ctx.params.project_id;
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId,
+    action,
+    // Probe with the project's SRN so project-scoped policies grant access,
+    // consistent with getProject / resolveProjectIds.
+    resource: `soat:${projectPublicId}:*:*`,
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return null;
+  }
+
+  return projectPublicId;
+};
 
 projectsRouter.post('/projects', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -107,6 +149,38 @@ projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
   await deleteProject({ id: ctx.params.project_id, force });
 
   ctx.status = 204;
+});
+
+projectsRouter.get('/projects/:project_id/prices', async (ctx: Context) => {
+  const projectPublicId = await authorizeProjectPrices({
+    ctx,
+    action: 'projects:GetProjectPrices',
+  });
+  if (!projectPublicId) return;
+
+  ctx.body = await listProjectPrices({ projectId: projectPublicId });
+});
+
+projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
+  const projectPublicId = await authorizeProjectPrices({
+    ctx,
+    action: 'projects:ManageProjectPrices',
+  });
+  if (!projectPublicId) return;
+
+  const body = ctx.request.body as { prices?: ProjectPriceBody[] };
+  const prices = (body.prices ?? []).map((price) => {
+    return {
+      provider: price.provider!,
+      model: price.model!,
+      inputPricePerM: price.inputPricePerM!,
+      outputPricePerM: price.outputPricePerM!,
+      cachedPricePerM: price.cachedPricePerM,
+      effectiveFrom: price.effectiveFrom!,
+    };
+  });
+
+  ctx.body = await upsertProjectPrices({ projectId: projectPublicId, prices });
 });
 
 export { projectsRouter };

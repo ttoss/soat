@@ -167,13 +167,14 @@ const writeGenerationMeter = async (args: {
   const attribution = resolveMeterAttribution(generation);
   const model = args.model || 'unknown';
 
-  // Price at write time from the row effective now — a per-provider override
-  // wins over the global default. Frozen onto the meter so later price changes
-  // never alter this recorded cost. Null when unpriced.
+  // Price at write time from the row effective now, resolved most-specific
+  // first: provider instance → project + slug → global default. Frozen onto the
+  // meter so later price changes never alter this recorded cost. Null unpriced.
   const price = await getEffectivePrice({
     provider: attribution.provider,
     model,
     aiProviderId: attribution.aiProviderId,
+    projectId: generation.projectId,
     at: new Date(),
   });
   const costUsd = computeCostUsd({ price, ...tokens });

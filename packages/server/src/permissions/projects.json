@@ -20,6 +20,16 @@
       "operationId": "deleteProject",
       "action": "projects:DeleteProject",
       "description": "Delete a project (admin only)"
+    },
+    {
+      "operationId": "getProjectPrices",
+      "action": "projects:GetProjectPrices",
+      "description": "List a project's per-provider-slug price rows"
+    },
+    {
+      "operationId": "updateProjectPrices",
+      "action": "projects:ManageProjectPrices",
+      "description": "Upsert a project's per-provider-slug price rows"
     }
   ]
 }

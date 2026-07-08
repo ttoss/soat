@@ -696,4 +696,172 @@ describe('Projects', () => {
       expect(getProjectRes.status).toBe(404);
     });
   });
+
+  describe('project + provider-slug prices', () => {
+    let priceProjectId: string;
+    let priceUserToken: string;
+    let priceNoPermToken: string;
+    const futureFrom = '2099-01-01T00:00:00.000Z';
+
+    beforeAll(async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Price Tier Project' });
+      priceProjectId = projRes.body.id;
+
+      const userRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'priceuser', password: 'pricepass' });
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'projects:GetProjectPrices',
+                  'projects:ManageProjectPrices',
+                ],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${userRes.body.id}/policies`)
+        .send({ policy_ids: [policyRes.body.id] });
+      priceUserToken = await loginAs('priceuser', 'pricepass');
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'pricenoperm', password: 'nopass' });
+      priceNoPermToken = await loginAs('pricenoperm', 'nopass');
+    });
+
+    describe('GET /api/v1/projects/:project_id/prices', () => {
+      test('unauthenticated request returns 401', async () => {
+        const res = await testClient.get(
+          `/api/v1/projects/${priceProjectId}/prices`
+        );
+        expect(res.status).toBe(401);
+      });
+
+      test('user without permission returns 403', async () => {
+        const res = await authenticatedTestClient(priceNoPermToken).get(
+          `/api/v1/projects/${priceProjectId}/prices`
+        );
+        expect(res.status).toBe(403);
+      });
+
+      test('unknown project returns 404', async () => {
+        const res = await authenticatedTestClient(priceUserToken).get(
+          '/api/v1/projects/proj_doesNotExist01/prices'
+        );
+        expect(res.status).toBe(404);
+      });
+
+      test('starts empty for a project with no price rows', async () => {
+        const res = await authenticatedTestClient(priceUserToken).get(
+          `/api/v1/projects/${priceProjectId}/prices`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.prices).toEqual([]);
+      });
+    });
+
+    describe('PUT /api/v1/projects/:project_id/prices', () => {
+      test('unauthenticated request returns 401', async () => {
+        const res = await testClient
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({ prices: [] });
+        expect(res.status).toBe(401);
+      });
+
+      test('user without permission returns 403', async () => {
+        const res = await authenticatedTestClient(priceNoPermToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({ prices: [] });
+        expect(res.status).toBe(403);
+      });
+
+      test('rejects a non-future effective_from with 400', async () => {
+        const res = await authenticatedTestClient(priceUserToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({
+            prices: [
+              {
+                provider: 'openai',
+                model: 'gpt-4o',
+                input_price_per_m: 1,
+                output_price_per_m: 2,
+                effective_from: '2020-01-01T00:00:00.000Z',
+              },
+            ],
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('upserts a project price and reads it back', async () => {
+        const putRes = await authenticatedTestClient(priceUserToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({
+            prices: [
+              {
+                provider: 'openai',
+                model: 'gpt-4o',
+                input_price_per_m: 4,
+                output_price_per_m: 12,
+                cached_price_per_m: 2,
+                effective_from: futureFrom,
+              },
+            ],
+          });
+        expect(putRes.status).toBe(200);
+        expect(putRes.body.prices).toHaveLength(1);
+        const price = putRes.body.prices[0];
+        expect(price.id).toMatch(/^price_/);
+        expect(price.project_id).toBe(priceProjectId);
+        // A project + slug row is not tied to any one provider instance.
+        expect(price.ai_provider_id).toBeNull();
+        expect(price.provider).toBe('openai');
+        expect(price.model).toBe('gpt-4o');
+        expect(price.input_price_per_m).toBe(4);
+
+        const getRes = await authenticatedTestClient(priceUserToken).get(
+          `/api/v1/projects/${priceProjectId}/prices`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.prices).toHaveLength(1);
+        expect(getRes.body.prices[0].id).toBe(price.id);
+      });
+
+      test('re-upserting the same key updates the rates in place', async () => {
+        const res = await authenticatedTestClient(priceUserToken)
+          .put(`/api/v1/projects/${priceProjectId}/prices`)
+          .send({
+            prices: [
+              {
+                provider: 'openai',
+                model: 'gpt-4o',
+                input_price_per_m: 6,
+                output_price_per_m: 18,
+                effective_from: futureFrom,
+              },
+            ],
+          });
+        expect(res.status).toBe(200);
+        expect(res.body.prices[0].input_price_per_m).toBe(6);
+
+        const getRes = await authenticatedTestClient(priceUserToken).get(
+          `/api/v1/projects/${priceProjectId}/prices`
+        );
+        expect(
+          getRes.body.prices.filter((p: { model: string }) => {
+            return p.model === 'gpt-4o';
+          })
+        ).toHaveLength(1);
+      });
+    });
+  });
 });

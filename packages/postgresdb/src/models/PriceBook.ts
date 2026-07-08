@@ -9,14 +9,16 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { AiProvider } from './AiProvider';
+import { Project } from './Project';
 
 /**
  * Versioned price data used to compute a `UsageMeter`'s `cost_usd` at write
- * time. Two scopes live in one table: a **global default** (`aiProviderId`
- * null), keyed by `(provider, model, effectiveFrom)`; and an optional
- * **per-provider override** (`aiProviderId` set) for a specific AI provider
- * instance. Cost lookup prefers the override, then falls back to the global
- * default; within each scope the latest `effectiveFrom <= now()` applies. New
+ * time. Three scopes live in one table, resolved most-specific first:
+ * a **per-provider override** (`aiProviderId` set) for one AI provider
+ * instance; a **project + provider-slug** price (`projectId` set,
+ * `aiProviderId` null) covering all of a project's instances of a slug; and a
+ * **global default** (both null). Cost lookup prefers instance → project+slug →
+ * global; within each scope the latest `effectiveFrom <= now()` applies. New
  * future-dated rows change the price deterministically without mutating costs
  * already recorded from earlier rows.
  */
@@ -27,9 +29,15 @@ import { AiProvider } from './AiProvider';
   indexes: [
     {
       unique: true,
-      fields: ['ai_provider_id', 'provider', 'model', 'effective_from'],
+      fields: [
+        'ai_provider_id',
+        'project_id',
+        'provider',
+        'model',
+        'effective_from',
+      ],
     },
-    // Serves the global-default and per-provider effective-price lookups.
+    // Serves the global-default, project+slug, and per-provider lookups.
     { fields: ['provider', 'model', 'effective_from'] },
   ],
   hooks: {
@@ -64,6 +72,23 @@ export class PriceBook extends Model {
     { onDelete: 'CASCADE' }
   )
   declare aiProvider: AiProvider | null;
+
+  // Null unless this is a project + provider-slug price. Set = a project-scoped
+  // rate covering every one of that project's instances of `provider`. Deleting
+  // the project drops its price rows; recorded meter costs are already frozen.
+  @ForeignKey(() => {
+    return Project;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Project;
+    },
+    { onDelete: 'CASCADE' }
+  )
+  declare project: Project | null;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
