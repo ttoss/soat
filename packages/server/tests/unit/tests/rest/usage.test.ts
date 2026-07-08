@@ -2,6 +2,10 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
+import { db } from 'src/db';
+import { recordGenerationUsage } from 'src/lib/usage';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -171,6 +175,67 @@ describe('Usage', () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
       expect(response.body.total).toBe(0);
+    });
+  });
+
+  describe('recordGenerationUsage attribution and idempotency', () => {
+    test('re-recording the same generation is a no-op (idempotent)', async () => {
+      await recordGenerationUsage({
+        generationId,
+        model: 'stub-model',
+        usage: undefined,
+      });
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${generationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+    });
+
+    test('recording usage for an unknown generation is a no-op', async () => {
+      await expect(
+        recordGenerationUsage({
+          generationId: 'gen_doesNotExist01',
+          model: 'm',
+          usage: undefined,
+        })
+      ).resolves.toBeUndefined();
+    });
+
+    test('maps a meter with null agent/generation and a priced cost', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const publicId = generatePublicId(PUBLIC_ID_PREFIXES.usageMeter);
+      await db.UsageMeter.create({
+        publicId,
+        projectId: project?.id as number,
+        runId: null,
+        nodeId: null,
+        agentId: null,
+        generationId: null,
+        provider: 'openai',
+        model: 'gpt-4o',
+        inputTokens: 3,
+        outputTokens: 5,
+        cachedTokens: 0,
+        reasoningTokens: 2,
+        costUsd: '2.5',
+        idempotencyKey: `manual-seed-${publicId}`,
+      });
+
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters'
+      );
+      expect(response.status).toBe(200);
+      const seeded = response.body.data.find((meter: { id: string }) => {
+        return meter.id === publicId;
+      });
+      expect(seeded).toBeDefined();
+      expect(seeded.agent_id).toBeNull();
+      expect(seeded.generation_id).toBeNull();
+      expect(seeded.run_id).toBeNull();
+      expect(seeded.cost_usd).toBe(2.5);
     });
   });
 });

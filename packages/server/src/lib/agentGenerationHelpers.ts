@@ -202,11 +202,13 @@ export const runStreamGeneration = (args: {
         completedAt: new Date(),
         stopReason: finishReason,
       }).catch(() => {});
-      recordGenerationUsage({
+      // recordGenerationUsage never rejects (it catches internally), so `void`
+      // marks the intentional fire-and-forget without an extra no-op handler.
+      void recordGenerationUsage({
         generationId: args.generationId,
         model: args.typedAgent.model ?? '',
         usage,
-      }).catch(() => {});
+      });
     },
   });
   return result.textStream as unknown as ReadableStream;
