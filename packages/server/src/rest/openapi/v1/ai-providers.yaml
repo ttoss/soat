@@ -280,7 +280,157 @@ paths:
           description: Forbidden
         '404':
           description: AI provider not found
+  /api/v1/ai-providers/{ai_provider_id}/prices:
+    get:
+      tags:
+        - AI Providers
+      summary: List per-provider price overrides
+      description: >
+        Returns the per-provider price overrides for this AI provider instance.
+        An override prices this specific provider (e.g. an enterprise-negotiated
+        rate or a gateway with markup) and wins over the global default at cost
+        time. Authorized by the caller's access to the provider's project — so,
+        unlike the global price book, a project's own overrides are visible here.
+      operationId: getAiProviderPrices
+      parameters:
+        - name: ai_provider_id
+          in: path
+          required: true
+          description: AI Provider ID
+          schema:
+            type: string
+            example: aip_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The provider's price overrides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderPricesResponse'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: AI provider not found
+    put:
+      tags:
+        - AI Providers
+      summary: Upsert per-provider price overrides
+      description: >
+        Upserts price overrides for this AI provider instance, keyed on
+        (model, effective_from). The provider slug is taken from the AI provider
+        itself, so only the model, rates, and effective_from are supplied.
+        Authorized by the caller's access to the provider's project.
+        `effective_from` must be in the future — past prices are immutable, so
+        ship corrections as new future-dated rows.
+      operationId: updateAiProviderPrices
+      parameters:
+        - name: ai_provider_id
+          in: path
+          required: true
+          description: AI Provider ID
+          schema:
+            type: string
+            example: aip_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertProviderPricesRequest'
+      responses:
+        '200':
+          description: The upserted price overrides
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderPricesResponse'
+        '400':
+          description: Bad Request (e.g. non-future effective_from)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: AI provider not found
 components:
+  schemas:
+    ProviderPrice:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the price row
+          example: price_V1StGXR8Z5jdHi6B
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          description: The AI provider instance this override prices
+          example: aip_V1StGXR8Z5jdHi6B
+        provider:
+          type: string
+          description: Provider slug (taken from the AI provider instance)
+          example: openai
+        model:
+          type: string
+          example: gpt-4o
+        input_price_per_m:
+          type: number
+          description: USD per one million input (prompt) tokens
+        output_price_per_m:
+          type: number
+          description: USD per one million output (completion) tokens
+        cached_price_per_m:
+          type: number
+          nullable: true
+          description: USD per one million cached input tokens; null falls back to the input price
+        effective_from:
+          type: string
+          format: date-time
+          description: The row with the latest effective_from <= now() prices a call
+        created_at:
+          type: string
+          format: date-time
+
+    ProviderPricesResponse:
+      type: object
+      properties:
+        prices:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProviderPrice'
+
+    UpsertProviderPricesRequest:
+      type: object
+      required:
+        - prices
+      properties:
+        prices:
+          type: array
+          items:
+            type: object
+            required:
+              - model
+              - input_price_per_m
+              - output_price_per_m
+              - effective_from
+            properties:
+              model:
+                type: string
+                example: gpt-4o
+              input_price_per_m:
+                type: number
+              output_price_per_m:
+                type: number
+              cached_price_per_m:
+                type: number
+                nullable: true
+              effective_from:
+                type: string
+                format: date-time
+                description: Must be in the future; past prices are immutable
+
   securitySchemes:
     bearerAuth:
       type: http

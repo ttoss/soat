@@ -11,6 +11,7 @@ import {
   updateAiProvider,
 } from 'src/lib/aiProviders';
 import { buildSrn } from 'src/lib/iam';
+import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
 import { checkAuth, resolveWriteProjectId } from './helpers';
 
@@ -92,6 +93,93 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 
   ctx.body = provider;
 });
+
+type ProviderPriceBody = {
+  model?: string;
+  inputPricePerM?: number;
+  outputPricePerM?: number;
+  cachedPricePerM?: number | null;
+  effectiveFrom?: string;
+};
+
+// Authorizes a per-provider price request against the provider's own project.
+// Returns the resolved provider (mapped) or null when a 401/403/404 response has
+// already been set on ctx and the caller should return.
+const authorizeProviderPrices = async (args: {
+  ctx: Context;
+  action: string;
+}): Promise<Awaited<ReturnType<typeof getAiProvider>> | null> => {
+  const { ctx, action } = args;
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return null;
+  }
+
+  const provider = await getAiProvider({ id: ctx.params.ai_provider_id });
+  if (!provider) {
+    ctx.status = 404;
+    ctx.body = { error: 'AI provider not found' };
+    return null;
+  }
+
+  const allowed = await ctx.authUser.isAllowed({
+    projectPublicId: provider.projectId!,
+    action,
+    resource: buildSrn({
+      projectPublicId: provider.projectId!,
+      resourceType: 'aiProvider',
+      resourceId: provider.id,
+    }),
+  });
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return null;
+  }
+
+  return provider;
+};
+
+aiProvidersRouter.get(
+  '/ai-providers/:ai_provider_id/prices',
+  async (ctx: Context) => {
+    const provider = await authorizeProviderPrices({
+      ctx,
+      action: 'aiProviders:GetAiProviderPrices',
+    });
+    if (!provider) return;
+
+    ctx.body = await listProviderPrices({ aiProviderId: provider.id });
+  }
+);
+
+aiProvidersRouter.put(
+  '/ai-providers/:ai_provider_id/prices',
+  async (ctx: Context) => {
+    const provider = await authorizeProviderPrices({
+      ctx,
+      action: 'aiProviders:ManageAiProviderPrices',
+    });
+    if (!provider) return;
+
+    const body = ctx.request.body as { prices?: ProviderPriceBody[] };
+    const prices = (body.prices ?? []).map((price) => {
+      return {
+        model: price.model!,
+        inputPricePerM: price.inputPricePerM!,
+        outputPricePerM: price.outputPricePerM!,
+        cachedPricePerM: price.cachedPricePerM,
+        effectiveFrom: price.effectiveFrom!,
+      };
+    });
+
+    ctx.body = await upsertProviderPrices({
+      aiProviderId: provider.id,
+      prices,
+    });
+  }
+);
 
 aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;

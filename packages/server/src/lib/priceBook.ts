@@ -240,39 +240,45 @@ const resolveAiProviderId = async (
   return provider.id as number;
 };
 
-const upsertPriceRow = async (args: {
-  price: PriceInput;
+// Core price-row write shared by the admin global path and the project-scoped
+// per-provider path. Takes an already-resolved numeric `aiProviderId`
+// (null = global default). Past-effective prices are immutable: a recorded cost
+// must always be explainable by the row that produced it, so corrections ship
+// as new future-dated rows rather than edits to historical prices.
+const writePriceRow = async (args: {
+  aiProviderId: number | null;
+  provider: string;
+  model: string;
+  inputPricePerM: number;
+  outputPricePerM: number;
+  cachedPricePerM?: number | null;
+  effectiveFrom: string;
   now: Date;
 }): Promise<number> => {
-  const effectiveFrom = new Date(args.price.effectiveFrom);
-  // Past-effective prices are immutable: a recorded cost must always be
-  // explainable by the row that produced it, so corrections ship as new
-  // future-dated rows rather than edits to historical prices.
+  const effectiveFrom = new Date(args.effectiveFrom);
   if (Number.isNaN(effectiveFrom.getTime()) || effectiveFrom <= args.now) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `effective_from must be a valid future timestamp (got '${args.price.effectiveFrom}').`
+      `effective_from must be a valid future timestamp (got '${args.effectiveFrom}').`
     );
   }
 
-  const aiProviderId = await resolveAiProviderId(args.price.aiProviderId);
   const values = {
-    aiProviderId,
-    provider: args.price.provider,
-    model: args.price.model,
-    inputPricePerM: String(args.price.inputPricePerM),
-    outputPricePerM: String(args.price.outputPricePerM),
+    aiProviderId: args.aiProviderId,
+    provider: args.provider,
+    model: args.model,
+    inputPricePerM: String(args.inputPricePerM),
+    outputPricePerM: String(args.outputPricePerM),
     cachedPricePerM:
-      args.price.cachedPricePerM === undefined ||
-      args.price.cachedPricePerM === null
+      args.cachedPricePerM === undefined || args.cachedPricePerM === null
         ? null
-        : String(args.price.cachedPricePerM),
+        : String(args.cachedPricePerM),
     effectiveFrom,
   };
 
   const [row, created] = await db.PriceBook.findOrCreate({
     where: {
-      aiProviderId,
+      aiProviderId: args.aiProviderId,
       provider: values.provider,
       model: values.model,
       effectiveFrom: values.effectiveFrom,
@@ -291,6 +297,23 @@ const upsertPriceRow = async (args: {
   return row.id as number;
 };
 
+const upsertPriceRow = async (args: {
+  price: PriceInput;
+  now: Date;
+}): Promise<number> => {
+  const aiProviderId = await resolveAiProviderId(args.price.aiProviderId);
+  return writePriceRow({
+    aiProviderId,
+    provider: args.price.provider,
+    model: args.price.model,
+    inputPricePerM: args.price.inputPricePerM,
+    outputPricePerM: args.price.outputPricePerM,
+    cachedPricePerM: args.price.cachedPricePerM,
+    effectiveFrom: args.price.effectiveFrom,
+    now: args.now,
+  });
+};
+
 export const upsertPrices = async (args: {
   prices: PriceInput[];
 }): Promise<{ prices: PersistedPrice[] }> => {
@@ -298,6 +321,92 @@ export const upsertPrices = async (args: {
   const ids: number[] = [];
   for (const price of args.prices) {
     ids.push(await upsertPriceRow({ price, now }));
+  }
+  const rows = await db.PriceBook.findAll({
+    where: { id: ids },
+    include: [{ model: db.AiProvider, as: 'aiProvider' }],
+  });
+  return { prices: rows.map(mapPrice) };
+};
+
+export type ProviderPriceInput = {
+  model: string;
+  inputPricePerM: number;
+  outputPricePerM: number;
+  cachedPricePerM?: number | null;
+  effectiveFrom: string;
+};
+
+// Resolves an AI provider public ID to its internal id and provider slug, or
+// throws when it does not exist.
+const getProviderForPricing = async (
+  aiProviderId: string
+): Promise<{ id: number; provider: string }> => {
+  const provider = await db.AiProvider.findOne({
+    where: { publicId: aiProviderId },
+  });
+  if (!provider) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider '${aiProviderId}' not found.`
+    );
+  }
+  return { id: provider.id as number, provider: provider.provider };
+};
+
+/**
+ * Lists the per-provider price overrides for one AI provider instance. Unlike
+ * the global price book (`listPrices`), overrides ARE returned here — the caller
+ * is scoped to the provider's own project, so there is no cross-tenant leak.
+ */
+export const listProviderPrices = async (args: {
+  aiProviderId: string;
+}): Promise<{ prices: PersistedPrice[] }> => {
+  log('listProviderPrices: aiProviderId=%s', args.aiProviderId);
+  const { id } = await getProviderForPricing(args.aiProviderId);
+  const rows = await db.PriceBook.findAll({
+    where: { aiProviderId: id },
+    include: [{ model: db.AiProvider, as: 'aiProvider' }],
+    order: [
+      ['model', 'ASC'],
+      ['effectiveFrom', 'DESC'],
+    ],
+  });
+  return { prices: rows.map(mapPrice) };
+};
+
+/**
+ * Upserts per-provider price overrides for one AI provider instance. The
+ * override's `provider` slug is taken from the AI provider itself — an override
+ * only wins at cost time when its slug equals the provider's — so callers supply
+ * just the model, rates, and `effectiveFrom`. Future-date-only, like the global
+ * path: past-effective prices are immutable.
+ */
+export const upsertProviderPrices = async (args: {
+  aiProviderId: string;
+  prices: ProviderPriceInput[];
+}): Promise<{ prices: PersistedPrice[] }> => {
+  log(
+    'upsertProviderPrices: aiProviderId=%s count=%d',
+    args.aiProviderId,
+    args.prices.length
+  );
+  const { id, provider } = await getProviderForPricing(args.aiProviderId);
+  const now = new Date();
+  const ids: number[] = [];
+  for (const price of args.prices) {
+    ids.push(
+      await writePriceRow({
+        aiProviderId: id,
+        provider,
+        model: price.model,
+        inputPricePerM: price.inputPricePerM,
+        outputPricePerM: price.outputPricePerM,
+        cachedPricePerM: price.cachedPricePerM,
+        effectiveFrom: price.effectiveFrom,
+        now,
+      })
+    );
   }
   const rows = await db.PriceBook.findAll({
     where: { id: ids },
