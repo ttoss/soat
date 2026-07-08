@@ -44,6 +44,7 @@ export type PersistedUsageMeter = {
   nodeId: string | null;
   agentId: string | null;
   generationId: string | null;
+  aiProviderId: string | null;
   provider: string;
   model: string;
   inputTokens: number;
@@ -54,12 +55,19 @@ export type PersistedUsageMeter = {
   createdAt: Date;
 };
 
+const assocPublicId = (
+  assoc: { publicId: string } | null | undefined
+): string | null => {
+  return assoc?.publicId ?? null;
+};
+
 const mapUsageMeter = (
   meter: InstanceType<(typeof db)['UsageMeter']> & {
     project?: InstanceType<(typeof db)['Project']>;
     agent?: InstanceType<(typeof db)['Agent']> | null;
     generation?: InstanceType<(typeof db)['Generation']> | null;
     run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
+    aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
   }
 ): PersistedUsageMeter => {
   if (!meter.project) {
@@ -69,10 +77,11 @@ const mapUsageMeter = (
   return {
     id: meter.publicId,
     projectId: meter.project.publicId,
-    runId: meter.run?.publicId ?? null,
+    runId: assocPublicId(meter.run),
     nodeId: meter.nodeId,
-    agentId: meter.agent?.publicId ?? null,
-    generationId: meter.generation?.publicId ?? null,
+    agentId: assocPublicId(meter.agent),
+    generationId: assocPublicId(meter.generation),
+    aiProviderId: assocPublicId(meter.aiProvider),
     provider: meter.provider,
     model: meter.model,
     inputTokens: meter.inputTokens,
@@ -109,7 +118,8 @@ const writeGenerationMeter = async (args: {
   }
 
   const tokens = extractUsageTokens(args.usage);
-  const provider = generation.agent?.aiProvider?.provider ?? 'unknown';
+  const aiProvider = generation.agent?.aiProvider ?? null;
+  const provider = aiProvider?.provider ?? 'unknown';
 
   const [, created] = await db.UsageMeter.findOrCreate({
     where: { idempotencyKey: args.generationId },
@@ -120,6 +130,7 @@ const writeGenerationMeter = async (args: {
       nodeId: null,
       agentId: generation.agentId,
       generationId: generation.id,
+      aiProviderId: aiProvider?.id ?? null,
       provider,
       model: args.model || 'unknown',
       inputTokens: tokens.inputTokens,
@@ -249,6 +260,7 @@ export const listUsageMeters = async (args: {
       { model: db.Agent, as: 'agent' },
       { model: db.Generation, as: 'generation' },
       { model: db.OrchestrationRun, as: 'run' },
+      { model: db.AiProvider, as: 'aiProvider' },
     ],
     order: [['createdAt', 'DESC']],
     limit,

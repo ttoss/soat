@@ -27,7 +27,8 @@ Usage relates to [generations](./generations.md) (each row links back to the gen
 | `node_id`          | string \| null  | Orchestration node within the run, when applicable                                           |
 | `agent_id`         | string \| null  | Agent that ran the generation                                                                |
 | `generation_id`    | string \| null  | Generation this usage was recorded for                                                       |
-| `provider`         | string          | AI provider slug the call was billed against (e.g. `openai`)                                 |
+| `ai_provider_id`   | string \| null  | AI provider instance billed; correlates the meter to the price book                          |
+| `provider`         | string          | Denormalized as-billed provider slug (e.g. `openai`), retained if the provider is deleted    |
 | `model`            | string          | Model identifier the provider billed                                                         |
 | `input_tokens`     | number          | Input (prompt) tokens reported by the provider                                               |
 | `output_tokens`    | number          | Output (completion) tokens reported by the provider                                          |
@@ -48,7 +49,7 @@ Usage is metered for agent generations — including conversations and orchestra
 
 ### Pricing
 
-`cost_usd` is `null` until a versioned price book prices the captured tokens. A `null` cost means "tokens captured, not yet priced" — it does not mean the call was free.
+`cost_usd` is `null` until a versioned price book prices the captured tokens. A `null` cost means "tokens captured, not yet priced" — it does not mean the call was free. Pricing correlates through `ai_provider_id` (the specific provider instance billed), so two providers that share a slug but differ in configuration can be priced independently. The denormalized `provider`/`model` snapshot keeps the receipt accurate even if the provider is later deleted (`ai_provider_id` → `null`).
 
 ## Examples
 

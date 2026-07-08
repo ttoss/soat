@@ -10,6 +10,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
+import { AiProvider } from './AiProvider';
 import { Generation } from './Generation';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
@@ -108,6 +109,27 @@ export class UsageMeter extends Model {
   )
   declare generation: Generation | null;
 
+  // The specific AI provider instance billed. Correlates the meter to the
+  // price book (a project may have several providers with the same slug).
+  // SET NULL on delete so an old meter never blocks provider removal; the
+  // denormalized `provider`/`model` below preserve the as-billed receipt.
+  @Index
+  @ForeignKey(() => {
+    return AiProvider;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare aiProviderId: number | null;
+
+  @BelongsTo(
+    () => {
+      return AiProvider;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare aiProvider: AiProvider | null;
+
+  // Denormalized as-billed provider slug (e.g. `openai`), retained even if the
+  // AI provider row is later deleted so historical receipts stay accurate.
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
 

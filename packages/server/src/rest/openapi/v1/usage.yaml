@@ -133,9 +133,19 @@ components:
           type: string
           nullable: true
           description: Public ID of the generation this usage was recorded for
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+          description: >
+            Public ID of the AI provider instance billed. Correlates the meter
+            to the price book. Null if the provider was later deleted; the
+            `provider`/`model` snapshot still records what was billed.
         provider:
           type: string
-          description: AI provider slug the call was billed against
+          description: >
+            Denormalized as-billed provider slug, retained even if the AI
+            provider is later deleted
           example: openai
         model:
           type: string

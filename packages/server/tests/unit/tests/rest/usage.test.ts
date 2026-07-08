@@ -21,6 +21,7 @@ describe('Usage', () => {
   let noPermToken: string;
   let projectId: string;
   let agentId: string;
+  let aiProviderId: string;
   let generationId: string;
   let stubServer: Server;
 
@@ -85,6 +86,7 @@ describe('Usage', () => {
         default_model: 'stub-model',
         base_url: stubBaseUrl,
       });
+    aiProviderId = aiProvRes.body.id;
 
     const agentRes = await authenticatedTestClient(userToken)
       .post('/api/v1/agents')
@@ -136,6 +138,7 @@ describe('Usage', () => {
       expect(meter.generation_id).toBe(generationId);
       expect(meter.agent_id).toBe(agentId);
       expect(meter.project_id).toBe(projectId);
+      expect(meter.ai_provider_id).toBe(aiProviderId);
       expect(meter.provider).toBe('ollama');
       expect(meter.model).toBe('stub-model');
       expect(meter.input_tokens).toBe(10);
@@ -214,6 +217,7 @@ describe('Usage', () => {
         nodeId: null,
         agentId: null,
         generationId: null,
+        aiProviderId: null,
         provider: 'openai',
         model: 'gpt-4o',
         inputTokens: 3,
@@ -234,6 +238,7 @@ describe('Usage', () => {
       expect(seeded).toBeDefined();
       expect(seeded.agent_id).toBeNull();
       expect(seeded.generation_id).toBeNull();
+      expect(seeded.ai_provider_id).toBeNull();
       expect(seeded.run_id).toBeNull();
       expect(seeded.cost_usd).toBe(2.5);
     });
