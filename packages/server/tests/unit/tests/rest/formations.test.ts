@@ -1364,6 +1364,47 @@ resources:
       expect(res.body.errors.length).toBeGreaterThan(0);
     });
 
+    test('validate reports a pipeline step whose inline tool is missing a name', async () => {
+      const template = {
+        resources: {
+          MyPipeline: {
+            type: 'tool',
+            properties: {
+              name: 'pipeline-inline-no-name',
+              type: 'pipeline',
+              pipeline: {
+                steps: [
+                  {
+                    id: 'strapiCreate',
+                    tool: {
+                      type: 'http',
+                      execute: { url: 'https://example.com', method: 'POST' },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      };
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template });
+
+      expect(res.status).toBe(200);
+      // The missing `name` must be caught at validate time, not surface only
+      // at deploy.
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors).toContainEqual(
+        expect.objectContaining({
+          path: 'resources.MyPipeline.properties.pipeline',
+          message: expect.stringMatching(
+            /inline tool must be an object with a name/i
+          ),
+        })
+      );
+    });
+
     test('creates formation with mcp tool type', async () => {
       const mcpTemplate = {
         resources: {

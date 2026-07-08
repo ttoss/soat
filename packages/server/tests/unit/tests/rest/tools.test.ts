@@ -529,6 +529,32 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
     });
 
+    test('rejects a step whose inline tool is missing a name (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'inline-missing-name',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              {
+                id: 'strapiCreate',
+                tool: {
+                  type: 'http',
+                  execute: { url: 'https://example.com', method: 'POST' },
+                },
+              },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+      expect(res.body.error.message).toMatch(
+        /inline tool must be an object with a name/i
+      );
+    });
+
     test('rejects an inline step tool of type pipeline (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
