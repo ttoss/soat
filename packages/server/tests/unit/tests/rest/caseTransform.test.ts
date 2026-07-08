@@ -145,6 +145,49 @@ describe('caseTransform middleware', () => {
     );
   });
 
+  test('tool input mapping keys are preserved verbatim (not case-transformed)', async () => {
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'tool-input-passthrough-project' });
+    const projectId = projectRes.body.id;
+
+    // A pipeline step's `input` mapping is a tool payload, not a SOAT resource
+    // field: its keys become the sub-tool's request body keys and must round-
+    // trip unchanged, exactly like `execute` and document `metadata`.
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'input-passthrough-pipeline',
+        type: 'pipeline',
+        pipeline: {
+          steps: [
+            {
+              id: 'call',
+              tool: {
+                name: 'inline-http',
+                type: 'http',
+                execute: {
+                  url: 'https://api.example.com/runs',
+                  method: 'POST',
+                },
+              },
+              input: { fundamental_truth: 'x' },
+            },
+          ],
+        },
+      });
+
+    expect(toolRes.status).toBe(201);
+    const stepInput = toolRes.body.pipeline.steps[0].input;
+    expect(stepInput.fundamental_truth).toBe('x');
+    expect(stepInput.fundamentalTruth).toBeUndefined();
+
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/projects/${projectId}`
+    );
+  });
+
   test('non /api/v1 paths are not transformed', async () => {
     // The health or root endpoint should not be transformed
     const response = await testClient.get('/');

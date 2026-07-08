@@ -529,6 +529,32 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
     });
 
+    test('rejects a step whose inline tool is missing a name (400)', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'inline-missing-name',
+          type: 'pipeline',
+          pipeline: {
+            steps: [
+              {
+                id: 'strapiCreate',
+                tool: {
+                  type: 'http',
+                  execute: { url: 'https://example.com', method: 'POST' },
+                },
+              },
+            ],
+          },
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('PIPELINE_INVALID_STEP');
+      expect(res.body.error.message).toMatch(
+        /inline tool must be an object with a name/i
+      );
+    });
+
     test('rejects an inline step tool of type pipeline (400)', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -1159,6 +1185,119 @@ describe('Tools', () => {
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.output_mapping).toEqual({ var: 'output.text' });
+    });
+  });
+
+  // An http tool forwards its input as the request body verbatim. The keys a
+  // caller authors (snake_case, matching SOAT's own external contract) must
+  // reach the target API unchanged — the caseTransform middleware must not
+  // camelCase a tool's `input` payload the way it does a resource's own fields.
+  describe('http tool body case preservation', () => {
+    let bodyServer: http.Server;
+    let bodyServerUrl: string;
+    let lastBody: Record<string, unknown> | undefined;
+
+    beforeAll(async () => {
+      bodyServer = http.createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk;
+        });
+        req.on('end', () => {
+          try {
+            lastBody = raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+          } catch {
+            lastBody = { __unparsed: raw };
+          }
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        bodyServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = bodyServer.address() as AddressInfo;
+      bodyServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        bodyServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('calling an http tool sends snake_case input keys verbatim', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'body-case-http-tool',
+          type: 'http',
+          execute: { url: `${bodyServerUrl}/runs`, method: 'POST' },
+        });
+      expect(createRes.status).toBe(201);
+
+      lastBody = undefined;
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({
+          input: {
+            fundamental_truth: 'the sky is blue',
+            nested_payload: { another_field: 42 },
+          },
+        });
+
+      expect(callRes.status).toBe(200);
+      // The target API must receive exactly what the caller authored — no
+      // snake_case → camelCase rewrite of the body keys.
+      expect(lastBody).toEqual({
+        fundamental_truth: 'the sky is blue',
+        nested_payload: { another_field: 42 },
+      });
+    });
+
+    test('a pipeline http step sends snake_case mapping keys verbatim', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'body-case-pipeline-tool',
+          type: 'pipeline',
+          parameters: {
+            type: 'object',
+            properties: { topic: { type: 'string' } },
+          },
+          pipeline: {
+            steps: [
+              {
+                id: 'post',
+                tool: {
+                  name: 'inline-http',
+                  type: 'http',
+                  execute: { url: `${bodyServerUrl}/runs`, method: 'POST' },
+                },
+                input: {
+                  topic: { var: 'input.topic' },
+                  fundamental_truth: 'authored in snake_case',
+                },
+              },
+            ],
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      lastBody = undefined;
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { topic: 'clarity' } });
+
+      expect(callRes.status).toBe(200);
+      expect(lastBody).toEqual({
+        topic: 'clarity',
+        fundamental_truth: 'authored in snake_case',
+      });
     });
   });
 });
