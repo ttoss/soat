@@ -131,8 +131,11 @@ describe('priceBook', () => {
     });
 
     test('resolves instance > project+slug > global in priority order', async () => {
-      const provider = 'tiertest';
-      const model = 'tier-model';
+      // A valid provider slug (the AiProvider.provider column is constrained)
+      // with a model that is not among the seeded defaults, so these rows stay
+      // isolated from seedDefaultPrices.
+      const provider = 'openai';
+      const model = 'tier-test-model';
       const past = new Date('2020-01-01T00:00:00.000Z');
 
       const project = await db.Project.create({ name: 'tier-price-project' });
