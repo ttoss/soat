@@ -67,6 +67,7 @@ describe('priceBook', () => {
       const gpt4o = await getEffectivePrice({
         provider: 'openai',
         model: 'gpt-4o',
+        aiProviderId: null,
         at: new Date(),
       });
       expect(gpt4o).not.toBeNull();
@@ -109,6 +110,7 @@ describe('priceBook', () => {
       const effective = await getEffectivePrice({
         provider,
         model,
+        aiProviderId: null,
         at: new Date('2024-06-01T00:00:00.000Z'),
       });
       expect(effective?.inputPricePerM).toBe('2');
@@ -119,6 +121,7 @@ describe('priceBook', () => {
         await getEffectivePrice({
           provider: 'nope',
           model: 'no-model',
+          aiProviderId: null,
           at: new Date(),
         })
       ).toBeNull();

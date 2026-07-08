@@ -460,5 +460,85 @@ describe('Usage', () => {
       // (10-4)*1 + 4*0.5 + 20*2 = 48 → 48 / 1e6 USD
       expect(meters.body.data[0].cost_usd).toBeCloseTo(0.000048, 9);
     });
+
+    test('admin upserts a per-provider override', async () => {
+      const effectiveFrom = new Date(Date.now() + 3 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: aiProviderId,
+              provider: 'ollama',
+              model: 'override-put-model',
+              input_price_per_m: 9,
+              output_price_per_m: 9,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.prices[0].ai_provider_id).toBe(aiProviderId);
+    });
+
+    test('rejects an override for an unknown provider', async () => {
+      const effectiveFrom = new Date(Date.now() + 3 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              ai_provider_id: 'aip_doesNotExist01',
+              provider: 'ollama',
+              model: 'x',
+              input_price_per_m: 1,
+              output_price_per_m: 1,
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
+    });
+
+    test('a per-provider override wins over the global default for cost', async () => {
+      const providerRow = await db.AiProvider.findOne({
+        where: { publicId: aiProviderId },
+      });
+      const past = new Date('2020-01-01T00:00:00.000Z');
+      // The stub always reports model 'stub-model', so both rows price that.
+      // Global default — the cheaper rate.
+      await db.PriceBook.create({
+        aiProviderId: null,
+        provider: 'ollama',
+        model: 'stub-model',
+        inputPricePerM: '1',
+        outputPricePerM: '1',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+      // Override for this provider instance — the pricier rate that must win.
+      await db.PriceBook.create({
+        aiProviderId: providerRow?.id as number,
+        provider: 'ollama',
+        model: 'stub-model',
+        inputPricePerM: '10',
+        outputPricePerM: '20',
+        cachedPricePerM: null,
+        effectiveFrom: past,
+      });
+
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'override' }] });
+      expect(genRes.status).toBe(200);
+
+      const meters = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${genRes.body.id}`
+      );
+      // Override rate: (10-4)*10 + 4*10 + 20*20 = 500 → 500 / 1e6 USD.
+      // The cheaper global default (26 / 1e6) must not win.
+      expect(meters.body.data[0].cost_usd).toBeCloseTo(0.0005, 9);
+    });
   });
 });

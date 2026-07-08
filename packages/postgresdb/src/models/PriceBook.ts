@@ -1,21 +1,37 @@
-import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
+import {
+  BelongsTo,
+  Column,
+  DataType,
+  ForeignKey,
+  Model,
+  Table,
+} from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { AiProvider } from './AiProvider';
 
 /**
- * Versioned, global price data used to compute a `UsageMeter`'s `cost_usd` at
- * write time. Prices are keyed by `(provider, model, effectiveFrom)`; for a
- * given provider/model the row with the latest `effectiveFrom <= now()` applies.
- * New future-dated rows change the price deterministically without mutating the
- * costs already recorded from earlier rows.
+ * Versioned price data used to compute a `UsageMeter`'s `cost_usd` at write
+ * time. Two scopes live in one table: a **global default** (`aiProviderId`
+ * null), keyed by `(provider, model, effectiveFrom)`; and an optional
+ * **per-provider override** (`aiProviderId` set) for a specific AI provider
+ * instance. Cost lookup prefers the override, then falls back to the global
+ * default; within each scope the latest `effectiveFrom <= now()` applies. New
+ * future-dated rows change the price deterministically without mutating costs
+ * already recorded from earlier rows.
  */
 @Table({
   tableName: 'price_books',
   timestamps: true,
   updatedAt: false,
-  // The unique composite also serves effective-price lookups by its
-  // (provider, model) leftmost prefix, so no separate index is needed.
-  indexes: [{ unique: true, fields: ['provider', 'model', 'effective_from'] }],
+  indexes: [
+    {
+      unique: true,
+      fields: ['ai_provider_id', 'provider', 'model', 'effective_from'],
+    },
+    // Serves the global-default and per-provider effective-price lookups.
+    { fields: ['provider', 'model', 'effective_from'] },
+  ],
   hooks: {
     beforeValidate: (instance: PriceBook) => {
       if (!instance.publicId) {
@@ -31,6 +47,23 @@ export class PriceBook extends Model {
     allowNull: false,
   })
   declare publicId: string;
+
+  // Null = global default. Set = override for a specific AI provider instance
+  // (e.g. an enterprise-negotiated rate or a gateway with markup). Deleting the
+  // provider drops its overrides; recorded meter costs are already frozen.
+  @ForeignKey(() => {
+    return AiProvider;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare aiProviderId: number | null;
+
+  @BelongsTo(
+    () => {
+      return AiProvider;
+    },
+    { onDelete: 'CASCADE' }
+  )
+  declare aiProvider: AiProvider | null;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;

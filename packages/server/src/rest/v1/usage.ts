@@ -7,6 +7,7 @@ export const usageRouter = new Router<Context>();
 
 type UpsertPricesBody = {
   prices?: Array<{
+    aiProviderId?: string | null;
     provider: string;
     model: string;
     inputPricePerM: number;

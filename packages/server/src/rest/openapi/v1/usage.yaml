@@ -283,6 +283,13 @@ components:
           type: string
           description: Public ID of the price row
           example: price_V1StGXR8Z5jdHi6B
+        ai_provider_id:
+          x-soat-ref: ai-providers
+          type: string
+          nullable: true
+          description: >
+            Null for a global default price. Set when this row is a
+            per-provider override for a specific AI provider instance.
         provider:
           type: string
           example: openai
@@ -331,6 +338,13 @@ components:
               - output_price_per_m
               - effective_from
             properties:
+              ai_provider_id:
+                x-soat-ref: ai-providers
+                type: string
+                nullable: true
+                description: >
+                  Omit for a global default price; set to a provider public ID
+                  to record a per-provider override.
               provider:
                 type: string
               model:

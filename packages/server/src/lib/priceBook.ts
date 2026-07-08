@@ -10,6 +10,7 @@ const PER_MILLION = 1_000_000;
 
 export type PersistedPrice = {
   id: string;
+  aiProviderId: string | null;
   provider: string;
   model: string;
   inputPricePerM: number;
@@ -20,10 +21,13 @@ export type PersistedPrice = {
 };
 
 const mapPrice = (
-  price: InstanceType<(typeof db)['PriceBook']>
+  price: InstanceType<(typeof db)['PriceBook']> & {
+    aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
+  }
 ): PersistedPrice => {
   return {
     id: price.publicId,
+    aiProviderId: price.aiProvider?.publicId ?? null,
     provider: price.provider,
     model: price.model,
     inputPricePerM: Number(price.inputPricePerM),
@@ -105,11 +109,13 @@ export const seedDefaultPrices = async (): Promise<void> => {
   for (const price of DEFAULT_PRICES) {
     await db.PriceBook.findOrCreate({
       where: {
+        aiProviderId: null,
         provider: price.provider,
         model: price.model,
         effectiveFrom: DEFAULT_PRICE_EFFECTIVE_FROM,
       },
       defaults: {
+        aiProviderId: null,
         provider: price.provider,
         model: price.model,
         inputPricePerM: String(price.inputPricePerM),
@@ -127,17 +133,33 @@ export const seedDefaultPrices = async (): Promise<void> => {
 };
 
 /**
- * Returns the price row that applies to a call: the latest row for the
- * provider/model whose `effectiveFrom <= at`. Null when no row covers it (the
- * caller records tokens with `cost_usd = null`).
+ * Returns the price row that applies to a call. A per-provider override
+ * (`aiProviderId` set) wins over the global default (`aiProviderId` null); in
+ * each scope the latest row with `effectiveFrom <= at` applies. Null when no
+ * row covers it (the caller records tokens with `cost_usd = null`).
  */
 export const getEffectivePrice = async (args: {
   provider: string;
   model: string;
+  aiProviderId: number | null;
   at: Date;
 }): Promise<InstanceType<(typeof db)['PriceBook']> | null> => {
+  if (args.aiProviderId !== null) {
+    const override = await db.PriceBook.findOne({
+      where: {
+        aiProviderId: args.aiProviderId,
+        provider: args.provider,
+        model: args.model,
+        effectiveFrom: { [Op.lte]: args.at },
+      },
+      order: [['effectiveFrom', 'DESC']],
+    });
+    if (override) return override;
+  }
+
   return db.PriceBook.findOne({
     where: {
+      aiProviderId: null,
       provider: args.provider,
       model: args.model,
       effectiveFrom: { [Op.lte]: args.at },
@@ -178,8 +200,11 @@ export const computeCostUsd = (args: {
   return cost.toFixed(6);
 };
 
+// Lists the global default prices only. Per-provider overrides are not exposed
+// here to avoid leaking one project's negotiated rates to another.
 export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
   const rows = await db.PriceBook.findAll({
+    where: { aiProviderId: null },
     order: [
       ['provider', 'ASC'],
       ['model', 'ASC'],
@@ -190,6 +215,7 @@ export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
 };
 
 type PriceInput = {
+  aiProviderId?: string | null;
   provider: string;
   model: string;
   inputPricePerM: number;
@@ -198,10 +224,26 @@ type PriceInput = {
   effectiveFrom: string;
 };
 
+// Resolves an optional AI provider public ID to its internal id. Null (a global
+// default row) passes through; an unknown provider is a bad request.
+const resolveAiProviderId = async (
+  publicId: string | null | undefined
+): Promise<number | null> => {
+  if (!publicId) return null;
+  const provider = await db.AiProvider.findOne({ where: { publicId } });
+  if (!provider) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider '${publicId}' not found.`
+    );
+  }
+  return provider.id as number;
+};
+
 const upsertPriceRow = async (args: {
   price: PriceInput;
   now: Date;
-}): Promise<InstanceType<(typeof db)['PriceBook']>> => {
+}): Promise<number> => {
   const effectiveFrom = new Date(args.price.effectiveFrom);
   // Past-effective prices are immutable: a recorded cost must always be
   // explainable by the row that produced it, so corrections ship as new
@@ -213,7 +255,9 @@ const upsertPriceRow = async (args: {
     );
   }
 
+  const aiProviderId = await resolveAiProviderId(args.price.aiProviderId);
   const values = {
+    aiProviderId,
     provider: args.price.provider,
     model: args.price.model,
     inputPricePerM: String(args.price.inputPricePerM),
@@ -228,6 +272,7 @@ const upsertPriceRow = async (args: {
 
   const [row, created] = await db.PriceBook.findOrCreate({
     where: {
+      aiProviderId,
       provider: values.provider,
       model: values.model,
       effectiveFrom: values.effectiveFrom,
@@ -243,16 +288,20 @@ const upsertPriceRow = async (args: {
     });
   }
 
-  return row;
+  return row.id as number;
 };
 
 export const upsertPrices = async (args: {
   prices: PriceInput[];
 }): Promise<{ prices: PersistedPrice[] }> => {
   const now = new Date();
-  const rows: InstanceType<(typeof db)['PriceBook']>[] = [];
+  const ids: number[] = [];
   for (const price of args.prices) {
-    rows.push(await upsertPriceRow({ price, now }));
+    ids.push(await upsertPriceRow({ price, now }));
   }
+  const rows = await db.PriceBook.findAll({
+    where: { id: ids },
+    include: [{ model: db.AiProvider, as: 'aiProvider' }],
+  });
   return { prices: rows.map(mapPrice) };
 };
