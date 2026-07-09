@@ -1,5 +1,7 @@
 import { buildDatabaseConfig, logDatabaseConnectionError } from 'src/db';
 
+import { sequelize } from '../../setupTestsAfterEnv';
+
 describe('buildDatabaseConfig', () => {
   const savedEnv = {
     host: process.env.DATABASE_HOST,
@@ -43,6 +45,18 @@ describe('buildDatabaseConfig', () => {
     expect(config.database).toBe('soat');
     expect(config.username).toBe('soat_user');
     expect(config.password).toBe('secret');
+  });
+});
+
+describe('schema sync reboot idempotency', () => {
+  test('sync({ alter: true }) does not crash when run again against an already-synced schema', async () => {
+    // Regression guard: an auto-generated index/constraint name longer than
+    // Postgres's 63-char identifier limit gets silently truncated on create.
+    // The next `sync({ alter: true })` recomputes the full (untruncated) name,
+    // sees it "missing" against the truncated one actually in the catalog, and
+    // tries to recreate it -> 42P07 "relation already exists". This crashes
+    // every boot after the first against a persisted database.
+    await expect(sequelize.sync({ alter: true })).resolves.not.toThrow();
   });
 });
 

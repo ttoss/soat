@@ -81,7 +81,7 @@ afterAll(async () => {
   });
 });
 
-let sequelize: Sequelize;
+export let sequelize: Sequelize;
 let postgresContainer: StartedPostgreSqlContainer;
 
 jest.setTimeout(120000);

@@ -28,6 +28,13 @@ import { Project } from './Project';
   updatedAt: false,
   indexes: [
     {
+      // Explicit name: the auto-generated name for this many columns is 67
+      // chars, but Postgres truncates identifiers to 63. On the next
+      // `sync({ alter: true })`, the truncated catalog name no longer matches
+      // the recomputed (untruncated) expected name, so Sequelize tries to
+      // recreate the index under the same truncated name and Postgres raises
+      // 42P07 "relation already exists" — crashing every boot after the first.
+      name: 'price_books_provider_model_effective_uk',
       unique: true,
       fields: [
         'ai_provider_id',
