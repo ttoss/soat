@@ -2396,6 +2396,31 @@ describe('Sessions', () => {
     describe('POST /messages with message_delay_seconds and auto_generate', () => {
       let delaySessionId: string;
 
+      // `session.generatingAt` is cleared in a `finally` block that runs after
+      // the mocked generation resolves — awaiting only the mock invocation
+      // (`generationStarted`) leaves that clear still in flight. Poll for it
+      // as the deterministic settle signal instead of a fixed sleep, both to
+      // assert the session isn't left stuck and to stop that in-flight clear
+      // from leaking into the next test (which would otherwise see a stale
+      // `generatingAt` and silently skip scheduling its own generation).
+      const waitForGeneratingAtCleared = async (timeoutMs = 5000) => {
+        const startedAt = Date.now();
+        let generatingAt: unknown;
+        do {
+          const res = await authenticatedTestClient(userToken).get(
+            `/api/v1/sessions/${delaySessionId}`
+          );
+          generatingAt = res.body.generating_at;
+          if (!generatingAt) return;
+          await new Promise((resolve) => {
+            return setTimeout(resolve, 25);
+          });
+        } while (Date.now() - startedAt < timeoutMs);
+        throw new Error(
+          `session ${delaySessionId} still generating after ${timeoutMs}ms`
+        );
+      };
+
       beforeAll(async () => {
         const res = await authenticatedTestClient(userToken)
           .post('/api/v1/sessions')
@@ -2450,6 +2475,11 @@ describe('Sessions', () => {
 
         await generationStarted;
         expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+        // Let the in-flight `generatingAt` clear before the next test reuses
+        // this session — otherwise it can see a stale value and silently skip
+        // scheduling its own generation.
+        await waitForGeneratingAtCleared();
       });
 
       test('second message within delay window resets the timer (debounce)', async () => {
@@ -2485,9 +2515,7 @@ describe('Sessions', () => {
 
         // Wait for the delay to elapse and exactly one generation to fire
         await generationStarted;
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 200);
-        });
+        await waitForGeneratingAtCleared();
 
         expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
       });
@@ -2509,16 +2537,17 @@ describe('Sessions', () => {
         expect(res.status).toBe(201);
 
         await generationStarted;
-        // Give the rejected promise's .catch(() => {}) a tick to run.
-        await new Promise((resolve) => {
-          return setTimeout(resolve, 200);
-        });
+        // `generatingAt` clears in the same `finally` that the rejected
+        // promise's `.catch(() => {})` runs alongside — waiting for it is a
+        // deterministic signal that the failure has been fully swallowed.
+        await waitForGeneratingAtCleared();
 
         // The session must still be usable afterwards (not left stuck).
         const statusRes = await authenticatedTestClient(userToken).get(
           `/api/v1/sessions/${delaySessionId}`
         );
         expect(statusRes.status).toBe(200);
+        expect(statusRes.body.generating_at).toBeNull();
       });
     });
   });
