@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.5](https://127.0.0.1/41729/git/ttoss/compare/v0.14.4...v0.14.5) (2026-07-09)
+
+### Bug Fixes
+
+* price_books index name exceeds Postgres's 63-char limit, crashing every reboot ([#508](https://127.0.0.1/41729/git/ttoss/issues/508)) ([6aeb5e2](https://127.0.0.1/41729/git/ttoss/commits/6aeb5e29913220adb73612ebb4470f41a1c1b4fc))
+
 ## [0.14.4](https://127.0.0.1/41729/git/ttoss/compare/v0.14.3...v0.14.4) (2026-07-08)
 
 ### Bug Fixes
