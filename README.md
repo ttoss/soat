@@ -6,6 +6,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![SafeSkill 92/100](https://img.shields.io/badge/SafeSkill-92%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/ttoss-soat)
+[![Docker Image Version](https://img.shields.io/docker/v/ttoss/soat?label=docker)](https://hub.docker.com/r/ttoss/soat)
+[![Docker Pulls](https://img.shields.io/docker/pulls/ttoss/soat)](https://hub.docker.com/r/ttoss/soat)
 
 **SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, multimodal ingestion, conversational memory, agent orchestration, DAG-based multi-agent workflows, retrieval-augmented generation, declarative stack deployment, a built-in web console, and a full Model Context Protocol server with first-party OAuth — backed by PostgreSQL.
 
