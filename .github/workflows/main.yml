@@ -184,7 +184,8 @@ jobs:
         with:
           images: ttoss/soat
           tags: |
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=v${{ needs.push-release-tag.outputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=v${{ needs.push-release-tag.outputs.version }}
             type=raw,value=latest
 
       - name: Build and push
