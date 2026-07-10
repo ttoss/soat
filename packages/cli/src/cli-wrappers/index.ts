@@ -41,5 +41,8 @@ export const getWrapperHelpFlags = (commandName: string): HelpFlag[] => {
   return wrapper?.helpFlags ?? [];
 };
 
-export { parseUnknownWithRepeats } from './flagParser.js';
+export {
+  extractPositionalArgs,
+  parseUnknownWithRepeats,
+} from './flagParser.js';
 export type { HelpFlag, ParsedFlags, Wrapper } from './types.js';

@@ -861,6 +861,33 @@ describe('Tools', () => {
       expect(res.body.error.code).toBe('SECRET_NOT_FOUND');
     });
 
+    test('mcp.headers key casing round-trips verbatim (HTTP header names are opaque)', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'mcp-header-casing-tool',
+          type: 'mcp',
+          mcp: {
+            url: 'https://mcp.example.com/sse',
+            headers: { Authorization: 'Bearer plain-token' },
+          },
+        });
+
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.mcp.headers).toEqual({
+        Authorization: 'Bearer plain-token',
+      });
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.mcp.headers).toEqual({
+        Authorization: 'Bearer plain-token',
+      });
+    });
+
     test('creating an mcp tool with an invalid secret ref in mcp.headers returns 400', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')

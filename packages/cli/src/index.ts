@@ -10,6 +10,7 @@ import { program } from 'commander';
 import pkg from '../package.json' with { type: 'json' };
 import {
   applyWrapperForCommand,
+  extractPositionalArgs,
   getWrapperHelpFlags,
   parseUnknownWithRepeats,
 } from './cli-wrappers/index.js';
@@ -340,7 +341,7 @@ program
     const bodyArgs: Record<string, unknown> = {};
 
     for (const [flagKey, val] of Object.entries(flags)) {
-      if (flagKey === 'profile') continue;
+      if (flagKey === 'profile' || flagKey === 'id') continue;
       const canonical = toCanonical(flagKey);
       const parsedValue = parseFlagValue(val);
       const pathParam = route.pathParams.find((p) => {
@@ -357,6 +358,35 @@ program
       } else {
         bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }
+    }
+
+    // Fall back to a generic `--id` flag or a bare positional argument
+    // (e.g. `soat get-formation frm_123`) when the command has exactly one
+    // path parameter and a more specific flag (e.g. `--formation_id`) did
+    // not already fill it. Ambiguous cases (zero or several path params)
+    // are left to the missing-parameter check below.
+    const positionalArgs = extractPositionalArgs({ cliArgs: rawArgs });
+    const idAlias = flags['id'] ?? positionalArgs[0];
+    const solePathParam = route.pathParams.length === 1 && route.pathParams[0];
+    if (
+      idAlias !== undefined &&
+      solePathParam &&
+      !(solePathParam in pathArgs)
+    ) {
+      pathArgs[solePathParam] = parseFlagValue(idAlias);
+    }
+
+    // Never send a request with an unresolved `{param}` placeholder still in
+    // the URL — fail fast with a clear, actionable message instead.
+    const missingPathParams = route.pathParams.filter((p) => {
+      return !(p in pathArgs);
+    });
+    if (missingPathParams.length > 0) {
+      console.error(
+        `Missing required path parameter(s): ${missingPathParams.join(', ')}.\n` +
+          `Provide with --${missingPathParams[0]} <value>, --id <value>, or a positional argument: soat ${commandName} <id>`
+      );
+      process.exit(1);
     }
 
     const profileOpt =

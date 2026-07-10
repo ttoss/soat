@@ -50,6 +50,10 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 
 ## Key Concepts
 
+### Header Name Casing
+
+HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserved **verbatim** — SOAT does not case-transform them. `{ "headers": { "Authorization": "Bearer …" } }` round-trips as `Authorization`, not `authorization` or any snake_cased variant.
+
 ### Tool ID vs Tool Name
 
 A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via `tool_ids`, `active_tool_ids`, and `step_rules[].active_tool_ids`.
