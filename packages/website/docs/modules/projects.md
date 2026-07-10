@@ -76,6 +76,17 @@ To grant a user access to a single project, attach a [Policy](./policies.md) sco
 
 By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
 
+### Common Errors
+
+| Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |
+| ------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `403`  | `{ "error": "Forbidden" }`                       | Caller isn't the `admin` role — creating, renaming, and deleting a project are admin-only               | Authenticate as the admin user, or have an admin perform the operation                                   |
+| `403`  | `{ "error": "Forbidden" }`                       | `GET /projects/{id}` (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `soat:<this-project-id>:*:*`, or use a key scoped to this project — see [Authorization Model](#authorization-model) |
+| `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
+| `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
+
+Project-scoped access is entirely policy-driven (there is no membership list), so a `403` on a project route almost always means the caller's current policies don't include an `Allow` statement covering that project's SRN — see [Project Access via Policies](#project-access-via-policies).
+
 ## Examples
 
 ### Create a project

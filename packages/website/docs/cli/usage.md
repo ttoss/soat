@@ -81,6 +81,25 @@ soat get-file --file-id file_01
 soat delete-file --file-id file_01
 ```
 
+## Testing Webhooks Locally
+
+`soat listen` starts a local HTTP server that receives webhook deliveries — both outbound [Webhook](../modules/webhooks.md) deliveries and inbound [Trigger](../modules/triggers.md) `X-Soat-Signature` payloads — so you can inspect them before wiring up a real endpoint:
+
+```bash
+soat listen --port 8787 --path /webhook --secret "$WEBHOOK_SECRET"
+# Listening for SOAT webhooks on http://localhost:8787/webhook
+```
+
+Point a webhook's `url` (or a `webhook`-type trigger's target, via a tunnel such as `ngrok`) at this address during development. Options:
+
+- `--port` — port to listen on (default `8787`)
+- `--path` — request path to accept (default `/webhook`)
+- `--secret` — verify `X-Soat-Signature` against this webhook/trigger secret; the request is rejected with `401` on a signature mismatch
+- `--filter` — only print events matching a pattern, e.g. `sessions.generation.*,files.*` (comma-separated, trailing `*` wildcard)
+- `--json` — print one JSON object per line instead of a human-readable block
+
+Each accepted delivery prints its `event_type`, `delivery_id`, and (when `--secret` is set) whether the signature was valid, followed by the pretty-printed payload.
+
 ## Passing Body Fields
 
 All request body fields are passed as `--flag value` arguments. Field names follow the REST API contract but are exposed in kebab-case, and path parameters keep their resource-specific names:

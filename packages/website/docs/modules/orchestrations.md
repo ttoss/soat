@@ -11,7 +11,7 @@ Orchestrations let you describe a directed acyclic graph (DAG) of nodes where ea
 
 Use orchestrations when you know the exact steps in advance and want deterministic, auditable execution — not when you need an LLM to decide which steps to take. An agent node inside an orchestration can still use LLM reasoning internally, but the orchestration graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
 
-> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+> See the [Permissions Reference](../permissions.md#orchestrations) for the IAM action strings for this module.
 
 An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see the [Agent Squad example](#agent-squad).
 
@@ -342,6 +342,23 @@ When a `human` node is reached, the run pauses and the GET run response includes
 ```
 
 `required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both pause reasons are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is currently no separate, independently-authenticated callback endpoint for webhook-receive nodes, so delivering the callback requires the same platform bearer token or API key as any other write to the run.
+
+### Common Errors
+
+| Code                              | Status | Cause                                                                                       | What to do                                                                                                 |
+| ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
+| `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
+| `ORCHESTRATION_NODE_FAILED`        | `422`  | A node threw during execution (e.g. a referenced `agent_id`/`tool_id` no longer exists)       | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
+| `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
+
+**Debugging a failed run beyond "check the trace":** call `get-orchestration-run` and read `node_executions` — each entry has `node_id`, the resolved `input` the node received, and (on failure) the structured `error`, so you can see exactly which node failed, with what input, and why, without reconstructing state from the trace alone. See [Node Executions](#node-executions).
+
+**A run appears stuck in a non-terminal state:**
+
+- `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once `active_nodes[].wake_at` (or the node's backoff delay) elapses. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
+- `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` (or `resume-orchestration-run`) is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
+- `running` for far longer than expected — the process driving it may have crashed or been redeployed mid-execution. The background reaper reclaims any run whose lease (`lease_expires_at`) has expired and resumes it from the last checkpoint; a healthy run refreshes its lease every round, so this self-heals within `ORCHESTRATION_RUN_LEASE_TTL_MS` without intervention — see [Durable Background Execution](#durable-background-execution).
 
 ## Examples
 

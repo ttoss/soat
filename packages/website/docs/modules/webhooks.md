@@ -79,6 +79,8 @@ When an event matches a webhook, the server sends an HTTP POST to the webhook UR
 
 Deliveries are retried up to three times. Each attempt and its outcome are recorded in a delivery log queryable through the API. To watch a real delivery arrive and inspect its outcome, see [Chat with an LLM - Step 11 (Verify delivery)](/docs/tutorials/chat-with-llm#step-11---verify-delivery-and-final-assistant-message).
 
+Before pointing `url` at a real endpoint, use [`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and inspect deliveries on your local machine.
+
 ### Secret and Signature Verification
 
 Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
