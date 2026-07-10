@@ -835,6 +835,88 @@ resources:
     });
   });
 
+  // ── Template case preservation ────────────────────────────────────────────
+
+  describe('Template key casing round-trips verbatim', () => {
+    let camelCaseFormationId: string;
+
+    // A template whose logical IDs and parameter names are intentionally not
+    // snake_case: a PascalCase logical ID and a camelCase parameter name. These
+    // are author-chosen identifiers (the tutorial uses `poemDoc`/`stanza1Agent`,
+    // the docs use `MyProvider`/`ApiSecret`) and must be stored and returned
+    // exactly as written — the caseTransform middleware must not rewrite them.
+    const camelCaseTemplate = {
+      parameters: {
+        memoryDisplayName: {
+          type: 'string',
+          default: 'Round Trip Memory',
+        },
+      },
+      resources: {
+        DefaultMemory: {
+          type: 'memory',
+          properties: {
+            name: { param: 'memoryDisplayName' },
+          },
+        },
+      },
+    };
+
+    test('validate accepts camelCase keys without warnings', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: camelCaseTemplate });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    test('creates a formation with camelCase/PascalCase keys', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `camel-case-${Date.now()}`,
+          template: camelCaseTemplate,
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      camelCaseFormationId = res.body.id;
+    });
+
+    test('GET returns the template with keys preserved verbatim', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${camelCaseFormationId}`
+      );
+      expect(res.status).toBe(200);
+
+      // The resource map key (logical ID) must not be rewritten to
+      // `_default_memory`.
+      expect(Object.keys(res.body.template.resources)).toEqual([
+        'DefaultMemory',
+      ]);
+      // The parameter name must not be rewritten to `memory_display_name`,
+      // otherwise a later `--parameter memoryDisplayName=…` override would not
+      // match the stored key.
+      expect(Object.keys(res.body.template.parameters)).toEqual([
+        'memoryDisplayName',
+      ]);
+      // The param expression key inside properties is likewise preserved.
+      expect(res.body.template.resources.DefaultMemory.properties.name).toEqual(
+        {
+          param: 'memoryDisplayName',
+        }
+      );
+    });
+
+    test('deletes the camelCase formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${camelCaseFormationId}`
+      );
+      expect(res.status).toBe(200);
+    });
+  });
+
   // ── Parameters support ────────────────────────────────────────────────────
 
   describe('Formation with parameters', () => {
