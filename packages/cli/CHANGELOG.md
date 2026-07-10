@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.6](https://github.com/ttoss/soat/compare/v0.14.5...v0.14.6) (2026-07-10)
+
+### Bug Fixes
+
+* CLI positional/--id support, formation params, and tool header casing ([#512](https://github.com/ttoss/soat/issues/512)) ([693ff65](https://github.com/ttoss/soat/commit/693ff6542bccc386165aaa593d8e59022c8f198e)), closes [#511](https://github.com/ttoss/soat/issues/511)
+
 ## [0.14.5](https://github.com/ttoss/soat/compare/v0.14.4...v0.14.5) (2026-07-09)
 
 **Note:** Version bump only for package @soat/cli

@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.6](https://github.com/ttoss/soat/compare/v0.14.5...v0.14.6) (2026-07-10)
+
+### Bug Fixes
+
+* CLI positional/--id support, formation params, and tool header casing ([#512](https://github.com/ttoss/soat/issues/512)) ([693ff65](https://github.com/ttoss/soat/commit/693ff6542bccc386165aaa593d8e59022c8f198e)), closes [#511](https://github.com/ttoss/soat/issues/511)
+* **server:** preserve formation template key casing on read-back ([#511](https://github.com/ttoss/soat/issues/511)) ([981df4a](https://github.com/ttoss/soat/commit/981df4a62c55fb8b0ed6f7e6f4138765f95195d9))
+
 ## [0.14.5](https://127.0.0.1/41729/git/ttoss/compare/v0.14.4...v0.14.5) (2026-07-09)
 
 **Note:** Version bump only for package @soat/website
