@@ -109,19 +109,6 @@ soat create-actor --name "My Bot" --project-id proj_01
 soat update-actor --actor-id actor_01 --name "Renamed Bot"
 ```
 
-## Passing a Single Resource ID
-
-For a command with exactly one path parameter, you can skip the resource-specific flag and pass the ID as a bare positional argument, or via the generic `--id` flag:
-
-```bash
-soat get-actor actor_01
-soat get-actor --id actor_01
-# equivalent to:
-soat get-actor --actor-id actor_01
-```
-
-If the required ID is omitted entirely, the CLI fails fast with a clear error instead of sending an incomplete request.
-
 ## JSON Output
 
 Every command prints the API response as formatted JSON:

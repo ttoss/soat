@@ -361,28 +361,19 @@ program
     }
 
     // Fall back to a generic `--id` flag or a bare positional argument
-    // (e.g. `soat get-formation frm_123`) for whichever path parameter a
-    // more specific flag (e.g. `--formation_id`) did not already fill.
-    const unresolvedPathParams = route.pathParams.filter((p) => {
-      return !(p in pathArgs);
-    });
+    // (e.g. `soat get-formation frm_123`) when the command has exactly one
+    // path parameter and a more specific flag (e.g. `--formation_id`) did
+    // not already fill it. Ambiguous cases (zero or several path params)
+    // are left to the missing-parameter check below.
     const positionalArgs = extractPositionalArgs({ cliArgs: rawArgs });
     const idAlias = flags['id'] ?? positionalArgs[0];
-
-    if (idAlias !== undefined) {
-      if (unresolvedPathParams.length === 1) {
-        pathArgs[unresolvedPathParams[0] as string] = parseFlagValue(idAlias);
-      } else if (unresolvedPathParams.length === 0) {
-        console.error(
-          `Command "${commandName}" does not take an id — remove the positional argument or --id flag.`
-        );
-        process.exit(1);
-      } else {
-        console.error(
-          `Command "${commandName}" has multiple path parameters (${unresolvedPathParams.join(', ')}); use their explicit flags instead of a positional id or --id.`
-        );
-        process.exit(1);
-      }
+    const solePathParam = route.pathParams.length === 1 && route.pathParams[0];
+    if (
+      idAlias !== undefined &&
+      solePathParam &&
+      !(solePathParam in pathArgs)
+    ) {
+      pathArgs[solePathParam] = parseFlagValue(idAlias);
     }
 
     // Never send a request with an unresolved `{param}` placeholder still in
