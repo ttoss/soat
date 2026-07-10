@@ -106,8 +106,15 @@ const buildBodySkipKeys = (path: string): Set<string> => {
 
 // The outbound (camel→snake) pass-through keys — the mirror of the inbound set.
 // 'preset_parameters' is the snake_case form of the response's presetParameters.
+// 'template' is a pass-through user document (formation templates): its inner
+// keys — resource logical IDs and parameter names — are author-chosen
+// identifiers that are stored verbatim on the way in, so they must be returned
+// verbatim on the way out. Rewriting them (e.g. `DefaultProvider` →
+// `_default_provider`, `aiProviderName` → `ai_provider_name`) would make the
+// returned template diverge from what was stored and break `--parameter`
+// overrides that reference the original key.
 const buildResponseSkipKeys = (path: string): Set<string> => {
-  const keys = new Set(['execute', 'preset_parameters']);
+  const keys = new Set(['template', 'execute', 'preset_parameters']);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
   return keys;

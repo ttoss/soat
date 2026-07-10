@@ -109,6 +109,13 @@ A template has four top-level keys. For a complete worked template wiring 14 res
 | `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
 | `metadata`   | No       | Arbitrary metadata stored with the formation                 |
 
+#### Key Naming and Case
+
+The template is stored and returned **verbatim** — SOAT does not rewrite its keys. This means two different naming rules apply inside a template:
+
+- **Resource `properties` keys** must be **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A camelCase property key is rejected at validation time as an unknown field.
+- **Logical IDs, parameter names, and output names** are **author-chosen identifiers** and are preserved exactly as written — any case is accepted (`DefaultProvider`, `poemDoc`, `aiProviderName`). Use whatever convention you prefer, but stay consistent: a `--parameter` override must reference a parameter by the exact name declared in the template (`--parameter aiProviderName=…` matches a parameter declared as `aiProviderName`, not `ai_provider_name`).
+
 ### Parameters
 
 Parameters make a template portable across environments by allowing deploy-time values to be injected without changing the template itself. Use the `parameters` key to declare them:
