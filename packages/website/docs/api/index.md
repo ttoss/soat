@@ -65,14 +65,19 @@ Project keys are scoped to a single project and inherit permissions from the ass
 
 ### Error Responses
 
-All errors return a 4xx or 5xx status code with a JSON error object:
+All errors return a 4xx or 5xx status code. Most business-logic errors use a structured shape with a stable `code`:
 
 ```json
 {
-  "error": "Unauthorized",
-  "message": "Invalid or missing authentication token"
+  "error": {
+    "code": "RESOURCE_NOT_FOUND",
+    "message": "Project 'proj_abc123' not found.",
+    "meta": { "id": "proj_abc123" }
+  }
 }
 ```
+
+`meta` is optional and present only for some error codes. A handful of legacy authentication/authorization checks instead return a plain string in `error` with no `code` or `meta`, e.g. `{ "error": "Unauthorized" }` or `{ "error": "Forbidden" }`. Unhandled server errors always return `500` with `{ "error": "Internal Server Error" }` — the underlying exception message is never forwarded to the client.
 
 Common status codes:
 
@@ -87,17 +92,24 @@ Common status codes:
 
 ### Pagination
 
-List endpoints support pagination via query parameters:
+Only endpoints that return a history/log of records — for example
+`GET /api/v1/trigger-firings`, `GET /api/v1/webhook-deliveries`,
+`GET /api/v1/traces`, `GET /api/v1/generations`, `GET /api/v1/sessions`,
+`GET /api/v1/files`, `GET /api/v1/secrets`, `GET /api/v1/actors`, and
+`GET /api/v1/ai-providers` — accept `limit`/`offset` query parameters:
 
 ```bash
-curl 'https://your-soat-server.com/api/v1/files?limit=25&offset=0' \
+curl 'https://your-soat-server.com/api/v1/trigger-firings?trigger_id=trg_abc&limit=25&offset=0' \
   -H "Authorization: Bearer <token>"
 ```
 
-Responses include a `data` array and metadata about the result set. Pagination parameters:
+- `limit` — Number of results per page. The default varies by endpoint (`25` or `50` — see that endpoint's OpenAPI spec). There is currently **no enforced maximum**: passing a very large `limit` returns that many rows.
+- `offset` — Number of results to skip (default `0`).
+- There is no `cursor`, `page`, or `sort`/`order` query parameter on any endpoint. Sort order (when defined) is fixed per endpoint — check that resource's module doc — and is not client-configurable.
 
-- `limit` — Number of results per page (default: 25, max: 100)
-- `offset` — Number of results to skip (default: 0)
+Primary resource-list endpoints that are **not** paginated (`GET /api/v1/projects`, `GET /api/v1/triggers`, `GET /api/v1/orchestrations`, `GET /api/v1/orchestration-runs`, `GET /api/v1/webhooks`, `GET /api/v1/agents`, and others) return the full array of matching resources in one response — do not send `limit`/`offset` to these.
+
+There are currently no per-project or per-API-key request-rate limits, quotas, or throttling enforced by the server — every authenticated request is processed immediately, bounded only by the resource limits described above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 
 ### Path and Query Parameters
 

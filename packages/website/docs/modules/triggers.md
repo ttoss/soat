@@ -24,8 +24,8 @@ Firings execute in-process: a manual fire is **synchronous** and returns the
 terminal firing; webhook and schedule fires are **fire-and-forget** and the
 firing record is the source of truth for the outcome.
 
-> See the [Permissions Reference](../permissions.md) for the IAM action strings
-> for this module.
+> See the [Permissions Reference](../permissions.md#triggers) for the IAM action
+> strings for this module.
 
 ## Related Tutorials
 
@@ -173,6 +173,10 @@ The request body becomes the fire-time input (a non-object JSON value is wrapped
 as `{ "payload": … }`); the body is capped at 1 MiB. The firing then executes in
 the background — poll the firing record for the outcome.
 
+Before wiring this endpoint to a real external system, use
+[`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and verify
+signed deliveries on your local machine.
+
 Verifying a signature on the receiving side mirrors the outbound
 [webhooks](./webhooks.md) convention:
 
@@ -195,6 +199,27 @@ one instance fires it.
 Firings that were missed while the server was down **coalesce into at most one**
 catch-up firing on restart, and then the normal schedule resumes — there is no
 unbounded catch-up storm.
+
+### Common Errors
+
+| Code                          | Status | Cause                                                                                                        | What to do                                                                                          |
+| ------------------------------ | ------ | -------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `INVALID_CRON_EXPRESSION`      | `400`  | `cron` is missing a field or otherwise not a valid 5-field expression                                          | Fix the expression; it is always evaluated in **UTC**                                                |
+| `TRIGGER_TARGET_NOT_FOUND`     | `400`  | `target_id` does not exist in the trigger's project                                                            | Verify the target ID and that it belongs to the same project as the trigger                          |
+| `TRIGGER_ACTION_NOT_ALLOWED`   | `400`  | An invalid field combination for `type`/`target_type` — e.g. `cron` on a non-`schedule` trigger, `action` on a non-tool target, or a `client`-type tool as the target | Check the [Trigger Types](#trigger-types) and [Targets and Input](#targets-and-input) rules          |
+| `TRIGGER_INPUT_INVALID`        | `400`  | Fire-time input doesn't satisfy the target — empty agent input, or a field missing/mismatched against an orchestration's `input_schema` | Supply the required input fields for the target type                                                 |
+| `TRIGGER_NOT_ACTIVE`           | `409`  | The trigger's `active` field is `false`                                                                        | `PATCH` the trigger with `active: true` before firing                                                |
+| `TRIGGER_CREATOR_UNAVAILABLE`  | `409`  | The user who created the trigger no longer exists                                                              | The trigger cannot fire under a deleted user's identity — recreate it under a live user              |
+| `TRIGGER_RECURSION_FORBIDDEN`  | `403`  | A trigger-scoped run-as credential tried to call the fire endpoint                                             | Fire the trigger with a user/API-key credential; a trigger cannot fire another trigger               |
+| `NAME_CONFLICT`                | `409`  | A trigger with that `name` already exists in the project                                                       | Choose a different name                                                                              |
+| `POLICY_HAS_DEPENDENTS`        | `409`  | Attempted to delete a policy while a trigger's `policy_id` still references it                                | Detach the policy from the trigger first, or delete the trigger                                      |
+| `RESOURCE_NOT_FOUND`           | `404`  | The trigger or firing ID doesn't exist (or isn't in the caller's project)                                      | Check the ID and project scope                                                                        |
+
+For the inbound webhook endpoint's error responses (bad signature, oversized body, inactive trigger, …), see the [table above](#inbound-webhook-endpoint).
+
+**A `schedule` trigger never fires:** confirm `active` is `true`, that `next_fire_at` is set (a `null` value means the trigger isn't schedulable), and that the server wasn't started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`. If the server was down past a fire time, expect at most one coalesced catch-up firing on restart, not one per missed occurrence — see [Schedules and Misfire Coalescing](#schedules-and-misfire-coalescing).
+
+**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings execute fire-and-forget in the background; poll `GET /trigger-firings/{id}` for the terminal `status`. There is no automatic retry of a failed firing — inspect `error.code`/`error.message` on the firing record and re-fire manually (or fix the underlying target) if it failed.
 
 ### Formation Support
 

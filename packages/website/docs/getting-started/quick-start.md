@@ -45,7 +45,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'ollama list | grep qwen3-embedding && ollama list | grep qwen3.5',
+          'ollama list | grep qwen3-embedding && ollama list | grep qwen2.5',
         ]
       interval: 10s
       timeout: 30s
