@@ -10,6 +10,7 @@ import { program } from 'commander';
 import pkg from '../package.json' with { type: 'json' };
 import {
   applyWrapperForCommand,
+  extractPositionalArgs,
   getWrapperHelpFlags,
   parseUnknownWithRepeats,
 } from './cli-wrappers/index.js';
@@ -340,7 +341,7 @@ program
     const bodyArgs: Record<string, unknown> = {};
 
     for (const [flagKey, val] of Object.entries(flags)) {
-      if (flagKey === 'profile') continue;
+      if (flagKey === 'profile' || flagKey === 'id') continue;
       const canonical = toCanonical(flagKey);
       const parsedValue = parseFlagValue(val);
       const pathParam = route.pathParams.find((p) => {
@@ -357,6 +358,44 @@ program
       } else {
         bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }
+    }
+
+    // Fall back to a generic `--id` flag or a bare positional argument
+    // (e.g. `soat get-formation frm_123`) for whichever path parameter a
+    // more specific flag (e.g. `--formation_id`) did not already fill.
+    const unresolvedPathParams = route.pathParams.filter((p) => {
+      return !(p in pathArgs);
+    });
+    const positionalArgs = extractPositionalArgs({ cliArgs: rawArgs });
+    const idAlias = flags['id'] ?? positionalArgs[0];
+
+    if (idAlias !== undefined) {
+      if (unresolvedPathParams.length === 1) {
+        pathArgs[unresolvedPathParams[0] as string] = parseFlagValue(idAlias);
+      } else if (unresolvedPathParams.length === 0) {
+        console.error(
+          `Command "${commandName}" does not take an id — remove the positional argument or --id flag.`
+        );
+        process.exit(1);
+      } else {
+        console.error(
+          `Command "${commandName}" has multiple path parameters (${unresolvedPathParams.join(', ')}); use their explicit flags instead of a positional id or --id.`
+        );
+        process.exit(1);
+      }
+    }
+
+    // Never send a request with an unresolved `{param}` placeholder still in
+    // the URL — fail fast with a clear, actionable message instead.
+    const missingPathParams = route.pathParams.filter((p) => {
+      return !(p in pathArgs);
+    });
+    if (missingPathParams.length > 0) {
+      console.error(
+        `Missing required path parameter(s): ${missingPathParams.join(', ')}.\n` +
+          `Provide with --${missingPathParams[0]} <value>, --id <value>, or a positional argument: soat ${commandName} <id>`
+      );
+      process.exit(1);
     }
 
     const profileOpt =

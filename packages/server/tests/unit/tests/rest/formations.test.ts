@@ -915,6 +915,76 @@ resources:
       );
       expect(res.status).toBe(200);
     });
+
+    // Regression coverage for an ai_provider-shaped template, matching the
+    // exact resource/parameter names reported as corrupted: `DefaultAiProvider`
+    // must not become `_default_ai_provider`, and `aiProviderName` must not
+    // become `ai_provider_name`.
+    describe('ai_provider resource with camelCase/PascalCase keys', () => {
+      let aiProviderCamelFormationId: string;
+
+      const aiProviderCamelTemplate = {
+        parameters: {
+          aiProviderName: {
+            type: 'string',
+            default: 'round-trip-provider',
+          },
+        },
+        resources: {
+          DefaultAiProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: { param: 'aiProviderName' },
+              provider: 'openai',
+              default_model: 'gpt-4o',
+            },
+          },
+        },
+      };
+
+      test('creates a formation with an ai_provider camelCase template', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `ai-provider-camel-${Date.now()}`,
+            template: aiProviderCamelTemplate,
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+        aiProviderCamelFormationId = res.body.id;
+      });
+
+      test('GET returns DefaultAiProvider/aiProviderName keys unchanged', async () => {
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/formations/${aiProviderCamelFormationId}`
+        );
+        expect(res.status).toBe(200);
+        expect(Object.keys(res.body.template.resources)).toEqual([
+          'DefaultAiProvider',
+        ]);
+        expect(Object.keys(res.body.template.parameters)).toEqual([
+          'aiProviderName',
+        ]);
+      });
+
+      test('a --parameter aiProviderName override matches the stored key', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .put(`/api/v1/formations/${aiProviderCamelFormationId}`)
+          .send({ parameters: { aiProviderName: 'overridden-provider' } });
+
+        expect(res.status).toBe(200);
+        expect(res.body.status).toBe('active');
+      });
+
+      test('deletes the ai_provider camelCase formation', async () => {
+        const res = await authenticatedTestClient(userToken).delete(
+          `/api/v1/formations/${aiProviderCamelFormationId}`
+        );
+        expect(res.status).toBe(200);
+      });
+    });
   });
 
   // ── Parameters support ────────────────────────────────────────────────────
@@ -1137,6 +1207,47 @@ resources:
         expect(res.body.status).toBe('active');
 
         // Clean up
+        await authenticatedTestClient(userToken).delete(
+          `/api/v1/formations/${res.body.id}`
+        );
+      });
+
+      // A parameter name containing an underscore (e.g. `api_token`) is the
+      // conventional way to name a secret-bearing parameter. The request's
+      // `parameters` map must not be case-transformed independently of the
+      // `template.parameters` declaration it is keyed against, or a supplied
+      // value silently fails to match and the parameter is reported missing.
+      test('accepts a supplied value for a required parameter whose name contains an underscore', async () => {
+        const templateWithUnderscoreParam = {
+          parameters: {
+            api_token: { type: 'string', description: 'API token' },
+          },
+          resources: {
+            UnderscoreParamTool: {
+              type: 'tool',
+              properties: {
+                name: 'underscore-param-tool',
+                execute: {
+                  url: 'https://example.com/endpoint',
+                  headers: { Authorization: { sub: 'Bearer ${api_token}' } },
+                },
+              },
+            },
+          },
+        };
+
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations')
+          .send({
+            project_id: projectId,
+            name: `underscore-param-${Date.now()}`,
+            template: templateWithUnderscoreParam,
+            parameters: { api_token: 'secret-value' },
+          });
+
+        expect(res.status).toBe(201);
+        expect(res.body.status).toBe('active');
+
         await authenticatedTestClient(userToken).delete(
           `/api/v1/formations/${res.body.id}`
         );

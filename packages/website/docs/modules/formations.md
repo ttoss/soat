@@ -115,6 +115,7 @@ The template is stored and returned **verbatim** — SOAT does not rewrite its k
 
 - **Resource `properties` keys** must be **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A camelCase property key is rejected at validation time as an unknown field.
 - **Logical IDs, parameter names, and output names** are **author-chosen identifiers** and are preserved exactly as written — any case is accepted (`DefaultProvider`, `poemDoc`, `aiProviderName`). Use whatever convention you prefer, but stay consistent: a `--parameter` override must reference a parameter by the exact name declared in the template (`--parameter aiProviderName=…` matches a parameter declared as `aiProviderName`, not `ai_provider_name`).
+- The deploy request's top-level **`parameters`** field (the value bag, not `template.parameters`) is likewise stored verbatim by key. A key must match the declared parameter name exactly, including underscores (`--parameter api_token=…` matches a parameter declared as `api_token`).
 
 ### Parameters
 

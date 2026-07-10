@@ -91,14 +91,24 @@ const isToolInputPassthroughPath = (path: string): boolean => {
 
 // The inbound (snake→camel) pass-through keys for a given path.
 // 'template' is a pass-through user document (formation templates),
+// 'parameters' is the formation deploy-time value bag keyed against
+// `template.parameters` and must stay in lockstep with those (also
+// pass-through) names — independently case-transforming it would silently
+// break the lookup for any parameter name containing an underscore.
 // 'presetParameters' (the camelCase form of the request's preset_parameters
-// field) is verbatim converter-tool input, and 'execute' is a pass-through
-// tool execute config whose inner keys (HTTP header names, `body_mode`, …) must
-// be preserved verbatim. 'metadata' (documents) and 'input' (tools) are
-// path-scoped pass-throughs. This mirrors the outbound set below so each key
-// round-trips unchanged.
+// field) is verbatim converter-tool input, and 'execute'/'mcp' are
+// pass-through tool configs whose inner keys (HTTP header names, `body_mode`,
+// …) must be preserved verbatim. 'metadata' (documents) and 'input' (tools)
+// are path-scoped pass-throughs. This mirrors the outbound set below so each
+// key round-trips unchanged.
 const buildBodySkipKeys = (path: string): Set<string> => {
-  const keys = new Set(['template', 'presetParameters', 'execute']);
+  const keys = new Set([
+    'template',
+    'parameters',
+    'presetParameters',
+    'execute',
+    'mcp',
+  ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
   return keys;
@@ -112,9 +122,17 @@ const buildBodySkipKeys = (path: string): Set<string> => {
 // verbatim on the way out. Rewriting them (e.g. `DefaultProvider` →
 // `_default_provider`, `aiProviderName` → `ai_provider_name`) would make the
 // returned template diverge from what was stored and break `--parameter`
-// overrides that reference the original key.
+// overrides that reference the original key. 'parameters' and 'mcp' mirror
+// the inbound set for the same reason (tool `parameters` is a free-form JSON
+// Schema; `mcp` carries HTTP header names, same as `execute`).
 const buildResponseSkipKeys = (path: string): Set<string> => {
-  const keys = new Set(['template', 'execute', 'preset_parameters']);
+  const keys = new Set([
+    'template',
+    'parameters',
+    'execute',
+    'mcp',
+    'preset_parameters',
+  ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
   return keys;
