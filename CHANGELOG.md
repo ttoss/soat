@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.8](https://github.com/ttoss/soat/compare/v0.14.7...v0.14.8) (2026-07-11)
+
+### Bug Fixes
+
+* **server:** preserve authored casing of client tool call args ([#518](https://github.com/ttoss/soat/issues/518)) ([fb3de5a](https://github.com/ttoss/soat/commit/fb3de5ad1a4d55e3d2741e8005d013502f8dc5f1))
+
 ## [0.14.7](https://github.com/ttoss/soat/compare/v0.14.6...v0.14.7) (2026-07-10)
 
 **Note:** Version bump only for package ttoss-soat
