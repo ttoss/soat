@@ -2939,4 +2939,123 @@ resources:
       expect(res.status).toBe(200);
     });
   });
+
+  // ── Ledger tombstones: deleted resources must not be re-reported ─────────
+
+  describe('Formation ledger does not re-report already-deleted resources', () => {
+    let ledgerFormationId: string;
+
+    const twoResourceTemplate = {
+      resources: {
+        KeepMemory: { type: 'memory', properties: { name: 'ledger-keep' } },
+        RemoveMemory: {
+          type: 'memory',
+          properties: { name: 'ledger-remove' },
+        },
+      },
+    };
+    const reducedTemplate = {
+      resources: {
+        KeepMemory: { type: 'memory', properties: { name: 'ledger-keep' } },
+      },
+    };
+
+    const findChange = (
+      body: { changes: Array<{ logical_id: string; action: string }> },
+      logicalId: string
+    ) => {
+      return body.changes.find((c) => {
+        return c.logical_id === logicalId;
+      });
+    };
+
+    test('creates a formation with two resources', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ledger-formation-${Date.now()}`,
+          template: twoResourceTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      ledgerFormationId = res.body.id;
+    });
+
+    test('plan reports the about-to-be-removed resource as a pending delete, matching what update will do', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: ledgerFormationId,
+          template: reducedTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      const removeChange = findChange(res.body, 'RemoveMemory');
+      expect(removeChange).toBeDefined();
+      expect(removeChange?.action).toBe('delete');
+    });
+
+    test('update actually deletes the removed resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${ledgerFormationId}`)
+        .send({ template: reducedTemplate });
+
+      expect(res.status).toBe(200);
+
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${ledgerFormationId}/events`
+      );
+      const updateOp = eventsRes.body[eventsRes.body.length - 1];
+      const removeEvent = updateOp.events.find((e: { logical_id: string }) => {
+        return e.logical_id === 'RemoveMemory';
+      });
+      expect(removeEvent).toBeDefined();
+      expect(removeEvent.action).toBe('delete');
+      expect(removeEvent.status).toBe('succeeded');
+    });
+
+    test('a no-op reconcile plan no longer mentions the already-deleted resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: ledgerFormationId,
+          template: reducedTemplate,
+        });
+
+      expect(res.status).toBe(200);
+      expect(findChange(res.body, 'RemoveMemory')).toBeUndefined();
+      const keepChange = findChange(res.body, 'KeepMemory');
+      expect(keepChange).toBeDefined();
+      expect(keepChange?.action).toBe('no-op');
+    });
+
+    test('re-running update-formation with the same template does not re-list the tombstoned resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${ledgerFormationId}`)
+        .send({ template: reducedTemplate });
+
+      expect(res.status).toBe(200);
+
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${ledgerFormationId}/events`
+      );
+      const latestUpdateOp = eventsRes.body[eventsRes.body.length - 1];
+      const removeEvent = latestUpdateOp.events.find(
+        (e: { logical_id: string }) => {
+          return e.logical_id === 'RemoveMemory';
+        }
+      );
+      expect(removeEvent).toBeUndefined();
+    });
+
+    test('cleans up the ledger formation', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${ledgerFormationId}`
+      );
+      expect(res.status).toBe(200);
+    });
+  });
 });

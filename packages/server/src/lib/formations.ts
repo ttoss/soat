@@ -1,5 +1,3 @@
-import { isDeepStrictEqual } from 'node:util';
-
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
@@ -13,11 +11,12 @@ import {
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
-  resolveParamExpressions,
-  resolveRefs,
   topologicalSort,
 } from './formationsHelpers';
-import { getFormationModule } from './formationsRegistry';
+import {
+  computeOrphanedPlanChanges,
+  planResourceChange,
+} from './formationsPlanHelpers';
 import type {
   FormationEvent,
   FormationTemplate,
@@ -103,12 +102,13 @@ export const planFormation = async (args: {
   const sortedOrder = topologicalSort(graph) ?? [];
 
   const existingMap = new Map<string, string>();
+  let existingResources: InstanceType<(typeof db)['FormationResource']>[] = [];
   if (args.formationId) {
     const formation = await db.Formation.findOne({
       where: { publicId: args.formationId },
     });
     if (formation) {
-      const existingResources = await db.FormationResource.findAll({
+      existingResources = await db.FormationResource.findAll({
         where: {
           formationId: (formation as unknown as { id: number }).id,
         },
@@ -121,72 +121,30 @@ export const planFormation = async (args: {
   }
 
   const resolvedParams = buildResolvedParamsMap(args.template, args.parameters);
+  const templateResourceKeys = new Set(Object.keys(args.template.resources));
 
   const changes: PlanChange[] = await Promise.all(
-    sortedOrder.map(async (logicalId): Promise<PlanChange> => {
-      const decl = args.template.resources[logicalId];
-      const physicalResourceId = existingMap.get(logicalId);
-
-      if (!physicalResourceId) {
-        return { logicalId, resourceType: decl.type, action: 'create' };
-      }
-
-      // Attempt a property-level diff using the module's read method.
-      const module = getFormationModule({ resourceType: decl.type });
-      if (module?.read) {
-        try {
-          const liveProperties = await module.read({ physicalResourceId });
-          if (liveProperties !== null) {
-            let resolvedProperties = resolveParamExpressions(
-              decl.properties ?? {},
-              resolvedParams,
-              new Set(Object.keys(args.template.resources))
-            ) as Record<string, unknown>;
-            try {
-              // Substitute physical ids of already-created resources so an
-              // unchanged ref/sub property diffs as a no-op.
-              resolvedProperties = resolveRefs(
-                resolvedProperties,
-                existingMap
-              ) as Record<string, unknown>;
-            } catch {
-              // A ref to a not-yet-created resource stays unresolved — the
-              // raw expression never equals the live value, so this reports
-              // 'update', which is the conservative answer.
-            }
-
-            const needsUpdate = Object.entries(resolvedProperties).some(
-              ([key, value]) => {
-                // A `use_previous_value` param that was omitted resolves to
-                // undefined; it never counts as a change since the stored value
-                // is reused.
-                if (value === undefined) return false;
-                return !isDeepStrictEqual(liveProperties[key], value);
-              }
-            );
-
-            return {
-              logicalId,
-              resourceType: decl.type,
-              physicalResourceId,
-              action: needsUpdate ? 'update' : 'no-op',
-            };
-          }
-        } catch {
-          // read failed — fall through to 'update'
-        }
-      }
-
-      return {
+    sortedOrder.map((logicalId) => {
+      return planResourceChange({
         logicalId,
-        resourceType: decl.type,
-        physicalResourceId,
-        action: 'update',
-      };
+        decl: args.template.resources[logicalId],
+        physicalResourceId: existingMap.get(logicalId),
+        resolvedParams,
+        existingMap,
+        templateResourceKeys,
+      });
     })
   );
 
-  return { changes };
+  // Surface resources the ledger still tracks but the new template no longer
+  // declares — they are about to be orphaned/deleted on `update-formation` —
+  // so `plan` and `update` agree on the same set of changes.
+  const orphanedChanges = computeOrphanedPlanChanges({
+    templateResourceKeys,
+    existingResources,
+  });
+
+  return { changes: [...changes, ...orphanedChanges] };
 };
 
 export const createFormation = async (args: {

@@ -128,7 +128,11 @@ export const handleOrphanedDeletes = async (args: {
   const { template, existingResources, events } = args;
   const newLogicalIds = new Set(Object.keys(template.resources));
   const toDelete = existingResources.filter((r) => {
-    return !newLogicalIds.has(r.logicalId) && r.physicalResourceId;
+    return (
+      !newLogicalIds.has(r.logicalId) &&
+      r.physicalResourceId &&
+      r.status !== 'deleted'
+    );
   });
   for (const resource of toDelete) {
     try {
