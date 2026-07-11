@@ -89,6 +89,29 @@ const isToolInputPassthroughPath = (path: string): boolean => {
   );
 };
 
+// A `requires_action` generation returns the pending tool calls the caller must
+// execute, each carrying an `args` object. For a client tool those keys mirror
+// the caller-authored `parameters` JSON Schema (which is itself a `parameters`
+// pass-through, stored and returned verbatim). Case-transforming `args` would
+// rewrite the caller's own key names (e.g. `adAccountId` → `ad_account_id`) so
+// the delivered payload diverges from the schema the caller owns — and a
+// casing-sensitive downstream API then rejects it. So on every endpoint that
+// can emit a `requires_action` result, `args` rounds-trips verbatim, exactly
+// like `input`/`execute`/`parameters`. This is response-only: no request body
+// carries an `args` key.
+const TOOL_CALL_ARGS_PASSTHROUGH_PATH_PREFIXES = [
+  '/api/v1/agents',
+  '/api/v1/sessions',
+  '/api/v1/conversations',
+  '/api/v1/orchestrations',
+];
+
+const isToolCallArgsPassthroughPath = (path: string): boolean => {
+  return TOOL_CALL_ARGS_PASSTHROUGH_PATH_PREFIXES.some((prefix) => {
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
+};
+
 // The inbound (snake→camel) pass-through keys for a given path.
 // 'template' is a pass-through user document (formation templates),
 // 'parameters' is the formation deploy-time value bag keyed against
@@ -135,6 +158,7 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
+  if (isToolCallArgsPassthroughPath(path)) keys.add('args');
   return keys;
 };
 

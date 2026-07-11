@@ -1861,7 +1861,7 @@ CLIENT_TOOL_RESP=$($SOAT_CLI create-tool \
   --name get_weather \
   --type client \
   --description "Returns the current weather for a given city." \
-  --parameters '{"type":"object","properties":{"city":{"type":"string","description":"The city name"}},"required":["city"]}')
+  --parameters '{"type":"object","properties":{"cityName":{"type":"string","description":"The city name"}},"required":["cityName"]}')
 CLIENT_TOOL_ID=$(echo "$CLIENT_TOOL_RESP" | jq -r '.id')
 if [ -z "$CLIENT_TOOL_ID" ] || [ "$CLIENT_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create client agent tool" >&2
@@ -1876,7 +1876,7 @@ CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name weather-agent \
-  --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the city name." \
+  --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the cityName argument." \
   --tool_ids "[\"$CLIENT_TOOL_ID\"]" \
   --tool_choice '{"type":"tool","tool_name":"get_weather"}' \
   --max_steps 3)
@@ -1895,7 +1895,7 @@ CLIENT_GEN_STATUS=''
 CLIENT_ATTEMPT=1
 while [ "$CLIENT_ATTEMPT" -le 3 ]; do
   CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$CLIENT_AGENT_ID" \
-    --messages '[{"role":"user","content":"Call get_weather with city Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
+    --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
   CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
   if [ "$CLIENT_GEN_STATUS" = "requires_action" ]; then
     break
@@ -1917,7 +1917,7 @@ CLIENT_GEN_ID=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.id')
 CLIENT_TOOL_CALL_ID=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].id // .requiredAction.toolCalls[0].id // empty')
 CLIENT_TRACE_ID=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.trace_id')
 CLIENT_TOOL_CALL_NAME=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].tool_name // .required_action.tool_calls[0].toolName // .requiredAction.toolCalls[0].tool_name // .requiredAction.toolCalls[0].toolName // empty')
-CLIENT_TOOL_CALL_CITY=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].args.city // .requiredAction.toolCalls[0].args.city // empty')
+CLIENT_TOOL_CALL_CITY=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.required_action.tool_calls[0].args.cityName // .requiredAction.toolCalls[0].args.cityName // empty')
 
 if [ -z "$CLIENT_TOOL_CALL_ID" ] || [ "$CLIENT_TOOL_CALL_ID" = "null" ]; then
   echo "ERROR: Expected at least one pending client tool call id" >&2
@@ -1927,6 +1927,17 @@ if [ "$CLIENT_TOOL_CALL_NAME" != "get_weather" ]; then
   echo "ERROR: Expected tool name 'get_weather', got '$CLIENT_TOOL_CALL_NAME'" >&2
   exit 1
 fi
+
+# The tool's parameters schema declares the camelCase key `cityName`. The
+# requires_action payload must return the caller-authored key verbatim — the
+# outbound case-transform must NOT rewrite it to `city_name`, or the payload
+# diverges from the schema the caller owns.
+CLIENT_ARGS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -c '.required_action.tool_calls[0].args // .requiredAction.toolCalls[0].args // {}')
+if printf '%s\n' "$CLIENT_ARGS" | jq -e 'has("city_name")' >/dev/null 2>&1; then
+  echo "ERROR: client tool args were snake_cased ('city_name'); expected authored casing 'cityName'. Args: $CLIENT_ARGS" >&2
+  exit 1
+fi
+echo "Client tool args preserve authored camelCase casing: OK"
 echo "Generation id: $CLIENT_GEN_ID"
 echo "Tool call id: $CLIENT_TOOL_CALL_ID"
 
