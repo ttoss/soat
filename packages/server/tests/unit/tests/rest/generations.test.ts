@@ -1,5 +1,6 @@
 import { updateGenerationRecord } from 'src/lib/generations';
 
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
@@ -130,6 +131,56 @@ describe('Generations', () => {
       expect(response.status).toBe(200);
       expect(response.body.error).toBeDefined();
       expect(response.body.error.message).toBeDefined();
+    });
+  });
+
+  describe('requires_action tool call arg casing on POST /generate', () => {
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    // A client tool's `args` mirror the caller-authored `parameters` JSON
+    // Schema, which is stored and returned verbatim (e.g. camelCase). The
+    // requires_action payload must return those keys unchanged — the outbound
+    // caseTransform must not snake_case them, or the payload diverges from the
+    // schema the caller owns.
+    test('preserves the authored casing of tool call args', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_argcase_01',
+        traceId: 'trc_argcase_01',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs' as const,
+          toolCalls: [
+            {
+              id: 'tc_argcase_01',
+              toolName: 'createOptimization',
+              args: {
+                adAccountId: 'act_123',
+                campaignId: 'cmp_456',
+                input: 'single-word-key',
+              },
+            },
+          ],
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'optimize my ads' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('requires_action');
+
+      const toolCall = response.body.required_action.tool_calls[0];
+      expect(toolCall.args.adAccountId).toBe('act_123');
+      expect(toolCall.args.campaignId).toBe('cmp_456');
+      expect(toolCall.args.input).toBe('single-word-key');
+
+      // The snake_cased forms must NOT appear — the middleware must leave the
+      // caller-authored keys untouched.
+      expect(toolCall.args.ad_account_id).toBeUndefined();
+      expect(toolCall.args.campaign_id).toBeUndefined();
     });
   });
 
