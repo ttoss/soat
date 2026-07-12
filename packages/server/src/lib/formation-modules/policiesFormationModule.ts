@@ -8,7 +8,10 @@ import {
   getPolicy,
   updatePolicy,
 } from '../policies';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  normalizePropertyKeys,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -21,24 +24,6 @@ const log = createDebug('soat:formations:policies');
 
 const SCHEMA_NAME = 'PolicyResourceProperties';
 const RESOURCE_LABEL = 'policy';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

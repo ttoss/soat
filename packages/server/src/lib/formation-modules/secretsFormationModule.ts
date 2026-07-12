@@ -1,7 +1,10 @@
 import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  normalizePropertyKeys,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import { createSecret, deleteSecret, updateSecret } from '../secrets';
 import {
   isObjectRecord,
@@ -15,24 +18,6 @@ const log = createDebug('soat:formations:secrets');
 
 const SCHEMA_NAME = 'SecretResourceProperties';
 const RESOURCE_LABEL = 'secret';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

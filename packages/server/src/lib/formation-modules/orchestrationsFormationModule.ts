@@ -9,6 +9,10 @@ import {
   updateOrchestration,
 } from '../orchestrations';
 import {
+  camelToSnakeKey,
+  convertKeys,
+  normalizePropertyKeys,
+  snakeToCamelKey,
   toNullableObject,
   toNullableString,
   toOptionalString,
@@ -27,41 +31,6 @@ const SCHEMA_NAME = 'OrchestrationResourceProperties';
 const RESOURCE_LABEL = 'orchestration';
 
 // ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const snakeToCamelKey = (key: string): string => {
-  return key.replace(/_([a-z])/g, (_, char: string) => {
-    return char.toUpperCase();
-  });
-};
-
-const convertKeys = (
-  obj: Record<string, unknown>,
-  transform: (key: string) => string
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(obj).map(([key, value]) => {
-      return [transform(key), value];
-    })
-  );
-};
-
-/**
- * Normalize the top-level property keys to snake_case so a template authored
- * with camelCase keys (e.g. `stateSchema`) validates against the snake_case
- * OpenAPI schema. Nested node/edge objects are left untouched here — they are
- * converted separately, key-by-key, only when a live orchestration is built.
- */
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return convertKeys(properties, camelToSnakeKey);
-};
 
 /**
  * Orchestration nodes and edges are stored (and read by the engine) with

@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
+  normalizePropertyKeys,
   toNullableArray,
   toNullableString,
   toOptionalString,
@@ -25,24 +26,6 @@ const log = createDebug('soat:formations:webhooks');
 
 const SCHEMA_NAME = 'WebhookResourceProperties';
 const RESOURCE_LABEL = 'webhook';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

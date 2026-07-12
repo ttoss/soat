@@ -6,7 +6,11 @@ import { db } from '../db';
 import type { TypedAgent } from './agentGenerationHelpers';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
-import { coalesce } from './resource-inputs/normalizers';
+import {
+  camelToSnakeKey,
+  convertKeysDeep,
+  snakeToCamelKey,
+} from './resource-inputs/normalizers';
 
 const log = createDebug('soat:knowledge');
 
@@ -42,101 +46,33 @@ const isRecord = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-const toStringArrayOrUndefined = (value: unknown): string[] | undefined => {
-  return Array.isArray(value) ? (value as string[]) : undefined;
-};
-
-const toNumberOrUndefined = (value: unknown): number | undefined => {
-  return typeof value === 'number' ? value : undefined;
-};
-
-const toStringOrUndefined = (value: unknown): string | undefined => {
-  return typeof value === 'string' ? value : undefined;
-};
-
-const toBooleanOrUndefined = (value: unknown): boolean | undefined => {
-  return typeof value === 'boolean' ? value : undefined;
-};
-
-const normalizeExtractionConfig = (
-  value: unknown
-): boolean | ExtractionConfig | undefined => {
-  if (typeof value === 'boolean') return value;
-  if (!isRecord(value)) return undefined;
-  return {
-    enabled: toBooleanOrUndefined(value.enabled),
-    aiProviderId: coalesce(
-      value.aiProviderId,
-      value.ai_provider_id,
-      toStringOrUndefined
-    ),
-    model: toStringOrUndefined(value.model),
-    prompt: toStringOrUndefined(value.prompt),
-  };
-};
-
-const denormalizeExtractionConfig = (
-  value: boolean | ExtractionConfig | undefined
-): unknown => {
-  if (typeof value !== 'object' || value === null) return value;
-  return {
-    enabled: value.enabled,
-    ai_provider_id: value.aiProviderId,
-    model: value.model,
-    prompt: value.prompt,
-  };
-};
-
 /**
- * Normalizes a raw `knowledge_config` bag into the canonical camelCase
- * `KnowledgeConfig` shape, accepting either casing for every field.
+ * Normalizes a raw `knowledge_config` bag to the canonical camelCase
+ * `KnowledgeConfig` shape, accepting either casing for every (nested) key.
  *
  * A direct `POST`/`PUT /api/v1/agents` call already arrives camelCased —
  * `caseTransformMiddleware` recursively converts the whole request body. A
  * Formation template does not: `template` is a deliberate case-transform
- * skip-key (its inner keys are validated against the snake_case OpenAPI
- * spec and must round-trip verbatim), so a formation-deployed agent's
+ * skip-key (its inner keys are validated against the snake_case OpenAPI spec
+ * and must round-trip verbatim), so a formation-deployed agent's
  * `knowledge_config` reaches here exactly as authored — snake_case. Without
- * this normalization, `agent.knowledgeConfig.writeMemoryId` /
- * `.memoryIds` read `undefined` for such agents, silently disabling
- * memory-scoped injection, the `write_memory` tool, and extraction.
+ * this normalization, `agent.knowledgeConfig.writeMemoryId` / `.memoryIds`
+ * read `undefined` for such agents, silently disabling memory-scoped
+ * injection, the `write_memory` tool, and extraction.
+ *
+ * A generic deep key transform (rather than a field-by-field mapping) keeps
+ * this correct when new `knowledge_config` fields are added: every key is
+ * converted, so nothing is silently dropped. This is safe because
+ * `knowledge_config` carries no free-form value maps — only scalars, string
+ * arrays, and the fixed-shape `extraction` object — so `snakeToCamelKey` on
+ * an already-camelCase input is a no-op and leaf values are never touched.
  */
 export const normalizeKnowledgeConfig = (
   value: unknown
 ): KnowledgeConfig | null | undefined => {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  return {
-    memoryIds: coalesce(
-      value.memoryIds,
-      value.memory_ids,
-      toStringArrayOrUndefined
-    ),
-    memoryTags: coalesce(
-      value.memoryTags,
-      value.memory_tags,
-      toStringArrayOrUndefined
-    ),
-    documentIds: coalesce(
-      value.documentIds,
-      value.document_ids,
-      toStringArrayOrUndefined
-    ),
-    documentPaths: coalesce(
-      value.documentPaths,
-      value.document_paths,
-      toStringArrayOrUndefined
-    ),
-    minScore: coalesce(value.minScore, value.min_score, toNumberOrUndefined),
-    limit: toNumberOrUndefined(value.limit),
-    query: toStringOrUndefined(value.query),
-    writeMemoryId: coalesce(
-      value.writeMemoryId,
-      value.write_memory_id,
-      toStringOrUndefined
-    ),
-    extraction: normalizeExtractionConfig(value.extraction),
-  };
+  return convertKeysDeep(value, snakeToCamelKey) as KnowledgeConfig;
 };
 
 /**
@@ -150,17 +86,7 @@ export const denormalizeKnowledgeConfig = (
 ): Record<string, unknown> | null | undefined => {
   if (value === null) return null;
   if (!isRecord(value)) return undefined;
-  const config = value as KnowledgeConfig;
-  return {
-    memory_ids: config.memoryIds,
-    memory_tags: config.memoryTags,
-    document_ids: config.documentIds,
-    document_paths: config.documentPaths,
-    min_score: config.minScore,
-    limit: config.limit,
-    write_memory_id: config.writeMemoryId,
-    extraction: denormalizeExtractionConfig(config.extraction),
-  };
+  return convertKeysDeep(value, camelToSnakeKey) as Record<string, unknown>;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {

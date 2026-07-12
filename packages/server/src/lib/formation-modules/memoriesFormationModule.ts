@@ -8,6 +8,7 @@ import {
   updateMemory,
 } from '../memories';
 import {
+  normalizePropertyKeys,
   toNullableArray,
   toNullableString,
   toOptionalString,
@@ -24,24 +25,6 @@ const log = createDebug('soat:formations:memories');
 
 const SCHEMA_NAME = 'MemoryResourceProperties';
 const RESOURCE_LABEL = 'memory';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 
