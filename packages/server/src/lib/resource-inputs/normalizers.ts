@@ -65,7 +65,15 @@ export const snakeToCamelKey = (key: string): string => {
   });
 };
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+/**
+ * Narrows to a plain data object — an object literal or `Object.create(null)`
+ * bag, not an array, `Date`, or class instance. The right guard for JSON-shaped
+ * data (request bodies, jsonb columns, formation property bags) before treating
+ * a value as a keyed record. Shared so callers stop hand-rolling the check.
+ */
+export const isPlainObject = (
+  value: unknown
+): value is Record<string, unknown> => {
   if (value === null || typeof value !== 'object') return false;
   const proto = Object.getPrototypeOf(value);
   return proto === Object.prototype || proto === null;

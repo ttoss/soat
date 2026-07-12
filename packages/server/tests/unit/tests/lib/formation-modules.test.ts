@@ -365,6 +365,18 @@ const CASES: RoundTripCase[] = [
             extraction: { enabled: true, model: 'llama3.2:1b' },
           },
         },
+        // Agent templates must accept camelCase top-level keys like every
+        // other resource — `aiProviderId`/`maxSteps` normalize to snake_case.
+        camel: {
+          aiProviderId,
+          name: 'Camel Agent',
+          maxSteps: 7,
+        },
+        camelExpectRead: {
+          ai_provider_id: aiProviderId,
+          name: 'Camel Agent',
+          max_steps: 7,
+        },
         update: { name: 'Agent B' },
         expectAfterUpdate: { name: 'Agent B' },
       };
@@ -486,6 +498,13 @@ const CASES: RoundTripCase[] = [
       return {
         create: { name: `Disc ${seed}`, ai_provider_id: aiProviderId },
         expectRead: { name: `Disc ${seed}`, ai_provider_id: aiProviderId },
+        // Discussion templates must accept camelCase top-level keys too.
+        camel: { name: `Camel Disc ${seed}`, aiProviderId, maxRounds: 3 },
+        camelExpectRead: {
+          name: `Camel Disc ${seed}`,
+          ai_provider_id: aiProviderId,
+          max_rounds: 3,
+        },
         // Discussion validation enforces required fields on update too, so the
         // update payload must carry `name` and `ai_provider_id`.
         update: { name: `Disc ${seed} updated`, ai_provider_id: aiProviderId },

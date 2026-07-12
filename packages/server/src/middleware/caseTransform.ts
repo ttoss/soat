@@ -1,25 +1,11 @@
 import type { Context } from 'src/Context';
+import {
+  camelToSnakeKey as camelToSnake,
+  isPlainObject,
+  snakeToCamelKey as snakeToCamel,
+} from 'src/lib/resource-inputs/normalizers';
 
 type Next = () => Promise<void>;
-
-const isPlainObject = (obj: unknown): obj is Record<string, unknown> => {
-  if (obj === null || typeof obj !== 'object') return false;
-
-  const proto = Object.getPrototypeOf(obj);
-  return proto === Object.prototype || proto === null;
-};
-
-const camelToSnake = (str: string): string => {
-  return str.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const snakeToCamel = (str: string): string => {
-  return str.replace(/_([a-z])/g, (_, char) => {
-    return char.toUpperCase();
-  });
-};
 
 const transformKeys = (
   obj: unknown,

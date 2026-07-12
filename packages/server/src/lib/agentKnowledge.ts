@@ -9,6 +9,7 @@ import { writeMemoryEntry } from './memoryEntries';
 import {
   camelToSnakeKey,
   convertKeysDeep,
+  isPlainObject,
   snakeToCamelKey,
 } from './resource-inputs/normalizers';
 
@@ -42,10 +43,6 @@ export type KnowledgeConfig = {
   extraction?: boolean | ExtractionConfig;
 };
 
-const isRecord = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
-
 /**
  * Normalizes a raw `knowledge_config` bag to the canonical camelCase
  * `KnowledgeConfig` shape, accepting either casing for every (nested) key.
@@ -71,7 +68,7 @@ export const normalizeKnowledgeConfig = (
   value: unknown
 ): KnowledgeConfig | null | undefined => {
   if (value === null) return null;
-  if (!isRecord(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   return convertKeysDeep(value, snakeToCamelKey) as KnowledgeConfig;
 };
 
@@ -85,7 +82,7 @@ export const denormalizeKnowledgeConfig = (
   value: unknown
 ): Record<string, unknown> | null | undefined => {
   if (value === null) return null;
-  if (!isRecord(value)) return undefined;
+  if (!isPlainObject(value)) return undefined;
   return convertKeysDeep(value, camelToSnakeKey) as Record<string, unknown>;
 };
 

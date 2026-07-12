@@ -7,6 +7,7 @@ import {
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
+  normalizePropertyKeys,
   toNullableArray,
   toNullableNumber,
   toNullableObject,
@@ -34,12 +35,16 @@ const validateAgentProperties = (args: {
   basePath: string;
   forUpdate?: boolean;
 }): ValidationError[] => {
-  const { properties, basePath, forUpdate } = args;
-  if (!isObjectRecord(properties)) {
+  const { basePath, forUpdate } = args;
+  if (!isObjectRecord(args.properties)) {
     return [
       { path: basePath, message: 'Agent `properties` must be an object' },
     ];
   }
+  // Accept camelCase top-level keys (e.g. `aiProviderId`) like every other
+  // formation module, normalizing to the snake_case the OpenAPI schema and the
+  // property readers below expect.
+  const properties = normalizePropertyKeys(args.properties);
 
   const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
   const errors: ValidationError[] = [];
@@ -116,14 +121,15 @@ export const agentsFormationModule: FormationModule = {
     return validateAgentProperties({ properties, basePath });
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties: rawProperties, projectId }) => {
     const errors = validateAgentProperties({
-      properties,
+      properties: rawProperties,
       basePath: 'resources.<agent>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
+    const properties = normalizePropertyKeys(rawProperties);
     const result = await createAgent(
       buildCreateAgentArgs({ properties, projectId })
     );
@@ -135,9 +141,9 @@ export const agentsFormationModule: FormationModule = {
     return result.id;
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties: rawProperties, physicalResourceId }) => {
     const errors = validateAgentProperties({
-      properties,
+      properties: rawProperties,
       basePath: 'resources.<agent>.properties',
       forUpdate: true,
     });
@@ -145,6 +151,7 @@ export const agentsFormationModule: FormationModule = {
       throw new Error(errors[0].message);
     }
 
+    const properties = normalizePropertyKeys(rawProperties);
     await updateAgent({
       id: physicalResourceId,
       aiProviderId: toOptionalString(properties.ai_provider_id),
