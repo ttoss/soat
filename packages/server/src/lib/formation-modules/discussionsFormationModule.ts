@@ -10,6 +10,7 @@ import {
 } from '../discussions';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
+  normalizePropertyKeys,
   toNullableNumber,
   toNullableString,
   toOptionalString,
@@ -31,12 +32,16 @@ const validateDiscussionProperties = (args: {
   properties: unknown;
   basePath: string;
 }): ValidationError[] => {
-  const { properties, basePath } = args;
-  if (!isObjectRecord(properties)) {
+  const { basePath } = args;
+  if (!isObjectRecord(args.properties)) {
     return [
       { path: basePath, message: 'Discussion `properties` must be an object' },
     ];
   }
+  // Accept camelCase top-level keys (e.g. `aiProviderId`, `maxRounds`) like
+  // every other formation module, normalizing to the snake_case the OpenAPI
+  // schema and the property readers below expect.
+  const properties = normalizePropertyKeys(args.properties);
 
   const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
   const errors: ValidationError[] = [];
@@ -107,15 +112,16 @@ export const discussionsFormationModule: FormationModule = {
     return validateDiscussionProperties({ properties, basePath });
   },
 
-  create: async ({ properties, projectId }) => {
+  create: async ({ properties: rawProperties, projectId }) => {
     const errors = validateDiscussionProperties({
-      properties,
+      properties: rawProperties,
       basePath: 'resources.<discussion>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
 
+    const properties = normalizePropertyKeys(rawProperties);
     const created = await createDiscussion({
       projectId,
       name: requireString({ value: properties.name, fieldName: 'name' }),
@@ -138,15 +144,16 @@ export const discussionsFormationModule: FormationModule = {
     return created.id;
   },
 
-  update: async ({ properties, physicalResourceId }) => {
+  update: async ({ properties: rawProperties, physicalResourceId }) => {
     const errors = validateDiscussionProperties({
-      properties,
+      properties: rawProperties,
       basePath: 'resources.<discussion>.properties',
     });
     if (errors.length > 0) {
       throw new Error(errors[0].message);
     }
 
+    const properties = normalizePropertyKeys(rawProperties);
     await updateDiscussion({
       id: physicalResourceId,
       name: toOptionalString(properties.name),

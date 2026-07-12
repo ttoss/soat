@@ -312,6 +312,8 @@ An agent can automatically retrieve relevant knowledge before every generation b
 
 `knowledge_config` can also be passed in the body of `POST /agents/:id/generate` to override the agent's stored config for that single call: `memory_ids`, `memory_tags`, `document_ids`, and `document_paths` are **unioned** with the agent's stored arrays, while `min_score` and `limit` use the per-generation value when present. `write_memory_id` and `extraction` are agent-level only and cannot be set per generation. See [Memories](./memories.md#agent-integration) for details on how the `write_memory` tool works.
 
+A config that only sets `memory_ids`/`memory_tags` (no `document_ids`/`document_paths`) stays memory-only — document search does not run, so unrelated project documents never crowd out the scoped memory entries. Document search runs when the config sets `document_ids`/`document_paths`, or when it sets no scoping filters at all (in which case the last user message is searched against every accessible document, matching the [Knowledge](./knowledge.md#search-modes) module's own rule for when document results are included).
+
 Results are injected as a fenced reference-context message prepended to the conversation:
 
 ```

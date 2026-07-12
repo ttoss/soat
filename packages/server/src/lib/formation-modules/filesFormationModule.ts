@@ -2,7 +2,10 @@ import createDebug from 'debug';
 
 import { createFile, deleteFile, getFile, updateFileMetadata } from '../files';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  normalizePropertyKeys,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -15,24 +18,6 @@ const log = createDebug('soat:formations:files');
 
 const SCHEMA_NAME = 'FileResourceProperties';
 const RESOURCE_LABEL = 'file';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

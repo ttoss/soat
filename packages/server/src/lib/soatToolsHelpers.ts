@@ -75,6 +75,10 @@ export interface OperationSpec {
   'x-soat-mcp-exclude'?: boolean;
 }
 
+// Distinct from `snakeToCamelKey` in resource-inputs/normalizers on purpose:
+// OpenAPI operation/parameter names can be kebab-case (e.g. `list-tools`), so
+// this variant also folds `-`. Do not merge the two — the normalizers helper is
+// underscore-only by design (it must not touch hyphens inside data values).
 export const snakeToCamel = (str: string): string => {
   return str.replace(/[_-]([a-z])/g, (_, letter) => {
     return letter.toUpperCase();

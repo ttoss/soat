@@ -9,6 +9,7 @@ import {
 import { lookupActorInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
+  normalizePropertyKeys,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -23,24 +24,6 @@ const log = createDebug('soat:formations:conversations');
 
 const SCHEMA_NAME = 'ConversationResourceProperties';
 const RESOURCE_LABEL = 'conversation';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

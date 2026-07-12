@@ -11,7 +11,10 @@ import {
   lookupProjectOwnerUserId,
 } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  normalizePropertyKeys,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -29,22 +32,6 @@ const RESOURCE_LABEL = 'api_key';
 // caseTransform middleware converts all nested request body keys to camelCase.
 // Formation templates are stored with those camelCase keys. Normalize back to
 // snake_case so the spec validators and property accessors work correctly.
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

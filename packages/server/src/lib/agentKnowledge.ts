@@ -6,6 +6,12 @@ import { db } from '../db';
 import type { TypedAgent } from './agentGenerationHelpers';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import {
+  camelToSnakeKey,
+  convertKeysDeep,
+  isPlainObject,
+  snakeToCamelKey,
+} from './resource-inputs/normalizers';
 
 const log = createDebug('soat:knowledge');
 
@@ -35,6 +41,49 @@ export type KnowledgeConfig = {
    * model, and prompt.
    */
   extraction?: boolean | ExtractionConfig;
+};
+
+/**
+ * Normalizes a raw `knowledge_config` bag to the canonical camelCase
+ * `KnowledgeConfig` shape, accepting either casing for every (nested) key.
+ *
+ * A direct `POST`/`PUT /api/v1/agents` call already arrives camelCased —
+ * `caseTransformMiddleware` recursively converts the whole request body. A
+ * Formation template does not: `template` is a deliberate case-transform
+ * skip-key (its inner keys are validated against the snake_case OpenAPI spec
+ * and must round-trip verbatim), so a formation-deployed agent's
+ * `knowledge_config` reaches here exactly as authored — snake_case. Without
+ * this normalization, `agent.knowledgeConfig.writeMemoryId` / `.memoryIds`
+ * read `undefined` for such agents, silently disabling memory-scoped
+ * injection, the `write_memory` tool, and extraction.
+ *
+ * A generic deep key transform (rather than a field-by-field mapping) keeps
+ * this correct when new `knowledge_config` fields are added: every key is
+ * converted, so nothing is silently dropped. This is safe because
+ * `knowledge_config` carries no free-form value maps — only scalars, string
+ * arrays, and the fixed-shape `extraction` object — so `snakeToCamelKey` on
+ * an already-camelCase input is a no-op and leaf values are never touched.
+ */
+export const normalizeKnowledgeConfig = (
+  value: unknown
+): KnowledgeConfig | null | undefined => {
+  if (value === null) return null;
+  if (!isPlainObject(value)) return undefined;
+  return convertKeysDeep(value, snakeToCamelKey) as KnowledgeConfig;
+};
+
+/**
+ * Reverses {@link normalizeKnowledgeConfig} for the Formation module's `read`
+ * method, which must return `knowledge_config` in snake_case (see
+ * `.claude/rules/modules.md` Formations Sync — "Formation module `read`
+ * method returns the new field (snake_case)").
+ */
+export const denormalizeKnowledgeConfig = (
+  value: unknown
+): Record<string, unknown> | null | undefined => {
+  if (value === null) return null;
+  if (!isPlainObject(value)) return undefined;
+  return convertKeysDeep(value, camelToSnakeKey) as Record<string, unknown>;
 };
 
 const anyLength = (arr: unknown[] | undefined): boolean => {
@@ -80,6 +129,14 @@ const hasKnowledgeFilters = (config: KnowledgeConfig): boolean => {
     anyLength(config.documentPaths) ||
     anyLength(config.documentIds)
   );
+};
+
+const hasMemoryFilters = (config: KnowledgeConfig): boolean => {
+  return anyLength(config.memoryIds) || anyLength(config.memoryTags);
+};
+
+const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
+  return anyLength(config.documentPaths) || anyLength(config.documentIds);
 };
 
 const formatResult = (
@@ -130,6 +187,18 @@ export const buildKnowledgeMessages = async (args: {
 
   if (!query && !hasKnowledgeFilters(config)) return [];
 
+  // A config scoped to specific memories/tags with no document scoping
+  // (paths/documentIds) must stay memory-only. searchKnowledge treats any
+  // defined `query` as "also search documents" (matching the raw
+  // /knowledge/search contract, where the caller opted in explicitly), but
+  // here `query` is auto-derived from the chat message on every turn — so
+  // letting it drive document search unconditionally would silently widen a
+  // memory-only config into an all-project document search. `query` is still
+  // forwarded (for memory relevance ranking); only the document branch is
+  // suppressed, and only when the config scopes memory but not documents.
+  const includeDocuments =
+    hasDocumentFilters(config) || !hasMemoryFilters(config);
+
   const results = await searchKnowledge({
     projectIds: args.projectIds,
     query,
@@ -139,6 +208,7 @@ export const buildKnowledgeMessages = async (args: {
     documentIds: config.documentIds,
     minScore: config.minScore,
     limit: config.limit,
+    includeDocuments,
   });
 
   log('buildKnowledgeMessages: results count=%d', results.length);

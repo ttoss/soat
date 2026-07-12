@@ -888,18 +888,18 @@ soat search-knowledge \
   --query "P1 outage response and how to reach Alice" \
   --memory-ids '["'"$MEMORY_ID"'"]' \
   --document-paths '["/alice/"]' \
-  | jq '.results[] | {score: .score, source_type: .source_type, content: .content}'
+  | jq '.results[] | {similarity_score: .similarity_score, source_type: .source_type, content: .content}'
 ```
 
 Expected output — note the two different `source_type` values:
 
 ```json
-{ "score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
-{ "score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
-{ "score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
+{ "similarity_score": 0.69, "source_type": "document", "content": "Alice Corp Support Policy: All priority-1 incidents must receive an initial response within 2 hours ..." }
+{ "similarity_score": 0.62, "source_type": "memory", "content": "Alice prefers email, especially for billing inquiries; she checks it twice a day" }
+{ "similarity_score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
 ```
 
-Each result shows a `score` (cosine similarity) so you can tune `min_score` and `limit` on `knowledge_config` with confidence.
+Each result shows a `similarity_score` (cosine similarity) so you can tune `min_score` and `limit` on `knowledge_config` with confidence.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -920,7 +920,7 @@ const res = await fetch('http://localhost:5047/api/v1/knowledge/search', {
 });
 
 const { results } = await res.json();
-results.forEach((r) => console.log(r.score, r.source_type, r.content));
+results.forEach((r) => console.log(r.similarity_score, r.source_type, r.content));
 ```
 
 </TabItem>
@@ -931,7 +931,7 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"P1 outage response and how to reach Alice\",\"memory_ids\":[\"$MEMORY_ID\"],\"document_paths\":[\"/alice/\"]}" \
-  | jq '.results[] | {score: .score, source_type: .source_type, content: .content}'
+  | jq '.results[] | {similarity_score: .similarity_score, source_type: .source_type, content: .content}'
 ```
 
 </TabItem>

@@ -8,7 +8,10 @@ import {
   deleteMemoryEntry,
   getMemoryEntry,
 } from '../memoryEntries';
-import { toOptionalString } from '../resource-inputs/normalizers';
+import {
+  normalizePropertyKeys,
+  toOptionalString,
+} from '../resource-inputs/normalizers';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -21,24 +24,6 @@ const log = createDebug('soat:formations:memoryEntries');
 
 const SCHEMA_NAME = 'MemoryEntryResourceProperties';
 const RESOURCE_LABEL = 'memory_entry';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

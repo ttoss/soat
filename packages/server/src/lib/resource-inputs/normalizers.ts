@@ -52,3 +52,91 @@ export const coalesce = <T>(
 ): T => {
   return mapper(camelValue !== undefined ? camelValue : snakeValue);
 };
+
+export const camelToSnakeKey = (key: string): string => {
+  return key.replace(/[A-Z]/g, (char) => {
+    return `_${char.toLowerCase()}`;
+  });
+};
+
+export const snakeToCamelKey = (key: string): string => {
+  return key.replace(/_([a-z])/g, (_, char: string) => {
+    return (char as string).toUpperCase();
+  });
+};
+
+/**
+ * Narrows to a plain data object — an object literal or `Object.create(null)`
+ * bag, not an array, `Date`, or class instance. The right guard for JSON-shaped
+ * data (request bodies, jsonb columns, formation property bags) before treating
+ * a value as a keyed record. Shared so callers stop hand-rolling the check.
+ */
+export const isPlainObject = (
+  value: unknown
+): value is Record<string, unknown> => {
+  if (value === null || typeof value !== 'object') return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+};
+
+/**
+ * Recursively rewrites every object key with `transform`, descending into
+ * nested plain objects and arrays while leaving all leaf *values* untouched.
+ *
+ * Use this to convert a whole nested config bag between the external snake_case
+ * contract and internal camelCase in one call — instead of enumerating fields
+ * by hand, which silently drops any field a future change forgets to list. Only
+ * safe for bags whose keys are all part of the resource contract; do **not**
+ * use it on free-form value maps that must round-trip verbatim (JSON Schema,
+ * user-defined metadata, JSON-Logic), which is why `caseTransform` keeps its
+ * own skip-key list rather than sharing this helper wholesale.
+ */
+export const convertKeysDeep = (
+  value: unknown,
+  transform: (key: string) => string
+): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      return convertKeysDeep(item, transform);
+    });
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => {
+        return [transform(key), convertKeysDeep(val, transform)];
+      })
+    );
+  }
+  return value;
+};
+
+/**
+ * Rewrites only an object's own (top-level) keys with `transform`, leaving all
+ * values — including nested objects — verbatim. The shallow counterpart to
+ * {@link convertKeysDeep}, for bags whose nested values must round-trip
+ * untouched.
+ */
+export const convertKeys = (
+  obj: Record<string, unknown>,
+  transform: (key: string) => string
+): Record<string, unknown> => {
+  return Object.fromEntries(
+    Object.entries(obj).map(([key, value]) => {
+      return [transform(key), value];
+    })
+  );
+};
+
+/**
+ * Rewrites a formation template's **top-level** property keys from camelCase
+ * to snake_case so a template authored in either casing validates against the
+ * snake_case OpenAPI schema. Shallow by design: nested value bags (a policy
+ * `document`, a webhook config, arbitrary `metadata`, orchestration node/edge
+ * expressions) are left verbatim and normalized separately by the module that
+ * owns them, when it owns them. Shared by every formation module.
+ */
+export const normalizePropertyKeys = (
+  properties: Record<string, unknown>
+): Record<string, unknown> => {
+  return convertKeys(properties, camelToSnakeKey);
+};

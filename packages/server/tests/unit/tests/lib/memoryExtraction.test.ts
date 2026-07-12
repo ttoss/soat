@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { applyCreateResource } from 'src/lib/formationsResourceHandlers';
 import { createGenerationRecord, getGeneration } from 'src/lib/generations';
 import {
   fireMemoryExtraction,
@@ -151,6 +152,63 @@ describe('memoryExtraction lib', () => {
 
       const persisted = await getGeneration({ publicId: generation.id });
       expect(persisted?.metadata?.extraction).toEqual({
+        candidates: 1,
+        created: 1,
+        updated: 0,
+        skipped: 0,
+      });
+    });
+
+    // Regression: a Formation template's `knowledge_config` bypasses
+    // caseTransformMiddleware entirely (`template` is a deliberate skip-key,
+    // see caseTransform.ts), so it reaches the agent formation module exactly
+    // as authored — snake_case (`write_memory_id`, not `writeMemoryId`).
+    // Before agentsFormationModule normalized it, `agent.knowledgeConfig`
+    // stored the raw snake_case bag, `resolveExtractionTarget` read
+    // `config?.writeMemoryId` as `undefined`, and extraction silently never
+    // ran for any formation-deployed agent.
+    test('writes facts for a formation-deployed agent whose knowledge_config was authored in snake_case', async () => {
+      const memoryRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Lib Formation Extraction Memory',
+        });
+      const memoryId = memoryRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      const agentId = await applyCreateResource({
+        resourceType: 'agent',
+        projectId: project!.id as number,
+        resolvedProperties: {
+          ai_provider_id: aiProviderId,
+          name: 'LibFormationExtractionAgent',
+          knowledge_config: { write_memory_id: memoryId, extraction: true },
+        },
+      });
+
+      const generation = await createGenerationRecord({
+        publicId: 'gen_libformext_01',
+        projectId: project!.id as number,
+        agentId,
+        traceId: 'trc_libformext_01',
+      });
+
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["Customer runs on a calendar fiscal year"]'
+      );
+
+      const summary = await runMemoryExtraction({
+        agentId,
+        generationId: generation.id,
+        messages: [{ role: 'user', content: 'We use a calendar fiscal year.' }],
+        assistantContent: 'Got it.',
+      });
+
+      expect(summary).toEqual({
         candidates: 1,
         created: 1,
         updated: 0,

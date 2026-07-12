@@ -4,6 +4,7 @@ import { db } from '../../db';
 import { lookupAgentInternalId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
+  normalizePropertyKeys,
   toNullableObject,
   toNullableString,
   toOptionalString,
@@ -26,24 +27,6 @@ const log = createDebug('soat:formations:sessions');
 
 const SCHEMA_NAME = 'SessionResourceProperties';
 const RESOURCE_LABEL = 'session';
-
-// ── Key normalization ────────────────────────────────────────────────────
-
-const camelToSnakeKey = (key: string): string => {
-  return key.replace(/[A-Z]/g, (char) => {
-    return `_${char.toLowerCase()}`;
-  });
-};
-
-const normalizePropertyKeys = (
-  properties: Record<string, unknown>
-): Record<string, unknown> => {
-  return Object.fromEntries(
-    Object.entries(properties).map(([key, value]) => {
-      return [camelToSnakeKey(key), value];
-    })
-  );
-};
 
 // ── Property validation ──────────────────────────────────────────────────
 

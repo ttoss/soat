@@ -358,6 +358,15 @@ type SearchKnowledgeArgs = {
   documentIds?: string[];
   memoryIds?: string[];
   memoryTags?: string[];
+  /**
+   * Internal-only override (not exposed on the REST search endpoint) that
+   * forces document search off even when `query` is set. Callers that derive
+   * `query` from context rather than an explicit caller request — e.g. agent
+   * generation injection deriving it from the chat message — use this to keep
+   * a memory-scoped config from silently widening into an all-project
+   * document search, while still passing `query` through for memory ranking.
+   */
+  includeDocuments?: boolean;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   policyWhere?: Record<string, any>;
 };
@@ -366,9 +375,10 @@ const getSearchFlags = (
   args: SearchKnowledgeArgs
 ): { hasDocumentSearch: boolean; hasMemorySearch: boolean } => {
   const hasDocumentSearch =
-    args.query !== undefined ||
-    (args.paths !== undefined && args.paths.length > 0) ||
-    (args.documentIds !== undefined && args.documentIds.length > 0);
+    args.includeDocuments !== false &&
+    (args.query !== undefined ||
+      (args.paths !== undefined && args.paths.length > 0) ||
+      (args.documentIds !== undefined && args.documentIds.length > 0));
   const hasMemorySearch =
     (args.memoryIds !== undefined && args.memoryIds.length > 0) ||
     (args.memoryTags !== undefined && args.memoryTags.length > 0);
