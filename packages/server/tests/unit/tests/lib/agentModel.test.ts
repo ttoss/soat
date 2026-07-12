@@ -184,13 +184,24 @@ describe('buildModel', () => {
 // (headers/signing happen at request time), so asserting on the model
 // itself couldn't distinguish correct from incorrect wiring.
 describe('resolveBedrockCredentials', () => {
-  test('defaults to us-east-1 and no credentials when nothing is provided', () => {
-    expect(resolveBedrockCredentials({ secretValue: null })).toEqual({
-      region: 'us-east-1',
-      accessKeyId: undefined,
-      secretAccessKey: undefined,
-      sessionToken: undefined,
+  test('falls back to the AWS default credential chain when nothing is provided', () => {
+    const result = resolveBedrockCredentials({ secretValue: null });
+    expect(result.region).toBe('us-east-1');
+    expect('credentialProvider' in result).toBe(true);
+    if ('credentialProvider' in result) {
+      expect(typeof result.credentialProvider).toBe('function');
+    }
+  });
+
+  test('falls back to the AWS default credential chain when the key pair is incomplete', () => {
+    const result = resolveBedrockCredentials({
+      secretValue: JSON.stringify({ accessKeyId: 'AKIAIOSFODNN7EXAMPLE' }),
     });
+    expect(result.region).toBe('us-east-1');
+    expect('credentialProvider' in result).toBe(true);
+    if ('credentialProvider' in result) {
+      expect(typeof result.credentialProvider).toBe('function');
+    }
   });
 
   test('uses accessKeyId/secretAccessKey from a JSON credentials secret', () => {
@@ -211,15 +222,13 @@ describe('resolveBedrockCredentials', () => {
     });
   });
 
-  test('falls back to no credentials when the secret is invalid JSON and not an ABSK token', () => {
-    expect(
-      resolveBedrockCredentials({ secretValue: 'not-valid-json' })
-    ).toEqual({
-      region: 'us-east-1',
-      accessKeyId: undefined,
-      secretAccessKey: undefined,
-      sessionToken: undefined,
-    });
+  test('falls back to the AWS default credential chain when the secret is invalid JSON and not an ABSK token', () => {
+    const result = resolveBedrockCredentials({ secretValue: 'not-valid-json' });
+    expect(result.region).toBe('us-east-1');
+    expect('credentialProvider' in result).toBe(true);
+    if ('credentialProvider' in result) {
+      expect(typeof result.credentialProvider).toBe('function');
+    }
   });
 
   test('uses apiKey from a JSON secret', () => {

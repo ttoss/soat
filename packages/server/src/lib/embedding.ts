@@ -33,8 +33,9 @@ const buildBedrockEmbeddingModel = (args: {
   model: string;
 }): EmbeddingModel => {
   // Reuse the same credential precedence as chat models (agentModel.ts): an
-  // ABSK bearer token in EMBEDDING_API_KEY wins, otherwise the AWS default
-  // credential chain (AWS_ACCESS_KEY_ID/…) is used by the provider.
+  // ABSK bearer token in EMBEDDING_API_KEY wins, a complete static key pair
+  // is used next, and otherwise resolveBedrockCredentials falls back to the
+  // AWS default credential chain (ECS task role, EC2 instance profile, etc.).
   const credentials = resolveBedrockCredentials({
     secretValue: process.env.EMBEDDING_API_KEY ?? null,
     config: { region: process.env.EMBEDDING_REGION ?? process.env.AWS_REGION },

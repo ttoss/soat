@@ -5,6 +5,7 @@ import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createGroq } from '@ai-sdk/groq';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createXai } from '@ai-sdk/xai';
+import { fromNodeProviderChain } from '@aws-sdk/credential-providers';
 import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel } from 'ai';
 
@@ -27,9 +28,13 @@ export type BedrockCredentials =
   | { region: string; apiKey: string }
   | {
       region: string;
-      accessKeyId?: string;
-      secretAccessKey?: string;
+      accessKeyId: string;
+      secretAccessKey: string;
       sessionToken?: string;
+    }
+  | {
+      region: string;
+      credentialProvider: ReturnType<typeof fromNodeProviderChain>;
     };
 
 const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
@@ -47,9 +52,17 @@ const parseBedrockSecret = (secretValue: string | null): BedrockSecret => {
 
 /**
  * Resolves the Bedrock credential precedence: a secret-linked apiKey wins
- * over `config.apiKey`, which wins over access-key/secret-key pairs. Pulled
- * out of `buildBedrockModel` so the precedence rules can be asserted
- * directly instead of only through the opaque model object they configure.
+ * over `config.apiKey`, which wins over a complete access-key/secret-key
+ * pair. Pulled out of `buildBedrockModel` so the precedence rules can be
+ * asserted directly instead of only through the opaque model object they
+ * configure.
+ *
+ * When no bearer token and no complete static key pair is available, this
+ * falls back to the AWS default credential chain (`fromNodeProviderChain`)
+ * so role-based auth works (ECS task role, EC2 instance profile, SSO, env
+ * vars). `@ai-sdk/amazon-bedrock` does NOT walk that chain on its own
+ * (vercel/ai#2216) — passing no credentials at all makes it throw a SigV4
+ * error instead of resolving role credentials itself.
  */
 export const resolveBedrockCredentials = (args: {
   secretValue: string | null;
@@ -63,12 +76,15 @@ export const resolveBedrockCredentials = (args: {
   if (resolvedApiKey) {
     return { region, apiKey: resolvedApiKey };
   }
-  return {
-    region,
-    accessKeyId: secret.accessKeyId,
-    secretAccessKey: secret.secretAccessKey,
-    sessionToken: secret.sessionToken,
-  };
+  if (secret.accessKeyId && secret.secretAccessKey) {
+    return {
+      region,
+      accessKeyId: secret.accessKeyId,
+      secretAccessKey: secret.secretAccessKey,
+      sessionToken: secret.sessionToken,
+    };
+  }
+  return { region, credentialProvider: fromNodeProviderChain() };
 };
 
 const buildBedrockModel = (args: BuildModelArgs): LanguageModel => {
