@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.10](https://github.com/ttoss/soat/compare/v0.14.9...v0.14.10) (2026-07-12)
+
+### Bug Fixes
+
+* **server:** scope memory-only knowledge injection and normalize formation knowledge_config casing ([#524](https://github.com/ttoss/soat/issues/524)) ([ed5503f](https://github.com/ttoss/soat/commit/ed5503f5e3290b74849475283e93b0047035a04b))
+
 ## [0.14.9](https://github.com/ttoss/soat/compare/v0.14.8...v0.14.9) (2026-07-12)
 
 ### Bug Fixes
