@@ -1,5 +1,9 @@
 import createDebug from 'debug';
 
+import {
+  denormalizeKnowledgeConfig,
+  normalizeKnowledgeConfig,
+} from '../agentKnowledge';
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
@@ -88,7 +92,9 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     singleSessionPerActor: toOptionalBoolean(
       properties.single_session_per_actor
     ),
-    knowledgeConfig: toOptional(toNullableObject(properties.knowledge_config)),
+    knowledgeConfig: toOptional(
+      normalizeKnowledgeConfig(properties.knowledge_config)
+    ),
     outputSchema: toOptional(toNullableObject(properties.output_schema)),
   };
 };
@@ -157,7 +163,7 @@ export const agentsFormationModule: FormationModule = {
       singleSessionPerActor: toOptionalBoolean(
         properties.single_session_per_actor
       ),
-      knowledgeConfig: toNullableObject(properties.knowledge_config),
+      knowledgeConfig: normalizeKnowledgeConfig(properties.knowledge_config),
       outputSchema: toNullableObject(properties.output_schema),
     });
   },
@@ -184,7 +190,7 @@ export const agentsFormationModule: FormationModule = {
         temperature: agent.temperature,
         max_context_messages: agent.maxContextMessages,
         single_session_per_actor: agent.singleSessionPerActor,
-        knowledge_config: agent.knowledgeConfig,
+        knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig),
         output_schema: agent.outputSchema,
       };
     } catch {

@@ -1,8 +1,15 @@
+import { db } from 'src/db';
+import type { TypedAgent } from 'src/lib/agentGenerationHelpers';
 import {
   buildKnowledgeMessages,
+  buildKnowledgeTools,
   buildWriteMemoryTool,
+  denormalizeKnowledgeConfig,
   mergeKnowledgeConfig,
+  normalizeKnowledgeConfig,
 } from 'src/lib/agentKnowledge';
+import { getAgent } from 'src/lib/agents';
+import { applyCreateResource } from 'src/lib/formationsResourceHandlers';
 import * as knowledgeModule from 'src/lib/knowledge';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -223,6 +230,56 @@ describe('buildKnowledgeMessages', () => {
     );
   });
 
+  test('excludes document search when only memory filters are configured, even with a chat message', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      knowledgeConfig: { memoryIds: ['mem_1'], limit: 50 },
+      messages: [{ role: 'user', content: 'what is the CPA cap?' }],
+    });
+    // A memory-scoped config must not silently widen into an all-project
+    // document search just because a chat message exists. `query` is still
+    // forwarded (it drives memory relevance ranking), but `includeDocuments`
+    // must be explicitly false so searchKnowledge's document branch never
+    // fires for this memory-only config.
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryIds: ['mem_1'],
+        query: 'what is the CPA cap?',
+        includeDocuments: false,
+      })
+    );
+  });
+
+  test('still searches documents when memory_ids is combined with explicit document scoping', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      knowledgeConfig: { memoryIds: ['mem_1'], documentPaths: ['/alice/'] },
+      messages: [{ role: 'user', content: 'what is the CPA cap?' }],
+    });
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        memoryIds: ['mem_1'],
+        paths: ['/alice/'],
+        query: 'what is the CPA cap?',
+        includeDocuments: true,
+      })
+    );
+  });
+
+  test('still searches documents from the chat message when no filters are configured at all', async () => {
+    mockSearchKnowledge.mockResolvedValueOnce([]);
+    await buildKnowledgeMessages({
+      knowledgeConfig: { limit: 5 },
+      messages: [{ role: 'user', content: 'general question' }],
+    });
+    expect(mockSearchKnowledge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        query: 'general question',
+        includeDocuments: true,
+      })
+    );
+  });
+
   test('passes projectIds and config options to searchKnowledge', async () => {
     mockSearchKnowledge.mockResolvedValueOnce([]);
     await buildKnowledgeMessages({
@@ -246,6 +303,7 @@ describe('buildKnowledgeMessages', () => {
       documentIds: [42],
       minScore: 0.5,
       limit: 5,
+      includeDocuments: true,
     });
   });
 
@@ -352,6 +410,254 @@ describe('mergeKnowledgeConfig', () => {
     });
     expect(result?.memoryIds).toEqual(['mem_1']);
     expect(result?.limit).toBe(3);
+  });
+});
+
+describe('normalizeKnowledgeConfig', () => {
+  test('returns null/undefined unchanged', () => {
+    expect(normalizeKnowledgeConfig(null)).toBeNull();
+    expect(normalizeKnowledgeConfig(undefined)).toBeUndefined();
+  });
+
+  test('returns undefined for a non-object value', () => {
+    expect(normalizeKnowledgeConfig('not an object')).toBeUndefined();
+  });
+
+  // A Formation template's `knowledge_config` bypasses caseTransformMiddleware
+  // (`template` is a deliberate skip-key — see caseTransform.ts) and reaches
+  // the formation module exactly as the author wrote it: snake_case. Without
+  // normalization, `agent.knowledgeConfig.writeMemoryId` reads `undefined` for
+  // such agents, which is what silently disabled memory injection, the
+  // write_memory tool, and extraction (the reported bug).
+  test('normalizes a fully snake_case (formation-authored) config to camelCase', () => {
+    const result = normalizeKnowledgeConfig({
+      memory_ids: ['mem_1'],
+      memory_tags: ['tag1'],
+      document_ids: ['doc_1'],
+      document_paths: ['/docs/'],
+      min_score: 0.5,
+      limit: 50,
+      write_memory_id: 'mem_1',
+      extraction: {
+        enabled: true,
+        ai_provider_id: 'aip_1',
+        model: 'llama3.2:1b',
+        prompt: 'extract facts',
+      },
+    });
+    expect(result).toEqual({
+      memoryIds: ['mem_1'],
+      memoryTags: ['tag1'],
+      documentIds: ['doc_1'],
+      documentPaths: ['/docs/'],
+      minScore: 0.5,
+      limit: 50,
+      query: undefined,
+      writeMemoryId: 'mem_1',
+      extraction: {
+        enabled: true,
+        aiProviderId: 'aip_1',
+        model: 'llama3.2:1b',
+        prompt: 'extract facts',
+      },
+    });
+  });
+
+  test('leaves an already camelCase (direct REST) config unchanged', () => {
+    const result = normalizeKnowledgeConfig({
+      memoryIds: ['mem_1'],
+      writeMemoryId: 'mem_1',
+      limit: 10,
+      extraction: true,
+    });
+    expect(result).toMatchObject({
+      memoryIds: ['mem_1'],
+      writeMemoryId: 'mem_1',
+      limit: 10,
+      extraction: true,
+    });
+  });
+
+  test('passes a boolean extraction value through as-is', () => {
+    expect(normalizeKnowledgeConfig({ extraction: true })?.extraction).toBe(
+      true
+    );
+    expect(normalizeKnowledgeConfig({ extraction: false })?.extraction).toBe(
+      false
+    );
+  });
+});
+
+describe('denormalizeKnowledgeConfig', () => {
+  test('returns null/undefined unchanged', () => {
+    expect(denormalizeKnowledgeConfig(null)).toBeNull();
+    expect(denormalizeKnowledgeConfig(undefined)).toBeUndefined();
+  });
+
+  test('converts a stored camelCase config back to snake_case for formation read', () => {
+    const result = denormalizeKnowledgeConfig({
+      memoryIds: ['mem_1'],
+      memoryTags: ['tag1'],
+      documentIds: ['doc_1'],
+      documentPaths: ['/docs/'],
+      minScore: 0.5,
+      limit: 50,
+      writeMemoryId: 'mem_1',
+      extraction: {
+        enabled: true,
+        aiProviderId: 'aip_1',
+        model: 'llama3.2:1b',
+        prompt: 'extract facts',
+      },
+    });
+    expect(result).toEqual({
+      memory_ids: ['mem_1'],
+      memory_tags: ['tag1'],
+      document_ids: ['doc_1'],
+      document_paths: ['/docs/'],
+      min_score: 0.5,
+      limit: 50,
+      write_memory_id: 'mem_1',
+      extraction: {
+        enabled: true,
+        ai_provider_id: 'aip_1',
+        model: 'llama3.2:1b',
+        prompt: 'extract facts',
+      },
+    });
+  });
+
+  test('round-trips through normalize → denormalize unchanged', () => {
+    const snakeCase = {
+      memory_ids: ['mem_1'],
+      write_memory_id: 'mem_1',
+      limit: 5,
+      extraction: true,
+    };
+    const roundTripped = denormalizeKnowledgeConfig(
+      normalizeKnowledgeConfig(snakeCase)
+    );
+    expect(roundTripped).toMatchObject(snakeCase);
+  });
+});
+
+describe('buildKnowledgeTools — formation-deployed agent casing regression', () => {
+  let adminToken: string;
+  let projectId: string;
+  let internalProjectId: number;
+  let aiProviderId: string;
+  let memoryId: string;
+
+  beforeAll(async () => {
+    // Reuses the file-wide 'admin' user bootstrapped by the
+    // `buildWriteMemoryTool` describe block above — `createFirstAdminUser`
+    // only ever creates the first admin per test-file database, so a second
+    // `/users/bootstrap` call here would 409. Logging in with the same
+    // well-known credentials works regardless of declaration order.
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'buildKnowledgeTools Formation Test Project' });
+    projectId = projectRes.body.id;
+
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    internalProjectId = project!.id as number;
+
+    const providerRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/ai-providers')
+      .send({
+        project_id: projectId,
+        name: 'BKT Provider',
+        provider: 'openai',
+        default_model: 'gpt-4o',
+      });
+    aiProviderId = providerRes.body.id;
+
+    const memoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memories')
+      .send({ project_id: projectId, name: 'BKT Memory' });
+    memoryId = memoryRes.body.id;
+  });
+
+  const toTypedAgent = (knowledgeConfig: unknown): TypedAgent => {
+    return {
+      instructions: null,
+      model: null,
+      toolIds: null,
+      tools: null,
+      maxSteps: null,
+      toolChoice: null,
+      stopConditions: null,
+      activeToolIds: null,
+      stepRules: null,
+      boundaryPolicy: null,
+      temperature: null,
+      knowledgeConfig,
+      outputSchema: null,
+      project: { id: internalProjectId, publicId: projectId },
+      aiProvider: { publicId: aiProviderId },
+    };
+  };
+
+  // Regression: a Formation template's `knowledge_config` bypasses
+  // caseTransformMiddleware entirely (`template` is a deliberate skip-key,
+  // see caseTransform.ts), so a formation-deployed agent's stored
+  // `knowledgeConfig` used to keep the author's snake_case keys verbatim
+  // (`write_memory_id`, not `writeMemoryId`). `buildKnowledgeTools` only ever
+  // checked the camelCase key, so `write_memory` silently never appeared for
+  // any formation-deployed agent.
+  test('exposes write_memory for an agent created via a formation template with snake_case knowledge_config', async () => {
+    const agentId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        ai_provider_id: aiProviderId,
+        name: 'Formation Write Memory Agent',
+        knowledge_config: { write_memory_id: memoryId },
+      },
+    });
+
+    const agent = await getAgent({ id: agentId });
+    const resolvedTools: Record<string, unknown> = {};
+
+    buildKnowledgeTools({
+      agentId,
+      projectIds: [internalProjectId],
+      typedAgent: toTypedAgent(agent.knowledgeConfig),
+      resolvedTools,
+    });
+
+    expect(resolvedTools.write_memory).toBeDefined();
+  });
+
+  test('does not expose write_memory when the formation config has no write_memory_id', async () => {
+    const agentId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        ai_provider_id: aiProviderId,
+        name: 'Formation No Write Memory Agent',
+        knowledge_config: { memory_ids: [memoryId] },
+      },
+    });
+
+    const agent = await getAgent({ id: agentId });
+    const resolvedTools: Record<string, unknown> = {};
+
+    buildKnowledgeTools({
+      agentId,
+      projectIds: [internalProjectId],
+      typedAgent: toTypedAgent(agent.knowledgeConfig),
+      resolvedTools,
+    });
+
+    expect(resolvedTools.write_memory).toBeUndefined();
   });
 });
 

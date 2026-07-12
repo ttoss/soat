@@ -337,6 +337,16 @@ const CASES: RoundTripCase[] = [
             type: 'object',
             properties: { summary: { type: 'string' } },
           },
+          // Formation templates author `knowledge_config` in snake_case, and
+          // `template` bypasses caseTransformMiddleware (a deliberate
+          // skip-key), so this exercises the create-side normalization to
+          // camelCase directly — not just via the REST middleware.
+          knowledge_config: {
+            memory_ids: [memoryId],
+            write_memory_id: memoryId,
+            limit: 25,
+            extraction: { enabled: true, model: 'llama3.2:1b' },
+          },
         },
         expectRead: {
           ai_provider_id: aiProviderId,
@@ -347,6 +357,12 @@ const CASES: RoundTripCase[] = [
           output_schema: {
             type: 'object',
             properties: { summary: { type: 'string' } },
+          },
+          knowledge_config: {
+            memory_ids: [memoryId],
+            write_memory_id: memoryId,
+            limit: 25,
+            extraction: { enabled: true, model: 'llama3.2:1b' },
           },
         },
         update: { name: 'Agent B' },

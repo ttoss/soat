@@ -446,7 +446,7 @@ soat search-knowledge \
   --query "How many sheets does the paper tray hold?" \
   --document-paths '["/manuals/"]' \
   --limit 3 \
-  | jq '[.results[] | {document_id, chunk_id, page, score, content}]'
+  | jq '[.results[] | {document_id, chunk_id, page, similarity_score, content}]'
 ```
 
 The top hit is the printer chunk, attributable to its page:
@@ -457,7 +457,7 @@ The top hit is the printer chunk, attributable to its page:
     "document_id": "doc_...",
     "chunk_id": "dchunk_...",
     "page": 1,
-    "score": 0.78,
+    "similarity_score": 0.78,
     "content": "X1000 Printer Quick Guide\nThe paper tray holds 250 sheets. ..."
   }
 ]
@@ -476,7 +476,7 @@ const { data: search } = await adminSoat.knowledge.searchKnowledge({
   },
 });
 for (const r of search.results) {
-  console.log(r.document_id, r.chunk_id, r.page, r.score);
+  console.log(r.document_id, r.chunk_id, r.page, r.similarity_score);
 }
 ```
 
@@ -488,7 +488,7 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"How many sheets does the paper tray hold?\",\"document_paths\":[\"/manuals/\"],\"limit\":3}" \
-  | jq '[.results[] | {document_id, chunk_id, page, score, content}]'
+  | jq '[.results[] | {document_id, chunk_id, page, similarity_score, content}]'
 ```
 
 </TabItem>

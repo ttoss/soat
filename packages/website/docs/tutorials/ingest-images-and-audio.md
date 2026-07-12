@@ -900,7 +900,7 @@ const { data: imageSearch } = await adminSoat.knowledge.searchKnowledge({
     limit: 3,
   },
 });
-for (const r of imageSearch.results) console.log(r.document_id, r.score);
+for (const r of imageSearch.results) console.log(r.document_id, r.similarity_score);
 
 const { data: audioSearch } = await adminSoat.knowledge.searchKnowledge({
   body: {
@@ -910,7 +910,7 @@ const { data: audioSearch } = await adminSoat.knowledge.searchKnowledge({
     limit: 3,
   },
 });
-for (const r of audioSearch.results) console.log(r.document_id, r.score);
+for (const r of audioSearch.results) console.log(r.document_id, r.similarity_score);
 ```
 
 </TabItem>
@@ -921,13 +921,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"total amount on the receipt\",\"document_paths\":[\"/images/\"],\"limit\":3}" \
-  | jq '[.results[] | {document_id, score, content}]'
+  | jq '[.results[] | {document_id, similarity_score, content}]'
 
 curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"query\":\"when is the launch scheduled\",\"document_paths\":[\"/audio/\"],\"limit\":3}" \
-  | jq '[.results[] | {document_id, score, content}]'
+  | jq '[.results[] | {document_id, similarity_score, content}]'
 ```
 
 </TabItem>
