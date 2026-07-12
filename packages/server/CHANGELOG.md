@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.9](https://github.com/ttoss/soat/compare/v0.14.8...v0.14.9) (2026-07-12)
+
+### Bug Fixes
+
+* **formations:** stop re-reporting tombstoned resources, align plan with update ([#520](https://github.com/ttoss/soat/issues/520)) ([e1c26b0](https://github.com/ttoss/soat/commit/e1c26b0563b3832c9c189f4f3a7de223423db4b3))
+* **server:** fall back to AWS default credential chain for Bedrock ([#522](https://github.com/ttoss/soat/issues/522)) ([73851f4](https://github.com/ttoss/soat/commit/73851f4f79317ed3903df44e4027dd300a4bed36)), closes [vercel/ai#2216](https://github.com/vercel/ai/issues/2216)
+
+### Features
+
+* **tools:** scope mcp tools to a subset of actions ([#521](https://github.com/ttoss/soat/issues/521)) ([285f3ca](https://github.com/ttoss/soat/commit/285f3ca71f7ba2ece3f3fe4ae39b42c24bf530c4))
+
 ## [0.14.8](https://github.com/ttoss/soat/compare/v0.14.7...v0.14.8) (2026-07-11)
 
 ### Bug Fixes
