@@ -402,6 +402,30 @@ describe('formationsApply', () => {
     expect(events[0].status).toBe('succeeded');
   });
 
+  test('handleOrphanedDeletes does not re-report a resource that is already tombstoned', async () => {
+    // Simulates a resource deleted in a prior `update-formation` run: its row
+    // still carries a stale `physicalResourceId` (never cleared) but its
+    // status is already 'deleted'. A subsequent reconcile with the same
+    // template must not re-attempt deletion or re-emit a delete event for it.
+    const tombstoned = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('already-deleted'),
+      resourceType: 'agent',
+      physicalResourceId: 'agt_stale',
+      status: 'deleted',
+      deletionPolicy: 'delete',
+    });
+    const events: FormationEvent[] = [];
+
+    await handleOrphanedDeletes({
+      template: { resources: {} },
+      existingResources: [tombstoned],
+      events,
+    });
+
+    expect(events).toHaveLength(0);
+  });
+
   test('processResourceChange marks resource as failed when create handler throws', async () => {
     const logicalId = uniqueName('CreateFails');
 

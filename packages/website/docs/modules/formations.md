@@ -383,6 +383,14 @@ Each resource in a formation goes through these statuses:
 | `deleted` | Deleted when removed from the template      |
 | `failed`  | Last operation failed                       |
 
+Once a resource reaches `deleted`, it is a tombstone kept for audit history —
+`get-formation` continues to list it, but it stops appearing as a live
+change: `plan-formation` and `update-formation` only report a resource once,
+at the deploy where it is actually removed from the template. A later no-op
+reconcile never re-lists it. `plan-formation` also previews that pending
+removal as a `delete` action before `update-formation` runs, so the two
+always agree on the same set of changes.
+
 The formation stack itself has these statuses:
 
 | Status          | Meaning                                                  |
