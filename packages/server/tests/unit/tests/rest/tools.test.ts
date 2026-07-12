@@ -1151,6 +1151,67 @@ describe('Tools', () => {
       expect(callRes.status).toBe(200);
       expect(callRes.body).toEqual({ ok: true });
     });
+
+    test('an mcp tool round-trips its actions allowlist', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'scoped-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          actions: ['read_item', 'list_items'],
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.actions).toEqual(['read_item', 'list_items']);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.actions).toEqual(['read_item', 'list_items']);
+    });
+
+    test('calling an mcp tool with an action in its allowlist invokes the MCP server', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'allowlisted-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          actions: ['read_item'],
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'read_item', input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({ ok: true });
+    });
+
+    test('calling an mcp tool with an action outside its allowlist returns 400 without contacting the server', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'read-only-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          actions: ['read_item'],
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'delete_item', input: {} });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(/not available on this tool/i);
+    });
   });
 
   describe('output_mapping', () => {

@@ -207,6 +207,16 @@ export const callMcpTool = async (
       'action is required for mcp tools.'
     );
   }
+  // When the tool declares an `actions` allowlist, enforce it before the
+  // outbound MCP request — a scoped (e.g. read-only) tool must reject a
+  // denied action at the capability boundary, not merely omit it from the
+  // model's tool surface. `null`/`undefined` means the whole server surface.
+  if (tool.actions != null && !tool.actions.includes(action)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `action "${action}" is not available on this tool.`
+    );
+  }
   const mcpConfig = tool.mcp as {
     url: string;
     headers?: Record<string, string>;

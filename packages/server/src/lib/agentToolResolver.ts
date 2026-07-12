@@ -621,7 +621,7 @@ const resolveMcpToolEntry = async (
       }),
     };
     return await resolveMcpTools({
-      typedTool: { mcp },
+      typedTool: { mcp, actions: typedTool.actions },
       toolContext,
       buildContextHeaders,
       logToolCallingError,

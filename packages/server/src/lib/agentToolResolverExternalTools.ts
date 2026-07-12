@@ -61,7 +61,15 @@ export const buildMcpToolExecute = (args: {
 };
 
 export const resolveMcpTools = async (args: {
-  typedTool: { mcp: { url: string; headers?: Record<string, string> } };
+  typedTool: {
+    mcp: { url: string; headers?: Record<string, string> };
+    // Optional allowlist of MCP tool names to expose. `null`/`undefined`
+    // exposes the entire MCP server surface (default); a set restricts the
+    // model to just those tools — the capability-level primitive that makes a
+    // read-only scope over a read+write MCP server enforceable, not just a
+    // prompt-level suggestion.
+    actions?: string[] | null;
+  };
   toolContext?: Record<string, string>;
   buildContextHeaders: (
     toolContext?: Record<string, string>
@@ -69,6 +77,8 @@ export const resolveMcpTools = async (args: {
   logToolCallingError: LogToolCallingError;
 }): Promise<Record<string, Tool>> => {
   const result: Record<string, Tool> = {};
+  const allowedActions =
+    args.typedTool.actions != null ? new Set(args.typedTool.actions) : null;
   const mcpUrl = args.typedTool.mcp.url;
   const mcpHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -97,7 +107,11 @@ export const resolveMcpTools = async (args: {
       };
     };
 
-    for (const mcpTool of listBody.result?.tools ?? []) {
+    const listedTools = (listBody.result?.tools ?? []).filter((mcpTool) => {
+      return !allowedActions || allowedActions.has(mcpTool.name);
+    });
+
+    for (const mcpTool of listedTools) {
       const mcpToolName = mcpTool.name;
       result[mcpToolName] = tool({
         description: mcpTool.description ?? undefined,
