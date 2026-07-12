@@ -1654,6 +1654,57 @@ describe('resolveMcpTools - direct', () => {
     });
     expect(result).toHaveProperty('noschema_tool');
   });
+
+  const mockMcpListWithTwoTools = () => {
+    return jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          result: { tools: [{ name: 'read_item' }, { name: 'delete_item' }] },
+        }),
+        { status: 200 }
+      )
+    );
+  };
+
+  test('exposes the entire MCP server surface when actions is null', async () => {
+    mockMcpListWithTwoTools();
+    const result = await resolveMcpTools({
+      typedTool: { mcp: { url: 'http://localhost:19999/mcp' }, actions: null },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result).sort()).toEqual(['delete_item', 'read_item']);
+  });
+
+  test('exposes only allowlisted actions when actions is set', async () => {
+    mockMcpListWithTwoTools();
+    const result = await resolveMcpTools({
+      typedTool: {
+        mcp: { url: 'http://localhost:19999/mcp' },
+        actions: ['read_item'],
+      },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toEqual(['read_item']);
+    expect(result).not.toHaveProperty('delete_item');
+  });
+
+  test('exposes nothing when actions is an empty allowlist', async () => {
+    mockMcpListWithTwoTools();
+    const result = await resolveMcpTools({
+      typedTool: { mcp: { url: 'http://localhost:19999/mcp' }, actions: [] },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toHaveLength(0);
+  });
 });
 
 describe('executeSoatTool - direct', () => {

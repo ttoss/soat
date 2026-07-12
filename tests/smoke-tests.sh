@@ -1763,6 +1763,43 @@ if ! echo "$MCP_DIRECT_TEXT" | grep -qi "mcp-agent-lister\|$MCP_AGENT_ID"; then
 fi
 echo "MCP direct tools/call: OK"
 
+# 27-scope. MCP action scoping — an `actions` allowlist restricts which MCP
+# tool names the tool exposes and can invoke. Create a read-only tool over the
+# SOAT MCP server scoped to just `list-agents`, verify the allowlisted action
+# works and a denied write action (`create-agent`) is rejected with 400.
+echo "--- Creating scoped (read-only) MCP tool ---"
+SCOPED_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-mcp-readonly \
+  --type mcp \
+  --description "SOAT MCP server scoped to a read-only action." \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --actions '["list-agents"]')
+SCOPED_MCP_TOOL_ID=$(echo "$SCOPED_MCP_TOOL_RESP" | jq -r '.id')
+echo "Scoped MCP Tool id: $SCOPED_MCP_TOOL_ID"
+
+SCOPED_MCP_ACTIONS=$(echo "$SCOPED_MCP_TOOL_RESP" | jq -r '.actions | join(",")')
+if [ "$SCOPED_MCP_ACTIONS" != "list-agents" ]; then
+  echo "ERROR: scoped MCP tool did not round-trip its actions allowlist, got '$SCOPED_MCP_ACTIONS'" >&2
+  exit 1
+fi
+
+echo "--- Calling allowlisted MCP action (list-agents) ---"
+SCOPED_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$SCOPED_MCP_TOOL_ID" --action list-agents --input '{}')
+if printf '%s\n' "$SCOPED_CALL_RESP" | jq -e '.error' >/dev/null 2>&1; then
+  echo "ERROR: allowlisted MCP action call returned an error" >&2
+  echo "$SCOPED_CALL_RESP" >&2
+  exit 1
+fi
+echo "Allowlisted MCP action call: OK"
+
+echo "--- Calling denied MCP action (create-agent) must be rejected ---"
+expect_cli_error_status 400 call-tool \
+  --tool-id "$SCOPED_MCP_TOOL_ID" \
+  --action create-agent \
+  --input '{}'
+echo "Denied MCP action rejected: OK"
+
 # 27a. OAuth discovery endpoints (required for Claude Connectors / MCP OAuth 2.1)
 echo "--- Validating OAuth discovery endpoints ---"
 OAUTH_AS_META=$(curl -sf "$SERVER_URL/.well-known/oauth-authorization-server")

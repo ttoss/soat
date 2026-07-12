@@ -40,7 +40,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
-| `actions`           | `string[] \| null`                              | SOAT platform actions to expose (e.g. `["search-knowledge"]`). Required for `soat` type.                         |
+| `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `soat`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `discussion_id`     | `string \| null`                                | ID of the discussion to invoke. Required for `discussion` type. See [discussion](#discussion).                    |
@@ -248,6 +248,28 @@ An `mcp` tool represents a connection to a [Model Context Protocol](https://mode
 The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
 
 `mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
+
+#### Scoping an MCP tool to a subset of actions
+
+By default an `mcp` tool exposes the **entire** MCP server surface: every tool the server advertises via `tools/list` is registered with the model. For a read+write server this makes a "read-only" role unenforceable at the capability level — the write tools are always present, and the boundary rests on the prompt alone.
+
+Set the `actions` array to an allowlist of MCP tool names to scope the tool to just those:
+
+```json
+{
+  "name": "oneclick",
+  "type": "mcp",
+  "mcp": { "url": "https://mcp.oneclick.example/sse" },
+  "actions": ["list_campaigns", "get_campaign"]
+}
+```
+
+With `actions` set, the scope is enforced at two points:
+
+- **Model surface** — only allowlisted tools are registered during generation. The model never sees, and cannot call, a tool outside the list.
+- **Direct calls** — `POST /tools/{id}/call` (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` ("not available on this tool") before any request reaches the MCP server.
+
+`actions` is an **allowlist**, not a denylist: names not listed are excluded. Omit the field (or set it to `null`) to expose the whole server surface (the default). An empty array (`[]`) exposes nothing. Because MCP tool names are discovered at runtime from the remote server, they are **not** validated against a static registry at create/update time (unlike `soat` actions) — a name that the server does not advertise is simply never exposed.
 
 ### soat
 
