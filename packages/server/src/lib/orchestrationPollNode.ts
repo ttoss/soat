@@ -1,8 +1,8 @@
 import { DomainError } from '../errors';
-import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { parseDuration } from './orchestrationDuration';
 import { type NodeExecutionResult } from './orchestrationNodeExecutors';
 import type { OrchestrationNode } from './orchestrations';
+import { applyInputMapping, evaluateLogic } from './templating';
 import { callTool } from './tools';
 
 // Poll node safety bounds. `maxIterations` caps the number of attempts. There

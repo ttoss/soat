@@ -330,15 +330,15 @@ Refs create implicit dependencies — no need to repeat them in `depends_on`.
 
 ### Sub Expressions
 
-`{ "sub": "..." }` interpolates values **inside** a string. A `${Name}` token inside a sub resolves to:
+`{ "sub": "..." }` interpolates values **inside** a string. Tokens are namespaced, so each is resolved at exactly one stage:
 
-- the parameter's value, when `Name` is declared in `parameters`;
-- the **physical public ID** of another resource, when `Name` is a resource logical ID (resolved at apply time, like a `ref`);
-- itself (left literal), when `Name` starts with `body.` — those are [tool-argument interpolations](./tools.md#http) resolved at tool-call time.
+- `${param.Name}` — the parameter's value, when `Name` is declared in `parameters`;
+- `${ref.Name}` — the **physical public ID** of another resource (resolved at apply time, like a `ref`);
+- `${arg.field}` / `${secret.<id>}` — left literal at deploy time; these are [tool-argument](./tools.md#http) and [secret](./secrets.md#secret-references-secret) tokens resolved at tool-call time.
 
-Resource logical IDs inside subs create implicit dependencies, exactly like `ref` expressions.
+`${ref.Name}` tokens inside subs create implicit dependencies, exactly like `ref` expressions.
 
-The main use case is embedding a [secret reference](./secrets.md#secret-references-secret) for a secret created in the same template — the sub resolves the logical ID to the `sec_...` physical ID, producing a stored `{{secret:sec_...}}` token that the tool resolves at call time:
+The main use case is embedding a [secret reference](./secrets.md#secret-references-secret) for a secret created in the same template. Nest the resource ref inside the secret token — the sub resolves `${ref.ApiSecret}` to the `sec_...` physical ID, reforming a `${secret.sec_...}` token that the tool resolves at call time:
 
 ```json
 {
@@ -356,7 +356,7 @@ The main use case is embedding a [secret reference](./secrets.md#secret-referenc
           "url": "https://api.example.com/convert",
           "method": "POST",
           "headers": {
-            "Authorization": { "sub": "Bearer {{secret:${ApiSecret}}}" }
+            "Authorization": { "sub": "Bearer ${secret.${ref.ApiSecret}}" }
           }
         }
       }
@@ -365,7 +365,7 @@ The main use case is embedding a [secret reference](./secrets.md#secret-referenc
 }
 ```
 
-After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — the decrypted value is only substituted server-side when the tool is called, and is never echoed back by any API response.
+After deployment the tool's stored header is `Bearer ${secret.sec_01HXYZ}` — the decrypted value is only substituted server-side when the tool is called, and is never echoed back by any API response.
 
 ### Topological Ordering
 

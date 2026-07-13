@@ -1,12 +1,12 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
-import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
+import { applyInputMapping, evaluateLogic } from './templating';
 import { callTool } from './tools';
 
 /**
@@ -68,9 +68,9 @@ const writeToState = (
   cursor[segments[segments.length - 1] as string] = value;
 };
 
-// `applyInputMapping` and the JSON Logic evaluator now live in
-// `./jsonLogicMapping` so orchestration nodes and pipeline tools share a single
-// evaluator. Re-exported here to preserve the existing import surface.
+// `applyInputMapping` and the JSON Logic evaluator now live in `./templating`
+// so orchestration nodes and pipeline tools share a single evaluator.
+// Re-exported here to preserve the existing import surface.
 export { applyInputMapping };
 
 export const applyOutputMapping = (

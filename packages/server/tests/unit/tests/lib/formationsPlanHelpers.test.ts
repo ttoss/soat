@@ -38,7 +38,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: undefined,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
       });
 
       expect(change).toEqual({
@@ -55,7 +54,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: 'ghost_1',
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['Ghost']),
       });
 
       expect(change.action).toBe('update');
@@ -73,7 +71,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: memory.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
       });
 
       expect(change).toEqual({
@@ -96,7 +93,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: memory.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
       });
 
       expect(change.action).toBe('update');
@@ -120,7 +116,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: memory.id,
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
       });
 
       expect(change.action).toBe('update');
@@ -133,7 +128,6 @@ describe('formationsPlanHelpers', () => {
         physicalResourceId: 'mem_does_not_exist',
         resolvedParams: new Map(),
         existingMap: new Map(),
-        templateResourceKeys: new Set(['MyMemory']),
       });
 
       expect(change.action).toBe('update');
@@ -155,7 +149,6 @@ describe('formationsPlanHelpers', () => {
           physicalResourceId: memory.id,
           resolvedParams: new Map(),
           existingMap: new Map(),
-          templateResourceKeys: new Set(['MyMemory']),
         });
 
         expect(change.action).toBe('update');

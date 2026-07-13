@@ -32,7 +32,7 @@ export {
   type GenerationResult,
   submitToolOutputs,
 } from './agentGeneration';
-export { resolveUrlPathParams } from './agentToolResolver';
+export { resolveUrlArgs } from './agentToolResolver';
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 

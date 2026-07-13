@@ -1021,8 +1021,8 @@ resources:
           properties: {
             name: 'param-tool',
             execute: {
-              url: { sub: '${ToolUrl}/endpoint' },
-              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+              url: { sub: '${param.ToolUrl}/endpoint' },
+              headers: { Authorization: { sub: 'Bearer ${param.ApiKey}' } },
             },
           },
         },
@@ -1229,7 +1229,9 @@ resources:
                 name: 'underscore-param-tool',
                 execute: {
                   url: 'https://example.com/endpoint',
-                  headers: { Authorization: { sub: 'Bearer ${api_token}' } },
+                  headers: {
+                    Authorization: { sub: 'Bearer ${param.api_token}' },
+                  },
                 },
               },
             },
@@ -1458,7 +1460,7 @@ resources:
             type: 'tool',
             properties: {
               name: 'req-tool',
-              execute: { url: { sub: '${ToolUrl}/x' } },
+              execute: { url: { sub: '${param.ToolUrl}/x' } },
             },
           },
         },
@@ -2783,7 +2785,7 @@ resources:
                   description: 'panel with synthesis',
                   synthesis: {
                     ai_provider_id: discussionAiProviderId,
-                    prompt: 'Weigh {steps.deliberation}',
+                    prompt: 'Weigh ${steps.deliberation}',
                     effort: 'high',
                   },
                   participants: [
@@ -2851,7 +2853,7 @@ resources:
               url: 'https://api.example.com/convert',
               method: 'POST',
               headers: {
-                Authorization: { sub: 'Bearer {{secret:${ApiSecret}}}' },
+                Authorization: { sub: 'Bearer ${secret.${ref.ApiSecret}}' },
               },
             },
           },
@@ -2879,7 +2881,7 @@ resources:
               execute: {
                 url: 'https://api.example.com/convert',
                 headers: {
-                  Authorization: { sub: 'Bearer {{secret:${Unknown}}}' },
+                  Authorization: { sub: 'Bearer ${secret.${ref.Unknown}}' },
                 },
               },
             },
@@ -2925,10 +2927,10 @@ resources:
         `/api/v1/tools/${toolResource!.physical_resource_id}`
       );
       expect(toolRes.status).toBe(200);
-      // The tool stores the {{secret:...}} reference with the physical secret
+      // The tool stores the ${secret.<id>} reference with the physical secret
       // id substituted — never the decrypted value.
       expect(toolRes.body.execute.headers.Authorization).toBe(
-        `Bearer {{secret:${secretResource!.physical_resource_id}}}`
+        'Bearer ${secret.' + secretResource!.physical_resource_id + '}'
       );
     });
 

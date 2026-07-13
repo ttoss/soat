@@ -31,12 +31,12 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 ## Key Concepts
 
-### Secret References (`{{secret:...}}`)
+### Secret References (`${secret.<id>}`) {#secret-references-secret}
 
 Any string field that supports secret references can embed a token of the form:
 
 ```
-{{secret:sec_01HXYZ...}}
+${secret.sec_01HXYZ...}
 ```
 
 The token — not the raw value — is what gets stored and echoed back by `GET`/`LIST` endpoints. The server resolves the token to the decrypted value at the point of use only, e.g. right before an outbound HTTP request. The referenced secret must belong to the same project as the resource that uses it; otherwise the API fails fast with `400 SECRET_NOT_FOUND` at create/update time.
@@ -52,7 +52,7 @@ Currently supported fields:
 {
   "execute": {
     "url": "https://api.example.com/convert",
-    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+    "headers": { "Authorization": "Bearer ${secret.sec_01HXYZ}" }
   }
 }
 ```

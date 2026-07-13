@@ -143,7 +143,7 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
  * Validates a tool definition's business rules — shared by `createTool` (a
  * persisted Tool row) and every ephemeral consumer (an agent's inline `tools`,
  * a pipeline step's inline `tool`): a name is required, `pipeline` steps
- * reference tools that exist, `soat` actions are known, and `{{secret:...}}`
+ * reference tools that exist, `soat` actions are known, and `${secret.<id>}`
  * references resolve within the given project.
  */
 /**
@@ -212,7 +212,7 @@ export const validateToolDefinition = async (args: {
     await assertDiscussionToolValid({ definition, projectId });
   }
 
-  // Fail fast on {{secret:...}} tokens referencing nonexistent or
+  // Fail fast on ${secret.<id>} tokens referencing nonexistent or
   // out-of-project secrets, instead of failing at first call.
   await assertSecretRefsExist({
     value: { execute: definition.execute, mcp: definition.mcp },

@@ -219,10 +219,9 @@ describe('formationsHelpers', () => {
     });
 
     test('extracts param names from a sub expression', () => {
-      expect(collectParamRefs({ sub: 'prefix-${env}-${region}' })).toEqual([
-        'env',
-        'region',
-      ]);
+      expect(
+        collectParamRefs({ sub: 'prefix-${param.env}-${param.region}' })
+      ).toEqual(['env', 'region']);
     });
 
     test('collects from an array', () => {
@@ -256,15 +255,18 @@ describe('formationsHelpers', () => {
         ['region', 'us-east-1'],
       ]);
       expect(
-        resolveParamExpressions({ sub: 'agent-${env}-${region}' }, map)
+        resolveParamExpressions(
+          { sub: 'agent-${param.env}-${param.region}' },
+          map
+        )
       ).toBe('agent-prod-us-east-1');
     });
 
-    test('leaves body.xxx refs in sub expressions untouched', () => {
+    test('leaves ${arg.*} runtime tokens in sub expressions untouched', () => {
       const map = new Map([['env', 'prod']]);
-      expect(resolveParamExpressions({ sub: '${env}-${body.name}' }, map)).toBe(
-        'prod-${body.name}'
-      );
+      expect(
+        resolveParamExpressions({ sub: '${param.env}-${arg.name}' }, map)
+      ).toBe('prod-${arg.name}');
     });
 
     test('resolves inside an array', () => {
@@ -297,7 +299,7 @@ describe('formationsHelpers', () => {
 
     test('resolves a sub with an unresolved placeholder to undefined', () => {
       expect(
-        resolveParamExpressions({ sub: '${missing}' }, new Map())
+        resolveParamExpressions({ sub: '${param.missing}' }, new Map())
       ).toBeUndefined();
     });
 
@@ -314,42 +316,47 @@ describe('formationsHelpers', () => {
   // ── sub expressions referencing resource logical ids ─────────────────────
 
   describe('sub expressions with resource refs', () => {
+    // A ${secret.${ref.X}} token composes a resource ref (resolved to the
+    // secret's physical id at apply time) inside a secret token (resolved to
+    // the secret value at tool-call time). Innermost-first matching makes the
+    // two stages compose: the inner ${ref.X} resolves first, reforming a valid
+    // ${secret.sec_...} token for the later stage.
     test('resolveParamExpressions keeps a sub referencing a resource logical id', () => {
       const result = resolveParamExpressions(
-        { sub: 'Bearer {{secret:${MySecret}}}' },
-        new Map(),
-        new Set(['MySecret'])
+        { sub: 'Bearer ${secret.${ref.MySecret}}' },
+        new Map()
       );
-      expect(result).toEqual({ sub: 'Bearer {{secret:${MySecret}}}' });
+      expect(result).toEqual({ sub: 'Bearer ${secret.${ref.MySecret}}' });
     });
 
     test('resolveParamExpressions resolves params while keeping resource tokens', () => {
       const result = resolveParamExpressions(
-        { sub: '${stage}-{{secret:${MySecret}}}' },
-        new Map([['stage', 'prod']]),
-        new Set(['MySecret'])
+        { sub: '${param.stage}-${secret.${ref.MySecret}}' },
+        new Map([['stage', 'prod']])
       );
-      expect(result).toEqual({ sub: 'prod-{{secret:${MySecret}}}' });
+      expect(result).toEqual({ sub: 'prod-${secret.${ref.MySecret}}' });
     });
 
     test('resolveRefs substitutes resource physical ids inside sub strings', () => {
       const resolved = resolveRefs(
         {
-          headers: { Authorization: { sub: 'Bearer {{secret:${MySecret}}}' } },
+          headers: {
+            Authorization: { sub: 'Bearer ${secret.${ref.MySecret}}' },
+          },
         },
         new Map([['MySecret', 'sec_abc123']])
       );
       expect(resolved).toEqual({
-        headers: { Authorization: 'Bearer {{secret:sec_abc123}}' },
+        headers: { Authorization: 'Bearer ${secret.sec_abc123}' },
       });
     });
 
-    test('resolveRefs leaves body.* tokens in sub strings untouched', () => {
+    test('resolveRefs leaves ${arg.*} tokens in sub strings untouched', () => {
       const resolved = resolveRefs(
-        { sub: '${MySecret}/${body.name}' },
+        { sub: '${ref.MySecret}/${arg.name}' },
         new Map([['MySecret', 'sec_abc123']])
       );
-      expect(resolved).toBe('sec_abc123/${body.name}');
+      expect(resolved).toBe('sec_abc123/${arg.name}');
     });
 
     test('buildDependencyGraph adds implicit deps for sub resource tokens', () => {
@@ -365,7 +372,7 @@ describe('formationsHelpers', () => {
               name: 't',
               execute: {
                 headers: {
-                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                  Authorization: { sub: 'Bearer ${secret.${ref.MySecret}}' },
                 },
               },
             },
@@ -389,7 +396,7 @@ describe('formationsHelpers', () => {
               name: 't',
               execute: {
                 headers: {
-                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                  Authorization: { sub: 'Bearer ${secret.${ref.MySecret}}' },
                 },
               },
             },
@@ -410,10 +417,10 @@ describe('formationsHelpers', () => {
           MyTool: {
             type: 'tool',
             properties: {
-              name: { sub: 'tool-${stage}' },
+              name: { sub: 'tool-${param.stage}' },
               execute: {
                 headers: {
-                  Authorization: { sub: 'Bearer {{secret:${MySecret}}}' },
+                  Authorization: { sub: 'Bearer ${secret.${ref.MySecret}}' },
                 },
               },
             },
@@ -427,7 +434,7 @@ describe('formationsHelpers', () => {
       };
       expect(toolProps.name).toBe('tool-prod');
       expect(toolProps.execute.headers.Authorization).toEqual({
-        sub: 'Bearer {{secret:${MySecret}}}',
+        sub: 'Bearer ${secret.${ref.MySecret}}',
       });
     });
   });

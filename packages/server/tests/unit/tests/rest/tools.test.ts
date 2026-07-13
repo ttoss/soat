@@ -713,7 +713,7 @@ describe('Tools', () => {
     });
   });
 
-  describe('Secret references ({{secret:...}}) in tool configs', () => {
+  describe('Secret references (${secret.<id>}) in tool configs', () => {
     let secretId: string;
     let otherProjectSecretId: string;
     let echoServer: http.Server;
@@ -776,7 +776,7 @@ describe('Tools', () => {
     });
 
     test('creating an http tool with a valid secret ref stores and echoes the raw token', async () => {
-      const token = `Bearer {{secret:${secretId}}}`;
+      const token = 'Bearer ${secret.' + secretId + '}';
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
@@ -810,7 +810,9 @@ describe('Tools', () => {
           type: 'http',
           execute: {
             url: `${echoServerUrl}/convert`,
-            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+            headers: {
+              Authorization: 'Bearer ${secret.sec_doesnotexist00}',
+            },
           },
         });
 
@@ -828,7 +830,7 @@ describe('Tools', () => {
           execute: {
             url: `${echoServerUrl}/convert`,
             headers: {
-              Authorization: `Bearer {{secret:${otherProjectSecretId}}}`,
+              Authorization: 'Bearer ${secret.' + otherProjectSecretId + '}',
             },
           },
         });
@@ -853,7 +855,9 @@ describe('Tools', () => {
         .send({
           execute: {
             url: `${echoServerUrl}/convert`,
-            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+            headers: {
+              Authorization: 'Bearer ${secret.sec_doesnotexist00}',
+            },
           },
         });
 
@@ -897,7 +901,9 @@ describe('Tools', () => {
           type: 'mcp',
           mcp: {
             url: 'https://mcp.example.com/sse',
-            headers: { Authorization: 'Bearer {{secret:sec_doesnotexist00}}' },
+            headers: {
+              Authorization: 'Bearer ${secret.sec_doesnotexist00}',
+            },
           },
         });
 
@@ -913,11 +919,11 @@ describe('Tools', () => {
           name: 'secret-ref-call-tool',
           type: 'http',
           execute: {
-            url: `${echoServerUrl}/convert?key={{secret:${secretId}}}`,
+            url: `${echoServerUrl}/convert?key=` + '${secret.' + secretId + '}',
             method: 'POST',
             headers: {
-              Authorization: `Bearer {{secret:${secretId}}}`,
-              'X-Api-Key': `{{secret:${secretId}}}`,
+              Authorization: 'Bearer ${secret.' + secretId + '}',
+              'X-Api-Key': '${secret.' + secretId + '}',
             },
           },
         });

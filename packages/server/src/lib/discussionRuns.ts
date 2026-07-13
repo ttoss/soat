@@ -24,7 +24,7 @@ const DEFAULT_PARTICIPANT_PROMPT =
 const DEFAULT_SYNTHESIS_PROMPT =
   'Synthesize the discussion below into a single clear outcome. State the ' +
   'recommendation and the strongest objection to it.\n\nDiscussion:\n' +
-  '{steps.deliberation}';
+  '${steps.deliberation}';
 
 type Participant = NonNullable<DiscussionModel['participants']>[number];
 
@@ -132,8 +132,8 @@ const uniqueLabel = (base: string, used: Set<string>): string => {
 const buildParticipantPrompt = (persona: string | null): string => {
   return (
     `${persona ?? DEFAULT_PARTICIPANT_PROMPT}\n\n` +
-    'Topic:\n{topic}\n\n' +
-    'Conversation so far:\n{transcript}\n\n' +
+    'Topic:\n${topic}\n\n' +
+    'Conversation so far:\n${transcript}\n\n' +
     'Respond with your perspective.'
   );
 };

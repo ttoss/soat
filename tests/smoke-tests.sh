@@ -226,10 +226,10 @@ fi
 
 $SOAT_CLI update-secret --secret-id "$SECRET_ID" --name smoke-secret-updated --value updatedvalue
 
-# Secret references ({{secret:...}}) in tool configs: the stored token is
+# Secret references (${secret.<id>}) in tool configs: the stored token is
 # echoed back verbatim (never the decrypted value), and a token referencing a
 # nonexistent secret fails fast at create time.
-SECRET_REF_TOKEN="Bearer {{secret:$SECRET_ID}}"
+SECRET_REF_TOKEN="Bearer \${secret.$SECRET_ID}"
 SECRET_REF_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-secret-ref-tool \
@@ -237,7 +237,7 @@ SECRET_REF_TOOL_RESP=$($SOAT_CLI create-tool \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$SECRET_REF_TOKEN\"}}")
 SECRET_REF_TOOL_ID=$(echo "$SECRET_REF_TOOL_RESP" | jq -r '.id')
 if [ -z "$SECRET_REF_TOOL_ID" ] || [ "$SECRET_REF_TOOL_ID" = "null" ]; then
-  echo "ERROR: Failed to create tool with a {{secret:...}} reference" >&2
+  echo "ERROR: Failed to create tool with a \${secret.<id>} reference" >&2
   echo "$SECRET_REF_TOOL_RESP" >&2
   exit 1
 fi
@@ -245,7 +245,7 @@ fi
 SECRET_REF_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$SECRET_REF_TOOL_ID")
 STORED_AUTH_HEADER=$(echo "$SECRET_REF_TOOL_GET" | jq -r '.execute.headers.Authorization')
 if [ "$STORED_AUTH_HEADER" != "$SECRET_REF_TOKEN" ]; then
-  echo "ERROR: Expected stored header to echo the {{secret:...}} token, got '$STORED_AUTH_HEADER'" >&2
+  echo "ERROR: Expected stored header to echo the \${secret.<id>} token, got '$STORED_AUTH_HEADER'" >&2
   echo "$SECRET_REF_TOOL_GET" >&2
   exit 1
 fi
@@ -254,7 +254,7 @@ expect_cli_error_status 400 create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-secret-ref-bad-tool \
   --type http \
-  --execute '{"url":"https://api.example.com/convert","headers":{"Authorization":"Bearer {{secret:sec_doesnotexist00}}"}}'
+  --execute '{"url":"https://api.example.com/convert","headers":{"Authorization":"Bearer ${secret.sec_doesnotexist00}"}}'
 
 $SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
 echo "Secret reference coverage: OK"
@@ -2891,12 +2891,12 @@ $SOAT_CLI delete-formation --formation_id "$POLICY_FORMATION_ID"
 echo "Policy formation deleted."
 
 # secret formation — includes a tool referencing the formation-created secret
-# through a sub expression, which resolves to a {{secret:sec_...}} token.
+# through a sub expression, which resolves to a ${secret.sec_...} token.
 echo "--- Formation: secret resource type ---"
 SECRET_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-secret" \
-  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}},"myTool":{"type":"tool","properties":{"name":"smoke-formation-secret-ref-tool","type":"http","execute":{"url":"https://api.example.com/convert","method":"POST","headers":{"Authorization":{"sub":"Bearer {{secret:${mySecret}}}"}}}}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
+  --template '{"resources":{"mySecret":{"type":"secret","properties":{"name":"smoke-formation-secret","value":"smoke-secret-value"}},"myTool":{"type":"tool","properties":{"name":"smoke-formation-secret-ref-tool","type":"http","execute":{"url":"https://api.example.com/convert","method":"POST","headers":{"Authorization":{"sub":"Bearer ${secret.${ref.mySecret}}"}}}}}},"outputs":{"secretId":{"ref":"mySecret"}}}')
 SECRET_FORMATION_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.id')
 if [ -z "$SECRET_FORMATION_ID" ] || [ "$SECRET_FORMATION_ID" = "null" ]; then
   echo "ERROR: create-formation (secret) did not return an id" >&2
@@ -2909,8 +2909,8 @@ FORMATION_SECRET_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.
 FORMATION_TOOL_PHYSICAL_ID=$(printf '%s\n' "$SECRET_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "myTool") | .physical_resource_id')
 FORMATION_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$FORMATION_TOOL_PHYSICAL_ID")
 FORMATION_TOOL_AUTH=$(printf '%s\n' "$FORMATION_TOOL_GET" | jq -r '.execute.headers.Authorization')
-if [ "$FORMATION_TOOL_AUTH" != "Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}" ]; then
-  echo "ERROR: Expected formation tool header 'Bearer {{secret:$FORMATION_SECRET_PHYSICAL_ID}}', got '$FORMATION_TOOL_AUTH'" >&2
+if [ "$FORMATION_TOOL_AUTH" != "Bearer \${secret.$FORMATION_SECRET_PHYSICAL_ID}" ]; then
+  echo "ERROR: Expected formation tool header 'Bearer \${secret.$FORMATION_SECRET_PHYSICAL_ID}', got '$FORMATION_TOOL_AUTH'" >&2
   printf '%s\n' "$FORMATION_TOOL_GET" >&2
   exit 1
 fi

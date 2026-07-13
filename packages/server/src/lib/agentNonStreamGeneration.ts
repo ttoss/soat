@@ -22,9 +22,9 @@ import {
   fireCompletionSideEffects,
   recordGenerationFailure,
 } from './generationLifecycle';
-import { applyToolOutputMapping } from './jsonLogicMapping';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
+import { applyToolOutputMapping } from './templating';
 
 const log = createDebug('soat:generation');
 

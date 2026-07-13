@@ -79,7 +79,7 @@ export const ERROR_CODES = {
   SECRET_NOT_FOUND: {
     httpStatus: 400,
     description:
-      'A secret referenced by a {{secret:...}} token does not exist in this project.',
+      'A secret referenced by a ${secret.<id>} token does not exist in this project.',
   },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,

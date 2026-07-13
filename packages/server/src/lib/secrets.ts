@@ -4,8 +4,11 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { collectTokens, renderRecord, renderTemplate } from './templating';
 
 const log = createDebug('soat:secrets');
+
+const SECRET_NAMESPACE = 'secret';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
@@ -130,32 +133,28 @@ export const updateSecret = async (args: {
   return mapSecret(secret);
 };
 
-// ── Secret references ({{secret:sec_...}}) ────────────────────────────────
+// ── Secret references (${secret.sec_...}) ─────────────────────────────────
 //
-// Any string-valued input across the API may embed a `{{secret:<publicId>}}`
+// Any string-valued input across the API may embed a `${secret.<publicId>}`
 // token. The token is what gets stored and echoed back by GET/LIST endpoints;
 // it is resolved to the decrypted value server-side, at the point of use only
-// (e.g. right before an outbound fetch for an http tool).
-
-const SECRET_REF_RE = /\{\{secret:(sec_[A-Za-z0-9]+)\}\}/g;
+// (e.g. right before an outbound fetch for an http tool). Resolution runs
+// through the shared string-template engine — the `secret` namespace is the
+// only reserved namespace here, so other namespaces (`${arg.*}`) are left
+// intact for their own stage.
 
 /**
- * Collects the public IDs of all secrets referenced by `{{secret:...}}`
- * tokens anywhere inside a value (deep-walks strings, arrays, and objects).
+ * Collects the public IDs of all secrets referenced by `${secret.<id>}` tokens
+ * anywhere inside a value (deep-walks strings, arrays, and objects).
  */
 export const collectSecretRefs = (value: unknown): string[] => {
-  if (typeof value === 'string') {
-    return [...value.matchAll(SECRET_REF_RE)].map((m) => {
-      return m[1];
+  return collectTokens(value)
+    .filter((token) => {
+      return token.namespace === SECRET_NAMESPACE;
+    })
+    .map((token) => {
+      return token.path;
     });
-  }
-  if (Array.isArray(value)) return value.flatMap(collectSecretRefs);
-  if (typeof value === 'object' && value !== null) {
-    return Object.values(value as Record<string, unknown>).flatMap(
-      collectSecretRefs
-    );
-  }
-  return [];
 };
 
 const loadReferencedSecrets = async (args: {
@@ -177,7 +176,7 @@ const loadReferencedSecrets = async (args: {
   if (missing) {
     throw new DomainError(
       'SECRET_NOT_FOUND',
-      `Secret '${missing}' referenced by a {{secret:...}} token does not exist in this project.`,
+      `Secret '${missing}' referenced by a \${secret.<id>} token does not exist in this project.`,
       { secretId: missing }
     );
   }
@@ -185,7 +184,7 @@ const loadReferencedSecrets = async (args: {
 };
 
 /**
- * Validates that every `{{secret:...}}` token inside a value references a
+ * Validates that every `${secret.<id>}` token inside a value references a
  * secret that exists in the given project. Throws `SECRET_NOT_FOUND` (400)
  * otherwise. Use at create/update time to fail fast instead of at first call.
  */
@@ -204,8 +203,30 @@ export const assertSecretRefsExist = async (args: {
 };
 
 /**
- * Resolves every `{{secret:...}}` token in a string to the decrypted value
- * of the referenced secret, scoped to the given project. Throws
+ * Builds a synchronous `secret` resolver by pre-loading every secret an
+ * already-collected id list references. A token whose secret has no stored
+ * value resolves to `undefined`, which leaves the token verbatim (unchanged
+ * from the prior behavior).
+ */
+const buildSecretResolver = async (args: {
+  ids: string[];
+  projectId: number;
+}): Promise<(id: string) => string | undefined> => {
+  const byId = await loadReferencedSecrets({
+    ids: [...new Set(args.ids)],
+    projectId: args.projectId,
+  });
+  return (id: string) => {
+    const secret = byId.get(id);
+    return secret?.encryptedValue
+      ? decryptValue(secret.encryptedValue)
+      : undefined;
+  };
+};
+
+/**
+ * Resolves every `${secret.<id>}` token in a string to the decrypted value of
+ * the referenced secret, scoped to the given project. Throws
  * `SECRET_NOT_FOUND` for a token referencing a nonexistent or out-of-project
  * secret. Never log or persist the returned value.
  */
@@ -213,41 +234,29 @@ export const resolveSecretRefsInString = async (args: {
   value: string;
   projectId: number;
 }): Promise<string> => {
-  const ids = [...new Set(collectSecretRefs(args.value))];
+  const ids = collectSecretRefs(args.value);
   if (ids.length === 0) return args.value;
   log(
     'resolveSecretRefsInString: projectId=%d refs=%d',
     args.projectId,
     ids.length
   );
-  const byId = await loadReferencedSecrets({ ids, projectId: args.projectId });
-  return args.value.replace(SECRET_REF_RE, (original, secretId: string) => {
-    const secret = byId.get(secretId);
-    if (!secret?.encryptedValue) return original;
-    return decryptValue(secret.encryptedValue);
-  });
+  const secret = await buildSecretResolver({ ids, projectId: args.projectId });
+  return renderTemplate(args.value, { resolvers: { secret } }).output;
 };
 
 /**
- * Resolves `{{secret:...}}` tokens in every value of a headers-shaped record.
+ * Resolves `${secret.<id>}` tokens in every value of a headers-shaped record.
  */
 export const resolveSecretRefsInRecord = async (args: {
   record: Record<string, string> | undefined;
   projectId: number;
 }): Promise<Record<string, string> | undefined> => {
   if (!args.record) return args.record;
-  const entries = await Promise.all(
-    Object.entries(args.record).map(
-      async ([key, value]): Promise<[string, string]> => {
-        if (typeof value !== 'string') return [key, value];
-        return [
-          key,
-          await resolveSecretRefsInString({ value, projectId: args.projectId }),
-        ];
-      }
-    )
-  );
-  return Object.fromEntries(entries);
+  const ids = collectSecretRefs(args.record);
+  if (ids.length === 0) return args.record;
+  const secret = await buildSecretResolver({ ids, projectId: args.projectId });
+  return renderRecord(args.record, { resolvers: { secret } }).output;
 };
 
 export const deleteSecret = async (args: {

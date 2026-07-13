@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
+import { applyInputMapping, applyOutputMapping } from './templating';
 import type { InlineToolDefinition } from './tools';
 
 // ── Types ───────────────────────────────────────────────────────────────────

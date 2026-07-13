@@ -587,8 +587,8 @@ Create an [`http` tool](/docs/modules/tools#http) pointed directly at xAI's `/st
 endpoint (overridden to the mock in CI via `$XAI_BASE_URL`). Two things make this work
 against a real, non-chat REST API:
 
-- **`{{secret:...}}` in `execute.headers`** — the raw key is never stored on the tool;
-  `GET`/`LIST` echo back the `{{secret:...}}` token, and it resolves to the decrypted
+- **`${secret.<id>}` in `execute.headers`** — the raw key is never stored on the tool;
+  `GET`/`LIST` echo back the `${secret.<id>}` token, and it resolves to the decrypted
   value only right before the outbound request. See
   [Secrets — Secret References](/docs/modules/secrets#secret-references-secret).
 - **`execute.body_mode: "multipart"`** — xAI's `/stt` endpoint requires
@@ -606,7 +606,7 @@ STT_TOOL_ID=$(soat create-tool \
   --name "xai-stt" \
   --type http \
   --description "Transcribes audio via xAI's speech-to-text API" \
-  --execute '{"url":"'"$XAI_BASE_URL"'/stt","method":"POST","body_mode":"multipart","headers":{"Authorization":"Bearer {{secret:'"$XAI_SECRET_ID"'}}"}}' \
+  --execute '{"url":"'"$XAI_BASE_URL"'/stt","method":"POST","body_mode":"multipart","headers":{"Authorization":"Bearer ${secret.'"$XAI_SECRET_ID"'}"}}' \
   --parameters '{"type":"object","properties":{"file":{"type":"object"},"language":{"type":"string"}}}' \
   | jq -r '.id')
 echo "STT_TOOL_ID: $STT_TOOL_ID"
@@ -626,7 +626,7 @@ const { data: sttTool } = await adminSoat.tools.createTool({
       url: `${process.env.XAI_BASE_URL}/stt`,
       method: 'POST',
       body_mode: 'multipart',
-      headers: { Authorization: `Bearer {{secret:${XAI_SECRET_ID}}}` },
+      headers: { Authorization: 'Bearer ${secret.' + XAI_SECRET_ID + '}' },
     },
     parameters: {
       type: 'object',
@@ -644,7 +644,7 @@ const STT_TOOL_ID = sttTool.id;
 STT_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-stt\",\"type\":\"http\",\"description\":\"Transcribes audio via xAI's speech-to-text API\",\"execute\":{\"url\":\"$XAI_BASE_URL/stt\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer {{secret:$XAI_SECRET_ID}}\"}},\"parameters\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"object\"},\"language\":{\"type\":\"string\"}}}}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"xai-stt\",\"type\":\"http\",\"description\":\"Transcribes audio via xAI's speech-to-text API\",\"execute\":{\"url\":\"$XAI_BASE_URL/stt\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer \${secret.$XAI_SECRET_ID}\"}},\"parameters\":{\"type\":\"object\",\"properties\":{\"file\":{\"type\":\"object\"},\"language\":{\"type\":\"string\"}}}}" \
   | jq -r '.id')
 echo "STT_TOOL_ID: $STT_TOOL_ID"
 ```
@@ -942,7 +942,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
   referenced by the [AI provider](/docs/modules/ai-providers#examples)'s `secret_id`.
   Zero plumbing: the highest-level way to OCR images with an LLM.
 - **A tool converter** — an `http` tool calling xAI's real speech-to-text REST API
-  directly (`body_mode: multipart`, key held as a `{{secret:...}}` reference in
+  directly (`body_mode: multipart`, key held as a `${secret.<id>}` reference in
   `execute.headers`), wrapped in a `pipeline` tool that reshapes the response into a
   bare string. Routed to by `audio/*`. This is the pattern for wrapping any real,
   non-chat third-party API — see

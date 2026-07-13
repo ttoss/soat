@@ -33,7 +33,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
 | `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`). Required for `http` type.                        |
-| `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
+| `execute.url`       | `string`                                        | HTTP endpoint. Supports `${arg.name}` tokens replaced at call time with URL-encoded argument values.                                     |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
 | `execute.body_mode` | `"json" \| "multipart"`                         | How the request body is encoded for `POST`/`PUT`/`PATCH` (default: `json`). Use `multipart` for APIs that require `multipart/form-data`. |
@@ -79,10 +79,7 @@ For `mcp` and `soat`, the tool's `name` is a **prefix** joined with an underscor
 
 When the model calls an `http` tool, the server sends an HTTP request to `execute.url` using the configured method. For `POST`, `PUT`, and `PATCH` the tool arguments are sent as a JSON body. For `GET`, `HEAD`, and `DELETE` the arguments become query-string parameters.
 
-`execute.url` supports two placeholder syntaxes for injecting tool arguments into the URL path at invocation time:
-
-- **`{paramName}`** — replaced with the corresponding tool argument (URL-encoded). Use this syntax when the tool is defined directly via the API or CLI.
-- **`${body.fieldName}`** — same behavior, but used inside formation template `sub` expressions where `${...}` is the interpolation syntax. Arguments consumed by either placeholder form are excluded from the request body or query string.
+`execute.url` supports `${arg.<name>}` tokens for injecting tool arguments into the URL at invocation time. Each token is replaced with the corresponding tool argument, URL-encoded; dotted paths (`${arg.user.id}`) read nested arguments. Arguments consumed by a token are excluded from the request body or query string. A token whose argument is absent is left in the URL verbatim. To emit a literal `${…}`, escape it as `$${…}`.
 
 Example — a `DELETE` tool with path parameters:
 
@@ -91,7 +88,7 @@ Example — a `DELETE` tool with path parameters:
   "name": "delete-post",
   "type": "http",
   "execute": {
-    "url": "https://api.example.com/users/{user_id}/posts/{post_id}",
+    "url": "https://api.example.com/users/${arg.user_id}/posts/${arg.post_id}",
     "method": "DELETE"
   },
   "parameters": {
@@ -111,7 +108,7 @@ When the model calls this tool with `{ "user_id": "123", "post_id": "456" }`, th
 DELETE https://api.example.com/users/123/posts/456
 ```
 
-In a formation template, use `${body.fieldName}` inside a `sub` expression to interpolate tool arguments into the URL path:
+In a formation template, use the same `${arg.fieldName}` tokens inside a `sub` expression; the formation deploy leaves the `arg` namespace intact so it resolves at tool-call time:
 
 ```yaml
 parameters:
@@ -125,7 +122,7 @@ resources:
       type: http
       name: patch-recurring-expense
       execute:
-        url: { sub: '${AppUrl}/finance/recurring-expenses/${body.publicUuid}' }
+        url: { sub: '${param.AppUrl}/finance/recurring-expenses/${arg.publicUuid}' }
         method: PATCH
       parameters:
         type: object
@@ -153,12 +150,12 @@ Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes 
   "execute": {
     "url": "https://api.example.com/convert",
     "method": "POST",
-    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+    "headers": { "Authorization": "Bearer ${secret.sec_01HXYZ}" }
   }
 }
 ```
 
-`{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
+`${secret.<id>}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
 
 #### Request body encoding (`body_mode`)
 
@@ -178,7 +175,7 @@ For `POST`, `PUT`, and `PATCH`, the request body defaults to JSON (`Content-Type
     "url": "https://api.x.ai/v1/stt",
     "method": "POST",
     "body_mode": "multipart",
-    "headers": { "Authorization": "Bearer {{secret:sec_01HXYZ}}" }
+    "headers": { "Authorization": "Bearer ${secret.sec_01HXYZ}" }
   },
   "parameters": {
     "type": "object",
@@ -247,7 +244,7 @@ An `mcp` tool represents a connection to a [Model Context Protocol](https://mode
 
 The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
 
-`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
+`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer ${secret.sec_01HXYZ}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
 
 #### Scoping an MCP tool to a subset of actions
 
@@ -405,7 +402,7 @@ soat create-tool \
   --name "get-weather" \
   --type http \
   --description "Fetches current weather for a city" \
-  --execute '{"url":"https://api.weather.example/v1/current?city={city}","method":"GET"}' \
+  --execute '{"url":"https://api.weather.example/v1/current?city=${arg.city}","method":"GET"}' \
   --parameters '{"type":"object","properties":{"city":{"type":"string"}},"required":["city"]}'
 ```
 
@@ -423,7 +420,7 @@ const { data, error } = await soat.tools.createTool({
     type: 'http',
     description: 'Fetches current weather for a city',
     execute: {
-      url: 'https://api.weather.example/v1/current?city={city}',
+      url: 'https://api.weather.example/v1/current?city=${arg.city}',
       method: 'GET',
     },
     parameters: {
@@ -449,7 +446,7 @@ curl -X POST https://api.example.com/api/v1/tools \
     "type": "http",
     "description": "Fetches current weather for a city",
     "execute": {
-      "url": "https://api.weather.example/v1/current?city={city}",
+      "url": "https://api.weather.example/v1/current?city=${arg.city}",
       "method": "GET"
     },
     "parameters": {

@@ -14,70 +14,54 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
-import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   resolveSecretRefsInRecord,
   resolveSecretRefsInString,
 } from './secrets';
+import { applyToolOutputMapping, getPath, renderTemplate } from './templating';
 import type { InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:toolResolver');
 
-// ── Path Parameter Interpolation ─────────────────────────────────────────
+// ── URL Argument Interpolation ───────────────────────────────────────────
 
-export const resolveUrlPathParams = (args: {
+/**
+ * Substitutes `${arg.<path>}` tokens in a tool URL with the call arguments,
+ * URL-encoding each value, and returns the arguments that were NOT consumed by
+ * a token so the caller can forward them as a query string (GET) or JSON body
+ * (POST). This single pass replaces the former `resolveUrlPathParams` +
+ * `resolveBodyParamInterpolations` pair (`{param}` and `${body.x}`), which did
+ * the same job with two different delimiters.
+ *
+ * A token whose argument is absent is left verbatim (unchanged from the prior
+ * behavior). Consuming a nested token such as `${arg.user.id}` removes the
+ * whole top-level `user` key from the forwarded arguments.
+ */
+export const resolveUrlArgs = (args: {
   url: string;
   toolArgs: Record<string, unknown>;
 }): { resolvedUrl: string; remainingArgs: Record<string, unknown> } => {
-  const pathParamPattern = /\{(\w+)\}/g;
-  const pathParams = new Set(
-    [...args.url.matchAll(pathParamPattern)].map((m) => {
-      return m[1];
-    })
-  );
+  const { output, consumed } = renderTemplate(args.url, {
+    resolvers: {
+      arg: (path) => {
+        const value = getPath(args.toolArgs, path);
+        return value === undefined ? undefined : String(value);
+      },
+    },
+    encode: true,
+  });
 
-  let resolvedUrl = args.url;
-  const remainingArgs: Record<string, unknown> = {};
-
-  for (const [k, v] of Object.entries(args.toolArgs)) {
-    if (pathParams.has(k)) {
-      resolvedUrl = resolvedUrl.replaceAll(
-        `{${k}}`,
-        encodeURIComponent(String(v))
-      );
-    } else {
-      remainingArgs[k] = v;
-    }
-  }
-
-  return { resolvedUrl, remainingArgs };
-};
-
-const BODY_PARAM_RE = /\$\{body\.(\w+)\}/g;
-
-// Resolves ${body.fieldName} placeholders from toolArgs at call time.
-export const resolveBodyParamInterpolations = (args: {
-  url: string;
-  toolArgs: Record<string, unknown>;
-}): { resolvedUrl: string; remainingArgs: Record<string, unknown> } => {
-  const bodyParams = new Set(
-    [...args.url.matchAll(BODY_PARAM_RE)].map((m) => {
-      return m[1];
+  const consumedKeys = new Set(
+    consumed.map((token) => {
+      return token.slice('arg.'.length).split('.')[0];
     })
   );
   const remainingArgs: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(args.toolArgs)) {
-    if (!bodyParams.has(k)) remainingArgs[k] = v;
+  for (const [key, value] of Object.entries(args.toolArgs)) {
+    if (!consumedKeys.has(key)) remainingArgs[key] = value;
   }
-  const resolvedUrl = args.url.replace(
-    BODY_PARAM_RE,
-    (original, field: string) => {
-      const value = args.toolArgs[field];
-      if (value === undefined) return original;
-      return encodeURIComponent(String(value));
-    }
-  );
-  return { resolvedUrl, remainingArgs };
+
+  return { resolvedUrl: output, remainingArgs };
 };
 
 // ── Context Headers ───────────────────────────────────────────────────────
@@ -324,7 +308,7 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
   );
 };
 
-// Resolves {{secret:...}} tokens in the request url and headers at the point
+// Resolves ${secret.<id>} tokens in the request url and headers at the point
 // of use — the stored config (and anything echoed back by GET/LIST) keeps the
 // reference.
 const resolveHttpRequestSecrets = async (args: {
@@ -416,7 +400,7 @@ const withoutContentType = (
 };
 
 // Builds the fetch RequestInit, selecting JSON or multipart body encoding.
-// `resolvedHeaders` are the execute headers after {{secret:...}} resolution.
+// `resolvedHeaders` are the execute headers after ${secret.<id>} resolution.
 const buildHttpRequestInit = (args: {
   method: string;
   hasBody: boolean;
@@ -471,13 +455,9 @@ export const buildHttpToolExecute = (
         : {};
     let url = args.execute.url;
     try {
-      const {
-        resolvedUrl: afterPathParams,
-        remainingArgs: afterPathParamsArgs,
-      } = resolveUrlPathParams({ url: args.execute.url, toolArgs: rawArgs });
-      const { resolvedUrl, remainingArgs } = resolveBodyParamInterpolations({
-        url: afterPathParams,
-        toolArgs: afterPathParamsArgs,
+      const { resolvedUrl, remainingArgs } = resolveUrlArgs({
+        url: args.execute.url,
+        toolArgs: rawArgs,
       });
       url = buildHttpRequestUrl({
         resolvedUrl,
@@ -608,7 +588,7 @@ const resolveMcpToolEntry = async (
 ): Promise<Record<string, Tool>> => {
   if (!typedTool.mcp?.url) return {};
   try {
-    // Resolve {{secret:...}} tokens right before connecting to the MCP
+    // Resolve ${secret.<id>} tokens right before connecting to the MCP
     // server — the stored config keeps the reference.
     const mcp = {
       url: await resolveSecretRefsInString({
@@ -779,7 +759,7 @@ const resolveToolByType = async (
  * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
  * tool — reusing the same `resolveToolByType` dispatch as a persisted Tool
  * row, adapted to a synthetic `AgentToolRow`. `projectId` scopes
- * `{{secret:...}}` resolution for `http`/`mcp` definitions. `pipeline`-type
+ * `${secret.<id>}` resolution for `http`/`mcp` definitions. `pipeline`-type
  * definitions are rejected by `assertEphemeralTypeSupported` (imported
  * dynamically to avoid a circular import with tools.ts, which imports this
  * module) before resolution — they have no persisted steps to resolve.

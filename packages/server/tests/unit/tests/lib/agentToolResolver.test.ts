@@ -7,8 +7,7 @@ import {
   isSoatActionAllowedByBoundary,
   parseHttpExecuteConfig,
   resolveAgentTools,
-  resolveBodyParamInterpolations,
-  resolveUrlPathParams,
+  resolveUrlArgs,
 } from 'src/lib/agentToolResolver';
 import {
   buildMcpToolExecute,
@@ -981,9 +980,9 @@ describe('isSoatActionAllowedByBoundary', () => {
   });
 });
 
-describe('resolveUrlPathParams', () => {
-  test('returns unchanged url and all args as remaining when no placeholders', () => {
-    const result = resolveUrlPathParams({
+describe('resolveUrlArgs', () => {
+  test('returns unchanged url and all args as remaining when no tokens', () => {
+    const result = resolveUrlArgs({
       url: 'https://example.com/api/items',
       toolArgs: { foo: 'bar', baz: 123 },
     });
@@ -991,18 +990,18 @@ describe('resolveUrlPathParams', () => {
     expect(result.remainingArgs).toEqual({ foo: 'bar', baz: 123 });
   });
 
-  test('replaces single path param and removes it from remainingArgs', () => {
-    const result = resolveUrlPathParams({
-      url: 'https://example.com/api/items/{itemId}',
+  test('replaces a single ${arg.x} token and removes it from remainingArgs', () => {
+    const result = resolveUrlArgs({
+      url: 'https://example.com/api/items/${arg.itemId}',
       toolArgs: { itemId: 'item-123', filter: 'active' },
     });
     expect(result.resolvedUrl).toBe('https://example.com/api/items/item-123');
     expect(result.remainingArgs).toEqual({ filter: 'active' });
   });
 
-  test('replaces multiple path params', () => {
-    const result = resolveUrlPathParams({
-      url: 'https://example.com/api/{projectId}/items/{itemId}',
+  test('replaces multiple ${arg.x} tokens', () => {
+    const result = resolveUrlArgs({
+      url: 'https://example.com/api/${arg.projectId}/items/${arg.itemId}',
       toolArgs: { projectId: 'prj-1', itemId: 'item-2', extra: 'value' },
     });
     expect(result.resolvedUrl).toBe(
@@ -1011,29 +1010,39 @@ describe('resolveUrlPathParams', () => {
     expect(result.remainingArgs).toEqual({ extra: 'value' });
   });
 
-  test('URL-encodes path param values', () => {
-    const result = resolveUrlPathParams({
-      url: 'https://example.com/search/{query}',
+  test('URL-encodes token values', () => {
+    const result = resolveUrlArgs({
+      url: 'https://example.com/search/${arg.query}',
       toolArgs: { query: 'hello world' },
     });
     expect(result.resolvedUrl).toBe('https://example.com/search/hello%20world');
+    expect(result.remainingArgs).toEqual({});
   });
 
-  test('leaves placeholder unchanged when arg is not provided', () => {
-    const result = resolveUrlPathParams({
-      url: 'https://example.com/{id}/details',
+  test('resolves a nested ${arg.a.b} path and removes the top-level key', () => {
+    const result = resolveUrlArgs({
+      url: 'https://example.com/u/${arg.user.id}',
+      toolArgs: { user: { id: 'u9' }, keep: 'x' },
+    });
+    expect(result.resolvedUrl).toBe('https://example.com/u/u9');
+    expect(result.remainingArgs).toEqual({ keep: 'x' });
+  });
+
+  test('leaves token unchanged when the arg is not provided', () => {
+    const result = resolveUrlArgs({
+      url: 'https://example.com/${arg.id}/details',
       toolArgs: { other: 'value' },
     });
-    expect(result.resolvedUrl).toBe('https://example.com/{id}/details');
+    expect(result.resolvedUrl).toBe('https://example.com/${arg.id}/details');
     expect(result.remainingArgs).toEqual({ other: 'value' });
   });
 
   test('handles empty toolArgs', () => {
-    const result = resolveUrlPathParams({
-      url: 'https://example.com/{id}/details',
+    const result = resolveUrlArgs({
+      url: 'https://example.com/${arg.id}/details',
       toolArgs: {},
     });
-    expect(result.resolvedUrl).toBe('https://example.com/{id}/details');
+    expect(result.resolvedUrl).toBe('https://example.com/${arg.id}/details');
     expect(result.remainingArgs).toEqual({});
   });
 });
@@ -1054,44 +1063,6 @@ describe('parseHttpExecuteConfig', () => {
   test('returns HttpExecuteConfig when execute has a valid url string', () => {
     const result = parseHttpExecuteConfig({ url: 'https://example.com/api' });
     expect(result).toMatchObject({ url: 'https://example.com/api' });
-  });
-});
-
-describe('resolveBodyParamInterpolations', () => {
-  test('replaces ${body.field} with toolArg value and removes it from remainingArgs', () => {
-    const result = resolveBodyParamInterpolations({
-      url: 'https://example.com/api/items/${body.itemId}',
-      toolArgs: { itemId: 'abc-123', other: 'value' },
-    });
-    expect(result.resolvedUrl).toBe('https://example.com/api/items/abc-123');
-    expect(result.remainingArgs).toEqual({ other: 'value' });
-  });
-
-  test('replaces multiple ${body.xxx} placeholders', () => {
-    const result = resolveBodyParamInterpolations({
-      url: 'https://example.com/${body.projectId}/items/${body.itemId}',
-      toolArgs: { projectId: 'prj-1', itemId: 'itm-2', extra: 'x' },
-    });
-    expect(result.resolvedUrl).toBe('https://example.com/prj-1/items/itm-2');
-    expect(result.remainingArgs).toEqual({ extra: 'x' });
-  });
-
-  test('URL-encodes body param values', () => {
-    const result = resolveBodyParamInterpolations({
-      url: 'https://example.com/search/${body.query}',
-      toolArgs: { query: 'hello world' },
-    });
-    expect(result.resolvedUrl).toBe('https://example.com/search/hello%20world');
-    expect(result.remainingArgs).toEqual({});
-  });
-
-  test('leaves placeholder unchanged when arg not provided', () => {
-    const result = resolveBodyParamInterpolations({
-      url: 'https://example.com/items/${body.id}',
-      toolArgs: { other: 'value' },
-    });
-    expect(result.resolvedUrl).toBe('https://example.com/items/${body.id}');
-    expect(result.remainingArgs).toEqual({ other: 'value' });
   });
 });
 

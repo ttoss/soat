@@ -193,7 +193,7 @@ echo "Provider: $PROVIDER_ID"
 
 Create a [discussion](/docs/modules/discussions#examples) with three participants. Two of them cover the **fundamentals** — one checks factual accuracy, one checks logical structure — and the third checks **voice and tone**. Splitting fundamentals across two focused reviewers (rather than one "check everything" reviewer) keeps each turn narrow and its verdict crisp; see [Deliberation and synthesis](/docs/modules/discussions#deliberation-and-synthesis) for how the turns run.
 
-The `synthesis` object overrides the final pass that merges the three reviews. Its prompt uses the `{topic}` placeholder (the draft under review) and `{steps.deliberation}` (the transcript of all reviewer turns) — see [Synthesis](/docs/modules/discussions#synthesis).
+The `synthesis` object overrides the final pass that merges the three reviews. Its prompt uses the `${topic}` placeholder (the draft under review) and `${steps.deliberation}` (the transcript of all reviewer turns) — see [Synthesis](/docs/modules/discussions#synthesis).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -220,7 +220,7 @@ DISCUSSION_ID=$(soat create-discussion \
     }
   ]' \
   --synthesis '{
-    "prompt": "You are the editor. The draft under review is:\n\n{topic}\n\nThe panel gave these reviews:\n\n{steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance."
+    "prompt": "You are the editor. The draft under review is:\n\n${topic}\n\nThe panel gave these reviews:\n\n${steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance."
   }' | jq -r '.id')
 echo "Discussion: $DISCUSSION_ID"
 ```
@@ -256,7 +256,7 @@ const { data: discussion } = await adminSoat.discussions.createDiscussion({
     ],
     synthesis: {
       prompt:
-        'You are the editor. The draft under review is:\n\n{topic}\n\nThe panel gave these reviews:\n\n{steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance.',
+        'You are the editor. The draft under review is:\n\n${topic}\n\nThe panel gave these reviews:\n\n${steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance.',
     },
   },
 });
@@ -282,7 +282,7 @@ DISCUSSION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/discussions" \
       { "name": "Voice & Tone Reviewer", "prompt": "You review only voice and tone. The target voice is clear, confident, and concise. Flag hedging, jargon, and shifts in register. Do not comment on facts or logic." }
     ],
     "synthesis": {
-      "prompt": "You are the editor. The draft under review is:\n\n{topic}\n\nThe panel gave these reviews:\n\n{steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance."
+      "prompt": "You are the editor. The draft under review is:\n\n${topic}\n\nThe panel gave these reviews:\n\n${steps.deliberation}\n\nProduce a single verdict: SHIP or REVISE, followed by the top 3 concrete fixes ordered by importance."
     }
   }' | jq -r '.id')
 echo "Discussion: $DISCUSSION_ID"
@@ -515,7 +515,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
 
 1. **One discussion, three focused voices.** The panel is a single [Discussion](/docs/modules/discussions) with three participants. Each has a narrow persona — accuracy, logic, tone — so no single turn tries to do everything, and each verdict stays sharp.
 
-2. **Synthesis merges the reviews.** After the reviewers speak, the `synthesis` pass reads the whole transcript (`{steps.deliberation}`) plus the original draft (`{topic}`) and emits one `SHIP`/`REVISE` verdict with ranked fixes. This is the only text the caller sees.
+2. **Synthesis merges the reviews.** After the reviewers speak, the `synthesis` pass reads the whole transcript (`${steps.deliberation}`) plus the original draft (`${topic}`) and emits one `SHIP`/`REVISE` verdict with ranked fixes. This is the only text the caller sees.
 
 3. **The agent consulted the panel as a tool.** The writer attached a [`discussion`-type tool](/docs/modules/tools#discussion). When it called the tool with its draft, the server ran the discussion synchronously and returned `{ outcome, run_id }`. The full transcript persisted on the run — the writer's context received only the synthesized verdict.
 

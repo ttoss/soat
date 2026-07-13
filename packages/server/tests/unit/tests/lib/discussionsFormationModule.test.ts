@@ -67,7 +67,7 @@ describe('discussionsFormationModule', () => {
         synthesis: {
           ai_provider_id: aiProviderId,
           model: 'llama3.2',
-          prompt: 'Weigh {steps.deliberation}',
+          prompt: 'Weigh ${steps.deliberation}',
           effort: 'high',
         },
         participants: [

@@ -350,7 +350,7 @@ describe('Discussions', () => {
       const res = await createDiscussion({
         synthesis: {
           ai_provider_id: aiProviderId,
-          prompt: 'Weigh {steps.deliberation}',
+          prompt: 'Weigh ${steps.deliberation}',
           effort: 'high',
         },
         participants: [

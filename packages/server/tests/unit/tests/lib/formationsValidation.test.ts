@@ -21,7 +21,7 @@ describe('getMissingParams', () => {
       ParamMemory: {
         type: 'memory',
         properties: {
-          name: { sub: '${ToolUrl}-memory' },
+          name: { sub: '${param.ToolUrl}-memory' },
         },
       },
     },
@@ -714,7 +714,7 @@ describe('validateFormationTemplate', () => {
         MyMemory: {
           type: 'memory',
           properties: {
-            name: { sub: 'Bearer ${MissingKey}' },
+            name: { sub: 'Bearer ${param.MissingKey}' },
           },
         },
       },
@@ -787,8 +787,8 @@ describe('validateFormationTemplate', () => {
             type: 'http',
             name: 'my-tool',
             execute: {
-              url: { sub: '${AppUrl}/api/endpoint' },
-              headers: { Authorization: { sub: 'Bearer ${ApiKey}' } },
+              url: { sub: '${param.AppUrl}/api/endpoint' },
+              headers: { Authorization: { sub: 'Bearer ${param.ApiKey}' } },
             },
           },
         },
@@ -798,7 +798,7 @@ describe('validateFormationTemplate', () => {
     expect(result.errors).toHaveLength(0);
   });
 
-  test('returns valid when sub expression in HTTP tool URL uses body.xxx path interpolation', () => {
+  test('returns valid when sub expression in HTTP tool URL uses ${arg.*} path interpolation', () => {
     const result = validateFormationTemplate({
       parameters: {
         AppUrl: { type: 'string', default: 'https://example.com' },
@@ -811,7 +811,7 @@ describe('validateFormationTemplate', () => {
             name: 'patch-expense',
             execute: {
               url: {
-                sub: '${AppUrl}/api/finance/recurring-expenses/${body.publicUuid}',
+                sub: '${param.AppUrl}/api/finance/recurring-expenses/${arg.publicUuid}',
               },
               method: 'PATCH',
             },

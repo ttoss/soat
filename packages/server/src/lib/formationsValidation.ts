@@ -5,6 +5,7 @@ import {
   collectParamRefs,
   collectRefAttrs,
   collectRefs,
+  collectSubTokens,
   parseRefAttr,
   topologicalSort,
 } from './formationsHelpers';
@@ -115,7 +116,12 @@ const validateResourceProperties = (args: {
     return errors;
   }
 
-  for (const ref of collectRefs(properties)) {
+  // `{ ref: … }` markers and `${ref.Name}` sub tokens must both name a
+  // resource declared in the template.
+  for (const ref of [
+    ...collectRefs(properties),
+    ...collectSubTokens(properties),
+  ]) {
     if (!logicalIds.has(ref)) {
       errors.push({
         path: `${basePath}.properties`,
@@ -124,16 +130,14 @@ const validateResourceProperties = (args: {
     }
   }
 
-  for (const ref of collectParamRefs(properties)) {
-    // body.xxx refs are runtime tool-argument interpolations, not formation params
-    if (ref.startsWith('body.')) continue;
-    // A sub token may also name a resource logical id (resolved to the
-    // physical id at apply time).
-    if (logicalIds.has(ref)) continue;
-    if (!paramNames.has(ref)) {
+  // `${param.Name}` sub tokens and `{ param: … }` markers must name a declared
+  // parameter. Runtime `${arg.*}` / `${secret.*}` tokens are resolved at
+  // tool-call time and are intentionally not validated here.
+  for (const param of collectParamRefs(properties)) {
+    if (!paramNames.has(param)) {
       errors.push({
         path: `${basePath}.properties`,
-        message: `'${ref}' is neither a parameter nor a resource logical id`,
+        message: `'${param}' is not a declared parameter`,
       });
     }
   }

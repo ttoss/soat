@@ -4,9 +4,9 @@ import {
   applyToolOutputMapping,
   evaluateLogic,
   isLogic,
-} from 'src/lib/jsonLogicMapping';
+} from 'src/lib/templating/jsonLogic';
 
-describe('jsonLogicMapping', () => {
+describe('jsonLogic', () => {
   describe('isLogic', () => {
     test('returns true for a single-key object', () => {
       expect(isLogic({ var: 'name' })).toBe(true);

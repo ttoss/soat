@@ -88,7 +88,7 @@ The optional `synthesis` object overrides the final pass:
 | ---------------- | ------ | ------------------------------------------------------- |
 | `ai_provider_id` | string | Provider for the synthesis completion                  |
 | `model`          | string | Model for the synthesis completion                     |
-| `prompt`         | string | Synthesis prompt template (supports `{steps.deliberation}` and `{topic}`) |
+| `prompt`         | string | Synthesis prompt template (supports `${steps.deliberation}` and `${topic}`) |
 | `effort`         | string | `low` \| `medium` \| `high` provider-native effort      |
 
 ### Invoking a discussion from an agent

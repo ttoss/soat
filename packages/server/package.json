@@ -9,6 +9,7 @@
     "db-dev:rm": "docker compose -f docker-compose.db.yml down -v",
     "db-dev:logs": "docker compose -f docker-compose.db.yml logs -f",
     "dev": "tsx watch src/server.ts",
+    "migrate:string-templates": "tsx scripts/migrate-string-templates.ts",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests/tsconfig.json",
     "lint": "pnpm run lint-openapi && eslint src",
     "lint-openapi": "spectral lint src/rest/openapi/**/*.yaml",

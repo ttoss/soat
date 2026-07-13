@@ -12,16 +12,9 @@ export const planResourceChange = async (args: {
   physicalResourceId: string | undefined;
   resolvedParams: Map<string, string>;
   existingMap: Map<string, string>;
-  templateResourceKeys: Set<string>;
 }): Promise<PlanChange> => {
-  const {
-    logicalId,
-    decl,
-    physicalResourceId,
-    resolvedParams,
-    existingMap,
-    templateResourceKeys,
-  } = args;
+  const { logicalId, decl, physicalResourceId, resolvedParams, existingMap } =
+    args;
 
   if (!physicalResourceId) {
     return { logicalId, resourceType: decl.type, action: 'create' };
@@ -35,8 +28,7 @@ export const planResourceChange = async (args: {
       if (liveProperties !== null) {
         let resolvedProperties = resolveParamExpressions(
           decl.properties ?? {},
-          resolvedParams,
-          templateResourceKeys
+          resolvedParams
         ) as Record<string, unknown>;
         try {
           // Substitute physical ids of already-created resources so an

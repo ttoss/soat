@@ -131,7 +131,6 @@ export const planFormation = async (args: {
         physicalResourceId: existingMap.get(logicalId),
         resolvedParams,
         existingMap,
-        templateResourceKeys,
       });
     })
   );

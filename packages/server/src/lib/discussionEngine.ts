@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import * as discussionCompletion from './discussionCompletion';
+import { renderTemplate } from './templating';
 
 const log = createDebug('soat:discussions');
 
@@ -36,13 +37,13 @@ export type DiscussionBranch = {
 };
 
 export type DiscussionStep = {
-  /** Unique, human-readable step name; referenced as `{steps.<name>}`. Must not contain '.'. */
+  /** Unique, human-readable step name; referenced as `${steps.<name>}`. Must not contain '.'. */
   name: string;
   /** Prompt template — required unless every branch supplies its own. */
   prompt?: string;
   /** Omit for a single implicit branch. 1–5 entries. */
   branches?: DiscussionBranch[];
-  /** Rounds of branch turns (default 1, max 3). >1 requires a `{transcript}` reference. */
+  /** Rounds of branch turns (default 1, max 3). >1 requires a `${transcript}` reference. */
   rounds?: number;
   /** Step-level defaults for branches that omit their own. */
   aiProviderId?: string;
@@ -76,10 +77,11 @@ const renderTranscript = (transcript: TranscriptEntry[]): string => {
 };
 
 /**
- * Resolves the allowlisted template tokens in a step prompt: `{topic}`,
- * `{steps.<name>}` (concat of that step's turns), `{steps.<name>.last}` (only
- * its final turn), and `{transcript}` (prior turns within the current step —
- * its presence is what turns on the shared, sequential transcript). Unknown
+ * Resolves the allowlisted template tokens in a step prompt through the shared
+ * string-template engine: `${topic}`, `${steps.<name>}` (concat of that step's
+ * turns), `${steps.<name>.last}` (only its final turn), and `${transcript}`
+ * (prior turns within the current step — its presence is what turns on the
+ * shared, sequential transcript). Unknown namespaces have no resolver, so their
  * tokens are left untouched.
  */
 export const resolveTemplate = (args: {
@@ -89,17 +91,21 @@ export const resolveTemplate = (args: {
   stepLastOutputs?: Record<string, string>;
   transcript?: TranscriptEntry[];
 }): string => {
-  return args.template.replace(/\{([\w.]+)\}/g, (match, token: string) => {
-    if (token === 'topic') return args.topic;
-    if (token === 'transcript') return renderTranscript(args.transcript ?? []);
-    if (token.startsWith('steps.')) {
-      const rest = token.slice('steps.'.length);
-      const lastSuffix = /^(.+)\.last$/.exec(rest);
-      if (lastSuffix) return args.stepLastOutputs?.[lastSuffix[1]] ?? '';
-      return args.stepOutputs[rest] ?? '';
-    }
-    return match;
-  });
+  return renderTemplate(args.template, {
+    resolvers: {
+      topic: () => {
+        return args.topic;
+      },
+      transcript: () => {
+        return renderTranscript(args.transcript ?? []);
+      },
+      steps: (path) => {
+        const lastSuffix = /^(.+)\.last$/.exec(path);
+        if (lastSuffix) return args.stepLastOutputs?.[lastSuffix[1]] ?? '';
+        return args.stepOutputs[path] ?? '';
+      },
+    },
+  }).output;
 };
 
 export type DiscussionOutcome = {
@@ -203,7 +209,7 @@ const resolveBranchConfig = (args: {
 
 /**
  * Runs a step's `branches` over `rounds`. Branches whose prompt (or the step's,
- * used as fallback) references `{transcript}` see every prior turn within the
+ * used as fallback) references `${transcript}` see every prior turn within the
  * step, so they run round-major/branch-order sequentially; without that token
  * the branches are independent samples.
  */

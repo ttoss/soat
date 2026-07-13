@@ -8,6 +8,7 @@ import type {
   RefExpression,
   SubExpression,
 } from './formationsTypes';
+import { collectTokens, renderTemplate } from './templating';
 
 // ── Ref Utilities ─────────────────────────────────────────────────────────
 
@@ -42,8 +43,6 @@ export const isSub = (value: unknown): value is SubExpression => {
   );
 };
 
-const SUB_PARAM_RE = /\$\{([^}]+)\}/g;
-
 export const resolveRefs = (
   value: unknown,
   resolvedIds: Map<string, string>
@@ -56,12 +55,17 @@ export const resolveRefs = (
     return physicalId;
   }
   if (isSub(value)) {
-    // A sub surviving param resolution only carries resource logical ids and
-    // `body.*` tokens. Substitute physical ids; leave `body.*` (resolved at
-    // tool-call time) intact.
-    return value.sub.replace(SUB_PARAM_RE, (original, name: string) => {
-      return resolvedIds.get(name) ?? original;
-    });
+    // A sub surviving param resolution only carries resource-ref tokens
+    // (`${ref.Name}`) and runtime tokens (`${arg.*}` / `${secret.*}`).
+    // Substitute physical ids for the refs; the runtime namespaces have no
+    // resolver here, so they are left intact for tool-call time.
+    return renderTemplate(value.sub, {
+      resolvers: {
+        ref: (name) => {
+          return resolvedIds.get(name);
+        },
+      },
+    }).output;
   }
   if (Array.isArray(value)) {
     return value.map((item) => {
@@ -129,18 +133,19 @@ export const isParam = (value: unknown): value is ParamExpression => {
 };
 
 /**
- * Collects every `${Name}` token found inside sub expressions, excluding
- * `body.*` tokens (which are resolved at tool-call time). A token may name a
- * template parameter or a resource logical id — callers disambiguate.
+ * Collects the resource logical ids referenced by `${ref.Name}` tokens inside
+ * sub expressions — these are implicit resource dependencies. Runtime
+ * namespaces (`${arg.*}` / `${secret.*}`) and parameter tokens (`${param.*}`)
+ * are ignored.
  */
 export const collectSubTokens = (value: unknown): string[] => {
   if (isSub(value)) {
-    return [...value.sub.matchAll(SUB_PARAM_RE)]
-      .map((m) => {
-        return m[1];
+    return collectTokens(value.sub)
+      .filter((token) => {
+        return token.namespace === 'ref';
       })
-      .filter((name) => {
-        return !name.startsWith('body.');
+      .map((token) => {
+        return token.path;
       });
   }
   if (Array.isArray(value)) return value.flatMap(collectSubTokens);
@@ -152,13 +157,22 @@ export const collectSubTokens = (value: unknown): string[] => {
   return [];
 };
 
+/**
+ * Collects the template parameters referenced by a value — both `{ param: … }`
+ * markers and `${param.Name}` tokens inside sub expressions. The namespace
+ * distinguishes these from resource refs (`${ref.*}`) and runtime tokens, so no
+ * logical-id disambiguation is needed by callers.
+ */
 export const collectParamRefs = (value: unknown): string[] => {
   if (isParam(value)) return [value.param];
   if (isSub(value)) {
-    const matches = [...value.sub.matchAll(SUB_PARAM_RE)];
-    return matches.map((m) => {
-      return m[1];
-    });
+    return collectTokens(value.sub)
+      .filter((token) => {
+        return token.namespace === 'param';
+      })
+      .map((token) => {
+        return token.path;
+      });
   }
   if (Array.isArray(value)) return value.flatMap(collectParamRefs);
   if (typeof value === 'object' && value !== null) {
@@ -171,8 +185,7 @@ export const collectParamRefs = (value: unknown): string[] => {
 
 export const resolveParamExpressions = (
   value: unknown,
-  resolvedParams: Map<string, string>,
-  resourceLogicalIds?: Set<string>
+  resolvedParams: Map<string, string>
 ): unknown => {
   if (isParam(value)) {
     // An unresolved param resolves to `undefined`, which drops the field from
@@ -183,46 +196,41 @@ export const resolveParamExpressions = (
     return resolvedParams.get(value.param);
   }
   if (isSub(value)) {
-    let hasUnresolved = false;
-    let hasResourceRef = false;
-    const replaced = value.sub.replace(
-      SUB_PARAM_RE,
-      (original, name: string) => {
-        // body.xxx refs are resolved at tool-call time, not formation-apply time
-        if (name.startsWith('body.')) return original;
-        // Resource logical ids are resolved to physical ids later, by
-        // resolveRefs at apply time — keep the token and the sub wrapper.
-        if (resourceLogicalIds?.has(name)) {
-          hasResourceRef = true;
-          return original;
-        }
-        const resolved = resolvedParams.get(name);
-        if (resolved === undefined) {
-          hasUnresolved = true;
-          return original;
-        }
-        return resolved;
-      }
-    );
-    // If any (non-body) param in the interpolation was kept/omitted, drop the
-    // whole value so the previous value is preserved rather than writing a
-    // partially-substituted string.
-    if (hasUnresolved) return undefined;
-    return hasResourceRef ? { sub: replaced } : replaced;
+    // Only the `param` namespace resolves here. `ref` tokens are resolved to
+    // physical ids later (resolveRefs, apply time); `arg`/`secret` at tool-call
+    // time. Those have no resolver, so the engine leaves them intact.
+    const result = renderTemplate(value.sub, {
+      resolvers: {
+        param: (name) => {
+          return resolvedParams.get(name);
+        },
+      },
+    });
+    // A `param` token that stayed unresolved is an explicit "use previous
+    // value": drop the whole field so the existing value is preserved rather
+    // than writing a partially-substituted string.
+    const hasUnresolvedParam = result.referenced.some((token) => {
+      return (
+        token.namespace === 'param' && !result.consumed.includes(token.raw)
+      );
+    });
+    if (hasUnresolvedParam) return undefined;
+    // A resource-ref token still needs resolveRefs at apply time — keep the sub
+    // wrapper so it is revisited; otherwise it is a finished plain string.
+    const hasResourceRef = result.referenced.some((token) => {
+      return token.namespace === 'ref';
+    });
+    return hasResourceRef ? { sub: result.output } : result.output;
   }
   if (Array.isArray(value)) {
     return value.map((item) => {
-      return resolveParamExpressions(item, resolvedParams, resourceLogicalIds);
+      return resolveParamExpressions(item, resolvedParams);
     });
   }
   if (typeof value === 'object' && value !== null) {
     const result: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      result[k] = resolveParamExpressions(
-        v,
-        resolvedParams,
-        resourceLogicalIds
-      );
+      result[k] = resolveParamExpressions(v, resolvedParams);
     }
     return result;
   }
@@ -268,8 +276,7 @@ export const resolveWorkingTemplate = (args: {
   if (!hasParameters && resolvedParamsMap.size === 0) return template;
   return resolveParamExpressions(
     template,
-    resolvedParamsMap,
-    new Set(Object.keys(template.resources))
+    resolvedParamsMap
   ) as FormationTemplate;
 };
 
@@ -292,16 +299,13 @@ export const getMissingParams = (
   provided?: Record<string, string>,
   forUpdate = false
 ): string[] => {
-  const logicalIds = new Set(Object.keys(template.resources));
-  const usedParams = new Set(
-    [
-      ...collectParamRefs(template.resources),
-      ...collectParamRefs(template.outputs ?? {}),
-    ].filter((name) => {
-      // A sub token naming a resource logical id is a resource ref, not a param.
-      return !logicalIds.has(name);
-    })
-  );
+  // `collectParamRefs` returns only `${param.*}` tokens and `{ param: … }`
+  // markers, so no resource-logical-id disambiguation is needed — the
+  // namespace already separates params from `${ref.*}` resource references.
+  const usedParams = new Set([
+    ...collectParamRefs(template.resources),
+    ...collectParamRefs(template.outputs ?? {}),
+  ]);
 
   return [...usedParams].filter((name) => {
     return !paramHasValue({

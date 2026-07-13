@@ -22,13 +22,13 @@ describe('discussionEngine', () => {
     test('substitutes topic, steps, steps.last, and transcript tokens', () => {
       const out = resolveTemplate({
         template:
-          'topic={topic} full={steps.a} last={steps.a.last} t={transcript} unknown={nope}',
+          'topic=${topic} full=${steps.a} last=${steps.a.last} t=${transcript} unknown=${nope}',
         topic: 'T',
         stepOutputs: { a: 'A1\nA2' },
         stepLastOutputs: { a: 'A2' },
         transcript: [{ name: 'X', text: 'hi' }],
       });
-      expect(out).toBe('topic=T full=A1\nA2 last=A2 t=X: hi unknown={nope}');
+      expect(out).toBe('topic=T full=A1\nA2 last=A2 t=X: hi unknown=${nope}');
     });
   });
 
@@ -37,7 +37,7 @@ describe('discussionEngine', () => {
       return 'lone answer';
     });
     const steps: DiscussionStep[] = [
-      { name: 'only', prompt: 'Answer {topic}' },
+      { name: 'only', prompt: 'Answer ${topic}' },
     ];
     const outcome = await runDiscussionPipeline({
       projectId: 1,
@@ -61,14 +61,14 @@ describe('discussionEngine', () => {
         name: 'deliberation',
         rounds: 2,
         branches: [
-          { name: 'Advocate', prompt: 'Advocate: {topic}\n{transcript}' },
-          { name: 'Skeptic', prompt: 'Skeptic: {topic}\n{transcript}' },
+          { name: 'Advocate', prompt: 'Advocate: ${topic}\n${transcript}' },
+          { name: 'Skeptic', prompt: 'Skeptic: ${topic}\n${transcript}' },
         ],
       },
       {
         name: 'synthesis',
         output: true,
-        prompt: 'Synthesize: {steps.deliberation}',
+        prompt: 'Synthesize: ${steps.deliberation}',
       },
     ];
     const outcome = await runDiscussionPipeline({
@@ -107,7 +107,7 @@ describe('discussionEngine', () => {
     });
     const steps: DiscussionStep[] = [
       { name: 'first', prompt: 'first' },
-      { name: 'out', prompt: 'OUT {steps.first}', output: true },
+      { name: 'out', prompt: 'OUT ${steps.first}', output: true },
     ];
     const outcome = await runDiscussionPipeline({
       projectId: 1,

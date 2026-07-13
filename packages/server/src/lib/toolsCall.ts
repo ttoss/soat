@@ -8,7 +8,6 @@ import {
   buildMcpToolExecute,
   executeSoatTool,
 } from './agentToolResolverExternalTools';
-import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
 import {
@@ -16,6 +15,7 @@ import {
   resolveSecretRefsInString,
 } from './secrets';
 import { soatTools } from './soatTools';
+import { applyToolOutputMapping } from './templating';
 
 const noopLogToolCallingError = () => {};
 
@@ -227,7 +227,7 @@ export const callMcpTool = async (
       'MCP tool has an invalid mcp configuration.'
     );
   }
-  // {{secret:...}} tokens resolve at the point of use, right before the
+  // ${secret.<id>} tokens resolve at the point of use, right before the
   // outbound MCP request — the stored config keeps the reference.
   const mcpUrl = await resolveSecretRefsInString({
     value: mcpConfig.url,
@@ -255,7 +255,7 @@ export const callMcpTool = async (
  * Executes an already-resolved tool definition — shared by `tools.ts#callTool`
  * (looks up a persisted Tool row first) and `callEphemeralTool` (executes an
  * inline definition directly, no DB row). `toolProjectId` scopes
- * `{{secret:...}}` resolution for `http`/`mcp` tools.
+ * `${secret.<id>}` resolution for `http`/`mcp` tools.
  *
  * A pipeline step's `callStep` dispatches inline here (rather than through a
  * separate named helper calling back into `callEphemeralTool`) so this stays
