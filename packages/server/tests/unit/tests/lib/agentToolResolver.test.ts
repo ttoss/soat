@@ -389,7 +389,7 @@ describe('resolveAgentTools', () => {
         description: 'Legacy stored execute payload',
         parameters: { type: 'object', properties: {} },
         execute: {
-          url: 'https://example.com/api/users/{user_id}',
+          url: 'https://example.com/api/users/${arg.user_id}',
           method: 'GET',
         },
       });
@@ -397,7 +397,7 @@ describe('resolveAgentTools', () => {
     await db.Tool.update(
       {
         execute: {
-          url: 'https://example.com/api/users/{user_id}',
+          url: 'https://example.com/api/users/${arg.user_id}',
           method: 'GET',
         },
       },
@@ -409,7 +409,7 @@ describe('resolveAgentTools', () => {
       {
         bind: [
           JSON.stringify({
-            url: 'https://example.com/api/users/{user_id}',
+            url: 'https://example.com/api/users/${arg.user_id}',
             method: 'GET',
           }),
           legacyToolRes.body.id,
