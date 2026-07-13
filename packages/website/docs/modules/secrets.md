@@ -31,7 +31,7 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 ## Key Concepts
 
-### Secret References (`${secret.<id>}`) {#secret-references-secret}
+### Secret References (`${secret...}`)
 
 Any string field that supports secret references can embed a token of the form:
 
