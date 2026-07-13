@@ -4,6 +4,7 @@ import { createGeneration } from './agentGeneration';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
@@ -48,7 +49,23 @@ const writeToState = (
 ): void => {
   const normalizedPath = path.startsWith('state.') ? path : `state.${path}`;
   const fieldName = normalizedPath.slice('state.'.length);
-  state[fieldName] = value;
+  // A dotted target (`state.proposed.action_id`) must build a nested object so
+  // it can later be read back with `{ "var": "proposed.action_id" }` — the
+  // JSON-Logic `var` reader descends dot-paths. Writing the whole dotted string
+  // as a single flat key (the previous behavior) left `{ "var": "a.b" }`
+  // resolving to null, since `var` looks for `state.a.b`, not `state["a.b"]`.
+  // The nested read path (`resolveLoopCollection`) already assumed this shape.
+  const segments = fieldName.split('.');
+  let cursor = state;
+  for (let i = 0; i < segments.length - 1; i += 1) {
+    const segment = segments[i] as string;
+    const next = cursor[segment];
+    if (next === null || typeof next !== 'object' || Array.isArray(next)) {
+      cursor[segment] = {};
+    }
+    cursor = cursor[segment] as Record<string, unknown>;
+  }
+  cursor[segments[segments.length - 1] as string] = value;
 };
 
 // `applyInputMapping` and the JSON Logic evaluator now live in
@@ -258,40 +275,6 @@ export const executeHumanNode = (args: {
     context,
     options: node.options,
   };
-};
-
-const SUFFIX_UNIT_MS: Record<string, number> = {
-  ms: 1,
-  s: 1000,
-  m: 60000,
-  h: 3600000,
-  d: 86400000,
-};
-
-/**
- * Parses a duration string to milliseconds. Accepts a friendly suffix form
- * (`5s`, `30s`, `5m`, `2h`, `1d`, `500ms`) or ISO 8601 (`PT5S`, `PT1M30S`,
- * `P1DT2H`). Unparseable input resolves to `0` (a no-op wait), matching the
- * delay node's long-standing behaviour. Shared by the `delay` and `poll` nodes
- * so both accept the same formats.
- */
-export const parseDuration = (value: string): number => {
-  const suffix = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)$/.exec(value.trim());
-  if (suffix) {
-    const amount = parseFloat(suffix[1] ?? '0');
-    const unitMs = SUFFIX_UNIT_MS[suffix[2] ?? 's'] ?? 1000;
-    return amount * unitMs;
-  }
-  const iso =
-    /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(
-      value
-    );
-  if (!iso) return 0;
-  const days = parseFloat(iso[1] ?? '0');
-  const hours = parseFloat(iso[2] ?? '0');
-  const minutes = parseFloat(iso[3] ?? '0');
-  const seconds = parseFloat(iso[4] ?? '0');
-  return ((days * 24 + hours) * 60 + minutes) * 60000 + seconds * 1000;
 };
 
 export const executeDelayNode = (args: {

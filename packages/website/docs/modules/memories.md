@@ -182,6 +182,25 @@ The custom `prompt` controls *what* to extract, not the response format — the 
 
 Extraction is opt-in and requires both fields: `extraction` without `write_memory_id` does nothing. Streaming generations and `requires_action` (client-tool) turns do not trigger extraction; the turn must complete in the same request.
 
+##### Gating extraction per turn
+
+The agent-level `extraction` flag decides the default, but a single `POST /agents/:id/generate` call can override it with a top-level `extract` boolean (not inside `knowledge_config`):
+
+- `extract` omitted — follow the agent's stored `extraction` default.
+- `extract: false` — suppress extraction for this turn even when the agent enables it. Use this for operational or tool-listing turns whose facts would only add noise to a curated memory.
+- `extract: true` — force extraction for this turn even when the agent does not enable it by default, provided the agent has a `write_memory_id`. Use this to capture a genuine onboarding turn without leaving extraction on for every turn.
+
+```json
+{
+  "messages": [{ "role": "user", "content": "List the tools you have." }],
+  "extract": false
+}
+```
+
+The `extract` flag has no effect on streaming or `requires_action` turns (they never extract), and cannot conjure a target: `extract: true` is still a no-op when the agent has no `write_memory_id`.
+
+Extraction reads the agent's stored `knowledge_config` at generation time and normalizes its casing on read, so an agent deployed by a Formation (whose stored config may be snake_case) extracts correctly without needing to be re-saved.
+
 See it end to end in [Agent with Persistent Memory - Step 11 (Enable automatic extraction)](/docs/tutorials/memories-agent#step-11--enable-automatic-extraction).
 
 ## Examples

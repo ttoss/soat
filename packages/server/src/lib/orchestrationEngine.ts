@@ -306,7 +306,14 @@ export const startOrchestrationRun = async (args: {
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
-  const state: Record<string, unknown> = { ...(args.input ?? {}) };
+  // Seed the run input both flat (top-level keys, the original behavior) and
+  // under an `input` namespace. The namespace matches the pipeline/formation
+  // convention (`{ "var": "input.<name>" }`) so a graph authored against that
+  // documented contract sees its run input in every node expression and
+  // input_mapping, not just in the persisted final-state dump. Keeping the flat
+  // keys preserves existing `{ "var": "<name>" }` references.
+  const runInput = (args.input ?? {}) as Record<string, unknown>;
+  const state: Record<string, unknown> = { ...runInput, input: runInput };
   const artifacts: Record<string, unknown> = {};
 
   const runRecord = await db.OrchestrationRun.create({

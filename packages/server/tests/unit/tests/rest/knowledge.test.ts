@@ -218,6 +218,53 @@ describe('Knowledge', () => {
       expect(Array.isArray(response.body.results)).toBe(true);
     });
 
+    test('a document semantic search populates a numeric similarity_score', async () => {
+      // Contract guard for the reported "score is null" symptom: a query-based
+      // document search must return a numeric relevance score (the field was
+      // renamed score -> similarity_score in a prior release). The embedding
+      // stub returns a constant vector, so distance is 0 and the score is 1.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'fox',
+        });
+      expect(response.status).toBe(200);
+      const docResult = response.body.results.find(
+        (r: { source_type: string }) => {
+          return r.source_type === 'document';
+        }
+      );
+      expect(docResult).toBeDefined();
+      expect(typeof docResult.similarity_score).toBe('number');
+      expect(Number.isFinite(docResult.similarity_score)).toBe(true);
+      expect(docResult.similarity_score).toBeGreaterThan(0);
+    });
+
+    test('min_score keeps a document whose true score clears the threshold', async () => {
+      // The constant-vector stub gives a correct document score of 1, so a
+      // min_score of 0.5 must keep the result. Under the sub-query bug the
+      // score collapsed to the fallback 0, which is below 0.5 and would be
+      // filtered out — so this pins the score to its true value (1), not merely
+      // "non-null". A threshold between the buggy 0 and the correct 1 is what
+      // makes this a genuine red/green regression test.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'fox',
+          min_score: 0.5,
+        });
+      expect(response.status).toBe(200);
+      const docResult = response.body.results.find(
+        (r: { source_type: string }) => {
+          return r.source_type === 'document';
+        }
+      );
+      expect(docResult).toBeDefined();
+      expect(docResult.similarity_score).toBeGreaterThanOrEqual(0.5);
+    });
+
     test('an admin-owned, policy-less project API key gets the admin wildcard policy', async () => {
       const keyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/api-keys')

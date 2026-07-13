@@ -215,9 +215,15 @@ The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `
 Each node can define:
 
 - **`input_mapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`output_mapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page.
+- **`output_mapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page. A **dotted** target such as `"state.proposed.action_id"` builds a nested object (`state.proposed = { action_id: … }`), so a later node reads it back with `{"var": "proposed.action_id"}` — the `var` reader descends dot-paths.
 
-The root state is available to every node. Transforms and conditions receive the full state object.
+#### Evaluation scope
+
+Every JSON Logic expression in a graph is evaluated against the run **state**, which is the single shared context: it holds the run input (see [Run input](#run-input)) plus everything upstream nodes have written via `output_mapping`. What differs between node types is not the scope but what each node *does* with it:
+
+- **`transform` and `condition`** evaluate their `expression` against the full state directly.
+- **`agent`, `tool`, `knowledge`, `memory_write`, `human`, `webhook`, `sub_orchestration`** evaluate each `input_mapping` value against the full state and pass only that projected result to the node (an agent's prompt, a tool's input, etc.) — they do not receive the whole state.
+- **`poll`** evaluates its `input_mapping` against state, then its `exit_condition` against state augmented with `response` (the latest tool result) and `attempt` (see [Polling](#polling)).
 
 #### Input Mapping (JSON Logic)
 
@@ -240,7 +246,14 @@ Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) a
 }
 ```
 
-Values passed to [`start-orchestration-run`](#examples) via `input` become the initial state, so a node can reference them directly with `{"var": "key"}`.
+#### Run input
+
+Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state two ways, so either convention resolves:
+
+- **Flat** — each top-level input key is a state key, read with `{"var": "key"}`.
+- **Namespaced** — the whole input object is also available under `input`, read with `{"var": "input.key"}`, matching the pipeline/formation convention.
+
+Input keys round-trip **verbatim** (they are not case-transformed), so a key sent as `cycle_task` is read as `{"var": "cycle_task"}` / `{"var": "input.cycle_task"}` — not `cycleTask`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference in an `input_mapping` satisfies [static validation](#static-validation) regardless of the declared `input_schema`.
 
 To pass a literal object that happens to look like a JSON Logic expression — e.g. the JSON Logic object `{"var": "x"}` itself, as data rather than an expression to evaluate — wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
 

@@ -17,9 +17,27 @@ const log = createDebug('soat:orchestrations');
  * Normalizes any thrown value into the structured error shape persisted on a
  * run (and on each failing node execution).
  */
+const describeThrown = (error: unknown): string => {
+  if (error instanceof Error) return error.message;
+  // A non-Error throw is common from third-party evaluators — e.g.
+  // json-logic-engine throws a bare `{ type: 'Unknown Operator' }` object for
+  // an unrecognized operator (such as a multi-key object used as a
+  // `map`/`filter` mapper). `String(obj)` collapses that to the useless
+  // "[object Object]", so serialize the value to preserve the actual cause.
+  if (typeof error === 'object' && error !== null) {
+    try {
+      const json = JSON.stringify(error);
+      if (json && json !== '{}') return json;
+    } catch {
+      // fall through to String() for circular / non-serializable values
+    }
+  }
+  return String(error);
+};
+
 export const buildRunError = (error: unknown): object => {
   return {
-    message: error instanceof Error ? error.message : String(error),
+    message: describeThrown(error),
     code: error instanceof DomainError ? error.code : 'UNKNOWN',
   };
 };

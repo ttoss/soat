@@ -336,6 +336,30 @@ describe('validateOrchestrationGraph', () => {
       expect(result.valid).toBe(true);
     });
 
+    test('accepts a namespaced `input.<name>` reference against the input schema', () => {
+      // The run input is seeded under an `input` namespace (matching the
+      // pipeline/formation `{ "var": "input.<name>" }` convention), so a
+      // reference through that namespace must validate even with a closed
+      // input_schema — it used to be rejected as "no upstream node writes
+      // 'state.input'".
+      const result = validate({
+        nodes: [
+          {
+            id: 'a',
+            type: 'transform',
+            expression: 1,
+            inputMapping: { prompt: { var: 'input.cycle_task' } },
+          },
+        ],
+        edges: [],
+        inputSchema: {
+          type: 'object',
+          properties: { cycle_task: { type: 'string' } },
+        },
+      });
+      expect(result.valid).toBe(true);
+    });
+
     test('errors when the writer is a parallel (non-upstream) node', () => {
       const result = validate({
         nodes: [

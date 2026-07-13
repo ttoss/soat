@@ -1,5 +1,6 @@
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
+import { parseDuration } from 'src/lib/orchestrationDuration';
 import {
   applyInputMapping,
   applyOutputMapping,
@@ -13,7 +14,6 @@ import {
   executeToolNode,
   executeTransformNode,
   executeWebhookNode,
-  parseDuration,
 } from 'src/lib/orchestrationNodeExecutors';
 import { executePollNode } from 'src/lib/orchestrationPollNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';

@@ -66,6 +66,7 @@ const fireExtractionForCompletedResult = (args: {
   projectIds?: number[];
   result: GenerationResult | ReadableStream;
   messages: ExtractionMessage[];
+  extract?: boolean;
 }): void => {
   if (
     args.result instanceof ReadableStream ||
@@ -79,6 +80,7 @@ const fireExtractionForCompletedResult = (args: {
     generationId: args.result.id,
     messages: args.messages,
     assistantContent: args.result.output?.content ?? '',
+    extract: args.extract,
   });
 };
 
@@ -117,6 +119,7 @@ agentGenerationRouter.post(
       toolContext,
       knowledgeConfig,
       actionId,
+      extract,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -127,6 +130,7 @@ agentGenerationRouter.post(
       toolContext?: Record<string, string>;
       knowledgeConfig?: object;
       actionId?: string;
+      extract?: boolean;
     };
 
     if (!Array.isArray(messages) || messages.length === 0) {
@@ -159,6 +163,7 @@ agentGenerationRouter.post(
       projectIds,
       result,
       messages: messages as ExtractionMessage[],
+      extract: typeof extract === 'boolean' ? extract : undefined,
     });
 
     await handleGenerationResult(ctx, result, stream);

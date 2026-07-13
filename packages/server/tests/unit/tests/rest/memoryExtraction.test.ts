@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import * as extractionCompletionModule from 'src/lib/memoryExtractionCompletion';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -476,6 +477,103 @@ describe('Memory Extraction', () => {
       const entries = await waitForEntries(memoryId, 1);
       expect(entries).toHaveLength(1);
       expect(entries[0].content).toBe('Project deadline is Friday');
+      expect(entries[0].source_type).toBe('extraction');
+    });
+  });
+
+  describe('per-turn extraction override (extract flag)', () => {
+    test('extract: false suppresses extraction even when the agent enables it', async () => {
+      const memoryId = await createMemory('Suppress Memory');
+      const agentId = await createAgent({
+        name: 'SuppressExtractionAgent',
+        knowledgeConfig: { write_memory_id: memoryId, extraction: true },
+      });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_supp', 'Here are your tools.')
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'List your tools.' }],
+          extract: false,
+        });
+      expect(res.status).toBe(200);
+
+      await waitForNoExtractionAttempt();
+      expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
+      expect(await listEntries(memoryId)).toHaveLength(0);
+    });
+
+    test('extract: true forces extraction when the agent has a write memory but did not enable it', async () => {
+      const memoryId = await createMemory('Force Memory');
+      const agentId = await createAgent({
+        name: 'ForceExtractionAgent',
+        // write_memory_id present, but extraction not enabled by default
+        knowledgeConfig: { write_memory_id: memoryId },
+      });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_force', 'Onboarding noted.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["User onboarded on a Monday"]'
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'I started on Monday.' }],
+          extract: true,
+        });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryId, 1);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].content).toBe('User onboarded on a Monday');
+      expect(entries[0].source_type).toBe('extraction');
+    });
+  });
+
+  describe('read-time knowledge_config normalization (stale agents)', () => {
+    test('extraction runs for an agent whose stored config is still snake_case', async () => {
+      // Simulates a formation-deployed agent persisted before write-time
+      // normalization: its knowledge_config blob is raw snake_case. Runtime
+      // code reads camelCase, so without read-time normalization the write
+      // memory and extraction flag would be invisible and extraction would
+      // silently no-op. Seed the stale shape directly, since no current API
+      // path produces it any more.
+      const memoryId = await createMemory('Stale Config Memory');
+      const agentId = await createAgent({ name: 'StaleConfigAgent' });
+
+      await db.Agent.update(
+        {
+          knowledgeConfig: {
+            write_memory_id: memoryId,
+            extraction: true,
+          },
+        },
+        { where: { publicId: agentId } }
+      );
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_ext_stale', 'Preference recorded.')
+      );
+      mockRunExtractionCompletion.mockResolvedValueOnce(
+        '["User prefers dark mode"]'
+      );
+
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'I prefer dark mode.' }],
+        });
+      expect(res.status).toBe(200);
+
+      const entries = await waitForEntries(memoryId, 1);
+      expect(entries).toHaveLength(1);
+      expect(entries[0].content).toBe('User prefers dark mode');
       expect(entries[0].source_type).toBe('extraction');
     });
   });
