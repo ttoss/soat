@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { ExtractionConfig, KnowledgeConfig } from './agentKnowledge';
+import { normalizeKnowledgeConfig } from './agentKnowledge';
 import { updateGenerationRecord } from './generations';
 import { writeMemoryEntry } from './memoryEntries';
 import * as extractionCompletion from './memoryExtractionCompletion';
@@ -158,39 +159,80 @@ type ExtractionTarget = {
  * config has extraction enabled and a `write_memory_id`, and the target
  * memory exists.
  */
+const findExtractionAgent = (args: {
+  agentId: string;
+  projectIds?: number[];
+}): Promise<InstanceType<(typeof db)['Agent']> | null> => {
+  const where: Record<string, unknown> = { publicId: args.agentId };
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  return db.Agent.findOne({ where });
+};
+
+/**
+ * Resolves the effective extraction config for a turn, applying the per-turn
+ * `override`. A forced-on override (`true`) runs extraction with the stored
+ * options (or defaults) even when the agent didn't enable it by default;
+ * `undefined` follows the stored config.
+ */
+const resolveEffectiveExtraction = (
+  config: KnowledgeConfig | null | undefined,
+  override?: boolean
+): ExtractionConfig | null => {
+  const configured = resolveExtractionConfig(config?.extraction);
+  return override === true ? (configured ?? {}) : configured;
+};
+
 const resolveExtractionTarget = async (args: {
   agentId: string;
   projectIds?: number[];
+  /**
+   * Per-turn override of the agent's extraction default. `false` suppresses
+   * extraction for this turn even when the agent enables it (e.g. operational
+   * or tool-listing turns that would only add noise); `true` forces it on when
+   * the agent has a write memory but did not enable extraction by default;
+   * `undefined` follows the agent's stored config.
+   */
+  override?: boolean;
 }): Promise<ExtractionTarget | null> => {
-  const where: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  if (args.override === false) {
+    log(
+      'resolveExtractionTarget: extraction suppressed for this turn agentId=%s',
+      args.agentId
+    );
+    return null;
+  }
 
-  const agent = await db.Agent.findOne({ where });
+  const agent = await findExtractionAgent(args);
   if (!agent) {
     log('resolveExtractionTarget: agent not found agentId=%s', args.agentId);
     return null;
   }
 
-  const config = agent.knowledgeConfig as KnowledgeConfig | null | undefined;
-  const extraction = resolveExtractionConfig(config?.extraction);
-  if (!extraction || !config?.writeMemoryId) {
+  // Normalize at read time so an agent whose stored knowledge_config is still
+  // in snake_case (e.g. a formation-deployed agent persisted before the
+  // write-time normalization fix) is not silently treated as extraction-off.
+  const config = normalizeKnowledgeConfig(agent.knowledgeConfig) as
+    KnowledgeConfig | null | undefined;
+  const extraction = resolveEffectiveExtraction(config, args.override);
+  const writeMemoryId = config?.writeMemoryId;
+  if (!extraction || !writeMemoryId) {
     log(
-      'resolveExtractionTarget: extraction not enabled agentId=%s extraction=%o writeMemoryId=%s',
+      'resolveExtractionTarget: extraction not enabled agentId=%s writeMemoryId=%s override=%s',
       args.agentId,
-      config?.extraction,
-      config?.writeMemoryId
+      writeMemoryId,
+      args.override
     );
     return null;
   }
 
   const memory = await db.Memory.findOne({
-    where: { publicId: config.writeMemoryId },
+    where: { publicId: writeMemoryId },
   });
   if (!memory) {
     log(
       'resolveExtractionTarget: write memory not found agentId=%s writeMemoryId=%s',
       args.agentId,
-      config.writeMemoryId
+      writeMemoryId
     );
     return null;
   }
@@ -254,10 +296,13 @@ export const runMemoryExtraction = async (args: {
   generationId?: string;
   messages: ExtractionMessage[];
   assistantContent: string;
+  /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */
+  extract?: boolean;
 }): Promise<ExtractionSummary | null> => {
   const target = await resolveExtractionTarget({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    override: args.extract,
   });
   if (!target) return null;
   const { memory, extraction } = target;
@@ -330,6 +375,8 @@ export const fireMemoryExtraction = (args: {
   generationId?: string;
   messages: ExtractionMessage[];
   assistantContent: string;
+  /** Per-turn override of the agent's extraction default; see resolveExtractionTarget. */
+  extract?: boolean;
 }): void => {
   void runMemoryExtraction(args).catch((error) => {
     log(

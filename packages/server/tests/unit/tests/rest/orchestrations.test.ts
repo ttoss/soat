@@ -1083,6 +1083,126 @@ describe('Orchestrations', () => {
       expect(execs[0].error.message).toBeDefined();
     });
 
+    test('a run that throws a non-Error value records a readable error message', async () => {
+      // A JSON-Logic `map` whose per-item mapper is a multi-key object is not
+      // valid JSON-Logic: the engine treats the first key as an operator, finds
+      // none, and throws a bare object `{ type: 'Unknown Operator' }` — not an
+      // Error. buildRunError used to String() that into the useless
+      // "[object Object]". The message must instead carry the serialized cause.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Opaque Error Repro',
+          nodes: [
+            {
+              id: 'bad_map',
+              type: 'transform',
+              expression: {
+                map: [{ var: 'items' }, { a: { var: '' }, b: 1 }],
+              },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { items: ['x', 'y'] },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('failed');
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runRes.body.id}`
+      );
+      const nodeError = getRes.body.node_executions[0].error;
+      expect(nodeError.message).not.toBe('[object Object]');
+      expect(nodeError.message).toContain('Unknown Operator');
+    });
+
+    test('run input is visible to node logic through the input namespace', async () => {
+      // Regression: run input used to be seeded only as flat top-level state
+      // keys, so a graph following the documented `{ "var": "input.<name>" }`
+      // convention read null. It must now resolve to the supplied value.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Input Namespace',
+          nodes: [
+            {
+              id: 'echo',
+              type: 'transform',
+              expression: { var: 'input.cycle_task' },
+              output_mapping: { result: 'state.echoed' },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+          input_schema: {
+            type: 'object',
+            properties: { cycle_task: { type: 'string' } },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { cycle_task: 'summarize the funnel' },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.echoed).toBe('summarize the funnel');
+    });
+
+    test('a dotted output_mapping target round-trips through a nested var read', async () => {
+      // Regression: writing to `state.proposed.action_id` stored a single flat
+      // key "proposed.action_id", which `{ "var": "proposed.action_id" }` could
+      // not read back (var descends dot-paths). The write must build a nested
+      // object so a downstream node reads the value.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Nested State Path',
+          nodes: [
+            {
+              id: 'write',
+              type: 'transform',
+              expression: { cat: ['act_', { var: 'input.n' }] },
+              output_mapping: { result: 'state.proposed.action_id' },
+            },
+            {
+              id: 'read',
+              type: 'transform',
+              expression: { var: 'proposed.action_id' },
+              output_mapping: { result: 'state.readback' },
+            },
+          ],
+          edges: [{ from: 'write', to: 'read' }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({
+          wait: true,
+          orchestration_id: createRes.body.id,
+          input: { n: '42' },
+        });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.readback).toBe('act_42');
+      expect(runRes.body.state.proposed).toEqual({ action_id: 'act_42' });
+    });
+
     // ── Phase 2: Parallel & Conditional ─────────────────────────────────
 
     test('fan-out executes multiple branches and all state updates land', async () => {

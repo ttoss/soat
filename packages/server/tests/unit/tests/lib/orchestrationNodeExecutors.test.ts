@@ -1,5 +1,6 @@
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
+import { parseDuration } from 'src/lib/orchestrationDuration';
 import {
   applyInputMapping,
   applyOutputMapping,
@@ -13,7 +14,6 @@ import {
   executeToolNode,
   executeTransformNode,
   executeWebhookNode,
-  parseDuration,
 } from 'src/lib/orchestrationNodeExecutors';
 import { executePollNode } from 'src/lib/orchestrationPollNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
@@ -144,6 +144,52 @@ describe('applyOutputMapping', () => {
     const state: Record<string, unknown> = {};
     applyOutputMapping({ result: 'output' }, { result: 42 }, state);
     expect(state['output']).toBe(42);
+  });
+
+  test('a dotted path builds a nested object', () => {
+    const state: Record<string, unknown> = {};
+    applyOutputMapping(
+      { result: 'state.proposed.action_id' },
+      { result: 'act_1' },
+      state
+    );
+    expect(state['proposed']).toEqual({ action_id: 'act_1' });
+  });
+
+  test('a deep multi-level dotted path creates every intermediate object', () => {
+    const state: Record<string, unknown> = {};
+    applyOutputMapping({ result: 'state.a.b.c' }, { result: 7 }, state);
+    expect(state).toEqual({ a: { b: { c: 7 } } });
+  });
+
+  test('a dotted write merges into an existing intermediate object', () => {
+    const state: Record<string, unknown> = { proposed: { existing: 1 } };
+    applyOutputMapping(
+      { result: 'state.proposed.action_id' },
+      { result: 'act_2' },
+      state
+    );
+    expect(state['proposed']).toEqual({ existing: 1, action_id: 'act_2' });
+  });
+
+  test('a dotted write overwrites a non-object intermediate value', () => {
+    const state: Record<string, unknown> = { proposed: 'scalar' };
+    applyOutputMapping(
+      { result: 'state.proposed.action_id' },
+      { result: 'act_3' },
+      state
+    );
+    expect(state['proposed']).toEqual({ action_id: 'act_3' });
+  });
+
+  test('a dotted write replaces an array intermediate with an object', () => {
+    const state: Record<string, unknown> = { proposed: [1, 2] };
+    applyOutputMapping(
+      { result: 'state.proposed.action_id' },
+      { result: 'act_4' },
+      state
+    );
+    expect(state['proposed']).toEqual({ action_id: 'act_4' });
   });
 });
 

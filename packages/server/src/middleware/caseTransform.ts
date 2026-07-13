@@ -66,13 +66,24 @@ const isMetadataPassthroughPath = (path: string): boolean => {
 // before they reach the target API, which then rejects them. So on the tools
 // routes `input` rounds-trips verbatim in both directions, exactly like
 // `execute` and document `metadata`.
-const TOOL_INPUT_PASSTHROUGH_PATH_PREFIX = '/api/v1/tools';
+// An orchestration run's `input` is the same kind of opaque, caller-authored
+// payload: its keys are seeded into run state (flat and under the `input`
+// namespace) and read back by node expressions via `{ "var": "input.<name>" }`
+// / `{ "var": "<name>" }`. Case-transforming it would rewrite a caller's
+// snake_case key (`cycle_task` → `cycleTask`) in state while the graph's `var`
+// references keep the original casing, so every underscore-bearing input key
+// resolves to null inside node logic even though it still shows up in the
+// snake_case-restored final-state dump. So `input` rounds-trips verbatim on the
+// orchestration-run routes too, exactly like a tool's `input`.
+const INPUT_PASSTHROUGH_PATH_PREFIXES = [
+  '/api/v1/tools',
+  '/api/v1/orchestration-runs',
+];
 
 const isToolInputPassthroughPath = (path: string): boolean => {
-  return (
-    path === TOOL_INPUT_PASSTHROUGH_PATH_PREFIX ||
-    path.startsWith(`${TOOL_INPUT_PASSTHROUGH_PATH_PREFIX}/`)
-  );
+  return INPUT_PASSTHROUGH_PATH_PREFIXES.some((prefix) => {
+    return path === prefix || path.startsWith(`${prefix}/`);
+  });
 };
 
 // A `requires_action` generation returns the pending tool calls the caller must

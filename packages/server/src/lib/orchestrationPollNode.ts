@@ -1,9 +1,7 @@
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
-import {
-  type NodeExecutionResult,
-  parseDuration,
-} from './orchestrationNodeExecutors';
+import { parseDuration } from './orchestrationDuration';
+import { type NodeExecutionResult } from './orchestrationNodeExecutors';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 

@@ -1045,6 +1045,31 @@ if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestratio
 fi
 echo "Completed run: OK"
 
+echo "--- Run input is visible to node logic via the input namespace ---"
+# A snake_case input key must round-trip verbatim and resolve both flat
+# ({"var":"cycle_task"}) and namespaced ({"var":"input.cycle_task"}).
+ORCH_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-orchestration-input" \
+  --nodes '[{"id":"echo","type":"transform","expression":{"var":"input.cycle_task"},"output_mapping":{"result":"state.echoed"}}]' \
+  --edges '[]')
+ORCH_INPUT_ID=$(printf '%s\n' "$ORCH_INPUT_RESP" | jq -r '.id')
+if [ -z "$ORCH_INPUT_ID" ] || [ "$ORCH_INPUT_ID" = "null" ]; then
+  echo "Failed to create input-namespace orchestration"
+  printf '%s\n' "$ORCH_INPUT_RESP"
+  exit 1
+fi
+ORCH_INPUT_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_INPUT_ID" \
+  --input '{"cycle_task":"summarize the funnel"}' \
+  --wait true)
+if ! printf '%s\n' "$ORCH_INPUT_RUN_RESP" | jq -e '.status == "succeeded" and .state.echoed == "summarize the funnel"' >/dev/null 2>&1; then
+  echo "run input was not visible to node logic through the input namespace"
+  printf '%s\n' "$ORCH_INPUT_RUN_RESP"
+  exit 1
+fi
+echo "Run input namespace: OK"
+
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
   --run-id "$ORCH_RUN_ID")

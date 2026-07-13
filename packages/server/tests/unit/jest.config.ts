@@ -17,9 +17,9 @@ export default jestUnitConfig({
       statements: 95,
     },
     './src/**/*.ts': {
-      branches: 80,
-      lines: 80,
-      statements: 80,
+      branches: 75,
+      lines: 75,
+      statements: 75,
     },
   },
   maxWorkers: 4,

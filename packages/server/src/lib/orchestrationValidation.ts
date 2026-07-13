@@ -281,6 +281,11 @@ const classifyRef = (args: {
 }): 'ok' | 'unwritten' | 'conditional' => {
   const { refPath, ctx } = args;
   const key = topSegment(refPath);
+  // The `input` namespace is always seeded from the run input (see
+  // startOrchestrationRun), so any `{ "var": "input.<name>" }` reference is
+  // satisfiable regardless of the declared input_schema — mirroring the
+  // pipeline/formation `input.` convention.
+  if (key === 'input') return 'ok';
   if (ctx.inputKeys.has(key)) return 'ok';
   const keyWriters = ctx.writers.get(key) ?? new Set<string>();
   const upstreamWriters = [...keyWriters].filter((w) => {

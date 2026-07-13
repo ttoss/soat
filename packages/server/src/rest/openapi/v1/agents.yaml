@@ -906,6 +906,17 @@ components:
         action_id:
           type: string
           description: Logical action label recorded on the generation's usage meter, so spend can be rolled up per action (e.g. an A/B/C/D operating action).
+        extract:
+          type: boolean
+          description: >-
+            Per-turn override of the agent's `knowledge_config.extraction`
+            default. Omit to follow the agent's stored config. Set `false` to
+            suppress automatic memory extraction for this turn (e.g. an
+            operational or tool-listing turn that would only add noise to a
+            curated memory). Set `true` to force extraction on for this turn
+            even when the agent does not enable it by default, provided the
+            agent has a `write_memory_id`. Has no effect on streaming or
+            `requires_action` turns, which never extract.
         knowledge_config:
           type: object
           nullable: true
