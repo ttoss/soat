@@ -4,6 +4,7 @@ import { createGeneration } from './agentGeneration';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
 import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
 import type { OrchestrationNode } from './orchestrations';
@@ -25,11 +26,14 @@ export type NodeExecutionResult =
   | { kind: 'condition'; label: string }
   | {
       kind: 'requires_action';
-      type: 'human_input' | 'webhook_receive';
+      type: 'human_input' | 'webhook_receive' | 'approval';
       nodeId: string;
       prompt: string;
       context: Record<string, unknown>;
       options?: string[];
+      // Present only for `approval` requires_action: the frozen proposal the
+      // engine emits as an ApprovalItem when the run parks (§5b of the PRD).
+      approvalSpec?: ApprovalNodeSpec;
     }
   | {
       // The node cannot complete now and must be resumed after `resumeInMs`.

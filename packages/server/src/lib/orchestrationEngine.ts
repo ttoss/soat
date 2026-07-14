@@ -3,6 +3,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { DecisionOutput, MappedApproval } from './approvals';
+import { emitApproval, registerApprovalResumeHandler } from './approvals';
 import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
@@ -57,6 +59,20 @@ const sleep = (ms: number): Promise<void> => {
   return new Promise<void>((resolve) => {
     return setTimeout(resolve, Math.max(ms, 0));
   });
+};
+
+/** Ids of the graph's `approval` nodes — the decision-routed nodes whose
+ * unlabeled edges follow only on approval (see resolveNextNodes). */
+const collectApprovalNodeIds = (nodes: OrchestrationNode[]): Set<string> => {
+  return new Set(
+    nodes
+      .filter((n) => {
+        return n.type === 'approval';
+      })
+      .map((n) => {
+        return n.id;
+      })
+  );
 };
 
 /**
@@ -160,6 +176,36 @@ const settleRun = async (args: {
     edges,
     traceId,
   } = args;
+
+  // When the run parks on an `approval` node, emit the ApprovalItem now (the run
+  // record is in scope here) and stamp the created item's id/expiry back onto the
+  // persisted required_action. The bulky frozen spec is dropped after emit — the
+  // ApprovalItem is its durable home.
+  if (
+    runStatus === 'awaiting_input' &&
+    requiredAction?.type === 'approval' &&
+    requiredAction.approvalSpec &&
+    !requiredAction.approvalId
+  ) {
+    const spec = requiredAction.approvalSpec;
+    const item = await emitApproval({
+      projectId: runRecord.projectId as number,
+      origin: 'node',
+      proposedAction: { toolId: spec.toolId, arguments: spec.arguments },
+      reasoning: spec.reasoning,
+      evidence: spec.evidence,
+      predictedImpact: spec.predictedImpact,
+      expiresInSeconds: spec.expiresInSeconds,
+      orchestrationRunId: runRecord.id as number,
+      nodeId: requiredAction.nodeId,
+    });
+    requiredAction.approvalId = item.id;
+    requiredAction.expiresAt =
+      item.expiresAt instanceof Date
+        ? item.expiresAt.toISOString()
+        : String(item.expiresAt);
+    requiredAction.approvalSpec = undefined;
+  }
 
   const output = getTerminalOutput({ nodes, edges, artifacts });
   await updateRunRecord({
@@ -441,9 +487,17 @@ export const resumeOrchestrationRunExecution = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   humanNodeId?: string;
   humanOutput?: Record<string, unknown>;
+  // Set when resuming an `approval` node: the decision ('approved' | 'rejected'
+  // | 'expired') becomes the node's branch label so `on_expired`/`approved`/…
+  // edges route, and unlabeled edges follow only on approval.
+  decisionLabel?: string;
 }): Promise<MappedOrchestrationRun> => {
-  const { run, humanNodeId, humanOutput } = args;
-  log('resumeOrchestrationRunExecution %o', { runId: run.id, humanNodeId });
+  const { run, humanNodeId, humanOutput, decisionLabel } = args;
+  log('resumeOrchestrationRunExecution %o', {
+    runId: run.id,
+    humanNodeId,
+    decisionLabel,
+  });
 
   const orch = await db.Orchestration.findOne({
     where: { id: run.orchestrationId as number },
@@ -482,12 +536,19 @@ export const resumeOrchestrationRunExecution = async (args: {
     Object.keys(artifacts).concat(humanNodeId ? [humanNodeId] : [])
   );
   const conditionLabels = new Map<string, string>();
+  // An approval resume routes by its decision: seed the resumed node's branch
+  // label so `resolveNextNodes` matches `on_expired`/`approved`/`rejected` edges
+  // and gates unlabeled edges to the approval case only.
+  if (humanNodeId && decisionLabel) {
+    conditionLabels.set(humanNodeId, decisionLabel);
+  }
   const startNodeIds = resolveResumeStartNodes({
     humanNodeId,
     activeNodes,
     completedNodes,
     conditionLabels,
     edges,
+    decisionNodeIds: collectApprovalNodeIds(nodes),
   });
 
   await run.update({
@@ -609,3 +670,45 @@ export const redriveRun = async (args: {
     entry,
   });
 };
+
+/**
+ * Resumes an orchestration run parked on an `approval` node once its item is
+ * resolved (approved/rejected/expired). Registered as the approvals module's
+ * `node`-origin resumption callback (§1 of the PRD) so the approvals module
+ * never imports the engine — the dependency points one way (engine → approvals).
+ * A no-op when the item did not come from an orchestration run, the run is no
+ * longer awaiting this node, or the run has moved on.
+ */
+const resumeRunForApproval = async (args: {
+  item: MappedApproval;
+  decision: DecisionOutput;
+}): Promise<void> => {
+  const { item, decision } = args;
+  if (item.origin !== 'node' || !item.runId || !item.nodeId) return;
+
+  const run = await db.OrchestrationRun.findOne({
+    where: { publicId: item.runId },
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Orchestration, as: 'orchestration' },
+    ],
+  });
+  if (!run || run.status !== 'awaiting_input') return;
+
+  const activeNodes = run.activeNodes as string[];
+  if (!activeNodes.includes(item.nodeId)) return;
+
+  log('resumeRunForApproval %o', {
+    runId: run.id,
+    nodeId: item.nodeId,
+    decision: decision.decision,
+  });
+  await resumeOrchestrationRunExecution({
+    run,
+    humanNodeId: item.nodeId,
+    humanOutput: { ...decision },
+    decisionLabel: decision.decision,
+  });
+};
+
+registerApprovalResumeHandler(resumeRunForApproval);

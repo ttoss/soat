@@ -20,6 +20,7 @@ export type OrchestratorNodeType =
   | 'memory_write'
   | 'condition'
   | 'human'
+  | 'approval'
   | 'loop'
   | 'poll'
   | 'delay'
@@ -56,6 +57,18 @@ export type OrchestrationNode = {
   // human node
   prompt?: string;
   options?: string[];
+  // approval node — proposes a guarded tool call (`toolId`) and parks the run as
+  // `awaiting_input` until a human approves/rejects (or it expires). `arguments`
+  // is an input-mapping-style object resolved against run state at emit time;
+  // `reasoning`/`evidence`/`predictedImpact` are JSON Logic resolved into the
+  // item's evidence; `expiresIn` is seconds until expiry; `instructions` is
+  // optional approver guidance.
+  arguments?: Record<string, unknown>;
+  expiresIn?: number;
+  instructions?: string;
+  reasoning?: unknown;
+  evidence?: unknown;
+  predictedImpact?: unknown;
   // memory_write node
   memoryId?: string;
   // loop node — runs the orchestration named by `orchestrationId` (shared with

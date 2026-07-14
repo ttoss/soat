@@ -396,6 +396,7 @@ components:
               memory_write,
               condition,
               human,
+              approval,
               loop,
               poll,
               delay,
@@ -436,6 +437,31 @@ components:
           x-soat-ref: memories
           type: string
           description: For memory_write nodes — public ID of the target memory.
+        arguments:
+          type: object
+          additionalProperties: true
+          description: >
+            For approval nodes — input-mapping-style object (JSON Logic values)
+            resolved against run state into the proposed tool call's arguments,
+            frozen onto the created approval item.
+        expires_in:
+          type: integer
+          description: >
+            For approval nodes — seconds until the created approval item expires.
+            Defaults to 86400 (24h) when omitted. An expired item can never
+            execute; the run routes down its `on_expired` edge.
+        instructions:
+          type: string
+          description: For approval nodes — optional guidance shown to the approver.
+        reasoning:
+          type: object
+          description: For approval nodes — JSON Logic resolved into the item's reasoning.
+        evidence:
+          type: object
+          description: For approval nodes — JSON Logic resolved into the item's evidence.
+        predicted_impact:
+          type: object
+          description: For approval nodes — JSON Logic resolved into the item's predicted impact.
         input_mapping:
           type: object
           additionalProperties: true

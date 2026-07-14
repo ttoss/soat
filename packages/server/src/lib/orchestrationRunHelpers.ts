@@ -183,6 +183,7 @@ export const resolveResumeStartNodes = (args: {
   completedNodes: Set<string>;
   conditionLabels: Map<string, string>;
   edges: OrchestrationEdge[];
+  decisionNodeIds?: Set<string>;
 }): string[] => {
   if (args.humanNodeId) {
     return resolveNextNodes({
@@ -190,6 +191,7 @@ export const resolveResumeStartNodes = (args: {
       completedNodes: args.completedNodes,
       conditionLabels: args.conditionLabels,
       edges: args.edges,
+      decisionNodeIds: args.decisionNodeIds,
     });
   }
   return args.activeNodes;

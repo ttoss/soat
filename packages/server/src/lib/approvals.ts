@@ -97,6 +97,45 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
   };
 };
 
+/**
+ * A producer's resumption callback (§1 of the PRD). Producers register how to
+ * resume their suspended execution context when an item resolves; the approvals
+ * module invokes it on approve/reject/expiry without importing the producer, so
+ * the dependency points one way (producer → approvals).
+ */
+export type ApprovalResumeHandler = (args: {
+  item: MappedApproval;
+  decision: DecisionOutput;
+}) => Promise<void>;
+
+const resumeHandlers: ApprovalResumeHandler[] = [];
+
+export const registerApprovalResumeHandler = (
+  handler: ApprovalResumeHandler
+): void => {
+  resumeHandlers.push(handler);
+};
+
+/**
+ * Invokes every registered resumption handler for a resolved item. Handlers are
+ * isolated: one throwing is logged and swallowed so a producer-side failure
+ * never corrupts the resolution response (the decision is already persisted; a
+ * parked run can be recovered via the run's resume endpoint). Each handler
+ * decides for itself whether the item concerns it (by `origin`/provenance).
+ */
+const notifyResume = async (
+  item: MappedApproval,
+  decision: DecisionOutput
+): Promise<void> => {
+  for (const handler of resumeHandlers) {
+    try {
+      await handler({ item, decision });
+    } catch (error) {
+      log('notifyResume: handler failed id=%s %o', item.id, error);
+    }
+  }
+};
+
 const emitApprovalEvent = async (args: {
   type: string;
   item: MappedApproval;
@@ -255,6 +294,7 @@ export const expireApprovalIfDue = async (args: {
     item: mapped,
     projectId: item.projectId,
   });
+  await notifyResume(mapped, buildDecisionOutput(mapped));
   return mapped;
 };
 
@@ -275,6 +315,7 @@ export const announceApprovalExpired = async (args: {
     item: mapped,
     projectId: item.projectId,
   });
+  await notifyResume(mapped, buildDecisionOutput(mapped));
 };
 
 const assertResolvable = (item: ApprovalInstance): void => {
@@ -324,12 +365,14 @@ const finalizeResolution = async (args: {
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   const refreshed = await findApprovalOrThrow(args.id);
   const mapped = mapApproval(refreshed);
+  const decision = buildDecisionOutput(mapped);
   await emitApprovalEvent({
     type: args.eventType,
     item: mapped,
     projectId: args.projectId,
   });
-  return { item: mapped, decision: buildDecisionOutput(mapped) };
+  await notifyResume(mapped, decision);
+  return { item: mapped, decision };
 };
 
 /**

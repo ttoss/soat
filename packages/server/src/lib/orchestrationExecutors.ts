@@ -1,4 +1,6 @@
 import { DomainError } from '../errors';
+import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
+import { executeApprovalNode } from './orchestrationApprovalNode';
 import { resolveNextNodes } from './orchestrationGraph';
 import type {
   NodeExecutionResult,
@@ -37,11 +39,18 @@ export {
 // ── Types ─────────────────────────────────────────────────────────────────
 
 export type RequiredAction = {
-  type: 'human_input' | 'webhook_receive';
+  type: 'human_input' | 'webhook_receive' | 'approval';
   nodeId: string;
   prompt: string;
   context: Record<string, unknown>;
   options?: string[];
+  // Carried while the run parks on an `approval` node. `approvalSpec` is the
+  // frozen proposal the engine emits as an ApprovalItem at settle time;
+  // `approvalId`/`expiresAt` are stamped back on once emitted so the persisted
+  // required_action exposes the created item to callers.
+  approvalSpec?: ApprovalNodeSpec;
+  approvalId?: string;
+  expiresAt?: string;
 };
 
 export type { WaitResume } from './orchestrationNodeExecutors';
@@ -78,6 +87,8 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
       return executeConditionNode({ node: nodeDefn, state });
     case 'human':
       return executeHumanNode({ node: nodeDefn, state });
+    case 'approval':
+      return executeApprovalNode({ node: nodeDefn, state });
     case 'webhook':
       return executeWebhookNode({ node: nodeDefn, state });
     default:
@@ -283,6 +294,7 @@ export const processNodeResultBatch = (args: {
           prompt: execResult.prompt,
           context: execResult.context,
           options: execResult.options,
+          approvalSpec: execResult.approvalSpec,
         };
       }
       continue;
