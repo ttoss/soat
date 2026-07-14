@@ -28,6 +28,13 @@ const log = createDebug('soat:formations:tools');
 const SCHEMA_NAME = 'ToolResourceProperties';
 const RESOURCE_LABEL = 'tool';
 
+// The lib `createTool` args are `undefined`-absent, while the normalizers yield
+// `null`-absent — bridge the two without a `??` at every call site (keeps
+// `create` under the per-function complexity budget).
+const optional = <T>(value: T | null): T | undefined => {
+  return value ?? undefined;
+};
+
 // ── Property validation ──────────────────────────────────────────────────
 
 // A pipeline step's `tool_id` may be a formation `{ ref: ResourceName }`
@@ -177,16 +184,20 @@ export const toolsFormationModule: FormationModule = {
       projectId,
       name: properties.name as string,
       type: toOptionalString(properties.type),
-      description: toNullableString(properties.description) ?? undefined,
-      parameters: toNullableObject(properties.parameters) ?? undefined,
-      execute: toNullableObject(properties.execute) ?? undefined,
-      mcp: toNullableObject(properties.mcp) ?? undefined,
-      actions: toNullableArray<string>(properties.actions) ?? undefined,
-      presetParameters:
-        toNullableObject(properties.preset_parameters) ?? undefined,
-      pipeline: toNullableObject(properties.pipeline) ?? undefined,
+      description: optional(toNullableString(properties.description)),
+      parameters: optional(toNullableObject(properties.parameters)),
+      execute: optional(toNullableObject(properties.execute)),
+      mcp: optional(toNullableObject(properties.mcp)),
+      actions: optional(toNullableArray<string>(properties.actions)),
+      deniedActions: optional(
+        toNullableArray<string>(properties.denied_actions)
+      ),
+      presetParameters: optional(
+        toNullableObject(properties.preset_parameters)
+      ),
+      pipeline: optional(toNullableObject(properties.pipeline)),
       discussionId: toOptionalString(properties.discussion_id),
-      outputMapping: toNullableObject(properties.output_mapping) ?? undefined,
+      outputMapping: optional(toNullableObject(properties.output_mapping)),
     });
 
     log(
@@ -216,6 +227,7 @@ export const toolsFormationModule: FormationModule = {
       execute: toNullableObject(properties.execute),
       mcp: toNullableObject(properties.mcp),
       actions: toNullableArray<string>(properties.actions),
+      deniedActions: toNullableArray<string>(properties.denied_actions),
       presetParameters: toNullableObject(properties.preset_parameters),
       pipeline: toNullableObject(properties.pipeline),
       discussionId: toNullableString(properties.discussion_id),
@@ -238,6 +250,7 @@ export const toolsFormationModule: FormationModule = {
         execute: tool.execute,
         mcp: tool.mcp,
         actions: tool.actions,
+        denied_actions: tool.deniedActions,
         preset_parameters: tool.presetParameters,
         pipeline: tool.pipeline,
         discussion_id: tool.discussionId,

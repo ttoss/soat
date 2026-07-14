@@ -125,7 +125,7 @@ const checkToolsAccess = async (
  */
 toolsRouter.post('/tools', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
-  const { name, type, description, actions } = body;
+  const { name, type, description, actions, deniedActions } = body;
   const projectPublicId = body.projectId as string | undefined;
   const discussionId = body.discussionId as string | undefined;
 
@@ -155,6 +155,9 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     type: parseStringOrUndefined(type),
     description: parseStringOrUndefined(description),
     actions: Array.isArray(actions) ? (actions as string[]) : undefined,
+    deniedActions: Array.isArray(deniedActions)
+      ? (deniedActions as string[])
+      : undefined,
     discussionId,
     ...jsonFields,
   });
@@ -241,6 +244,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     execute,
     mcp,
     actions,
+    deniedActions,
     presetParameters,
     pipeline,
     discussionId,
@@ -274,6 +278,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     execute: parsedExecute,
     mcp: parsedMcp,
     actions: parseNullableArray(actions),
+    deniedActions: parseNullableArray(deniedActions),
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
     discussionId: parseNullableString(discussionId),

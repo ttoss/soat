@@ -1826,6 +1826,43 @@ expect_cli_error_status 400 call-tool \
   --input '{}'
 echo "Denied MCP action rejected: OK"
 
+# 27-deny. MCP action scoping via a `denied_actions` denylist — exposes the whole
+# SOAT MCP surface minus the denied write action. Verify a non-denied read action
+# (`list-agents`) works and the denied write action (`create-agent`) is rejected
+# with 400 before any request reaches the MCP server.
+echo "--- Creating denylist-scoped MCP tool ---"
+DENY_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-mcp-denylist \
+  --type mcp \
+  --description "SOAT MCP server with a write action denied." \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --denied_actions '["create-agent"]')
+DENY_MCP_TOOL_ID=$(echo "$DENY_MCP_TOOL_RESP" | jq -r '.id')
+echo "Denylist MCP Tool id: $DENY_MCP_TOOL_ID"
+
+DENY_MCP_ACTIONS=$(echo "$DENY_MCP_TOOL_RESP" | jq -r '.denied_actions | join(",")')
+if [ "$DENY_MCP_ACTIONS" != "create-agent" ]; then
+  echo "ERROR: denylist MCP tool did not round-trip its denied_actions, got '$DENY_MCP_ACTIONS'" >&2
+  exit 1
+fi
+
+echo "--- Calling a non-denied MCP action (list-agents) ---"
+DENY_CALL_RESP=$($SOAT_CLI call-tool --tool-id "$DENY_MCP_TOOL_ID" --action list-agents --input '{}')
+if printf '%s\n' "$DENY_CALL_RESP" | jq -e '.error' >/dev/null 2>&1; then
+  echo "ERROR: non-denied MCP action call returned an error" >&2
+  echo "$DENY_CALL_RESP" >&2
+  exit 1
+fi
+echo "Non-denied MCP action call: OK"
+
+echo "--- Calling denied MCP action (create-agent) must be rejected ---"
+expect_cli_error_status 400 call-tool \
+  --tool-id "$DENY_MCP_TOOL_ID" \
+  --action create-agent \
+  --input '{}'
+echo "Denylist MCP action rejected: OK"
+
 # 27a. OAuth discovery endpoints (required for Claude Connectors / MCP OAuth 2.1)
 echo "--- Validating OAuth discovery endpoints ---"
 OAUTH_AS_META=$(curl -sf "$SERVER_URL/.well-known/oauth-authorization-server")

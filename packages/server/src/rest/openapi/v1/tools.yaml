@@ -92,7 +92,7 @@ paths:
                     - files:ListFiles
                     - files:GetFile
               mcp_scoped:
-                summary: Read-only MCP tool (scoped to a subset of actions)
+                summary: Read-only MCP tool (allowlisted to a subset of actions)
                 value:
                   name: oneclick
                   type: mcp
@@ -101,6 +101,17 @@ paths:
                   actions:
                     - list_campaigns
                     - get_campaign
+              mcp_denylist:
+                summary: Read-only MCP tool (whole surface minus write actions)
+                value:
+                  name: oneclick
+                  type: mcp
+                  mcp:
+                    url: https://mcp.oneclick.example/sse
+                  denied_actions:
+                    - create_optimization
+                    - update_optimization
+                    - deactivate_all_optimizations
               pipeline:
                 summary: Pipeline tool (compute → persist)
                 value:
@@ -488,6 +499,19 @@ components:
             MCP tool names — when set, only those tools are exposed to the model
             and callable via `/call`; when `null`, the entire MCP server surface
             is exposed. Ignored for other tool types.
+        denied_actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            For `mcp` tools: an optional denylist of MCP tool names to hide.
+            Applied after `actions` and taking precedence over it — a name in
+            both lists is denied. This is the ergonomic way to scope a
+            read+write MCP server read-only: deny just the write tools instead
+            of enumerating every read tool in `actions`. Names not listed are
+            exposed. `null` (default) denies nothing. Ignored for other tool
+            types.
         preset_parameters:
           type: object
           nullable: true
@@ -589,6 +613,16 @@ components:
             (required). For `mcp` tools: an optional allowlist of MCP tool names
             to scope the server surface — omit or set `null` to expose every
             tool the MCP server offers. Ignored for other tool types.
+        denied_actions:
+          type: array
+          items:
+            type: string
+          description: >-
+            For `mcp` tools: an optional denylist of MCP tool names to hide.
+            Applied after `actions` and taking precedence over it. Use it to
+            scope a read+write MCP server read-only by denying just the write
+            tools. Omit or set `null` to deny nothing. Ignored for other tool
+            types.
         preset_parameters:
           type: object
           description: >-
@@ -660,6 +694,16 @@ components:
             For `mcp` tools: an optional allowlist of MCP tool names to scope
             the server surface (`null` exposes every tool). Ignored for other
             tool types.
+        denied_actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            For `mcp` tools: an optional denylist of MCP tool names to hide.
+            Applied after `actions` and taking precedence over it. Use it to
+            scope a read+write MCP server read-only by denying just the write
+            tools. `null` denies nothing. Ignored for other tool types.
         preset_parameters:
           type: object
           nullable: true
@@ -694,8 +738,8 @@ components:
           description: >
             For `soat` tools: the action name (must be in the tool's `actions`
             list). For `mcp` tools: the MCP tool name to invoke (must be in the
-            tool's `actions` allowlist when one is set). Ignored for `http`
-            tools.
+            tool's `actions` allowlist when one is set, and must not be in its
+            `denied_actions` denylist). Ignored for `http` tools.
         input:
           type: object
           description: >

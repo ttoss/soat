@@ -73,6 +73,7 @@ export type MappedTool = {
   execute: object | null;
   mcp: object | null;
   actions: string[] | null;
+  deniedActions: string[] | null;
   presetParameters: object | null;
   pipeline: object | null;
   discussionId: string | null;
@@ -102,6 +103,7 @@ const mapTool = (
     execute: tool.execute,
     mcp: tool.mcp,
     actions: tool.actions,
+    deniedActions: tool.deniedActions,
     presetParameters: tool.presetParameters,
     pipeline: tool.pipeline,
     discussionId:
@@ -117,17 +119,22 @@ const mapTool = (
 
 export type CreateToolArgs = InlineToolDefinition & { projectId: number };
 
+const nullify = <T>(value: T | undefined): T | null => {
+  return value ?? null;
+};
+
 const buildToolConfigFields = (args: CreateToolArgs) => {
   return {
-    description: args.description ?? null,
-    parameters: args.parameters ?? null,
-    execute: args.execute ?? null,
-    mcp: args.mcp ?? null,
-    actions: args.actions ?? null,
-    presetParameters: args.presetParameters ?? null,
-    pipeline: args.pipeline ?? null,
+    description: nullify(args.description),
+    parameters: nullify(args.parameters),
+    execute: nullify(args.execute),
+    mcp: nullify(args.mcp),
+    actions: nullify(args.actions),
+    deniedActions: nullify(args.deniedActions),
+    presetParameters: nullify(args.presetParameters),
+    pipeline: nullify(args.pipeline),
     discussion: args.discussionId ? { discussionId: args.discussionId } : null,
-    outputMapping: args.outputMapping ?? null,
+    outputMapping: nullify(args.outputMapping),
   };
 };
 
@@ -298,6 +305,7 @@ const buildToolUpdates = (args: {
   execute?: object | null;
   mcp?: object | null;
   actions?: string[] | null;
+  deniedActions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
   discussionId?: string | null;
@@ -312,6 +320,7 @@ const buildToolUpdates = (args: {
     'execute',
     'mcp',
     'actions',
+    'deniedActions',
     'presetParameters',
     'pipeline',
     'outputMapping',
@@ -337,6 +346,7 @@ type ToolUpdateArgs = {
   execute?: object | null;
   mcp?: object | null;
   actions?: string[] | null;
+  deniedActions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
   discussionId?: string | null;

@@ -753,6 +753,16 @@ components:
             Allowlist of actions the tool exposes. For `soat` tools: SOAT
             platform action names. For `mcp` tools: an optional allowlist of MCP
             tool names to scope the server surface (`null` exposes every tool).
+        denied_actions:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            For `mcp` tools: an optional denylist of MCP tool names to hide.
+            Applied after `actions` and taking precedence over it — the
+            ergonomic way to scope a read+write MCP server read-only by denying
+            just the write tools. `null` denies nothing.
         preset_parameters:
           type: object
           nullable: true

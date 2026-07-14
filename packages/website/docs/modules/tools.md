@@ -41,6 +41,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
 | `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `soat`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
+| `denied_actions`    | `string[] \| null`                              | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `discussion_id`     | `string \| null`                                | ID of the discussion to invoke. Required for `discussion` type. See [discussion](#discussion).                    |
@@ -272,6 +273,19 @@ With `actions` set, the scope is enforced at two points:
 - **Direct calls** — `POST /tools/{id}/call` (and `pipeline` steps) reject an `action` outside the allowlist with `400 VALIDATION_FAILED` ("not available on this tool") before any request reaches the MCP server.
 
 `actions` is an **allowlist**, not a denylist: names not listed are excluded. Omit the field (or set it to `null`) to expose the whole server surface (the default). An empty array (`[]`) exposes nothing. Because MCP tool names are discovered at runtime from the remote server, they are **not** validated against a static registry at create/update time (unlike `soat` actions) — a name that the server does not advertise is simply never exposed.
+
+For a read+write server with many read tools, enumerating every read tool in an allowlist is tedious and drifts as the server adds tools. Set `denied_actions` instead to expose the **whole** surface minus a denylist of write tools:
+
+```json
+{
+  "name": "oneclick",
+  "type": "mcp",
+  "mcp": { "url": "https://mcp.oneclick.example/sse" },
+  "denied_actions": ["create_optimization", "update_optimization", "deactivate_all_optimizations"]
+}
+```
+
+`denied_actions` is enforced at the same two points as `actions` (model surface and direct calls). It is applied **after** the allowlist and **takes precedence** over it: a name present in both `actions` and `denied_actions` is denied. Use `actions` to opt specific tools in, `denied_actions` to opt specific tools out, or both together (allowlist first, then subtract the denylist). Omit `denied_actions` (or set it to `null`) to deny nothing (the default).
 
 ### soat
 
