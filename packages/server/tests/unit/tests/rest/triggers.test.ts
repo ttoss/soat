@@ -2,7 +2,10 @@ import crypto from 'node:crypto';
 
 import { signTriggerToken } from 'src/lib/triggerToken';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -1480,6 +1483,62 @@ describe('Triggers', () => {
         });
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('TRIGGER_TARGET_NOT_FOUND');
+    });
+  });
+
+  // A project-scoped credential (project key / OAuth token) carries a policy
+  // whose resources are SRN-scoped to the project, not the wildcard `*`. The
+  // by-id handlers must authorize against a project SRN — not the implicit `*`
+  // default — or such a principal can list but never get/update/delete.
+  describe('SRN-scoped principal (project-scoped credential)', () => {
+    let scopedToken: string;
+
+    beforeAll(async () => {
+      scopedToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'triggersscoped',
+        actions: [
+          'triggers:GetTrigger',
+          'triggers:UpdateTrigger',
+          'triggers:DeleteTrigger',
+          'triggers:ListTriggerFirings',
+        ],
+      });
+    });
+
+    test('can get, list firings, update, and delete triggers', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'scoped-trigger',
+          type: 'manual',
+          target_type: 'orchestration',
+          target_id: orchestrationId,
+        });
+      const id = created.body.id;
+
+      const getRes = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/triggers/${id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.id).toBe(id);
+
+      const firingsRes = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/trigger-firings?trigger_id=${id}`
+      );
+      expect(firingsRes.status).toBe(200);
+
+      const patchRes = await authenticatedTestClient(scopedToken)
+        .patch(`/api/v1/triggers/${id}`)
+        .send({ name: 'scoped-trigger-renamed' });
+      expect(patchRes.status).toBe(200);
+
+      const delRes = await authenticatedTestClient(scopedToken).delete(
+        `/api/v1/triggers/${id}`
+      );
+      expect(delRes.status).toBe(204);
     });
   });
 });

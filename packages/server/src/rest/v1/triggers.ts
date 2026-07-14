@@ -75,6 +75,7 @@ triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:GetTrigger',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -114,6 +115,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   const canStartTarget = await ctx.authUser!.isAllowed({
     projectPublicId: projectPublicId!,
     action: targetStartAction(body.targetType),
+    resource: `soat:${projectPublicId}:*:*`,
   });
   if (!canStartTarget) {
     ctx.status = 403;
@@ -154,6 +156,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:UpdateTrigger',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -178,6 +181,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     const canStartTarget = await ctx.authUser.isAllowed({
       projectPublicId: trigger.projectId!,
       action: targetStartAction(body.targetType),
+      resource: `soat:${trigger.projectId}:*:*`,
     });
     if (!canStartTarget) {
       ctx.status = 403;
@@ -219,6 +223,7 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:DeleteTrigger',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -250,6 +255,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:FireTrigger',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -290,6 +296,7 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:ListTriggerFirings',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -319,6 +326,7 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: firing.projectId!,
     action: 'triggers:GetTriggerFiring',
+    resource: `soat:${firing.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -341,6 +349,7 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:GetTriggerSecret',
+    resource: `soat:${trigger.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -365,6 +374,7 @@ triggersRouter.post(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: trigger.projectId!,
       action: 'triggers:RotateTriggerSecret',
+      resource: `soat:${trigger.projectId}:*:*`,
     });
     if (!allowed) {
       ctx.status = 403;

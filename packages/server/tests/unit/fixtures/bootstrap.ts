@@ -86,3 +86,44 @@ export const setupProjectWithUsers = async (args: {
     noPermToken,
   };
 };
+
+/**
+ * Provisions a principal whose policy is SRN-scoped to a single project
+ * (`resource: ["soat:<project>:*:*"]`) rather than the wildcard `*` that
+ * {@link setupProjectWithUsers} grants. This mirrors the effective boundary of a
+ * project-scoped credential (project key / OAuth access token, see
+ * `buildConsentPolicyFromScopeClaim`), and is the shape that exposes handlers
+ * which authorize with no `resource` (defaulting to `*`, which an SRN-scoped
+ * Allow cannot match). Returns a login token for the scoped user.
+ */
+export const createScopedPrincipal = async (args: {
+  adminToken: string;
+  projectId: string;
+  username: string;
+  actions: string[];
+}): Promise<string> => {
+  const password = `${args.username}pass`;
+  const createUserRes = await authenticatedTestClient(args.adminToken)
+    .post('/api/v1/users')
+    .send({ username: args.username, password });
+
+  const policyRes = await authenticatedTestClient(args.adminToken)
+    .post('/api/v1/policies')
+    .send({
+      document: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: args.actions,
+            resource: [`soat:${args.projectId}:*:*`],
+          },
+        ],
+      },
+    });
+
+  await authenticatedTestClient(args.adminToken)
+    .put(`/api/v1/users/${createUserRes.body.id}/policies`)
+    .send({ policy_ids: [policyRes.body.id] });
+
+  return loginAs(args.username, password);
+};

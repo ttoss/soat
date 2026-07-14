@@ -47,6 +47,7 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:GetSecret',
+    resource: `soat:${secret.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -97,6 +98,7 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:UpdateSecret',
+    resource: `soat:${secret.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;
@@ -127,6 +129,7 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:DeleteSecret',
+    resource: `soat:${secret.projectId}:*:*`,
   });
   if (!allowed) {
     ctx.status = 403;

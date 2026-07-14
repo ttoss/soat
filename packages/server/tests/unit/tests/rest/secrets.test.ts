@@ -1,4 +1,7 @@
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Secrets', () => {
@@ -335,6 +338,56 @@ describe('Secrets', () => {
         `/api/v1/secrets/${linkedSecretId}?force=true`
       );
       expect(response.status).toBe(204);
+    });
+  });
+
+  // A project-scoped credential (project key / OAuth token) carries a policy
+  // whose resources are SRN-scoped to the project, not the wildcard `*`. The
+  // by-id handlers must authorize against a project SRN — not the implicit `*`
+  // default — or such a principal can list but never get/update/delete.
+  describe('SRN-scoped principal (project-scoped credential)', () => {
+    let scopedToken: string;
+
+    beforeAll(async () => {
+      scopedToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'secretsscoped',
+        actions: [
+          'secrets:ListSecrets',
+          'secrets:GetSecret',
+          'secrets:UpdateSecret',
+          'secrets:DeleteSecret',
+        ],
+      });
+    });
+
+    test('can get, update, and delete secrets in its project', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'Scoped', value: 'v1' });
+      const id = created.body.id;
+
+      const listRes = await authenticatedTestClient(scopedToken)
+        .get('/api/v1/secrets')
+        .query({ projectId });
+      expect(listRes.status).toBe(200);
+
+      const getRes = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/secrets/${id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.id).toBe(id);
+
+      const patchRes = await authenticatedTestClient(scopedToken)
+        .patch(`/api/v1/secrets/${id}`)
+        .send({ value: 'v2' });
+      expect(patchRes.status).toBe(200);
+
+      const delRes = await authenticatedTestClient(scopedToken).delete(
+        `/api/v1/secrets/${id}`
+      );
+      expect(delRes.status).toBe(204);
     });
   });
 });

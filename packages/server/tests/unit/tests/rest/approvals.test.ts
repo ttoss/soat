@@ -7,7 +7,10 @@ import {
 } from 'src/lib/approvals';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 // The approvals queue has no public create endpoint — items are platform-created
@@ -17,6 +20,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // exercise list/get/approve/reject/expiry through REST as a real client would.
 
 describe('Approvals', () => {
+  let adminToken: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -49,6 +53,7 @@ describe('Approvals', () => {
       ],
     });
 
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
@@ -316,6 +321,70 @@ describe('Approvals', () => {
       expect(found).toBeDefined();
       expect(found!.origin).toBe('tool_call');
       expect(found!.dedupKey).toBe('approvals:dedup:1');
+    });
+  });
+
+  // A project-scoped principal (project key / OAuth token) carries a policy
+  // whose resources are SRN-scoped to the project (`soat:<project>:*:*`) rather
+  // than the wildcard `*` the other tests use. The get/approve/reject handlers
+  // must therefore check against a concrete item SRN — not the implicit `*`
+  // default — or the SRN-scoped Allow never matches and every resolution 403s
+  // even though list succeeds. This reproduces the list-allowed/get-denied split
+  // reported in A-1.
+  describe('SRN-scoped principal can resolve, not just list', () => {
+    let scopedToken: string;
+
+    beforeAll(async () => {
+      scopedToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'approvalsscoped',
+        actions: [
+          'approvals:ListApprovals',
+          'approvals:GetApproval',
+          'approvals:ResolveApproval',
+        ],
+      });
+    });
+
+    test('lists approvals scoped to the project', async () => {
+      const seeded = await seedApproval();
+      const res = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/approvals?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.some((a: { id: string }) => {
+          return a.id === seeded.id;
+        })
+      ).toBe(true);
+    });
+
+    test('gets a single approval item', async () => {
+      const seeded = await seedApproval();
+      const res = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/approvals/${seeded.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(seeded.id);
+    });
+
+    test('approves a pending item', async () => {
+      const seeded = await seedApproval();
+      const res = await authenticatedTestClient(scopedToken)
+        .post(`/api/v1/approvals/${seeded.id}/approve`)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('approved');
+    });
+
+    test('rejects a pending item', async () => {
+      const seeded = await seedApproval();
+      const res = await authenticatedTestClient(scopedToken)
+        .post(`/api/v1/approvals/${seeded.id}/reject`)
+        .send({ reason: 'scoped rejection' });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('rejected');
     });
   });
 });

@@ -6,8 +6,25 @@ import {
   listApprovals,
   rejectApproval,
 } from 'src/lib/approvals';
+import { buildSrn } from 'src/lib/iam';
 
 const approvalsRouter = new Router<Context>();
+
+/**
+ * Item-level SRN for a single approval. The get/resolve handlers authorize
+ * against this concrete resource rather than the implicit `*` default so a
+ * project-scoped principal — whose policy grants an SRN pattern such as
+ * `soat:<project>:*:*`, never the bare `*` — is granted access. Passing no
+ * resource defaults to `*`, which such a policy cannot match, wrongly denying
+ * get/approve/reject while `list` (already SRN-checked) succeeds.
+ */
+const approvalSrn = (approval: { projectId?: string; id: string }): string => {
+  return buildSrn({
+    projectPublicId: approval.projectId!,
+    resourceType: 'approval',
+    resourceId: approval.id,
+  });
+};
 
 approvalsRouter.get('/approvals', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -51,6 +68,7 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: approval.projectId!,
     action: 'approvals:GetApproval',
+    resource: approvalSrn(approval),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -75,6 +93,7 @@ approvalsRouter.post(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: approval.projectId!,
       action: 'approvals:ResolveApproval',
+      resource: approvalSrn(approval),
     });
     if (!allowed) {
       ctx.status = 403;
@@ -106,6 +125,7 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: approval.projectId!,
     action: 'approvals:ResolveApproval',
+    resource: approvalSrn(approval),
   });
   if (!allowed) {
     ctx.status = 403;
