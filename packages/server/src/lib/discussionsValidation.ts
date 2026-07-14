@@ -63,3 +63,68 @@ export const validateDiscussionConfig = (args: {
     assertEffort(args.synthesis.effort, 'synthesis');
   }
 };
+
+// ── Prompt template token warnings ──────────────────────────────────────────
+//
+// A discussion always compiles down to at most two engine steps — the fixed
+// `deliberation` step (one branch per participant) followed by an optional
+// `synthesis` step — so `deliberation` is the only step a prompt can ever
+// legitimately reference (see `discussionRuns.ts` `buildSteps`). Any other
+// `{token}` is either a typo or a token copied from a different templating
+// system; it is not rejected (unknown tokens pass through `resolveTemplate`
+// unresolved, which is harmless), just surfaced as a warning.
+
+const PROMPT_TOKEN_RE = /\{([\w.]+)\}/g;
+const ALWAYS_ALLOWED_TOKENS = new Set(['topic', 'transcript']);
+const ALLOWED_STEP_REFS = new Set([
+  'steps.deliberation',
+  'steps.deliberation.last',
+]);
+
+const findPromptTokenWarnings = (args: {
+  prompt: string;
+  where: string;
+}): string[] => {
+  const warnings: string[] = [];
+  for (const match of args.prompt.matchAll(PROMPT_TOKEN_RE)) {
+    const token = match[1] as string;
+    if (ALWAYS_ALLOWED_TOKENS.has(token) || ALLOWED_STEP_REFS.has(token)) {
+      continue;
+    }
+    warnings.push(
+      `${args.where} references unknown template token '{${token}}' — allowed tokens are {topic}, {transcript}, {steps.deliberation}, and {steps.deliberation.last}.`
+    );
+  }
+  return warnings;
+};
+
+/**
+ * Collects non-blocking warnings for `{token}` references in participant and
+ * synthesis prompts that fall outside the allowlist `resolveTemplate` actually
+ * resolves. Pure and side-effect free — safe to call on every read, not just
+ * at write time.
+ */
+export const findDiscussionTemplateWarnings = (args: {
+  participants?: Array<{ prompt?: string | null }>;
+  synthesis?: SynthesisConfig | null;
+}): string[] => {
+  const warnings: string[] = [];
+  for (const [index, participant] of (args.participants ?? []).entries()) {
+    if (!participant.prompt) continue;
+    warnings.push(
+      ...findPromptTokenWarnings({
+        prompt: participant.prompt,
+        where: `participants[${index}].prompt`,
+      })
+    );
+  }
+  if (args.synthesis?.prompt) {
+    warnings.push(
+      ...findPromptTokenWarnings({
+        prompt: args.synthesis.prompt,
+        where: 'synthesis.prompt',
+      })
+    );
+  }
+  return warnings;
+};

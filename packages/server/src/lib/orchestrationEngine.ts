@@ -9,7 +9,7 @@ import {
 } from './orchestrationEvents';
 import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
 import {
-  applyOutputMapping,
+  applyStateMapping,
   findStartNodes,
   resolveNextNodes,
 } from './orchestrationExecutors';
@@ -18,6 +18,7 @@ import {
   recordDelayResumption,
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
+import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
@@ -106,7 +107,8 @@ const buildResumeEntry = async (args: {
     return n.id === nodeId;
   });
   artifacts[nodeId] = resume.artifact;
-  if (node) applyOutputMapping(node.outputMapping, resume.artifact, state);
+  writeNodeArtifact({ nodeId, artifact: resume.artifact, state });
+  if (node) applyStateMapping(node.stateMapping, resume.artifact, state);
   completedNodes.add(nodeId);
   if (node) {
     await recordDelayResumption({
@@ -306,14 +308,13 @@ export const startOrchestrationRun = async (args: {
 
   const nodes = orch.nodes as OrchestrationNode[];
   const edges = orch.edges as OrchestrationEdge[];
-  // Seed the run input both flat (top-level keys, the original behavior) and
-  // under an `input` namespace. The namespace matches the pipeline/formation
-  // convention (`{ "var": "input.<name>" }`) so a graph authored against that
-  // documented contract sees its run input in every node expression and
-  // input_mapping, not just in the persisted final-state dump. Keeping the flat
-  // keys preserves existing `{ "var": "<name>" }` references.
+  // Seed the run input under the `input` namespace only, matching the
+  // pipeline/formation convention (`{ "var": "input.<name>" }`) so a graph
+  // reads run input the same way everywhere in the platform. Earlier releases
+  // also spread the input flat across top-level state keys; that alias is
+  // removed — read run input via `{ "var": "input.<name>" }`.
   const runInput = (args.input ?? {}) as Record<string, unknown>;
-  const state: Record<string, unknown> = { ...runInput, input: runInput };
+  const state: Record<string, unknown> = { input: runInput };
   const artifacts: Record<string, unknown> = {};
 
   const runRecord = await db.OrchestrationRun.create({

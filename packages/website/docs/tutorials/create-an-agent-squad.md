@@ -212,22 +212,22 @@ cat > squad.json << 'EOF'
             "id": "research",
             "type": "agent",
             "agent_id": { "ref": "Researcher" },
-            "input_mapping": { "prompt": { "var": "topic" } },
-            "output_mapping": { "content": "state.research" }
+            "input_mapping": { "prompt": { "var": "input.topic" } },
+            "state_mapping":{"state.research":{"var":"output.content"}}
           },
           {
             "id": "write",
             "type": "agent",
             "agent_id": { "ref": "Writer" },
             "input_mapping": { "prompt": { "var": "research" } },
-            "output_mapping": { "content": "state.draft" }
+            "state_mapping":{"state.draft":{"var":"output.content"}}
           },
           {
             "id": "review",
             "type": "agent",
             "agent_id": { "ref": "Reviewer" },
             "input_mapping": { "prompt": { "var": "research" } },
-            "output_mapping": { "content": "state.notes" }
+            "state_mapping":{"state.notes":{"var":"output.content"}}
           },
           {
             "id": "approve",
@@ -235,13 +235,13 @@ cat > squad.json << 'EOF'
             "prompt": "Approve the draft for publishing?",
             "options": ["approve", "reject"],
             "input_mapping": { "draft": { "var": "draft" }, "notes": { "var": "notes" } },
-            "output_mapping": { "approved": "state.approved" }
+            "state_mapping":{"state.approved":{"var":"output.approved"}}
           },
           {
             "id": "publish",
             "type": "transform",
             "expression": { "cat": ["Published: ", { "var": "draft" }] },
-            "output_mapping": { "result": "state.published" }
+            "state_mapping":{"state.published":{"var":"output.result"}}
           }
         ],
         "edges": [
@@ -316,22 +316,22 @@ const template = {
             id: 'research',
             type: 'agent',
             agent_id: { ref: 'Researcher' },
-            input_mapping: { prompt: { var: 'topic' } },
-            output_mapping: { content: 'state.research' },
+            input_mapping: { prompt: { var: 'input.topic' } },
+            state_mapping: { 'state.research': { var: 'output.content' } },
           },
           {
             id: 'write',
             type: 'agent',
             agent_id: { ref: 'Writer' },
             input_mapping: { prompt: { var: 'research' } },
-            output_mapping: { content: 'state.draft' },
+            state_mapping: { 'state.draft': { var: 'output.content' } },
           },
           {
             id: 'review',
             type: 'agent',
             agent_id: { ref: 'Reviewer' },
             input_mapping: { prompt: { var: 'research' } },
-            output_mapping: { content: 'state.notes' },
+            state_mapping: { 'state.notes': { var: 'output.content' } },
           },
           {
             id: 'approve',
@@ -339,13 +339,13 @@ const template = {
             prompt: 'Approve the draft for publishing?',
             options: ['approve', 'reject'],
             input_mapping: { draft: { var: 'draft' }, notes: { var: 'notes' } },
-            output_mapping: { approved: 'state.approved' },
+            state_mapping: { 'state.approved': { var: 'output.approved' } },
           },
           {
             id: 'publish',
             type: 'transform',
             expression: { cat: ['Published: ', { var: 'draft' }] },
-            output_mapping: { result: 'state.published' },
+            state_mapping: { 'state.published': { var: 'output.result' } },
           },
         ],
         edges: [
@@ -414,22 +414,22 @@ cat > squad.json << 'EOF'
             "id": "research",
             "type": "agent",
             "agent_id": { "ref": "Researcher" },
-            "input_mapping": { "prompt": { "var": "topic" } },
-            "output_mapping": { "content": "state.research" }
+            "input_mapping": { "prompt": { "var": "input.topic" } },
+            "state_mapping":{"state.research":{"var":"output.content"}}
           },
           {
             "id": "write",
             "type": "agent",
             "agent_id": { "ref": "Writer" },
             "input_mapping": { "prompt": { "var": "research" } },
-            "output_mapping": { "content": "state.draft" }
+            "state_mapping":{"state.draft":{"var":"output.content"}}
           },
           {
             "id": "review",
             "type": "agent",
             "agent_id": { "ref": "Reviewer" },
             "input_mapping": { "prompt": { "var": "research" } },
-            "output_mapping": { "content": "state.notes" }
+            "state_mapping":{"state.notes":{"var":"output.content"}}
           },
           {
             "id": "approve",
@@ -437,13 +437,13 @@ cat > squad.json << 'EOF'
             "prompt": "Approve the draft for publishing?",
             "options": ["approve", "reject"],
             "input_mapping": { "draft": { "var": "draft" }, "notes": { "var": "notes" } },
-            "output_mapping": { "approved": "state.approved" }
+            "state_mapping":{"state.approved":{"var":"output.approved"}}
           },
           {
             "id": "publish",
             "type": "transform",
             "expression": { "cat": ["Published: ", { "var": "draft" }] },
-            "output_mapping": { "result": "state.published" }
+            "state_mapping":{"state.published":{"var":"output.result"}}
           }
         ],
         "edges": [
@@ -767,7 +767,7 @@ UPDATED_TEMPLATE=$(printf '%s' "$TEMPLATE" | jq '
     "type": "agent",
     "agent_id": { "ref": "Proofreader" },
     "input_mapping": { "prompt": { "var": "research" } },
-    "output_mapping": { "content": "state.citationNotes" }
+    "state_mapping":{"state.citationNotes":{"var":"output.content"}}
   }] |
   .resources.ContentSquad.properties.edges += [
     { "from": "research", "to": "proofread" },
@@ -811,7 +811,7 @@ updatedTemplate.resources.ContentSquad.properties.nodes.push({
   type: 'agent',
   agent_id: { ref: 'Proofreader' },
   input_mapping: { prompt: { var: 'research' } },
-  output_mapping: { content: 'state.citationNotes' },
+  state_mapping: { 'state.citationNotes': { var: 'output.content' } },
 });
 updatedTemplate.resources.ContentSquad.properties.edges.push(
   { from: 'research', to: 'proofread' },
@@ -844,7 +844,7 @@ UPDATED_TEMPLATE=$(printf '%s' "$TEMPLATE" | jq '
     "type": "agent",
     "agent_id": { "ref": "Proofreader" },
     "input_mapping": { "prompt": { "var": "research" } },
-    "output_mapping": { "content": "state.citationNotes" }
+    "state_mapping":{"state.citationNotes":{"var":"output.content"}}
   }] |
   .resources.ContentSquad.properties.edges += [
     { "from": "research", "to": "proofread" },

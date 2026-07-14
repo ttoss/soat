@@ -3,7 +3,7 @@ import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { parseDuration } from 'src/lib/orchestrationDuration';
 import {
   applyInputMapping,
-  applyOutputMapping,
+  applyStateMapping,
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
@@ -125,31 +125,39 @@ describe('applyInputMapping', () => {
   });
 });
 
-// ── applyOutputMapping ─────────────────────────────────────────────────────
+// ── applyStateMapping ────────────────────────────────────────────────────────
 
-describe('applyOutputMapping', () => {
-  test('does nothing when outputMapping is undefined', () => {
+describe('applyStateMapping', () => {
+  test('does nothing when stateMapping is undefined', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping(undefined, { result: 42 }, state);
+    applyStateMapping(undefined, { result: 42 }, state);
     expect(state).toEqual({});
   });
 
-  test('writes artifact value to state under the mapped key', () => {
+  test('writes a {"var": "output.<key>"} expression result to state under the mapped path', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping({ result: 'state.output' }, { result: 42 }, state);
+    applyStateMapping(
+      { 'state.output': { var: 'output.result' } },
+      { result: 42 },
+      state
+    );
     expect(state['output']).toBe(42);
   });
 
-  test('an output path without the state. prefix is normalized to one', () => {
+  test('a state path without the state. prefix is normalized to one', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping({ result: 'output' }, { result: 42 }, state);
+    applyStateMapping(
+      { output: { var: 'output.result' } },
+      { result: 42 },
+      state
+    );
     expect(state['output']).toBe(42);
   });
 
   test('a dotted path builds a nested object', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping(
-      { result: 'state.proposed.action_id' },
+    applyStateMapping(
+      { 'state.proposed.action_id': { var: 'output.result' } },
       { result: 'act_1' },
       state
     );
@@ -158,14 +166,18 @@ describe('applyOutputMapping', () => {
 
   test('a deep multi-level dotted path creates every intermediate object', () => {
     const state: Record<string, unknown> = {};
-    applyOutputMapping({ result: 'state.a.b.c' }, { result: 7 }, state);
+    applyStateMapping(
+      { 'state.a.b.c': { var: 'output.result' } },
+      { result: 7 },
+      state
+    );
     expect(state).toEqual({ a: { b: { c: 7 } } });
   });
 
   test('a dotted write merges into an existing intermediate object', () => {
     const state: Record<string, unknown> = { proposed: { existing: 1 } };
-    applyOutputMapping(
-      { result: 'state.proposed.action_id' },
+    applyStateMapping(
+      { 'state.proposed.action_id': { var: 'output.result' } },
       { result: 'act_2' },
       state
     );
@@ -174,18 +186,38 @@ describe('applyOutputMapping', () => {
 
   test('a dotted write overwrites a non-object intermediate value', () => {
     const state: Record<string, unknown> = { proposed: 'scalar' };
-    applyOutputMapping(
-      { result: 'state.proposed.action_id' },
+    applyStateMapping(
+      { 'state.proposed.action_id': { var: 'output.result' } },
       { result: 'act_3' },
       state
     );
     expect(state['proposed']).toEqual({ action_id: 'act_3' });
   });
 
+  test('a literal (non-logic) value is written as-is, matching input_mapping semantics', () => {
+    const state: Record<string, unknown> = {};
+    applyStateMapping({ 'state.label': 'literal text' }, {}, state);
+    expect(state['label']).toBe('literal text');
+  });
+
+  test('an expression can read the current state alongside the artifact', () => {
+    const state: Record<string, unknown> = { count: 1 };
+    applyStateMapping(
+      {
+        'state.count': {
+          '+': [{ var: 'state.count' }, { var: 'output.delta' }],
+        },
+      },
+      { delta: 4 },
+      state
+    );
+    expect(state['count']).toBe(5);
+  });
+
   test('a dotted write replaces an array intermediate with an object', () => {
     const state: Record<string, unknown> = { proposed: [1, 2] };
-    applyOutputMapping(
-      { result: 'state.proposed.action_id' },
+    applyStateMapping(
+      { 'state.proposed.action_id': { var: 'output.result' } },
       { result: 'act_4' },
       state
     );

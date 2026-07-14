@@ -13,6 +13,7 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
+import { findInvalidTemplateTokens } from '../secrets';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import {
   isObjectRecord,
@@ -94,6 +95,18 @@ const validateToolProperties = (args: {
       const message =
         error instanceof DomainError ? error.message : String(error);
       errors.push({ path: `${basePath}.pipeline`, message });
+    }
+  }
+
+  // Validate execute and mcp separately so each error points at the field
+  // that actually carries the offending token.
+  for (const field of ['execute', 'mcp'] as const) {
+    const invalidTokens = findInvalidTemplateTokens(properties[field]);
+    for (const token of new Set(invalidTokens)) {
+      errors.push({
+        path: `${basePath}.${field}`,
+        message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
+      });
     }
   }
 

@@ -856,7 +856,7 @@ describe('MCP tools - happy path', () => {
                 id: 'start',
                 type: 'transform',
                 expression: { var: '' },
-                output_mapping: { output: 'state.result' },
+                state_mapping: { 'state.result': { var: 'output.output' } },
               },
             ],
             edges: [],
@@ -1373,7 +1373,7 @@ describe('MCP tools - happy path', () => {
             id: 'a',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'state.step1' },
+            stateMapping: { 'state.step1': { var: 'output.result' } },
           },
           {
             id: 'b',

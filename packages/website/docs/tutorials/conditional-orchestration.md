@@ -153,19 +153,19 @@ ORCH_ID=$(soat create-orchestration \
     {
       "id": "route",
       "type": "condition",
-      "expression": {"if": [{"var": "urgent"}, "alert", "queue"]}
+      "expression": {"if": [{"var": "input.urgent"}, "alert", "queue"]}
     },
     {
       "id": "send_alert",
       "type": "transform",
-      "expression": {"cat": ["ALERT: ", {"var": "topic"}]},
-      "output_mapping": {"result": "state.result"}
+      "expression": {"cat": ["ALERT: ", {"var": "input.topic"}]},
+      "state_mapping":{"state.result":{"var":"output.result"}}
     },
     {
       "id": "queue_task",
       "type": "transform",
-      "expression": {"cat": ["QUEUED: ", {"var": "topic"}]},
-      "output_mapping": {"result": "state.result"}
+      "expression": {"cat": ["QUEUED: ", {"var": "input.topic"}]},
+      "state_mapping":{"state.result":{"var":"output.result"}}
     }
   ]' \
   --edges '[
@@ -187,19 +187,19 @@ const { data: orch } = await adminSoat.orchestrations.createOrchestration({
       {
         id: 'route',
         type: 'condition',
-        expression: { if: [{ var: 'urgent' }, 'alert', 'queue'] },
+        expression: { if: [{ var: 'input.urgent' }, 'alert', 'queue'] },
       },
       {
         id: 'send_alert',
         type: 'transform',
-        expression: { cat: ['ALERT: ', { var: 'topic' }] },
-        output_mapping: { result: 'state.result' },
+        expression: { cat: ['ALERT: ', { var: 'input.topic' }] },
+        state_mapping: { 'state.result': { var: 'output.result' } },
       },
       {
         id: 'queue_task',
         type: 'transform',
-        expression: { cat: ['QUEUED: ', { var: 'topic' }] },
-        output_mapping: { result: 'state.result' },
+        expression: { cat: ['QUEUED: ', { var: 'input.topic' }] },
+        state_mapping: { 'state.result': { var: 'output.result' } },
       },
     ],
     edges: [
@@ -222,9 +222,9 @@ ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
     "project_id": "'"$PROJECT_ID"'",
     "name": "content-triage",
     "nodes": [
-      {"id":"route","type":"condition","expression":{"if":[{"var":"urgent"},"alert","queue"]}},
-      {"id":"send_alert","type":"transform","expression":{"cat":["ALERT: ",{"var":"topic"}]},"output_mapping":{"result":"state.result"}},
-      {"id":"queue_task","type":"transform","expression":{"cat":["QUEUED: ",{"var":"topic"}]},"output_mapping":{"result":"state.result"}}
+      {"id":"route","type":"condition","expression":{"if":[{"var":"input.urgent"},"alert","queue"]}},
+      {"id":"send_alert","type":"transform","expression":{"cat":["ALERT: ",{"var":"input.topic"}]},"state_mapping":{"state.result":{"var":"output.result"}}},
+      {"id":"queue_task","type":"transform","expression":{"cat":["QUEUED: ",{"var":"input.topic"}]},"state_mapping":{"state.result":{"var":"output.result"}}}
     ],
     "edges": [
       {"from":"route","to":"send_alert","condition":"alert"},

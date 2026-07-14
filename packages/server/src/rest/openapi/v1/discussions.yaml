@@ -600,6 +600,16 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ParticipantRecord'
+        template_warnings:
+          type: array
+          items:
+            type: string
+          description: >-
+            Non-blocking warnings for participant/synthesis prompt `{token}`
+            references outside the allowlist ({topic}, {transcript},
+            {steps.deliberation}, {steps.deliberation.last}). Unknown tokens
+            are not rejected — they pass through unresolved — so this is
+            informational only.
         created_at:
           type: string
           format: date-time

@@ -80,9 +80,12 @@ export type OrchestrationNode = {
   orchestrationId?: string;
   // Shared: max iterations for cycles
   maxIterations?: number;
-  // Shared mappings — inputMapping values are JSON Logic (literal or expression)
+  // Shared mappings — values are JSON Logic (literal or expression).
+  // inputMapping: { <inputKey>: <expr over state> }.
+  // stateMapping: { <state.path>: <expr over { output: artifact, state }> } —
+  // keys are write destinations, mirroring input_mapping's read-source shape.
   inputMapping?: Record<string, unknown>;
-  outputMapping?: Record<string, string>;
+  stateMapping?: Record<string, unknown>;
   outputSchema?: object;
   // Retry-on-failure policy for this node (see NodeRetryPolicy).
   retry?: NodeRetryPolicy;

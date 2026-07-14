@@ -934,6 +934,96 @@ describe('Tools', () => {
     });
   });
 
+  describe('Invalid template tokens ({{...}}) in tool configs', () => {
+    test('creating an http tool with a non-secret {{...}} token in execute.url returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-token-url-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.weather.example/v1/current?city={{city}}',
+            method: 'GET',
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('creating an http tool with a non-secret {{...}} token in execute.headers returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-token-header-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { Authorization: 'Bearer {{token}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('creating an mcp tool with a non-secret {{...}} token in mcp.headers returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-token-mcp-tool',
+          type: 'mcp',
+          mcp: {
+            url: 'https://mcp.example.com/sse',
+            headers: { Authorization: 'Bearer {{apiKey}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('updating a tool with a non-secret {{...}} token in execute.url returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'invalid-token-update-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/convert' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({
+          execute: { url: 'https://api.example.com/convert?city={{city}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('a valid {{secret:...}} token alongside single-brace {param} placeholders is accepted', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'valid-mixed-token-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/users/{user_id}',
+            method: 'DELETE',
+          },
+        });
+
+      expect(res.status).toBe(201);
+    });
+  });
+
   describe('Tool call validation and MCP calling', () => {
     let mcpServer: http.Server;
     let mcpServerUrl: string;

@@ -81,6 +81,11 @@ export const ERROR_CODES = {
     description:
       'A secret referenced by a {{secret:...}} token does not exist in this project.',
   },
+  INVALID_TEMPLATE_TOKEN: {
+    httpStatus: 400,
+    description:
+      'A {{...}} double-curly token was found that is not a {{secret:sec_...}} reference. Double curly braces are reserved for secret references; use single braces ({param}) for URL path parameters.',
+  },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

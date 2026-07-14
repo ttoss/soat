@@ -1,6 +1,7 @@
 import { db } from '../db';
 import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
-import { applyOutputMapping, resolveNextNodes } from './orchestrationExecutors';
+import { applyStateMapping, resolveNextNodes } from './orchestrationExecutors';
+import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -169,8 +170,9 @@ export const applyHumanInputToState = (args: {
   const humanNode = nodes.find((n) => {
     return n.id === humanNodeId;
   });
+  writeNodeArtifact({ nodeId: humanNodeId, artifact: humanOutput, state });
   if (humanNode) {
-    applyOutputMapping(humanNode.outputMapping, humanOutput, state);
+    applyStateMapping(humanNode.stateMapping, humanOutput, state);
   }
   artifacts[humanNodeId] = humanOutput;
 };

@@ -1090,6 +1090,69 @@ resources:
           ])
         );
       });
+
+      test('returns invalid for a tool resource with a non-secret {{...}} token in execute', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({
+            template: {
+              resources: {
+                BadTool: {
+                  type: 'tool',
+                  properties: {
+                    name: 'bad-token-tool',
+                    execute: {
+                      url: 'https://api.weather.example/v1/current?city={{city}}',
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: 'resources.BadTool.properties.execute',
+              message: expect.stringContaining("'{{city}}'"),
+            }),
+          ])
+        );
+      });
+
+      test('reports a non-secret {{...}} token in mcp at the mcp path, not execute', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({
+            template: {
+              resources: {
+                BadMcpTool: {
+                  type: 'tool',
+                  properties: {
+                    name: 'bad-mcp-token-tool',
+                    mcp: {
+                      url: 'https://mcp.example/sse',
+                      headers: { Authorization: 'Bearer {{apiKey}}' },
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: 'resources.BadMcpTool.properties.mcp',
+              message: expect.stringContaining("'{{apiKey}}'"),
+            }),
+          ])
+        );
+      });
     });
 
     describe('POST /api/v1/formations', () => {
@@ -1931,8 +1994,8 @@ resources:
                   id: 'write',
                   type: 'agent',
                   agent_id: { ref: 'SquadAgent' },
-                  input_mapping: { prompt: { var: 'topic' } },
-                  output_mapping: { content: 'state.draft' },
+                  input_mapping: { prompt: { var: 'input.topic' } },
+                  state_mapping: { 'state.draft': { var: 'output.content' } },
                 },
               ],
               edges: [],

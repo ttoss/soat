@@ -24,7 +24,7 @@ describe('Orchestrations', () => {
         id: 'start',
         type: 'transform',
         expression: { var: '' },
-        output_mapping: { output: 'state.result' },
+        state_mapping: { 'state.result': { var: 'output.output' } },
       },
     ],
     edges: [],
@@ -39,14 +39,31 @@ describe('Orchestrations', () => {
         id: 'nodeA',
         type: 'transform',
         expression: 42,
-        output_mapping: { result: 'state.step1' },
+        state_mapping: { 'state.step1': { var: 'output.result' } },
       },
       {
         id: 'nodeB',
         type: 'transform',
         expression: { '+': [{ var: 'step1' }, 1] },
         input_mapping: { val: { var: 'step1' } },
-        output_mapping: { result: 'state.step2' },
+        state_mapping: { 'state.step2': { var: 'output.result' } },
+      },
+    ],
+    edges: [{ from: 'nodeA', to: 'nodeB' }],
+  };
+
+  const nodesNamespaceOrchestration = {
+    name: 'Nodes Namespace Pipeline',
+    nodes: [
+      // No state_mapping: nodeB reads nodeA's raw artifact via the
+      // engine-owned state.nodes.<id> namespace instead.
+      { id: 'nodeA', type: 'transform', expression: 42 },
+      {
+        id: 'nodeB',
+        type: 'transform',
+        expression: { '+': [{ var: 'nodes.nodeA.result' }, 1] },
+        input_mapping: { val: { var: 'nodes.nodeA.result' } },
+        state_mapping: { 'state.step2': { var: 'output.result' } },
       },
     ],
     edges: [{ from: 'nodeA', to: 'nodeB' }],
@@ -64,13 +81,13 @@ describe('Orchestrations', () => {
         id: 'yes_node',
         type: 'transform',
         expression: 'yes_result',
-        output_mapping: { result: 'state.branch' },
+        state_mapping: { 'state.branch': { var: 'output.result' } },
       },
       {
         id: 'no_node',
         type: 'transform',
         expression: 'no_result',
-        output_mapping: { result: 'state.branch' },
+        state_mapping: { 'state.branch': { var: 'output.result' } },
       },
     ],
     edges: [
@@ -285,7 +302,7 @@ describe('Orchestrations', () => {
               id: 'a',
               type: 'transform',
               expression: 1,
-              output_mapping: { result: 'state.step1' },
+              state_mapping: { 'state.step1': { var: 'output.result' } },
             },
             {
               id: 'b',
@@ -323,7 +340,7 @@ describe('Orchestrations', () => {
               id: 'yes_node',
               type: 'transform',
               expression: 1,
-              output_mapping: { result: 'state.branch' },
+              state_mapping: { 'state.branch': { var: 'output.result' } },
             },
             { id: 'no_node', type: 'transform', expression: 2 },
             {
@@ -350,6 +367,89 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestrations/validate')
         .send({ nodes: [], edges: [] });
       expect(response.status).toBe(401);
+    });
+
+    test('accepts a node reading an upstream node via {"var": "nodes.<id>..."}', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: nodesNamespaceOrchestration.nodes,
+          edges: nodesNamespaceOrchestration.edges,
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(true);
+      expect(response.body.errors).toEqual([]);
+    });
+
+    test('rejects a node referencing nodes.<id> of a non-upstream node', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [
+            { id: 'a', type: 'transform', expression: 1 },
+            {
+              id: 'b',
+              type: 'transform',
+              expression: 1,
+              input_mapping: { val: { var: 'nodes.ghost.result' } },
+            },
+          ],
+          edges: [{ from: 'a', to: 'b' }],
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(false);
+      expect(response.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining("'ghost' is not an earlier"),
+          }),
+        ])
+      );
+    });
+
+    test('rejects a state_mapping write into the reserved nodes namespace', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [
+            {
+              id: 'a',
+              type: 'transform',
+              expression: 1,
+              state_mapping: { 'state.nodes.a': { var: 'output.result' } },
+            },
+          ],
+          edges: [],
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(false);
+      expect(response.body.errors).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            message: expect.stringContaining(
+              "reserved 'nodes' state namespace"
+            ),
+          }),
+        ])
+      );
+    });
+
+    test('accepts an input_schema property named nodes (input lives under state.input, no collision)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations/validate')
+        .send({
+          nodes: [
+            {
+              id: 'a',
+              type: 'transform',
+              expression: { var: 'input.nodes' },
+            },
+          ],
+          edges: [],
+          input_schema: { properties: { nodes: { type: 'object' } } },
+        });
+      expect(response.status).toBe(200);
+      expect(response.body.valid).toBe(true);
     });
   });
 
@@ -483,7 +583,7 @@ describe('Orchestrations', () => {
           id: 'updated_node',
           type: 'transform',
           expression: 'updated',
-          output_mapping: { result: 'state.updated' },
+          state_mapping: { 'state.updated': { var: 'output.result' } },
         },
       ];
       const response = await authenticatedTestClient(userToken)
@@ -647,6 +747,106 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.step2).toBe(43);
     });
 
+    test("a node reads an upstream node's raw artifact via state.nodes.<id> without a state_mapping", async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...nodesNamespaceOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+      const nodesNsId = createRes.body.id;
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: nodesNsId, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      // node ids are caller-authored identifiers referenced verbatim by
+      // {"var": "nodes.<id>..."} — they must round-trip unmangled, not be
+      // snake-cased like a schema field name (nodeA, not node_a).
+      expect(runRes.body.state.nodes.nodeA.result).toBe(42);
+      expect(runRes.body.state.step2).toBe(43);
+    });
+
+    test('a node whose expression reflects the whole state does not create a circular state.nodes reference', async () => {
+      // { var: '' } resolves to the entire state object, so the recorded
+      // artifact (`{ result: <state> }`) aliases `state` itself unless the
+      // engine clones before nesting it under state.nodes.<id>.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Whole State Reflection',
+          nodes: [{ id: 'start', type: 'transform', expression: { var: '' } }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.nodes.start.result).toEqual({ input: {} });
+    });
+
+    test('a state_mapping value that resolves to the whole state does not create a circular reference', async () => {
+      // { var: 'state' } over the { output, state } context resolves to the
+      // live state object; writing it back uncloned would nest state inside
+      // itself and crash JSONB persistence, stranding the run.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'State Snapshot Mapping',
+          nodes: [
+            {
+              id: 'snap',
+              type: 'transform',
+              expression: 1,
+              state_mapping: { 'state.snapshot': { var: 'state' } },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.snapshot.input).toEqual({});
+    });
+
+    test("a downstream node reads a condition node's label via state.nodes.<id>", async () => {
+      // Condition nodes complete with a label, not an artifact; the nodes
+      // namespace still records them as { label } so nodes.<id> refs that
+      // validation accepts are actually readable at runtime.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Condition Label In Nodes Namespace',
+          nodes: [
+            { id: 'cond', type: 'condition', expression: 'yes' },
+            {
+              id: 'pick',
+              type: 'transform',
+              expression: { var: 'nodes.cond.label' },
+              state_mapping: { 'state.picked': { var: 'output.result' } },
+            },
+          ],
+          edges: [{ from: 'cond', to: 'pick', condition: 'yes' }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.picked).toBe('yes');
+    });
+
     test('condition node routes to correct branch', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
@@ -726,9 +926,9 @@ describe('Orchestrations', () => {
               input_mapping: {
                 language: 'pt-BR',
                 threshold: 0.8,
-                documentId: { var: 'temaDocumentId' },
-                label: { cat: ['Tema: ', { var: 'titulo' }] },
-                isLong: { '>': [{ var: 'wordCount' }, 500] },
+                documentId: { var: 'input.temaDocumentId' },
+                label: { cat: ['Tema: ', { var: 'input.titulo' }] },
+                isLong: { '>': [{ var: 'input.wordCount' }, 500] },
               },
             },
           ],
@@ -768,7 +968,7 @@ describe('Orchestrations', () => {
               id: 'C',
               type: 'transform',
               expression: 'c',
-              output_mapping: { result: 'state.final' },
+              state_mapping: { 'state.final': { var: 'output.result' } },
             },
           ],
           edges: [
@@ -835,7 +1035,9 @@ describe('Orchestrations', () => {
                 // a literal string is passed through as-is
                 other: 'literal-value',
               },
-              output_mapping: { results: 'state.knowledgeResults' },
+              state_mapping: {
+                'state.knowledgeResults': { var: 'output.results' },
+              },
             },
           ],
           edges: [],
@@ -960,7 +1162,7 @@ describe('Orchestrations', () => {
       expect(nodeA.completed_at).toBeDefined();
 
       // nodeB's input_mapping { val: { var: 'step1' } } resolves against state
-      // written by nodeA's output_mapping (state.step1 = 42).
+      // written by nodeA's state_mapping (state.step1 = 42).
       expect(nodeB.status).toBe('completed');
       expect(nodeB.input).toEqual({ val: 42 });
       expect(nodeB.output).toEqual({ result: 43 });
@@ -1098,7 +1300,7 @@ describe('Orchestrations', () => {
               id: 'bad_map',
               type: 'transform',
               expression: {
-                map: [{ var: 'items' }, { a: { var: '' }, b: 1 }],
+                map: [{ var: 'input.items' }, { a: { var: '' }, b: 1 }],
               },
             },
           ],
@@ -1138,7 +1340,7 @@ describe('Orchestrations', () => {
               id: 'echo',
               type: 'transform',
               expression: { var: 'input.cycle_task' },
-              output_mapping: { result: 'state.echoed' },
+              state_mapping: { 'state.echoed': { var: 'output.result' } },
             },
           ],
           edges: [],
@@ -1162,7 +1364,7 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.echoed).toBe('summarize the funnel');
     });
 
-    test('a dotted output_mapping target round-trips through a nested var read', async () => {
+    test('a dotted state_mapping target round-trips through a nested var read', async () => {
       // Regression: writing to `state.proposed.action_id` stored a single flat
       // key "proposed.action_id", which `{ "var": "proposed.action_id" }` could
       // not read back (var descends dot-paths). The write must build a nested
@@ -1176,13 +1378,15 @@ describe('Orchestrations', () => {
               id: 'write',
               type: 'transform',
               expression: { cat: ['act_', { var: 'input.n' }] },
-              output_mapping: { result: 'state.proposed.action_id' },
+              state_mapping: {
+                'state.proposed.action_id': { var: 'output.result' },
+              },
             },
             {
               id: 'read',
               type: 'transform',
               expression: { var: 'proposed.action_id' },
-              output_mapping: { result: 'state.readback' },
+              state_mapping: { 'state.readback': { var: 'output.result' } },
             },
           ],
           edges: [{ from: 'write', to: 'read' }],
@@ -1216,13 +1420,13 @@ describe('Orchestrations', () => {
               id: 'branch_a',
               type: 'transform',
               expression: 'a',
-              output_mapping: { result: 'state.a' },
+              state_mapping: { 'state.a': { var: 'output.result' } },
             },
             {
               id: 'branch_b',
               type: 'transform',
               expression: 'b',
-              output_mapping: { result: 'state.b' },
+              state_mapping: { 'state.b': { var: 'output.result' } },
             },
           ],
           edges: [
@@ -1253,19 +1457,19 @@ describe('Orchestrations', () => {
               id: 'A',
               type: 'transform',
               expression: 'a',
-              output_mapping: { result: 'state.a' },
+              state_mapping: { 'state.a': { var: 'output.result' } },
             },
             {
               id: 'B',
               type: 'transform',
               expression: 'b',
-              output_mapping: { result: 'state.b' },
+              state_mapping: { 'state.b': { var: 'output.result' } },
             },
             {
               id: 'join',
               type: 'transform',
               expression: { cat: [{ var: 'a' }, { var: 'b' }] },
-              output_mapping: { result: 'state.joined' },
+              state_mapping: { 'state.joined': { var: 'output.result' } },
             },
           ],
           edges: [
@@ -1308,7 +1512,7 @@ describe('Orchestrations', () => {
               id: 'C',
               type: 'transform',
               expression: 'c',
-              output_mapping: { result: 'state.final' },
+              state_mapping: { 'state.final': { var: 'output.result' } },
             },
           ],
           edges: [
@@ -1517,13 +1721,13 @@ describe('Orchestrations', () => {
               type: 'human',
               prompt: 'Approve or reject',
               options: ['approve', 'reject'],
-              output_mapping: { choice: 'state.choice' },
+              state_mapping: { 'state.choice': { var: 'output.choice' } },
             },
             {
               id: 'finish',
               type: 'transform',
               expression: { var: 'choice' },
-              output_mapping: { result: 'state.result' },
+              state_mapping: { 'state.result': { var: 'output.result' } },
             },
           ],
           edges: [{ from: 'approval', to: 'finish' }],
@@ -1805,7 +2009,7 @@ describe('Orchestrations', () => {
               id: 'A',
               type: 'transform',
               expression: 'done',
-              output_mapping: { result: 'state.done' },
+              state_mapping: { 'state.done': { var: 'output.result' } },
             },
           ],
           edges: [],
@@ -1841,8 +2045,10 @@ describe('Orchestrations', () => {
             {
               id: 'pass',
               type: 'transform',
-              expression: { var: 'item' },
-              output_mapping: { result: 'state.result' },
+              // Loop items arrive as the sub-run's input, readable only
+              // through the input namespace.
+              expression: { var: 'input.item' },
+              state_mapping: { 'state.result': { var: 'output.result' } },
             },
           ],
           edges: [],
@@ -1888,7 +2094,7 @@ describe('Orchestrations', () => {
               id: 'delay',
               type: 'delay',
               duration: 'PT0S',
-              output_mapping: { waited: 'state.waited' },
+              state_mapping: { 'state.waited': { var: 'output.waited' } },
             },
           ],
           edges: [],
@@ -1914,7 +2120,7 @@ describe('Orchestrations', () => {
               id: 'wh',
               type: 'webhook',
               mode: 'emit',
-              output_mapping: { emitted: 'state.emitted' },
+              state_mapping: { 'state.emitted': { var: 'output.emitted' } },
             },
           ],
           edges: [],
@@ -1984,9 +2190,9 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'state.items',
+              collection: 'state.input.items',
               item_variable: 'item',
-              output_mapping: { results: 'state.results' },
+              state_mapping: { 'state.results': { var: 'output.results' } },
             },
           ],
           edges: [],
@@ -2016,9 +2222,9 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'state.items',
+              collection: 'state.input.items',
               item_variable: 'item',
-              output_mapping: { results: 'state.results' },
+              state_mapping: { 'state.results': { var: 'output.results' } },
             },
           ],
           edges: [],
@@ -2035,7 +2241,12 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
-      expect(Array.isArray(runRes.body.state.results)).toBe(true);
+      // Each result is the sub-run's output ({ terminalNodeId: artifact });
+      // asserting the item value proves the loop actually fed the item
+      // through the sub-run's input namespace, not just that a run happened.
+      expect(runRes.body.state.results).toEqual([
+        { pass: { result: 'hello' } },
+      ]);
     });
 
     test('loop node with non-state collection path', async () => {
@@ -2048,9 +2259,9 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'items', // no 'state.' prefix — resolveLoopCollection normalises it
+              collection: 'input.items', // no 'state.' prefix — resolveLoopCollection normalises it
               item_variable: 'item',
-              output_mapping: { results: 'state.results' },
+              state_mapping: { 'state.results': { var: 'output.results' } },
             },
           ],
           edges: [],
@@ -2122,8 +2333,13 @@ describe('Orchestrations', () => {
               id: 'sub',
               type: 'sub_orchestration',
               orchestration_id: subOrchId,
-              input_mapping: { item: { var: 'value' } },
-              output_mapping: { result: 'state.subResult' },
+              input_mapping: { item: { var: 'input.value' } },
+              // The node's artifact is the child run's output
+              // ({ terminalNodeId: artifact }), so the item surfaces at
+              // output.pass.result.
+              state_mapping: {
+                'state.subResult': { var: 'output.pass.result' },
+              },
             },
           ],
           edges: [],
@@ -2140,6 +2356,7 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.subResult).toBe('test');
     });
 
     test('poll node missing required fields is rejected at create', async () => {
@@ -2173,9 +2390,9 @@ describe('Orchestrations', () => {
                 exit_condition: {
                   '==': [{ var: 'response.status' }, 'completed'],
                 },
-                output_mapping: {
-                  condition_met: 'state.done',
-                  result: 'state.final',
+                state_mapping: {
+                  'state.done': { var: 'output.conditionMet' },
+                  'state.final': { var: 'output.result' },
                 },
               },
             ],
@@ -2216,7 +2433,7 @@ describe('Orchestrations', () => {
                 exit_condition: {
                   '==': [{ var: 'response.status' }, 'completed'],
                 },
-                output_mapping: { condition_met: 'state.done' },
+                state_mapping: { 'state.done': { var: 'output.conditionMet' } },
               },
             ],
             edges: [],
@@ -2384,20 +2601,20 @@ describe('Orchestrations', () => {
               id: 'check',
               type: 'condition',
               expression: {
-                if: [{ '>': [{ var: 'score' }, 0.8] }, 'high', 'low'],
+                if: [{ '>': [{ var: 'input.score' }, 0.8] }, 'high', 'low'],
               },
             },
             {
               id: 'high_path',
               type: 'transform',
               expression: 'high-ran',
-              output_mapping: { result: 'state.high' },
+              state_mapping: { 'state.high': { var: 'output.result' } },
             },
             {
               id: 'low_path',
               type: 'transform',
               expression: 'low-ran',
-              output_mapping: { result: 'state.low' },
+              state_mapping: { 'state.low': { var: 'output.result' } },
             },
           ],
           edges: [
@@ -2459,7 +2676,7 @@ describe('Orchestrations', () => {
               id: 'after_review',
               type: 'transform',
               expression: { var: 'state.review.decision' },
-              output_mapping: { result: 'state.decision' },
+              state_mapping: { 'state.decision': { var: 'output.result' } },
             },
           ],
           edges: [{ from: 'review', to: 'after_review' }],
@@ -2587,7 +2804,7 @@ describe('Orchestrations', () => {
             id: 'start',
             type: 'transform',
             expression: 'hello',
-            output_mapping: { result: 'state.msg' },
+            state_mapping: { 'state.msg': { var: 'output.result' } },
           },
         ],
         edges: [],
@@ -2613,13 +2830,13 @@ describe('Orchestrations', () => {
             id: 'delay',
             type: 'delay',
             duration: '1s',
-            output_mapping: { waited: 'state.waited' },
+            state_mapping: { 'state.waited': { var: 'output.waited' } },
           },
           {
             id: 'after',
             type: 'transform',
             expression: 'done',
-            output_mapping: { result: 'state.after' },
+            state_mapping: { 'state.after': { var: 'output.result' } },
           },
         ],
         edges: [{ from: 'delay', to: 'after' }],
@@ -2670,7 +2887,7 @@ describe('Orchestrations', () => {
               exit_condition: {
                 '==': [{ var: 'response.status' }, 'completed'],
               },
-              output_mapping: { condition_met: 'state.done' },
+              state_mapping: { 'state.done': { var: 'output.conditionMet' } },
             },
           ],
           edges: [],
@@ -2713,7 +2930,7 @@ describe('Orchestrations', () => {
               id: 'start',
               type: 'transform',
               expression: 'ok',
-              output_mapping: { result: 'state.msg' },
+              state_mapping: { 'state.msg': { var: 'output.result' } },
             },
           ],
           edges: [],
@@ -2790,13 +3007,13 @@ describe('Orchestrations', () => {
             id: 'start',
             type: 'transform',
             expression: 'hello',
-            output_mapping: { result: 'state.msg' },
+            state_mapping: { 'state.msg': { var: 'output.result' } },
           },
           {
             id: 'after',
             type: 'transform',
             expression: 'done',
-            output_mapping: { result: 'state.after' },
+            state_mapping: { 'state.after': { var: 'output.result' } },
           },
         ],
         edges: [{ from: 'start', to: 'after' }],
@@ -2821,7 +3038,7 @@ describe('Orchestrations', () => {
             id: 'start',
             type: 'transform',
             expression: 'hi',
-            output_mapping: { result: 'state.msg' },
+            state_mapping: { 'state.msg': { var: 'output.result' } },
           },
         ],
         edges: [],

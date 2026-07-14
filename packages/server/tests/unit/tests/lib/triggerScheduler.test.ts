@@ -109,7 +109,7 @@ beforeAll(async () => {
             id: 'start',
             type: 'transform',
             expression: { var: '' },
-            output_mapping: { output: 'state.result' },
+            state_mapping: { 'state.result': { var: 'output.output' } },
           },
         ],
         edges: [],

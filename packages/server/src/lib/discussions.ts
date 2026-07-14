@@ -7,7 +7,10 @@ import {
   type ParticipantInput,
   type SynthesisConfig,
 } from './discussionsTypes';
-import { validateDiscussionConfig } from './discussionsValidation';
+import {
+  findDiscussionTemplateWarnings,
+  validateDiscussionConfig,
+} from './discussionsValidation';
 import { registerResourceFieldMap } from './policyCompiler';
 
 const log = createDebug('soat:discussions');
@@ -24,7 +27,10 @@ export {
   type ParticipantInput,
   type SynthesisConfig,
 } from './discussionsTypes';
-export { validateDiscussionConfig } from './discussionsValidation';
+export {
+  findDiscussionTemplateWarnings,
+  validateDiscussionConfig,
+} from './discussionsValidation';
 
 // ── Mapping ──────────────────────────────────────────────────────────────────
 
@@ -62,6 +68,10 @@ export const mapDiscussion = (discussion: DiscussionModel) => {
     synthesis: discussion.synthesis ?? null,
     tags: discussion.tags ?? undefined,
     participants,
+    templateWarnings: findDiscussionTemplateWarnings({
+      participants,
+      synthesis: discussion.synthesis as SynthesisConfig | null,
+    }),
     createdAt: discussion.createdAt,
     updatedAt: discussion.updatedAt,
   };

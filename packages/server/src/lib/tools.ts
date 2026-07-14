@@ -6,7 +6,10 @@ import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
 } from './pipelineTools';
-import { assertSecretRefsExist } from './secrets';
+import {
+  assertNoInvalidTemplateTokens,
+  assertSecretRefsExist,
+} from './secrets';
 import { soatTools } from './soatTools';
 import { callResolvedTool, type InlineToolDefinition } from './toolsCall';
 
@@ -212,6 +215,13 @@ export const validateToolDefinition = async (args: {
     await assertDiscussionToolValid({ definition, projectId });
   }
 
+  // Reject any {{...}} token that isn't a {{secret:...}} reference before
+  // checking whether referenced secrets actually exist.
+  assertNoInvalidTemplateTokens({
+    execute: definition.execute,
+    mcp: definition.mcp,
+  });
+
   // Fail fast on {{secret:...}} tokens referencing nonexistent or
   // out-of-project secrets, instead of failing at first call.
   await assertSecretRefsExist({
@@ -361,6 +371,7 @@ const validateToolUpdate = async (params: {
     validateSoatActions(args.actions);
   }
   if (args.execute !== undefined || args.mcp !== undefined) {
+    assertNoInvalidTemplateTokens({ execute: args.execute, mcp: args.mcp });
     await assertSecretRefsExist({
       value: { execute: args.execute, mcp: args.mcp },
       projectId: tool.projectId,

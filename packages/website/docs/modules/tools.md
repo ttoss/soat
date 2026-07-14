@@ -160,6 +160,8 @@ Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes 
 
 `{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
 
+Secret references are the **only** valid double-curly syntax: any other `{{...}}` token anywhere in `execute` or `mcp` is rejected at create/update time with `400 INVALID_TEMPLATE_TOKEN` — use single braces (`{param}`) for [URL path placeholders](#http). See [Expressions & Templating](../advanced/expressions-and-templating.md) for the full pattern reference.
+
 #### Request body encoding (`body_mode`)
 
 The `input` a caller passes to an `http` tool becomes its request body **verbatim** — SOAT does not case-transform the body keys, so `{ "input": { "fundamental_truth": "…" } }` is sent as `{"fundamental_truth":"…"}`, not `{"fundamentalTruth":"…"}`. Author the input in whatever casing the target API expects. (Elsewhere the REST API converts request bodies from snake_case to camelCase internally; a tool's `input` is exempt, because it is an opaque payload forwarded to the target, not a SOAT resource field.)

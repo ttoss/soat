@@ -5,7 +5,7 @@ import type {
   WaitResume,
 } from './orchestrationNodeExecutors';
 import {
-  applyOutputMapping,
+  applyStateMapping,
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
@@ -18,6 +18,7 @@ import {
   executeTransformNode,
   executeWebhookNode,
 } from './orchestrationNodeExecutors';
+import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import { executePollNode } from './orchestrationPollNode';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
@@ -30,7 +31,7 @@ export {
 export type { NodeExecutionResult } from './orchestrationNodeExecutors';
 export {
   applyInputMapping,
-  applyOutputMapping,
+  applyStateMapping,
 } from './orchestrationNodeExecutors';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -214,6 +215,30 @@ const findFirstTraceId = (
   return null;
 };
 
+// Records a completed node's result into the run's shared structures: a
+// condition contributes its label (recorded as { label } in the nodes
+// namespace so a validated nodes.<conditionId> ref is readable at runtime);
+// every other node contributes its artifact plus its state_mapping writes.
+const recordCompletedNode = (args: {
+  nodeId: string;
+  nodeDefn: OrchestrationNode;
+  execResult: Extract<NodeExecutionResult, { kind: 'artifact' | 'condition' }>;
+  artifacts: Record<string, unknown>;
+  conditionLabels: Map<string, string>;
+  state: Record<string, unknown>;
+}): void => {
+  const { nodeId, nodeDefn, execResult, artifacts, conditionLabels, state } =
+    args;
+  if (execResult.kind === 'condition') {
+    conditionLabels.set(nodeId, execResult.label);
+    writeNodeArtifact({ nodeId, artifact: { label: execResult.label }, state });
+  } else {
+    artifacts[nodeId] = execResult.artifact;
+    writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
+    applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
+  }
+};
+
 export const processNodeResultBatch = (args: {
   nodeResults: Array<{
     nodeId: string;
@@ -278,12 +303,14 @@ export const processNodeResultBatch = (args: {
       continue;
     }
 
-    if (execResult.kind === 'condition') {
-      conditionLabels.set(nodeId, execResult.label);
-    } else {
-      artifacts[nodeId] = execResult.artifact;
-      applyOutputMapping(nodeDefn.outputMapping, execResult.artifact, state);
-    }
+    recordCompletedNode({
+      nodeId,
+      nodeDefn,
+      execResult,
+      artifacts,
+      conditionLabels,
+      state,
+    });
 
     completedNodes.add(nodeId);
 
