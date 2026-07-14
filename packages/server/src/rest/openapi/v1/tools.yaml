@@ -52,7 +52,7 @@ paths:
                     required:
                       - city
                   execute:
-                    url: https://api.weather.example/v1/current?city={{city}}
+                    url: https://api.weather.example/v1/current?city={city}
               http_with_output_mapping:
                 summary: HTTP tool reshaping its result with output_mapping
                 value:
