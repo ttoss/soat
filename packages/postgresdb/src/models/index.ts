@@ -2,6 +2,7 @@ export { Actor } from './Actor';
 export { Agent } from './Agent';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
+export { ApprovalItem } from './ApprovalItem';
 export { Chat } from './Chat';
 export { Conversation } from './Conversation';
 export { ConversationMessage } from './ConversationMessage';

@@ -1,0 +1,274 @@
+openapi: 3.0.3
+info:
+  title: SOAT Approvals API
+  version: 1.0.0
+  description: >-
+    API for the approvals queue — human-decision items proposed by the platform
+    (an `approval` orchestration node, or tool-call interception). Items are
+    created by the platform only; there is no public create endpoint. Every item
+    carries a frozen proposed action, its supporting evidence, and a
+    server-enforced expiry after which it can never execute.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Approvals
+    description: Manage the human-decision approval queue
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/approvals:
+    get:
+      tags:
+        - Approvals
+      summary: List approval items
+      description: Returns approval items for a project, filterable by status, origin, and expiry.
+      operationId: listApprovals
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: status
+          in: query
+          description: Filter by lifecycle status
+          schema:
+            type: string
+            enum: [pending, approved, rejected, expired]
+        - name: origin
+          in: query
+          description: Filter by producer origin
+          schema:
+            type: string
+            enum: [node, tool_call]
+        - name: expires_before
+          in: query
+          description: Return only items expiring at or before this timestamp
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: List of approval items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ApprovalItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /api/v1/approvals/{approval_id}:
+    get:
+      tags:
+        - Approvals
+      summary: Get an approval item
+      description: Returns a single approval item with its full evidence.
+      operationId: getApproval
+      parameters:
+        - $ref: '#/components/parameters/approval_id'
+      responses:
+        '200':
+          description: Approval item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Approval item not found
+  /api/v1/approvals/{approval_id}/approve:
+    post:
+      tags:
+        - Approvals
+      summary: Approve an approval item
+      description: >-
+        Approves the item. Optionally supply edited `arguments` to replace the
+        proposed arguments (edit-then-approve); the original is preserved on the
+        item. Expiry is re-checked at decision time — an expired item can never
+        be approved.
+      operationId: approveApproval
+      parameters:
+        - $ref: '#/components/parameters/approval_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                arguments:
+                  type: object
+                  description: Edited arguments to execute instead of the proposed ones
+      responses:
+        '200':
+          description: Approval item approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalItem'
+        '400':
+          description: Edited arguments are not a JSON object
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Approval item not found
+        '409':
+          description: Item already resolved or expired
+  /api/v1/approvals/{approval_id}/reject:
+    post:
+      tags:
+        - Approvals
+      summary: Reject an approval item
+      description: Rejects the item. A reason is required and preserved on the item.
+      operationId: rejectApproval
+      parameters:
+        - $ref: '#/components/parameters/approval_id'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  description: Why the item is being rejected (required)
+                  example: Amount exceeds the approved monthly budget.
+      responses:
+        '200':
+          description: Approval item rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApprovalItem'
+        '400':
+          description: Reason missing
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Approval item not found
+        '409':
+          description: Item already resolved or expired
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  parameters:
+    approval_id:
+      name: approval_id
+      in: path
+      required: true
+      description: Approval item ID
+      schema:
+        type: string
+        example: apr_V1StGXR8Z5jdHi6B
+  schemas:
+    ApprovalItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: apr_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        origin:
+          type: string
+          enum: [node, tool_call]
+          description: How the item was produced (analytics/filtering only)
+        status:
+          type: string
+          enum: [pending, approved, rejected, expired]
+        proposed_action:
+          type: object
+          description: The frozen proposed action
+          properties:
+            tool_id:
+              type: string
+            arguments:
+              type: object
+        reasoning:
+          type: string
+          nullable: true
+          description: The proposing agent's rationale
+        evidence:
+          type: object
+          nullable: true
+          description: Supporting structured data
+        predicted_impact:
+          type: string
+          nullable: true
+          description: Expected execution effect
+        expires_at:
+          type: string
+          format: date-time
+          description: Server-enforced hard gate; the item can never execute after this
+        dedup_key:
+          type: string
+          nullable: true
+          description: Set on tool-call items to suppress duplicate proposals
+        run_id:
+          type: string
+          nullable: true
+          description: Originating orchestration run (node producer)
+        node_id:
+          type: string
+          nullable: true
+          description: Originating node id within the run's graph
+        generation_id:
+          type: string
+          nullable: true
+          description: Originating generation (tool-call producer)
+        agent_id:
+          type: string
+          nullable: true
+          description: Proposing agent
+        knowledge_version:
+          type: string
+          nullable: true
+        policy_version:
+          type: string
+          nullable: true
+        resolved_by:
+          type: string
+          nullable: true
+          description: Resolving user's public ID; null on expiry
+        resolution_reason:
+          type: string
+          nullable: true
+          description: Required on rejection
+        edited_arguments:
+          type: object
+          nullable: true
+          description: Set on edit-then-approve
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

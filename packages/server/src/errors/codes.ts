@@ -344,6 +344,29 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The inbound hook request body is not valid JSON.',
   },
+  APPROVAL_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The approval item does not exist or is not accessible.',
+  },
+  APPROVAL_ALREADY_RESOLVED: {
+    httpStatus: 409,
+    description:
+      'The approval item has already been resolved (approved, rejected, or expired) and cannot be resolved again.',
+  },
+  APPROVAL_EXPIRED: {
+    httpStatus: 409,
+    description:
+      'The approval item has expired and can never execute. Its supporting evidence is stale; a fresh proposal is required.',
+  },
+  APPROVAL_REASON_REQUIRED: {
+    httpStatus: 400,
+    description: 'A reason is required when rejecting an approval item.',
+  },
+  APPROVAL_INVALID_EDIT: {
+    httpStatus: 400,
+    description:
+      'The edited arguments supplied on edit-then-approve must be a JSON object.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }
