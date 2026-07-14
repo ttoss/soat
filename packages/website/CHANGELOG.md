@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.15.0](https://127.0.0.1/41729/git/ttoss/compare/v0.14.12...v0.15.0) (2026-07-14)
+
+### Features
+
+* **approvals:** add the approval orchestration node producer ([#538](https://127.0.0.1/41729/git/ttoss/issues/538)) ([90fd793](https://127.0.0.1/41729/git/ttoss/commits/90fd793c570e53a5e91e39d7addb91c044009c8e)), closes [#1](https://127.0.0.1/41729/git/ttoss/issues/1)
+* **website:** improve SEO with meta descriptions, robots.txt, and structured data ([#535](https://127.0.0.1/41729/git/ttoss/issues/535)) ([60b7c94](https://127.0.0.1/41729/git/ttoss/commits/60b7c94c809c630ea0cf7df6cf8b8a0e3454fc92))
+
 ## [0.14.12](https://127.0.0.1/41729/git/ttoss/compare/v0.14.11...v0.14.12) (2026-07-14)
 
 ### Features
