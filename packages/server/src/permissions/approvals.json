@@ -1,0 +1,25 @@
+{
+  "module": "approvals",
+  "operations": [
+    {
+      "operationId": "listApprovals",
+      "action": "approvals:ListApprovals",
+      "description": "List approval items in a project"
+    },
+    {
+      "operationId": "getApproval",
+      "action": "approvals:GetApproval",
+      "description": "Get an approval item by ID with its full evidence"
+    },
+    {
+      "operationId": "approveApproval",
+      "action": "approvals:ResolveApproval",
+      "description": "Approve an approval item, optionally with edited arguments"
+    },
+    {
+      "operationId": "rejectApproval",
+      "action": "approvals:ResolveApproval",
+      "description": "Reject an approval item with a required reason"
+    }
+  ]
+}

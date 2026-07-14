@@ -106,6 +106,7 @@ const sidebars: SidebarsConfig = {
             'modules/discussions',
             'modules/triggers',
             'modules/webhooks',
+            'modules/approvals',
           ],
         },
         {

@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
 import { initializeDatabase, logDatabaseConnectionError } from './db';
+import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { seedDefaultPrices } from './lib/priceBook';
 import { startTriggerScheduler } from './lib/triggerScheduler';
@@ -28,6 +29,9 @@ const startServer = async () => {
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
     startOrchestrationScheduler();
+    // Start the approvals expiry sweeper so pending approval items past their
+    // expiry are flipped to `expired` and can never execute late.
+    startApprovalScheduler();
     // Start the trigger scheduler so due schedule triggers fire (including
     // occurrences whose next_fire_at elapsed while the server was down).
     startTriggerScheduler();
