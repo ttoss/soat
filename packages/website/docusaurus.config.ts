@@ -156,27 +156,9 @@ const config: Config = {
         },
         {
           type: 'docSidebar',
-          sidebarId: 'apiSidebar',
+          sidebarId: 'referenceSidebar',
           position: 'left',
-          label: 'API',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'sdkSidebar',
-          position: 'left',
-          label: 'SDK',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'cliSidebar',
-          position: 'left',
-          label: 'CLI',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'mcpSidebar',
-          position: 'left',
-          label: 'MCP',
+          label: 'Reference',
         },
         {
           href: 'https://github.com/ttoss/soat',
@@ -202,6 +184,10 @@ const config: Config = {
             {
               label: 'Tutorials',
               to: '/docs/tutorials',
+            },
+            {
+              label: 'Reference',
+              to: '/docs/api',
             },
           ],
         },

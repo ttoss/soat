@@ -1,8 +1,8 @@
 ---
-sidebar_position: 3
+sidebar_label: Configuration
 ---
 
-# Advanced Configuration
+# Configuration
 
 This page covers all environment variables available for the SOAT server, along with guidance for production deployments.
 

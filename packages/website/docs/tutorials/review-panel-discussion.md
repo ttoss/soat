@@ -1,5 +1,5 @@
 ---
-sidebar_position: 11
+sidebar_position: 15
 ---
 
 import Tabs from '@theme/Tabs';
@@ -32,7 +32,7 @@ By the end you will understand:
 
 ## Prerequisites
 
-- SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide, and skim [Key Concepts](/docs/getting-started/concepts) if SOAT's mental model is new to you. For production hardening (secrets, env vars), see [Advanced Configuration](/docs/getting-started/advanced-config).
+- SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide, and skim [Key Concepts](/docs/getting-started/concepts) if SOAT's mental model is new to you. For production hardening (secrets, env vars), see [Configuration](/docs/getting-started/advanced-config).
 - An [Ollama](https://ollama.com) instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
 - CLI, SDK, or curl available. The server is at `http://localhost:5047`.
 

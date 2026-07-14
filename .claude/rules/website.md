@@ -15,7 +15,7 @@ Agents working on the website package must adhere to the following guidelines to
 ## Documentation Structure
 
 - **Read README.md for Website Details**: Before making any changes, thoroughly read the packages/website/README.md file to understand the current website structure, navbar organization, and sidebar conventions.
-- **Maintain Structure**: When adding new documentation, follow the established structure outlined in the README.md, including the navbar sections (Platform, Resources, MCP, API, Blog) and sidebar organization for resources.
+- **Maintain Structure**: When adding new documentation, follow the established structure outlined in the README.md — the navbar sections (Docs, Tutorials, Reference) and the explicit sidebar groupings in `sidebars.ts`. New module pages must be added to the matching Platform category and new tutorials to the matching tutorial category in `sidebars.ts`.
 
 ## Content Guidelines
 
