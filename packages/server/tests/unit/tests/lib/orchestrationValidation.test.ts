@@ -336,7 +336,12 @@ describe('validateOrchestrationGraph', () => {
       });
       expect(result.valid).toBe(false);
       expect(result.errors).toContainEqual(
-        expect.objectContaining({ path: 'nodes[0].input_mapping.val' })
+        expect.objectContaining({
+          path: 'nodes[0].input_mapping.val',
+          // The message must steer the author to the actual fix (the input
+          // namespace), not falsely claim the key is undeclared.
+          message: expect.stringContaining('{"var": "input.seed"}'),
+        })
       );
     });
 

@@ -317,10 +317,12 @@ const checkNodeReachability = (args: {
       const verdict = classifyRef({ refPath, ctx });
       const key = topSegment(refPath);
       const path = `nodes[${index}].input_mapping.${mappingKey}`;
-      // `nodes.<nodeId>` is never part of run input (open or closed contract
-      // alike) — it is written exclusively by the referenced node completing
-      // — so an unwritten reference is always an error, unlike a plain state
-      // key which may be legitimately supplied by an open run input.
+      // `nodes.<nodeId>` is written exclusively by the referenced node
+      // completing, so an unwritten reference is always an error. A plain
+      // state key can never be satisfied by run input either (input is
+      // seeded under `state.input` only), but a parallel non-ancestor
+      // node's state_mapping may still write it before this node runs, so
+      // without a declared input_schema the graph stays permissive.
       if (verdict === 'unwritten' && key === NODE_ARTIFACTS_STATE_KEY) {
         const referencedNodeId = refPath.split('.')[1];
         errors.push({
@@ -328,12 +330,15 @@ const checkNodeReachability = (args: {
           message: `references ${refPath} but '${referencedNodeId}' is not an earlier (upstream) node in this graph.`,
         });
       } else if (verdict === 'unwritten' && ctx.inputKeys.size > 0) {
-        // With a declared input_schema the input contract is closed, so a key
-        // neither in the schema nor written upstream is a hard error. Without
-        // one the contract is open — the run may supply it — so it is allowed.
+        // With a declared input_schema the input contract is closed, so a
+        // key not written upstream is a hard error. Point the author at the
+        // real fix: run input is only readable through the input namespace.
+        const suffix = ctx.inputKeys.has(key)
+          ? `'${key}' is declared in input_schema, but run input is seeded under the 'input' namespace only — reference it as {"var": "input.${key}"}.`
+          : `it is not declared in input_schema either.`;
         errors.push({
           path,
-          message: `references state.${refPath} but no upstream node writes 'state.${key}' and it is not declared in input_schema.`,
+          message: `references state.${refPath} but no upstream node writes 'state.${key}'; ${suffix}`,
         });
       } else if (verdict === 'conditional') {
         warnings.push({
@@ -401,7 +406,7 @@ export const validateOrchestrationGraph = (args: {
   const warnings: OrchestrationValidationIssue[] = [];
 
   errors.push(...checkNodeShapes(nodes));
-  errors.push(...checkReservedNodeNamespace({ nodes, inputSchema }));
+  errors.push(...checkReservedNodeNamespace({ nodes }));
 
   const nodeIds = nodes
     .map((n) => {

@@ -5,8 +5,10 @@ import type { OrchestrationNode } from './orchestrations';
  * {@link writeNodeArtifact}), giving orchestrations the same
  * read-any-upstream-result ergonomics as a pipeline's `steps.<id>` — without
  * requiring an explicit `state_mapping` write. Static
- * validation (`checkReservedNodeNamespace`) rejects a run input or a mapping
+ * validation (`checkReservedNodeNamespace`) rejects a `state_mapping`
  * write that targets this namespace, since the engine owns it exclusively.
+ * (Run input cannot collide: it is seeded under `state.input` only, so even
+ * an input property named `nodes` lands at `state.input.nodes`.)
  *
  * Deliberately a standalone leaf module (only a type-only import from
  * `orchestrations.ts`): both `orchestrationNodeExecutors.ts` and
@@ -57,26 +59,16 @@ const topSegment = (path: string): string => {
 /**
  * `nodes` is a reserved top-level state key: the engine writes every
  * completed node's artifact to `state.nodes.<nodeId>` unconditionally (see
- * {@link writeNodeArtifact}), so a run input or a `state_mapping` write
- * targeting it would silently fight the engine for ownership. Checked against
- * both the declared `input_schema` and every node's write paths (a
- * `state_mapping`'s own keys are its write destinations).
+ * {@link writeNodeArtifact}), so a `state_mapping` write targeting it would
+ * silently fight the engine for ownership. Checked against every node's
+ * write paths (a `state_mapping`'s own keys are its write destinations).
+ * Run input is deliberately not checked: it is seeded under `state.input`
+ * only, so an input property named `nodes` can never reach `state.nodes`.
  */
 export const checkReservedNodeNamespace = (args: {
   nodes: OrchestrationNode[];
-  inputSchema?: object | null;
 }): Array<{ path: string; message: string }> => {
   const issues: Array<{ path: string; message: string }> = [];
-  const schema = args.inputSchema as Record<string, unknown> | null | undefined;
-  const properties = schema?.['properties'] as
-    Record<string, unknown> | undefined;
-  if (properties && NODE_ARTIFACTS_STATE_KEY in properties) {
-    issues.push({
-      path: 'input_schema.properties.nodes',
-      message:
-        "'nodes' is a reserved run-state key (every node's artifact is recorded at state.nodes.<nodeId>) and cannot be declared as a run input property.",
-    });
-  }
   for (const [index, node] of args.nodes.entries()) {
     if (!node.stateMapping) continue;
     for (const statePath of Object.keys(node.stateMapping)) {

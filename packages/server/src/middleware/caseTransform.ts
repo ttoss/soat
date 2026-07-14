@@ -67,9 +67,9 @@ const isMetadataPassthroughPath = (path: string): boolean => {
 // routes `input` rounds-trips verbatim in both directions, exactly like
 // `execute` and document `metadata`.
 // An orchestration run's `input` is the same kind of opaque, caller-authored
-// payload: its keys are seeded into run state (flat and under the `input`
-// namespace) and read back by node expressions via `{ "var": "input.<name>" }`
-// / `{ "var": "<name>" }`. Case-transforming it would rewrite a caller's
+// payload: its keys are seeded into run state (under the `input` namespace)
+// and read back by node expressions via `{ "var": "input.<name>" }`.
+// Case-transforming it would rewrite a caller's
 // snake_case key (`cycle_task` → `cycleTask`) in state while the graph's `var`
 // references keep the original casing, so every underscore-bearing input key
 // resolves to null inside node logic even though it still shows up in the
@@ -78,7 +78,7 @@ const isMetadataPassthroughPath = (path: string): boolean => {
 //
 // `state` and `artifacts` (and the run's terminal `output`, which is just the
 // terminal nodes' artifacts) carry the same problem one level deeper: their
-// keys are either an `output_mapping`/`state_mapping` author's own state-path
+// keys are either a `state_mapping` author's own state-path
 // segments, or — since every node's artifact is recorded at
 // `state.nodes.<nodeId>` / `artifacts.<nodeId>` / `output.<nodeId>` — the
 // caller's own node ids. A node id like `nodeA` is exactly as

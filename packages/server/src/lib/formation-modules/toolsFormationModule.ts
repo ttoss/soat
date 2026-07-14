@@ -98,15 +98,16 @@ const validateToolProperties = (args: {
     }
   }
 
-  const invalidTokens = findInvalidTemplateTokens({
-    execute: properties.execute,
-    mcp: properties.mcp,
-  });
-  for (const token of new Set(invalidTokens)) {
-    errors.push({
-      path: `${basePath}.execute`,
-      message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
-    });
+  // Validate execute and mcp separately so each error points at the field
+  // that actually carries the offending token.
+  for (const field of ['execute', 'mcp'] as const) {
+    const invalidTokens = findInvalidTemplateTokens(properties[field]);
+    for (const token of new Set(invalidTokens)) {
+      errors.push({
+        path: `${basePath}.${field}`,
+        message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
+      });
+    }
   }
 
   return errors;

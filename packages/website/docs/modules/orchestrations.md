@@ -109,7 +109,7 @@ A `loop` node iterates an array in the run state and runs a **sub-orchestration 
 | --- | --- | --- |
 | `orchestration_id` | — (required) | Public ID of the orchestration to run for each item (same field the `sub_orchestration` node uses) |
 | `collection` | `state.items` | State path to the array to iterate; a path without the `state.` prefix is normalised to one. A missing or non-array value yields zero iterations |
-| `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key, so the sub-graph reads it with `{"var": "item"}` |
+| `item_variable` | `item` | Each element is passed as the sub-run's **input** under this key; run input is seeded under the `input` namespace, so the sub-graph reads it with `{"var": "input.item"}` |
 | `parallelism` | `5` | Items are processed in batches of this size |
 
 The node completes with an artifact `{ results: [...] }` — one entry per item, in order, holding that sub-run's `output`. A graph containing a `loop` node is exempt from [cycle detection](#static-validation) (loops introduce intentional cycles).
@@ -239,7 +239,7 @@ Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`,
 ]
 ```
 
-`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write or a declared `input_schema` property named `nodes`, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph.
+`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node completes with a label rather than an artifact; its namespace entry is `{ "label": "<emitted label>" }`, readable as `{ "var": "nodes.<id>.label" }`.
 
 #### Evaluation scope
 
@@ -311,10 +311,9 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | Duplicate node id | two nodes share `id: "a"` |
 | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
 | Cycle (no `loop` node present) | `a → b → a` |
-| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node **and** `input_schema` is declared but does not list `x` |
+| Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
 | Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema`, since `nodes` is never part of run input |
 | Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
-| Reserved `nodes` input property | `input_schema.properties` declares a `nodes` property |
 
 **Warnings (never block):**
 
@@ -322,7 +321,7 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | ----- | ------- |
 | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
-The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema`, the run input is an open contract — the key may be supplied at run time — so the reference is allowed. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch. A `{"var": "nodes.<id>..."}` reference is the one exception: since `nodes.<id>` can never come from run input, an unwritten reference is always an error, open contract or not.
+The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema` the graph stays permissive — a parallel (non-upstream) node's `state_mapping` may legitimately write the key before the reader runs. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch. A `{"var": "nodes.<id>..."}` reference is the one exception: since `nodes.<id>` is written exclusively by the referenced node completing, an unwritten reference is always an error, open contract or not.
 
 ```bash
 soat validate-orchestration \

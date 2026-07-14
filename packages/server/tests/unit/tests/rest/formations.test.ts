@@ -1121,6 +1121,38 @@ resources:
           ])
         );
       });
+
+      test('reports a non-secret {{...}} token in mcp at the mcp path, not execute', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/formations/validate')
+          .send({
+            template: {
+              resources: {
+                BadMcpTool: {
+                  type: 'tool',
+                  properties: {
+                    name: 'bad-mcp-token-tool',
+                    mcp: {
+                      url: 'https://mcp.example/sse',
+                      headers: { Authorization: 'Bearer {{apiKey}}' },
+                    },
+                  },
+                },
+              },
+            },
+          });
+
+        expect(res.status).toBe(200);
+        expect(res.body.valid).toBe(false);
+        expect(res.body.errors).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              path: 'resources.BadMcpTool.properties.mcp',
+              message: expect.stringContaining("'{{apiKey}}'"),
+            }),
+          ])
+        );
+      });
     });
 
     describe('POST /api/v1/formations', () => {

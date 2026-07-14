@@ -55,7 +55,7 @@ To pass an object that *looks like* an expression — for example, the literal p
 Plain dotted strings (no delimiters) appear where a value is an **address**, not an expression:
 
 - **Orchestration `state_mapping` keys** — `{"state.summary": {"var": "output.content"}}` writes the node artifact's `content` field to `state.summary`, building nested objects along the way (`state.a.b` is readable back as `{"var": "a.b"}`). The `state.` prefix is optional. Keys are *state write paths*; values are JSON Logic (see [JSON Logic](#json-logic)) — the reverse-of-`input_mapping` shape (there, keys are input-parameter names and values point at the read source).
-- **The `nodes.<id>` namespace** — every completed orchestration node's full artifact is recorded at `state.nodes.<nodeId>`, whether or not that node declares a `state_mapping`. A downstream node reads it with `{"var": "nodes.<nodeId>.<field>"}`, giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` without explicit wiring. `nodes` is a reserved state key: a `state_mapping` write or an `input_schema` property named `nodes` is rejected.
+- **The `nodes.<id>` namespace** — every completed orchestration node's full artifact is recorded at `state.nodes.<nodeId>`, whether or not that node declares a `state_mapping`. A downstream node reads it with `{"var": "nodes.<nodeId>.<field>"}`, giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` without explicit wiring. `nodes` is a reserved state key: a `state_mapping` write targeting it is rejected. (An `input_schema` property named `nodes` is fine — run input lives under `state.input`, so it cannot collide.)
 - **Loop node `collection`** — `state.items.pending` names the state array to iterate.
 - **`output_path` on `tool_output` message content** — extracts a field from a tool result before it enters a conversation (`"text"`, `"data.0.url"`; numeric segments index arrays).
 - **Formation `ref_attr`** — `"MySecret.value"` reads an attribute of another resource: everything before the first dot is the logical ID, the rest is the attribute name.
@@ -88,8 +88,6 @@ A discussion always compiles to at most two engine steps: the fixed `deliberatio
 | `{steps.deliberation.last}` | Only the deliberation step's final turn |
 
 Unknown tokens are left untouched (safe for literal braces in a prompt), but a `{token}` outside this allowlist — e.g. `{steps.synthesis}`, a self-reference, or a typo — is surfaced as a non-blocking entry in the discussion's `template_warnings` field, returned on every create, update, and read.
-
-Unknown tokens are left untouched, so literal braces in a prompt are safe.
 
 ## Secret references (`{{secret:...}}`)
 

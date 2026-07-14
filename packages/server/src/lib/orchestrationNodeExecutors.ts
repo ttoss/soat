@@ -89,7 +89,16 @@ export const applyStateMapping = (
   if (!stateMapping) return;
   const context = { output: artifact, state };
   for (const [statePath, expr] of Object.entries(stateMapping)) {
-    writeToState(statePath, evaluateLogic(expr, context), state);
+    // Clone before writing: the evaluator returns references, so an
+    // expression like { "var": "state" } (or { "var": "" }) resolves to the
+    // live state object — writing it back uncloned would nest state inside
+    // itself and crash JSON serialization at the next checkpoint/response.
+    // Same hazard writeNodeArtifact guards against for the nodes namespace.
+    writeToState(
+      statePath,
+      structuredClone(evaluateLogic(expr, context)),
+      state
+    );
   }
 };
 

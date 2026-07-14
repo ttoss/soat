@@ -434,21 +434,22 @@ describe('Orchestrations', () => {
       );
     });
 
-    test('rejects an input_schema declaring the reserved nodes property', async () => {
+    test('accepts an input_schema property named nodes (input lives under state.input, no collision)', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations/validate')
         .send({
-          nodes: [{ id: 'a', type: 'transform', expression: 1 }],
+          nodes: [
+            {
+              id: 'a',
+              type: 'transform',
+              expression: { var: 'input.nodes' },
+            },
+          ],
           edges: [],
           input_schema: { properties: { nodes: { type: 'object' } } },
         });
       expect(response.status).toBe(200);
-      expect(response.body.valid).toBe(false);
-      expect(response.body.errors).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ path: 'input_schema.properties.nodes' }),
-        ])
-      );
+      expect(response.body.valid).toBe(true);
     });
   });
 
@@ -785,6 +786,65 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
       expect(runRes.body.state.nodes.start.result).toEqual({ input: {} });
+    });
+
+    test('a state_mapping value that resolves to the whole state does not create a circular reference', async () => {
+      // { var: 'state' } over the { output, state } context resolves to the
+      // live state object; writing it back uncloned would nest state inside
+      // itself and crash JSONB persistence, stranding the run.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'State Snapshot Mapping',
+          nodes: [
+            {
+              id: 'snap',
+              type: 'transform',
+              expression: 1,
+              state_mapping: { 'state.snapshot': { var: 'state' } },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.snapshot.input).toEqual({});
+    });
+
+    test("a downstream node reads a condition node's label via state.nodes.<id>", async () => {
+      // Condition nodes complete with a label, not an artifact; the nodes
+      // namespace still records them as { label } so nodes.<id> refs that
+      // validation accepts are actually readable at runtime.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Condition Label In Nodes Namespace',
+          nodes: [
+            { id: 'cond', type: 'condition', expression: 'yes' },
+            {
+              id: 'pick',
+              type: 'transform',
+              expression: { var: 'nodes.cond.label' },
+              state_mapping: { 'state.picked': { var: 'output.result' } },
+            },
+          ],
+          edges: [{ from: 'cond', to: 'pick', condition: 'yes' }],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.picked).toBe('yes');
     });
 
     test('condition node routes to correct branch', async () => {
@@ -1985,7 +2045,9 @@ describe('Orchestrations', () => {
             {
               id: 'pass',
               type: 'transform',
-              expression: { var: 'item' },
+              // Loop items arrive as the sub-run's input, readable only
+              // through the input namespace.
+              expression: { var: 'input.item' },
               state_mapping: { 'state.result': { var: 'output.result' } },
             },
           ],
@@ -2179,7 +2241,12 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
-      expect(Array.isArray(runRes.body.state.results)).toBe(true);
+      // Each result is the sub-run's output ({ terminalNodeId: artifact });
+      // asserting the item value proves the loop actually fed the item
+      // through the sub-run's input namespace, not just that a run happened.
+      expect(runRes.body.state.results).toEqual([
+        { pass: { result: 'hello' } },
+      ]);
     });
 
     test('loop node with non-state collection path', async () => {
@@ -2266,8 +2333,13 @@ describe('Orchestrations', () => {
               id: 'sub',
               type: 'sub_orchestration',
               orchestration_id: subOrchId,
-              input_mapping: { item: { var: 'value' } },
-              state_mapping: { 'state.subResult': { var: 'output.result' } },
+              input_mapping: { item: { var: 'input.value' } },
+              // The node's artifact is the child run's output
+              // ({ terminalNodeId: artifact }), so the item surfaces at
+              // output.pass.result.
+              state_mapping: {
+                'state.subResult': { var: 'output.pass.result' },
+              },
             },
           ],
           edges: [],
@@ -2284,6 +2356,7 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.subResult).toBe('test');
     });
 
     test('poll node missing required fields is rejected at create', async () => {
