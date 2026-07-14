@@ -1,5 +1,17 @@
 /**
- * Generates packages/website/docs/mcp/tools.md from OpenAPI YAML specs.
+ * Generates the MCP Tools reference from the OpenAPI YAML specs:
+ *
+ *   docs/mcp/tools.md            — index page linking to one page per module
+ *   docs/mcp/tools/<module>.md   — per-module tool list with argument detail
+ *
+ * The MCP tool surface is derived at runtime by the server from the same specs
+ * (`src/lib/soatTools.ts`), so this generator mirrors its two rules:
+ *   - operations flagged `x-soat-mcp-exclude` are not exposed as tools;
+ *   - request-body fields flagged `x-soat-server-managed` are not tool inputs.
+ *
+ * MCP tool names and argument names are camelCase (the MCP endpoint is not
+ * processed by the snake_case caseTransform middleware).
+ *
  * Run with: pnpm tsx scripts/generateMcpToolsDocs.ts
  */
 
@@ -7,108 +19,182 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import { load } from 'js-yaml';
+import {
+  type BodyProp,
+  getBodyProps,
+  getOperationParams,
+  loadModules,
+  loadOperations,
+  mcpToolName,
+  type ModuleConfig,
+  type OperationEntry,
+  type OperationParam,
+  sanitizeInline,
+} from './openapiReferenceHelpers';
 
-const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
+const scriptsDir = path.dirname(url.fileURLToPath(import.meta.url));
+const MCP_DOCS_DIR = path.resolve(scriptsDir, '../docs/mcp');
+const INDEX_OUTPUT_FILE = path.join(MCP_DOCS_DIR, 'tools.md');
+const TOOLS_OUTPUT_DIR = path.join(MCP_DOCS_DIR, 'tools');
 
-const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
-
-const OUTPUT_FILE = path.resolve(__dirname, '../docs/mcp/tools.md');
-
-interface OpenApiSpec {
-  tags?: Array<{ name: string }>;
-  paths?: Record<string, Record<string, OperationSpec>>;
-}
-
-interface OperationSpec {
-  operationId?: string;
-  description?: string;
+interface ToolArgument {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
 }
 
 interface ToolEntry {
   name: string;
   description: string;
+  args: ToolArgument[];
 }
 
-const operationIdToToolName = (operationId: string): string => {
-  return operationId
-    .replace(/([A-Z])/g, '-$1')
-    .toLowerCase()
-    .replace(/^-/, '');
+const paramToArgument = (param: OperationParam): ToolArgument => {
+  return {
+    name: param.camelName,
+    type: param.type,
+    required: param.required,
+    description: param.description,
+  };
 };
 
-interface ModuleConfig {
-  file: string;
-  label: string;
-  docLink: string;
-}
+const bodyPropToArgument = (prop: BodyProp): ToolArgument => {
+  return {
+    name: prop.camelName,
+    type: prop.type,
+    required: prop.required,
+    description: prop.description,
+  };
+};
 
-const toTitleCase = (kebab: string): string => {
-  return kebab
-    .split('-')
-    .map((w) => {
-      return w.charAt(0).toUpperCase() + w.slice(1);
+const buildTool = (args: {
+  entry: OperationEntry;
+  mod: ModuleConfig;
+}): ToolEntry | null => {
+  const { entry, mod } = args;
+  if (entry.operation['x-soat-mcp-exclude']) return null;
+
+  const params = getOperationParams({
+    operation: entry.operation,
+    spec: mod.spec,
+  });
+  const bodyProps = getBodyProps({
+    operation: entry.operation,
+    spec: mod.spec,
+    excludeServerManaged: true,
+  });
+
+  return {
+    name: mcpToolName(entry.operationId),
+    description: entry.description,
+    args: [
+      ...params.map(paramToArgument),
+      ...bodyProps.map(bodyPropToArgument),
+    ],
+  };
+};
+
+const loadTools = (mod: ModuleConfig): ToolEntry[] => {
+  return loadOperations(mod.spec)
+    .map((entry) => {
+      return buildTool({ entry, mod });
     })
-    .join(' ');
-};
-
-/**
- * Map spec filenames to a different module doc page when the spec belongs to
- * a sub-resource whose documentation lives inside a parent module's page.
- */
-const DOC_OVERRIDES: Record<string, string> = {
-  memoryEntries: 'memories',
-};
-
-const loadModules = (): ModuleConfig[] => {
-  return fs
-    .readdirSync(SPECS_DIR)
-    .filter((f) => {
-      return f.endsWith('.yaml');
-    })
-    .sort()
-    .map((f) => {
-      const file = f.replace(/\.yaml$/, '');
-      const spec = load(
-        fs.readFileSync(path.join(SPECS_DIR, f), 'utf-8')
-      ) as OpenApiSpec;
-      const label = spec.tags?.[0]?.name ?? toTitleCase(file);
-      const docFile = DOC_OVERRIDES[file] ?? file;
-      return { file, label, docLink: `../modules/${docFile}` };
+    .filter((tool): tool is ToolEntry => {
+      return tool !== null;
     });
 };
 
-const loadTools = (moduleName: string): ToolEntry[] => {
-  const specPath = path.join(SPECS_DIR, `${moduleName}.yaml`);
-  if (!fs.existsSync(specPath)) return [];
+const renderArguments = (args: ToolArgument[]): string => {
+  if (args.length === 0) return 'This tool takes no arguments.';
 
-  const spec = load(fs.readFileSync(specPath, 'utf-8')) as OpenApiSpec;
-  const tools: ToolEntry[] = [];
-  const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
+  const header = [
+    '| Argument | Type | Required | Description |',
+    '| -------- | ---- | -------- | ----------- |',
+  ];
+  const rows = args.map((arg) => {
+    const desc = arg.description ? sanitizeInline(arg.description) : '—';
+    return `| \`${arg.name}\` | \`${arg.type}\` | ${
+      arg.required ? 'yes' : 'no'
+    } | ${desc} |`;
+  });
+  return [...header, ...rows].join('\n');
+};
 
-  for (const pathItem of Object.values(spec.paths ?? {})) {
-    for (const [method, operation] of Object.entries(pathItem)) {
-      if (!HTTP_METHODS.has(method) || !operation.operationId) continue;
-      tools.push({
-        name: operationIdToToolName(operation.operationId),
-        description: operation.description ?? '',
-      });
-    }
+const renderToolSection = (tool: ToolEntry): string => {
+  return [
+    `### \`${tool.name}\``,
+    '',
+    tool.description ? sanitizeInline(tool.description) : '—',
+    '',
+    '#### Arguments',
+    '',
+    renderArguments(tool.args),
+  ].join('\n');
+};
+
+const writeModulePage = (args: {
+  mod: ModuleConfig;
+  tools: ToolEntry[];
+  outputFile: string;
+}): void => {
+  const { mod, tools, outputFile } = args;
+  const sections: string[] = [
+    '---',
+    `title: ${mod.label}`,
+    // Explicit slug (relative to the `/docs` base) so routing never depends on
+    // the category-index convention — a module whose file basename equals its
+    // folder (e.g. `tools/tools.md`) would otherwise lose its own route.
+    `slug: /mcp/tools/${mod.file}`,
+    '---',
+    '',
+    `# ${mod.label}`,
+    '',
+    `MCP tools for the ${mod.label} module. See the [${mod.label} module docs](/docs/modules/${mod.docFile}) for permissions and data model.`,
+  ];
+
+  for (const tool of tools) {
+    sections.push('');
+    sections.push(renderToolSection(tool));
   }
 
-  return tools;
+  sections.push('');
+  fs.writeFileSync(outputFile, sections.join('\n'), 'utf-8');
 };
 
-const renderTable = (tools: ToolEntry[]): string => {
-  const rows = tools.map((t) => {
-    return `| \`${t.name}\` | ${t.description} |`;
-  });
-  return ['| Tool | Description |', '| ---- | ----------- |', ...rows].join(
-    '\n'
-  );
+const cleanGeneratedModulePages = (): void => {
+  if (!fs.existsSync(TOOLS_OUTPUT_DIR)) {
+    fs.mkdirSync(TOOLS_OUTPUT_DIR, { recursive: true });
+    return;
+  }
+  for (const file of fs.readdirSync(TOOLS_OUTPUT_DIR)) {
+    if (file.endsWith('.md')) {
+      fs.unlinkSync(path.join(TOOLS_OUTPUT_DIR, file));
+    }
+  }
 };
 
-const main = () => {
+const main = (): void => {
+  cleanGeneratedModulePages();
+
+  const moduleLinks: string[] = [];
+
+  for (const mod of loadModules()) {
+    const tools = loadTools(mod);
+    if (tools.length === 0) continue;
+
+    const outputFile = path.join(TOOLS_OUTPUT_DIR, `${mod.file}.md`);
+    writeModulePage({ mod, tools, outputFile });
+    // Absolute site paths, not `./tools/<file>`: the index page is served at
+    // both `/docs/mcp/tools` and `/docs/mcp/tools/`, and the trailing-slash
+    // variant would resolve a relative link into the subdirectory twice.
+    moduleLinks.push(
+      `- [${mod.label}](/docs/mcp/tools/${mod.file}) — ${tools.length} tool${
+        tools.length === 1 ? '' : 's'
+      }`
+    );
+  }
+
   const sections: string[] = [
     '---',
     'sidebar_position: 3',
@@ -116,26 +202,21 @@ const main = () => {
     '',
     '# Tools Reference',
     '',
-    'Complete list of all MCP tools exposed by the SOAT server, grouped by module. Each tool name maps directly to the MCP `tools/call` method name.',
+    'Every MCP tool exposed by the SOAT server, grouped by module. Each tool name maps directly to the MCP `tools/call` method name, and its arguments are the tool `inputSchema` fields.',
+    '',
+    'Tool and argument names are **camelCase** — the MCP endpoint is not processed by the snake_case case-transform applied to the REST API.',
+    '',
+    '## Modules',
+    '',
+    ...moduleLinks,
+    '',
   ];
 
-  for (const mod of loadModules()) {
-    const tools = loadTools(mod.file);
-    if (tools.length === 0) continue;
-
-    sections.push('');
-    sections.push(`## ${mod.label}`);
-    sections.push('');
-    sections.push(
-      `See [${mod.label} module docs](${mod.docLink}) for permissions and data model.`
-    );
-    sections.push('');
-    sections.push(renderTable(tools));
-  }
-
-  sections.push('');
-
-  fs.writeFileSync(OUTPUT_FILE, sections.join('\n'), 'utf-8');
+  fs.writeFileSync(INDEX_OUTPUT_FILE, sections.join('\n'), 'utf-8');
+  // eslint-disable-next-line no-console
+  console.log(`MCP tools index written to: ${INDEX_OUTPUT_FILE}`);
+  // eslint-disable-next-line no-console
+  console.log(`MCP per-module tool docs written to: ${TOOLS_OUTPUT_DIR}`);
 };
 
 main();
