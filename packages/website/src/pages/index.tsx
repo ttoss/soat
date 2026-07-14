@@ -18,12 +18,12 @@ const platformPillars = [
   {
     title: 'Orchestrate',
     description:
-      'Agents, tools, sessions, chats, and DAG-based orchestrations handle real multi-step workflows.',
+      'Agents call tools and other agents. DAG orchestrations and multi-agent discussions turn them into deterministic, multi-step workflows.',
   },
   {
     title: 'Remember',
     description:
-      'Knowledge search and memories retrieve context, while ingestion rules turn images and audio into searchable documents.',
+      'Knowledge search and memories retrieve context, while ingestion rules turn PDFs, images, and audio into searchable documents.',
   },
   {
     title: 'Govern',
@@ -33,7 +33,7 @@ const platformPillars = [
   {
     title: 'Observe',
     description:
-      'Traces and webhooks expose what agents did, which tools ran, and what changed downstream.',
+      'Traces capture every tool call, token, and model response; webhooks and triggers push what changed to the rest of your stack.',
   },
 ];
 
@@ -64,8 +64,9 @@ const HomepageHeader = () => {
         </Heading>
         <p className={clsx('hero__subtitle', styles.heroSubtitle)}>
           Run tool-calling agents with durable sessions, deterministic
-          orchestrations, searchable knowledge, writable memory, scoped secrets,
-          IAM policies, traces, and MCP from one self-hosted server.
+          multi-agent orchestrations, searchable knowledge, writable memory,
+          scoped secrets, IAM policies, traces, and MCP from one self-hosted
+          Node.js server.
         </p>
         <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
@@ -100,9 +101,13 @@ const ArchitectureBand = () => {
               One self-hosted layer for the agent backend stack.
             </Heading>
             <p className={styles.architectureLead}>
-              SOAT packages the production services agents need into a single
-              control surface: storage, orchestration, retrieval, governance,
-              and observability.
+              SOAT packages the production services agents need — storage,
+              orchestration, retrieval, governance, and observability — into one
+              Node.js process backed by PostgreSQL and pgvector. The REST API
+              and the MCP endpoint run in that same process, over the same
+              business logic and the same permission engine, so every surface
+              enforces identical access rules. No queue, no vector service, no
+              separate auth server to wire up.
             </p>
           </div>
           <div className={styles.architectureVisual}>
@@ -246,7 +251,7 @@ export default function Home(): React.ReactNode {
   return (
     <Layout
       title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
-      description="Run tool-calling agents with durable sessions, deterministic orchestrations, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted server."
+      description="Run tool-calling agents with durable sessions, deterministic multi-agent orchestrations, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted Node.js server."
     >
       <HomepageHeader />
       <main>
