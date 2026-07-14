@@ -127,7 +127,9 @@ describe('Approvals', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(seeded.id);
-      expect(res.body.evidence).toEqual({ orderId: 'ord_123' });
+      // The caseTransform middleware recursively snake_cases response JSON, so
+      // the opaque evidence object's keys come back snake_cased too.
+      expect(res.body.evidence).toEqual({ order_id: 'ord_123' });
       expect(res.body.predicted_impact).toBe('Issues a $500 refund');
     });
 
