@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.11](https://github.com/ttoss/soat/compare/v0.14.10...v0.14.11) (2026-07-14)
+
+### Bug Fixes
+
+* **server:** orchestration var resolution, extraction gating, error messages ([#526](https://github.com/ttoss/soat/issues/526)) ([a16cccd](https://github.com/ttoss/soat/commit/a16cccd395e3e567b0b353296d8d82a370fc58d7))
+
 ## [0.14.10](https://github.com/ttoss/soat/compare/v0.14.9...v0.14.10) (2026-07-12)
 
 ### Bug Fixes
