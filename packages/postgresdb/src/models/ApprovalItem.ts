@@ -21,13 +21,13 @@ import { User } from './User';
 @Table({
   tableName: 'approval_items',
   indexes: [
-    { fields: ['projectId', 'status', 'expiresAt'] },
+    { fields: ['project_id', 'status', 'expires_at'] },
     // A tool-call producer must not enqueue the same proposal twice while one
     // is still pending — the partial unique index makes that a DB-level
     // guarantee (used from Phase 2).
     {
       unique: true,
-      fields: ['dedupKey'],
+      fields: ['dedup_key'],
       where: { status: 'pending' },
       name: 'approval_items_dedup_key_pending_unique',
     },
