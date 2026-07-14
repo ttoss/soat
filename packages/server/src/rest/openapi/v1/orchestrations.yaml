@@ -447,11 +447,17 @@ components:
             `{">": [...]}` compute derived values. Any other value (string,
             number, boolean, array, multi-key object) is passed through as a
             literal.
-        output_mapping:
+        state_mapping:
           type: object
-          additionalProperties:
-            type: string
-          description: Maps node artifact keys to state paths.
+          additionalProperties: true
+          description: >
+            Maps state write paths to values. Each key is a `state.<path>`
+            destination (the `state.` prefix is optional); each value is JSON
+            Logic (https://jsonlogic.com) evaluated against
+            `{ "output": <node artifact>, "state": <run state> }` — e.g.
+            `{ "summary": {"var": "output.content"} }` writes the artifact's
+            `content` field to `state.summary`. The same evaluator as
+            input_mapping/transform/condition; only the context differs.
         output_schema:
           type: object
           description: For agent nodes — JSON Schema for structured output parsing.

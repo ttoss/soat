@@ -255,7 +255,7 @@ describe('validateOrchestrationGraph', () => {
             id: 'a',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'state.step1' },
+            stateMapping: { 'state.step1': { var: 'output.result' } },
           },
           {
             id: 'b',
@@ -270,14 +270,14 @@ describe('validateOrchestrationGraph', () => {
       expect(result.warnings).toHaveLength(0);
     });
 
-    test('accepts a reference written by an upstream node whose outputMapping value omits the state. prefix', () => {
+    test('accepts a reference written by an upstream node whose stateMapping key omits the state. prefix', () => {
       const result = validate({
         nodes: [
           {
             id: 'a',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'step1' },
+            stateMapping: { step1: { var: 'output.result' } },
           },
           {
             id: 'b',
@@ -296,7 +296,29 @@ describe('validateOrchestrationGraph', () => {
       expect(result.warnings).toHaveLength(0);
     });
 
-    test('accepts a reference satisfied by the run input schema', () => {
+    test('accepts a namespaced reference satisfied by the run input schema', () => {
+      const result = validate({
+        nodes: [
+          {
+            id: 'a',
+            type: 'transform',
+            expression: 1,
+            inputMapping: { val: { var: 'input.seed' } },
+          },
+        ],
+        edges: [],
+        inputSchema: {
+          type: 'object',
+          properties: { seed: { type: 'string' } },
+        },
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    test('rejects a flat (non-namespaced) reference even when input_schema declares the key', () => {
+      // Run input is seeded only under the `input` namespace (not flat), so a
+      // flat {"var": "seed"} is never satisfiable at runtime regardless of
+      // input_schema — static validation must not report it as reachable.
       const result = validate({
         nodes: [
           {
@@ -312,10 +334,13 @@ describe('validateOrchestrationGraph', () => {
           properties: { seed: { type: 'string' } },
         },
       });
-      expect(result.valid).toBe(true);
+      expect(result.valid).toBe(false);
+      expect(result.errors).toContainEqual(
+        expect.objectContaining({ path: 'nodes[0].input_mapping.val' })
+      );
     });
 
-    test('accepts a reference satisfied by an input schema with no `properties` key', () => {
+    test('accepts a namespaced reference satisfied by an input schema with no `properties` key', () => {
       // Falls back to scanning the schema's own top-level keys (excluding
       // JSON-schema keywords) when `properties` is absent.
       const result = validate({
@@ -324,7 +349,7 @@ describe('validateOrchestrationGraph', () => {
             id: 'a',
             type: 'transform',
             expression: 1,
-            inputMapping: { val: { var: 'seed' } },
+            inputMapping: { val: { var: 'input.seed' } },
           },
         ],
         edges: [],
@@ -367,7 +392,7 @@ describe('validateOrchestrationGraph', () => {
             id: 'writer',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'state.shared' },
+            stateMapping: { 'state.shared': { var: 'output.result' } },
           },
           {
             id: 'reader',
@@ -398,7 +423,7 @@ describe('validateOrchestrationGraph', () => {
             id: 'yes_node',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'state.branch' },
+            stateMapping: { 'state.branch': { var: 'output.result' } },
           },
           {
             id: 'no_node',
@@ -436,13 +461,13 @@ describe('validateOrchestrationGraph', () => {
             id: 'yes_node',
             type: 'transform',
             expression: 1,
-            outputMapping: { result: 'state.branch' },
+            stateMapping: { 'state.branch': { var: 'output.result' } },
           },
           {
             id: 'no_node',
             type: 'transform',
             expression: 2,
-            outputMapping: { result: 'state.branch' },
+            stateMapping: { 'state.branch': { var: 'output.result' } },
           },
           {
             id: 'join',

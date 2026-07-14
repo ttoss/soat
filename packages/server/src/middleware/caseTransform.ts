@@ -75,6 +75,16 @@ const isMetadataPassthroughPath = (path: string): boolean => {
 // resolves to null inside node logic even though it still shows up in the
 // snake_case-restored final-state dump. So `input` rounds-trips verbatim on the
 // orchestration-run routes too, exactly like a tool's `input`.
+//
+// `state` and `artifacts` (and the run's terminal `output`, which is just the
+// terminal nodes' artifacts) carry the same problem one level deeper: their
+// keys are either an `output_mapping`/`state_mapping` author's own state-path
+// segments, or — since every node's artifact is recorded at
+// `state.nodes.<nodeId>` / `artifacts.<nodeId>` / `output.<nodeId>` — the
+// caller's own node ids. A node id like `nodeA` is exactly as
+// caller-authored as a run-input key, and a graph's `{ "var": "nodes.nodeA...
+// " }` reference keeps that casing internally, so rewriting it to `node_a` on
+// the way out would desync the response from what the graph itself reads.
 const INPUT_PASSTHROUGH_PATH_PREFIXES = [
   '/api/v1/tools',
   '/api/v1/orchestration-runs',
@@ -118,9 +128,14 @@ const isToolCallArgsPassthroughPath = (path: string): boolean => {
 // 'presetParameters' (the camelCase form of the request's preset_parameters
 // field) is verbatim converter-tool input, and 'execute'/'mcp' are
 // pass-through tool configs whose inner keys (HTTP header names, `body_mode`,
-// …) must be preserved verbatim. 'metadata' (documents) and 'input' (tools)
-// are path-scoped pass-throughs. This mirrors the outbound set below so each
-// key round-trips unchanged.
+// …) must be preserved verbatim. 'stateMapping' (an orchestration node's
+// state_mapping) is keyed by dotted run-state paths (e.g.
+// `state.proposed.action_id`) — author-chosen, not schema field names — so
+// case-transforming its keys would rewrite any underscore-bearing path
+// segment while the node's own `{"var": "proposed.action_id"}` reads keep the
+// original casing, silently desyncing the write from every downstream read.
+// 'metadata' (documents) and 'input' (tools) are path-scoped pass-throughs.
+// This mirrors the outbound set below so each key round-trips unchanged.
 const buildBodySkipKeys = (path: string): Set<string> => {
   const keys = new Set([
     'template',
@@ -128,6 +143,7 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     'presetParameters',
     'execute',
     'mcp',
+    'stateMapping',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
@@ -144,7 +160,8 @@ const buildBodySkipKeys = (path: string): Set<string> => {
 // returned template diverge from what was stored and break `--parameter`
 // overrides that reference the original key. 'parameters' and 'mcp' mirror
 // the inbound set for the same reason (tool `parameters` is a free-form JSON
-// Schema; `mcp` carries HTTP header names, same as `execute`).
+// Schema; `mcp` carries HTTP header names, same as `execute`). 'state_mapping'
+// mirrors the inbound 'stateMapping' entry above.
 const buildResponseSkipKeys = (path: string): Set<string> => {
   const keys = new Set([
     'template',
@@ -152,9 +169,15 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     'execute',
     'mcp',
     'preset_parameters',
+    'state_mapping',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
-  if (isToolInputPassthroughPath(path)) keys.add('input');
+  if (isToolInputPassthroughPath(path)) {
+    keys.add('input');
+    keys.add('state');
+    keys.add('artifacts');
+    keys.add('output');
+  }
   if (isToolCallArgsPassthroughPath(path)) keys.add('args');
   return keys;
 };

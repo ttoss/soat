@@ -169,7 +169,7 @@ synchronously without needing an AI provider.
 ORCH_ID=$(soat create-orchestration \
   --project-id "$PROJECT_ID" \
   --name "daily-cycle" \
-  --nodes '[{"id":"seed","type":"transform","expression":{"var":"cycle"},"output_mapping":{"result":"state.cycle"}}]' \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.cycle"},"state_mapping":{"state.cycle":{"var":"output.result"}}}]' \
   --edges '[]' | jq -r '.id')
 echo "Orchestration: $ORCH_ID"
 ```
@@ -186,8 +186,8 @@ const { data: orchestration } = await adminSoat.orchestrations.createOrchestrati
       {
         id: 'seed',
         type: 'transform',
-        expression: { var: 'cycle' },
-        output_mapping: { result: 'state.cycle' },
+        expression: { var: 'input.cycle' },
+        state_mapping: { 'state.cycle': { var: 'output.result' } },
       },
     ],
     edges: [],
@@ -203,7 +203,7 @@ const orchestrationId = orchestration.id;
 ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"project_id":"'"$PROJECT_ID"'","name":"daily-cycle","nodes":[{"id":"seed","type":"transform","expression":{"var":"cycle"},"output_mapping":{"result":"state.cycle"}}],"edges":[]}' | jq -r '.id')
+  -d '{"project_id":"'"$PROJECT_ID"'","name":"daily-cycle","nodes":[{"id":"seed","type":"transform","expression":{"var":"input.cycle"},"state_mapping":{"state.cycle":{"var":"output.result"}}}],"edges":[]}' | jq -r '.id')
 
 echo "Orchestration: $ORCH_ID"
 ```

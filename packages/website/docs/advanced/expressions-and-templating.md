@@ -6,8 +6,8 @@ Every place SOAT lets you map, transform, or interpolate values uses one of six 
 
 | Pattern | Syntax | Where it is valid | Resolves at |
 | ------- | ------ | ----------------- | ----------- |
-| [JSON Logic](#json-logic) | `{"var": "input.x"}`, `{"cat": [...]}`, `{"if": [...]}`, … | Orchestration `input_mapping`, `expression`, `exit_condition`; pipeline step `input` and pipeline `output`; tool `output_mapping` | Run / call time |
-| [Dotted paths](#dotted-paths) | `state.a.b`, `text`, `MySecret.value` | Orchestration `output_mapping` values and loop `collection`; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time |
+| [JSON Logic](#json-logic) | `{"var": "input.x"}`, `{"cat": [...]}`, `{"if": [...]}`, … | Orchestration `input_mapping`, `state_mapping`, `expression`, `exit_condition`; pipeline step `input` and pipeline `output`; tool `output_mapping` | Run / call time |
+| [Dotted paths](#dotted-paths) | `state.a.b`, `text`, `MySecret.value` | Orchestration `state_mapping` keys, loop `collection`, and the `nodes.<id>` namespace; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time |
 | [`{param}`](#single-curly-param) | `/users/{user_id}` | `execute.url` of `http` tools | Call time |
 | [Discussion tokens](#discussion-prompt-tokens) | `{topic}`, `{transcript}`, `{steps.<name>}`, `{steps.<name>.last}` | Discussion step prompts | Turn time |
 | [`{{secret:...}}`](#secret-references-secret) | `{{secret:sec_01HXYZ}}` | `execute.url`, `execute.headers`, `mcp.url`, `mcp.headers` | Call time |
@@ -34,9 +34,10 @@ The syntax is identical everywhere; only the **context root** differs:
 
 | Surface | Field | `var` reads from |
 | ------- | ----- | ---------------- |
-| Orchestration node | `input_mapping` | Run state. Run input is available both flat (`{"var": "key"}`) and namespaced (`{"var": "input.key"}`) — prefer `input.key`. |
+| Orchestration node | `input_mapping` | Run state. Run input is seeded under the `input` namespace only — read it with `{"var": "input.key"}` (a flat `{"var": "key"}` is never satisfied by run input). Every upstream node's raw artifact is also available under `nodes.<nodeId>` (see [Dotted paths](#dotted-paths)). |
 | Orchestration `transform` / `condition` | `expression` | Run state (same as above) |
 | Orchestration `poll` | `exit_condition` | Run state plus `response` (latest tool result) and `attempt` |
+| Orchestration node | `state_mapping` | `{ "output": <the node's own artifact>, "state": <run state> }` — note the different context root from every other orchestration surface |
 | Pipeline tool step | `input` | `input.*` (tool call arguments) and `steps.<id>.*` (earlier step results) |
 | Pipeline tool | `output` | Same as pipeline step `input` |
 | Any tool (`http`, `mcp`, `pipeline`) | `output_mapping` | `output.*` (the tool's raw result) |
@@ -53,12 +54,13 @@ To pass an object that *looks like* an expression — for example, the literal p
 
 Plain dotted strings (no delimiters) appear where a value is an **address**, not an expression:
 
-- **Orchestration `output_mapping` values** — `{"content": "state.summary"}` writes the node artifact's `content` field to `state.summary`, building nested objects along the way (`state.a.b` is readable back as `{"var": "a.b"}`). The `state.` prefix is optional. Note the direction: keys are *artifact fields*, values are *state write paths* — the reverse of `input_mapping`.
+- **Orchestration `state_mapping` keys** — `{"state.summary": {"var": "output.content"}}` writes the node artifact's `content` field to `state.summary`, building nested objects along the way (`state.a.b` is readable back as `{"var": "a.b"}`). The `state.` prefix is optional. Keys are *state write paths*; values are JSON Logic (see [JSON Logic](#json-logic)) — the reverse-of-`input_mapping` shape (there, keys are input-parameter names and values point at the read source).
+- **The `nodes.<id>` namespace** — every completed orchestration node's full artifact is recorded at `state.nodes.<nodeId>`, whether or not that node declares a `state_mapping`. A downstream node reads it with `{"var": "nodes.<nodeId>.<field>"}`, giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` without explicit wiring. `nodes` is a reserved state key: a `state_mapping` write or an `input_schema` property named `nodes` is rejected.
 - **Loop node `collection`** — `state.items.pending` names the state array to iterate.
 - **`output_path` on `tool_output` message content** — extracts a field from a tool result before it enters a conversation (`"text"`, `"data.0.url"`; numeric segments index arrays).
 - **Formation `ref_attr`** — `"MySecret.value"` reads an attribute of another resource: everything before the first dot is the logical ID, the rest is the attribute name.
 
-Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call.text"}`) — that is JSON Logic's addressing, not a separate mechanism.
+Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call.text"}`, `{"var": "nodes.fetch.result"}`) — that is JSON Logic's addressing, not a separate mechanism.
 
 ## Single curly (`{param}`)
 
@@ -71,19 +73,21 @@ Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call
 This is the canonical URL placeholder syntax and intentionally matches OpenAPI path templating.
 
 :::warning Single braces, not double
-`{{city}}` is **not** a supported placeholder — double braces are reserved for [secret references](#secret-references-secret). The resolver matches the inner `{city}` and leaves the outer braces in the URL, producing `?city={London}`. Always write `{city}`.
+`{{city}}` is **not** a supported placeholder — double braces are reserved for [secret references](#secret-references-secret). Creating or updating a tool (directly, or via a formation) with any other `{{...}}` token in `execute`/`mcp` fields is rejected with `400 INVALID_TEMPLATE_TOKEN`. Always write `{city}`.
 :::
 
 ## Discussion prompt tokens
 
-Discussion step prompts support a fixed allowlist of `{token}` substitutions, resolved before each turn:
+A discussion always compiles to at most two engine steps: the fixed `deliberation` step (one branch per participant) and an optional `synthesis` step. Participant and synthesis prompts support a fixed allowlist of `{token}` substitutions, resolved before each turn:
 
 | Token | Replaced with |
 | ----- | ------------- |
 | `{topic}` | The discussion run's topic |
 | `{transcript}` | Prior turns within the current step (enables the shared sequential transcript) |
-| `{steps.<name>}` | Concatenated output of an earlier step |
-| `{steps.<name>.last}` | Only the final turn of an earlier step |
+| `{steps.deliberation}` | Concatenated output of the deliberation step (only meaningful from `synthesis`) |
+| `{steps.deliberation.last}` | Only the deliberation step's final turn |
+
+Unknown tokens are left untouched (safe for literal braces in a prompt), but a `{token}` outside this allowlist — e.g. `{steps.synthesis}`, a self-reference, or a typo — is surfaced as a non-blocking entry in the discussion's `template_warnings` field, returned on every create, update, and read.
 
 Unknown tokens are left untouched, so literal braces in a prompt are safe.
 
@@ -144,7 +148,7 @@ The same phase rule explains `${body.x}`: `sub` leaves it alone at apply time so
 
 ## Common mistakes
 
-- **`{{param}}` in a tool URL** — double braces are secrets-only; use `{param}`.
+- **`{{param}}` in a tool URL** — double braces are secrets-only; use `{param}`. Rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
 - **camelCase `var` paths for run input** — orchestration run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
 - **Bare string as a state read** — in an `input_mapping`, a bare string is a literal. `"state.key"` does not read state; use `{"var": "key"}`.
 - **Forward references** — a pipeline step may only read `steps.<id>` of an *earlier* step; formations reject circular `ref`/`sub` dependencies.

@@ -135,7 +135,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create the per-item sub-orchestration
 
-The `loop` node runs a whole [orchestration](/docs/modules/orchestrations#loops-collection-iteration) once per item in a collection. Create a tiny child orchestration that receives one `item` and echoes it through a `transform` node. The loop injects each element under the `item` variable, so the child reads it with `{"var": "item"}`.
+The `loop` node runs a whole [orchestration](/docs/modules/orchestrations#loops-collection-iteration) once per item in a collection. Create a tiny child orchestration that receives one `item` and echoes it through a `transform` node. The loop injects each element under the `item` variable, seeded into the sub-run's input namespace, so the child reads it with `{"var": "input.item"}`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -144,7 +144,7 @@ The `loop` node runs a whole [orchestration](/docs/modules/orchestrations#loops-
 SUB_ORCH_ID=$(soat create-orchestration \
   --project-id "$PROJECT_ID" \
   --name "Process One Item" \
-  --nodes '[{"id":"echo","type":"transform","expression":{"var":"item"},"output_mapping":{"result":"state.processed"}}]' \
+  --nodes '[{"id":"echo","type":"transform","expression":{"var":"input.item"},"state_mapping":{"state.processed":{"var":"output.result"}}}]' \
   --edges '[]' | jq -r '.id')
 echo "SUB_ORCH_ID: $SUB_ORCH_ID"
 ```
@@ -161,8 +161,8 @@ const { data: subOrch } = await adminSoat.orchestrations.createOrchestration({
       {
         id: 'echo',
         type: 'transform',
-        expression: { var: 'item' },
-        output_mapping: { result: 'state.processed' },
+        expression: { var: 'input.item' },
+        state_mapping: { 'state.processed': { var: 'output.result' } },
       },
     ],
     edges: [],
@@ -178,7 +178,7 @@ const SUB_ORCH_ID = subOrch.id;
 SUB_ORCH_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Process One Item\",\"nodes\":[{\"id\":\"echo\",\"type\":\"transform\",\"expression\":{\"var\":\"item\"},\"output_mapping\":{\"result\":\"state.processed\"}}],\"edges\":[]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Process One Item\",\"nodes\":[{\"id\":\"echo\",\"type\":\"transform\",\"expression\":{\"var\":\"input.item\"},\"state_mapping\":{\"state.processed\":{\"var\":\"output.result\"}}}],\"edges\":[]}" \
   | jq -r '.id')
 echo "SUB_ORCH_ID: $SUB_ORCH_ID"
 ```
@@ -256,11 +256,11 @@ This [orchestration](/docs/modules/orchestrations#node-types) chains the control
 ```bash
 ORCH_NODES='[
   {"id":"pace","type":"delay","duration":"1s"},
-  {"id":"wait-ready","type":"poll","tool_id":"'"$CHECK_TOOL_ID"'","operation_id":"get-project","exit_condition":{"==":[{"var":"response.id"},"'"$PROJECT_ID"'"]},"interval":"1s","max_iterations":5,"output_mapping":{"result":"state.project"}},
-  {"id":"process-each","type":"loop","orchestration_id":"'"$SUB_ORCH_ID"'","collection":"state.items","item_variable":"item","output_mapping":{"results":"state.results"}},
+  {"id":"wait-ready","type":"poll","tool_id":"'"$CHECK_TOOL_ID"'","operation_id":"get-project","exit_condition":{"==":[{"var":"response.id"},"'"$PROJECT_ID"'"]},"interval":"1s","max_iterations":5,"state_mapping":{"state.project":{"var":"output.result"}}},
+  {"id":"process-each","type":"loop","orchestration_id":"'"$SUB_ORCH_ID"'","collection":"state.input.items","item_variable":"item","state_mapping":{"state.results":{"var":"output.results"}}},
   {"id":"route","type":"condition","expression":{"if":[{"var":"results"},"processed","none"]}},
-  {"id":"summary-processed","type":"transform","expression":"Items were processed.","output_mapping":{"result":"state.summary"}},
-  {"id":"summary-none","type":"transform","expression":"No items to process.","output_mapping":{"result":"state.summary"}}
+  {"id":"summary-processed","type":"transform","expression":"Items were processed.","state_mapping":{"state.summary":{"var":"output.result"}}},
+  {"id":"summary-none","type":"transform","expression":"No items to process.","state_mapping":{"state.summary":{"var":"output.result"}}}
 ]'
 
 ORCH_EDGES='[
@@ -300,15 +300,15 @@ const { data: orchestration } =
           exit_condition: { '==': [{ var: 'response.id' }, PROJECT_ID] },
           interval: '1s',
           max_iterations: 5,
-          output_mapping: { result: 'state.project' },
+          state_mapping: { 'state.project': { var: 'output.result' } },
         },
         {
           id: 'process-each',
           type: 'loop',
           orchestration_id: SUB_ORCH_ID,
-          collection: 'state.items',
+          collection: 'state.input.items',
           item_variable: 'item',
-          output_mapping: { results: 'state.results' },
+          state_mapping: { 'state.results': { var: 'output.results' } },
         },
         {
           id: 'route',
@@ -319,13 +319,13 @@ const { data: orchestration } =
           id: 'summary-processed',
           type: 'transform',
           expression: 'Items were processed.',
-          output_mapping: { result: 'state.summary' },
+          state_mapping: { 'state.summary': { var: 'output.result' } },
         },
         {
           id: 'summary-none',
           type: 'transform',
           expression: 'No items to process.',
-          output_mapping: { result: 'state.summary' },
+          state_mapping: { 'state.summary': { var: 'output.result' } },
         },
       ],
       edges: [
@@ -347,7 +347,7 @@ const ORCHESTRATION_ID = orchestration.id;
 ORCHESTRATION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Control Flow Tour\",\"description\":\"delay, poll, loop, condition\",\"nodes\":[{\"id\":\"pace\",\"type\":\"delay\",\"duration\":\"1s\"},{\"id\":\"wait-ready\",\"type\":\"poll\",\"tool_id\":\"$CHECK_TOOL_ID\",\"operation_id\":\"get-project\",\"exit_condition\":{\"==\":[{\"var\":\"response.id\"},\"$PROJECT_ID\"]},\"interval\":\"1s\",\"max_iterations\":5,\"output_mapping\":{\"result\":\"state.project\"}},{\"id\":\"process-each\",\"type\":\"loop\",\"orchestration_id\":\"$SUB_ORCH_ID\",\"collection\":\"state.items\",\"item_variable\":\"item\",\"output_mapping\":{\"results\":\"state.results\"}},{\"id\":\"route\",\"type\":\"condition\",\"expression\":{\"if\":[{\"var\":\"results\"},\"processed\",\"none\"]}},{\"id\":\"summary-processed\",\"type\":\"transform\",\"expression\":\"Items were processed.\",\"output_mapping\":{\"result\":\"state.summary\"}},{\"id\":\"summary-none\",\"type\":\"transform\",\"expression\":\"No items to process.\",\"output_mapping\":{\"result\":\"state.summary\"}}],\"edges\":[{\"from\":\"pace\",\"to\":\"wait-ready\"},{\"from\":\"wait-ready\",\"to\":\"process-each\"},{\"from\":\"process-each\",\"to\":\"route\"},{\"from\":\"route\",\"to\":\"summary-processed\",\"condition\":\"processed\"},{\"from\":\"route\",\"to\":\"summary-none\",\"condition\":\"none\"}]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Control Flow Tour\",\"description\":\"delay, poll, loop, condition\",\"nodes\":[{\"id\":\"pace\",\"type\":\"delay\",\"duration\":\"1s\"},{\"id\":\"wait-ready\",\"type\":\"poll\",\"tool_id\":\"$CHECK_TOOL_ID\",\"operation_id\":\"get-project\",\"exit_condition\":{\"==\":[{\"var\":\"response.id\"},\"$PROJECT_ID\"]},\"interval\":\"1s\",\"max_iterations\":5,\"state_mapping\":{\"state.project\":{\"var\":\"output.result\"}}},{\"id\":\"process-each\",\"type\":\"loop\",\"orchestration_id\":\"$SUB_ORCH_ID\",\"collection\":\"state.input.items\",\"item_variable\":\"item\",\"state_mapping\":{\"state.results\":{\"var\":\"output.results\"}}},{\"id\":\"route\",\"type\":\"condition\",\"expression\":{\"if\":[{\"var\":\"results\"},\"processed\",\"none\"]}},{\"id\":\"summary-processed\",\"type\":\"transform\",\"expression\":\"Items were processed.\",\"state_mapping\":{\"state.summary\":{\"var\":\"output.result\"}}},{\"id\":\"summary-none\",\"type\":\"transform\",\"expression\":\"No items to process.\",\"state_mapping\":{\"state.summary\":{\"var\":\"output.result\"}}}],\"edges\":[{\"from\":\"pace\",\"to\":\"wait-ready\"},{\"from\":\"wait-ready\",\"to\":\"process-each\"},{\"from\":\"process-each\",\"to\":\"route\"},{\"from\":\"route\",\"to\":\"summary-processed\",\"condition\":\"processed\"},{\"from\":\"route\",\"to\":\"summary-none\",\"condition\":\"none\"}]}" \
   | jq -r '.id')
 echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 ```
@@ -480,7 +480,7 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 - **`poll`** calls its tool, evaluates `exit_condition` against `{ ...state, response, attempt }`, and either stops (truthy) or waits `interval` and retries — up to `max_iterations`. On exhaustion it completes with `condition_met: false` unless `fail_on_timeout: true`. Each polled call should be safe to repeat.
 - **`loop`** fans out over `collection`, running `orchestration_id` once per item with the element bound to `item_variable`, and collects each sub-run's output into `{ results: [...] }`.
 - **`condition`** turns a JSON Logic result into a string label; edges pick the matching branch with `condition`. Unselected branches are recorded as `skipped`.
-- **`transform`** computes a value (or, as here, returns a literal) and writes it to state via `output_mapping`.
+- **`transform`** computes a value (or, as here, returns a literal) and writes it to state via `state_mapping`.
 
 To see the `none` branch, run again with `--input '{"items":[]}'`: the empty collection makes `loop` produce `[]`, the `condition` evaluates to `none`, and `summary-none` runs instead.
 

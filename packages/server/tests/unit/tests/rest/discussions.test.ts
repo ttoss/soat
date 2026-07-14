@@ -142,6 +142,36 @@ describe('Discussions', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('AI_PROVIDER_NOT_FOUND');
     });
+
+    test('a participant prompt with only allowed tokens has no template_warnings', async () => {
+      const res = await createDiscussion({
+        participants: [
+          { name: 'Advocate', prompt: 'Consider {topic} using {transcript}.' },
+        ],
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.template_warnings).toEqual([]);
+    });
+
+    test('a participant prompt referencing an unknown token surfaces a template_warnings entry', async () => {
+      const res = await createDiscussion({
+        participants: [
+          { name: 'Advocate', prompt: 'Summarize {steps.synthesis} please.' },
+        ],
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.template_warnings).toEqual(
+        expect.arrayContaining([expect.stringContaining('{steps.synthesis}')])
+      );
+    });
+
+    test('a synthesis prompt referencing {steps.deliberation} has no template_warnings', async () => {
+      const res = await createDiscussion({
+        synthesis: { prompt: 'Wrap up: {steps.deliberation.last}' },
+      });
+      expect(res.status).toBe(201);
+      expect(res.body.template_warnings).toEqual([]);
+    });
   });
 
   describe('GET /api/v1/discussions', () => {

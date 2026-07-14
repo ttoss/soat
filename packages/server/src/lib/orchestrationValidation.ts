@@ -7,7 +7,12 @@ import {
   computeDominators,
   transitivePredecessors,
 } from './orchestrationGraphAnalysis';
+import {
+  checkReservedNodeNamespace,
+  NODE_ARTIFACTS_STATE_KEY,
+} from './orchestrationNodesNamespace';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
+import { collectVarRefs } from './orchestrationVarRefs';
 
 const log = createDebug('soat:orchestrations');
 
@@ -24,34 +29,7 @@ export type OrchestrationValidationResult = {
   warnings: OrchestrationValidationIssue[];
 };
 
-// ── JSON Logic var extraction ─────────────────────────────────────────────
-
-/**
- * Recursively collects every `var` reference path used in a JSON Logic
- * expression. `applyInputMapping` evaluates each mapping value against the run
- * state, so `{ var: 'foo' }` reads `state.foo`. Returns the raw path strings
- * (e.g. `'foo'`, `'foo.bar'`). Numeric indices and the empty path (whole
- * state) are ignored — they cannot be statically resolved to a single key.
- */
-export const collectVarRefs = (expr: unknown): string[] => {
-  if (Array.isArray(expr)) {
-    return expr.flatMap(collectVarRefs);
-  }
-  if (expr === null || typeof expr !== 'object') return [];
-
-  const refs: string[] = [];
-  for (const [operator, operand] of Object.entries(
-    expr as Record<string, unknown>
-  )) {
-    if (operator === 'var') {
-      const path = Array.isArray(operand) ? operand[0] : operand;
-      if (typeof path === 'string' && path.length > 0) refs.push(path);
-      continue;
-    }
-    refs.push(...collectVarRefs(operand));
-  }
-  return refs;
-};
+export { collectVarRefs } from './orchestrationVarRefs';
 
 const topSegment = (path: string): string => {
   return path.split('.')[0] as string;
@@ -60,16 +38,16 @@ const topSegment = (path: string): string => {
 // ── State key analysis ────────────────────────────────────────────────────
 
 /**
- * The top-level state keys a node writes via its `outputMapping`. Values are
- * `state.<path>` strings; a value without the `state.` prefix is normalized
- * to one, mirroring `writeToState`. The top-level segment of the remainder is
- * the key that becomes available to downstream nodes.
+ * The top-level state keys a node writes via its `stateMapping`. Keys are
+ * `state.<path>` strings (a `state_mapping`'s own keys are its write
+ * destinations); a key without the `state.` prefix is normalized to one,
+ * mirroring `writeToState`. The top-level segment of the remainder is the key
+ * that becomes available to downstream nodes.
  */
 const writtenStateKeys = (node: OrchestrationNode): string[] => {
-  if (!node.outputMapping) return [];
+  if (!node.stateMapping) return [];
   const keys: string[] = [];
-  for (const statePath of Object.values(node.outputMapping)) {
-    if (typeof statePath !== 'string') continue;
+  for (const statePath of Object.keys(node.stateMapping)) {
     const normalizedPath = statePath.startsWith('state.')
       ? statePath
       : `state.${statePath}`;
@@ -267,6 +245,30 @@ type RefContext = {
   writers: Map<string, Set<string>>;
   ancestors: Set<string>;
   ancestorDominators: Set<string>;
+  allNodeIds: Set<string>;
+};
+
+/**
+ * Classifies a `{var: "nodes.<nodeId>..."}` reference: `nodes.<nodeId>...` is
+ * written unconditionally by the engine the moment `<nodeId>` completes
+ * (`writeNodeArtifact`) — not via a declared `state_mapping` — so it needs
+ * its own reachability check against `<nodeId>` directly (must both exist and
+ * be an upstream/ancestor node), rather than the general writers-map lookup
+ * `classifyRef` uses for ordinary state keys. A bare `{"var": "nodes"}` (no
+ * node id segment) is left unchecked, matching the open-input-contract
+ * behavior for ordinary keys.
+ */
+const classifyNodesRef = (args: {
+  refPath: string;
+  ctx: RefContext;
+}): 'ok' | 'unwritten' | 'conditional' => {
+  const { refPath, ctx } = args;
+  const nodeId = refPath.split('.')[1];
+  if (!nodeId) return 'ok';
+  if (!ctx.allNodeIds.has(nodeId) || !ctx.ancestors.has(nodeId)) {
+    return 'unwritten';
+  }
+  return ctx.ancestorDominators.has(nodeId) ? 'ok' : 'conditional';
 };
 
 /**
@@ -281,12 +283,16 @@ const classifyRef = (args: {
 }): 'ok' | 'unwritten' | 'conditional' => {
   const { refPath, ctx } = args;
   const key = topSegment(refPath);
-  // The `input` namespace is always seeded from the run input (see
+  // The `input` namespace is the only place run input is seeded (see
   // startOrchestrationRun), so any `{ "var": "input.<name>" }` reference is
   // satisfiable regardless of the declared input_schema — mirroring the
-  // pipeline/formation `input.` convention.
+  // pipeline/formation `input.` convention. A *flat* `{ "var": "<name>" }` is
+  // never seeded from run input (even when input_schema declares `<name>`) —
+  // it can only be satisfied by an upstream node's own `state_mapping` write,
+  // handled by the general writers-map lookup below.
   if (key === 'input') return 'ok';
-  if (ctx.inputKeys.has(key)) return 'ok';
+  if (key === NODE_ARTIFACTS_STATE_KEY)
+    return classifyNodesRef({ refPath, ctx });
   const keyWriters = ctx.writers.get(key) ?? new Set<string>();
   const upstreamWriters = [...keyWriters].filter((w) => {
     return ctx.ancestors.has(w);
@@ -311,10 +317,20 @@ const checkNodeReachability = (args: {
       const verdict = classifyRef({ refPath, ctx });
       const key = topSegment(refPath);
       const path = `nodes[${index}].input_mapping.${mappingKey}`;
-      // With a declared input_schema the input contract is closed, so a key
-      // neither in the schema nor written upstream is a hard error. Without
-      // one the contract is open — the run may supply it — so it is allowed.
-      if (verdict === 'unwritten' && ctx.inputKeys.size > 0) {
+      // `nodes.<nodeId>` is never part of run input (open or closed contract
+      // alike) — it is written exclusively by the referenced node completing
+      // — so an unwritten reference is always an error, unlike a plain state
+      // key which may be legitimately supplied by an open run input.
+      if (verdict === 'unwritten' && key === NODE_ARTIFACTS_STATE_KEY) {
+        const referencedNodeId = refPath.split('.')[1];
+        errors.push({
+          path,
+          message: `references ${refPath} but '${referencedNodeId}' is not an earlier (upstream) node in this graph.`,
+        });
+      } else if (verdict === 'unwritten' && ctx.inputKeys.size > 0) {
+        // With a declared input_schema the input contract is closed, so a key
+        // neither in the schema nor written upstream is a hard error. Without
+        // one the contract is open — the run may supply it — so it is allowed.
         errors.push({
           path,
           message: `references state.${refPath} but no upstream node writes 'state.${key}' and it is not declared in input_schema.`,
@@ -347,6 +363,7 @@ const checkReachability = (args: {
   const preds = buildPredecessors(edges);
   const dominators = computeDominators({ nodeIds, edges, preds });
   const writers = buildWriters(nodes);
+  const allNodeIds = new Set(nodeIds);
 
   for (const [index, node] of nodes.entries()) {
     if (!node.inputMapping) continue;
@@ -355,6 +372,7 @@ const checkReachability = (args: {
       writers,
       ancestors: transitivePredecessors({ nodeId: node.id, preds }),
       ancestorDominators: dominators.get(node.id) ?? new Set<string>(),
+      allNodeIds,
     };
     const res = checkNodeReachability({ node, index, ctx });
     errors.push(...res.errors);
@@ -383,6 +401,7 @@ export const validateOrchestrationGraph = (args: {
   const warnings: OrchestrationValidationIssue[] = [];
 
   errors.push(...checkNodeShapes(nodes));
+  errors.push(...checkReservedNodeNamespace({ nodes, inputSchema }));
 
   const nodeIds = nodes
     .map((n) => {

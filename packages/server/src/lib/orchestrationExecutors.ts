@@ -5,7 +5,7 @@ import type {
   WaitResume,
 } from './orchestrationNodeExecutors';
 import {
-  applyOutputMapping,
+  applyStateMapping,
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
@@ -18,6 +18,7 @@ import {
   executeTransformNode,
   executeWebhookNode,
 } from './orchestrationNodeExecutors';
+import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import { executePollNode } from './orchestrationPollNode';
 import type { OrchestrationEdge, OrchestrationNode } from './orchestrations';
 
@@ -30,7 +31,7 @@ export {
 export type { NodeExecutionResult } from './orchestrationNodeExecutors';
 export {
   applyInputMapping,
-  applyOutputMapping,
+  applyStateMapping,
 } from './orchestrationNodeExecutors';
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -282,7 +283,8 @@ export const processNodeResultBatch = (args: {
       conditionLabels.set(nodeId, execResult.label);
     } else {
       artifacts[nodeId] = execResult.artifact;
-      applyOutputMapping(nodeDefn.outputMapping, execResult.artifact, state);
+      writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
+      applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
     }
 
     completedNodes.add(nodeId);

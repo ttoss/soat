@@ -32,6 +32,7 @@ Deep thinking lives entirely in Discussions rather than in a per-agent `reasonin
 | `max_rounds`     | number   | Rounds of deliberation (1–3, default `1`)                                   |
 | `synthesis`      | object   | Optional override for the final synthesis pass — see [Synthesis](#synthesis) |
 | `participants`   | array    | The deliberation participants — see [Participant](#participant)             |
+| `template_warnings` | array | Read-only. Non-blocking warnings for participant/synthesis `prompt` `{token}` references outside the allowlist described in [Expressions & Templating](../advanced/expressions-and-templating.md#discussion-prompt-tokens). Unknown tokens are not rejected — they pass through unresolved — so this is informational only. |
 | `tags`           | object   | Arbitrary string tags                                                       |
 | `created_at`     | string   | ISO 8601 creation timestamp                                                 |
 | `updated_at`     | string   | ISO 8601 last-updated timestamp                                             |

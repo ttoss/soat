@@ -99,7 +99,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
 | `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhook_url`) or pauses awaiting a callback (`mode: "receive"`). `emit` is fire-and-forget: the POST is not awaited, and delivery success or failure is not tracked or retried — the node completes immediately with `{ emitted: true }` regardless of the outcome. |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `output_mapping`'s artifact key is a flat property lookup (it does not traverse dots), so `{"childNode": "state.x"}` copies the whole `{ terminalNodeId: terminalArtifact }` object into `state.x`; pull out a deeper field with a following `transform` node reading `{"var": "x.terminalNodeId.someField"}`. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
 
 ### Loops (collection iteration)
 
@@ -122,7 +122,7 @@ The node completes with an artifact `{ results: [...] }` — one entry per item,
   "collection": "state.documents",
   "item_variable": "doc",
   "parallelism": 3,
-  "output_mapping": { "results": "state.summaries" }
+  "state_mapping": { "state.summaries": { "var": "output.results" } }
 }
 ```
 
@@ -147,7 +147,7 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
   "exit_condition": { "==": [{ "var": "response.status" }, "completed"] },
   "interval": "5s",
   "max_iterations": 60,
-  "output_mapping": { "result": "state.render" }
+  "state_mapping": { "state.render": { "var": "output.result" } }
 }
 ```
 
@@ -215,11 +215,35 @@ The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `
 Each node can define:
 
 - **`input_mapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`output_mapping`** — Maps node outputs back to state paths after execution. Each value should be a string starting with the literal `state.` prefix (e.g. `"state.summary"`); a value without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Prefer the explicit `state.`-prefixed form shown in the examples throughout this page. A **dotted** target such as `"state.proposed.action_id"` builds a nested object (`state.proposed = { action_id: … }`), so a later node reads it back with `{"var": "proposed.action_id"}` — the `var` reader descends dot-paths.
+- **`state_mapping`** — Projects a node's artifact into state after execution. Each **key** is a state write path and should start with the literal `state.` prefix (e.g. `"state.summary"`); a key without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Each **value** is [JSON Logic](https://jsonlogic.com) evaluated against `{ "output": <the node's artifact>, "state": <run state> }` — the same evaluator as `input_mapping`/`transform`/`condition`, just a different context. `{ "summary": { "var": "output.content" } }` writes the artifact's `content` field to `state.summary`; a literal value (string, number, boolean) is written as-is. A **dotted** target such as `"state.proposed.action_id"` builds a nested object (`state.proposed = { action_id: … }`), so a later node reads it back with `{"var": "proposed.action_id"}` — the `var` reader descends dot-paths.
+
+  ```json
+  { "id": "summarise", "type": "agent", "agent_id": "agent_xyz", "state_mapping": { "state.summary": { "var": "output.content" } } }
+  ```
+
+  Since it is JSON Logic, `state_mapping` can also compute derived values or read the artifact's own upstream state — e.g. `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a running total across nodes.
+
+#### The `nodes.<id>` namespace
+
+Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`, whether or not the node declares a `state_mapping` — giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` (see [Pipeline Tools](./tools.md#pipeline)). A downstream node reads it with `{ "var": "nodes.<nodeId>.<field>" }` without any explicit wiring on the upstream node:
+
+```json
+[
+  { "id": "fetch", "type": "tool", "tool_id": "tool_abc" },
+  {
+    "id": "summarise",
+    "type": "agent",
+    "agent_id": "agent_xyz",
+    "input_mapping": { "prompt": { "var": "nodes.fetch.result" } }
+  }
+]
+```
+
+`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write or a declared `input_schema` property named `nodes`, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph.
 
 #### Evaluation scope
 
-Every JSON Logic expression in a graph is evaluated against the run **state**, which is the single shared context: it holds the run input (see [Run input](#run-input)) plus everything upstream nodes have written via `output_mapping`. What differs between node types is not the scope but what each node *does* with it:
+Every JSON Logic expression in a graph is evaluated against the run **state**, which is the single shared context: it holds the run input (see [Run input](#run-input)) plus everything upstream nodes have written via `state_mapping`, plus every upstream node's raw artifact under `nodes.<id>`. What differs between node types is not the scope but what each node *does* with it:
 
 - **`transform` and `condition`** evaluate their `expression` against the full state directly.
 - **`agent`, `tool`, `knowledge`, `memory_write`, `human`, `webhook`, `sub_orchestration`** evaluate each `input_mapping` value against the full state and pass only that projected result to the node (an agent's prompt, a tool's input, etc.) — they do not receive the whole state.
@@ -248,12 +272,9 @@ Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) a
 
 #### Run input
 
-Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state two ways, so either convention resolves:
+Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state under an `input` namespace, read with `{"var": "input.key"}` — matching the pipeline/formation convention, so run input, pipeline `input.*`, and formation `${...}` all read the same way.
 
-- **Flat** — each top-level input key is a state key, read with `{"var": "key"}`.
-- **Namespaced** — the whole input object is also available under `input`, read with `{"var": "input.key"}`, matching the pipeline/formation convention.
-
-Input keys round-trip **verbatim** (they are not case-transformed), so a key sent as `cycle_task` is read as `{"var": "cycle_task"}` / `{"var": "input.cycle_task"}` — not `cycleTask`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference in an `input_mapping` satisfies [static validation](#static-validation) regardless of the declared `input_schema`.
+Input keys round-trip **verbatim** (they are not case-transformed), so a key sent as `cycle_task` is read as `{"var": "input.cycle_task"}` — not `{"var": "input.cycleTask"}`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference in an `input_mapping` satisfies [static validation](#static-validation) regardless of the declared `input_schema`; a **flat** `{"var": "<name>"}` reference is never satisfied by run input (only by an upstream node's own `state_mapping` write) — earlier releases also seeded run input flat across top-level state keys, but that alias has been removed.
 
 To pass a literal object that happens to look like a JSON Logic expression — e.g. the JSON Logic object `{"var": "x"}` itself, as data rather than an expression to evaluate — wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
 
@@ -291,6 +312,9 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
 | Cycle (no `loop` node present) | `a → b → a` |
 | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node **and** `input_schema` is declared but does not list `x` |
+| Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema`, since `nodes` is never part of run input |
+| Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
+| Reserved `nodes` input property | `input_schema.properties` declares a `nodes` property |
 
 **Warnings (never block):**
 
@@ -298,11 +322,11 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | ----- | ------- |
 | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
-The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema`, the run input is an open contract — the key may be supplied at run time — so the reference is allowed. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch.
+The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema`, the run input is an open contract — the key may be supplied at run time — so the reference is allowed. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch. A `{"var": "nodes.<id>..."}` reference is the one exception: since `nodes.<id>` can never come from run input, an unwritten reference is always an error, open contract or not.
 
 ```bash
 soat validate-orchestration \
-  --nodes '[{"id":"a","type":"transform","expression":1,"output_mapping":{"result":"state.step1"}},
+  --nodes '[{"id":"a","type":"transform","expression":1,"state_mapping": { "state.step1": { "var": "output.result" } }},
             {"id":"b","type":"transform","expression":1,"input_mapping":{"val":{"var":"step1"}}}]' \
   --edges '[{"from":"a","to":"b"}]'
 # → { "valid": true, "errors": [], "warnings": [] }
@@ -385,8 +409,8 @@ soat create-orchestration \
   --project-id "$PROJECT_ID" \
   --name "fetch-and-summarize" \
   --nodes '[
-    {"id":"fetch","type":"tool","tool_id":"tool_abc","output_mapping":{"result":"state.raw"}},
-    {"id":"summarise","type":"agent","agent_id":"agent_xyz","input_mapping":{"prompt":{"var":"raw"}},"output_mapping":{"content":"state.summary"}}
+    {"id":"fetch","type":"tool","tool_id":"tool_abc","state_mapping": { "state.raw": { "var": "output.result" } }},
+    {"id":"summarise","type":"agent","agent_id":"agent_xyz","input_mapping":{"prompt":{"var":"raw"}},"state_mapping": { "state.summary": { "var": "output.content" } }}
   ]' \
   --edges '[{"from":"fetch","to":"summarise"}]'
 ```
@@ -407,14 +431,14 @@ const { data, error } = await soat.orchestrations.createOrchestration({
         id: 'fetch',
         type: 'tool',
         tool_id: 'tool_abc',
-        output_mapping: { result: 'state.raw' },
+        state_mapping: { 'state.raw': { var: 'output.result' } },
       },
       {
         id: 'summarise',
         type: 'agent',
         agent_id: 'agent_xyz',
         input_mapping: { prompt: { var: 'raw' } },
-        output_mapping: { content: 'state.summary' },
+        state_mapping: { 'state.summary': { var: 'output.content' } },
       },
     ],
     edges: [{ from: 'fetch', to: 'summarise' }],
@@ -438,14 +462,14 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
         "id": "fetch",
         "type": "tool",
         "tool_id": "tool_abc",
-        "output_mapping": {"result": "state.raw"}
+        "state_mapping": { "state.raw": { "var": "output.result" } }
       },
       {
         "id": "summarise",
         "type": "agent",
         "agent_id": "agent_xyz",
         "input_mapping": {"prompt": {"var": "raw"}},
-        "output_mapping": {"content": "state.summary"}
+        "state_mapping": { "state.summary": { "var": "output.content" } }
       }
     ],
     "edges": [{"from": "fetch", "to": "summarise"}]
@@ -507,8 +531,8 @@ Both `branch_a` and `branch_b` run concurrently after `start` completes:
 {
   "nodes": [
     { "id": "start", "type": "transform", "expression": { "var": "query" } },
-    { "id": "branch_a", "type": "agent", "agent_id": "agent_a", "output_mapping": { "content": "state.a" } },
-    { "id": "branch_b", "type": "agent", "agent_id": "agent_b", "output_mapping": { "content": "state.b" } }
+    { "id": "branch_a", "type": "agent", "agent_id": "agent_a", "state_mapping": { "state.a": { "var": "output.content" } } },
+    { "id": "branch_b", "type": "agent", "agent_id": "agent_b", "state_mapping": { "state.b": { "var": "output.content" } } }
   ],
   "edges": [
     { "from": "start", "to": "branch_a" },
@@ -554,7 +578,7 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
 
 ### Agent Squad
 
-A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `output_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
+A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `state_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -594,14 +618,14 @@ cat > squad.json << 'EOF'
             "type": "agent",
             "agent_id": { "ref": "Writer" },
             "input_mapping": { "prompt": { "var": "topic" } },
-            "output_mapping": { "content": "state.draft" }
+            "state_mapping": { "state.draft": { "var": "output.content" } }
           },
           {
             "id": "review",
             "type": "agent",
             "agent_id": { "ref": "Reviewer" },
             "input_mapping": { "prompt": { "var": "draft" } },
-            "output_mapping": { "content": "state.final" }
+            "state_mapping": { "state.final": { "var": "output.content" } }
           }
         ],
         "edges": [{ "from": "write", "to": "review" }]
@@ -664,14 +688,14 @@ const template = {
             type: 'agent',
             agent_id: { ref: 'Writer' },
             input_mapping: { prompt: { var: 'topic' } },
-            output_mapping: { content: 'state.draft' },
+            state_mapping: { 'state.draft': { var: 'output.content' } },
           },
           {
             id: 'review',
             type: 'agent',
             agent_id: { ref: 'Reviewer' },
             input_mapping: { prompt: { var: 'draft' } },
-            output_mapping: { content: 'state.final' },
+            state_mapping: { 'state.final': { var: 'output.content' } },
           },
         ],
         edges: [{ from: 'write', to: 'review' }],

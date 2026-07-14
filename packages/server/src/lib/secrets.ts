@@ -203,6 +203,69 @@ export const assertSecretRefsExist = async (args: {
   await loadReferencedSecrets({ ids, projectId: args.projectId });
 };
 
+// The inner alternation lets a `${...}` sub placeholder's own closing brace
+// pass through without prematurely ending the `{{...}}` match — a plain
+// `[^}]*` body would stop at the sub's inner `}` and leave a mangled,
+// one-brace-short capture for `{{secret:${ApiSecret}}}`.
+const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
+// A resolved reference (`secret:sec_...`) or a formation `sub` placeholder
+// still awaiting resolution (`secret:${LogicalIdOrParam}`) are both valid —
+// a formation template is statically validated *before* `${...}` tokens
+// resolve, so `{ "sub": "Bearer {{secret:${ApiSecret}}}" }` is legitimate
+// template source, not an authoring mistake (see the "Composition" section
+// of the expressions & templating reference doc).
+const VALID_SECRET_TOKEN_RE = /^secret:(sec_[A-Za-z0-9]+|\$\{[^}]+\})$/;
+
+/**
+ * Collects every `{{...}}` token inside a value (deep-walks strings, arrays,
+ * and objects) whose content is not a well-formed `secret:sec_...` reference
+ * (or an unresolved `secret:${...}` sub placeholder). Double curly braces are
+ * reserved exclusively for secret references — this is a shape check only
+ * (whether the referenced secret exists is {@link assertSecretRefsExist}'s
+ * job), so it needs no DB access and is safe to call from pure, static
+ * validation (e.g. `validate-formation`).
+ */
+export const findInvalidTemplateTokens = (value: unknown): string[] => {
+  if (typeof value === 'string') {
+    return [...value.matchAll(DOUBLE_CURLY_RE)]
+      .map((m) => {
+        return m[0];
+      })
+      .filter((token) => {
+        return !VALID_SECRET_TOKEN_RE.test(token.slice(2, -2));
+      });
+  }
+  if (Array.isArray(value)) return value.flatMap(findInvalidTemplateTokens);
+  if (typeof value === 'object' && value !== null) {
+    return Object.values(value as Record<string, unknown>).flatMap(
+      findInvalidTemplateTokens
+    );
+  }
+  return [];
+};
+
+/**
+ * Throws `INVALID_TEMPLATE_TOKEN` (400) when `value` contains a `{{...}}`
+ * token that is not a `{{secret:sec_...}}` reference — e.g. a `{{param}}`
+ * placeholder copied from another templating system, which the URL/header
+ * resolver would otherwise leave with stray braces in the outbound request.
+ */
+export const assertNoInvalidTemplateTokens = (value: unknown): void => {
+  const invalid = [...new Set(findInvalidTemplateTokens(value))];
+  if (invalid.length === 0) return;
+  throw new DomainError(
+    'INVALID_TEMPLATE_TOKEN',
+    `Invalid template token(s) ${invalid
+      .map((t) => {
+        return `'${t}'`;
+      })
+      .join(
+        ', '
+      )} — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
+    { tokens: invalid }
+  );
+};
+
 /**
  * Resolves every `{{secret:...}}` token in a string to the decrypted value
  * of the referenced secret, scoped to the given project. Throws

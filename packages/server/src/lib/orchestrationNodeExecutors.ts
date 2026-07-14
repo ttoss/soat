@@ -73,14 +73,23 @@ const writeToState = (
 // evaluator. Re-exported here to preserve the existing import surface.
 export { applyInputMapping };
 
-export const applyOutputMapping = (
-  outputMapping: Record<string, string> | undefined,
+/**
+ * Projects a completed node's artifact into run state: each key of
+ * `stateMapping` is a state write path, and each value is JSON Logic
+ * evaluated against `{ output: artifact, state }` — e.g.
+ * `{ "summary": { "var": "output.content" } }` writes the artifact's
+ * `content` field to `state.summary`. One evaluator, one mental model, shared
+ * with `input_mapping`/`transform`/`condition` (only the context differs).
+ */
+export const applyStateMapping = (
+  stateMapping: Record<string, unknown> | undefined,
   artifact: Record<string, unknown>,
   state: Record<string, unknown>
 ): void => {
-  if (!outputMapping) return;
-  for (const [artifactKey, statePath] of Object.entries(outputMapping)) {
-    writeToState(statePath, artifact[artifactKey], state);
+  if (!stateMapping) return;
+  const context = { output: artifact, state };
+  for (const [statePath, expr] of Object.entries(stateMapping)) {
+    writeToState(statePath, evaluateLogic(expr, context), state);
   }
 };
 
