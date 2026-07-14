@@ -90,37 +90,68 @@ export const findStartNodes = (
     });
 };
 
+/**
+ * Whether an edge's branch condition is met. A `condition` edge follows only
+ * when the completed node's label matches. An unlabeled edge leaving a decision
+ * node (`approval`) follows only on the `approved` label; otherwise unlabeled
+ * edges always follow.
+ */
+const edgeConditionMet = (args: {
+  edge: OrchestrationEdge;
+  label: string | undefined;
+  isDecisionNode: boolean;
+}): boolean => {
+  const { edge, label, isDecisionNode } = args;
+  if (edge.condition !== undefined) return label === edge.condition;
+  if (isDecisionNode) return label === 'approved';
+  return true;
+};
+
+/**
+ * For an `all`-activation edge, whether every edge in its activation group has
+ * a completed source (a join barrier). Non-grouped edges always pass.
+ */
+const activationGroupSatisfied = (args: {
+  edge: OrchestrationEdge;
+  edges: OrchestrationEdge[];
+  completedNodes: Set<string>;
+}): boolean => {
+  const { edge, edges, completedNodes } = args;
+  if (!edge.activationGroup || edge.activationCondition !== 'all') return true;
+  return edges
+    .filter((e) => {
+      return e.to === edge.to && e.activationGroup === edge.activationGroup;
+    })
+    .every((e) => {
+      return completedNodes.has(e.from);
+    });
+};
+
 export const resolveNextNodes = (args: {
   completedNodeId: string;
   completedNodes: Set<string>;
   conditionLabels: Map<string, string>;
   edges: OrchestrationEdge[];
+  // Nodes whose branch is decided by a decision label (`approval`). An unlabeled
+  // edge leaving one of these follows only when the label is `approved` — the
+  // rejection/expiry paths must be modeled with explicit `condition` edges.
+  decisionNodeIds?: Set<string>;
 }): string[] => {
   const { completedNodeId, completedNodes, conditionLabels, edges } = args;
-  const next: string[] = [];
+  const isDecisionNode = args.decisionNodeIds?.has(completedNodeId) ?? false;
+  const label = conditionLabels.get(completedNodeId);
 
-  const outEdges = edges.filter((e) => {
-    return e.from === completedNodeId;
-  });
-
-  for (const edge of outEdges) {
-    if (edge.condition !== undefined) {
-      const label = conditionLabels.get(completedNodeId);
-      if (label !== edge.condition) continue;
-    }
-
-    if (edge.activationGroup && edge.activationCondition === 'all') {
-      const groupEdges = edges.filter((e) => {
-        return e.to === edge.to && e.activationGroup === edge.activationGroup;
-      });
-      const allSatisfied = groupEdges.every((e) => {
-        return completedNodes.has(e.from);
-      });
-      if (!allSatisfied) continue;
-    }
-
-    next.push(edge.to);
-  }
+  const next = edges
+    .filter((edge) => {
+      return (
+        edge.from === completedNodeId &&
+        edgeConditionMet({ edge, label, isDecisionNode }) &&
+        activationGroupSatisfied({ edge, edges, completedNodes })
+      );
+    })
+    .map((edge) => {
+      return edge.to;
+    });
 
   return [...new Set(next)];
 };

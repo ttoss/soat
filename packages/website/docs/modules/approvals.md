@@ -75,7 +75,9 @@ Evidence goes stale, so expiry is enforced server-side in **both directions**:
 
 ### Approve, reject, edit-then-approve
 
-- **Approve** resolves the item; the (frozen) proposed action is what executes.
+- **Approve** resolves the item and resumes its producer with the decision — an
+  `approval` orchestration node routes down its `approved` edge (where a
+  downstream `tool` node acts on the frozen or edited arguments).
 - **Edit-then-approve** replaces the arguments via the `arguments` field on the
   approve call. Edited arguments must be a JSON object; the original proposal is
   preserved in `proposed_action`, and the edit is recorded in `edited_arguments`.

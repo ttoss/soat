@@ -95,6 +95,7 @@ const REQUIRED_NODE_FIELDS: Partial<
   tool: 'toolId',
   transform: 'expression',
   condition: 'expression',
+  approval: 'toolId',
   memory_write: 'memoryId',
   delay: 'duration',
   loop: 'orchestrationId',

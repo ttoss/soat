@@ -99,6 +99,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memory_id` and `input_mapping` with `content`.                                        |
 | `condition`    | Evaluates a JSON Logic rule and emits a string label. Downstream edges use `condition: "<label>"` to select the active branch.      |
 | `human`        | Pauses the run and waits for external input. The run enters `awaiting_input` status with `required_action`.                         |
+| `approval`     | Proposes a guarded tool call and pauses for a human decision via the [Approvals](./approvals.md) queue. Uses `tool_id`, `arguments`, and `expires_in`. See [Approval Nodes](#approval-nodes).                         |
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
@@ -382,6 +383,30 @@ When a `human` node is reached, the run pauses and the GET run response includes
 ```
 
 `required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both pause reasons are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is currently no separate, independently-authenticated callback endpoint for webhook-receive nodes, so delivering the callback requires the same platform bearer token or API key as any other write to the run.
+
+### Approval Nodes
+
+An `approval` node proposes a guarded tool call and pauses the run for a human decision. Unlike a `human` node — which is resumed directly via `human-input` — an approval node files an [ApprovalItem](./approvals.md) at emit time and is resumed **only** by resolving that item through the [Approvals](./approvals.md) queue (`POST /approvals/{id}/approve` or `/reject`), or by server-side expiry.
+
+The run pauses with `required_action.type: "approval"`, carrying the created item:
+
+```json
+{
+  "required_action": {
+    "type": "approval",
+    "node_id": "gate",
+    "approval_id": "apr_x1y2z3a4b5c6d7e8",
+    "expires_at": "2026-07-15T16:00:00.000Z"
+  }
+}
+```
+
+The node's `arguments`, `reasoning`, `evidence`, and `predicted_impact` mappings are resolved against run state and **frozen** onto the item at emit time. On resolution the decision (`approved` | `rejected` | `expired`) becomes the node's branch label:
+
+- Edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route by the decision — the counterpart of a `condition` node's labels.
+- An **unlabeled** edge leaving an approval node follows **only on approval**; the rejection and expiry paths must be modeled with explicit labeled edges. If no edge matches a `rejected`/`expired` decision, the run ends at the node.
+
+Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./approvals.md#expiry-is-a-hard-gate)): an expired item can never execute, and the run routes down its `expired` edge.
 
 ### Common Errors
 
