@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.14.12](https://127.0.0.1/41729/git/ttoss/compare/v0.14.11...v0.14.12) (2026-07-14)
+
+### Bug Fixes
+
+* **server:** round-trip orchestration JSON Logic keys verbatim ([#532](https://127.0.0.1/41729/git/ttoss/issues/532)) ([5e824e2](https://127.0.0.1/41729/git/ttoss/commits/5e824e2541de661d3dad32b77e2d26ec64c71395))
+
+### Features
+
+* **tools:** scope mcp tools with a denied_actions denylist ([#533](https://127.0.0.1/41729/git/ttoss/issues/533)) ([838bab1](https://127.0.0.1/41729/git/ttoss/commits/838bab1dee653aa32e72c8203e1290609f47e8ef)), closes [#521](https://127.0.0.1/41729/git/ttoss/issues/521)
+
 ## [0.14.11](https://127.0.0.1/41729/git/ttoss/compare/v0.14.10...v0.14.11) (2026-07-14)
 
 ### Bug Fixes
