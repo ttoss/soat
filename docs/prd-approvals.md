@@ -75,24 +75,27 @@ else — lifecycle, expiry, permissions, API, events — is shared.
 
 ## 2. Implementation status
 
-All components not started:
+Phase 1 shipped (approvals queue core + `approval` orchestration node);
+Phases 2–4 not started:
 
-- [ ] `ApprovalItem` model with lifecycle (`apr_` prefix) — `src/lib/approvals.ts`
-- [ ] Approvals module core: emit/resolve, dedup, re-classification
-- [ ] `approval` orchestration node type (producer #1; upgrade path from `human`)
+- [x] `ApprovalItem` model with lifecycle (`apr_` prefix) — `src/lib/approvals.ts`
+- [x] Approvals module core: emit/resolve _(dedup key column exists; dedup logic
+      and edit-time re-classification are deferred to Phase 2 / guardrails)_
+- [x] `approval` orchestration node type (producer #1)
 - [ ] Tool-call interception via `approval_policy` on tool bindings (producer #2)
-- [ ] Server-side expiry enforcement via scheduler sweeper + execution-path re-check
-- [ ] Approve / reject / edit-then-approve workflows
+- [x] Server-side expiry enforcement via scheduler sweeper + execution-path re-check
+- [x] Approve / reject / edit-then-approve workflows
 - [ ] `ExceptionItem` model with severity routing (`exc_` prefix)
 - [ ] `ActivityEntry` feed (`acte_` prefix)
-- [ ] Webhook events for approvals and exceptions
-- [ ] REST endpoints, OpenAPI specs, permissions
+- [x] Webhook events for approvals (`approvals.created` / `.approved` / `.rejected`
+      / `.expired`) _(exception events deferred to Phase 3)_
+- [x] REST endpoints, OpenAPI specs, permissions
 
 ---
 
 ## 3. Implementation phases
 
-### Phase 1 — Approvals module + `approval` node + expiry
+### Phase 1 — Approvals module + `approval` node + expiry ✅ Done
 
 Convert risky actions into persistent, queryable queue items that cannot execute
 after their supporting evidence goes stale.
@@ -115,7 +118,7 @@ after their supporting evidence goes stale.
 **Unlock:** manage-by-exception operation — agents propose, humans decide from a
 queue — for orchestrated (scheduled/DAG) execution.
 
-### Phase 2 — Tool-call approval (`approval_policy` on tool bindings)
+### Phase 2 — Tool-call approval (`approval_policy` on tool bindings) — Not started
 
 Extend the same queue to *every* execution surface: chat sessions, direct
 generations, MCP.
@@ -139,7 +142,7 @@ generations, MCP.
 **Unlock:** allow/ask/deny as platform-level enforcement; guardrails hold on
 conversational surfaces where no orchestration runs.
 
-### Phase 3 — Exceptions and severity routing
+### Phase 3 — Exceptions and severity routing — Not started
 
 Failures and anomalies become first-class items, not log lines.
 
@@ -154,7 +157,7 @@ Failures and anomalies become first-class items, not log lines.
 
 **Unlock:** hybrid alert routing without polling.
 
-### Phase 4 — Activity feed
+### Phase 4 — Activity feed — Not started
 
 Every autonomous execution visible, for auditability.
 
