@@ -1,4 +1,5 @@
 ---
+description: "Reference for every SOAT server environment variable, with guidance for production deployments."
 sidebar_label: Configuration
 ---
 

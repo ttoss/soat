@@ -1,4 +1,5 @@
 ---
+description: "Deploy a multi-agent orchestration pipeline with a single Agent Formation template instead of many ordered API calls."
 sidebar_position: 16
 ---
 

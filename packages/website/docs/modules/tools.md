@@ -1,3 +1,7 @@
+---
+description: "Standalone, reusable tool definitions that SOAT agents call during generation."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

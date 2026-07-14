@@ -1,4 +1,5 @@
 ---
+description: "Walk through a realistic SOAT permissions setup from scratch with users, policies, and API keys."
 sidebar_position: 1
 ---
 

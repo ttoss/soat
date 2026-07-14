@@ -1,4 +1,5 @@
 ---
+description: "SOAT is a self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server."
 sidebar_position: 1
 ---
 

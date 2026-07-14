@@ -1,4 +1,5 @@
 ---
+description: "Compare SOAT's four client surfaces — REST API, CLI, TypeScript SDK, and MCP — and pick the one that fits where your code runs."
 sidebar_position: 3
 title: Choosing a Client Surface
 ---

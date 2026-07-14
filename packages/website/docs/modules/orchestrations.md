@@ -1,3 +1,7 @@
+---
+description: "DAG-based workflow definitions that chain agents, tools, and knowledge lookups into repeatable pipelines."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

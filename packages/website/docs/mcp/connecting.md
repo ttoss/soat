@@ -1,4 +1,5 @@
 ---
+description: "How to connect an MCP client to SOAT's Streamable HTTP endpoint."
 sidebar_position: 2
 ---
 

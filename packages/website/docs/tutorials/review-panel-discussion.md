@@ -1,4 +1,5 @@
 ---
+description: "Build an editorial review-panel workflow where reviewers check a draft's fundamentals and tone, then synthesize a verdict."
 sidebar_position: 15
 ---
 

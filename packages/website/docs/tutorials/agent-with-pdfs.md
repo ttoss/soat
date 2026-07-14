@@ -1,4 +1,5 @@
 ---
+description: "Build a SOAT agent that answers questions from a library of PDFs using ingestion and knowledge search."
 sidebar_position: 8
 ---
 

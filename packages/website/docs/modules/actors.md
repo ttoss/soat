@@ -1,3 +1,7 @@
+---
+description: "The Actors module represents people, bots, and external participants within a SOAT project, correlating them with external systems via external_id."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

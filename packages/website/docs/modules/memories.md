@@ -1,3 +1,7 @@
+---
+description: "Named containers for storing and retrieving knowledge entries within a SOAT project."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

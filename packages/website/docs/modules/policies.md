@@ -1,3 +1,7 @@
+---
+description: "Global, reusable IAM policy documents attached to users and API keys, defining fine-grained rules evaluated at request time."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

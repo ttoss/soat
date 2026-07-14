@@ -1,4 +1,5 @@
 ---
+description: "Connect SOAT to hosted LLM providers such as xAI, OpenAI, Anthropic, and Amazon Bedrock."
 sidebar_position: 3
 ---
 

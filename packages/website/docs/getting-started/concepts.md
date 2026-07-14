@@ -1,4 +1,5 @@
 ---
+description: "The mental model behind SOAT and how its core resources — projects, agents, sessions, and more — fit together."
 sidebar_position: 2
 ---
 

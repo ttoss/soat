@@ -1,4 +1,5 @@
 ---
+description: "Give a SOAT agent long-term memory that persists across sessions."
 sidebar_position: 5
 ---
 

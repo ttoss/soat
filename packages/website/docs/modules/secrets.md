@@ -1,3 +1,7 @@
+---
+description: "Encrypted storage for sensitive values such as API keys and credentials in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

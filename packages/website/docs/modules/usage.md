@@ -1,3 +1,7 @@
+---
+description: "Usage meters record the token cost of every LLM generation, attributing spend to a project, agent, and generation."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

@@ -1,4 +1,5 @@
 ---
+description: "Build a nested-agent pipeline where one agent coordinates sub-agents with SOAT tools."
 sidebar_position: 11
 ---
 

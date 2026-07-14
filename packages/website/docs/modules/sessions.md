@@ -1,3 +1,7 @@
+---
+description: "A simplified one-user-to-one-agent conversational interface owned by an agent."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

@@ -1,3 +1,7 @@
+---
+description: "MCP-only tools that give agents direct access to SOAT platform documentation."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

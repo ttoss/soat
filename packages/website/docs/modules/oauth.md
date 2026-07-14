@@ -1,3 +1,7 @@
+---
+description: "SOAT as a first-party OAuth 2.1 Authorization Server for its MCP endpoint."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

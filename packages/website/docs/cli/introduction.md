@@ -1,4 +1,5 @@
 ---
+description: "The @soat/cli command-line interface for the SOAT REST API, with every operation auto-generated as a sub-command from the OpenAPI specs."
 sidebar_position: 1
 slug: /cli
 ---

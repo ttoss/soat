@@ -1,4 +1,5 @@
 ---
+description: "Get SOAT running locally with Docker Compose in under five minutes."
 sidebar_position: 1
 slug: /getting-started
 ---

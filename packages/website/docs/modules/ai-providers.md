@@ -1,3 +1,7 @@
+---
+description: "Register and manage LLM provider configurations — model, base URL, and API-key secret — per project in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

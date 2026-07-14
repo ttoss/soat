@@ -1,3 +1,7 @@
+---
+description: "Unified semantic search across a project's documents and memory entries, ranked by vector similarity and tagged by source."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

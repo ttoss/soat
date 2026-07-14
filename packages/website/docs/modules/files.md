@@ -1,3 +1,7 @@
+---
+description: "File upload, download, metadata, and deletion over a pluggable storage backend — local filesystem, S3, or GCS."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

@@ -1,3 +1,7 @@
+---
+description: "Multi-tenant namespaces in SOAT; every document, file, actor, and conversation belongs to a project."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

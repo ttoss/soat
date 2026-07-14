@@ -1,3 +1,7 @@
+---
+description: "Traces record the full execution history of agent generations — every reasoning step and tool call."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
