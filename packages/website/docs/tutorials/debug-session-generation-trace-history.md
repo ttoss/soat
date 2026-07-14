@@ -27,7 +27,7 @@ This workflow uses [Sessions debugging links](/docs/modules/sessions#debugging-s
 
 - A running SOAT instance. Follow [Quick Start](/docs/getting-started) if needed.
 - New to the platform? Read [Key Concepts](/docs/getting-started/concepts).
-- For production hardening, read [Advanced Configuration](/docs/getting-started/advanced-config).
+- For production hardening, read [Configuration](/docs/getting-started/advanced-config).
 - [Ollama](https://ollama.com) available locally for this example.
 
 <Tabs groupId="client">

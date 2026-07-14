@@ -1,5 +1,5 @@
 ---
-sidebar_position: 10
+sidebar_position: 9
 ---
 
 import Tabs from '@theme/Tabs';
@@ -58,7 +58,7 @@ tutorial fails loudly in CI instead of silently passing on the wrong input.
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
 - For production hardening (storing provider keys as secrets), see
-  [Advanced Configuration](/docs/getting-started/advanced-config).
+  [Configuration](/docs/getting-started/advanced-config).
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
 - Provider credentials for **real** runs: an
   [OpenAI API key](https://platform.openai.com/docs) with access to a **vision**

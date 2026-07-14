@@ -117,6 +117,6 @@ See the [CLI commands reference](/docs/cli/commands) for the full surface.
 
 | Topic                                       | Description                          |
 | ------------------------------------------- | ------------------------------------ |
-| [Advanced Configuration](./advanced-config) | Production environment variables     |
-| [Modules](/docs/modules/iam)                | Deep-dives into every resource type  |
+| [Configuration](./advanced-config)          | Production environment variables     |
+| [Platform modules](/docs/modules)           | Deep-dives into every resource type  |
 | [API Reference](/docs/api)                  | OpenAPI-generated endpoint reference |

@@ -116,4 +116,4 @@ curl -X POST https://api.example.com/api/v1/documents \
 
 - **[Get started](/docs/getting-started)** — bring up SOAT with Docker Compose in five minutes
 - **[Key concepts](/docs/getting-started/concepts)** — the mental model behind projects, agents, and sessions
-- **[Modules](/docs/modules/iam)** — deep-dives into every resource type
+- **[Platform modules](/docs/modules)** — deep-dives into every resource type
