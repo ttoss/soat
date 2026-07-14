@@ -83,12 +83,14 @@ describe('Approval node (orchestration producer)', () => {
   };
 
   // The expiry sweeper dispatches its handler (which resumes the run) detached,
-  // so poll the observable side effect — the run leaving `awaiting_input` — with
-  // a bounded loop rather than reading once and racing the resume.
+  // so poll the observable side effect — the run reaching a terminal state — with
+  // a bounded loop rather than reading once and racing the resume (which
+  // transitions through a transient `running` state before it settles).
+  const TERMINAL = ['succeeded', 'failed', 'cancelled', 'expired'];
   const waitForRunSettled = async (runId: string) => {
-    for (let i = 0; i < 50; i += 1) {
+    for (let i = 0; i < 100; i += 1) {
       const run = await getRun(runId);
-      if (run.status !== 'awaiting_input') return run;
+      if (TERMINAL.includes(run.status)) return run;
       await new Promise((resolve) => {
         return setTimeout(resolve, 20);
       });
