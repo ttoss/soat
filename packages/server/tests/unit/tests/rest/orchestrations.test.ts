@@ -2128,7 +2128,7 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'state.items',
+              collection: 'state.input.items',
               item_variable: 'item',
               state_mapping: { 'state.results': { var: 'output.results' } },
             },
@@ -2160,7 +2160,7 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'state.items',
+              collection: 'state.input.items',
               item_variable: 'item',
               state_mapping: { 'state.results': { var: 'output.results' } },
             },
@@ -2192,7 +2192,7 @@ describe('Orchestrations', () => {
               id: 'loop',
               type: 'loop',
               orchestration_id: subOrchId,
-              collection: 'items', // no 'state.' prefix — resolveLoopCollection normalises it
+              collection: 'input.items', // no 'state.' prefix — resolveLoopCollection normalises it
               item_variable: 'item',
               state_mapping: { 'state.results': { var: 'output.results' } },
             },

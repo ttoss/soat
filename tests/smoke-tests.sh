@@ -932,7 +932,7 @@ echo "Orchestration-scoped auth: OK"
 
 echo "--- Validating orchestration graph (valid) ---"
 ORCH_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
-  --nodes '[{"id":"seed","type":"transform","expression":{"var":"theme"},"output_mapping":{"result":"state.theme"}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"input_mapping":{"t":{"var":"theme"}},"output_mapping":{"result":"state.title"}}]' \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.theme"},"state_mapping":{"state.theme":{"var":"output.result"}}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"input_mapping":{"t":{"var":"theme"}},"state_mapping":{"state.title":{"var":"output.result"}}}]' \
   --edges '[{"from":"seed","to":"decorate"}]')
 if ! printf '%s\n' "$ORCH_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
   echo "validate-orchestration did not report a valid graph as valid"
@@ -991,7 +991,7 @@ echo "--- Creating orchestration ---"
 ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration" \
-  --nodes '[{"id":"seed","type":"transform","expression":{"var":"theme"},"output_mapping":{"result":"state.theme"}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"output_mapping":{"result":"state.title"}}]' \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.theme"},"state_mapping":{"state.theme":{"var":"output.result"}}},{"id":"decorate","type":"transform","expression":{"cat":[{"var":"theme"}," sonnet"]},"state_mapping":{"state.title":{"var":"output.result"}}}]' \
   --edges '[{"from":"seed","to":"decorate"}]')
 ORCH_ID=$(printf '%s\n' "$ORCH_RESP" | jq -r '.id')
 if [ -z "$ORCH_ID" ] || [ "$ORCH_ID" = "null" ]; then
@@ -1046,12 +1046,13 @@ fi
 echo "Completed run: OK"
 
 echo "--- Run input is visible to node logic via the input namespace ---"
-# A snake_case input key must round-trip verbatim and resolve both flat
-# ({"var":"cycle_task"}) and namespaced ({"var":"input.cycle_task"}).
+# A snake_case input key must round-trip verbatim; it resolves only through the
+# namespaced form ({"var":"input.cycle_task"}) — a flat {"var":"cycle_task"}
+# is never satisfied by run input.
 ORCH_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-orchestration-input" \
-  --nodes '[{"id":"echo","type":"transform","expression":{"var":"input.cycle_task"},"output_mapping":{"result":"state.echoed"}}]' \
+  --nodes '[{"id":"echo","type":"transform","expression":{"var":"input.cycle_task"},"state_mapping":{"state.echoed":{"var":"output.result"}}}]' \
   --edges '[]')
 ORCH_INPUT_ID=$(printf '%s\n' "$ORCH_INPUT_RESP" | jq -r '.id')
 if [ -z "$ORCH_INPUT_ID" ] || [ "$ORCH_INPUT_ID" = "null" ]; then
@@ -1099,7 +1100,7 @@ echo "--- Creating human-review orchestration ---"
 HUMAN_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-human-orchestration" \
-  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"input_mapping":{"language":"pt-BR","documentId":{"var":"temaDocumentId"},"label":{"cat":["Tema: ",{"var":"titulo"}]}},"output_mapping":{"choice":"state.review"}},{"id":"finalize","type":"transform","expression":{"var":"review"},"output_mapping":{"result":"state.finalReview"}}]' \
+  --nodes '[{"id":"approval","type":"human","prompt":"Approve the poem?","options":["approve","reject"],"input_mapping":{"language":"pt-BR","documentId":{"var":"input.temaDocumentId"},"label":{"cat":["Tema: ",{"var":"input.titulo"}]}},"state_mapping":{"state.review":{"var":"output.choice"}}},{"id":"finalize","type":"transform","expression":{"var":"review"},"state_mapping":{"state.finalReview":{"var":"output.result"}}}]' \
   --edges '[{"from":"approval","to":"finalize"}]')
 HUMAN_ORCH_ID=$(printf '%s\n' "$HUMAN_ORCH_RESP" | jq -r '.id')
 if [ -z "$HUMAN_ORCH_ID" ] || [ "$HUMAN_ORCH_ID" = "null" ]; then
@@ -1186,7 +1187,7 @@ echo "--- Condition-branch skipped node executions ---"
 COND_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-cond-skip" \
-  --nodes '[{"id":"check","type":"condition","expression":{"if":[{">": [{"var":"score"},0.8]},"high","low"]}},{"id":"high_path","type":"transform","expression":"high-ran","output_mapping":{"result":"state.high"}},{"id":"low_path","type":"transform","expression":"low-ran","output_mapping":{"result":"state.low"}}]' \
+  --nodes '[{"id":"check","type":"condition","expression":{"if":[{">": [{"var":"input.score"},0.8]},"high","low"]}},{"id":"high_path","type":"transform","expression":"high-ran","state_mapping":{"state.high":{"var":"output.result"}}},{"id":"low_path","type":"transform","expression":"low-ran","state_mapping":{"state.low":{"var":"output.result"}}}]' \
   --edges '[{"from":"check","to":"high_path","condition":"high"},{"from":"check","to":"low_path","condition":"low"}]')
 COND_ORCH_ID=$(printf '%s\n' "$COND_ORCH_RESP" | jq -r '.id')
 if [ -z "$COND_ORCH_ID" ] || [ "$COND_ORCH_ID" = "null" ]; then
@@ -1222,7 +1223,7 @@ echo "--- Starting an async run (returns immediately) ---"
 ASYNC_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-async-orchestration" \
-  --nodes '[{"id":"start","type":"transform","expression":"async ok","output_mapping":{"result":"state.msg"}}]' \
+  --nodes '[{"id":"start","type":"transform","expression":"async ok","state_mapping":{"state.msg":{"var":"output.result"}}}]' \
   --edges '[]')
 ASYNC_ORCH_ID=$(printf '%s\n' "$ASYNC_ORCH_RESP" | jq -r '.id')
 
@@ -1263,7 +1264,7 @@ echo "--- Delay run resumes via the background scheduler ---"
 DELAY_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-delay-orchestration" \
-  --nodes '[{"id":"pause","type":"delay","duration":"3s","output_mapping":{"waited":"state.waited"}},{"id":"after","type":"transform","expression":"resumed","output_mapping":{"result":"state.after"}}]' \
+  --nodes '[{"id":"pause","type":"delay","duration":"3s","state_mapping":{"state.waited":{"var":"output.waited"}}},{"id":"after","type":"transform","expression":"resumed","state_mapping":{"state.after":{"var":"output.result"}}}]' \
   --edges '[{"from":"pause","to":"after"}]')
 DELAY_ORCH_ID=$(printf '%s\n' "$DELAY_ORCH_RESP" | jq -r '.id')
 
@@ -2534,7 +2535,7 @@ echo "--- Creating trigger target orchestration ---"
 TRIGGER_ORCH_RESP=$($SOAT_CLI create-orchestration \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name "smoke-trigger-orchestration" \
-  --nodes '[{"id":"seed","type":"transform","expression":{"var":"cycle"},"output_mapping":{"result":"state.cycle"}}]' \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.cycle"},"state_mapping":{"state.cycle":{"var":"output.result"}}}]' \
   --edges '[]')
 TRIGGER_ORCH_ID=$(printf '%s\n' "$TRIGGER_ORCH_RESP" | jq -r '.id')
 if [ -z "$TRIGGER_ORCH_ID" ] || [ "$TRIGGER_ORCH_ID" = "null" ]; then
@@ -2939,7 +2940,7 @@ echo "Session formation deleted."
 # an orchestration whose node references that agent via a ref, proving the ref is
 # resolved to the physical agent id inside the orchestration's nodes.
 echo "--- Formation: orchestration resource type (agent squad) ---"
-SQUAD_TEMPLATE="{\"resources\":{\"squadAgent\":{\"type\":\"agent\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Smoke Squad Agent\",\"instructions\":\"Summarize the input.\"}},\"squadFlow\":{\"type\":\"orchestration\",\"properties\":{\"name\":\"smoke-squad\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"topic\":{\"type\":\"string\"}}},\"nodes\":[{\"id\":\"summarize\",\"type\":\"agent\",\"agent_id\":{\"ref\":\"squadAgent\"},\"input_mapping\":{\"prompt\":{\"var\":\"topic\"}},\"output_mapping\":{\"content\":\"state.summary\"}}],\"edges\":[]}}},\"outputs\":{\"orchestrationId\":{\"ref\":\"squadFlow\"}}}"
+SQUAD_TEMPLATE="{\"resources\":{\"squadAgent\":{\"type\":\"agent\",\"properties\":{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Smoke Squad Agent\",\"instructions\":\"Summarize the input.\"}},\"squadFlow\":{\"type\":\"orchestration\",\"properties\":{\"name\":\"smoke-squad\",\"input_schema\":{\"type\":\"object\",\"properties\":{\"topic\":{\"type\":\"string\"}}},\"nodes\":[{\"id\":\"summarize\",\"type\":\"agent\",\"agent_id\":{\"ref\":\"squadAgent\"},\"input_mapping\":{\"prompt\":{\"var\":\"input.topic\"}},\"state_mapping\":{\"state.summary\":{\"var\":\"output.content\"}}}],\"edges\":[]}}},\"outputs\":{\"orchestrationId\":{\"ref\":\"squadFlow\"}}}"
 SQUAD_FORMATION_RESP=$($SOAT_CLI create-formation \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "smoke-formation-orchestration" \
