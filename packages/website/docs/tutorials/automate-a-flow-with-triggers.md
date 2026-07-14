@@ -1,4 +1,5 @@
 ---
+description: "Automate a SOAT flow by binding a manual, webhook, or schedule starter to an executable target with Triggers."
 sidebar_position: 17
 ---
 

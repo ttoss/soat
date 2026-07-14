@@ -1,3 +1,7 @@
+---
+description: "Complete reference for SOAT's six expression and templating pattern families and how each resolves at a different time so they compose without escaping."
+---
+
 # Expressions & Templating
 
 Every place SOAT lets you map, transform, or interpolate values uses one of six pattern families. Each family has a distinct syntax because each resolves at a **different time** — that is what lets them compose in a single string without escaping rules. This page is the complete reference.

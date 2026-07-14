@@ -1,3 +1,7 @@
+---
+description: "HTTP callbacks that deliver signed event notifications when project resources change."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

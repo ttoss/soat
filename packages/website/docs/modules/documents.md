@@ -1,3 +1,7 @@
+---
+description: "Store documents with per-chunk embedding vectors for semantic search across project content in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

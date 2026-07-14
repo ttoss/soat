@@ -1,4 +1,5 @@
 ---
+description: "Examples for common SOAT SDK operations across every module, using a typed SoatClient instance."
 sidebar_position: 2
 ---
 

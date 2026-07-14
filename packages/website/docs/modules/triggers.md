@@ -1,3 +1,7 @@
+---
+description: "Bind a starter — manual, webhook, or schedule — to an executable target in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

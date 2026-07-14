@@ -1,4 +1,5 @@
 ---
+description: "Overview of the SOAT REST API: versioned, authenticated HTTP endpoints that return JSON for every platform operation."
 sidebar_label: Overview
 sidebar_position: 1
 ---

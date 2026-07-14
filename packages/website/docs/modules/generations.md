@@ -1,3 +1,7 @@
+---
+description: "Generation records track individual LLM runs started by agents, including lifecycle status and failure details."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

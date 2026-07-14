@@ -1,4 +1,5 @@
 ---
+description: "Ingest images and audio into searchable documents using converter tools and ingestion rules."
 sidebar_position: 9
 ---
 

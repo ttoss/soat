@@ -1,4 +1,5 @@
 ---
+description: "SOAT exposes every resource as Model Context Protocol (MCP) tools that Claude, Copilot, and any MCP client can call directly."
 sidebar_position: 1
 slug: /mcp
 ---

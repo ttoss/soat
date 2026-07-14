@@ -1,3 +1,7 @@
+---
+description: "Human identities within a SOAT instance, authenticated via username and password."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

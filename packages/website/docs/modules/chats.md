@@ -1,3 +1,7 @@
+---
+description: "LLM completions with optional persistent configuration, supporting both stateless and per-chat modes in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

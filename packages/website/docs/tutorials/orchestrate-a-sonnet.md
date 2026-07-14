@@ -1,4 +1,5 @@
 ---
+description: "Build a poem pipeline with the Orchestrations module, invoking each agent directly from the graph."
 sidebar_position: 10
 ---
 

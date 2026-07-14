@@ -1,3 +1,7 @@
+---
+description: "Multi-party dialogues that group ordered, role-tagged messages with optional actor authorship within a SOAT project."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

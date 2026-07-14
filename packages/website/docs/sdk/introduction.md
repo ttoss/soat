@@ -1,4 +1,5 @@
 ---
+description: "The @soat/sdk typed TypeScript client for the SOAT REST API, generated from the OpenAPI specs."
 sidebar_position: 1
 slug: /sdk
 ---

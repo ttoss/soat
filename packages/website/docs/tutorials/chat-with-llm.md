@@ -1,4 +1,5 @@
 ---
+description: "Walk through a full back-and-forth conversation with an LLM in SOAT."
 sidebar_position: 2
 ---
 

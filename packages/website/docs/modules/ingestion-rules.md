@@ -1,3 +1,7 @@
+---
+description: "Route a file content_type to a converter tool so images, audio, and scanned PDFs can be ingested into searchable documents."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

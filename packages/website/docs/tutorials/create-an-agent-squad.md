@@ -1,4 +1,5 @@
 ---
+description: "Build and deploy a coordinated agent squad — researcher, writer, reviewer, and human approval — as a single Formation stack."
 sidebar_position: 14
 ---
 

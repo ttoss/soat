@@ -1,4 +1,5 @@
 ---
+description: "Common SOAT CLI workflows and command examples for agents, sessions, projects, and more."
 sidebar_position: 2
 ---
 

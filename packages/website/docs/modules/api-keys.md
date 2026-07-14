@@ -1,3 +1,7 @@
+---
+description: "Long-lived, project-scoped programmatic credentials that authenticate as their owning user, with optional policy restrictions."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

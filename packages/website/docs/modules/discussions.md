@@ -1,3 +1,7 @@
+---
+description: "Reusable deliberation configs where a panel of participants thinks over a topic and returns a synthesized outcome."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

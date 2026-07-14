@@ -1,3 +1,7 @@
+---
+description: "Generate numeric vector representations of text using SOAT's configured embedding model."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 

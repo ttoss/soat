@@ -1,4 +1,5 @@
 ---
+description: "A practical workflow for debugging SOAT by mapping sessions, generations, and traces together."
 sidebar_position: 6
 title: Debug Session, Generation, and Trace History
 ---

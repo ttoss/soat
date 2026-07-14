@@ -1,3 +1,7 @@
+---
+description: "Agents are persistent configurations for multi-step AI workflows that run reasoning-and-acting loops with tools in SOAT."
+---
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
