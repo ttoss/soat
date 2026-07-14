@@ -188,6 +188,72 @@ describe('caseTransform middleware', () => {
     );
   });
 
+  test('orchestration node JSON Logic bodies (expression, exit_condition) round-trip verbatim', async () => {
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'expression-passthrough-project' });
+    const projectId = projectRes.body.id;
+
+    // `expression` (transform/condition) and `exit_condition` (poll) are raw
+    // JSON Logic bodies: their inner object keys are author-authored data, not
+    // SOAT field names, so a `preserve`-wrapped literal must survive the round-
+    // trip with its snake_case keys intact — exactly like `state_mapping`.
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/orchestrations')
+      .send({
+        project_id: projectId,
+        name: 'json-logic-passthrough',
+        nodes: [
+          {
+            id: 'emit',
+            type: 'transform',
+            expression: {
+              preserve: { action_id: 'x', approval_expired: true },
+            },
+          },
+          {
+            id: 'watch',
+            type: 'poll',
+            tool_id: 'tool_placeholder',
+            interval: '30s',
+            exit_condition: {
+              '==': [{ var: 'response.job_state' }, 'done'],
+            },
+          },
+        ],
+        edges: [{ from: 'emit', to: 'watch' }],
+      });
+    expect(createRes.status).toBe(201);
+
+    const assertVerbatim = (body: Record<string, unknown>): void => {
+      const nodes = body.nodes as Array<Record<string, unknown>>;
+      const emit = nodes.find((n) => {
+        return n.id === 'emit';
+      })!;
+      const watch = nodes.find((n) => {
+        return n.id === 'watch';
+      })!;
+      expect(emit.expression).toEqual({
+        preserve: { action_id: 'x', approval_expired: true },
+      });
+      expect(watch.exit_condition).toEqual({
+        '==': [{ var: 'response.job_state' }, 'done'],
+      });
+    };
+
+    assertVerbatim(createRes.body);
+
+    const getRes = await authenticatedTestClient(adminToken).get(
+      `/api/v1/orchestrations/${createRes.body.id}`
+    );
+    expect(getRes.status).toBe(200);
+    assertVerbatim(getRes.body);
+
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/projects/${projectId}`
+    );
+  });
+
   test('non /api/v1 paths are not transformed', async () => {
     // The health or root endpoint should not be transformed
     const response = await testClient.get('/');

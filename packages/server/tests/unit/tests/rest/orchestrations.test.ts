@@ -788,6 +788,45 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.nodes.start.result).toEqual({ input: {} });
     });
 
+    test("a transform expression's data-object keys round-trip verbatim (no camelCase conversion)", async () => {
+      // F-9: the templating doc promises JSON Logic keys round-trip verbatim.
+      // A `preserve`-wrapped literal emitted by a transform must land in
+      // state.nodes.<id>.result with its snake_case keys intact — the engine
+      // must not camelCase `action_id` into `actionId`.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Preserve Verbatim Keys',
+          nodes: [
+            {
+              id: 'emit',
+              type: 'transform',
+              expression: {
+                preserve: { action_id: 'x', approval_expired: true },
+              },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      // The stored definition must keep the author's snake_case keys.
+      expect(createRes.body.nodes[0].expression).toEqual({
+        preserve: { action_id: 'x', approval_expired: true },
+      });
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      expect(runRes.body.state.nodes.emit.result).toEqual({
+        action_id: 'x',
+        approval_expired: true,
+      });
+      expect(runRes.body.state.nodes.emit.result.actionId).toBeUndefined();
+    });
+
     test('a state_mapping value that resolves to the whole state does not create a circular reference', async () => {
       // { var: 'state' } over the { output, state } context resolves to the
       // live state object; writing it back uncloned would nest state inside

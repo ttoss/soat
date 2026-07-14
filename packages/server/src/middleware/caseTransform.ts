@@ -134,6 +134,14 @@ const isToolCallArgsPassthroughPath = (path: string): boolean => {
 // case-transforming its keys would rewrite any underscore-bearing path
 // segment while the node's own `{"var": "proposed.action_id"}` reads keep the
 // original casing, silently desyncing the write from every downstream read.
+// 'expression' (transform/condition nodes) and 'exitCondition' (poll nodes)
+// are raw JSON Logic bodies whose inner object keys are author-authored data,
+// not SOAT field names. The templating doc promises those keys round-trip
+// verbatim: a `{"preserve": {"action_id": "x"}}` expression must land in
+// `state.nodes.<id>.result` as `action_id`, so a downstream
+// `{"var": "nodes.<id>.result.action_id"}` resolves it. Case-transforming them
+// would rewrite `action_id` to `actionId` while the `var` reads keep the
+// authored casing, so every underscore-bearing key resolves to null.
 // 'metadata' (documents) and 'input' (tools) are path-scoped pass-throughs.
 // This mirrors the outbound set below so each key round-trips unchanged.
 const buildBodySkipKeys = (path: string): Set<string> => {
@@ -144,6 +152,8 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     'execute',
     'mcp',
     'stateMapping',
+    'expression',
+    'exitCondition',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
@@ -160,8 +170,10 @@ const buildBodySkipKeys = (path: string): Set<string> => {
 // returned template diverge from what was stored and break `--parameter`
 // overrides that reference the original key. 'parameters' and 'mcp' mirror
 // the inbound set for the same reason (tool `parameters` is a free-form JSON
-// Schema; `mcp` carries HTTP header names, same as `execute`). 'state_mapping'
-// mirrors the inbound 'stateMapping' entry above.
+// Schema; `mcp` carries HTTP header names, same as `execute`). 'state_mapping',
+// 'expression', and 'exit_condition' mirror the inbound 'stateMapping' /
+// 'expression' / 'exitCondition' entries above so JSON Logic bodies round-trip
+// with their author-authored inner keys intact.
 const buildResponseSkipKeys = (path: string): Set<string> => {
   const keys = new Set([
     'template',
@@ -170,6 +182,8 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     'mcp',
     'preset_parameters',
     'state_mapping',
+    'expression',
+    'exit_condition',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) {
