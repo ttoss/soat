@@ -7,8 +7,11 @@ import {
 } from 'src/lib/approvals';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 // The approvals queue has no public create endpoint — items are platform-created
 // (an `approval` node in Phase 1; tool-call interception in Phase 2). There is
@@ -332,34 +335,16 @@ describe('Approvals', () => {
     let scopedToken: string;
 
     beforeAll(async () => {
-      const createUserRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/users')
-        .send({ username: 'approvalsscoped', password: 'scopedpass' });
-      const scopedUserId = createUserRes.body.id;
-
-      const policyRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/policies')
-        .send({
-          document: {
-            statement: [
-              {
-                effect: 'Allow',
-                action: [
-                  'approvals:ListApprovals',
-                  'approvals:GetApproval',
-                  'approvals:ResolveApproval',
-                ],
-                resource: [`soat:${projectId}:*:*`],
-              },
-            ],
-          },
-        });
-
-      await authenticatedTestClient(adminToken)
-        .put(`/api/v1/users/${scopedUserId}/policies`)
-        .send({ policy_ids: [policyRes.body.id] });
-
-      scopedToken = await loginAs('approvalsscoped', 'scopedpass');
+      scopedToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'approvalsscoped',
+        actions: [
+          'approvals:ListApprovals',
+          'approvals:GetApproval',
+          'approvals:ResolveApproval',
+        ],
+      });
     });
 
     test('lists approvals scoped to the project', async () => {

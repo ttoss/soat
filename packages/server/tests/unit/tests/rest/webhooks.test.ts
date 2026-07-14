@@ -1,6 +1,9 @@
 import { db } from 'src/db';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('Webhooks', () => {
@@ -643,6 +646,67 @@ describe('Webhooks', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+  });
+
+  // A project-scoped credential (project key / OAuth token) carries a policy
+  // whose resources are SRN-scoped to the project, not the wildcard `*`. The
+  // by-id handlers must authorize against a project SRN — not the implicit `*`
+  // default — or such a principal can list but never get/update/delete/rotate.
+  describe('SRN-scoped principal (project-scoped credential)', () => {
+    let scopedToken: string;
+
+    beforeAll(async () => {
+      scopedToken = await createScopedPrincipal({
+        adminToken,
+        projectId,
+        username: 'webhooksscoped',
+        actions: [
+          'webhooks:GetWebhook',
+          'webhooks:UpdateWebhook',
+          'webhooks:DeleteWebhook',
+          'webhooks:GetWebhookSecret',
+          'webhooks:RotateWebhookSecret',
+        ],
+      });
+    });
+
+    test('can get, update, rotate-secret, and delete webhooks', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/webhooks')
+        .send({
+          project_id: projectId,
+          name: 'Scoped Hook',
+          url: 'https://example.com/scoped',
+          events: ['*'],
+        });
+      const id = created.body.id;
+
+      const getRes = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/webhooks/${id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.id).toBe(id);
+
+      const secretRes = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/webhooks/${id}/secret`
+      );
+      expect(secretRes.status).toBe(200);
+
+      const putRes = await authenticatedTestClient(scopedToken)
+        .put(`/api/v1/webhooks/${id}`)
+        .send({ name: 'Renamed' });
+      expect(putRes.status).toBe(200);
+
+      const rotateRes = await authenticatedTestClient(scopedToken).post(
+        `/api/v1/webhooks/${id}/rotate-secret`
+      );
+      expect(rotateRes.status).toBe(200);
+
+      const delRes = await authenticatedTestClient(scopedToken).delete(
+        `/api/v1/webhooks/${id}`
+      );
+      expect(delRes.status).toBe(204);
     });
   });
 });
