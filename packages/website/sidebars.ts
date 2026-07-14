@@ -172,6 +172,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/multi-agent-orchestration',
         'tutorials/conditional-orchestration',
         'tutorials/orchestration-control-flow',
+        'tutorials/approval-gate',
         'tutorials/create-an-agent-squad',
         'tutorials/review-panel-discussion',
       ],

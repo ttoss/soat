@@ -28,6 +28,10 @@ branches on it.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Approval Gates - Step 7 (Approve it — the run resumes)](/docs/tutorials/approval-gate#step-7--approve-it--the-run-resumes)
+
 ## Data Model
 
 | Field                | Type            | Description                                                        |
