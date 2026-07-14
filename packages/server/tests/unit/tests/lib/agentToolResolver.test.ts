@@ -1705,6 +1705,39 @@ describe('resolveMcpTools - direct', () => {
     });
     expect(Object.keys(result)).toHaveLength(0);
   });
+
+  test('excludes denied actions when deniedActions is set', async () => {
+    mockMcpListWithTwoTools();
+    const result = await resolveMcpTools({
+      typedTool: {
+        mcp: { url: 'http://localhost:19999/mcp' },
+        deniedActions: ['delete_item'],
+      },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toEqual(['read_item']);
+    expect(result).not.toHaveProperty('delete_item');
+  });
+
+  test('denylist takes precedence over allowlist for the same action', async () => {
+    mockMcpListWithTwoTools();
+    const result = await resolveMcpTools({
+      typedTool: {
+        mcp: { url: 'http://localhost:19999/mcp' },
+        actions: ['read_item', 'delete_item'],
+        deniedActions: ['delete_item'],
+      },
+      buildContextHeaders: () => {
+        return {};
+      },
+      logToolCallingError: jest.fn(),
+    });
+    expect(Object.keys(result)).toEqual(['read_item']);
+    expect(result).not.toHaveProperty('delete_item');
+  });
 });
 
 describe('executeSoatTool - direct', () => {

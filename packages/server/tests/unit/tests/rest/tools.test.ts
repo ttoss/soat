@@ -1302,6 +1302,73 @@ describe('Tools', () => {
       expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
       expect(callRes.body.error.message).toMatch(/not available on this tool/i);
     });
+
+    test('an mcp tool round-trips its denied_actions denylist', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'denylist-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          denied_actions: ['delete_item', 'update_item'],
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.denied_actions).toEqual([
+        'delete_item',
+        'update_item',
+      ]);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.denied_actions).toEqual([
+        'delete_item',
+        'update_item',
+      ]);
+    });
+
+    test('calling an mcp tool with a non-denied action invokes the MCP server', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'denylist-allowed-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          denied_actions: ['delete_item'],
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'read_item', input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({ ok: true });
+    });
+
+    test('calling an mcp tool with a denied action returns 400 without contacting the server', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'denylist-blocked-mcp-tool',
+          type: 'mcp',
+          mcp: { url: mcpServerUrl },
+          denied_actions: ['delete_item'],
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ action: 'delete_item', input: {} });
+
+      expect(callRes.status).toBe(400);
+      expect(callRes.body.error.code).toBe('VALIDATION_FAILED');
+      expect(callRes.body.error.message).toMatch(/not available on this tool/i);
+    });
   });
 
   describe('output_mapping', () => {

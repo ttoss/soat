@@ -61,6 +61,9 @@ export class Tool extends Model {
   declare actions: string[] | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
+  declare deniedActions: string[] | null;
+
+  @Column({ type: DataType.JSONB, allowNull: true })
   declare presetParameters: object | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })

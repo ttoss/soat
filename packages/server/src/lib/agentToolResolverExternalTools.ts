@@ -69,6 +69,11 @@ export const resolveMcpTools = async (args: {
     // read-only scope over a read+write MCP server enforceable, not just a
     // prompt-level suggestion.
     actions?: string[] | null;
+    // Optional denylist of MCP tool names to hide. Applied after the allowlist,
+    // and takes precedence over it: a name in both lists is denied. This is the
+    // ergonomic way to scope a read+write server read-only — deny just the write
+    // tools instead of enumerating every read tool in the allowlist.
+    deniedActions?: string[] | null;
   };
   toolContext?: Record<string, string>;
   buildContextHeaders: (
@@ -79,6 +84,10 @@ export const resolveMcpTools = async (args: {
   const result: Record<string, Tool> = {};
   const allowedActions =
     args.typedTool.actions != null ? new Set(args.typedTool.actions) : null;
+  const deniedActions =
+    args.typedTool.deniedActions != null
+      ? new Set(args.typedTool.deniedActions)
+      : null;
   const mcpUrl = args.typedTool.mcp.url;
   const mcpHeaders: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -108,7 +117,9 @@ export const resolveMcpTools = async (args: {
     };
 
     const listedTools = (listBody.result?.tools ?? []).filter((mcpTool) => {
-      return !allowedActions || allowedActions.has(mcpTool.name);
+      if (allowedActions && !allowedActions.has(mcpTool.name)) return false;
+      if (deniedActions && deniedActions.has(mcpTool.name)) return false;
+      return true;
     });
 
     for (const mcpTool of listedTools) {

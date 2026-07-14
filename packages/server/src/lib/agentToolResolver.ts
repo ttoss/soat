@@ -621,7 +621,11 @@ const resolveMcpToolEntry = async (
       }),
     };
     return await resolveMcpTools({
-      typedTool: { mcp, actions: typedTool.actions },
+      typedTool: {
+        mcp,
+        actions: typedTool.actions,
+        deniedActions: typedTool.deniedActions,
+      },
       toolContext,
       buildContextHeaders,
       logToolCallingError,
@@ -652,6 +656,7 @@ type AgentToolRow = {
   mcp: { url: string; headers?: Record<string, string> } | null;
   discussion: { discussionId: string } | null;
   actions: string[] | null;
+  deniedActions: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
 };
@@ -784,6 +789,39 @@ const resolveToolByType = async (
  * dynamically to avoid a circular import with tools.ts, which imports this
  * module) before resolution — they have no persisted steps to resolve.
  */
+const orNull = <T>(value: T | null | undefined): T | null => {
+  return value ?? null;
+};
+
+const ephemeralDefinitionToRow = (
+  definition: InlineToolDefinition,
+  projectId: number
+): AgentToolRow => {
+  return {
+    publicId: '',
+    projectId,
+    type: definition.type ?? 'http',
+    name: definition.name,
+    description: orNull(definition.description),
+    parameters: orNull(
+      definition.parameters as Record<string, unknown> | undefined
+    ),
+    execute: orNull(definition.execute as AgentToolRow['execute']),
+    mcp: orNull(definition.mcp as AgentToolRow['mcp']),
+    discussion: definition.discussionId
+      ? { discussionId: definition.discussionId }
+      : null,
+    actions: orNull(definition.actions),
+    deniedActions: orNull(definition.deniedActions),
+    presetParameters: orNull(
+      definition.presetParameters as Record<string, unknown> | undefined
+    ),
+    outputMapping: orNull(
+      definition.outputMapping as Record<string, unknown> | undefined
+    ),
+  };
+};
+
 export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;
@@ -798,28 +836,7 @@ export const resolveEphemeralAgentTool = async (args: {
   const { assertEphemeralTypeSupported } = await import('./tools');
   assertEphemeralTypeSupported(args.definition);
 
-  const typedTool: AgentToolRow = {
-    publicId: '',
-    projectId: args.projectId,
-    type: args.definition.type ?? 'http',
-    name: args.definition.name,
-    description: args.definition.description ?? null,
-    parameters:
-      (args.definition.parameters as Record<string, unknown> | undefined) ??
-      null,
-    execute: (args.definition.execute as AgentToolRow['execute']) ?? null,
-    mcp: (args.definition.mcp as AgentToolRow['mcp']) ?? null,
-    discussion: args.definition.discussionId
-      ? { discussionId: args.definition.discussionId }
-      : null,
-    actions: args.definition.actions ?? null,
-    presetParameters:
-      (args.definition.presetParameters as
-        Record<string, unknown> | undefined) ?? null,
-    outputMapping:
-      (args.definition.outputMapping as Record<string, unknown> | undefined) ??
-      null,
-  };
+  const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
 
   const tools = await resolveToolByType(typedTool, args);
   return wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
