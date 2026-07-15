@@ -952,6 +952,17 @@ if ! printf '%s\n' "$ORCH_POLL_VALID_RESP" | jq -e '.valid == true' >/dev/null 2
 fi
 echo "Validate orchestration with poll node (valid): OK"
 
+echo "--- Validating orchestration graph with an authenticated webhook emit node (valid) ---"
+ORCH_WEBHOOK_VALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
+  --nodes '[{"id":"seed","type":"transform","expression":{"preserve":{"m":"x"}}},{"id":"alert","type":"webhook","mode":"emit","webhook_url":"https://alerts.example.com/hook","headers":{"X-Auth":"static-token"},"signing_secret":"shhh","require_delivery":true,"retry":{"max_attempts":3,"backoff":{"strategy":"exponential"}},"input_mapping":{"m":{"var":"nodes.seed.result.m"}}}]' \
+  --edges '[{"from":"seed","to":"alert"}]')
+if ! printf '%s\n' "$ORCH_WEBHOOK_VALID_RESP" | jq -e '.valid == true' >/dev/null 2>&1; then
+  echo "validate-orchestration did not accept a webhook emit node with headers/signing_secret/require_delivery"
+  printf '%s\n' "$ORCH_WEBHOOK_VALID_RESP"
+  exit 1
+fi
+echo "Validate orchestration with authenticated webhook emit node (valid): OK"
+
 echo "--- Validating orchestration graph with an incomplete poll node (invalid) ---"
 ORCH_POLL_INVALID_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI validate-orchestration \
   --nodes '[{"id":"wait","type":"poll"}]' \

@@ -98,6 +98,14 @@ export type OrchestrationNode = {
   // authenticate the payload.
   headers?: Record<string, string>;
   signingSecret?: string;
+  // webhook emit node — when true, a failed delivery (transport error or a
+  // non-2xx response) throws a retriable `ORCHESTRATION_WEBHOOK_DELIVERY_FAILED`
+  // instead of silently completing with `delivered: false`. Combined with the
+  // node's `retry` policy this gives a critical alert an observable, retried
+  // delivery: the failing attempt is recorded and, once attempts are exhausted,
+  // the run fails rather than dropping the alert. Defaults to false
+  // (fire-and-observe: the run continues regardless of delivery).
+  requireDelivery?: boolean;
   // sub_orchestration node
   orchestrationId?: string;
   // Shared: max iterations for cycles
