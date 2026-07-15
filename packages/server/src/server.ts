@@ -7,7 +7,6 @@ import { app } from './app';
 import { initializeDatabase, logDatabaseConnectionError } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
-import { seedDefaultPrices } from './lib/priceBook';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { createFirstAdminUser } from './lib/users';
 
@@ -22,9 +21,6 @@ const startServer = async () => {
   try {
     const database = await initializeDatabase(app);
     await database.sequelize.sync({ alter: true });
-    // Seed the shipped default price rows so usage cost is computed out of the
-    // box; idempotent, so operator overrides are never clobbered on restart.
-    await seedDefaultPrices();
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
