@@ -23,7 +23,7 @@
     "sync": "ttoss-postgresdb sync"
   },
   "dependencies": {
-    "@ttoss/postgresdb": "^0.9.9",
+    "@ttoss/postgresdb": "^0.10.0",
     "nanoid": "^5.1.16"
   },
   "devDependencies": {

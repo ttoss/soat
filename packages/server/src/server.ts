@@ -4,7 +4,11 @@ import createDebug from 'debug';
 
 import pkg from '../package.json' assert { type: 'json' };
 import { app } from './app';
-import { initializeDatabase, logDatabaseConnectionError } from './db';
+import {
+  initializeDatabase,
+  logDatabaseConnectionError,
+  syncSchemaWithAdvisoryLock,
+} from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { seedDefaultPrices } from './lib/priceBook';
@@ -21,7 +25,9 @@ const SOAT_PORT = process.env.PORT || 5047;
 const startServer = async () => {
   try {
     const database = await initializeDatabase(app);
-    await database.sequelize.sync({ alter: true });
+    // Serialize boot-time schema DDL across concurrently-starting tasks so
+    // sync({ alter: true }) runs exactly once and the rest see a no-op.
+    await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
     // Seed the shipped default price rows so usage cost is computed out of the
     // box; idempotent, so operator overrides are never clobbered on restart.
     await seedDefaultPrices();
