@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.2](https://github.com/ttoss/soat/compare/v0.15.1...v0.15.2) (2026-07-15)
+
+### Bug Fixes
+
+* **server:** document_paths prefix filter, boundary-gated write_memory, signed webhook emit ([#545](https://github.com/ttoss/soat/issues/545)) ([ed3965d](https://github.com/ttoss/soat/commit/ed3965dbb88be2ffebb4490f0e2aa8dbbd08fbc8))
+
+### Features
+
+* **server:** serialize boot-time schema sync with a Postgres advisory lock ([#544](https://github.com/ttoss/soat/issues/544)) ([d59bba7](https://github.com/ttoss/soat/commit/d59bba73b9ef7327360201b05b5383fce7b01334))
+
 ## [0.15.1](https://github.com/ttoss/soat/compare/v0.15.0...v0.15.1) (2026-07-15)
 
 ### Bug Fixes
