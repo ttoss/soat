@@ -13,13 +13,13 @@ describe('AI Providers', () => {
     const setup = await setupProjectWithUsers({
       prefix: 'aiprov',
       policyActions: [
-        'aiProviders:ListAiProviders',
-        'aiProviders:GetAiProvider',
-        'aiProviders:CreateAiProvider',
-        'aiProviders:UpdateAiProvider',
-        'aiProviders:DeleteAiProvider',
-        'aiProviders:GetAiProviderPrices',
-        'aiProviders:ManageAiProviderPrices',
+        'ai-providers:ListAiProviders',
+        'ai-providers:GetAiProvider',
+        'ai-providers:CreateAiProvider',
+        'ai-providers:UpdateAiProvider',
+        'ai-providers:DeleteAiProvider',
+        'ai-providers:GetAiProviderPrices',
+        'ai-providers:ManageAiProviderPrices',
       ],
       createOtherProject: true,
     });

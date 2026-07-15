@@ -50,7 +50,7 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
-    action: 'aiProviders:ListAiProviders',
+    action: 'ai-providers:ListAiProviders',
   });
 
   if (projectIds === null) {
@@ -78,7 +78,7 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: provider.projectId!,
-    action: 'aiProviders:GetAiProvider',
+    action: 'ai-providers:GetAiProvider',
     resource: buildSrn({
       projectPublicId: provider.projectId!,
       resourceType: 'aiProvider',
@@ -146,7 +146,7 @@ aiProvidersRouter.get(
   async (ctx: Context) => {
     const provider = await authorizeProviderPrices({
       ctx,
-      action: 'aiProviders:GetAiProviderPrices',
+      action: 'ai-providers:GetAiProviderPrices',
     });
     if (!provider) return;
 
@@ -159,7 +159,7 @@ aiProvidersRouter.put(
   async (ctx: Context) => {
     const provider = await authorizeProviderPrices({
       ctx,
-      action: 'aiProviders:ManageAiProviderPrices',
+      action: 'ai-providers:ManageAiProviderPrices',
     });
     if (!provider) return;
 
@@ -196,7 +196,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
   const targetProjectId = await resolveWriteProjectId({
     ctx,
     projectPublicId: body.projectId,
-    action: 'aiProviders:CreateAiProvider',
+    action: 'ai-providers:CreateAiProvider',
   });
   if (targetProjectId === null) return;
 
@@ -245,7 +245,7 @@ aiProvidersRouter.patch(
 
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: existing.projectId!,
-      action: 'aiProviders:UpdateAiProvider',
+      action: 'ai-providers:UpdateAiProvider',
       resource: buildSrn({
         projectPublicId: existing.projectId!,
         resourceType: 'aiProvider',
@@ -315,7 +315,7 @@ aiProvidersRouter.delete(
 
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: existing.projectId!,
-      action: 'aiProviders:DeleteAiProvider',
+      action: 'ai-providers:DeleteAiProvider',
       resource: buildSrn({
         projectPublicId: existing.projectId!,
         resourceType: 'aiProvider',

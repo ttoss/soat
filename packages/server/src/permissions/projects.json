@@ -2,6 +2,11 @@
   "module": "projects",
   "operations": [
     {
+      "operationId": "listProjects",
+      "action": "projects:ListProjects",
+      "description": "List projects the caller can access"
+    },
+    {
       "operationId": "createProject",
       "action": "projects:CreateProject",
       "description": "Create a new project (admin only)"

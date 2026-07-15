@@ -103,7 +103,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
-| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhook_url`) or pauses awaiting a callback (`mode: "receive"`). `emit` is fire-and-forget: the POST is not awaited, and delivery success or failure is not tracked or retried — the node completes immediately with `{ emitted: true }` regardless of the outcome. |
+| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhook_url`) or pauses awaiting a callback (`mode: "receive"`). An `emit` node may authenticate its POST: `headers` values support `{{secret:...}}` templating (resolved against the run's project), and `signing_secret` HMAC-SHA256 signs the body, sending the digest as `X-Soat-Signature: sha256=<hex>`. The POST is awaited and the node's artifact records delivery: `{ emitted: true, delivered: <bool>, status: <httpStatus>, signed: <bool> }` (a transport failure sets `delivered: false` without failing the run). See [Webhook auth](#webhook-authentication). |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
 
 ### Loops (collection iteration)
@@ -157,6 +157,28 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 ```
 
 > **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
+
+### Webhook authentication
+
+A `webhook` emit node can authenticate and sign its outbound POST so a receiver can trust the caller and the payload:
+
+- **`headers`** — extra request headers. Values support `{{secret:...}}` templating, resolved against the run's project at emit time, so an auth header carries a secret without embedding it in `webhook_url`. Use standard (hyphenated) header names — e.g. `X-Auth-Token`, `Authorization`.
+- **`signing_secret`** — when set, the exact serialized body is HMAC-SHA256 signed with this secret (itself `{{secret:...}}`-templatable) and the digest is sent as `X-Soat-Signature: sha256=<hex>`.
+
+The POST is awaited: the node's artifact records `{ emitted: true, delivered: <bool>, status: <httpStatus>, signed: <bool> }`. A transport failure sets `delivered: false` and the run continues (emit never fails the run), so a downstream `condition` node can branch on delivery.
+
+```json
+{
+  "id": "alert",
+  "type": "webhook",
+  "mode": "emit",
+  "webhook_url": "https://alerts.example.com/hook",
+  "headers": { "X-Auth-Token": "{{secret:sec_alertToken}}" },
+  "signing_secret": "{{secret:sec_alertSigning}}",
+  "input_mapping": { "reason": { "var": "state.exception" } },
+  "state_mapping": { "state.delivered": { "var": "output.delivered" } }
+}
+```
 
 ### Retry Policy
 

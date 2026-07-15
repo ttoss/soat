@@ -3,7 +3,15 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
-import { validatePolicyDocument } from './iam';
+import { validatePolicyActions, validatePolicyDocument } from './iam';
+
+const validatePolicy = (
+  document: PolicyDocument
+): { valid: boolean; errors: string[] } => {
+  const structural = validatePolicyDocument(document);
+  if (!structural.valid) return structural;
+  return validatePolicyActions(document);
+};
 
 export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
   return {
@@ -44,7 +52,7 @@ export const createPolicy = async (args: {
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
-  const validation = validatePolicyDocument(args.document);
+  const validation = validatePolicy(args.document);
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
   }
@@ -67,7 +75,7 @@ export const updatePolicy = async (args: {
 }): Promise<
   ReturnType<typeof mapPolicy> | { invalid: true; errors: string[] }
 > => {
-  const validation = validatePolicyDocument(args.document);
+  const validation = validatePolicy(args.document);
   if (!validation.valid) {
     return { invalid: true, errors: validation.errors };
   }

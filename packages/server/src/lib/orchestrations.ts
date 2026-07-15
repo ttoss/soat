@@ -89,6 +89,15 @@ export type OrchestrationNode = {
   // webhook node
   mode?: 'emit' | 'receive';
   webhookUrl?: string;
+  // webhook emit node — outbound request auth. `headers` values support
+  // `{{secret:...}}` templating (resolved against the run's project at emit
+  // time), so a caller can send an auth header without embedding the token in
+  // the URL. When `signingSecret` is set (also secret-templatable), the emit
+  // POST is HMAC-SHA256 signed over the exact serialized body and the digest is
+  // sent as the `X-Soat-Signature` header (`sha256=<hex>`), so the receiver can
+  // authenticate the payload.
+  headers?: Record<string, string>;
+  signingSecret?: string;
   // sub_orchestration node
   orchestrationId?: string;
   // Shared: max iterations for cycles

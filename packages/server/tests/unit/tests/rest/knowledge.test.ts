@@ -117,6 +117,84 @@ describe('Knowledge', () => {
       expect(result.project_id).toBe(projectId);
     });
 
+    test('matches a document stored via a path lacking a leading slash', async () => {
+      // Regression (F-10): documents whose path was persisted without a
+      // leading slash (e.g. ingested with a slash-less pathPrefix) must still
+      // be reachable by a leading-slash prefix. createDocument now normalizes
+      // the stored path, so `no-slash/nested.txt` is keyed as
+      // `/no-slash/nested.txt` and matches `document_paths: ['/no-slash/']`.
+      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
+        project_id: projectId,
+        content: 'A slash-less playbook document.',
+        filename: 'nested.txt',
+        path: 'no-slash/nested.txt',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          document_paths: ['/no-slash/'],
+        });
+      expect(response.status).toBe(200);
+      const match = response.body.results.find((r: { path?: string }) => {
+        return r.path === '/no-slash/nested.txt';
+      });
+      expect(match).toBeDefined();
+      expect(match.source_type).toBe('document');
+    });
+
+    test('matches when the prefix filter itself omits the leading slash', async () => {
+      // Regression (F-10): a prefix supplied without a leading slash
+      // (`docs/`) is normalized on the query side so it still matches the
+      // leading-slash-normalized stored path `/docs/sample.txt`.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          document_paths: ['docs/'],
+        });
+      expect(response.status).toBe(200);
+      const match = response.body.results.find((r: { path?: string }) => {
+        return r.path === '/docs/sample.txt';
+      });
+      expect(match).toBeDefined();
+    });
+
+    test('matches a deeply nested path by an intermediate folder prefix', async () => {
+      // Regression (F-10): a 3-level path must be reachable both by a shallow
+      // folder prefix and by its exact full path.
+      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
+        project_id: projectId,
+        content: 'Deep diagnosis contract playbook.',
+        filename: 'deep-diagnosis.md',
+        path: '/playbooks/data-analyst/deep-diagnosis.md',
+      });
+
+      const shallow = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({ project_id: projectId, document_paths: ['/playbooks/'] });
+      expect(shallow.status).toBe(200);
+      expect(
+        shallow.body.results.some((r: { path?: string }) => {
+          return r.path === '/playbooks/data-analyst/deep-diagnosis.md';
+        })
+      ).toBe(true);
+
+      const exact = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          document_paths: ['/playbooks/data-analyst/deep-diagnosis.md'],
+        });
+      expect(exact.status).toBe(200);
+      expect(
+        exact.body.results.some((r: { path?: string }) => {
+          return r.path === '/playbooks/data-analyst/deep-diagnosis.md';
+        })
+      ).toBe(true);
+    });
+
     test('returns 403 when user has no permission', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/knowledge/search')

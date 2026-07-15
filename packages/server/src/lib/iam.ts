@@ -1,3 +1,5 @@
+import { listAllActions, listModuleNames } from './permissionCatalog';
+
 export type Effect = 'Allow' | 'Deny';
 
 export type ConditionOperator =
@@ -178,6 +180,63 @@ export const validatePolicyDocument = (
 
   for (let i = 0; i < d.statement.length; i++) {
     validateStatement(d.statement[i], i, errors);
+  }
+
+  return { valid: errors.length === 0, errors };
+};
+
+/**
+ * True when `action` names a real, enforceable permission: the `*` super
+ * wildcard, a `module:*` wildcard for a module that exists, or an exact
+ * `module:Operation` present in the permission catalog (`src/permissions/*`).
+ */
+const isKnownAction = (action: string): boolean => {
+  if (action === '*') return true;
+  const wildcard = /^([a-zA-Z0-9_-]+):\*$/.exec(action);
+  if (wildcard) return listModuleNames().has(wildcard[1]);
+  return listAllActions().has(action);
+};
+
+/**
+ * Semantic validation layered on top of `validatePolicyDocument`'s structural
+ * checks: every `action` must name a real, enforceable permission. This is what
+ * stops a mis-named `Deny` (a typo or a guessed action) from being silently
+ * accepted and then never matching anything at evaluation time (fail-open at
+ * authoring). Applied only at authoring boundaries (policy create/update,
+ * formation validation) — never in the runtime evaluation path, so previously
+ * stored policies keep evaluating unchanged.
+ */
+const collectUnknownActionErrors = (args: {
+  stmt: unknown;
+  index: number;
+  errors: string[];
+}): void => {
+  const { stmt, index, errors } = args;
+  if (!stmt || typeof stmt !== 'object' || Array.isArray(stmt)) return;
+  const actions = (stmt as Record<string, unknown>).action;
+  if (!Array.isArray(actions)) return;
+  for (const act of actions) {
+    if (typeof act === 'string' && !isKnownAction(act)) {
+      errors.push(
+        `statement[${index}].action: "${act}" is not a known action — ` +
+          'see the Permissions Reference (/docs/modules/iam/permissions-reference)'
+      );
+    }
+  }
+};
+
+export const validatePolicyActions = (
+  doc: unknown
+): { valid: boolean; errors: string[] } => {
+  const errors: string[] = [];
+  if (!doc || typeof doc !== 'object' || Array.isArray(doc)) {
+    return { valid: true, errors };
+  }
+  const d = doc as Record<string, unknown>;
+  if (!Array.isArray(d.statement)) return { valid: true, errors };
+
+  for (const [index, stmt] of d.statement.entries()) {
+    collectUnknownActionErrors({ stmt, index, errors });
   }
 
   return { valid: errors.length === 0, errors };

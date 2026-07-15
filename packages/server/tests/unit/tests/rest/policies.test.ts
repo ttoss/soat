@@ -135,6 +135,70 @@ describe('Policies', () => {
       expect(response.status).toBe(400);
     });
 
+    test('returns 400 for an unknown/typo action string (F-11)', async () => {
+      // A mis-named action must be rejected at create time so a `Deny` cannot
+      // silently no-op against a nonexistent action.
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Typo Action Policy',
+          document: {
+            statement: [
+              {
+                effect: 'Deny',
+                action: ['memories:CreateMemoryEntryy'],
+                resource: ['*'],
+              },
+            ],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid policy document');
+      expect(
+        response.body.details.some((d: string) => {
+          return d.includes('memories:CreateMemoryEntryy');
+        })
+      ).toBe(true);
+    });
+
+    test('returns 400 for an action whose module does not exist (F-11)', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Unknown Module Policy',
+          document: {
+            statement: [{ effect: 'Allow', action: ['nonexistent:DoThing'] }],
+          },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toBe('Invalid policy document');
+    });
+
+    test('accepts a real memory-write action and a module wildcard (F-11)', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Valid Memory Policy',
+          document: {
+            statement: [
+              {
+                effect: 'Deny',
+                action: [
+                  'memories:CreateMemoryEntry',
+                  'memories:UpdateMemoryEntry',
+                ],
+                resource: ['*'],
+              },
+              { effect: 'Allow', action: ['memories:*'] },
+            ],
+          },
+        });
+
+      expect(response.status).toBe(201);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post('/api/v1/policies').send({
         document: {
@@ -235,7 +299,7 @@ describe('Policies', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['files:GetFile', 'files:ListFiles'],
+                action: ['files:GetFile', 'files:DeleteFile'],
               },
             ],
           },
@@ -248,7 +312,7 @@ describe('Policies', () => {
         'files:GetFile'
       );
       expect(response.body.document.statement[0].action).toContain(
-        'files:ListFiles'
+        'files:DeleteFile'
       );
     });
 

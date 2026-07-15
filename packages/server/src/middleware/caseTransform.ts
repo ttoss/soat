@@ -154,6 +154,13 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     'stateMapping',
     'expression',
     'exitCondition',
+    // A `headers` object is an HTTP header bag — its keys are header names
+    // (`X-Auth`, `Content-Type`) that must round-trip verbatim, exactly like
+    // the header names nested under `execute`/`mcp`. Case-transforming them
+    // would rewrite `X-Auth` to `_x-_auth` on the way out (and mangle any
+    // underscore-bearing name on the way in). Covers the orchestration webhook
+    // emit node's `headers`.
+    'headers',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
@@ -184,6 +191,9 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     'state_mapping',
     'expression',
     'exit_condition',
+    // Mirror of the inbound `headers` skip — HTTP header names round-trip
+    // verbatim in responses (e.g. the orchestration webhook node's `headers`).
+    'headers',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) {

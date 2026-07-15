@@ -1067,7 +1067,10 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
-      expect(ingestRes.body.path).toBe('archive/2024/prefixed.txt');
+      // The stored path is leading-slash normalized (F-10) so that a
+      // `document_paths` prefix filter (`/archive/`) can match it. Previously
+      // it was stored as `archive/2024/...` and never matched.
+      expect(ingestRes.body.path).toBe('/archive/2024/prefixed.txt');
     });
 
     test('a whitespace-only text file fails ingestion with no extractable text', async () => {

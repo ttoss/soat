@@ -72,6 +72,9 @@ type DispatchArgs = {
   nodeDefn: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
+  // The run's own project id — used for project-scoped secret resolution (e.g.
+  // webhook emit auth headers / HMAC signing).
+  projectId?: number;
   traceId: string | null;
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
@@ -89,8 +92,8 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
       return executeHumanNode({ node: nodeDefn, state });
     case 'approval':
       return executeApprovalNode({ node: nodeDefn, state });
-    case 'webhook':
-      return executeWebhookNode({ node: nodeDefn, state });
+    case 'delay':
+      return executeDelayNode({ node: nodeDefn });
     default:
       return null;
   }
@@ -99,11 +102,20 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
 const dispatchNodeExecution = async (
   args: DispatchArgs
 ): Promise<NodeExecutionResult> => {
-  const { nodeDefn, state, projectIds, traceId, authHeader, pollAttempt } =
-    args;
+  const {
+    nodeDefn,
+    state,
+    projectIds,
+    projectId,
+    traceId,
+    authHeader,
+    pollAttempt,
+  } = args;
   const simple = dispatchSimpleNode(args);
   if (simple !== null) return simple;
   switch (nodeDefn.type) {
+    case 'webhook':
+      return executeWebhookNode({ node: nodeDefn, state, projectId });
     case 'agent':
       return executeAgentNode({
         node: nodeDefn,
@@ -126,8 +138,6 @@ const dispatchNodeExecution = async (
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
     case 'memory_write':
       return executeMemoryWriteNode({ node: nodeDefn, state });
-    case 'delay':
-      return executeDelayNode({ node: nodeDefn });
     case 'loop':
       return executeLoopNode({
         node: nodeDefn,
@@ -157,6 +167,7 @@ export const executeNodeById = async (args: {
   nodes: OrchestrationNode[];
   state: Record<string, unknown>;
   projectIds: number[];
+  projectId?: number;
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
@@ -165,8 +176,16 @@ export const executeNodeById = async (args: {
   nodeDefn: OrchestrationNode;
   execResult: NodeExecutionResult;
 }> => {
-  const { nodeId, nodes, state, projectIds, traceId, authHeader, pollAttempt } =
-    args;
+  const {
+    nodeId,
+    nodes,
+    state,
+    projectIds,
+    projectId,
+    traceId,
+    authHeader,
+    pollAttempt,
+  } = args;
   const nodeDefn = nodes.find((n) => {
     return n.id === nodeId;
   });
@@ -180,6 +199,7 @@ export const executeNodeById = async (args: {
     nodeDefn,
     state,
     projectIds,
+    projectId,
     traceId,
     authHeader,
     pollAttempt,

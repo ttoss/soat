@@ -160,6 +160,67 @@ outputs:
 
       expect(res.status).toBe(401);
     });
+
+    test('policy resource with an unknown action is rejected (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadPolicy: {
+                type: 'policy',
+                properties: {
+                  document: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:Nonexistent'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((e: string | { message?: string }) => {
+          return JSON.stringify(e).includes('memories:Nonexistent');
+        })
+      ).toBe(true);
+    });
+
+    test('policy resource with only real actions validates (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              GoodPolicy: {
+                type: 'policy',
+                properties: {
+                  document: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:CreateMemoryEntry'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
   });
 
   // ── Plan ──────────────────────────────────────────────────────────────────

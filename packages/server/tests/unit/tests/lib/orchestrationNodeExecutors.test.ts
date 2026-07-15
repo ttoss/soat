@@ -443,38 +443,108 @@ describe('executeHumanNode', () => {
 // ── executeWebhookNode ─────────────────────────────────────────────────────
 
 describe('executeWebhookNode', () => {
-  test('emit mode without webhookUrl returns emitted artifact', () => {
-    const result = executeWebhookNode({
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  test('emit mode without webhookUrl returns emitted artifact', async () => {
+    const result = await executeWebhookNode({
       node: makeNode({ type: 'webhook', mode: 'emit' }),
       state: {},
     });
     expect(result).toEqual({ kind: 'artifact', artifact: { emitted: true } });
   });
 
-  test('undefined mode defaults to emit behaviour', () => {
-    const result = executeWebhookNode({
+  test('undefined mode defaults to emit behaviour', async () => {
+    const result = await executeWebhookNode({
       node: makeNode({ type: 'webhook' }),
       state: {},
     });
     expect(result).toEqual({ kind: 'artifact', artifact: { emitted: true } });
   });
 
-  test('emit mode fires fetch with webhookUrl (best-effort, no throw)', () => {
-    // fetch is fire-and-forget; any network error is swallowed by .catch()
-    expect(() => {
-      return executeWebhookNode({
-        node: makeNode({
-          type: 'webhook',
-          mode: 'emit',
-          webhookUrl: 'http://localhost:0/noop',
-        }),
-        state: { val: 1 },
-      });
-    }).not.toThrow();
+  test('emit awaits fetch and reports delivery status', async () => {
+    const calls: Array<{ url: string; init: RequestInit }> = [];
+    global.fetch = (async (url: string, init: RequestInit) => {
+      calls.push({ url, init });
+      return { ok: true, status: 202 } as Response;
+    }) as typeof fetch;
+
+    const result = await executeWebhookNode({
+      node: makeNode({
+        type: 'webhook',
+        mode: 'emit',
+        webhookUrl: 'http://example.test/hook',
+        inputMapping: { val: { var: 'val' } },
+      }),
+      state: { val: 1 },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe('http://example.test/hook');
+    expect(JSON.parse(calls[0].init.body as string)).toEqual({ val: 1 });
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { emitted: true, delivered: true, status: 202, signed: false },
+    });
   });
 
-  test('receive mode returns requires_action with prompt and context', () => {
-    const result = executeWebhookNode({
+  test('a transport failure records delivered=false without throwing', async () => {
+    global.fetch = (async () => {
+      throw new Error('network down');
+    }) as typeof fetch;
+
+    const result = await executeWebhookNode({
+      node: makeNode({
+        type: 'webhook',
+        mode: 'emit',
+        webhookUrl: 'http://example.test/hook',
+      }),
+      state: {},
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { emitted: true, delivered: false, signed: false },
+    });
+  });
+
+  test('emit sends literal headers and an HMAC signature (F-12)', async () => {
+    let sent: Record<string, string> = {};
+    let sentBody = '';
+    global.fetch = (async (_url: string, init: RequestInit) => {
+      sent = init.headers as Record<string, string>;
+      sentBody = init.body as string;
+      return { ok: true, status: 200 } as Response;
+    }) as typeof fetch;
+
+    const result = await executeWebhookNode({
+      node: makeNode({
+        type: 'webhook',
+        mode: 'emit',
+        webhookUrl: 'http://example.test/hook',
+        headers: { 'X-Auth': 'static-token' },
+        signingSecret: 'shhh',
+        inputMapping: { alert: { var: 'alert' } },
+      }),
+      state: { alert: 'exception' },
+    });
+
+    // Header is forwarded verbatim (no project scope → literal pass-through).
+    expect(sent['X-Auth']).toBe('static-token');
+    // Signature is HMAC-SHA256 over the exact serialized body.
+    const { createHmac } = await import('node:crypto');
+    const expected =
+      'sha256=' + createHmac('sha256', 'shhh').update(sentBody).digest('hex');
+    expect(sent['X-Soat-Signature']).toBe(expected);
+    expect(result).toMatchObject({
+      artifact: { signed: true, delivered: true },
+    });
+  });
+
+  test('receive mode returns requires_action with prompt and context', async () => {
+    const result = await executeWebhookNode({
       node: makeNode({
         type: 'webhook',
         mode: 'receive',

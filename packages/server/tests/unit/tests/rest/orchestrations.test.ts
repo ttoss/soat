@@ -2175,6 +2175,33 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.emitted).toBe(true);
     });
 
+    test('webhook emit node accepts headers and signing_secret (F-12)', async () => {
+      // Regression: these fields were previously rejected with
+      // VALIDATION_FAILED: Unknown field(s). They must now be accepted so an
+      // emit node can authenticate / sign its outbound POST.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Webhook Emit Signed',
+          nodes: [
+            {
+              id: 'wh',
+              type: 'webhook',
+              mode: 'emit',
+              webhook_url: 'http://example.test/hook',
+              headers: { 'X-Auth': 'token-123' },
+              signing_secret: 'shhh',
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+      const node = createRes.body.nodes[0];
+      expect(node.headers).toEqual({ 'X-Auth': 'token-123' });
+      expect(node.signing_secret).toBe('shhh');
+    });
+
     test('webhook receive mode pauses the run', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
