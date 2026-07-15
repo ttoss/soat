@@ -11,7 +11,6 @@ import {
 } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
-import { seedDefaultPrices } from './lib/priceBook';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { createFirstAdminUser } from './lib/users';
 
@@ -28,9 +27,6 @@ const startServer = async () => {
     // Serialize boot-time schema DDL across concurrently-starting tasks so
     // sync({ alter: true }) runs exactly once and the rest see a no-op.
     await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
-    // Seed the shipped default price rows so usage cost is computed out of the
-    // box; idempotent, so operator overrides are never clobbered on restart.
-    await seedDefaultPrices();
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
