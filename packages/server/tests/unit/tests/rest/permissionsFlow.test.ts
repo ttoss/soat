@@ -1210,7 +1210,7 @@ describe('Group 13: API key with project-scoped SRN policy — memories, ai-prov
           statement: [
             {
               effect: 'Allow',
-              action: ['memories:*', 'aiProviders:*'],
+              action: ['memories:*', 'ai-providers:*'],
               resource: [`soat:${projectId}:*:*`],
             },
           ],

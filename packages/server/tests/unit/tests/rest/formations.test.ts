@@ -160,6 +160,135 @@ outputs:
 
       expect(res.status).toBe(401);
     });
+
+    test('policy resource with an unknown action is rejected (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadPolicy: {
+                type: 'policy',
+                properties: {
+                  document: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:Nonexistent'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((e: string | { message?: string }) => {
+          return JSON.stringify(e).includes('memories:Nonexistent');
+        })
+      ).toBe(true);
+    });
+
+    test('policy resource with only real actions validates (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              GoodPolicy: {
+                type: 'policy',
+                properties: {
+                  document: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:CreateMemoryEntry'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
+
+    test('agent boundary_policy with an unknown action is rejected (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadBoundaryAgent: {
+                type: 'agent',
+                properties: {
+                  ai_provider_id: 'aip_placeholder000',
+                  boundary_policy: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:Nonexistent'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((e: string | { message?: string }) => {
+          return JSON.stringify(e).includes('memories:Nonexistent');
+        })
+      ).toBe(true);
+    });
+
+    test('agent boundary_policy with only real actions raises no action error (F-11)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              GoodBoundaryAgent: {
+                type: 'agent',
+                properties: {
+                  ai_provider_id: 'aip_placeholder000',
+                  boundary_policy: {
+                    statement: [
+                      {
+                        effect: 'Deny',
+                        action: ['memories:CreateMemoryEntry'],
+                        resource: ['*'],
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      // The boundary's action is valid, so no "not a known action" error for it.
+      expect(
+        res.body.errors.some((e: string | { message?: string }) => {
+          return JSON.stringify(e).includes('not a known action');
+        })
+      ).toBe(false);
+    });
   });
 
   // ── Plan ──────────────────────────────────────────────────────────────────

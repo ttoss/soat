@@ -4,6 +4,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import type { TypedAgent } from './agentGenerationHelpers';
+import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
 import {
@@ -222,10 +223,36 @@ export const buildKnowledgeMessages = async (args: {
   return [{ role: 'user', content: buildKnowledgeContent(knowledgeText) }];
 };
 
+/**
+ * The `write_memory` tool consolidates a fact — it may create a new entry or
+ * merge into (update) an existing one. It is a SOAT-native action, so the
+ * agent's `boundary_policy` must gate it the same way `buildSoatActionTool`
+ * gates REST-backed native tools. Because the write can either create or
+ * update, the boundary must allow **both** memory-write actions; a deny on
+ * either (including a wildcard `Deny action:["*"]`) blocks the tool
+ * fail-closed.
+ */
+const MEMORY_WRITE_ACTIONS = [
+  'memories:CreateMemoryEntry',
+  'memories:UpdateMemoryEntry',
+] as const;
+
+const findBoundaryDeniedMemoryWriteAction = (
+  boundaryPolicy: unknown
+): string | null => {
+  for (const iamAction of MEMORY_WRITE_ACTIONS) {
+    if (!isSoatActionAllowedByBoundary({ boundaryPolicy, iamAction })) {
+      return iamAction;
+    }
+  }
+  return null;
+};
+
 export const buildWriteMemoryTool = (args: {
   writeMemoryId: string;
   agentId: string;
   projectIds?: number[];
+  boundaryPolicy?: unknown;
 }): Tool => {
   return tool({
     description:
@@ -241,6 +268,13 @@ export const buildWriteMemoryTool = (args: {
       required: ['content'],
     }),
     execute: async ({ content }: { content: string }) => {
+      const deniedAction = findBoundaryDeniedMemoryWriteAction(
+        args.boundaryPolicy
+      );
+      if (deniedAction) {
+        log('write_memory: boundary policy denies %s', deniedAction);
+        return { error: `Forbidden: boundary policy denies ${deniedAction}` };
+      }
       const memory = await db.Memory.findOne({
         where: { publicId: args.writeMemoryId },
       });
@@ -278,6 +312,7 @@ export const buildKnowledgeTools = (args: {
       writeMemoryId: knowledgeConfig.writeMemoryId,
       agentId: args.agentId,
       projectIds: args.projectIds,
+      boundaryPolicy: args.typedAgent.boundaryPolicy,
     });
   }
 };

@@ -12,6 +12,7 @@ import {
   type IngestedDoc,
   resolveChunkConfig,
 } from './documentIngestionCore';
+import { normalizePath } from './filePaths';
 import { resolveIngestionRule } from './ingestionRules';
 import { mapDocument } from './knowledge';
 import {
@@ -265,9 +266,11 @@ export const enqueueDocumentIngestion = async (args: {
   }
 
   const filename = file.filename ?? 'document';
-  const docPath = args.pathPrefix
-    ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
-    : `/${filename}`;
+  const docPath = normalizePath(
+    args.pathPrefix
+      ? `${args.pathPrefix.replace(/\/$/, '')}/${filename}`
+      : `/${filename}`
+  );
 
   const doc = await db.Document.create({
     fileId: file.id,

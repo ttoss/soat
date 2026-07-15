@@ -519,6 +519,22 @@ components:
         webhook_url:
           type: string
           description: For webhook emit nodes — URL to POST to.
+        headers:
+          type: object
+          additionalProperties:
+            type: string
+          description: >
+            For webhook emit nodes — extra HTTP headers sent with the POST.
+            Values support `{{secret:...}}` templating, resolved against the
+            run's project at emit time, so an auth header can carry a secret
+            without embedding it in the URL.
+        signing_secret:
+          type: string
+          description: >
+            For webhook emit nodes — when set, the POST body is HMAC-SHA256
+            signed with this secret and the digest is sent as the
+            `X-Soat-Signature: sha256=<hex>` header so the receiver can
+            authenticate the payload. Supports `{{secret:...}}` templating.
         orchestration_id:
           x-soat-ref: orchestrations
           type: string

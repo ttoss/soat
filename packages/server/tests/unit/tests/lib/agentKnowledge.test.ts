@@ -70,6 +70,89 @@ describe('buildWriteMemoryTool', () => {
 
     expect(result).toEqual({ error: 'Memory mem_nonexistent not found' });
   });
+
+  test('a wildcard deny boundary blocks the write (fail-closed, F-11)', async () => {
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: memoryId,
+      agentId: 'agt_test',
+      boundaryPolicy: {
+        statement: [{ effect: 'Deny', action: ['*'], resource: ['*'] }],
+      },
+    });
+
+    const before = await authenticatedTestClient(adminToken).get(
+      `/api/v1/memory-entries?memory_id=${memoryId}`
+    );
+    const beforeCount = before.body.length;
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'Client name is Acme.' },
+      {} as never
+    );
+
+    expect(result).toEqual({
+      error: 'Forbidden: boundary policy denies memories:CreateMemoryEntry',
+    });
+
+    // Nothing was persisted — the deny is enforced, not merely reported.
+    const after = await authenticatedTestClient(adminToken).get(
+      `/api/v1/memory-entries?memory_id=${memoryId}`
+    );
+    expect(after.body.length).toBe(beforeCount);
+  });
+
+  test('a targeted deny on the memory-write action blocks the write (F-11)', async () => {
+    // Allow everything, then deny only the update action — the write tool
+    // consolidates (may update), so the targeted deny must still block it even
+    // though create is permitted.
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: memoryId,
+      agentId: 'agt_test',
+      boundaryPolicy: {
+        statement: [
+          { effect: 'Allow', action: ['*'], resource: ['*'] },
+          {
+            effect: 'Deny',
+            action: ['memories:UpdateMemoryEntry'],
+            resource: ['*'],
+          },
+        ],
+      },
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'Another fact.' },
+      {} as never
+    );
+
+    expect(result).toEqual({
+      error: 'Forbidden: boundary policy denies memories:UpdateMemoryEntry',
+    });
+  });
+
+  test('a boundary that allows the memory-write actions permits the write', async () => {
+    const writeMemoryTool = buildWriteMemoryTool({
+      writeMemoryId: memoryId,
+      agentId: 'agt_test',
+      boundaryPolicy: {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['memories:*'],
+            resource: ['*'],
+          },
+        ],
+      },
+    });
+
+    const result = await writeMemoryTool.execute!(
+      { content: 'A fact under an allowing boundary.' },
+      {} as never
+    );
+
+    expect(result).toMatchObject({ action: expect.any(String) });
+    expect((result as { error?: string }).error).toBeUndefined();
+  });
 });
 
 describe('buildKnowledgeMessages', () => {

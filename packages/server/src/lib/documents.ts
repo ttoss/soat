@@ -336,10 +336,10 @@ export const createDocument = async (args: {
 
   const provider = getActiveStorageProvider();
 
-  const effectivePath = args.path ?? args.filename ?? null;
+  const rawPath = args.path ?? args.filename ?? null;
   const file = await db.File.create({
     projectId: args.projectId,
-    path: effectivePath,
+    path: rawPath === null ? null : normalizePath(rawPath),
     filename: args.filename ?? 'document.txt',
     contentType: 'text/plain',
     size: Buffer.byteLength(args.content, 'utf-8'),

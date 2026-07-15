@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import type { PolicyDocument } from '../iam';
+import { validatePolicyActions } from '../iam';
 import {
   createPolicy,
   deletePolicy,
@@ -56,6 +57,18 @@ const validatePolicyProperties = (args: {
     pushRequiredFieldErrors({ spec, properties, basePath, errors });
   }
   pushFieldTypeErrors({ spec, properties, basePath, errors });
+
+  // The `document` is an IAM policy — validate its action strings here so a
+  // typo'd / nonexistent action is rejected at `validate-formation` time rather
+  // than silently accepted and failing open at evaluation. Structural validation
+  // (shape, effect, resource) is handled downstream by `createPolicy` /
+  // `updatePolicy`; here we only add the semantic action-name check.
+  const document = properties.document;
+  if (document != null && isObjectRecord(document)) {
+    for (const message of validatePolicyActions(document).errors) {
+      errors.push({ path: `${basePath}.document`, message });
+    }
+  }
 
   return errors;
 };

@@ -323,34 +323,7 @@ export const executeDelayNode = (args: {
   };
 };
 
-export const executeWebhookNode = (args: {
-  node: OrchestrationNode;
-  state: Record<string, unknown>;
-}): NodeExecutionResult => {
-  const { node, state } = args;
-  const mode = node.mode ?? 'emit';
-  if (mode === 'receive') {
-    const context = applyInputMapping(node.inputMapping, state);
-    return {
-      kind: 'requires_action',
-      type: 'webhook_receive',
-      nodeId: node.id,
-      prompt: 'Waiting for webhook callback.',
-      context,
-    };
-  }
-  if (node.webhookUrl) {
-    const payload = applyInputMapping(node.inputMapping, state);
-    fetch(node.webhookUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {
-      /* best-effort */
-    });
-  }
-  return { kind: 'artifact', artifact: { emitted: true } };
-};
+export { executeWebhookNode } from './orchestrationWebhookNode';
 
 const resolveLoopCollection = (args: {
   collectionPath: string;

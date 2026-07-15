@@ -104,7 +104,12 @@ const buildFileInclude = (args: {
   if (args.paths && args.paths.length > 0) {
     conditions.push({
       [Op.or]: args.paths.map((p) => {
-        return { path: { [Op.like]: `${p}%` } };
+        // Stored `File.path` values are always leading-slash normalized, so a
+        // prefix supplied without one (`playbooks/`) must be normalized the
+        // same way or the `LIKE '<prefix>%'` match never fires. The trailing
+        // slash is preserved to keep folder-prefix semantics intact.
+        const prefix = p.startsWith('/') ? p : `/${p}`;
+        return { path: { [Op.like]: `${prefix}%` } };
       }),
     });
   }

@@ -1120,7 +1120,7 @@ describe('MCP tools - happy path', () => {
         name: 'MCP Updated Policy',
         document: {
           statement: [
-            { effect: 'Allow', action: ['files:GetFile', 'files:ListFiles'] },
+            { effect: 'Allow', action: ['files:GetFile', 'files:DeleteFile'] },
           ],
         },
       });
@@ -1129,7 +1129,7 @@ describe('MCP tools - happy path', () => {
       const result = parseResult(res);
       expect(result.id).toBe(mcpPolicyId);
       expect(result.name).toBe('MCP Updated Policy');
-      expect(result.document.statement[0].action).toContain('files:ListFiles');
+      expect(result.document.statement[0].action).toContain('files:DeleteFile');
     });
 
     test('delete-policy deletes the policy', async () => {
