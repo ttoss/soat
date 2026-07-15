@@ -1,5 +1,6 @@
 import {
   buildDatabaseConfig,
+  getSchemaSyncLockTimeoutMs,
   logDatabaseConnectionError,
   SCHEMA_SYNC_LOCK_KEY,
   syncSchemaWithAdvisoryLock,
@@ -53,6 +54,46 @@ describe('buildDatabaseConfig', () => {
   });
 });
 
+describe('getSchemaSyncLockTimeoutMs', () => {
+  const savedTimeout = process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+
+  afterEach(() => {
+    if (savedTimeout === undefined) {
+      delete process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+    } else {
+      process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = savedTimeout;
+    }
+  });
+
+  test('defaults to 600000ms (10min) when the env var is unset', () => {
+    // The default must exceed a real migration's duration so a task merely
+    // waiting for a live peer's sync waits it out instead of aborting.
+    delete process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+    expect(getSchemaSyncLockTimeoutMs()).toBe(600_000);
+  });
+
+  test('honours a valid positive-integer override from the env var', () => {
+    process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = '30000';
+    expect(getSchemaSyncLockTimeoutMs()).toBe(30_000);
+  });
+
+  test.each([
+    ['not-a-number', 'not-a-number'],
+    ['zero', '0'],
+    ['negative', '-1'],
+    ['fractional', '1500.5'],
+    ['empty string', ''],
+  ])(
+    'falls back to the default for an invalid override (%s)',
+    (_label, value) => {
+      // A misconfigured bound must never become an unbounded (0) or nonsensical
+      // wait — any non-positive-integer value falls back to the safe default.
+      process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = value;
+      expect(getSchemaSyncLockTimeoutMs()).toBe(600_000);
+    }
+  );
+});
+
 describe('schema sync reboot idempotency', () => {
   test('sync({ alter: true }) does not crash when run again against an already-synced schema', async () => {
     // Regression guard: an auto-generated index/constraint name longer than
@@ -103,6 +144,47 @@ describe('syncSchemaWithAdvisoryLock', () => {
       await syncPromise;
       expect(synced).toBe(true);
     });
+  });
+
+  test('fails fast with a lock-timeout error when the lock is held past the bound', async () => {
+    // Regression guard for PR #549: a peer SIGKILLed mid-boot leaves the
+    // session advisory lock held until its backend is reaped (minutes behind a
+    // pooler/Aurora). Without a bound every later boot blocks forever and the
+    // whole deploy deadlocks. The bound turns that into a fast, logged failure
+    // that propagates to startServer's catch -> process.exit(1). Here we hold
+    // the lock on one connection, set a tiny bound, and assert the sync rejects
+    // quickly with a lock-timeout error instead of hanging indefinitely.
+    const saved = process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+    process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = '250';
+
+    try {
+      await sequelize.transaction(async (t) => {
+        await sequelize.query('SELECT pg_advisory_lock(:key)', {
+          replacements: { key: SCHEMA_SYNC_LOCK_KEY },
+          transaction: t,
+        });
+
+        const startedAt = Date.now();
+        await expect(syncSchemaWithAdvisoryLock({ sequelize })).rejects.toThrow(
+          /lock timeout/i
+        );
+        // The bound is what ends the wait — the call must return in well under
+        // the multi-minute backend-reap window, proving it did not block on the
+        // held lock indefinitely.
+        expect(Date.now() - startedAt).toBeLessThan(10_000);
+
+        await sequelize.query('SELECT pg_advisory_unlock(:key)', {
+          replacements: { key: SCHEMA_SYNC_LOCK_KEY },
+          transaction: t,
+        });
+      });
+    } finally {
+      if (saved === undefined) {
+        delete process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+      } else {
+        process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS = saved;
+      }
+    }
   });
 });
 
