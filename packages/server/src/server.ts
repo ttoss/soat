@@ -2,9 +2,13 @@ import 'dotenv/config';
 
 import createDebug from 'debug';
 
-import pkg from '../package.json' assert { type: 'json' };
+import pkg from '../package.json' with { type: 'json' };
 import { app } from './app';
-import { initializeDatabase, logDatabaseConnectionError } from './db';
+import {
+  initializeDatabase,
+  logDatabaseConnectionError,
+  syncSchemaWithAdvisoryLock,
+} from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
@@ -20,7 +24,9 @@ const SOAT_PORT = process.env.PORT || 5047;
 const startServer = async () => {
   try {
     const database = await initializeDatabase(app);
-    await database.sequelize.sync({ alter: true });
+    // Serialize boot-time schema DDL across concurrently-starting tasks so
+    // sync({ alter: true }) runs exactly once and the rest see a no-op.
+    await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
     // Start the durable orchestration scheduler once the database is ready so
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).

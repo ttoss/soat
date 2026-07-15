@@ -1,12 +1,44 @@
 import { models } from '@soat/postgresdb';
 import type { App } from '@ttoss/http-server';
-import { initialize } from '@ttoss/postgresdb';
+import type { Sequelize } from '@ttoss/postgresdb';
+import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
 
 export { models };
 
 export type DB = Awaited<ReturnType<typeof initialize<typeof models>>>;
 
 export let db: DB;
+
+/**
+ * Fixed 64-bit key for the boot-time schema-sync advisory lock.
+ *
+ * Every task contends on this one constant so exactly one performs the DDL —
+ * it must stay identical across releases, otherwise concurrently-booting tasks
+ * would take different locks and stop serializing. Arbitrary but stable value
+ * standing for "soat schema sync".
+ */
+export const SCHEMA_SYNC_LOCK_KEY = 0x50a7_5c_00;
+
+/**
+ * Run boot-time `sync({ alter: true })` behind a Postgres session-level
+ * advisory lock so concurrently-starting tasks serialize instead of racing.
+ *
+ * `sync({ alter })` emits ALTER TABLE; if two tasks run it at once (rolling
+ * deploy batch >= 2 at scale, auto-scale-out, instance refresh) they can
+ * deadlock or leave the schema inconsistent. The advisory lock makes
+ * all-but-one boot wait, so the DDL runs exactly once and the rest see a
+ * no-op. The lock/unlock pair is taken on a single dedicated connection and
+ * always released (success or failure) by `syncWithAdvisoryLock`.
+ */
+export const syncSchemaWithAdvisoryLock = async (args: {
+  sequelize: Sequelize;
+}) => {
+  await syncWithAdvisoryLock({
+    sequelize: args.sequelize,
+    key: SCHEMA_SYNC_LOCK_KEY,
+    sync: { alter: true },
+  });
+};
 
 /**
  * Build the options passed to `@ttoss/postgresdb`'s `initialize`.

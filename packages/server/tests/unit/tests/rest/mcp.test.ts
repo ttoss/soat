@@ -12,6 +12,10 @@ import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 let httpServer: http.Server;
 
 beforeAll(async () => {
+  // Bind the worker's own port (set per Jest worker in setupTests.ts) so this
+  // matches the base URL src/mcp/server.ts froze at import — the MCP tools'
+  // soat self-calls target it. The per-worker port keeps this listener from
+  // colliding with tools.test.ts, which needs its worker's port unbound.
   const port = parseInt(process.env.PORT || '15047', 10);
   await new Promise<void>((resolve, reject) => {
     httpServer = app.listen(port, resolve);
