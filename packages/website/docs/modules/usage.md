@@ -82,7 +82,7 @@ Usage is metered for agent generations — including [conversations](./conversat
 
 Each meter records `price_id` — the exact price-book row that produced its `cost_usd`. Because cost is frozen and the price row is versioned, a receipt is auditable to the precise price applied even after prices change.
 
-SOAT ships **global default prices** for common provider/model pairs (seeded at startup) so cost is computed out of the box. Prices are managed where their scope lives:
+SOAT ships **no default prices** — until an operator adds a price row, cost is computed as `null` (tokens are still captured) rather than from indicative, potentially stale rates. Prices are managed where their scope lives:
 
 - **Global defaults** — admins via `PUT /api/v1/usage/prices`. `GET /api/v1/usage/prices` lists only these, so no project sees another's rates.
 - **Project + provider-slug** — project members via [`PUT /api/v1/projects/{project_id}/prices`](./projects.md), pricing all of a project's instances of a slug at once.

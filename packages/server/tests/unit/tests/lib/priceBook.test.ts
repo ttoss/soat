@@ -1,16 +1,10 @@
 import { db } from 'src/db';
-import {
-  computeCostUsd,
-  DEFAULT_PRICE_EFFECTIVE_FROM,
-  getEffectivePrice,
-  seedDefaultPrices,
-} from 'src/lib/priceBook';
+import { computeCostUsd, getEffectivePrice } from 'src/lib/priceBook';
 
 /**
- * Pure cost arithmetic plus the DB-backed effective-price selection and default
- * seeding. computeCostUsd/getEffectivePrice/seedDefaultPrices have no direct
- * REST entry point (they run inside the metering write path and at startup), so
- * they are covered here directly.
+ * Pure cost arithmetic plus the DB-backed effective-price selection.
+ * computeCostUsd/getEffectivePrice have no direct REST entry point (they run
+ * inside the metering write path), so they are covered here directly.
  */
 describe('priceBook', () => {
   describe('computeCostUsd', () => {
@@ -55,26 +49,6 @@ describe('priceBook', () => {
           cachedTokens: 0,
         })
       ).toBeNull();
-    });
-  });
-
-  describe('seedDefaultPrices', () => {
-    test('seeds shipped defaults and is idempotent', async () => {
-      await seedDefaultPrices();
-      const first = await db.PriceBook.count();
-      expect(first).toBeGreaterThan(0);
-
-      const gpt4o = await getEffectivePrice({
-        provider: 'openai',
-        model: 'gpt-4o',
-        aiProviderId: null,
-        projectId: null,
-        at: new Date(),
-      });
-      expect(gpt4o).not.toBeNull();
-
-      await seedDefaultPrices();
-      expect(await db.PriceBook.count()).toBe(first);
     });
   });
 
@@ -132,8 +106,7 @@ describe('priceBook', () => {
 
     test('resolves instance > project+slug > global in priority order', async () => {
       // A valid provider slug (the AiProvider.provider column is constrained)
-      // with a model that is not among the seeded defaults, so these rows stay
-      // isolated from seedDefaultPrices.
+      // with a model unique to this test, so these rows stay isolated.
       const provider = 'openai';
       const model = 'tier-test-model';
       const past = new Date('2020-01-01T00:00:00.000Z');
@@ -213,9 +186,5 @@ describe('priceBook', () => {
       });
       expect(globalOnly?.inputPricePerM).toBe('1');
     });
-  });
-
-  test('DEFAULT_PRICE_EFFECTIVE_FROM is in the past so defaults apply', () => {
-    expect(DEFAULT_PRICE_EFFECTIVE_FROM.getTime()).toBeLessThan(Date.now());
   });
 });

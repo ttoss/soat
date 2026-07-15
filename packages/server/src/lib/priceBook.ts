@@ -3,15 +3,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  DEFAULT_PRICE_EFFECTIVE_FROM,
-  DEFAULT_PRICES,
-} from './priceBookDefaults';
-
-export {
-  DEFAULT_PRICE_EFFECTIVE_FROM,
-  DEFAULT_PRICES,
-} from './priceBookDefaults';
 
 const log = createDebug('soat:priceBook');
 
@@ -49,40 +40,6 @@ const mapPrice = (
     effectiveFrom: price.effectiveFrom,
     createdAt: price.createdAt,
   };
-};
-
-/**
- * Idempotently inserts the shipped default price rows. Existing rows for a
- * `(provider, model, effectiveFrom)` key are left untouched, so re-running on
- * startup never overwrites operator changes.
- */
-export const seedDefaultPrices = async (): Promise<void> => {
-  for (const price of DEFAULT_PRICES) {
-    await db.PriceBook.findOrCreate({
-      where: {
-        aiProviderId: null,
-        projectId: null,
-        provider: price.provider,
-        model: price.model,
-        effectiveFrom: DEFAULT_PRICE_EFFECTIVE_FROM,
-      },
-      defaults: {
-        aiProviderId: null,
-        projectId: null,
-        provider: price.provider,
-        model: price.model,
-        inputPricePerM: String(price.inputPricePerM),
-        outputPricePerM: String(price.outputPricePerM),
-        cachedPricePerM:
-          price.cachedPricePerM === null ? null : String(price.cachedPricePerM),
-        effectiveFrom: DEFAULT_PRICE_EFFECTIVE_FROM,
-      },
-    });
-  }
-  log(
-    'seedDefaultPrices: ensured %d default price rows',
-    DEFAULT_PRICES.length
-  );
 };
 
 /**
