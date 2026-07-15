@@ -124,6 +124,17 @@ const config: Config = {
 
   plugins: [
     [
+      '@docusaurus/plugin-client-redirects',
+      {
+        redirects: [
+          {
+            from: '/docs/getting-started/advanced-config',
+            to: '/docs/self-hosting/configuration',
+          },
+        ],
+      },
+    ],
+    [
       'docusaurus-plugin-openapi-docs',
       {
         id: 'api',

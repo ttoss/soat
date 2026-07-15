@@ -25,7 +25,7 @@ By the end you will understand how orchestration state, direct agent nodes, tran
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, tools, and runs before diving in.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/getting-started/advanced-config).
+- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
 - Server is at `http://localhost:5047`.
 - [Ollama](https://ollama.com) running locally with a chat model available. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
