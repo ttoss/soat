@@ -10,30 +10,20 @@ import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 let httpServer: http.Server;
-let previousPort: string | undefined;
 
 beforeAll(async () => {
-  // Bind an ephemeral port instead of the fixed default (15047). Jest runs test
-  // files in parallel worker processes but a bound port is OS-global, so
-  // squatting 15047 here would collide with tools.test.ts, whose soat/pipeline
-  // self-call tests fetch http://localhost:15047 expecting it to be unreachable
-  // (→ 500 / PIPELINE_STEP_FAILED). Point process.env.PORT at the actual bound
-  // port so this file's own soat self-calls still reach this listener.
-  previousPort = process.env.PORT;
+  // Bind the worker's own port (set per Jest worker in setupTests.ts) so this
+  // matches the base URL src/mcp/server.ts froze at import — the MCP tools'
+  // soat self-calls target it. The per-worker port keeps this listener from
+  // colliding with tools.test.ts, which needs its worker's port unbound.
+  const port = parseInt(process.env.PORT || '15047', 10);
   await new Promise<void>((resolve, reject) => {
-    httpServer = app.listen(0, () => {
-      const address = httpServer.address();
-      const boundPort =
-        typeof address === 'object' && address ? address.port : 0;
-      process.env.PORT = String(boundPort);
-      resolve();
-    });
+    httpServer = app.listen(port, resolve);
     httpServer.once('error', reject);
   });
 });
 
 afterAll(async () => {
-  process.env.PORT = previousPort;
   await new Promise<void>((resolve, reject) => {
     if (!httpServer) return resolve();
     httpServer.close((err) => {
