@@ -10,16 +10,30 @@ import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 let httpServer: http.Server;
+let previousPort: string | undefined;
 
 beforeAll(async () => {
-  const port = parseInt(process.env.PORT || '15047', 10);
+  // Bind an ephemeral port instead of the fixed default (15047). Jest runs test
+  // files in parallel worker processes but a bound port is OS-global, so
+  // squatting 15047 here would collide with tools.test.ts, whose soat/pipeline
+  // self-call tests fetch http://localhost:15047 expecting it to be unreachable
+  // (→ 500 / PIPELINE_STEP_FAILED). Point process.env.PORT at the actual bound
+  // port so this file's own soat self-calls still reach this listener.
+  previousPort = process.env.PORT;
   await new Promise<void>((resolve, reject) => {
-    httpServer = app.listen(port, resolve);
+    httpServer = app.listen(0, () => {
+      const address = httpServer.address();
+      const boundPort =
+        typeof address === 'object' && address ? address.port : 0;
+      process.env.PORT = String(boundPort);
+      resolve();
+    });
     httpServer.once('error', reject);
   });
 });
 
 afterAll(async () => {
+  process.env.PORT = previousPort;
   await new Promise<void>((resolve, reject) => {
     if (!httpServer) return resolve();
     httpServer.close((err) => {
