@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.1](https://github.com/ttoss/soat/compare/v0.15.0...v0.15.1) (2026-07-15)
+
+### Bug Fixes
+
+* **formations:** accept a parameterized cron on schedule triggers (resolve before required-check) ([#542](https://github.com/ttoss/soat/issues/542)) ([3066f6d](https://github.com/ttoss/soat/commit/3066f6daba0c53980672ca2a537154592b1c2cf7)), closes [#541](https://github.com/ttoss/soat/issues/541)
+* **iam:** project-scoped tokens can resolve/get/update, not just list (approvals + secrets + triggers + webhooks) ([#541](https://github.com/ttoss/soat/issues/541)) ([91a0254](https://github.com/ttoss/soat/commit/91a02540bd75f97919c4564f7a32c65bb581dfbb))
+
 # [0.15.0](https://github.com/ttoss/soat/compare/v0.14.12...v0.15.0) (2026-07-14)
 
 ### Features
