@@ -195,6 +195,79 @@ describe('Knowledge', () => {
       ).toBe(true);
     });
 
+    test('matches a path prefix when combined with a semantic query', async () => {
+      // Regression: `document_paths` must compose with `query`. The semantic
+      // path (`findChunksWithSearch`) applies a `limit` + vector `order`, which
+      // must not drop the path filter — a query + prefix combination has to
+      // still return the path-matched document.
+      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
+        project_id: projectId,
+        content: 'Deep diagnosis contract playbook, combined query variant.',
+        filename: 'deep-diagnosis-combined.md',
+        path: '/playbooks-combined/data-analyst/deep-diagnosis.md',
+      });
+
+      const shallow = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'deep diagnosis contract',
+          document_paths: ['/playbooks-combined/'],
+        });
+      expect(shallow.status).toBe(200);
+      expect(
+        shallow.body.results.some((r: { path?: string }) => {
+          return (
+            r.path === '/playbooks-combined/data-analyst/deep-diagnosis.md'
+          );
+        })
+      ).toBe(true);
+
+      const exact = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          query: 'deep diagnosis contract',
+          document_paths: [
+            '/playbooks-combined/data-analyst/deep-diagnosis.md',
+          ],
+        });
+      expect(exact.status).toBe(200);
+      expect(
+        exact.body.results.some((r: { path?: string }) => {
+          return (
+            r.path === '/playbooks-combined/data-analyst/deep-diagnosis.md'
+          );
+        })
+      ).toBe(true);
+    });
+
+    test('coerces a scalar document_paths into a single-prefix filter', async () => {
+      // Defensive: a client that sends `document_paths` as a bare string
+      // (rather than an array) must not crash the search with a 500. The value
+      // is coerced to a one-element array and matched as a prefix.
+      await authenticatedTestClient(userToken).post('/api/v1/documents').send({
+        project_id: projectId,
+        content: 'Scalar-path coercion probe.',
+        filename: 'scalar.txt',
+        path: '/scalar-probe/scalar.txt',
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          // Intentionally a string, not an array — mimics a non-conforming client.
+          document_paths: '/scalar-probe/',
+        });
+      expect(response.status).toBe(200);
+      expect(
+        response.body.results.some((r: { path?: string }) => {
+          return r.path === '/scalar-probe/scalar.txt';
+        })
+      ).toBe(true);
+    });
+
     test('returns 403 when user has no permission', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/knowledge/search')

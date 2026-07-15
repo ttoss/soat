@@ -1,7 +1,94 @@
+import { db } from 'src/db';
 import * as embeddingModule from 'src/lib/embedding';
 import { resolveDocumentSearch } from 'src/lib/knowledge';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
+
+// Regression: a `document_paths` / `document_ids` filter joins `File` (nested
+// two levels below the `DocumentChunk` query root) and applies a `limit`. When
+// Sequelize builds the query with its default `subQuery: true`, the LIMIT is
+// applied to the chunk rows *before* the join filter, so in a project holding
+// more matching-by-distance chunks than the limit, the single path-matched
+// document is ranked past the window and dropped — the search returns zero
+// even though the exact path exists. The REST/constant-embedding tests can't
+// surface this because every chunk shares one vector (all distances equal);
+// here we hand-place a far-away embedding on the target so a real vector sort
+// pushes it to the end, reproducing the drop deterministically.
+describe('resolveDocumentSearch — nested path filter with a limit', () => {
+  let adminToken: string;
+  let projectId: string;
+  const targetPath = '/unique-target/target.md';
+  const dim = Number(process.env.EMBEDDING_DIMENSIONS);
+  const nearVector = new Array(dim).fill(0.1);
+  const farVector = new Array(dim).fill(-0.1);
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'resolveDocumentSearch limit Test Project' });
+    projectId = projectRes.body.id;
+
+    // 14 noise documents whose chunk embeddings sit right next to the query
+    // vector, so they occupy the entire top-`limit` window.
+    for (let i = 0; i < 14; i += 1) {
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: `Noise document ${i}.`,
+          filename: `noise-${i}.txt`,
+          path: `/noise/noise-${i}.txt`,
+        });
+    }
+
+    // The lone target under a unique prefix; push its embedding far away so a
+    // real vector sort ranks it last.
+    const targetRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/documents')
+      .send({
+        project_id: projectId,
+        content: 'The unique target playbook.',
+        filename: 'target.md',
+        path: targetPath,
+      });
+    const targetDoc = await db.Document.findOne({
+      where: { publicId: targetRes.body.id },
+    });
+    await db.DocumentChunk.update(
+      { embedding: farVector },
+      { where: { documentId: targetDoc!.id } }
+    );
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  test('semantic search still returns the path-matched doc past the limit window', async () => {
+    jest
+      .spyOn(embeddingModule, 'getEmbedding')
+      .mockResolvedValue([...nearVector]);
+
+    const results = await resolveDocumentSearch({
+      config: {
+        search: 'unique target',
+        paths: ['/unique-target/'],
+        limit: 10,
+      },
+    });
+
+    expect(
+      results.some((r) => {
+        return r.path === targetPath;
+      })
+    ).toBe(true);
+  });
+});
 
 // A `$`-prefixed policyWhere key (e.g. `$file.path$`, produced by the policy
 // compiler for the `document` resourceType) requires `subQuery: false` on

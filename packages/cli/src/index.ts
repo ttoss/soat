@@ -53,6 +53,24 @@ const parseFlagValue = (value: string): unknown => {
   return value;
 };
 
+/**
+ * Build the value for an array-typed flag. Collects repeated occurrences
+ * (`--document_paths /a/ --document_paths /b/`) into a list, coercing each
+ * element with `parseFlagValue`. A single JSON-array literal
+ * (`--document_ids '["doc_1","doc_2"]'`) is passed through as-is rather than
+ * being wrapped again, and a single scalar (`--document_paths /playbooks/`)
+ * becomes a one-element array.
+ */
+const buildArrayFlagValue = (rawValues: string[]): unknown => {
+  const parsed = rawValues.map((v) => {
+    return parseFlagValue(v);
+  });
+  if (parsed.length === 1 && Array.isArray(parsed[0])) {
+    return parsed[0];
+  }
+  return parsed;
+};
+
 /** Normalize symbol names to compare exports across acronym casing differences. */
 const normalizeSymbol = (name: string) => {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -334,6 +352,17 @@ program
       parsedFlags,
     });
     const flags = wrapped.flags.single;
+    const repeatedFlags = wrapped.flags.repeated;
+
+    // Declared type per flag (keyed by canonical name), so array-typed body
+    // params are serialized as JSON arrays instead of a bare scalar. Without
+    // this, `--document_paths /playbooks/` reached the API as the string
+    // "/playbooks/" and blew up server-side array handling.
+    const flagTypeByCanonical = new Map<string, string>(
+      route.flags.map((f) => {
+        return [toCanonical(f.name), f.type];
+      })
+    );
 
     // Split flags into path / query / body
     const pathArgs: Record<string, unknown> = {};
@@ -343,7 +372,10 @@ program
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile' || flagKey === 'id') continue;
       const canonical = toCanonical(flagKey);
-      const parsedValue = parseFlagValue(val);
+      const parsedValue =
+        flagTypeByCanonical.get(canonical) === 'array'
+          ? buildArrayFlagValue(repeatedFlags[flagKey] ?? [val])
+          : parseFlagValue(val);
       const pathParam = route.pathParams.find((p) => {
         return toCanonical(p) === canonical;
       });
