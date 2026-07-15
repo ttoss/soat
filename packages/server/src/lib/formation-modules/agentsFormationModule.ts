@@ -6,7 +6,7 @@ import {
 } from '../agentKnowledge';
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
-import { validatePolicyActions, validatePolicyDocument } from '../iam';
+import { validatePolicyActions } from '../iam';
 import {
   normalizePropertyKeys,
   toNullableArray,
@@ -63,15 +63,12 @@ const validateAgentProperties = (args: {
 
   // A `boundary_policy` gates the agent's SOAT-native tool actions, so its
   // action strings must be real and enforceable — otherwise a mis-named `Deny`
-  // silently no-ops and the boundary fails open. Validate it here (only when it
-  // is shaped as a policy object) the same way policy create/update does.
+  // silently no-ops and the boundary fails open. Validate the action names here
+  // (only when it is shaped as a policy object); structural validation is
+  // applied by the boundary evaluator at generation time.
   const boundaryPolicy = properties.boundary_policy;
   if (boundaryPolicy != null && isObjectRecord(boundaryPolicy)) {
-    const structural = validatePolicyDocument(boundaryPolicy);
-    const semantic = structural.valid
-      ? validatePolicyActions(boundaryPolicy)
-      : { valid: false, errors: structural.errors };
-    for (const message of semantic.errors) {
+    for (const message of validatePolicyActions(boundaryPolicy).errors) {
       errors.push({ path: `${basePath}.boundary_policy`, message });
     }
   }
