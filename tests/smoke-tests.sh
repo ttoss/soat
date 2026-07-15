@@ -2148,8 +2148,19 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   fi
 fi
 
-# 34c. Price book — default prices are seeded and readable
+# 34c. Price book — the global-defaults path (admin upsert + read-back)
+# No prices ship by default, so the global tier is exercised by upserting a
+# global default row (ai_provider_id null) and reading it back.
 echo "--- Verifying price book ---"
+PRICES_PUT=$($SOAT_CLI upsert-price-book \
+  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","input_price_per_m":2,"output_price_per_m":8,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  | sanitize_json)
+PRICES_PUT_OK=$(printf '%s\n' "$PRICES_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id == null) and (.prices[0].input_price_per_m == 2)')
+if [ "$PRICES_PUT_OK" != "true" ]; then
+  echo "ERROR: upsert-price-book did not return the upserted global price" >&2
+  echo "$PRICES_PUT" >&2
+  exit 1
+fi
 PRICES_RESP=$($SOAT_CLI get-price-book | sanitize_json)
 PRICES_IS_ARRAY=$(printf '%s\n' "$PRICES_RESP" | jq -r 'if (.prices | type) == "array" then "yes" else "no" end')
 if [ "$PRICES_IS_ARRAY" != "yes" ]; then
@@ -2157,13 +2168,13 @@ if [ "$PRICES_IS_ARRAY" != "yes" ]; then
   echo "$PRICES_RESP" >&2
   exit 1
 fi
-PRICES_TOTAL=$(printf '%s\n' "$PRICES_RESP" | jq -r '.prices | length')
-if [ "$PRICES_TOTAL" -lt 1 ]; then
-  echo "ERROR: price book is empty — default prices were not seeded" >&2
+PRICES_HAS_ROW=$(printf '%s\n' "$PRICES_RESP" | jq -r '[.prices[] | select(.model == "qwen2.5:0.5b" and .ai_provider_id == null)] | length >= 1')
+if [ "$PRICES_HAS_ROW" != "true" ]; then
+  echo "ERROR: get-price-book did not return the upserted global price" >&2
   echo "$PRICES_RESP" >&2
   exit 1
 fi
-echo "Price book endpoint (defaults seeded): OK ($PRICES_TOTAL rows)"
+echo "Price book endpoint (global upsert + read-back): OK"
 
 # 34d. Per-provider price override — a project prices its own provider instance
 echo "--- Verifying per-provider price override ---"
