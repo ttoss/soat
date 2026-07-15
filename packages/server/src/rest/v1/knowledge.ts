@@ -10,10 +10,25 @@ type KnowledgeSearchBody = {
   query?: string;
   minScore?: number;
   limit?: number;
-  memoryIds?: string[];
-  memoryTags?: string[];
-  documentPaths?: string[];
-  documentIds?: string[];
+  // Array-typed filters. Typed loosely to tolerate non-conforming clients that
+  // send a single value as a bare scalar; `toStringArray` normalizes them.
+  memoryIds?: string[] | string;
+  memoryTags?: string[] | string;
+  documentPaths?: string[] | string;
+  documentIds?: string[] | string;
+};
+
+/**
+ * Coerce an array-typed search filter to an array. Clients that send a single
+ * value as a bare scalar (e.g. `document_paths: "/playbooks/"` instead of
+ * `["/playbooks/"]`) must not crash the search — normalize the scalar into a
+ * one-element array so downstream filtering treats it as a single prefix/id.
+ */
+const toStringArray = (
+  value: string[] | string | undefined
+): string[] | undefined => {
+  if (value === undefined) return undefined;
+  return Array.isArray(value) ? value : [value];
 };
 
 const hasSearchFilters = (body: KnowledgeSearchBody): boolean => {
@@ -83,10 +98,10 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     query: body.query,
     minScore: body.minScore,
     limit: body.limit,
-    paths: body.documentPaths,
-    documentIds: body.documentIds,
-    memoryIds: body.memoryIds,
-    memoryTags: body.memoryTags,
+    paths: toStringArray(body.documentPaths),
+    documentIds: toStringArray(body.documentIds),
+    memoryIds: toStringArray(body.memoryIds),
+    memoryTags: toStringArray(body.memoryTags),
   });
   ctx.body = { results };
 });
