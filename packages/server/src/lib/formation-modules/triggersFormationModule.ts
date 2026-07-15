@@ -19,6 +19,7 @@ import {
   validateTriggerShape,
 } from '../triggers';
 import {
+  isFormationExpression,
   isObjectRecord,
   loadModuleSpec,
   pushFieldTypeErrors,
@@ -50,7 +51,21 @@ const toOptionalBoolean = (value: unknown): boolean | undefined => {
  * action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
  * type-dependent fields are present, well-typed, and schema-valid — so it is a
  * no-op when `errors` already has entries.
+ *
+ * A field supplied as an unresolved formation expression (`{ sub }`, `{ param }`,
+ * `{ ref }`) is treated as *present* for the presence/exclusivity checks — its
+ * literal value only exists after parameter/ref resolution at apply time, where
+ * the real cron string is re-validated. Without this, a parameterized `cron`
+ * (e.g. `cron: { sub: "${healthcheck_cron}" }`) normalizes to `null` here and
+ * trips "cron is required for schedule triggers" even though it is provided.
  */
+const EXPRESSION_PLACEHOLDER = '<expression>';
+
+const shapeFieldValue = (value: unknown): string | null => {
+  if (isFormationExpression(value)) return EXPRESSION_PLACEHOLDER;
+  return toNullableString(value) ?? null;
+};
+
 const pushShapeRuleErrors = (args: {
   properties: Record<string, unknown>;
   basePath: string;
@@ -68,9 +83,11 @@ const pushShapeRuleErrors = (args: {
     validateTriggerShape({
       type: properties.type,
       targetType: properties.target_type,
-      action: toNullableString(properties.action) ?? null,
-      cron: toNullableString(properties.cron) ?? null,
+      action: shapeFieldValue(properties.action),
+      cron: shapeFieldValue(properties.cron),
     });
+    // Only a literal cron can be parsed here; an expression's real value is
+    // validated at apply time once the parameter/ref is resolved.
     if (properties.type === 'schedule' && typeof properties.cron === 'string') {
       validateCronExpression(properties.cron);
     }

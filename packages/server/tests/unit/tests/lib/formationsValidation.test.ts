@@ -1039,4 +1039,106 @@ describe('validateFormationTemplate', () => {
     });
     expect(result.valid).toBe(true);
   });
+
+  // ── Schedule trigger cron parameterization ──────────────────────────────
+  // A `schedule` trigger's cron may be supplied as an unresolved formation
+  // expression; the "cron is required" shape rule must treat it as present
+  // (its literal is validated at apply time, after the param/ref resolves).
+  describe('schedule trigger cron via formation expression', () => {
+    const scheduleTemplate = (cron: unknown): Record<string, unknown> => {
+      return {
+        parameters: {
+          healthcheck_cron: { type: 'string', default: '0 11 * * *' },
+        },
+        resources: {
+          MyOrch: {
+            type: 'orchestration',
+            properties: {
+              name: 'o',
+              nodes: [{ id: 'n', type: 'transform', expression: { var: '' } }],
+              edges: [],
+            },
+          },
+          MyTrigger: {
+            type: 'trigger',
+            properties: {
+              name: 'hc',
+              type: 'schedule',
+              target_type: 'orchestration',
+              target_id: { ref: 'MyOrch' },
+              cron,
+            },
+          },
+        },
+      };
+    };
+
+    test('accepts a cron supplied via sub', () => {
+      const result = validateFormationTemplate(
+        scheduleTemplate({ sub: '${healthcheck_cron}' })
+      );
+      expect(result.valid).toBe(true);
+      expect(result.errors).toEqual([]);
+    });
+
+    test('accepts a cron supplied via param', () => {
+      const result = validateFormationTemplate(
+        scheduleTemplate({ param: 'healthcheck_cron' })
+      );
+      expect(result.valid).toBe(true);
+    });
+
+    test('still accepts a literal cron', () => {
+      const result = validateFormationTemplate(scheduleTemplate('0 11 * * *'));
+      expect(result.valid).toBe(true);
+    });
+
+    test('still rejects a schedule trigger with no cron at all', () => {
+      const result = validateFormationTemplate(scheduleTemplate(undefined));
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.map((e) => {
+          return e.message;
+        })
+      ).toContain('cron is required for schedule triggers.');
+    });
+
+    test('still rejects an invalid literal cron', () => {
+      const result = validateFormationTemplate(scheduleTemplate('not a cron'));
+      expect(result.valid).toBe(false);
+      expect(result.errors[0].message).toMatch(/cron/i);
+    });
+
+    test('still rejects a cron (even parameterized) on a non-schedule trigger', () => {
+      const result = validateFormationTemplate({
+        parameters: { c: { type: 'string', default: '0 11 * * *' } },
+        resources: {
+          MyOrch: {
+            type: 'orchestration',
+            properties: {
+              name: 'o',
+              nodes: [{ id: 'n', type: 'transform', expression: { var: '' } }],
+              edges: [],
+            },
+          },
+          MyTrigger: {
+            type: 'trigger',
+            properties: {
+              name: 't',
+              type: 'manual',
+              target_type: 'orchestration',
+              target_id: { ref: 'MyOrch' },
+              cron: { param: 'c' },
+            },
+          },
+        },
+      });
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.map((e) => {
+          return e.message;
+        })
+      ).toContain('cron is only valid for schedule triggers.');
+    });
+  });
 });
