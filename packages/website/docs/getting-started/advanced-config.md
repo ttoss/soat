@@ -56,6 +56,22 @@ Aurora PostgreSQL 18.3 crashes the DB instance when it receives the multi-statem
 
 :::
 
+### Schema Sync
+
+On boot, SOAT runs `sync({ alter: true })` behind a **session-level Postgres advisory lock** so concurrently starting tasks (a rolling deploy batch, auto-scale-out, or an instance refresh) serialize instead of racing the DDL. All-but-one boot waits for the lock; the winner runs the schema changes once and the rest see a no-op.
+
+That wait is **bounded**. If a task is SIGKILLed (grace-period expiry, OOM) while holding the lock mid-sync, its Postgres backend can linger — behind a connection pooler or a managed engine like Aurora it may take minutes to be reaped — leaving the session lock held. Without a bound, every later boot would block on lock acquisition forever and the whole deploy would deadlock. The bound turns that into a fast, logged failure (`canceling statement due to lock timeout`) that exits the process with a non-zero code, so the orchestrator restarts the task cleanly.
+
+| Variable                       | Default          | Description                                                                        |
+| ------------------------------ | ---------------- | --------------------------------------------------------------------------------- |
+| `SCHEMA_SYNC_LOCK_TIMEOUT_MS`  | `600000` (10min) | Upper bound in milliseconds on how long boot waits to acquire the schema-sync advisory lock before failing fast |
+
+Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) falls back to the default — a misconfigured bound never becomes an unbounded wait.
+
+:::warning
+Keep this value **larger than a legitimate migration's duration.** A task that is merely waiting for a live peer's `sync` to finish should wait it out rather than abort. Align it with your deployment's health-check grace period. Lower it only if your migrations are known to be fast and you want boots to fail sooner when a lock is genuinely stuck.
+:::
+
 ### Server
 
 | Variable                  | Default | Description                                                  |

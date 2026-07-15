@@ -188,8 +188,8 @@ importers:
   packages/postgresdb:
     dependencies:
       '@ttoss/postgresdb':
-        specifier: ^0.10.0
-        version: 0.10.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)
+        specifier: ^0.11.0
+        version: 0.11.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)
       nanoid:
         specifier: ^6.0.0
         version: 6.0.0
@@ -285,8 +285,8 @@ importers:
         specifier: ^0.22.0
         version: 0.22.0(@modelcontextprotocol/sdk@1.29.0(zod@4.4.3))
       '@ttoss/postgresdb':
-        specifier: ^0.10.0
-        version: 0.10.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)
+        specifier: ^0.11.0
+        version: 0.11.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)
       ai:
         specifier: ^7.0.26
         version: 7.0.26(zod@4.4.3)
@@ -4168,8 +4168,8 @@ packages:
     resolution: {integrity: sha512-lbacRI/EaMKrTnw9aNqr3VbbJlEVJj3DnOezPkhAz3vE8OubQx8K2KtVez94vjrYE4WGbtmeOuOK5vDTVqlMLw==}
     hasBin: true
 
-  '@ttoss/postgresdb@0.10.0':
-    resolution: {integrity: sha512-sxI6sdLs4S428dpAbKT5nd4W2vpomugGWkseDoW6JWcVv92+hzUuNPeR4mKjYzW5zo2r1p/rjodhlNi2WMy/QQ==}
+  '@ttoss/postgresdb@0.11.0':
+    resolution: {integrity: sha512-zXeUHTdqpmAOPQLl0otT+uXNqJKpuBEewNIzqiSbedDzGUDvVOoQ9VtDMA6u5vORUuZ37KX+2oXBiGkl4+6Okw==}
 
   '@ttoss/read-config-file@2.2.20':
     resolution: {integrity: sha512-H8dStcEYm7XogOfZeS43SZFIZ+cT7K76T+qDvLm36CrtXSigUuLT95wVMzSeR2MIUBX2FrF4oXYcaHiTx/kgdQ==}
@@ -17675,7 +17675,7 @@ snapshots:
       esbuild: 0.28.1
       sequelize-erd: 1.3.1
 
-  '@ttoss/postgresdb@0.10.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)':
+  '@ttoss/postgresdb@0.11.0(@types/node@26.1.1)(@types/validator@13.15.10)(reflect-metadata@0.2.2)':
     dependencies:
       pg: 8.22.0
       pgvector: 0.2.1
@@ -17994,7 +17994,7 @@ snapshots:
 
   '@types/sax@1.2.7':
     dependencies:
-      '@types/node': 17.0.45
+      '@types/node': 26.1.1
 
   '@types/send@0.17.6':
     dependencies:

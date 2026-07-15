@@ -30,7 +30,7 @@
     "@ttoss/http-server": "^0.7.1",
     "@ttoss/http-server-auth": "^0.3.7",
     "@ttoss/http-server-mcp": "^0.22.0",
-    "@ttoss/postgresdb": "^0.10.0",
+    "@ttoss/postgresdb": "^0.11.0",
     "ai": "^7.0.26",
     "bcryptjs": "^3.0.3",
     "croner": "^10.0.1",
