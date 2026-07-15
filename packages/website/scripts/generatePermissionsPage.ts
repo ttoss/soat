@@ -86,7 +86,6 @@ const main = () => {
   const sections: string[] = [
     '---',
     'sidebar_position: 100',
-    'slug: /modules/iam/permissions-reference',
     '---',
     '',
     '# Permissions Reference',

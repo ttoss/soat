@@ -392,7 +392,7 @@ This follows the same pattern as [API keys](./api-keys.md#permission-inheritance
 
 The boundary policy also gates the native **`write_memory`** tool (injected by `knowledge_config.write_memory_id`): the write is a SOAT-native memory action, so a boundary that denies `memories:CreateMemoryEntry` / `memories:UpdateMemoryEntry` (including a wildcard `Deny action:["*"]`) blocks it fail-closed — the tool returns a `Forbidden: boundary policy denies <action>` error and nothing is written.
 
-Action strings are validated when the boundary policy is created or applied (via `validate-formation`, `create-policy`, or agent create/update): an unknown or mis-named action is rejected rather than silently accepted, so a typo'd `Deny` cannot no-op. See the [Permissions Reference](./permissions.md) for the enforceable `module:Operation` action names.
+Action strings are validated when the boundary policy is created or applied (via `validate-formation`, `create-policy`, or agent create/update): an unknown or mis-named action is rejected rather than silently accepted, so a typo'd `Deny` cannot no-op. See the [Permissions Reference](../permissions.md) for the enforceable `module:Operation` action names.
 
 The boundary policy only governs `soat` actions. For `http`, `client`, and `mcp` tools the actions execute externally and are outside the platform's permission model.
 

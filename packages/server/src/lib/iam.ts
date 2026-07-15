@@ -219,7 +219,7 @@ const collectUnknownActionErrors = (args: {
     if (typeof act === 'string' && !isKnownAction(act)) {
       errors.push(
         `statement[${index}].action: "${act}" is not a known action — ` +
-          'see the Permissions Reference (/docs/modules/iam/permissions-reference)'
+          'see the Permissions Reference (/docs/permissions)'
       );
     }
   }
