@@ -102,7 +102,7 @@ if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
 fi
 
 POLICY_WRITE_RESP=$($SOAT_CLI create-policy \
-  --document '{"statement":[{"effect":"Allow","action":["files:PutFile"]}]}' \
+  --document '{"statement":[{"effect":"Allow","action":["files:CreateFile"]}]}' \
   --name smoke-write-policy)
 POLICY_WRITE_ID=$(echo "$POLICY_WRITE_RESP" | jq -r '.id')
 if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
@@ -129,7 +129,7 @@ fi
 
 # Update policy
 POLICY_UPDATE_RESP=$($SOAT_CLI update-policy --policy-id "$POLICY_READ_ID" \
-  --document '{"statement":[{"effect":"Allow","action":["files:GetFile","files:ListFiles"]}]}' \
+  --document '{"statement":[{"effect":"Allow","action":["files:GetFile","files:DownloadFile"]}]}' \
   --name smoke-read-policy-updated)
 if ! printf '%s\n' "$POLICY_UPDATE_RESP" | jq -e --arg id "$POLICY_READ_ID" '.id == $id' >/dev/null 2>&1; then
   echo "ERROR: PUT policy did not return updated policy" >&2
