@@ -2,7 +2,7 @@ import 'dotenv/config';
 
 import createDebug from 'debug';
 
-import pkg from '../package.json' assert { type: 'json' };
+import pkg from '../package.json' with { type: 'json' };
 import { app } from './app';
 import {
   initializeDatabase,

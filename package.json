@@ -25,11 +25,11 @@
     "syncpack:lint": "syncpack lint"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.0",
-    "@lerna-lite/changed": "^5.4.0",
-    "@lerna-lite/cli": "^5.4.0",
-    "@lerna-lite/list": "^5.4.0",
-    "@lerna-lite/version": "^5.4.0",
+    "@commitlint/cli": "^21.2.1",
+    "@lerna-lite/changed": "^5.4.1",
+    "@lerna-lite/cli": "^5.4.1",
+    "@lerna-lite/list": "^5.4.1",
+    "@lerna-lite/version": "^5.4.1",
     "@ttoss/config": "^1.37.17",
     "@ttoss/eslint-config": "^1.27.0",
     "@ttoss/monorepo": "^1.29.17",
@@ -37,9 +37,9 @@
     "eslint": "^9",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
-    "prettier": "^3.9.4",
+    "prettier": "^3.9.5",
     "syncpack": "^15.3.2",
-    "turbo": "^2.10.3",
+    "turbo": "^2.10.5",
     "typescript": "~6.0.3"
   },
   "engines": {

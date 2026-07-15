@@ -1,5 +1,19 @@
 packages:
   - 'packages/*'
+# Pinned out of `pnpm update`:
+# - @stoplight/spectral-cli@6.16.1 pulls rollup@2.80.0, which trips the
+#   no-downgrade trust policy below (possible package takeover). Keep the CLI at
+#   its current version rather than weakening the trust guard; revisit once
+#   spectral ships a release without the flagged rollup.
+# - typescript@7.x (tsgo native port) breaks the toolchain: @hey-api/openapi-ts
+#   (SDK generator) and @typescript-eslint/typescript-estree both fail against
+#   it. Stay on 6.x until those support TS 7.
+# - eslint held at 9.x: 10.x is not adopted yet in this repo's config stack.
+updateConfig:
+  ignoreDependencies:
+    - '@stoplight/spectral-cli'
+    - 'typescript'
+    - 'eslint'
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - 'carlin'
