@@ -2,6 +2,9 @@ import { models } from '@soat/postgresdb';
 import type { App } from '@ttoss/http-server';
 import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
+import createDebug from 'debug';
+
+const log = createDebug('soat:db');
 
 export { models };
 
@@ -19,6 +22,24 @@ export let db: DB;
  */
 export const SCHEMA_SYNC_LOCK_KEY = 0x50a7_5c_00;
 
+const DEFAULT_SCHEMA_SYNC_LOCK_TIMEOUT_MS = 600_000;
+
+/**
+ * Upper bound (ms) on how long boot waits to *acquire* the schema-sync advisory
+ * lock before failing fast. Overridable via `SCHEMA_SYNC_LOCK_TIMEOUT_MS`.
+ *
+ * It must stay **larger than a legitimate migration's duration**: a task that is
+ * merely waiting for a live peer's `sync` to finish should wait it out, not
+ * abort. Keep it aligned with the deployment's health-check grace period (see
+ * the infra repo's `HealthCheckGracePeriodSeconds`, INFRASTRUCTURE.md §8).
+ */
+export const getSchemaSyncLockTimeoutMs = (): number => {
+  const raw = Number(process.env.SCHEMA_SYNC_LOCK_TIMEOUT_MS);
+  return Number.isInteger(raw) && raw > 0
+    ? raw
+    : DEFAULT_SCHEMA_SYNC_LOCK_TIMEOUT_MS;
+};
+
 /**
  * Run boot-time `sync({ alter: true })` behind a Postgres session-level
  * advisory lock so concurrently-starting tasks serialize instead of racing.
@@ -26,17 +47,31 @@ export const SCHEMA_SYNC_LOCK_KEY = 0x50a7_5c_00;
  * `sync({ alter })` emits ALTER TABLE; if two tasks run it at once (rolling
  * deploy batch >= 2 at scale, auto-scale-out, instance refresh) they can
  * deadlock or leave the schema inconsistent. The advisory lock makes
- * all-but-one boot wait, so the DDL runs exactly once and the rest see a
- * no-op. The lock/unlock pair is taken on a single dedicated connection and
- * always released (success or failure) by `syncWithAdvisoryLock`.
+ * all-but-one boot wait, so the DDL runs exactly once and the rest see a no-op.
+ *
+ * The wait is **bounded** by `lockTimeoutMs`: a session-level advisory lock held
+ * by a peer that was SIGKILLed mid-boot (grace-period expiry, OOM) stays held
+ * until its Postgres backend is reaped, which behind a pooler / Aurora can take
+ * minutes. Without a bound every later boot would block forever and the whole
+ * deploy would deadlock. The bound turns that into a fast, logged failure
+ * (which propagates to `startServer`'s catch → `process.exit(1)`) instead of a
+ * silent multi-minute hang. See `getSchemaSyncLockTimeoutMs` for why the bound
+ * must exceed a real migration's duration.
  */
 export const syncSchemaWithAdvisoryLock = async (args: {
   sequelize: Sequelize;
 }) => {
+  const lockTimeoutMs = getSchemaSyncLockTimeoutMs();
+  log(
+    'syncSchemaWithAdvisoryLock: key=%d lockTimeoutMs=%d',
+    SCHEMA_SYNC_LOCK_KEY,
+    lockTimeoutMs
+  );
   await syncWithAdvisoryLock({
     sequelize: args.sequelize,
     key: SCHEMA_SYNC_LOCK_KEY,
     sync: { alter: true },
+    lockTimeoutMs,
   });
 };
 
