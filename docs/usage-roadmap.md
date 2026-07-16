@@ -26,17 +26,22 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 - ✅ **Decision:** USD is the fixed metering currency
   ([details](./prd-usage-metering.md#meter-type-generalization))
 
-## Milestone 1 — Per-run cost (billing-grade "one action = one receipt")
+## Milestone 1 — Per-run cost (billing-grade "one action = one receipt") ✅ Done
 
-> [Metering Phase 3a](./prd-usage-metering.md#phase-3a--runnode-attribution--run-roll-up--not-started)
+> [Metering Phase 3a](./prd-usage-metering.md#phase-3a--runnode-attribution--run-roll-up--done)
+>
+> **Shipped (#562).** Every generation an orchestration node dispatches now
+> meters with its `run_id` + `node_id` (threaded through the generation
+> metadata), a run exposes the summed roll-up, and the initiating trigger is
+> propagated onto in-run generations.
 
 | # | Task | Notes |
 |---|------|-------|
-| 1.1 | Thread orchestration run/node context into `recordGenerationUsage`; stop hardcoding `run_id`/`node_id` to `null` | Agent nodes know their run + node id at dispatch time |
-| 1.2 | Scope the meter idempotency key by node execution | Replayed nodes upsert into a no-op ([prd-orchestration-queue.md](./prd-orchestration-queue.md)) |
-| 1.3 | Per-run receipt: `GET /usage/receipt?run_id=…` | Same shape as the generation receipt, summed across the run |
-| 1.4 | Surface `usage` totals (tokens, `cost_usd`) on the orchestration-run response | |
-| 1.5 | Finish in-run trigger/action attribution (#485 remainder) | Unblocked by 1.1 |
+| 1.1 ✅ | Thread orchestration run/node context into `recordGenerationUsage`; stop hardcoding `run_id`/`node_id` to `null` | Carried on generation metadata; the run's public id is resolved to its FK at write time |
+| 1.2 ✅ | Scope the meter idempotency key by node execution | Inside a run the key is `run:<run>:node:<node>`, so a replayed node upserts into a no-op ([prd-orchestration-queue.md](./prd-orchestration-queue.md)) |
+| 1.3 ✅ | Per-run receipt: `GET /usage/receipt?run_id=…` | Same shape as the generation receipt, summed across the run |
+| 1.4 ✅ | Surface `usage` totals (tokens, `cost_usd`) on the orchestration-run response | `usage` object on `GET /orchestration-runs/{run_id}`; omitted from list responses |
+| 1.5 ✅ | Finish in-run trigger/action attribution (#485 remainder) | `OrchestrationRun.trigger_id` propagates the initiating trigger onto in-run generations; node id serves as the in-run action |
 
 ## Milestone 2 — Schema generalization (before billing freezes on tokens) ✅ Done
 

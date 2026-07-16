@@ -16,13 +16,13 @@
 | Provider-call instrumentation              | 🚧 Agent path (#483, #557)  | Wired for agent generations (non-stream, streaming, and the tool-outputs continuation path, #557), conversations, and orchestration agent nodes; extraction/discussions/chats still pending |
 | Reasoning-token breakdown                  | ✅ Done (#483)              | `reasoning_tokens` (and cached) captured from the provider report     |
 | `trace_id` attribution                     | ✅ Done (#484)              | Meter links to its trace; filterable                                  |
-| Trigger + logical action-id attribution    | 🚧 Agent-target (#485)      | `trigger_id`/`action_id` on the meter; in-orchestration-run trigger attribution pending run-scoping |
+| Trigger + logical action-id attribution    | ✅ Done (#485, #562)        | `trigger_id`/`action_id` on the meter; in-orchestration-run trigger attribution wired via `OrchestrationRun.trigger_id` (#562) |
 | Price book + write-time cost computation   | ✅ Done (#488)              | Cost frozen at write time from the effective price row                |
 | Three-tier price resolution                | ✅ Done (#502/#504)         | Per-provider override → project + provider-slug → global default      |
 | Default price seeding                      | ❌ Removed (#546)           | SOAT no longer ships default prices; operators load their own. Meters with no matching price row record `cost_usd = null` |
 | Per-generation receipt                     | ✅ Done                     | `GET /api/v1/usage/receipt` sums a generation's meters (tokens, cost, price rows used) |
-| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageEvent` but the single writer hardcodes `null`; no event is attributable to an orchestration run today |
-| Run roll-up (per-run token/cost sum)       | ❌ Not started              | Blocked on run/node attribution                                       |
+| Run/node attribution (`run_id`, `node_id`) | ✅ Done (#562)              | Threaded through the generation metadata; the run's public id is resolved to its FK at write time, and the idempotency key is scoped by node execution |
+| Run roll-up (per-run token/cost sum)       | ✅ Done (#562)              | `GET /api/v1/usage/receipt?run_id=…` per-run receipt + a `usage` object on the orchestration-run response |
 | Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
 | Meter-type generalization                  | ✅ Done                     | Rebuilt as `UsageEvent` (one metered occurrence) + `UsageComponent` (one priced dimension); `PriceBook` prices a SKU component. See [Meter-Type Generalization](#meter-type-generalization) |
 | Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
@@ -144,15 +144,16 @@ operator (who owns price data since #546).
 
 ## Implementation Phases
 
-Phases 1–2 are shipped; 3a–3c close the billing-grade per-run gaps; 4–6 add
-the non-LLM dimensions; 7 stays deferred behind guardrails.
+Phases 1–2 and 3a–3b are shipped; 3c closes the remaining billing-grade
+aggregation gap; 4–6 add the non-LLM dimensions; 7 stays deferred behind
+guardrails.
 
 ### Phase 1 — Meter Rows + Idempotency ✅ Done (#483)
 
 > Delivered for the agent-completion path (agent generations, conversations,
 > orchestration agent nodes), including the tool-outputs continuation path
-> (#557). Idempotency is keyed on the generation; the node-level idempotency
-> key from the orchestration queue is pending run-scoping. Reasoning/cached
+> (#557). Idempotency is keyed on the generation, and — inside an orchestration
+> run — scoped by node execution (`run:<run>:node:<node>`, #562). Reasoning/cached
 > token breakdown (#483), `trace_id` (#484), and trigger/action attribution
 > (#485) were added on top via epic #482. Extraction, discussions, and chats
 > are not yet metered.
@@ -203,29 +204,33 @@ produce exactly one row per LLM call".
 Defining the customer-facing billing unit stays out of scope — SOAT meters,
 the consuming product bills.
 
-### Phase 3a — Run/Node Attribution + Run Roll-up ❌ Not started
+### Phase 3a — Run/Node Attribution + Run Roll-up ✅ Done
 
-> `UsageMeter.run_id`/`node_id` exist in the schema but the single writer
-> (`recordGenerationUsage`) hardcodes them to `null` — no meter row can be
-> attributed to an orchestration run today, which blocks per-run receipts,
-> the run ceiling, and in-run trigger attribution (#485 remainder).
+> **Shipped (#562).** `UsageEvent.run_id`/`node_id` are now populated: the
+> orchestration run/node (and the run's initiating trigger) are carried on the
+> generation metadata and read back at write time, so every generation an
+> orchestration node dispatches is attributable to its run. This unblocked
+> per-run receipts, the cumulative per-run signal, and in-run trigger
+> attribution (#485 remainder).
 
 **Goal:** Every generation started by an orchestration node meters with its
 `run_id` + `node_id`; a run exposes the sum of its generations' tokens and
 cost.
 
-**Deliverables:**
+**Deliverables (all shipped):**
 
-- Thread the orchestration run/node context through to
-  `recordGenerationUsage` (agent nodes already know their run and node id at
-  dispatch time); scope the idempotency key by node execution so a replayed
-  node upserts into a no-op
-- Run roll-up read path: `GET /api/v1/usage/receipt?run_id=…` returning the
+- ✅ Thread the orchestration run/node context through to
+  `recordGenerationUsage` (via the generation metadata, the same vehicle as
+  `action_id`/`trigger_id`); the run's public id is resolved to its FK at write
+  time, and the idempotency key is scoped by node execution
+  (`run:<run>:node:<node>`) so a replayed node upserts into a no-op
+- ✅ Run roll-up read path: `GET /api/v1/usage/receipt?run_id=…` returning the
   same receipt shape as the per-generation receipt (tokens, cost, price rows,
   per-generation breakdown), summed across the run's meters
-- Surface the roll-up totals on `GET
-  /api/v1/orchestrations/{id}/runs/{run_id}` (`usage` object: total tokens,
-  `cost_usd`)
+- ✅ Surface the roll-up totals on `GET /api/v1/orchestration-runs/{run_id}`
+  (`usage` object: total tokens, `cost_usd`); omitted from run list responses
+- ✅ In-run trigger attribution: `OrchestrationRun.trigger_id` is set when a
+  trigger starts the run and propagated onto every in-run generation's event
 
 **Unlocks:** Per-run receipts ("one operating cycle → one action" billing),
 the cumulative per-run signal for a ceiling check, correct in-run
@@ -332,8 +337,8 @@ this phase only prices.
 
 > Blocked on the guardrail evaluator and `usage.*` guard context
 > ([prd-guardrails.md](./prd-guardrails.md)), which are unbuilt. The per-run
-> token-ceiling issue (#486) was deferred for the same reason. Interim: once
-> Phase 3a lands, an orchestration `condition` node can read the run's
+> token-ceiling issue (#486) was deferred for the same reason. Interim: now that
+> Phase 3a has landed, an orchestration `condition` node can read the run's
 > cumulative usage (via the run roll-up) and route to an abort path —
 > a modelable pattern, not a platform guarantee.
 
@@ -425,8 +430,8 @@ Columns marked **(3b)** are added by the generalization phase.
 | id              | INTEGER      | PK                                                  |
 | publicId        | VARCHAR(32)  | UNIQUE, `um_` prefix                                |
 | projectId       | INTEGER      | FK → Project, NOT NULL                              |
-| runId           | INTEGER      | FK → OrchestrationRun, NULL (populated by Phase 3a) |
-| nodeId          | VARCHAR      | NULL (node within the run; populated by Phase 3a)   |
+| runId           | INTEGER      | FK → OrchestrationRun, NULL (populated for in-run generations, #562) |
+| nodeId          | VARCHAR      | NULL (node within the run; populated for in-run generations, #562)   |
 | agentId         | INTEGER      | FK → Agent, NULL                                    |
 | generationId    | INTEGER      | FK → Generation, NULL                               |
 | traceId         | INTEGER      | FK → Trace, NULL                                    |
@@ -514,7 +519,7 @@ permissions (`ai-providers`, `projects`).
 | Method | Path                                       | Description                                             | Status |
 | ------ | ------------------------------------------ | ------------------------------------------------------- | ------ |
 | GET    | `/api/v1/usage/meters`                     | Raw meter rows, cursor-paginated (audit/reconciliation); filters: agent, generation, trace, trigger, action (+ `meter_type` after 3b) | ✅ |
-| GET    | `/api/v1/usage/receipt`                    | Per-generation receipt (`generation_id`); per-run receipt (`run_id`) after Phase 3a | ✅ generation / ❌ run |
+| GET    | `/api/v1/usage/receipt`                    | Per-generation receipt (`generation_id`); per-run receipt (`run_id`, #562) | ✅ |
 | GET    | `/api/v1/usage/prices`                     | Global default price book                                | ✅ |
 | PUT    | `/api/v1/usage/prices`                     | Upsert global price rows (admin)                         | ✅ |
 | GET/PUT | `/api/v1/ai-providers/{id}/prices`        | Per-provider price overrides (tier 1)                    | ✅ |
