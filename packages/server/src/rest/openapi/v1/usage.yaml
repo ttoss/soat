@@ -69,6 +69,14 @@ paths:
           description: Filter by logical action id
           schema:
             type: string
+        - name: meter_type
+          in: query
+          required: false
+          description: >
+            Filter by meter type (e.g. `llm_tokens`, `compute_execution`,
+            `api_request`, `storage`)
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -92,7 +100,7 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/UsageMeter'
+                      $ref: '#/components/schemas/UsageEvent'
                   total:
                     type: integer
                   limit:
@@ -228,13 +236,54 @@ components:
       bearerFormat: JWT
 
   schemas:
-    UsageMeter:
+    UsageComponent:
       type: object
+      description: >
+        One priced dimension of a usage event. Every meter type is expressed as
+        components, so tokens and infra are uniform: an `llm_tokens` event has
+        `input_tokens` / `output_tokens` (+ `cached_tokens`, and a non-billable
+        `reasoning_tokens` detail), a `compute_execution` event has one
+        `compute_second` component.
+      properties:
+        component:
+          type: string
+          description: The measured dimension (e.g. `input_tokens`, `compute_second`)
+        quantity:
+          type: number
+          description: The measured amount, expressed in `unit`
+        unit:
+          type: string
+          description: Unit `quantity` is measured in (`token`, `compute_second`, …)
+        billable:
+          type: boolean
+          description: >
+            Whether this component contributes to cost. Non-billable details
+            (e.g. `reasoning_tokens`, a subset of `output_tokens`) are never
+            priced and never double-counted into billable totals.
+        unit_price:
+          type: number
+          nullable: true
+          description: USD per `unit`, frozen at write time; null when unpriced
+        cost_usd:
+          type: number
+          nullable: true
+          description: quantity × unit_price, frozen at write time; null when unpriced
+        price_id:
+          type: string
+          nullable: true
+          description: Public ID of the price-book row that priced this component
+
+    UsageEvent:
+      type: object
+      description: >
+        One metered occurrence (a completed LLM call, a node execution, …).
+        Attribution and total cost live here; the measured quantities live in
+        `components`.
       properties:
         id:
           type: string
-          description: Public ID of the usage-meter row
-          example: um_V1StGXR8Z5jdHi6B
+          description: Public ID of the usage event
+          example: ue_V1StGXR8Z5jdHi6B
         project_id:
           x-soat-ref: projects
           type: string
@@ -243,8 +292,8 @@ components:
           type: string
           nullable: true
           description: >
-            Public ID of the orchestration run that initiated the call, when
-            the generation ran inside a run. Null for standalone generations.
+            Public ID of the orchestration run that initiated the occurrence.
+            Null for standalone events.
         node_id:
           type: string
           nullable: true
@@ -269,9 +318,9 @@ components:
           type: string
           nullable: true
           description: >
-            Public ID of the AI provider instance billed. Correlates the meter
-            to the price book. Null if the provider was later deleted; the
-            `provider`/`model` snapshot still records what was billed.
+            Public ID of the AI provider instance billed. Null if the provider
+            was later deleted; the `provider`/`model` snapshot still records
+            what was billed.
         trigger_id:
           x-soat-ref: triggers
           type: string
@@ -285,42 +334,31 @@ components:
           description: >
             Caller-supplied logical action label, for rolling spend up per
             action. Null when the caller did not label the action.
+        meter_type:
+          type: string
+          description: >
+            What the event measures: `llm_tokens`, `compute_execution`,
+            `api_request`, or `storage`.
         provider:
           type: string
           description: >
-            Denormalized as-billed provider slug, retained even if the AI
-            provider is later deleted
+            As-billed SKU vendor slug, retained even if the AI provider is
+            deleted. `soat` for platform meter types.
           example: openai
         model:
           type: string
-          description: Model identifier the provider billed
+          description: Model id, or the billable SKU for platform meter types
           example: gpt-4o
-        input_tokens:
-          type: integer
-          description: Input (prompt) tokens reported by the provider
-        output_tokens:
-          type: integer
-          description: Output (completion) tokens reported by the provider
-        cached_tokens:
-          type: integer
-          description: Cached input tokens read, when the provider reports them
-        reasoning_tokens:
-          type: integer
-          description: >
-            Reasoning tokens the provider reports separately (e.g. OpenAI
-            `completion_tokens_details.reasoning_tokens`). 0 when unreported.
         cost_usd:
           type: number
           nullable: true
           description: >
-            Cost in USD computed at write time from the versioned price book.
-            Null when the tokens are captured but not yet priced.
-        price_id:
-          type: string
-          nullable: true
-          description: >
-            Public ID of the price-book row that produced `cost_usd` (the
-            price-table version). Null when no price applied.
+            Total USD cost — the sum of the priced component costs, frozen at
+            write time. Null when no component was priced.
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/UsageComponent'
         created_at:
           type: string
           format: date-time
@@ -336,30 +374,42 @@ components:
           example: USD
         line_items:
           type: array
+          description: One line per usage event on the generation
           items:
             type: object
             properties:
+              event_id:
+                type: string
+              meter_type:
+                type: string
               provider:
                 type: string
               model:
                 type: string
-              price_id:
-                type: string
+              cost_usd:
+                type: number
                 nullable: true
-                description: Price-book version that priced this line
-              input_tokens:
-                type: integer
-              output_tokens:
-                type: integer
-              cached_tokens:
-                type: integer
-              reasoning_tokens:
-                type: integer
+              components:
+                type: array
+                items:
+                  $ref: '#/components/schemas/UsageComponent'
+        by_meter_type:
+          type: array
+          description: >
+            Per-meter-type cost rollup — the "tokens + infra" split. A
+            single-type receipt has one entry whose cost equals the receipt
+            total.
+          items:
+            type: object
+            properties:
+              meter_type:
+                type: string
               cost_usd:
                 type: number
                 nullable: true
         total_input_tokens:
           type: integer
+          description: Full prompt tokens (uncached input + cached), reconstructed from components
         total_output_tokens:
           type: integer
         total_cached_tokens:
@@ -369,10 +419,13 @@ components:
         total_cost_usd:
           type: number
           nullable: true
-          description: Sum of priced line costs; null when no line is priced
+          description: Sum of priced component costs; null when nothing is priced
 
     Price:
       type: object
+      description: >
+        A versioned unit price for one billable component of a SKU. Cost is
+        uniform across meter types — quantity × unit_price.
       properties:
         id:
           type: string
@@ -385,22 +438,26 @@ components:
           description: >
             Null for a global default price. Set when this row is a
             per-provider override for a specific AI provider instance.
+        meter_type:
+          type: string
+          description: Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …)
         provider:
           type: string
+          description: SKU vendor slug (`openai`, or `soat` for platform SKUs)
           example: openai
         model:
           type: string
+          description: Model id, or the billable SKU for platform meter types
           example: gpt-4o
-        input_price_per_m:
+        component:
+          type: string
+          description: The component this row prices (`input_tokens`, `compute_second`, …)
+        unit:
+          type: string
+          description: Unit `unit_price` is denominated in (`token`, `compute_second`, …)
+        unit_price:
           type: number
-          description: USD per one million input (prompt) tokens
-        output_price_per_m:
-          type: number
-          description: USD per one million output (completion) tokens
-        cached_price_per_m:
-          type: number
-          nullable: true
-          description: USD per one million cached input tokens; null falls back to the input price
+          description: USD per `unit` (for token components, USD per token)
         effective_from:
           type: string
           format: date-time
@@ -429,9 +486,15 @@ components:
             required:
               - provider
               - model
-              - input_price_per_m
-              - output_price_per_m
+              - component
+              - unit
+              - unit_price
               - effective_from
+            description: >
+              A price row for one component of a SKU. For LLM SKUs supply the
+              `input_tokens` / `output_tokens` (and optionally `cached_tokens`)
+              components with unit `token`; for platform SKUs supply the
+              platform component (e.g. `compute_second`).
             properties:
               ai_provider_id:
                 x-soat-ref: ai-providers
@@ -440,17 +503,25 @@ components:
                 description: >
                   Omit for a global default price; set to a provider public ID
                   to record a per-provider override.
+              meter_type:
+                type: string
+                default: llm_tokens
+                description: >
+                  Defaults to `llm_tokens`. Set to a platform meter type
+                  (e.g. `compute_execution`) for a platform SKU.
               provider:
                 type: string
               model:
                 type: string
-              input_price_per_m:
+              component:
+                type: string
+                description: The component this row prices (`input_tokens`, `compute_second`, …)
+              unit:
+                type: string
+                description: Unit `unit_price` is denominated in (`token`, `compute_second`, …)
+              unit_price:
                 type: number
-              output_price_per_m:
-                type: number
-              cached_price_per_m:
-                type: number
-                nullable: true
+                description: USD per `unit`
               effective_from:
                 type: string
                 format: date-time

@@ -12,15 +12,17 @@ import { AiProvider } from './AiProvider';
 import { Project } from './Project';
 
 /**
- * Versioned price data used to compute a `UsageMeter`'s `cost_usd` at write
- * time. Three scopes live in one table, resolved most-specific first:
- * a **per-provider override** (`aiProviderId` set) for one AI provider
- * instance; a **project + provider-slug** price (`projectId` set,
- * `aiProviderId` null) covering all of a project's instances of a slug; and a
- * **global default** (both null). Cost lookup prefers instance → project+slug →
- * global; within each scope the latest `effectiveFrom <= now()` applies. New
- * future-dated rows change the price deterministically without mutating costs
- * already recorded from earlier rows.
+ * Versioned unit price for a single billable **component** of a SKU. Cost is
+ * uniform across meter types — `costUsd = quantity × unitPrice` — so a price
+ * row prices one `(provider, model, component)` at a time: e.g. `openai` /
+ * `gpt-4o` / `output_tokens`, or `soat` / `compute-second` / `compute_second`.
+ *
+ * Three scopes live in one table, resolved most-specific first: a
+ * **per-provider override** (`aiProviderId` set) for one AI provider instance;
+ * a **project + provider-slug** price (`projectId` set, `aiProviderId` null);
+ * and a **global default** (both null). Within each scope the latest
+ * `effectiveFrom <= now()` applies. New future-dated rows change the price
+ * deterministically without mutating costs already frozen onto components.
  */
 @Table({
   tableName: 'price_books',
@@ -28,24 +30,23 @@ import { Project } from './Project';
   updatedAt: false,
   indexes: [
     {
-      // Explicit name: the auto-generated name for this many columns is 67
-      // chars, but Postgres truncates identifiers to 63. On the next
-      // `sync({ alter: true })`, the truncated catalog name no longer matches
-      // the recomputed (untruncated) expected name, so Sequelize tries to
-      // recreate the index under the same truncated name and Postgres raises
-      // 42P07 "relation already exists" — crashing every boot after the first.
-      name: 'price_books_provider_model_effective_uk',
+      // Explicit name: the auto-generated name for this many columns exceeds
+      // Postgres's 63-char identifier limit, and a truncated catalog name no
+      // longer matches the recomputed expected name on the next
+      // `sync({ alter: true })`, crashing boot with 42P07.
+      name: 'price_books_scope_sku_component_effective_uk',
       unique: true,
       fields: [
         'ai_provider_id',
         'project_id',
         'provider',
         'model',
+        'component',
         'effective_from',
       ],
     },
     // Serves the global-default, project+slug, and per-provider lookups.
-    { fields: ['provider', 'model', 'effective_from'] },
+    { fields: ['provider', 'model', 'component', 'effective_from'] },
   ],
   hooks: {
     beforeValidate: (instance: PriceBook) => {
@@ -63,9 +64,8 @@ export class PriceBook extends Model {
   })
   declare publicId: string;
 
-  // Null = global default. Set = override for a specific AI provider instance
-  // (e.g. an enterprise-negotiated rate or a gateway with markup). Deleting the
-  // provider drops its overrides; recorded meter costs are already frozen.
+  // Null = global default. Set = override for a specific AI provider instance.
+  // Deleting the provider drops its overrides; frozen component costs are safe.
   @ForeignKey(() => {
     return AiProvider;
   })
@@ -80,9 +80,8 @@ export class PriceBook extends Model {
   )
   declare aiProvider: AiProvider | null;
 
-  // Null unless this is a project + provider-slug price. Set = a project-scoped
-  // rate covering every one of that project's instances of `provider`. Deleting
-  // the project drops its price rows; recorded meter costs are already frozen.
+  // Null unless this is a project + provider-slug price. Deleting the project
+  // drops its price rows; frozen component costs are safe.
   @ForeignKey(() => {
     return Project;
   })
@@ -97,25 +96,31 @@ export class PriceBook extends Model {
   )
   declare project: Project | null;
 
+  // Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …).
+  @Column({ type: DataType.STRING, allowNull: false })
+  declare meterType: string;
+
+  // SKU vendor slug (`openai`, or `soat` for platform SKUs).
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
 
+  // SKU identifier: the model id for LLM SKUs, the platform unit otherwise.
   @Column({ type: DataType.STRING, allowNull: false })
   declare model: string;
 
-  // USD per one million input (prompt) tokens.
-  @Column({ type: DataType.DECIMAL, allowNull: false })
-  declare inputPricePerM: string;
+  // The component this row prices (`input_tokens`, `output_tokens`,
+  // `cached_tokens`, `compute_second`, …).
+  @Column({ type: DataType.STRING, allowNull: false })
+  declare component: string;
 
-  // USD per one million output (completion) tokens. Reasoning tokens are part
-  // of the output count and are billed at this rate.
-  @Column({ type: DataType.DECIMAL, allowNull: false })
-  declare outputPricePerM: string;
+  // Unit `unitPrice` is denominated in (`token`, `compute_second`, …). Must match
+  // the metered component's unit.
+  @Column({ type: DataType.STRING, allowNull: false })
+  declare unit: string;
 
-  // USD per one million cached input tokens read. Null falls back to the input
-  // price (i.e. no cache discount).
-  @Column({ type: DataType.DECIMAL, allowNull: true })
-  declare cachedPricePerM: string | null;
+  // USD per `unit`.
+  @Column({ type: DataType.DECIMAL, allowNull: false })
+  declare unitPrice: string;
 
   // The row with the latest effectiveFrom <= now() prices a call.
   @Column({ type: DataType.DATE, allowNull: false })

@@ -21,11 +21,11 @@
 | Three-tier price resolution                | ✅ Done (#502/#504)         | Per-provider override → project + provider-slug → global default      |
 | Default price seeding                      | ❌ Removed (#546)           | SOAT no longer ships default prices; operators load their own. Meters with no matching price row record `cost_usd = null` |
 | Per-generation receipt                     | ✅ Done                     | `GET /api/v1/usage/receipt` sums a generation's meters (tokens, cost, price rows used) |
-| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageMeter` but the single writer hardcodes `null`; no meter row is attributable to an orchestration run today |
+| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageEvent` but the single writer hardcodes `null`; no event is attributable to an orchestration run today |
 | Run roll-up (per-run token/cost sum)       | ❌ Not started              | Blocked on run/node attribution                                       |
 | Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
-| Meter-type generalization                  | ❌ Not started              | `meter_type` discriminator + `quantity`/`unit`; see [Meter-Type Generalization](#meter-type-generalization) |
-| Compute (`node_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
+| Meter-type generalization                  | ✅ Done                     | Rebuilt as `UsageEvent` (one metered occurrence) + `UsageComponent` (one priced dimension); `PriceBook` prices a SKU component. See [Meter-Type Generalization](#meter-type-generalization) |
+| Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
 | Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
 | `usage.threshold_crossed` webhook event    | ❌ Not started              | For downstream billing/alerting pipelines                             |
@@ -34,8 +34,9 @@
 
 ## Overview
 
-SOAT meters every agent LLM call into an append-only `UsageMeter` row, priced
-at write time from a versioned, three-tier `PriceBook`. Anyone operating
+SOAT meters every agent LLM call into an append-only `UsageEvent` (with its
+per-dimension `UsageComponent` rows), priced at write time from a versioned,
+three-tier `PriceBook`. Anyone operating
 agents per customer project needs to answer "what did this project/run/agent
 cost this period" from the platform, and needs the numbers to be
 **billing-grade**: append-only, idempotent under retries, priced at write
@@ -55,6 +56,17 @@ second metering system.
 
 ## Meter-Type Generalization
 
+> **✅ Shipped (Phase 3b) as an event + component model.** The sections below
+> capture the original design intent; the delivered realization went further
+> than additive columns. A metered occurrence is a `UsageEvent` (attribution +
+> total cost) whose measured quantities are `UsageComponent` rows (one priced
+> dimension each: `quantity × unit_price`). `PriceBook` prices one component of
+> a SKU. Tokens are not privileged — an `llm_tokens` event simply has token
+> components. See the [Usage module doc](../packages/website/docs/modules/usage.md)
+> for the authoritative field list; where the schema tables below still describe
+> `meter_type`/`quantity`/`unit` columns on a single `UsageMeter` row, the
+> event + component model supersedes them.
+
 **Decision:** one metering pipeline for all cost dimensions, not one table
 per dimension. The attribution chain
 (`project → run → node → agent → generation → trace`), the append-only /
@@ -67,7 +79,7 @@ fork billing logic four ways.
 | `meter_type`     | What one row records                                        | `quantity` / `unit`        | Emitter (write path)                                                    |
 | ---------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
 | `llm_tokens`     | One completed LLM call's token usage (today's rows)         | `null` — token columns used | `recordGenerationUsage` at generation completion (exists)                |
-| `node_execution` | One orchestration node execution's wall-clock compute time  | seconds / `node_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
+| `compute_execution` | One orchestration node execution's wall-clock compute time  | seconds / `compute_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
 | `api_request`    | A batch of API requests served for a project                | requests / `request`       | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
 | `storage`        | One project's stored bytes for one day                      | GB-days / `gb_day`         | Daily snapshot job summing `File.size` + document/chunk byte counts      |
 
@@ -85,7 +97,7 @@ fork billing logic four ways.
   for other types.
 - `generation_id`/`agent_id` are already nullable, so non-LLM rows fit the
   existing attribution model unchanged (`storage` rows carry only
-  `project_id`; `node_execution` rows carry `run_id` + `node_id`).
+  `project_id`; `compute_execution` rows carry `run_id` + `node_id`).
 
 **`PriceBook`** gains:
 
@@ -95,7 +107,7 @@ fork billing logic four ways.
   rows and vice versa.
 - The `(provider, model)` pair generalizes to a **SKU**: for platform meters
   `provider` is `soat` and `model` names the billable unit
-  (e.g. `node-second`, `request`, `gb-day`). This keeps the unique upsert key,
+  (e.g. `compute-second`, `request`, `gb-day`). This keeps the unique upsert key,
   the three-tier resolution (per-provider override → project + provider-slug
   → global default), the `effective_from` versioning, and the
   past-rows-are-immutable rule working unchanged for every meter type.
@@ -219,23 +231,37 @@ cost.
 the cumulative per-run signal for a ceiling check, correct in-run
 trigger/action attribution.
 
-### Phase 3b — Meter-Type Generalization (schema) ❌ Not started
+### Phase 3b — Meter-Type Generalization (schema) ✅ Done
 
 **Goal:** The meter and price schemas carry a `meter_type` so non-LLM
 dimensions land in the same pipeline — done **before** billing consumers
-(PRD-002 credits) freeze on the current shape, when it is still a cheap
-additive change.
+(PRD-002 credits) freeze on the current shape.
+
+**Shipped as a ground-up redesign, not additive columns.** Rather than
+privileging tokens on `UsageMeter`, metering was rebuilt into a uniform
+event + component model so no meter type is special (the old `UsageMeter`
+table was dropped).
 
 **Deliverables:**
 
-- `UsageMeter`: `meter_type` (default `llm_tokens`), `quantity`, `unit`
-  columns; `meter_type` filter on `GET /api/v1/usage/meters`
-- `PriceBook`: `meter_type`, `unit_price`, `unit` columns; upsert validation
-  (token prices XOR unit price, matching the row's type)
-- `computeCostUsd` branches on type: token formula for `llm_tokens`,
-  `quantity × unit_price` otherwise
-- Receipt shape gains a by-`meter_type` breakdown (single-type receipts are
-  unchanged in their totals)
+- `UsageEvent` (`ue_`): one metered occurrence — attribution chain
+  (`project`/`run`/`node`/`agent`/`generation`/`trace`/`ai_provider`/
+  `trigger`/`action`), `meter_type`, SKU (`provider`/`model`), total
+  `cost_usd`; append-only, idempotent on the generation. `meter_type` filter
+  on `GET /api/v1/usage/meters`.
+- `UsageComponent` (`uc_`): one priced dimension per row — `component`,
+  `quantity`, `unit`, `billable`, `unit_price`, `cost_usd`, `price_id`. An
+  `llm_tokens` event has `input_tokens`/`output_tokens`/`cached_tokens` (+ a
+  non-billable `reasoning_tokens` detail); `compute_execution` a single
+  `compute_second`.
+- `PriceBook`: prices **one component of a SKU** per row
+  (`meter_type`, `provider`, `model`, `component`, `unit`, `unit_price`,
+  `effective_from`); three-tier resolution and future-dated immutability
+  unchanged; per-component upsert validation.
+- Cost is uniform `quantity × unit_price` per component; the event's
+  `cost_usd` is the sum. Token components are priced per token.
+- Receipt gains a `by_meter_type` cost split and reconstructed token totals
+  (single-type receipts unchanged in their totals).
 
 **Unlocks:** Phases 4–6 become emitter-only work; the "tokens + infra" split
 of the receipt.
@@ -266,13 +292,13 @@ monthly cost figure without scanning every meter row client-side.
 budget alerts without polling; the monthly per-project figure billing
 reconciles against.
 
-### Phase 4 — Compute Metering (`node_execution`) ❌ Not started
+### Phase 4 — Compute Metering (`compute_execution`) ❌ Not started
 
 **Depends on Phases 3a + 3b.** Rides on the same run/node wiring: the
-node-completion hook that stamps `completed_at` writes one `node_execution`
+node-completion hook that stamps `completed_at` writes one `compute_execution`
 meter row (`quantity` = wall-clock seconds from the execution's own
 timestamps, `run_id`/`node_id` attribution, idempotency key from the node
-execution). Priced via a `soat`/`node-second` SKU when the operator defines
+execution). Priced via a `soat`/`compute-second` SKU when the operator defines
 one; `cost_usd = null` otherwise.
 
 **Unlocks:** The compute half of "tokens + infra"; per-run receipts that
@@ -407,7 +433,7 @@ Columns marked **(3b)** are added by the generalization phase.
 | aiProviderId    | INTEGER      | FK → AiProvider, NULL                               |
 | triggerId       | VARCHAR      | NULL; initiating trigger's public id                |
 | actionId        | VARCHAR      | NULL; caller-supplied logical action id (from `generation.metadata`) |
-| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `node_execution` \| `api_request` \| `storage` |
+| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `compute_execution` \| `api_request` \| `storage` |
 | provider        | VARCHAR      | NOT NULL (`soat` for platform meter types)          |
 | model           | VARCHAR      | NOT NULL (the SKU for platform meter types)         |
 | inputTokens     | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
@@ -415,7 +441,7 @@ Columns marked **(3b)** are added by the generalization phase.
 | cachedTokens    | INTEGER      | NOT NULL DEFAULT 0                                  |
 | reasoningTokens | INTEGER      | NOT NULL DEFAULT 0                                  |
 | quantity        | DECIMAL      | **(3b)** NULL; the measure for non-LLM types        |
-| unit            | VARCHAR      | **(3b)** NULL; `node_second` \| `request` \| `gb_day` |
+| unit            | VARCHAR      | **(3b)** NULL; `compute_second` \| `request` \| `gb_day` |
 | costUsd         | DECIMAL      | NULL when no price row matched                      |
 | priceId         | INTEGER      | FK → PriceBook, NULL; the price row applied         |
 | idempotencyKey  | VARCHAR      | UNIQUE, NOT NULL                                    |
@@ -532,11 +558,11 @@ After Phase 3b, platform SKUs use the unit-price shape instead:
 {
   "prices": [
     {
-      "meter_type": "node_execution",
+      "meter_type": "compute_execution",
       "provider": "soat",
-      "model": "node-second",
+      "model": "compute-second",
       "unit_price": 0.0001,
-      "unit": "node_second",
+      "unit": "compute_second",
       "effective_from": "2026-08-01T00:00:00Z"
     }
   ]

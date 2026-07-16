@@ -105,7 +105,7 @@ const runCompletionSideEffects = async (
     // The tool-outputs continuation is a separate completion path from
     // `buildCompletedGenerationResult`/`runStreamGeneration`'s `onEnd` — both
     // of which already meter usage. Without this, a generation that paused
-    // for a client tool call never got a UsageMeter row, even though the
+    // for a client tool call never got a usage event, even though the
     // provider's response carried real usage.
     recordGenerationUsage({
       generationId: args.generationId,

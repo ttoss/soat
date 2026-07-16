@@ -60,4 +60,28 @@ describe('extractUsageTokens', () => {
       reasoningTokens: 0,
     });
   });
+
+  test('records 0 for every count when the provider omits input/output totals', () => {
+    expect(
+      extractUsageTokens({
+        inputTokens: undefined,
+        outputTokens: undefined,
+        totalTokens: undefined,
+        inputTokenDetails: {
+          noCacheTokens: undefined,
+          cacheReadTokens: undefined,
+          cacheWriteTokens: undefined,
+        },
+        outputTokenDetails: {
+          textTokens: undefined,
+          reasoningTokens: undefined,
+        },
+      })
+    ).toEqual({
+      inputTokens: 0,
+      outputTokens: 0,
+      cachedTokens: 0,
+      reasoningTokens: 0,
+    });
+  });
 });

@@ -2134,16 +2134,17 @@ fi
 USAGE_TOTAL=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '.total // 0')
 echo "List usage meters endpoint: OK (total: $USAGE_TOTAL)"
 
-# When at least one generation has completed, the row must carry the token
-# columns (values depend on the live provider, so only their shape is checked).
+# When at least one generation has completed, the event must carry token
+# components (values depend on the live provider, so only their shape is
+# checked).
 if [ "$USAGE_TOTAL" -ge 1 ]; then
-  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '(.data[0] | (.id | startswith("um_")) and (.provider | length > 0) and (.input_tokens | type == "number") and (.reasoning_tokens | type == "number"))')
+  USAGE_ROW_OK=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '(.data[0] | (.id | startswith("ue_")) and (.provider | length > 0) and (.meter_type == "llm_tokens") and (.components | type == "array") and ([.components[] | select(.component == "input_tokens")] | length >= 1))')
   if [ "$USAGE_ROW_OK" != "true" ]; then
-    echo "ERROR: usage-meter row missing expected token fields" >&2
+    echo "ERROR: usage event missing expected token components" >&2
     echo "$USAGE_METERS_RESP" >&2
     exit 1
   fi
-  echo "Usage meter row shape (tokens incl. reasoning): OK"
+  echo "Usage event shape (token components): OK"
 
   # 34b-ii. Receipt — the metered generation has a reconcilable receipt
   USAGE_GEN_ID=$(printf '%s\n' "$USAGE_METERS_RESP" | jq -r '.data[0].generation_id // empty')
@@ -2164,9 +2165,9 @@ fi
 # global default row (ai_provider_id null) and reading it back.
 echo "--- Verifying price book ---"
 PRICES_PUT=$($SOAT_CLI upsert-price-book \
-  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","input_price_per_m":2,"output_price_per_m":8,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","component":"input_tokens","unit":"token","unit_price":0.000002,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
   | sanitize_json)
-PRICES_PUT_OK=$(printf '%s\n' "$PRICES_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id == null) and (.prices[0].input_price_per_m == 2)')
+PRICES_PUT_OK=$(printf '%s\n' "$PRICES_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id == null) and (.prices[0].component == "input_tokens") and (.prices[0].unit_price == 0.000002)')
 if [ "$PRICES_PUT_OK" != "true" ]; then
   echo "ERROR: upsert-price-book did not return the upserted global price" >&2
   echo "$PRICES_PUT" >&2
@@ -2191,9 +2192,9 @@ echo "Price book endpoint (global upsert + read-back): OK"
 echo "--- Verifying per-provider price override ---"
 OVERRIDE_PUT=$($SOAT_CLI update-ai-provider-prices \
   --ai_provider_id "$AI_PROVIDER_ID" \
-  --prices '[{"model":"qwen2.5:0.5b","input_price_per_m":7,"output_price_per_m":21,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  --prices '[{"model":"qwen2.5:0.5b","component":"input_tokens","unit":"token","unit_price":0.000007,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
   | sanitize_json)
-OVERRIDE_OK=$(printf '%s\n' "$OVERRIDE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id != null) and (.prices[0].input_price_per_m == 7)')
+OVERRIDE_OK=$(printf '%s\n' "$OVERRIDE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].ai_provider_id != null) and (.prices[0].unit_price == 0.000007)')
 if [ "$OVERRIDE_OK" != "true" ]; then
   echo "ERROR: update-ai-provider-prices did not return the upserted override" >&2
   echo "$OVERRIDE_PUT" >&2
@@ -2212,9 +2213,9 @@ echo "Per-provider price override: OK"
 echo "--- Verifying project + provider-slug price ---"
 PROJECT_PRICE_PUT=$($SOAT_CLI update-project-prices \
   --project_id "$PROJECT_PUBLIC_ID" \
-  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","input_price_per_m":3,"output_price_per_m":9,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  --prices '[{"provider":"ollama","model":"qwen2.5:0.5b","component":"input_tokens","unit":"token","unit_price":0.000003,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
   | sanitize_json)
-PROJECT_PRICE_OK=$(printf '%s\n' "$PROJECT_PRICE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].project_id != null) and (.prices[0].ai_provider_id == null) and (.prices[0].input_price_per_m == 3)')
+PROJECT_PRICE_OK=$(printf '%s\n' "$PROJECT_PRICE_PUT" | jq -r '(.prices[0].id | startswith("price_")) and (.prices[0].project_id != null) and (.prices[0].ai_provider_id == null) and (.prices[0].unit_price == 0.000003)')
 if [ "$PROJECT_PRICE_OK" != "true" ]; then
   echo "ERROR: update-project-prices did not return the upserted project price" >&2
   echo "$PROJECT_PRICE_PUT" >&2
