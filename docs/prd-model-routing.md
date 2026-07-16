@@ -1,7 +1,8 @@
 # PRD: Model Routing & Fallback Module
 
 > Complements [prd-orchestration-queue.md](./prd-orchestration-queue.md) and
-> [prd-schedules.md](./prd-schedules.md): unattended runs need completions that
+> the [Triggers module](../packages/website/docs/modules/triggers.md): unattended
+> runs need completions that
 > survive a provider outage. Pricing is unaffected — see
 > [prd-usage-metering.md](./prd-usage-metering.md).
 

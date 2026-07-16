@@ -78,8 +78,8 @@ noisy-neighbor fairness and LLM provider rate limits.
 **Deliverables:**
 
 - `max_concurrent_runs` per project (default unlimited; enforced at claim
-  time — excess tasks stay queued, which is what `overlap_policy: queue` in
-  [prd-schedules.md](./prd-schedules.md) leans on)
+  time — excess tasks stay queued, which is what a queued scheduled
+  [trigger](../packages/website/docs/modules/triggers.md) leans on)
 - Global worker concurrency setting (`ORCHESTRATION_WORKER_CONCURRENCY`)
 - Queue depth and claim latency exposed via
   `GET /api/v1/orchestrations/queue/stats` (see
