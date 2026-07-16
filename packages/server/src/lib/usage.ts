@@ -4,6 +4,13 @@ import { db } from '../db';
 // module's public surface (used by the generation lifecycle and tests) is
 // unchanged. `usage.ts` owns the read path (list + receipt re-export).
 export type {
+  UsageAggregate,
+  UsageAggregateGroup,
+  UsageAggregateTotals,
+  UsageGroupBy,
+} from './usageAggregate';
+export { aggregateUsage, USAGE_GROUP_BY } from './usageAggregate';
+export type {
   UsageReceipt,
   UsageReceiptComponent,
   UsageReceiptLine,

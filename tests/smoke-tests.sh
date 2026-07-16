@@ -2179,6 +2179,19 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     fi
     echo "Usage receipt endpoint: OK (generation $USAGE_GEN_ID)"
   fi
+
+  # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
+  # Grand totals and each group carry summed token counts and cost_usd.
+  USAGE_AGG_RESP=$($SOAT_CLI get-usage \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --group-by meter_type | sanitize_json)
+  USAGE_AGG_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '((.project_id | length > 0) and (.group_by == "meter_type") and (.groups | type == "array") and (.totals.input_tokens | type == "number") and ([.groups[] | select(.key == "llm_tokens")] | length >= 1))')
+  if [ "$USAGE_AGG_OK" != "true" ]; then
+    echo "ERROR: get-usage did not return a well-formed aggregate rollup" >&2
+    echo "$USAGE_AGG_RESP" >&2
+    exit 1
+  fi
+  echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
 fi
 
 # 34c. Price book — the global-defaults path (admin upsert + read-back)

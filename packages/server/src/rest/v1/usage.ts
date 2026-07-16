@@ -2,7 +2,12 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
-import { getReceipt, getRunReceipt, listUsageEvents } from 'src/lib/usage';
+import {
+  aggregateUsage,
+  getReceipt,
+  getRunReceipt,
+  listUsageEvents,
+} from 'src/lib/usage';
 
 export const usageRouter = new Router<Context>();
 
@@ -71,6 +76,58 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   });
 
   ctx.body = result;
+});
+
+/**
+ * @openapi
+ * GET /api/v1/usage
+ * operationId: getUsage
+ * Returns a project's usage rolled up over an optional [from, to] window,
+ * bucketed by one dimension (group_by=model|agent|run|day|meter_type). Each
+ * group and the grand total carry summed token counts and cost_usd. Requires
+ * usage:GetUsage on the project.
+ */
+usageRouter.get('/usage', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  // The caseTransform middleware camelCases query keys, so `project_id` and
+  // `group_by` arrive as `projectId` / `groupBy`.
+  const {
+    projectId: projectPublicId,
+    from,
+    to,
+    groupBy,
+  } = ctx.query as Record<string, string | undefined>;
+
+  if (!projectPublicId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'project_id query parameter is required.'
+    );
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action: 'usage:GetUsage',
+  });
+
+  if (
+    projectIds === null ||
+    projectIds === undefined ||
+    projectIds.length === 0
+  ) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  ctx.body = await aggregateUsage({
+    projectId: projectIds[0],
+    projectPublicId,
+    from,
+    to,
+    groupBy,
+  });
 });
 
 // Resolves the receipt for either addressing mode (run_id or generation_id, the

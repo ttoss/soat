@@ -120,6 +120,78 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/usage:
+    get:
+      tags:
+        - Usage
+      summary: Get aggregated usage for a project
+      description: >
+        Returns a project's usage rolled up over an optional `[from, to]` time
+        window, bucketed by a single dimension. Each group and the grand total
+        carry summed token counts and `cost_usd` (null when no event in the
+        bucket was priced). This is the per-project cost-by-range/by-category
+        query — a monthly figure without scanning raw meter rows client-side.
+      operationId: getUsage
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          description: Project public ID to aggregate usage for
+          schema:
+            type: string
+        - name: group_by
+          in: query
+          required: true
+          description: >
+            Dimension to bucket by. `day` buckets on the event's UTC calendar
+            day; the others bucket on the matching column.
+          schema:
+            type: string
+            enum: [model, agent, run, day, meter_type]
+        - name: from
+          in: query
+          required: false
+          description: >
+            Inclusive lower bound (ISO-8601 timestamp) on the event created_at.
+            Omit for no lower bound.
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          required: false
+          description: >
+            Inclusive upper bound (ISO-8601 timestamp) on the event created_at.
+            Omit for no upper bound.
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: The aggregated usage rollup
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UsageAggregate'
+        '400':
+          description: Bad Request (missing project_id, invalid group_by or timestamp)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/usage/receipt:
     get:
       tags:
@@ -373,6 +445,61 @@ components:
         created_at:
           type: string
           format: date-time
+
+    UsageAggregateTotals:
+      type: object
+      description: Summed token counts and cost for a bucket (or the grand total).
+      properties:
+        cost_usd:
+          type: number
+          nullable: true
+          description: Sum of priced event costs in the bucket; null when nothing is priced
+        input_tokens:
+          type: integer
+          description: Full prompt tokens (uncached input + cached), reconstructed from components
+        output_tokens:
+          type: integer
+        cached_tokens:
+          type: integer
+        reasoning_tokens:
+          type: integer
+
+    UsageAggregate:
+      type: object
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+        from:
+          type: string
+          format: date-time
+          nullable: true
+          description: Lower bound applied, echoed back; null when unbounded
+        to:
+          type: string
+          format: date-time
+          nullable: true
+          description: Upper bound applied, echoed back; null when unbounded
+        group_by:
+          type: string
+          enum: [model, agent, run, day, meter_type]
+        groups:
+          type: array
+          description: One entry per distinct value in the chosen dimension.
+          items:
+            allOf:
+              - type: object
+                properties:
+                  key:
+                    type: string
+                    nullable: true
+                    description: >
+                      The bucket's value in the chosen dimension (a model id,
+                      meter type, agent/run public id, or `YYYY-MM-DD` UTC day).
+                      Null when the dimension does not apply to an event.
+              - $ref: '#/components/schemas/UsageAggregateTotals'
+        totals:
+          $ref: '#/components/schemas/UsageAggregateTotals'
 
     UsageReceipt:
       type: object
