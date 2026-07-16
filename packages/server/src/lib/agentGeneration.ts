@@ -81,10 +81,17 @@ const dispatchGeneration = (args: {
 const buildGenerationMetadata = (args: {
   actionId?: string;
   triggerId?: string;
+  runId?: string;
+  nodeId?: string;
 }): Record<string, unknown> | null => {
   const metadata: Record<string, unknown> = {};
   if (args.actionId !== undefined) metadata.actionId = args.actionId;
   if (args.triggerId !== undefined) metadata.triggerId = args.triggerId;
+  // Orchestration attribution: the public run id and the node id that
+  // dispatched this generation, so its usage event can be rolled up per run and
+  // per node. Read back off the generation metadata in `usageRecording.ts`.
+  if (args.runId !== undefined) metadata.runId = args.runId;
+  if (args.nodeId !== undefined) metadata.nodeId = args.nodeId;
   return Object.keys(metadata).length > 0 ? metadata : null;
 };
 
@@ -103,6 +110,8 @@ const resolveContextAndRecord = async (args: {
   knowledgeConfig?: object;
   actionId?: string;
   triggerId?: string;
+  runId?: string;
+  nodeId?: string;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -131,6 +140,8 @@ const resolveContextAndRecord = async (args: {
     metadata: buildGenerationMetadata({
       actionId: args.actionId,
       triggerId: args.triggerId,
+      runId: args.runId,
+      nodeId: args.nodeId,
     }),
   }).catch((error) => {
     log(
@@ -141,6 +152,40 @@ const resolveContextAndRecord = async (args: {
   });
 
   return ctx;
+};
+
+// Returns a stop-here depth-guard result when the recursion budget is spent,
+// or null to proceed. Extracted so `createGeneration` stays within its length
+// budget.
+const buildDepthGuardIfExhausted = async (args: {
+  agentId: string;
+  projectIds?: number[];
+  maxDepth: number;
+  traceId: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+}): Promise<GenerationResult | null> => {
+  if (args.maxDepth > 0) return null;
+
+  const depthAgent = await resolveAgentForGeneration({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+  });
+  if (!depthAgent) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Agent '${args.agentId}' not found.`
+    );
+  }
+  return buildDepthGuardResult({
+    traceId: args.traceId,
+    projectId: depthAgent.project.id as number,
+    projectPublicId: depthAgent.project.publicId,
+    agentId: args.agentId,
+    generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    parentTraceId: args.parentTraceId ?? null,
+    rootTraceId: args.rootTraceId ?? null,
+  });
 };
 
 export const createGeneration = async (args: {
@@ -160,32 +205,21 @@ export const createGeneration = async (args: {
   knowledgeConfig?: object;
   actionId?: string;
   triggerId?: string;
+  runId?: string;
+  nodeId?: string;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
-  if (maxDepth <= 0) {
-    const depthAgent = await resolveAgentForGeneration({
-      agentId: args.agentId,
-      projectIds: args.projectIds,
-    });
-    if (!depthAgent) {
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Agent '${args.agentId}' not found.`
-      );
-    }
-    const depthGenId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
-    return buildDepthGuardResult({
-      traceId,
-      projectId: depthAgent.project.id as number,
-      projectPublicId: depthAgent.project.publicId,
-      agentId: args.agentId,
-      generationId: depthGenId,
-      parentTraceId: args.parentTraceId ?? null,
-      rootTraceId: args.rootTraceId ?? null,
-    });
-  }
+  const depthGuard = await buildDepthGuardIfExhausted({
+    agentId: args.agentId,
+    projectIds: args.projectIds,
+    maxDepth,
+    traceId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+  });
+  if (depthGuard) return depthGuard;
 
   const ctx = await resolveContextAndRecord({
     agentId: args.agentId,
@@ -202,6 +236,8 @@ export const createGeneration = async (args: {
     knowledgeConfig: args.knowledgeConfig,
     actionId: args.actionId,
     triggerId: args.triggerId,
+    runId: args.runId,
+    nodeId: args.nodeId,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

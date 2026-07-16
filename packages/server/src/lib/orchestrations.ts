@@ -7,6 +7,7 @@ import {
   assertOrchestrationUpdateValid,
   assertOrchestrationValid,
 } from './orchestrationValidation';
+import { getRunUsageTotals, type UsageTotals } from './usageReceipt';
 
 const log = createDebug('soat:orchestrations');
 
@@ -169,6 +170,9 @@ export type MappedOrchestrationRun = {
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   nodeExecutions: MappedNodeExecution[];
+  // Usage roll-up (tokens + cost_usd) summed across every metered generation the
+  // run produced. Populated on the single-run read; omitted from list responses.
+  usage?: UsageTotals;
   startedAt: Date | null;
   completedAt: Date | null;
   createdAt: Date;
@@ -218,7 +222,8 @@ export const mapOrchestrationRun = (
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
     nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
-  }
+  },
+  usage?: UsageTotals
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
@@ -234,6 +239,7 @@ export const mapOrchestrationRun = (
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,
     nodeExecutions: (run.nodeExecutions ?? []).map(mapNodeExecution),
+    ...(usage ? { usage } : {}),
     startedAt: run.startedAt,
     completedAt: run.completedAt,
     createdAt: run.createdAt,
@@ -476,11 +482,14 @@ export const findOrchestrationRun = async (args: {
   const run = await db.OrchestrationRun.findOne({ where, include });
   if (!run) return null;
 
+  const usage = await getRunUsageTotals({ runInternalId: run.id as number });
+
   return mapOrchestrationRun(
     run as InstanceType<typeof db.OrchestrationRun> & {
       orchestration: InstanceType<typeof db.Orchestration>;
       project: InstanceType<typeof db.Project>;
-    }
+    },
+    usage
   );
 };
 

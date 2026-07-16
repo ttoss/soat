@@ -130,8 +130,22 @@ export const executeAgentNode = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  // Orchestration attribution: the public run id that owns this node execution
+  // and the trigger firing (if any) that started the run. Both are stamped onto
+  // the generation's usage event so spend rolls up per run, per node, and per
+  // trigger.
+  runPublicId?: string;
+  triggerId?: string;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, traceId, authHeader } = args;
+  const {
+    node,
+    state,
+    projectIds,
+    traceId,
+    authHeader,
+    runPublicId,
+    triggerId,
+  } = args;
   if (!node.agentId)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
@@ -154,6 +168,9 @@ export const executeAgentNode = async (args: {
     messages,
     parentTraceId: traceId,
     authHeader,
+    runId: runPublicId,
+    nodeId: node.id,
+    triggerId,
   });
 
   if (result instanceof ReadableStream) {

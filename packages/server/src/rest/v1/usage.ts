@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
-import { getReceipt, listUsageEvents } from 'src/lib/usage';
+import { getReceipt, getRunReceipt, listUsageEvents } from 'src/lib/usage';
 
 export const usageRouter = new Router<Context>();
 
@@ -73,12 +73,56 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   ctx.body = result;
 });
 
+// Resolves the receipt for either addressing mode (run_id or generation_id, the
+// two mutually exclusive). Throws VALIDATION_FAILED when neither is supplied and
+// RESOURCE_NOT_FOUND when the addressed resource is not visible in scope.
+const resolveReceipt = async (args: {
+  generationId?: string;
+  runId?: string;
+  projectIds?: number[];
+}) => {
+  if (args.runId) {
+    const receipt = await getRunReceipt({
+      runId: args.runId,
+      projectIds: args.projectIds,
+    });
+    if (!receipt) {
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Orchestration run '${args.runId}' not found.`
+      );
+    }
+    return receipt;
+  }
+
+  if (!args.generationId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'generation_id or run_id query parameter is required.'
+    );
+  }
+
+  const receipt = await getReceipt({
+    generationId: args.generationId,
+    projectIds: args.projectIds,
+  });
+  if (!receipt) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Generation '${args.generationId}' not found.`
+    );
+  }
+  return receipt;
+};
+
 /**
  * @openapi
  * GET /api/v1/usage/receipt
  * operationId: getUsageReceipt
- * Returns a billing receipt for a completed generation: per-model line items
- * (tokens, the price-book version that priced them, and cost) plus totals.
+ * Returns a billing receipt. Pass generation_id for a per-generation receipt or
+ * run_id for a per-run receipt summed across the orchestration run's meters —
+ * both share the same shape (per-model line items with tokens, the price-book
+ * version that priced them, and cost, plus totals).
  */
 usageRouter.get('/usage/receipt', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -100,26 +144,16 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
     return;
   }
 
-  const { generationId } = ctx.query as Record<string, string | undefined>;
-  if (!generationId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'generation_id query parameter is required.'
-    );
-  }
+  const { generationId, runId } = ctx.query as Record<
+    string,
+    string | undefined
+  >;
 
-  const receipt = await getReceipt({
+  ctx.body = await resolveReceipt({
     generationId,
+    runId,
     projectIds: projectIds ?? undefined,
   });
-  if (!receipt) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Generation '${generationId}' not found.`
-    );
-  }
-
-  ctx.body = receipt;
 });
 
 /**

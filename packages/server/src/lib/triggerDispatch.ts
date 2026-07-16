@@ -144,6 +144,7 @@ const dispatchToTarget = async (args: {
       input: args.input,
       authHeader: args.authHeader,
       wait: true,
+      triggerId: args.triggerId,
     });
     return {
       target_type: 'orchestration',

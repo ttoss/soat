@@ -95,11 +95,11 @@ An LLM event's tokens are split into disjoint, additive components. `input_token
 
 ### Coverage
 
-Usage is metered for agent generations — including [conversations](./conversations.md) and [orchestration](./orchestrations.md) agent nodes, which run through the same agent-completion path. `run_id` and `node_id` are reserved for orchestration attribution and are `null` for standalone generations.
+Usage is metered for agent generations — including [conversations](./conversations.md) and [orchestration](./orchestrations.md) agent nodes, which run through the same agent-completion path. When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
 
 ### Trigger and action attribution
 
-`action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the [generation](./generations.md) and copied onto its event so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when an **agent-target** [trigger](./triggers.md) initiates the generation. Filter the event list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action. (Trigger attribution for generations produced inside an [orchestration](./orchestrations.md) run is tracked with the run-scoping work and is `null` until then.)
+`action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the [generation](./generations.md) and copied onto its event so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when a [trigger](./triggers.md) initiates the generation — both for a direct **agent-target** trigger and for generations produced inside an [orchestration](./orchestrations.md) run started by a trigger (the run carries the trigger id and propagates it to every in-run generation). Filter the event list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action.
 
 ### Pricing
 
@@ -119,7 +119,9 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 
 ### Receipts and reconciliation
 
-`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event (its SKU, cost, and component breakdown), a `by_meter_type` cost split (the "tokens + infra" split — one entry per distinct meter type), reconstructed token totals (`total_input_tokens` is uncached input + cached), plus a grand total. A single-type receipt has one `by_meter_type` entry whose cost equals the receipt total. Because every component carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it. Per-**run** receipts (summing a run's generations) follow once run-scoping lands.
+`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event (its SKU, cost, and component breakdown), a `by_meter_type` cost split (the "tokens + infra" split — one entry per distinct meter type), reconstructed token totals (`total_input_tokens` is uncached input + cached), plus a grand total. A single-type receipt has one `by_meter_type` entry whose cost equals the receipt total. Because every component carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it.
+
+`GET /api/v1/usage/receipt?run_id=…` returns the same receipt shape for an entire [orchestration](./orchestrations.md) run — "one operating cycle → one action" billing — with one line item per usage event across every node of the run, summed for the totals and the `by_meter_type` split. The response carries `run_id` (and omits `generation_id`). The run's token/cost roll-up is also surfaced inline on the run itself as a `usage` object on `GET /api/v1/orchestration-runs/{run_id}`, so callers see run spend without a second request.
 
 ## Examples
 
@@ -175,6 +177,36 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/usage/receipt?generation_id=gen_V1StGXR8Z5jdHi6B" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Get a run's receipt (summed across every node of the run):
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-usage-receipt --run-id orch_run_V1StGXR8Z5jdHi6B
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.getUsageReceipt({
+  query: { run_id: 'orch_run_V1StGXR8Z5jdHi6B' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/usage/receipt?run_id=orch_run_V1StGXR8Z5jdHi6B" \
   -H "Authorization: Bearer <token>"
 ```
 

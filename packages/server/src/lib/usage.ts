@@ -8,8 +8,9 @@ export type {
   UsageReceiptComponent,
   UsageReceiptLine,
   UsageReceiptMeterTypeTotal,
+  UsageTotals,
 } from './usageReceipt';
-export { getReceipt } from './usageReceipt';
+export { getReceipt, getRunReceipt, getRunUsageTotals } from './usageReceipt';
 export type { UsageTokens } from './usageRecording';
 export { extractUsageTokens, recordGenerationUsage } from './usageRecording';
 

@@ -65,11 +65,17 @@ type Attribution = {
   provider: string;
   actionId: string | null;
   triggerId: string | null;
+  // Public id of the orchestration run that dispatched the generation, and the
+  // node within it. Both arrive via generation metadata; `runPublicId` is
+  // resolved to the internal FK at persist time. Null for standalone generations.
+  runPublicId: string | null;
+  nodeId: string | null;
 };
 
 // Pulls the event's attribution off the loaded generation: the billed AI
-// provider (internal id + slug) and the caller-supplied action / initiating
-// trigger carried in the generation's metadata.
+// provider (internal id + slug), the caller-supplied action / initiating
+// trigger, and the orchestration run/node — all carried in the generation's
+// metadata.
 const resolveEventAttribution = (
   generation: GenerationWithAgent
 ): Attribution => {
@@ -80,7 +86,37 @@ const resolveEventAttribution = (
     provider: aiProvider?.provider ?? 'unknown',
     actionId: metadataString(metadata, 'actionId'),
     triggerId: metadataString(metadata, 'triggerId'),
+    runPublicId: metadataString(metadata, 'runId'),
+    nodeId: metadataString(metadata, 'nodeId'),
   };
+};
+
+// Resolves the run's public id (carried in generation metadata) to its internal
+// FK. Returns null when absent or the run no longer exists — the event is still
+// recorded, just without the run association.
+const resolveRunId = async (
+  runPublicId: string | null
+): Promise<number | null> => {
+  if (!runPublicId) return null;
+  const run = await db.OrchestrationRun.findOne({
+    where: { publicId: runPublicId },
+  });
+  return (run?.id as number | undefined) ?? null;
+};
+
+// The idempotency key. Inside an orchestration run a generation is scoped to its
+// node execution (`run:<run>:node:<node>`), so a replayed node upserts into a
+// no-op instead of double counting. Standalone generations key on the
+// generation's own public id.
+const buildIdempotencyKey = (args: {
+  generationPublicId: string;
+  runPublicId: string | null;
+  nodeId: string | null;
+}): string => {
+  if (args.runPublicId && args.nodeId) {
+    return `run:${args.runPublicId}:node:${args.nodeId}`;
+  }
+  return args.generationPublicId;
 };
 
 type PricedComponent = TokenComponent & {
@@ -153,11 +189,14 @@ const priceComponents = (args: {
   );
 };
 
-// Atomic + idempotent on the generation id: a replayed completion finds the
-// event already present and writes nothing, instead of double counting.
+// Atomic + idempotent on the resolved key: a replayed completion (or a replayed
+// orchestration node) finds the event already present and writes nothing,
+// instead of double counting.
 const persistEvent = async (args: {
   generation: GenerationWithAgent;
   attribution: Attribution;
+  runId: number | null;
+  idempotencyKey: string;
   model: string;
   priced: PricedComponent[];
   costUsd: string | null;
@@ -165,12 +204,12 @@ const persistEvent = async (args: {
   const { generation, attribution } = args;
   return db.sequelize.transaction(async (transaction) => {
     const [event, created] = await db.UsageEvent.findOrCreate({
-      where: { idempotencyKey: generation.publicId },
+      where: { idempotencyKey: args.idempotencyKey },
       defaults: {
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: generation.projectId,
-        runId: null,
-        nodeId: null,
+        runId: args.runId,
+        nodeId: attribution.nodeId,
         agentId: generation.agentId,
         generationId: generation.id,
         traceId: generation.traceId,
@@ -181,7 +220,7 @@ const persistEvent = async (args: {
         provider: attribution.provider,
         model: args.model,
         costUsd: args.costUsd,
-        idempotencyKey: generation.publicId,
+        idempotencyKey: args.idempotencyKey,
       },
       transaction,
     });
@@ -243,9 +282,18 @@ const writeGenerationEvent = async (args: {
     })
   );
 
+  const runId = await resolveRunId(attribution.runPublicId);
+  const idempotencyKey = buildIdempotencyKey({
+    generationPublicId: generation.publicId,
+    runPublicId: attribution.runPublicId,
+    nodeId: attribution.nodeId,
+  });
+
   const created = await persistEvent({
     generation,
     attribution,
+    runId,
+    idempotencyKey,
     model,
     priced,
     costUsd,

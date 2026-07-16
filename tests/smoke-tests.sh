@@ -1098,6 +1098,27 @@ if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.node_executions | type) == "a
 fi
 echo "Get run: OK"
 
+# Run usage roll-up: the single-run read surfaces a usage object with numeric
+# token totals. This orchestration has only transform nodes (no metered
+# generation), so the totals are a deterministic zero.
+if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.usage | type) == "object" and (.usage.total_input_tokens | type) == "number"' >/dev/null 2>&1; then
+  echo "get-orchestration-run did not include a usage roll-up"
+  printf '%s\n' "$ORCH_RUN_GET_RESP"
+  exit 1
+fi
+echo "Run usage roll-up: OK"
+
+# Per-run receipt: same shape as the generation receipt, addressed by run_id.
+# Uses the default admin CLI (the usage:GetReceipt permission lives with the
+# admin, not the orchestration-scoped API key).
+ORCH_RUN_RECEIPT=$($SOAT_CLI get-usage-receipt --run-id "$ORCH_RUN_ID")
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.total_input_tokens | type) == "number")' >/dev/null 2>&1; then
+  echo "get-usage-receipt --run-id did not return a well-formed run receipt"
+  printf '%s\n' "$ORCH_RUN_RECEIPT"
+  exit 1
+fi
+echo "Per-run receipt: OK"
+
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
 if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
