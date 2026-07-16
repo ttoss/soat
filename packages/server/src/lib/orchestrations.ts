@@ -25,6 +25,7 @@ export type OrchestratorNodeType =
   | 'poll'
   | 'delay'
   | 'webhook'
+  | 'emit_event'
   | 'sub_orchestration';
 
 export type RetryBackoffStrategy = 'fixed' | 'exponential';
@@ -86,26 +87,17 @@ export type OrchestrationNode = {
   // delay node / poll node — duration string: a friendly suffix form
   // (`5s`, `30s`, `5m`, `2h`, `500ms`) or ISO 8601 (e.g. PT5S).
   duration?: string;
-  // webhook node
-  mode?: 'emit' | 'receive';
-  webhookUrl?: string;
-  // webhook emit node — outbound request auth. `headers` values support
-  // `{{secret:...}}` templating (resolved against the run's project at emit
-  // time), so a caller can send an auth header without embedding the token in
-  // the URL. When `signingSecret` is set (also secret-templatable), the emit
-  // POST is HMAC-SHA256 signed over the exact serialized body and the digest is
-  // sent as the `X-Soat-Signature` header (`sha256=<hex>`), so the receiver can
-  // authenticate the payload.
-  headers?: Record<string, string>;
-  signingSecret?: string;
-  // webhook emit node — when true, a failed delivery (transport error or a
-  // non-2xx response) throws a retriable `ORCHESTRATION_WEBHOOK_DELIVERY_FAILED`
-  // instead of silently completing with `delivered: false`. Combined with the
-  // node's `retry` policy this gives a critical alert an observable, retried
-  // delivery: the failing attempt is recorded and, once attempts are exhausted,
-  // the run fails rather than dropping the alert. Defaults to false
-  // (fire-and-observe: the run continues regardless of delivery).
-  requireDelivery?: boolean;
+  // webhook node — parks the run awaiting an inbound callback (`mode: receive`).
+  // Outbound notification is not a webhook node concern: emit an `emit_event`
+  // node instead and let a Webhook subscription deliver it (see eventType).
+  mode?: 'receive';
+  // emit_event node — emits an internal domain event of type `eventType`
+  // carrying the input-mapped payload as the event `data`. Any Webhook
+  // subscribed to that event type (in the run's project) then delivers it —
+  // signed, retried, and tracked by the Webhooks module — so a graph never
+  // holds a URL or secret of its own. Reactive, fire-and-forget: the run does
+  // not block on or fail from delivery outcome.
+  eventType?: string;
   // sub_orchestration node
   orchestrationId?: string;
   // Shared: max iterations for cycles

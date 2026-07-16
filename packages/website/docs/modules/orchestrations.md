@@ -103,7 +103,8 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
-| `webhook`      | Emits an HTTP POST (`mode: "emit"`, `webhook_url`) or pauses awaiting a callback (`mode: "receive"`). An `emit` node may authenticate its POST: `headers` values support `{{secret:...}}` templating (resolved against the run's project), and `signing_secret` HMAC-SHA256 signs the body, sending the digest as `X-Soat-Signature: sha256=<hex>`. The POST is awaited and the node's artifact records delivery: `{ emitted: true, delivered: <bool>, status: <httpStatus>, signed: <bool> }` (by default a transport failure sets `delivered: false` without failing the run; `require_delivery: true` instead fails the node so a `retry` policy can re-deliver). See [Webhook auth](#webhook-authentication). |
+| `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. Any [Webhook](./webhooks.md) subscribed to that event type in the run's project delivers it — signed, retried, and tracked by the Webhooks module. The graph holds no URL or secret. Fire-and-forget: the run does not block on or fail from delivery. See [Emitting events](#emitting-events). |
+| `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
 
 ### Loops (collection iteration)
@@ -158,30 +159,25 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 
 > **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
 
-### Webhook authentication
+### Emitting events
 
-A `webhook` emit node can authenticate and sign its outbound POST so a receiver can trust the caller and the payload:
+To send data out of a graph, an `emit_event` node emits an **internal event** — it does not call any URL itself. Delivery is entirely the [Webhooks](./webhooks.md) module's job: any webhook subscribed to the event type (in the run's project) delivers the event, already signed (`X-Soat-Signature`), retried, tracked as a `WebhookDelivery`, and policy-gated. The graph therefore holds **no URL and no secret** — auth and endpoints are managed once, centrally, on the webhook subscription.
 
-- **`headers`** — extra request headers. Values support `{{secret:...}}` templating, resolved against the run's project at emit time, so an auth header carries a secret without embedding it in `webhook_url`. Use standard (hyphenated) header names — e.g. `X-Auth-Token`, `Authorization`.
-- **`signing_secret`** — when set, the exact serialized body is HMAC-SHA256 signed with this secret (itself `{{secret:...}}`-templatable) and the digest is sent as `X-Soat-Signature: sha256=<hex>`.
-- **`require_delivery`** — when `true`, a failed delivery (transport error or a non-2xx response) fails the node with a retriable `ORCHESTRATION_WEBHOOK_DELIVERY_FAILED` error instead of completing with `delivered: false`. Pair it with a [`retry`](#retry-policy) policy so a critical alert is re-delivered; once attempts are exhausted the run **fails** rather than silently dropping the alert. Defaults to `false`.
+- **`event_type`** — the event type to emit, e.g. `guardrail.exception`. A subscriber listens with `create-webhook --events "guardrail.exception"` (or a pattern like `guardrail.*`).
+- **`input_mapping`** — resolved against run state to build the event `data` payload.
 
-The POST is awaited: on success (or, without `require_delivery`, on any completed request) the node's artifact records `{ emitted: true, delivered: <bool>, status: <httpStatus>, signed: <bool> }`. By default a transport failure sets `delivered: false` and the run continues, so a downstream `condition` node can branch on delivery. With `require_delivery: true` a failed delivery instead throws — the failing attempt is recorded in `node_executions` and the run fails once retries are exhausted.
+The node is reactive and fire-and-forget, exactly like the run's own [lifecycle events](#durable-background-execution): it completes as soon as the event is emitted, and the run neither blocks on nor fails from any subscriber's delivery outcome. Its artifact is `{ emitted: true, eventType: "<type>" }`. (If a graph needs a _synchronous_ call whose failure must fail the run, use an `http` [tool](./tools.md) node instead — that is a tool call, not a notification.)
 
 ```json
 {
   "id": "alert",
-  "type": "webhook",
-  "mode": "emit",
-  "webhook_url": "https://alerts.example.com/hook",
-  "headers": { "X-Auth-Token": "{{secret:sec_alertToken}}" },
-  "signing_secret": "{{secret:sec_alertSigning}}",
-  "require_delivery": true,
-  "retry": { "max_attempts": 5, "backoff": { "strategy": "exponential" } },
-  "input_mapping": { "reason": { "var": "state.exception" } },
-  "state_mapping": { "state.delivered": { "var": "output.delivered" } }
+  "type": "emit_event",
+  "event_type": "guardrail.exception",
+  "input_mapping": { "reason": { "var": "state.exception" } }
 }
 ```
+
+The emitted event carries `resource_type: "orchestration_run"` and the run's id as `resource_id`, so subscribers (and webhook policies) can scope to orchestration output. See [Delivery](./webhooks.md#delivery) for the envelope and signature format.
 
 ### Retry Policy
 

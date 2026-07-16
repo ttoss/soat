@@ -401,6 +401,7 @@ components:
               poll,
               delay,
               webhook,
+              emit_event,
               sub_orchestration,
             ]
           description: Node execution type.
@@ -514,37 +515,19 @@ components:
             (`5s`, `30s`, `5m`, `2h`, `500ms`) or ISO 8601 (e.g. PT5S).
         mode:
           type: string
-          enum: [emit, receive]
-          description: For webhook nodes — whether to emit or receive.
-        webhook_url:
-          type: string
-          description: For webhook emit nodes — URL to POST to.
-        headers:
-          type: object
-          additionalProperties:
-            type: string
+          enum: [receive]
           description: >
-            For webhook emit nodes — extra HTTP headers sent with the POST.
-            Values support `{{secret:...}}` templating, resolved against the
-            run's project at emit time, so an auth header can carry a secret
-            without embedding it in the URL.
-        signing_secret:
+            For webhook nodes — parks the run awaiting an inbound callback.
+            `receive` is the only mode; to send a notification out of a graph,
+            use an `emit_event` node instead.
+        event_type:
           type: string
           description: >
-            For webhook emit nodes — when set, the POST body is HMAC-SHA256
-            signed with this secret and the digest is sent as the
-            `X-Soat-Signature: sha256=<hex>` header so the receiver can
-            authenticate the payload. Supports `{{secret:...}}` templating.
-        require_delivery:
-          type: boolean
-          description: >
-            For webhook emit nodes — when true, a failed delivery (transport
-            error or a non-2xx response) fails the node with a retriable
-            `ORCHESTRATION_WEBHOOK_DELIVERY_FAILED` error instead of completing
-            with `delivered: false`. Combine with a `retry` policy to re-deliver
-            a critical alert; once attempts are exhausted the run fails rather
-            than silently dropping it. Defaults to false (the run continues
-            regardless of delivery).
+            For emit_event nodes — the internal event type to emit (e.g.
+            `guardrail.exception`). The node's input_mapping becomes the event
+            `data`. Any Webhook subscribed to this event type in the run's
+            project then delivers it — signed, retried, and tracked by the
+            Webhooks module — so the graph holds no URL or secret of its own.
         orchestration_id:
           x-soat-ref: orchestrations
           type: string

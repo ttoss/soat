@@ -100,6 +100,7 @@ const REQUIRED_NODE_FIELDS: Partial<
   delay: 'duration',
   loop: 'orchestrationId',
   poll: 'toolId',
+  emit_event: 'eventType',
   sub_orchestration: 'orchestrationId',
 };
 

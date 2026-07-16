@@ -2149,57 +2149,89 @@ describe('Orchestrations', () => {
       expect(runRes.body.state.waited).toBe('PT0S');
     });
 
-    test('webhook emit mode completes', async () => {
-      const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestrations')
-        .send({
-          name: 'Webhook Emit',
-          nodes: [
-            {
-              id: 'wh',
-              type: 'webhook',
-              mode: 'emit',
-              state_mapping: { 'state.emitted': { var: 'output.emitted' } },
-            },
-          ],
-          edges: [],
-          project_id: projectId,
-        });
-      expect(createRes.status).toBe(201);
+    test('emit_event node emits an event delivered to a subscribed webhook', async () => {
+      // A graph gets data out by emitting an internal event; a Webhook
+      // subscription (not the graph) delivers it. The node holds no URL/secret.
+      const fetchSpy = jest
+        .spyOn(global, 'fetch')
+        .mockResolvedValue(new Response('ok', { status: 200 }));
+      const hookUrl = 'https://example.com/emit-event-hook';
+      try {
+        // Admin has webhooks:CreateWebhook; the orch user does not. The
+        // dispatcher matches webhooks by project, regardless of who created them.
+        const hookRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/webhooks')
+          .send({
+            project_id: projectId,
+            name: 'emit-event-hook',
+            url: hookUrl,
+            events: ['guardrail.exception'],
+          });
+        expect(hookRes.status).toBe(201);
 
-      const runRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestration-runs')
-        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
-      expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('succeeded');
-      expect(runRes.body.state.emitted).toBe(true);
-    });
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Emit Event',
+            nodes: [
+              {
+                id: 'alert',
+                type: 'emit_event',
+                event_type: 'guardrail.exception',
+                input_mapping: { reason: 'kill-switch' },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
 
-    test('webhook emit node accepts headers and signing_secret (F-12)', async () => {
-      // Regression: these fields were previously rejected with
-      // VALIDATION_FAILED: Unknown field(s). They must now be accepted so an
-      // emit node can authenticate / sign its outbound POST.
-      const createRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/orchestrations')
-        .send({
-          name: 'Webhook Emit Signed',
-          nodes: [
-            {
-              id: 'wh',
-              type: 'webhook',
-              mode: 'emit',
-              webhook_url: 'http://example.test/hook',
-              headers: { 'X-Auth': 'token-123' },
-              signing_secret: 'shhh',
-            },
-          ],
-          edges: [],
-          project_id: projectId,
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('succeeded');
+
+        const exec = runRes.body.node_executions.find(
+          (n: { node_id: string }) => {
+            return n.node_id === 'alert';
+          }
+        );
+        // `output` is a verbatim pass-through on orchestration-run routes, so
+        // the artifact keeps its camelCase `eventType`.
+        expect(exec.output).toEqual({
+          emitted: true,
+          eventType: 'guardrail.exception',
         });
-      expect(createRes.status).toBe(201);
-      const node = createRes.body.nodes[0];
-      expect(node.headers).toEqual({ 'X-Auth': 'token-123' });
-      expect(node.signing_secret).toBe('shhh');
+
+        // Delivery is fire-and-forget; poll until the subscription is called.
+        const deadline = Date.now() + 5000;
+        const callTo = () => {
+          return fetchSpy.mock.calls.find(([u]) => {
+            return u === hookUrl;
+          });
+        };
+        while (!callTo() && Date.now() < deadline) {
+          await new Promise((r) => {
+            return setTimeout(r, 25);
+          });
+        }
+        const call = callTo();
+        expect(call).toBeDefined();
+        const init = call![1] as {
+          headers: Record<string, string>;
+          body: string;
+        };
+        expect(init.headers['X-Soat-Event']).toBe('guardrail.exception');
+        const body = JSON.parse(init.body);
+        expect(body.event).toBe('guardrail.exception');
+        expect(body.resource_type ?? body.resourceType).toBe(
+          'orchestration_run'
+        );
+        expect(body.data.reason).toBe('kill-switch');
+      } finally {
+        fetchSpy.mockRestore();
+      }
     });
 
     test('webhook receive mode pauses the run', async () => {

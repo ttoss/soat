@@ -11,6 +11,7 @@ import {
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
+  executeEmitEventNode,
   executeHumanNode,
   executeKnowledgeNode,
   executeLoopNode,
@@ -72,9 +73,11 @@ type DispatchArgs = {
   nodeDefn: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
-  // The run's own project id — used for project-scoped secret resolution (e.g.
-  // webhook emit auth headers / HMAC signing).
+  // The run's own project id — used for project-scoped resolution (secrets) and
+  // to scope an emit_event node's event to the run's project.
   projectId?: number;
+  // The run's public id — used as the resourceId of an emit_event node's event.
+  runPublicId?: string;
   traceId: string | null;
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
@@ -94,6 +97,8 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
       return executeApprovalNode({ node: nodeDefn, state });
     case 'delay':
       return executeDelayNode({ node: nodeDefn });
+    case 'webhook':
+      return executeWebhookNode({ node: nodeDefn, state });
     default:
       return null;
   }
@@ -107,6 +112,7 @@ const dispatchNodeExecution = async (
     state,
     projectIds,
     projectId,
+    runPublicId,
     traceId,
     authHeader,
     pollAttempt,
@@ -114,8 +120,13 @@ const dispatchNodeExecution = async (
   const simple = dispatchSimpleNode(args);
   if (simple !== null) return simple;
   switch (nodeDefn.type) {
-    case 'webhook':
-      return executeWebhookNode({ node: nodeDefn, state, projectId });
+    case 'emit_event':
+      return executeEmitEventNode({
+        node: nodeDefn,
+        state,
+        projectId,
+        runPublicId,
+      });
     case 'agent':
       return executeAgentNode({
         node: nodeDefn,
@@ -168,6 +179,7 @@ export const executeNodeById = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   projectId?: number;
+  runPublicId?: string;
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
@@ -182,6 +194,7 @@ export const executeNodeById = async (args: {
     state,
     projectIds,
     projectId,
+    runPublicId,
     traceId,
     authHeader,
     pollAttempt,
@@ -200,6 +213,7 @@ export const executeNodeById = async (args: {
     state,
     projectIds,
     projectId,
+    runPublicId,
     traceId,
     authHeader,
     pollAttempt,

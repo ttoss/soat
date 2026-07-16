@@ -323,6 +323,7 @@ export const executeDelayNode = (args: {
   };
 };
 
+export { executeEmitEventNode } from './orchestrationEmitEventNode';
 export { executeWebhookNode } from './orchestrationWebhookNode';
 
 const resolveLoopCollection = (args: {
