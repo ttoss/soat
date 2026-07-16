@@ -65,15 +65,19 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 | 2.3 ✅ | Cost is uniform `quantity × unit_price` per component; event cost is their sum | token components priced per token |
 | 2.4 ✅ | `meter_type` filter on `GET /usage/meters`; receipt gains a `by_meter_type` breakdown | |
 
-## Milestone 3 — Project aggregate + alerts (queryable, pushable)
+## Milestone 3 — Project aggregate + alerts (queryable, pushable) ✅ Done
 
-> [Metering Phase 3c](./prd-usage-metering.md#phase-3c--aggregation--events--not-started)
+> [Metering Phase 3c](./prd-usage-metering.md#phase-3c--aggregation--events--done)
+>
+> **Shipped (#564, #565).** Per-project usage is queryable as a grouped
+> rollup, and thresholds fire the `usage.threshold_crossed` webhook after each
+> metering write with once-per-window / 10% re-arm hysteresis.
 
 | # | Task | Notes |
 |---|------|-------|
-| 3.1 | `GET /api/v1/usage?project_id&from&to&group_by=model\|agent\|run\|day\|meter_type` | The per-project cost-by-date-range/by-category query |
-| 3.2 | `UsageThreshold` table + CRUD | Fire-state / hysteresis rules in [Usage Thresholds](./prd-usage-metering.md#usage-thresholds) |
-| 3.3 | `usage.threshold_crossed` webhook | Once-per-window / 10% re-arm band |
+| 3.1 ✅ | `GET /api/v1/usage?project_id&from&to&group_by=model\|agent\|run\|day\|meter_type` | The per-project cost-by-date-range/by-category query (#564) |
+| 3.2 ✅ | `UsageThreshold` table + CRUD | Fire-state / hysteresis rules in [Usage Thresholds](./prd-usage-metering.md#usage-thresholds) (#565) |
+| 3.3 ✅ | `usage.threshold_crossed` webhook | Once-per-window / 10% re-arm band; evaluated synchronously after each usage-event write (#565) |
 
 ## Milestone 4 — Infra meter emitters (the "+ infra" half of the bill)
 
