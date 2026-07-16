@@ -175,6 +175,7 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
 describe('resolveDocumentSearch — discussion-output documents', () => {
   let adminToken: string;
   let projectId: string;
+  let projectDbId: number;
   const discussionOutputPath = '/discussions/disc_1/runs/run_1/outcome.txt';
   const normalPath = '/playbooks/normal.md';
 
@@ -188,6 +189,10 @@ describe('resolveDocumentSearch — discussion-output documents', () => {
       .post('/api/v1/projects')
       .send({ name: 'resolveDocumentSearch discussion-output Test Project' });
     projectId = projectRes.body.id;
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    projectDbId = project!.id;
 
     await authenticatedTestClient(adminToken).post('/api/v1/documents').send({
       project_id: projectId,
@@ -204,7 +209,10 @@ describe('resolveDocumentSearch — discussion-output documents', () => {
   });
 
   test('a plain search excludes documents under /discussions/ by default', async () => {
-    const results = await resolveDocumentSearch({ config: {} });
+    const results = await resolveDocumentSearch({
+      projectIds: [projectDbId],
+      config: {},
+    });
 
     expect(
       results.some((r) => {
@@ -220,6 +228,7 @@ describe('resolveDocumentSearch — discussion-output documents', () => {
 
   test('an explicit paths filter targeting /discussions/ still returns it', async () => {
     const results = await resolveDocumentSearch({
+      projectIds: [projectDbId],
       config: { paths: ['/discussions/'] },
     });
 

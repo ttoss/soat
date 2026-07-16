@@ -28,6 +28,7 @@ describe('Discussions', () => {
         'tools:CreateTool',
         'tools:GetTool',
         'tools:DeleteTool',
+        'documents:GetDocument',
       ],
     });
 

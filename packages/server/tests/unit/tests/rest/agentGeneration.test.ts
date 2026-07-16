@@ -15,6 +15,12 @@ import {
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+const sleep = (ms: number) => {
+  return new Promise((resolve) => {
+    return setTimeout(resolve, ms);
+  });
+};
+
 describe('Agent Generation Routes', () => {
   afterEach(() => {
     jest.clearAllMocks();
@@ -647,9 +653,20 @@ describe('Agent Generation Routes', () => {
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('completed');
 
-      const metersRes = await authenticatedTestClient(userToken).get(
+      // The tool-outputs continuation completes via a fire-and-forget side
+      // effect (`fireCompletionSideEffects`, not awaited by the response), so
+      // the UsageMeter row lands asynchronously — poll for it within a bound
+      // instead of asserting immediately after the response returns.
+      let metersRes = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/meters?generation_id=gen_usage_metered'
       );
+      const startedAt = Date.now();
+      while (metersRes.body.total === 0 && Date.now() - startedAt < 5000) {
+        await sleep(50);
+        metersRes = await authenticatedTestClient(userToken).get(
+          '/api/v1/usage/meters?generation_id=gen_usage_metered'
+        );
+      }
       expect(metersRes.status).toBe(200);
       expect(metersRes.body.total).toBe(1);
       expect(metersRes.body.data[0].input_tokens).toBe(1);
