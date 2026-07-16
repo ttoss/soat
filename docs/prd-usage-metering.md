@@ -4,33 +4,133 @@
 > Depends on the idempotency keys from
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > exactly-once accounting under retries; feeds the `usage.*` guard context in
-> [prd-guardrails.md](./prd-guardrails.md).
+> [prd-guardrails.md](./prd-guardrails.md) and the token/cost windows in
+> [prd-quotas.md](./prd-quotas.md).
 
 ## Implementation Status
 
 | Component                                  | Status                     | Notes                                                                |
 | ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
 | `UsageMeter` model (append-only)           | ✅ Done (#483)              | One row per completed generation; unique idempotency key on the generation |
-| Provider-call instrumentation              | 🚧 Agent path (#483)        | Wired for agent generations, conversations, and orchestration agent nodes; extraction/discussions/chats still pending |
+| Provider-call instrumentation              | 🚧 Agent path (#483, #557)  | Wired for agent generations (non-stream, streaming, and the tool-outputs continuation path, #557), conversations, and orchestration agent nodes; extraction/discussions/chats still pending |
 | Reasoning-token breakdown                  | ✅ Done (#483)              | `reasoning_tokens` (and cached) captured from the provider report     |
 | `trace_id` attribution                     | ✅ Done (#484)              | Meter links to its trace; filterable                                  |
 | Trigger + logical action-id attribution    | 🚧 Agent-target (#485)      | `trigger_id`/`action_id` on the meter; in-orchestration-run trigger attribution pending run-scoping |
 | Price book + write-time cost computation   | ✅ Done (#488)              | Cost frozen at write time from the effective price row                |
-| Default price seeding                      | ✅ Done (#488)              | Common provider/model defaults seeded idempotently at startup         |
+| Three-tier price resolution                | ✅ Done (#502/#504)         | Per-provider override → project + provider-slug → global default      |
+| Default price seeding                      | ❌ Removed (#546)           | SOAT no longer ships default prices; operators load their own. Meters with no matching price row record `cost_usd = null` |
+| Per-generation receipt                     | ✅ Done                     | `GET /api/v1/usage/receipt` sums a generation's meters (tokens, cost, price rows used) |
+| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageMeter` but the single writer hardcodes `null`; no meter row is attributable to an orchestration run today |
+| Run roll-up (per-run token/cost sum)       | ❌ Not started              | Blocked on run/node attribution                                       |
 | Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
+| Meter-type generalization                  | ❌ Not started              | `meter_type` discriminator + `quantity`/`unit`; see [Meter-Type Generalization](#meter-type-generalization) |
+| Compute (`node_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
+| Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
+| API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
 | `usage.threshold_crossed` webhook event    | ❌ Not started              | For downstream billing/alerting pipelines                             |
 | Threshold config (`UsageThreshold` table)  | ❌ Not started              | Per-project thresholds + fire state driving `usage.threshold_crossed` |
-| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([prd-guardrails.md](./prd-guardrails.md)), which is unbuilt |
+| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([prd-guardrails.md](./prd-guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read |
+
+## Overview
+
+SOAT meters every agent LLM call into an append-only `UsageMeter` row, priced
+at write time from a versioned, three-tier `PriceBook`. Anyone operating
+agents per customer project needs to answer "what did this project/run/agent
+cost this period" from the platform, and needs the numbers to be
+**billing-grade**: append-only, idempotent under retries, priced at write
+time.
+
+The write side is deliberately one place — the shared completion side-effects
+(`recordGenerationUsage`) — so every provider and every path (agents,
+extraction, discussions, orchestration nodes) meters identically, and adding
+a provider cannot silently skip metering.
+
+**LLM tokens are not the whole bill.** A project's true cost is
+`tokens + infra` — compute time spent executing orchestration nodes, API
+requests served, and bytes stored. Today only tokens are metered; the
+[Meter-Type Generalization](#meter-type-generalization) section defines how
+the same meter/price machinery extends to the other dimensions without a
+second metering system.
+
+## Meter-Type Generalization
+
+**Decision:** one metering pipeline for all cost dimensions, not one table
+per dimension. The attribution chain
+(`project → run → node → agent → generation → trace`), the append-only /
+idempotency guarantees, the write-time pricing, and the aggregation surface
+are identical for every dimension — duplicating them per dimension would
+fork billing logic four ways.
+
+### Meter types
+
+| `meter_type`     | What one row records                                        | `quantity` / `unit`        | Emitter (write path)                                                    |
+| ---------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
+| `llm_tokens`     | One completed LLM call's token usage (today's rows)         | `null` — token columns used | `recordGenerationUsage` at generation completion (exists)                |
+| `node_execution` | One orchestration node execution's wall-clock compute time  | seconds / `node_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
+| `api_request`    | A batch of API requests served for a project                | requests / `request`       | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
+| `storage`        | One project's stored bytes for one day                      | GB-days / `gb_day`         | Daily snapshot job summing `File.size` + document/chunk byte counts      |
+
+### Schema changes
+
+**`UsageMeter`** gains:
+
+- `meter_type` VARCHAR NOT NULL DEFAULT `'llm_tokens'` — discriminator; all
+  existing rows backfill to `llm_tokens` via the default.
+- `quantity` DECIMAL NULL + `unit` VARCHAR NULL — the generic measure for
+  non-LLM types. For `llm_tokens` both stay `null`; the token columns remain
+  the source of truth (no double-encoding of the same number).
+- Token columns (`input_tokens`, `output_tokens`, `cached_tokens`,
+  `reasoning_tokens`) are meaningful only for `llm_tokens` and default to `0`
+  for other types.
+- `generation_id`/`agent_id` are already nullable, so non-LLM rows fit the
+  existing attribution model unchanged (`storage` rows carry only
+  `project_id`; `node_execution` rows carry `run_id` + `node_id`).
+
+**`PriceBook`** gains:
+
+- `meter_type` VARCHAR NOT NULL DEFAULT `'llm_tokens'`.
+- `unit_price` DECIMAL NULL + `unit` VARCHAR NULL — used when
+  `meter_type != 'llm_tokens'`; the per-M token columns stay `null` for those
+  rows and vice versa.
+- The `(provider, model)` pair generalizes to a **SKU**: for platform meters
+  `provider` is `soat` and `model` names the billable unit
+  (e.g. `node-second`, `request`, `gb-day`). This keeps the unique upsert key,
+  the three-tier resolution (per-provider override → project + provider-slug
+  → global default), the `effective_from` versioning, and the
+  past-rows-are-immutable rule working unchanged for every meter type.
+
+**Cost computation** branches on type: `llm_tokens` keeps the existing
+token-rate formula; every other type is `quantity × unit_price`. As with
+tokens today, a missing price row records the quantity with
+`cost_usd = null` — usage is never lost because pricing lagged.
+
+### Consumer-facing effects
+
+- `GET /api/v1/usage/meters` gains a `meter_type` filter.
+- The receipt and the aggregation endpoint report cost **broken down by
+  `meter_type`** plus a grand total — the "tokens + infra" split downstream
+  billing needs.
+- Thresholds and quotas ([prd-quotas.md](./prd-quotas.md)) keep operating on
+  `cost_usd`/`tokens`; a total-cost threshold naturally starts covering infra
+  cost once infra meters exist. Request *enforcement* counters
+  (`QuotaWindowCounter`) stay separate from request *metering* rows: quotas
+  need atomic per-request increments to block, metering needs cheap batched
+  rows to bill — different write patterns, deliberately not unified.
 
 ## Implementation Phases
+
+Phases 1–2 are shipped; 3a–3c close the billing-grade per-run gaps; 4–6 add
+the non-LLM dimensions; 7 stays deferred behind guardrails.
 
 ### Phase 1 — Meter Rows + Idempotency ✅ Done (#483)
 
 > Delivered for the agent-completion path (agent generations, conversations,
-> orchestration agent nodes). Idempotency is keyed on the generation; the
-> node-level idempotency key from the orchestration queue is pending
-> run-scoping. Reasoning/cached token breakdown (#483), `trace_id` (#484), and
-> trigger/action attribution (#485) were added on top via epic #482.
+> orchestration agent nodes), including the tool-outputs continuation path
+> (#557). Idempotency is keyed on the generation; the node-level idempotency
+> key from the orchestration queue is pending run-scoping. Reasoning/cached
+> token breakdown (#483), `trace_id` (#484), and trigger/action attribution
+> (#485) were added on top via epic #482. Extraction, discussions, and chats
+> are not yet metered.
 
 **Goal:** Every LLM call produces exactly one attribution-complete usage row —
 including under at-least-once redelivery.
@@ -52,12 +152,16 @@ including under at-least-once redelivery.
 **Unlocks:** Trustworthy raw usage data; the acceptance test "replayed nodes
 produce exactly one row per LLM call".
 
-### Phase 2 — Price Book + Cost ✅ Done (#488)
+### Phase 2 — Price Book + Cost ✅ Done (#488, #502/#504, #546)
 
 > Meters with no matching price row record `cost_usd = null` and are visible
 > through the standard meter list (no separate "missing price" admin view).
-> SOAT ships default prices, seeded at startup, that operators override with
-> future-dated rows.
+> Prices resolve through three tiers — per-provider override
+> (`PUT /api/v1/ai-providers/{id}/prices`), project + provider-slug
+> (`PUT /api/v1/projects/{id}/prices`), global default
+> (`PUT /api/v1/usage/prices`) — most specific wins (#502/#504). Default
+> price seeding was shipped and then **removed** (#546): SOAT does not
+> maintain a market price list; operators load and own their price data.
 
 **Goal:** Cost in USD computed at write time, immune to later price changes.
 
@@ -68,24 +172,75 @@ produce exactly one row per LLM call".
 - `cost_usd` computed at meter-write time from the price row effective at
   that moment — recorded costs never change retroactively when prices update
 - Meters with no matching price row record tokens with `cost_usd = null`
-  (visible, not lost) and surface in a "missing price" admin view
+  (visible, not lost)
 
 **Unlocks:** Billing-grade cost data downstream consumers can invoice from.
 Defining the customer-facing billing unit stays out of scope — SOAT meters,
 the consuming product bills.
 
-### Phase 3 — Aggregation + Events ❌ Not started
+### Phase 3a — Run/Node Attribution + Run Roll-up ❌ Not started
+
+> `UsageMeter.run_id`/`node_id` exist in the schema but the single writer
+> (`recordGenerationUsage`) hardcodes them to `null` — no meter row can be
+> attributed to an orchestration run today, which blocks per-run receipts,
+> the run ceiling, and in-run trigger attribution (#485 remainder).
+
+**Goal:** Every generation started by an orchestration node meters with its
+`run_id` + `node_id`; a run exposes the sum of its generations' tokens and
+cost.
+
+**Deliverables:**
+
+- Thread the orchestration run/node context through to
+  `recordGenerationUsage` (agent nodes already know their run and node id at
+  dispatch time); scope the idempotency key by node execution so a replayed
+  node upserts into a no-op
+- Run roll-up read path: `GET /api/v1/usage/receipt?run_id=…` returning the
+  same receipt shape as the per-generation receipt (tokens, cost, price rows,
+  per-generation breakdown), summed across the run's meters
+- Surface the roll-up totals on `GET
+  /api/v1/orchestrations/{id}/runs/{run_id}` (`usage` object: total tokens,
+  `cost_usd`)
+
+**Unlocks:** Per-run receipts ("one operating cycle → one action" billing),
+the cumulative per-run signal for a ceiling check, correct in-run
+trigger/action attribution.
+
+### Phase 3b — Meter-Type Generalization (schema) ❌ Not started
+
+**Goal:** The meter and price schemas carry a `meter_type` so non-LLM
+dimensions land in the same pipeline — done **before** billing consumers
+(PRD-002 credits) freeze on the current shape, when it is still a cheap
+additive change.
+
+**Deliverables:**
+
+- `UsageMeter`: `meter_type` (default `llm_tokens`), `quantity`, `unit`
+  columns; `meter_type` filter on `GET /api/v1/usage/meters`
+- `PriceBook`: `meter_type`, `unit_price`, `unit` columns; upsert validation
+  (token prices XOR unit price, matching the row's type)
+- `computeCostUsd` branches on type: token formula for `llm_tokens`,
+  `quantity × unit_price` otherwise
+- Receipt shape gains a by-`meter_type` breakdown (single-type receipts are
+  unchanged in their totals)
+
+**Unlocks:** Phases 4–6 become emitter-only work; the "tokens + infra" split
+of the receipt.
+
+### Phase 3c — Aggregation + Events ❌ Not started
 
 > A raw meter list (`GET /api/v1/usage/meters`) with agent/generation/trace/
 > trigger/action filters exists; the grouped aggregation endpoint, thresholds,
 > and the `usage.threshold_crossed` webhook are not yet built.
 
-**Goal:** Usage is queryable and pushable, not just stored.
+**Goal:** Usage is queryable and pushable, not just stored — a per-project
+monthly cost figure without scanning every meter row client-side.
 
 **Deliverables:**
 
-- `GET /api/v1/usage?project_id&from&to&group_by=model|agent|orchestration|day`
-  returning token and cost rollups
+- `GET /api/v1/usage?project_id&from&to&group_by=model|agent|run|day|meter_type`
+  returning token and cost rollups (SUM over the indexed
+  `(project_id, created_at)` meter rows)
 - `UsageThreshold` table + CRUD endpoints (see
   [Usage Thresholds](#usage-thresholds)) — per-project thresholds on cost or
   tokens over a calendar-month or rolling-24h window
@@ -95,13 +250,53 @@ the consuming product bills.
   [Usage Thresholds](#usage-thresholds)
 
 **Unlocks:** Unit-economics reporting per project/cycle/role and proactive
-budget alerts without polling.
+budget alerts without polling; the monthly per-project figure billing
+reconciles against.
 
-### Phase 4 — Budget Guard Integration ⏭️ Deferred
+### Phase 4 — Compute Metering (`node_execution`) ❌ Not started
+
+**Depends on Phases 3a + 3b.** Rides on the same run/node wiring: the
+node-completion hook that stamps `completed_at` writes one `node_execution`
+meter row (`quantity` = wall-clock seconds from the execution's own
+timestamps, `run_id`/`node_id` attribution, idempotency key from the node
+execution). Priced via a `soat`/`node-second` SKU when the operator defines
+one; `cost_usd = null` otherwise.
+
+**Unlocks:** The compute half of "tokens + infra"; per-run receipts that
+include execution time.
+
+### Phase 5 — Storage Metering ❌ Not started
+
+**Depends on Phase 3b.** A daily snapshot job writes one `storage` meter row
+per project (`quantity` = GB-days: total bytes across `File.size` plus
+document/chunk content, sampled once per UTC day; idempotency key
+`storage:{project_id}:{YYYY-MM-DD}` so a re-run job cannot double-count).
+Priced via a `soat`/`gb-day` SKU.
+
+**Unlocks:** The storage line of the project bill; "which project's knowledge
+base is costing us" visibility.
+
+### Phase 6 — API-Request Metering ❌ Not started
+
+**Depends on Phase 3b. Deliberately last** — least dollar-material and the
+only dimension needing new infrastructure. A counting middleware aggregates
+requests in memory per `(project, api_key)` and flushes one `api_request`
+meter row per counter per flush interval (`quantity` = request count;
+idempotency key from the flush window). One row **per request** is explicitly
+rejected — it would multiply every agent tool loop into meter writes.
+Enforcement stays with [prd-quotas.md](./prd-quotas.md)'s atomic counters;
+this phase only prices.
+
+**Unlocks:** The request line of the project bill.
+
+### Phase 7 — Budget Guard Integration ⏭️ Deferred
 
 > Blocked on the guardrail evaluator and `usage.*` guard context
 > ([prd-guardrails.md](./prd-guardrails.md)), which are unbuilt. The per-run
-> token-ceiling issue (#486) was deferred for the same reason.
+> token-ceiling issue (#486) was deferred for the same reason. Interim: once
+> Phase 3a lands, an orchestration `condition` node can read the run's
+> cumulative usage (via the run roll-up) and route to an abort path —
+> a modelable pattern, not a platform guarantee.
 
 **Goal:** Runaway cycles trip fail-closed like any other guard.
 
@@ -117,19 +312,6 @@ budget alerts without polling.
 **Unlocks:** Hard per-project spend ceilings enforced deterministically at the
 tool boundary.
 
-## Overview
-
-SOAT currently records generations and traces but neither token usage nor
-cost. Anyone operating agents per customer project needs to answer "what did
-this project/run/agent cost this period" from the platform, and needs the
-numbers to be **billing-grade**: append-only, idempotent under retries, priced
-at write time.
-
-The write side is deliberately one place — the shared provider-call wrapper —
-so every provider and every path (agents, extraction, discussions,
-orchestration nodes) meters identically, and adding a provider cannot silently
-skip metering.
-
 ## Usage Thresholds
 
 **Decision:** thresholds live in a dedicated `UsageThreshold` table, not a
@@ -141,7 +323,9 @@ the once-per-window guarantee unenforceable at the DB level.
 A project can have multiple thresholds (e.g. a 50 USD warning and a 100 USD
 alert). Each threshold is defined by:
 
-- `metric` — `cost_usd` | `tokens` (tokens = input + output + cached)
+- `metric` — `cost_usd` | `tokens` (tokens = input + output + cached).
+  `cost_usd` aggregates across **all meter types**, so infra meters count
+  toward a cost threshold as soon as they exist.
 - `window` — explicit, one of:
   - `calendar_month` — the current UTC calendar month; resets at
     00:00 UTC on the 1st. The window key is `YYYY-MM` (e.g. `2026-07`).
@@ -195,42 +379,63 @@ semantics trivial.
 
 ### UsageMeter
 
+Columns marked **(3b)** are added by the generalization phase.
+
 | Column          | Type         | Constraints                                        |
 | --------------- | ------------ | --------------------------------------------------- |
 | id              | INTEGER      | PK                                                  |
 | publicId        | VARCHAR(32)  | UNIQUE, `um_` prefix                                |
 | projectId       | INTEGER      | FK → Project, NOT NULL                              |
-| runId           | INTEGER      | FK → OrchestrationRun, NULL                         |
-| nodeId          | VARCHAR      | NULL (node within the run)                          |
+| runId           | INTEGER      | FK → OrchestrationRun, NULL (populated by Phase 3a) |
+| nodeId          | VARCHAR      | NULL (node within the run; populated by Phase 3a)   |
 | agentId         | INTEGER      | FK → Agent, NULL                                    |
 | generationId    | INTEGER      | FK → Generation, NULL                               |
-| provider        | VARCHAR      | NOT NULL                                            |
-| model           | VARCHAR      | NOT NULL                                            |
-| inputTokens     | INTEGER      | NOT NULL                                            |
-| outputTokens    | INTEGER      | NOT NULL                                            |
+| traceId         | INTEGER      | FK → Trace, NULL                                    |
+| aiProviderId    | INTEGER      | FK → AiProvider, NULL                               |
+| triggerId       | VARCHAR      | NULL; initiating trigger's public id                |
+| actionId        | VARCHAR      | NULL; caller-supplied logical action id (from `generation.metadata`) |
+| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `node_execution` \| `api_request` \| `storage` |
+| provider        | VARCHAR      | NOT NULL (`soat` for platform meter types)          |
+| model           | VARCHAR      | NOT NULL (the SKU for platform meter types)         |
+| inputTokens     | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
+| outputTokens    | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
 | cachedTokens    | INTEGER      | NOT NULL DEFAULT 0                                  |
+| reasoningTokens | INTEGER      | NOT NULL DEFAULT 0                                  |
+| quantity        | DECIMAL      | **(3b)** NULL; the measure for non-LLM types        |
+| unit            | VARCHAR      | **(3b)** NULL; `node_second` \| `request` \| `gb_day` |
 | costUsd         | DECIMAL      | NULL when no price row matched                      |
+| priceId         | INTEGER      | FK → PriceBook, NULL; the price row applied         |
 | idempotencyKey  | VARCHAR      | UNIQUE, NOT NULL                                    |
 | createdAt       | TIMESTAMP    | NOT NULL; no updatedAt — rows are immutable         |
 
-Indexes: `(projectId, createdAt)`, `(runId)`, unique `(idempotencyKey)`.
+Indexes: `(projectId, createdAt)`, `(runId)`, `(traceId)`, unique
+`(idempotencyKey)`.
 
 ### PriceBook
+
+Columns marked **(3b)** are added by the generalization phase.
 
 | Column          | Type         | Constraints                          |
 | --------------- | ------------ | ------------------------------------ |
 | id              | INTEGER      | PK                                   |
 | publicId        | VARCHAR(32)  | UNIQUE, `price_` prefix (registered in `packages/postgresdb/src/utils/publicId.ts`) |
-| provider        | VARCHAR      | NOT NULL                             |
-| model           | VARCHAR      | NOT NULL                             |
-| inputPricePerM  | DECIMAL      | USD per million input tokens         |
-| outputPricePerM | DECIMAL      | USD per million output tokens        |
+| aiProviderId    | INTEGER      | FK → AiProvider, NULL; set on per-provider override rows (tier 1) |
+| projectId       | INTEGER      | FK → Project, NULL; set on project + provider-slug rows (tier 2); both NULL = global default (tier 3) |
+| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens` |
+| provider        | VARCHAR      | NOT NULL (`soat` for platform SKUs)  |
+| model           | VARCHAR      | NOT NULL (the SKU for platform meter types) |
+| inputPricePerM  | DECIMAL      | USD per million input tokens; NULL on non-LLM rows |
+| outputPricePerM | DECIMAL      | USD per million output tokens; NULL on non-LLM rows |
 | cachedPricePerM | DECIMAL      | NULL → falls back to input price     |
+| unitPrice       | DECIMAL      | **(3b)** NULL; USD per `unit` on non-LLM rows |
+| unit            | VARCHAR      | **(3b)** NULL; must match the meter's unit |
 | effectiveFrom   | TIMESTAMP    | NOT NULL; latest row ≤ now() applies |
-| createdAt       | TIMESTAMP    | NOT NULL                             |
+| createdAt       | TIMESTAMP    | NOT NULL; append-only — no updatedAt |
 
-Unique index: `(provider, model, effectiveFrom)` — the upsert key (see
-[Price book upsert](#price-book-upsert)).
+Unique index: `(aiProviderId, projectId, provider, model, effectiveFrom)` —
+the upsert key (see [Price book upsert](#price-book-upsert)). Resolution is
+most-specific-first: per-provider override → project + provider-slug →
+global default.
 
 ### UsageThreshold
 
@@ -251,27 +456,34 @@ Index: `(projectId)`. Fire-state semantics are defined in
 
 ## Permissions
 
-| Permission                | Endpoint                                            |
-| ------------------------- | ---------------------------------------------------- |
-| `usage:GetUsage`          | `GET /api/v1/usage`                                  |
-| `usage:ListUsageMeters`   | `GET /api/v1/usage/meters`                           |
-| `usage:ManagePriceBook`   | `PUT /api/v1/usage/prices` (admin)                   |
-| `usage:ListThresholds`    | `GET /api/v1/usage/thresholds`                       |
-| `usage:ManageThresholds`  | `POST /api/v1/usage/thresholds`, `DELETE /api/v1/usage/thresholds/{threshold_id}` |
+| Permission                | Endpoint                                            | Status |
+| ------------------------- | ---------------------------------------------------- | ------ |
+| `usage:ListUsageMeters`   | `GET /api/v1/usage/meters`                           | ✅     |
+| `usage:GetReceipt`        | `GET /api/v1/usage/receipt`                          | ✅     |
+| `usage:GetPriceBook`      | `GET /api/v1/usage/prices`                           | ✅     |
+| `usage:ManagePriceBook`   | `PUT /api/v1/usage/prices` (admin)                   | ✅     |
+| `usage:GetUsage`          | `GET /api/v1/usage`                                  | ❌ Phase 3c |
+| `usage:ListThresholds`    | `GET /api/v1/usage/thresholds`                       | ❌ Phase 3c |
+| `usage:ManageThresholds`  | `POST /api/v1/usage/thresholds`, `DELETE /api/v1/usage/thresholds/{threshold_id}` | ❌ Phase 3c |
 
 Actions are defined in `packages/server/src/permissions/usage.json`.
+Per-provider and per-project price endpoints carry their own module
+permissions (`ai-providers`, `projects`).
 
 ## REST API
 
-| Method | Path                                       | Description                                             |
-| ------ | ------------------------------------------ | ------------------------------------------------------- |
-| GET    | `/api/v1/usage`                            | Aggregated usage (`project_id`, `from`, `to`, `group_by`) |
-| GET    | `/api/v1/usage/meters`                     | Raw meter rows, cursor-paginated (audit/reconciliation)   |
-| GET    | `/api/v1/usage/prices`                     | Current price book                                        |
-| PUT    | `/api/v1/usage/prices`                     | Upsert price rows (admin)                                 |
-| GET    | `/api/v1/usage/thresholds`                 | List thresholds (`project_id` filter)                     |
-| POST   | `/api/v1/usage/thresholds`                 | Create a threshold                                        |
-| DELETE | `/api/v1/usage/thresholds/{threshold_id}`  | Delete a threshold (resets its fire state)                |
+| Method | Path                                       | Description                                             | Status |
+| ------ | ------------------------------------------ | ------------------------------------------------------- | ------ |
+| GET    | `/api/v1/usage/meters`                     | Raw meter rows, cursor-paginated (audit/reconciliation); filters: agent, generation, trace, trigger, action (+ `meter_type` after 3b) | ✅ |
+| GET    | `/api/v1/usage/receipt`                    | Per-generation receipt (`generation_id`); per-run receipt (`run_id`) after Phase 3a | ✅ generation / ❌ run |
+| GET    | `/api/v1/usage/prices`                     | Global default price book                                | ✅ |
+| PUT    | `/api/v1/usage/prices`                     | Upsert global price rows (admin)                         | ✅ |
+| GET/PUT | `/api/v1/ai-providers/{id}/prices`        | Per-provider price overrides (tier 1)                    | ✅ |
+| GET/PUT | `/api/v1/projects/{id}/prices`            | Project + provider-slug prices (tier 2)                  | ✅ |
+| GET    | `/api/v1/usage`                            | Aggregated usage (`project_id`, `from`, `to`, `group_by=model\|agent\|run\|day\|meter_type`) | ❌ Phase 3c |
+| GET    | `/api/v1/usage/thresholds`                 | List thresholds (`project_id` filter)                     | ❌ Phase 3c |
+| POST   | `/api/v1/usage/thresholds`                 | Create a threshold                                        | ❌ Phase 3c |
+| DELETE | `/api/v1/usage/thresholds/{threshold_id}`  | Delete a threshold (resets its fire state)                | ❌ Phase 3c |
 
 ### Price book upsert
 
@@ -301,6 +513,23 @@ Request:
 }
 ```
 
+After Phase 3b, platform SKUs use the unit-price shape instead:
+
+```json
+{
+  "prices": [
+    {
+      "meter_type": "node_execution",
+      "provider": "soat",
+      "model": "node-second",
+      "unit_price": 0.0001,
+      "unit": "node_second",
+      "effective_from": "2026-08-01T00:00:00Z"
+    }
+  ]
+}
+```
+
 Response (`200`; each row carries its public ID):
 
 ```json
@@ -322,3 +551,24 @@ Response (`200`; each row carries its public ID):
 
 A row matching an existing future-dated `(provider, model, effective_from)`
 key replaces that row's prices; otherwise a new row is inserted.
+
+## Risks
+
+- **Schema generalization after billing freezes on the current shape** —
+  PRD-002 (credits) consumes meters; adding `meter_type` after invoicing
+  logic hardcodes "a meter row is tokens" forks billing. Mitigation: Phase 3b
+  is sequenced before any billing consumer, and defaults make it a purely
+  additive migration.
+- **Request-metering write amplification** — one row per request would turn
+  every agent tool loop into meter writes. Mitigation: flush-aggregated
+  counters are a hard design constraint (Phase 6), mirroring the existing
+  rule that raw meter rows never emit webhooks.
+- **Storage snapshot drift** — a daily sample misses intra-day churn; a
+  project that uploads and deletes 100 GB between samples meters zero.
+  Accepted for v1 (bounded by the sampling interval and symmetric across
+  projects); event-driven byte accounting is a noted future refinement.
+- **Non-LLM meters without prices** — operators who never define platform
+  SKUs get `cost_usd = null` infra rows. Accepted: identical to the existing
+  missing-token-price behavior — quantities are still recorded and priceable
+  retroactively is **not** offered (write-time pricing is the invariant), so
+  operators should define SKUs before enabling infra billing.
