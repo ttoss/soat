@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.3](https://127.0.0.1/41729/git/ttoss/compare/v0.15.2...v0.15.3) (2026-07-16)
+
+### Bug Fixes
+
+* **cli:** send array-typed flags as arrays; harden knowledge search ([#553](https://127.0.0.1/41729/git/ttoss/issues/553)) ([760ee59](https://127.0.0.1/41729/git/ttoss/commits/760ee59b1a8748a8e9ee32babbb8a256054d2d80))
+* **server:** bound boot schema-sync advisory-lock wait ([#549](https://127.0.0.1/41729/git/ttoss/issues/549)) ([978a27c](https://127.0.0.1/41729/git/ttoss/commits/978a27c5f6f04a42016089a9c04998ee898e8217))
+
+### Features
+
+* **orchestrations:** add require_delivery to webhook emit node (F-12) ([#554](https://127.0.0.1/41729/git/ttoss/issues/554)) ([6f74ce7](https://127.0.0.1/41729/git/ttoss/commits/6f74ce7dde856e4e0287e0181c190a75f726085a))
+
 ## [0.15.2](https://127.0.0.1/41729/git/ttoss/compare/v0.15.1...v0.15.2) (2026-07-15)
 
 ### Bug Fixes

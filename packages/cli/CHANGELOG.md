@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.3](https://github.com/ttoss/soat/compare/v0.15.2...v0.15.3) (2026-07-16)
+
+### Bug Fixes
+
+* **cli:** send array-typed flags as arrays; harden knowledge search ([#553](https://github.com/ttoss/soat/issues/553)) ([760ee59](https://github.com/ttoss/soat/commit/760ee59b1a8748a8e9ee32babbb8a256054d2d80))
+
 ## [0.15.2](https://github.com/ttoss/soat/compare/v0.15.1...v0.15.2) (2026-07-15)
 
 ### Features
