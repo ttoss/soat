@@ -93,6 +93,16 @@ export type KnowledgeResult =
 
 // ── Private helpers ──────────────────────────────────────────────────────
 
+/**
+ * Discussion run outputs (participant responses + synthesis) are persisted
+ * as documents under this path prefix so they can be told apart from
+ * project knowledge. They are excluded from search-knowledge by default —
+ * unless the caller explicitly filters by `paths` (an explicit request for
+ * that path is honored) — so discussion transcripts don't contaminate
+ * semantic search over the project's real content.
+ */
+const DISCUSSION_OUTPUT_PATH_PREFIX = '/discussions/';
+
 const buildFileInclude = (args: {
   projectIds?: number[];
   paths?: string[];
@@ -111,6 +121,13 @@ const buildFileInclude = (args: {
         const prefix = p.startsWith('/') ? p : `/${p}`;
         return { path: { [Op.like]: `${prefix}%` } };
       }),
+    });
+  } else {
+    conditions.push({
+      [Op.or]: [
+        { path: { [Op.notLike]: `${DISCUSSION_OUTPUT_PATH_PREFIX}%` } },
+        { path: null },
+      ],
     });
   }
   const where = conditions.length > 0 ? { [Op.and]: conditions } : undefined;

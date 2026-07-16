@@ -255,6 +255,7 @@ const persistTurns = async (args: {
  */
 const persistRun = async (args: {
   discussion: DiscussionModel;
+  runPublicId: string;
   projectId: number;
   turns: DiscussionTurn[];
   outcome: string;
@@ -272,11 +273,21 @@ const persistRun = async (args: {
       turns: args.turns,
       labelToParticipant: args.labelToParticipant,
     });
+    // Housed under a dedicated /discussions/ path (excluded from
+    // search-knowledge by default, see knowledge.ts) with metadata/tags
+    // identifying it as a discussion artifact rather than project knowledge.
     const document = await createDocument({
       projectId: args.projectId,
       content: args.outcome,
       title: `Discussion outcome: ${args.discussion.name}`,
       filename: 'outcome.txt',
+      path: `/discussions/${args.discussion.publicId}/runs/${args.runPublicId}/outcome.txt`,
+      metadata: {
+        source: 'discussion-run',
+        discussionId: args.discussion.publicId,
+        runId: args.runPublicId,
+      },
+      tags: { source: 'discussion' },
     });
     return {
       conversationId: await findConversationDbId(conversation.id),
@@ -321,6 +332,13 @@ export const runDiscussion = async (args: {
   topic: string;
   startedBy?: Record<string, unknown> | null;
   initiatorGenerationId?: string | null;
+  /**
+   * The trace of the generation that invoked this run as a tool (its own
+   * `traceId` — every generation's trace is 1:1 with the generation itself).
+   * Null for directly-invoked runs (`POST /discussions/:id/runs`), which have
+   * no generation/trace context to attribute to.
+   */
+  traceId?: string | null;
 }) => {
   log('runDiscussion: discussionId=%s', args.discussionId);
 
@@ -334,6 +352,7 @@ export const runDiscussion = async (args: {
     status: 'running',
     startedBy: args.startedBy ?? null,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
+    traceId: args.traceId ?? null,
   });
 
   const participants = sortedParticipants(discussion);
@@ -353,6 +372,7 @@ export const runDiscussion = async (args: {
     status === 'completed'
       ? await persistRun({
           discussion,
+          runPublicId: run.publicId,
           projectId,
           turns: outcome.turns,
           outcome: outcome.text,

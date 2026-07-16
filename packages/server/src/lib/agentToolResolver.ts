@@ -573,12 +573,15 @@ const resolveClientTool = (typedTool: {
   });
 };
 
-const resolveDiscussionTool = (typedTool: {
-  name: string;
-  description: string | null;
-  parameters: Record<string, unknown> | null;
-  discussion: { discussionId: string } | null;
-}): Tool => {
+const resolveDiscussionTool = (
+  typedTool: {
+    name: string;
+    description: string | null;
+    parameters: Record<string, unknown> | null;
+    discussion: { discussionId: string } | null;
+  },
+  args: { traceId?: string }
+): Tool => {
   const discussionId = typedTool.discussion?.discussionId ?? '';
   const parameters =
     typeof typedTool.parameters === 'string'
@@ -596,6 +599,7 @@ const resolveDiscussionTool = (typedTool: {
           typeof input.initiatorGenerationId === 'string'
             ? input.initiatorGenerationId
             : undefined,
+        traceId: args.traceId ?? null,
       });
       return { outcome: run.outcome, run_id: run.id };
     },
@@ -774,7 +778,11 @@ const resolveToolByType = async (
       });
     case 'discussion':
       if (!typedTool.discussion?.discussionId) return {};
-      return { [typedTool.name]: resolveDiscussionTool(typedTool) };
+      return {
+        [typedTool.name]: resolveDiscussionTool(typedTool, {
+          traceId: args.traceId,
+        }),
+      };
     default:
       return {};
   }

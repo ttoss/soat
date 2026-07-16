@@ -302,6 +302,7 @@ type ToolOutputsGenerationResult = {
   text: string;
   finishReason: string;
   output?: unknown;
+  usage?: LanguageModelUsage;
 };
 
 const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
@@ -392,7 +393,12 @@ export const resolveToolOutputsResult = (args: {
   fireCompletionSideEffects({
     generationId: args.generationId,
     pending: args.pending,
-    result: args.result as { steps: unknown[]; finishReason: string },
+    result: args.result as {
+      steps: unknown[];
+      finishReason: string;
+      response?: { modelId?: string };
+      usage?: LanguageModelUsage;
+    },
     completedResult,
   });
 
