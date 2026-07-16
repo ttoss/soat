@@ -12,11 +12,12 @@ import {
 const projectsRouter = new Router<Context>();
 
 type ProjectPriceBody = {
+  meterType?: string;
   provider?: string;
   model?: string;
-  inputPricePerM?: number;
-  outputPricePerM?: number;
-  cachedPricePerM?: number | null;
+  component?: string;
+  unit?: string;
+  unitPrice?: number;
   effectiveFrom?: string;
 };
 
@@ -171,11 +172,12 @@ projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
   const body = ctx.request.body as { prices?: ProjectPriceBody[] };
   const prices = (body.prices ?? []).map((price) => {
     return {
+      meterType: price.meterType,
       provider: price.provider!,
       model: price.model!,
-      inputPricePerM: price.inputPricePerM!,
-      outputPricePerM: price.outputPricePerM!,
-      cachedPricePerM: price.cachedPricePerM,
+      component: price.component!,
+      unit: price.unit!,
+      unitPrice: price.unitPrice!,
       effectiveFrom: price.effectiveFrom!,
     };
   });

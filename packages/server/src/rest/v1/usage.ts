@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
-import { getReceipt, listUsageMeters } from 'src/lib/usage';
+import { getReceipt, listUsageEvents } from 'src/lib/usage';
 
 export const usageRouter = new Router<Context>();
 
@@ -12,11 +12,9 @@ type UpsertPricesBody = {
     meterType?: string;
     provider: string;
     model: string;
-    inputPricePerM?: number | null;
-    outputPricePerM?: number | null;
-    cachedPricePerM?: number | null;
-    unitPrice?: number | null;
-    unit?: string | null;
+    component: string;
+    unit: string;
+    unitPrice: number;
     effectiveFrom: string;
   }>;
 };
@@ -60,7 +58,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     offset,
   } = ctx.query as Record<string, string | undefined>;
 
-  const result = await listUsageMeters({
+  const result = await listUsageEvents({
     projectIds: projectIds ?? undefined,
     agentId,
     generationId,

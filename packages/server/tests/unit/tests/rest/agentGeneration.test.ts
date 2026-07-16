@@ -618,7 +618,7 @@ describe('Agent Generation Routes', () => {
     // code path than the direct (no-pending-tool) completion in
     // `buildCompletedGenerationResult`. Only the latter called
     // `recordGenerationUsage`, so any generation that pauses for a client
-    // tool call never got a UsageMeter row, even though the stub server
+    // tool call never got a usage event, even though the stub server
     // above returns real `usage` on every response.
     test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
       await createGenerationRecord({
@@ -655,7 +655,7 @@ describe('Agent Generation Routes', () => {
 
       // The tool-outputs continuation completes via a fire-and-forget side
       // effect (`fireCompletionSideEffects`, not awaited by the response), so
-      // the UsageMeter row lands asynchronously — poll for it within a bound
+      // the usage event lands asynchronously — poll for it within a bound
       // instead of asserting immediately after the response returns.
       let metersRes = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/meters?generation_id=gen_usage_metered'
@@ -669,8 +669,15 @@ describe('Agent Generation Routes', () => {
       }
       expect(metersRes.status).toBe(200);
       expect(metersRes.body.total).toBe(1);
-      expect(metersRes.body.data[0].input_tokens).toBe(1);
-      expect(metersRes.body.data[0].output_tokens).toBe(1);
+      const components: Array<{ component: string; quantity: number }> =
+        metersRes.body.data[0].components;
+      const quantityOf = (name: string) => {
+        return components.find((c) => {
+          return c.component === name;
+        })?.quantity;
+      };
+      expect(quantityOf('input_tokens')).toBe(1);
+      expect(quantityOf('output_tokens')).toBe(1);
 
       const receiptRes = await authenticatedTestClient(userToken).get(
         '/api/v1/usage/receipt?generation_id=gen_usage_metered'

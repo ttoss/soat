@@ -319,26 +319,15 @@ components:
         model:
           type: string
           example: gpt-4o
-        input_price_per_m:
-          type: number
-          nullable: true
-          description: USD per one million input (prompt) tokens
-        output_price_per_m:
-          type: number
-          nullable: true
-          description: USD per one million output (completion) tokens
-        cached_price_per_m:
-          type: number
-          nullable: true
-          description: USD per one million cached input tokens; null falls back to the input price
-        unit_price:
-          type: number
-          nullable: true
-          description: Always null for token prices
+        component:
+          type: string
+          description: The token component this row prices (`input_tokens`, `output_tokens`, `cached_tokens`)
         unit:
           type: string
-          nullable: true
-          description: Always null for token prices
+          description: Always `token` for token pricing
+        unit_price:
+          type: number
+          description: USD per token for this component
         effective_from:
           type: string
           format: date-time
@@ -365,8 +354,9 @@ components:
             required:
               - provider
               - model
-              - input_price_per_m
-              - output_price_per_m
+              - component
+              - unit
+              - unit_price
               - effective_from
             properties:
               provider:
@@ -375,13 +365,15 @@ components:
               model:
                 type: string
                 example: gpt-4o
-              input_price_per_m:
+              component:
+                type: string
+                description: The token component this row prices (`input_tokens`, `output_tokens`, `cached_tokens`)
+              unit:
+                type: string
+                description: Always `token` for token pricing
+              unit_price:
                 type: number
-              output_price_per_m:
-                type: number
-              cached_price_per_m:
-                type: number
-                nullable: true
+                description: USD per token for this component
               effective_from:
                 type: string
                 format: date-time

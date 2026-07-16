@@ -479,8 +479,9 @@ describe('AI Providers', () => {
             prices: [
               {
                 model: 'gpt-4o',
-                input_price_per_m: 1,
-                output_price_per_m: 2,
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000001,
                 effective_from: '2020-01-01T00:00:00.000Z',
               },
             ],
@@ -489,16 +490,16 @@ describe('AI Providers', () => {
         expect(res.body.error.code).toBe('VALIDATION_FAILED');
       });
 
-      test('upserts an override and reads it back', async () => {
+      test('upserts a component override and reads it back', async () => {
         const putRes = await authenticatedTestClient(userToken)
           .put(`/api/v1/ai-providers/${pricedProviderId}/prices`)
           .send({
             prices: [
               {
                 model: 'gpt-4o',
-                input_price_per_m: 5,
-                output_price_per_m: 15,
-                cached_price_per_m: 2.5,
+                component: 'output_tokens',
+                unit: 'token',
+                unit_price: 0.000015,
                 effective_from: futureFrom,
               },
             ],
@@ -511,9 +512,9 @@ describe('AI Providers', () => {
         expect(price.ai_provider_id).toBe(pricedProviderId);
         expect(price.provider).toBe('openai');
         expect(price.model).toBe('gpt-4o');
-        expect(price.input_price_per_m).toBe(5);
-        expect(price.output_price_per_m).toBe(15);
-        expect(price.cached_price_per_m).toBe(2.5);
+        expect(price.component).toBe('output_tokens');
+        expect(price.unit).toBe('token');
+        expect(price.unit_price).toBe(0.000015);
 
         const getRes = await authenticatedTestClient(userToken).get(
           `/api/v1/ai-providers/${pricedProviderId}/prices`
@@ -523,24 +524,24 @@ describe('AI Providers', () => {
         expect(getRes.body.prices[0].id).toBe(price.id);
       });
 
-      test('re-upserting the same key updates the rates in place', async () => {
+      test('re-upserting the same key updates the rate in place', async () => {
         const res = await authenticatedTestClient(userToken)
           .put(`/api/v1/ai-providers/${pricedProviderId}/prices`)
           .send({
             prices: [
               {
                 model: 'gpt-4o',
-                input_price_per_m: 6,
-                output_price_per_m: 18,
+                component: 'output_tokens',
+                unit: 'token',
+                unit_price: 0.000018,
                 effective_from: futureFrom,
               },
             ],
           });
         expect(res.status).toBe(200);
-        expect(res.body.prices[0].input_price_per_m).toBe(6);
-        expect(res.body.prices[0].output_price_per_m).toBe(18);
+        expect(res.body.prices[0].unit_price).toBe(0.000018);
 
-        // Still a single row for that (model, effective_from) key.
+        // Still a single row for that (model, component, effective_from) key.
         const getRes = await authenticatedTestClient(userToken).get(
           `/api/v1/ai-providers/${pricedProviderId}/prices`
         );

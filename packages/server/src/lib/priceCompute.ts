@@ -1,114 +1,119 @@
-// Pure pricing arithmetic and the price-shape validation rule, kept free of any
-// DB access so they can be unit-tested directly and reused by every price write
-// path. `priceBook.ts` composes these with the persistence layer.
-
-const PER_MILLION = 1_000_000;
+// Pure pricing/metering arithmetic and shape helpers, kept free of any DB
+// access so they can be unit-tested directly and reused by every write path.
+// `priceBook.ts` and `usage.ts` compose these with persistence.
 
 export const DEFAULT_METER_TYPE = 'llm_tokens';
 
-type PriceShapeArgs = {
-  meterType: string;
-  inputPricePerM?: number | null;
-  outputPricePerM?: number | null;
-  cachedPricePerM?: number | null;
+// Cost is stored with enough decimal places that per-token unit prices
+// (e.g. 0.0000025 USD/token) stay exact for small calls.
+const COST_DECIMALS = 10;
+
+/**
+ * A single component's cost: `quantity × unitPrice`, or null when the component
+ * is unpriced (no price row, or a non-billable detail component). Usage is
+ * never lost because pricing lagged — the quantity is still recorded.
+ */
+export const computeComponentCostUsd = (args: {
+  quantity: number;
+  unitPrice: number | null | undefined;
+}): string | null => {
+  if (args.unitPrice === null || args.unitPrice === undefined) return null;
+  return (args.quantity * args.unitPrice).toFixed(COST_DECIMALS);
+};
+
+/**
+ * Sums component costs into an event total. Null when no component was priced
+ * (mirrors the component-level "captured but not priced" semantics) rather than
+ * reporting a misleading 0.
+ */
+export const sumComponentCostUsd = (
+  costs: Array<string | null>
+): string | null => {
+  const priced = costs.filter((cost): cost is string => {
+    return cost !== null;
+  });
+  if (priced.length === 0) return null;
+  const total = priced.reduce((acc, cost) => {
+    return acc + Number(cost);
+  }, 0);
+  return total.toFixed(COST_DECIMALS);
+};
+
+export type TokenComponent = {
+  component: string;
+  quantity: number;
+  unit: string;
+  billable: boolean;
+};
+
+/**
+ * Decomposes an LLM call's token counts into disjoint, additive components.
+ * `input_tokens` is the *uncached* input (cached tokens are billed separately
+ * at their own rate), and `reasoning_tokens` is a non-billable detail — it is a
+ * subset of `output_tokens` reported for visibility, so it is never priced and
+ * never double-counted into billable totals. Zero-quantity billable components
+ * are dropped so a call only records the dimensions it actually used.
+ */
+export const buildTokenComponents = (tokens: {
+  inputTokens: number;
+  outputTokens: number;
+  cachedTokens: number;
+  reasoningTokens: number;
+}): TokenComponent[] => {
+  const uncachedInput = Math.max(0, tokens.inputTokens - tokens.cachedTokens);
+  const components: TokenComponent[] = [
+    {
+      component: 'input_tokens',
+      quantity: uncachedInput,
+      unit: 'token',
+      billable: true,
+    },
+    {
+      component: 'output_tokens',
+      quantity: tokens.outputTokens,
+      unit: 'token',
+      billable: true,
+    },
+  ];
+  if (tokens.cachedTokens > 0) {
+    components.push({
+      component: 'cached_tokens',
+      quantity: tokens.cachedTokens,
+      unit: 'token',
+      billable: true,
+    });
+  }
+  if (tokens.reasoningTokens > 0) {
+    components.push({
+      component: 'reasoning_tokens',
+      quantity: tokens.reasoningTokens,
+      unit: 'token',
+      billable: false,
+    });
+  }
+  return components;
+};
+
+/**
+ * Validates a single price-book upsert row's shape (transport-independent, so
+ * REST and any future formation path share it). Returns a message describing
+ * the violation, or null when valid. `effective_from` immutability is enforced
+ * separately at the DB layer against the current time.
+ */
+export const validatePriceInput = (args: {
+  component?: string;
+  unit?: string;
   unitPrice?: number | null;
-  unit?: string | null;
-};
-
-const validateTokenShape = (args: PriceShapeArgs): string | null => {
-  if (args.inputPricePerM == null || args.outputPricePerM == null) {
-    return 'llm_tokens prices require input_price_per_m and output_price_per_m.';
-  }
-  if (args.unitPrice != null || args.unit != null) {
-    return 'llm_tokens prices must not set unit_price or unit.';
-  }
-  return null;
-};
-
-const validateUnitShape = (args: PriceShapeArgs): string | null => {
-  if (args.unitPrice == null || !args.unit) {
-    return `${args.meterType} prices require unit_price and unit.`;
-  }
-  const hasTokenPrice =
-    args.inputPricePerM != null ||
-    args.outputPricePerM != null ||
-    args.cachedPricePerM != null;
-  if (hasTokenPrice) {
-    return `${args.meterType} prices must not set token prices (input/output/cached_price_per_m).`;
-  }
-  return null;
-};
-
-/**
- * Enforces the token-price XOR unit-price shape rule shared by every price
- * write path (the single source of truth per the modules rule). An
- * `llm_tokens` row must carry `input`/`output` per-million rates and no unit
- * price; every other meter type must carry `unit_price` + `unit` and no token
- * rates. Returns a message describing the violation, or null when the shape is
- * valid.
- */
-export const validatePriceShape = (args: PriceShapeArgs): string | null => {
-  return args.meterType === DEFAULT_METER_TYPE
-    ? validateTokenShape(args)
-    : validateUnitShape(args);
-};
-
-type ComputeCostArgs = {
-  price: {
-    meterType?: string;
-    inputPricePerM: string | null;
-    outputPricePerM: string | null;
-    cachedPricePerM: string | null;
-    unitPrice?: string | null;
-  } | null;
-  inputTokens?: number;
-  outputTokens?: number;
-  cachedTokens?: number;
-  quantity?: number | null;
-};
-
-const computeTokenCost = (args: ComputeCostArgs): string | null => {
-  const price = args.price;
+}): string | null => {
+  if (!args.component) return 'component is required.';
+  if (!args.unit) return 'unit is required.';
   if (
-    !price ||
-    price.inputPricePerM === null ||
-    price.outputPricePerM === null
+    args.unitPrice === null ||
+    args.unitPrice === undefined ||
+    Number.isNaN(args.unitPrice) ||
+    args.unitPrice < 0
   ) {
-    return null;
+    return 'unit_price must be a non-negative number.';
   }
-  const inputTokens = args.inputTokens ?? 0;
-  const outputTokens = args.outputTokens ?? 0;
-  const cachedTokens = args.cachedTokens ?? 0;
-  const inputRate = Number(price.inputPricePerM);
-  const outputRate = Number(price.outputPricePerM);
-  const cachedRate =
-    price.cachedPricePerM === null ? inputRate : Number(price.cachedPricePerM);
-  const uncachedInput = Math.max(0, inputTokens - cachedTokens);
-  const cost =
-    (uncachedInput * inputRate +
-      cachedTokens * cachedRate +
-      outputTokens * outputRate) /
-    PER_MILLION;
-  return cost.toFixed(6);
-};
-
-/**
- * Computes a meter row's cost in USD from the price row that applies to it.
- * Branches on meter type: `llm_tokens` uses the per-million token formula
- * (cached input billed at the cached rate, falling back to the input rate when
- * unset; reasoning tokens are already part of `outputTokens`); every other type
- * is `quantity × unit_price`. Returns a fixed-precision string for the DECIMAL
- * column, or null when there is no price (or the price lacks the rate its type
- * needs — usage is recorded with `cost_usd = null` rather than lost).
- */
-export const computeCostUsd = (args: ComputeCostArgs): string | null => {
-  if (!args.price) return null;
-
-  const meterType = args.price.meterType ?? DEFAULT_METER_TYPE;
-  if (meterType === DEFAULT_METER_TYPE) {
-    return computeTokenCost(args);
-  }
-
-  if (args.price.unitPrice == null || args.quantity == null) return null;
-  return (args.quantity * Number(args.price.unitPrice)).toFixed(6);
+  return null;
 };

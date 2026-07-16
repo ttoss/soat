@@ -792,8 +792,9 @@ describe('Projects', () => {
               {
                 provider: 'openai',
                 model: 'gpt-4o',
-                input_price_per_m: 1,
-                output_price_per_m: 2,
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000001,
                 effective_from: '2020-01-01T00:00:00.000Z',
               },
             ],
@@ -802,7 +803,7 @@ describe('Projects', () => {
         expect(res.body.error.code).toBe('VALIDATION_FAILED');
       });
 
-      test('upserts a project price and reads it back', async () => {
+      test('upserts a project component price and reads it back', async () => {
         const putRes = await authenticatedTestClient(priceUserToken)
           .put(`/api/v1/projects/${priceProjectId}/prices`)
           .send({
@@ -810,9 +811,9 @@ describe('Projects', () => {
               {
                 provider: 'openai',
                 model: 'gpt-4o',
-                input_price_per_m: 4,
-                output_price_per_m: 12,
-                cached_price_per_m: 2,
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000004,
                 effective_from: futureFrom,
               },
             ],
@@ -826,7 +827,8 @@ describe('Projects', () => {
         expect(price.ai_provider_id).toBeNull();
         expect(price.provider).toBe('openai');
         expect(price.model).toBe('gpt-4o');
-        expect(price.input_price_per_m).toBe(4);
+        expect(price.component).toBe('input_tokens');
+        expect(price.unit_price).toBe(0.000004);
 
         const getRes = await authenticatedTestClient(priceUserToken).get(
           `/api/v1/projects/${priceProjectId}/prices`
@@ -836,7 +838,7 @@ describe('Projects', () => {
         expect(getRes.body.prices[0].id).toBe(price.id);
       });
 
-      test('re-upserting the same key updates the rates in place', async () => {
+      test('re-upserting the same key updates the rate in place', async () => {
         const res = await authenticatedTestClient(priceUserToken)
           .put(`/api/v1/projects/${priceProjectId}/prices`)
           .send({
@@ -844,14 +846,15 @@ describe('Projects', () => {
               {
                 provider: 'openai',
                 model: 'gpt-4o',
-                input_price_per_m: 6,
-                output_price_per_m: 18,
+                component: 'input_tokens',
+                unit: 'token',
+                unit_price: 0.000006,
                 effective_from: futureFrom,
               },
             ],
           });
         expect(res.status).toBe(200);
-        expect(res.body.prices[0].input_price_per_m).toBe(6);
+        expect(res.body.prices[0].unit_price).toBe(0.000006);
 
         const getRes = await authenticatedTestClient(priceUserToken).get(
           `/api/v1/projects/${priceProjectId}/prices`
