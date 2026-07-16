@@ -21,10 +21,10 @@
 | Three-tier price resolution                | ✅ Done (#502/#504)         | Per-provider override → project + provider-slug → global default      |
 | Default price seeding                      | ❌ Removed (#546)           | SOAT no longer ships default prices; operators load their own. Meters with no matching price row record `cost_usd = null` |
 | Per-generation receipt                     | ✅ Done                     | `GET /api/v1/usage/receipt` sums a generation's meters (tokens, cost, price rows used) |
-| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageMeter` but the single writer hardcodes `null`; no meter row is attributable to an orchestration run today |
+| Run/node attribution (`run_id`, `node_id`) | ❌ Not wired                | Columns exist on `UsageEvent` but the single writer hardcodes `null`; no event is attributable to an orchestration run today |
 | Run roll-up (per-run token/cost sum)       | ❌ Not started              | Blocked on run/node attribution                                       |
 | Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
-| Meter-type generalization                  | ❌ Not started              | `meter_type` discriminator + `quantity`/`unit`; see [Meter-Type Generalization](#meter-type-generalization) |
+| Meter-type generalization                  | ✅ Done                     | Rebuilt as `UsageEvent` (one metered occurrence) + `UsageComponent` (one priced dimension); `PriceBook` prices a SKU component. See [Meter-Type Generalization](#meter-type-generalization) |
 | Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
 | Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
@@ -34,8 +34,9 @@
 
 ## Overview
 
-SOAT meters every agent LLM call into an append-only `UsageMeter` row, priced
-at write time from a versioned, three-tier `PriceBook`. Anyone operating
+SOAT meters every agent LLM call into an append-only `UsageEvent` (with its
+per-dimension `UsageComponent` rows), priced at write time from a versioned,
+three-tier `PriceBook`. Anyone operating
 agents per customer project needs to answer "what did this project/run/agent
 cost this period" from the platform, and needs the numbers to be
 **billing-grade**: append-only, idempotent under retries, priced at write
@@ -54,6 +55,17 @@ the same meter/price machinery extends to the other dimensions without a
 second metering system.
 
 ## Meter-Type Generalization
+
+> **✅ Shipped (Phase 3b) as an event + component model.** The sections below
+> capture the original design intent; the delivered realization went further
+> than additive columns. A metered occurrence is a `UsageEvent` (attribution +
+> total cost) whose measured quantities are `UsageComponent` rows (one priced
+> dimension each: `quantity × unit_price`). `PriceBook` prices one component of
+> a SKU. Tokens are not privileged — an `llm_tokens` event simply has token
+> components. See the [Usage module doc](../packages/website/docs/modules/usage.md)
+> for the authoritative field list; where the schema tables below still describe
+> `meter_type`/`quantity`/`unit` columns on a single `UsageMeter` row, the
+> event + component model supersedes them.
 
 **Decision:** one metering pipeline for all cost dimensions, not one table
 per dimension. The attribution chain
@@ -219,23 +231,37 @@ cost.
 the cumulative per-run signal for a ceiling check, correct in-run
 trigger/action attribution.
 
-### Phase 3b — Meter-Type Generalization (schema) ❌ Not started
+### Phase 3b — Meter-Type Generalization (schema) ✅ Done
 
 **Goal:** The meter and price schemas carry a `meter_type` so non-LLM
 dimensions land in the same pipeline — done **before** billing consumers
-(PRD-002 credits) freeze on the current shape, when it is still a cheap
-additive change.
+(PRD-002 credits) freeze on the current shape.
+
+**Shipped as a ground-up redesign, not additive columns.** Rather than
+privileging tokens on `UsageMeter`, metering was rebuilt into a uniform
+event + component model so no meter type is special (the old `UsageMeter`
+table was dropped).
 
 **Deliverables:**
 
-- `UsageMeter`: `meter_type` (default `llm_tokens`), `quantity`, `unit`
-  columns; `meter_type` filter on `GET /api/v1/usage/meters`
-- `PriceBook`: `meter_type`, `unit_price`, `unit` columns; upsert validation
-  (token prices XOR unit price, matching the row's type)
-- `computeCostUsd` branches on type: token formula for `llm_tokens`,
-  `quantity × unit_price` otherwise
-- Receipt shape gains a by-`meter_type` breakdown (single-type receipts are
-  unchanged in their totals)
+- `UsageEvent` (`ue_`): one metered occurrence — attribution chain
+  (`project`/`run`/`node`/`agent`/`generation`/`trace`/`ai_provider`/
+  `trigger`/`action`), `meter_type`, SKU (`provider`/`model`), total
+  `cost_usd`; append-only, idempotent on the generation. `meter_type` filter
+  on `GET /api/v1/usage/meters`.
+- `UsageComponent` (`uc_`): one priced dimension per row — `component`,
+  `quantity`, `unit`, `billable`, `unit_price`, `cost_usd`, `price_id`. An
+  `llm_tokens` event has `input_tokens`/`output_tokens`/`cached_tokens` (+ a
+  non-billable `reasoning_tokens` detail); `compute_execution` a single
+  `compute_second`.
+- `PriceBook`: prices **one component of a SKU** per row
+  (`meter_type`, `provider`, `model`, `component`, `unit`, `unit_price`,
+  `effective_from`); three-tier resolution and future-dated immutability
+  unchanged; per-component upsert validation.
+- Cost is uniform `quantity × unit_price` per component; the event's
+  `cost_usd` is the sum. Token components are priced per token.
+- Receipt gains a `by_meter_type` cost split and reconstructed token totals
+  (single-type receipts unchanged in their totals).
 
 **Unlocks:** Phases 4–6 become emitter-only work; the "tokens + infra" split
 of the receipt.

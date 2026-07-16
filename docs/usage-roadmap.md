@@ -14,8 +14,10 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 
 ## Shipped (baseline)
 
-- ✅ `UsageMeter` append-only rows per completed generation, idempotent,
-  with trace/trigger/action attribution (#483, #484, #485, #557)
+- ✅ Append-only usage rows per completed generation, idempotent, with
+  trace/trigger/action attribution (#483, #484, #485, #557). _Milestone 2
+  replaced the original token-centric `UsageMeter` with the `UsageEvent` +
+  `UsageComponent` model._
 - ✅ Versioned `PriceBook` with three-tier resolution and write-time
   `cost_usd` (#488, #502/#504); default seeding removed — operators own
   price data (#546)
@@ -36,19 +38,27 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 | 1.4 | Surface `usage` totals (tokens, `cost_usd`) on the orchestration-run response | |
 | 1.5 | Finish in-run trigger/action attribution (#485 remainder) | Unblocked by 1.1 |
 
-## Milestone 2 — Schema generalization (before billing freezes on tokens)
+## Milestone 2 — Schema generalization (before billing freezes on tokens) ✅ Done
 
-> [Metering Phase 3b](./prd-usage-metering.md#phase-3b--meter-type-generalization-schema--not-started)
+> [Metering Phase 3b](./prd-usage-metering.md#phase-3b--meter-type-generalization-schema--done)
 > and the [Meter-Type Generalization](./prd-usage-metering.md#meter-type-generalization)
 > design. Deliberately sequenced before any billing consumer (credits PRD)
 > hardcodes "a meter row is tokens".
+>
+> **Shipped as a ground-up redesign rather than additive columns.** Instead of
+> privileging tokens on `UsageMeter`, metering is now a uniform **`UsageEvent`
+> (one metered occurrence) + `UsageComponent` (one priced dimension)** model:
+> `llm_tokens` is an event with `input_tokens`/`output_tokens`/`cached_tokens`
+> components (+ a non-billable `reasoning_tokens` detail); infra types are the
+> same shape with different components. `PriceBook` prices one component of a
+> SKU per row. No meter type is privileged, and new dimensions are emitter-only.
 
 | # | Task | Notes |
 |---|------|-------|
-| 2.1 | `UsageMeter`: add `meter_type` (default `llm_tokens`), `quantity`, `unit` | Purely additive migration |
-| 2.2 | `PriceBook`: add `meter_type`, `unit_price`, `unit`; upsert validation (token prices XOR unit price) | `(provider, model)` generalizes to a SKU, e.g. `soat`/`compute-second` |
-| 2.3 | `computeCostUsd` branches: token formula vs `quantity × unit_price` | |
-| 2.4 | `meter_type` filter on `GET /usage/meters`; receipt gains a by-type breakdown | |
+| 2.1 ✅ | `UsageEvent` + `UsageComponent` carry `meter_type` and per-component `quantity`/`unit` | Breaking rebuild (old `UsageMeter` dropped); token columns gone |
+| 2.2 ✅ | `PriceBook` prices one component of a SKU (`meter_type`, `component`, `unit`, `unit_price`); per-component upsert validation | `(provider, model)` generalizes to a SKU, e.g. `soat`/`compute-second` |
+| 2.3 ✅ | Cost is uniform `quantity × unit_price` per component; event cost is their sum | token components priced per token |
+| 2.4 ✅ | `meter_type` filter on `GET /usage/meters`; receipt gains a `by_meter_type` breakdown | |
 
 ## Milestone 3 — Project aggregate + alerts (queryable, pushable)
 
