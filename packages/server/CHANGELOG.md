@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.4](https://127.0.0.1/41729/git/ttoss/compare/v0.15.3...v0.15.4) (2026-07-16)
+
+### Bug Fixes
+
+* **formations:** allow document resource to declare a chunk strategy ([#559](https://127.0.0.1/41729/git/ttoss/issues/559)) ([dd8069e](https://127.0.0.1/41729/git/ttoss/commits/dd8069ee8faae228892c9ba3bbdf26ffe85577c0))
+* **formations:** expose plan-formation diff and fix false-positive updates ([#560](https://127.0.0.1/41729/git/ttoss/issues/560)) ([07d0e25](https://127.0.0.1/41729/git/ttoss/commits/07d0e25bea78686443c5ca435501e8f1adc510a8))
+
+### Features
+
+* **usage:** per-run cost — run/node attribution, run receipt, run roll-up (Milestone 1) ([#562](https://127.0.0.1/41729/git/ttoss/issues/562)) ([7273bfb](https://127.0.0.1/41729/git/ttoss/commits/7273bfbbcb0bb65f638f4eaf2d916f502a58fdeb))
+* **usage:** project usage aggregate endpoint (Milestone 3.1) ([#564](https://127.0.0.1/41729/git/ttoss/issues/564)) ([272fb39](https://127.0.0.1/41729/git/ttoss/commits/272fb3938a7559f3e6322ccf20b173351387fc64))
+* **usage:** usage thresholds + threshold-crossed webhook (Milestone 3.2/3.3) ([#565](https://127.0.0.1/41729/git/ttoss/issues/565)) ([d04d3d8](https://127.0.0.1/41729/git/ttoss/commits/d04d3d8ed24980316e250dcae9f83585580cf0e9))
+
 ## [0.15.3](https://127.0.0.1/41729/git/ttoss/compare/v0.15.2...v0.15.3) (2026-07-16)
 
 ### Bug Fixes

@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.4](https://github.com/ttoss/soat/compare/v0.15.3...v0.15.4) (2026-07-16)
+
+### Bug Fixes
+
+* **formations:** allow document resource to declare a chunk strategy ([#559](https://github.com/ttoss/soat/issues/559)) ([dd8069e](https://github.com/ttoss/soat/commit/dd8069ee8faae228892c9ba3bbdf26ffe85577c0))
+* **formations:** expose plan-formation diff and fix false-positive updates ([#560](https://github.com/ttoss/soat/issues/560)) ([07d0e25](https://github.com/ttoss/soat/commit/07d0e25bea78686443c5ca435501e8f1adc510a8))
+
+### Features
+
+* **usage:** per-run cost — run/node attribution, run receipt, run roll-up (Milestone 1) ([#562](https://github.com/ttoss/soat/issues/562)) ([7273bfb](https://github.com/ttoss/soat/commit/7273bfbbcb0bb65f638f4eaf2d916f502a58fdeb))
+* **usage:** project usage aggregate endpoint (Milestone 3.1) ([#564](https://github.com/ttoss/soat/issues/564)) ([272fb39](https://github.com/ttoss/soat/commit/272fb3938a7559f3e6322ccf20b173351387fc64))
+* **usage:** usage thresholds + threshold-crossed webhook (Milestone 3.2/3.3) ([#565](https://github.com/ttoss/soat/issues/565)) ([d04d3d8](https://github.com/ttoss/soat/commit/d04d3d8ed24980316e250dcae9f83585580cf0e9))
+
 ## [0.15.3](https://github.com/ttoss/soat/compare/v0.15.2...v0.15.3) (2026-07-16)
 
 ### Bug Fixes
