@@ -1574,6 +1574,28 @@ resources:
       secretFormationId = res.body.id;
     });
 
+    test('plan-formation reports no-op for an unchanged secret with use_previous_value', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: secretFormationId,
+          template: secretTemplate,
+          // XaiApiKey intentionally omitted — nothing about the secret changed.
+        });
+
+      expect(res.status).toBe(200);
+      const secretChange = res.body.changes.find(
+        (c: { logical_id: string }) => {
+          return c.logical_id === 'XaiKey';
+        }
+      );
+      expect(secretChange).toBeDefined();
+      expect(secretChange.action).toBe('no-op');
+      expect(secretChange.diff.desired).toEqual({ name: 'xai-api-key' });
+      expect(secretChange.diff.current).toEqual({ name: 'xai-api-key' });
+    });
+
     test('omitting a use_previous_value param keeps the secret untouched on update', async () => {
       const updatedTemplate = {
         ...secretTemplate,
@@ -1740,6 +1762,9 @@ resources:
       });
       expect(toolChange).toBeDefined();
       expect(toolChange.action).toBe('no-op');
+      expect(toolChange.diff).toBeDefined();
+      expect(toolChange.diff.desired.name).toBe('my-http-tool');
+      expect(toolChange.diff.current.name).toBe('my-http-tool');
     });
 
     test('updates the tool resource in the formation', async () => {
@@ -2929,6 +2954,38 @@ resources:
       expect(discRes.status).toBe(200);
       expect(discRes.body.name).toBe('Formation panel');
       expect(discRes.body.participants).toHaveLength(2);
+    });
+
+    test('plan-formation reports no-op for an unchanged discussion resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: discussionFormationId,
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: {
+                  name: 'Formation panel',
+                  ai_provider_id: discussionAiProviderId,
+                  max_rounds: 1,
+                  participants: [
+                    { name: 'Advocate', prompt: 'Argue for.' },
+                    { name: 'Skeptic', prompt: 'Argue against.' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      const panelChange = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'Panel';
+      });
+      expect(panelChange).toBeDefined();
+      expect(panelChange.action).toBe('no-op');
     });
 
     test('formation update changes the discussion', async () => {

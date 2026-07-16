@@ -413,6 +413,24 @@ teardown treats it as already gone rather than failing the stack. Only
 unexpected errors mark the operation `failed` and leave the stack in
 `delete_failed`.
 
+### Plan Diff
+
+Each entry in `plan-formation`'s `changes[]` array carries a `diff` object
+alongside `logical_id`, `resource_type`, `action`, and `physical_resource_id`:
+
+| Field           | Type          | Description                                                                          |
+| --------------- | ------------- | ------------------------------------------------------------------------------------- |
+| `diff.desired`  | object        | Resolved desired-state properties, after parameter and `ref`/`sub` substitution        |
+| `diff.current`  | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read) |
+
+For a resource type whose live state can be read back (most resource types),
+`diff.current` reflects the resource as it exists today. For a write-only
+resource type (currently only `secret`, whose value is encrypted at rest and
+never read back), `diff.current` reflects the last-applied snapshot stored on
+the formation resource instead — the same source of truth `update-formation`
+diffs against, so `plan-formation` and `update-formation` agree on whether a
+secret with `use_previous_value: true` is a `no-op`.
+
 ### Operations and Event Log
 
 Every deploy (create, update, delete) creates a `FormationOperation` record with:

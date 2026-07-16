@@ -5,6 +5,7 @@ import {
   planResourceChange,
 } from 'src/lib/formationsPlanHelpers';
 import { createMemory } from 'src/lib/memories';
+import { createSecret } from 'src/lib/secrets';
 
 // These tests drive the extracted plan-diffing helpers directly with real
 // inputs (a real Memory row for the read-diff paths), following the
@@ -45,6 +46,7 @@ describe('formationsPlanHelpers', () => {
         logicalId: 'MyMemory',
         resourceType: 'memory',
         action: 'create',
+        diff: { desired: { name: 'unprovisioned' }, current: null },
       });
     });
 
@@ -81,6 +83,10 @@ describe('formationsPlanHelpers', () => {
         resourceType: 'memory',
         physicalResourceId: memory.id,
         action: 'no-op',
+        diff: {
+          desired: { name: memory.name },
+          current: expect.objectContaining({ name: memory.name }),
+        },
       });
     });
 
@@ -162,6 +168,73 @@ describe('formationsPlanHelpers', () => {
       } finally {
         readSpy.mockRestore();
       }
+    });
+  });
+
+  describe('planResourceChange for write-only resources (secrets)', () => {
+    test('reports no-op for an unchanged secret compared against lastAppliedProperties', async () => {
+      const secretName = uniqueName('plan-helpers-secret');
+      const secret = await createSecret({
+        projectId,
+        name: secretName,
+        value: 'super-secret-value',
+      });
+
+      // `value` is omitted (use_previous_value) so it resolves to undefined;
+      // lastAppliedProperties mirrors what sanitizeLastAppliedProperties
+      // persists — the value is stripped, only `name` remains.
+      const change = await planResourceChange({
+        logicalId: 'MySecret',
+        decl: { type: 'secret', properties: { name: secretName } },
+        physicalResourceId: secret.id,
+        resolvedParams: new Map(),
+        existingMap: new Map(),
+        templateResourceKeys: new Set(['MySecret']),
+        lastAppliedProperties: { name: secretName },
+      });
+
+      expect(change.action).toBe('no-op');
+    });
+
+    test('reports update for a secret whose resolved name differs from lastAppliedProperties', async () => {
+      const secretName = uniqueName('plan-helpers-secret');
+      const secret = await createSecret({
+        projectId,
+        name: secretName,
+        value: 'super-secret-value',
+      });
+
+      const change = await planResourceChange({
+        logicalId: 'MySecret',
+        decl: { type: 'secret', properties: { name: 'a different name' } },
+        physicalResourceId: secret.id,
+        resolvedParams: new Map(),
+        existingMap: new Map(),
+        templateResourceKeys: new Set(['MySecret']),
+        lastAppliedProperties: { name: secretName },
+      });
+
+      expect(change.action).toBe('update');
+    });
+
+    test('falls back to update for a secret with no lastAppliedProperties snapshot', async () => {
+      const secretName = uniqueName('plan-helpers-secret');
+      const secret = await createSecret({
+        projectId,
+        name: secretName,
+        value: 'super-secret-value',
+      });
+
+      const change = await planResourceChange({
+        logicalId: 'MySecret',
+        decl: { type: 'secret', properties: { name: secretName } },
+        physicalResourceId: secret.id,
+        resolvedParams: new Map(),
+        existingMap: new Map(),
+        templateResourceKeys: new Set(['MySecret']),
+      });
+
+      expect(change.action).toBe('update');
     });
   });
 

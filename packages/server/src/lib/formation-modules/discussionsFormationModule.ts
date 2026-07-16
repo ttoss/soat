@@ -180,6 +180,33 @@ export const discussionsFormationModule: FormationModule = {
         ai_provider_id: discussion.aiProviderId,
         model: discussion.model,
         synthesis: discussion.synthesis,
+        // Mapped to the same snake_case shape the template declares, omitting
+        // `position` (derived from array order, never authored in a
+        // template) and any field left at its null default, so a template
+        // that only sets the fields it cares about still diffs as a no-op
+        // instead of always reporting 'update' (the array was previously
+        // omitted from `read` entirely).
+        participants: discussion.participants.map(
+          (
+            participant: Awaited<
+              ReturnType<typeof getDiscussion>
+            >['participants'][number]
+          ) => {
+            const mapped: Record<string, unknown> = {
+              name: participant.name,
+              prompt: participant.prompt,
+              actor_id: participant.actorId,
+              ai_provider_id: participant.aiProviderId,
+              model: participant.model,
+              temperature: participant.temperature,
+              effort: participant.effort,
+            };
+            for (const [key, value] of Object.entries(mapped)) {
+              if (value === null) delete mapped[key];
+            }
+            return mapped;
+          }
+        ),
       };
     } catch {
       return null;

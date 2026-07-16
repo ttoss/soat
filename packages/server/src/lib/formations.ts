@@ -102,6 +102,7 @@ export const planFormation = async (args: {
   const sortedOrder = topologicalSort(graph) ?? [];
 
   const existingMap = new Map<string, string>();
+  const lastAppliedMap = new Map<string, Record<string, unknown> | null>();
   let existingResources: InstanceType<(typeof db)['FormationResource']>[] = [];
   if (args.formationId) {
     const formation = await db.Formation.findOne({
@@ -116,6 +117,10 @@ export const planFormation = async (args: {
       for (const r of existingResources) {
         if (r.physicalResourceId)
           existingMap.set(r.logicalId, r.physicalResourceId);
+        lastAppliedMap.set(
+          r.logicalId,
+          r.lastAppliedProperties as Record<string, unknown> | null
+        );
       }
     }
   }
@@ -132,6 +137,7 @@ export const planFormation = async (args: {
         resolvedParams,
         existingMap,
         templateResourceKeys,
+        lastAppliedProperties: lastAppliedMap.get(logicalId),
       });
     })
   );
