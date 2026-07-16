@@ -1,6 +1,7 @@
 # PRD: Usage Metering
 
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G5).
+> Work sequencing lives in the [Usage Roadmap](./usage-roadmap.md).
 > Depends on the idempotency keys from
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > exactly-once accounting under retries; feeds the `usage.*` guard context in
