@@ -652,9 +652,11 @@ components:
         initiator_generation_id:
           type: string
           nullable: true
+          description: Reserved for the generation that invoked this run as a tool. Not currently populated — see trace_id.
         trace_id:
           type: string
           nullable: true
+          description: Trace of the generation that invoked this run as a tool. Null for runs started directly via POST /discussions/{discussion_id}/runs.
         completed_at:
           type: string
           format: date-time

@@ -167,3 +167,75 @@ describe('resolveDocumentSearch — policyWhere with a $-prefixed key', () => {
     expect(Array.isArray(results)).toBe(true);
   });
 });
+
+// Discussion run outputs (participant responses + synthesis) are persisted as
+// documents under /discussions/ so agents that call search-knowledge to
+// reason over project content don't get discussion transcripts/verdicts back
+// as false matches — see discussionRuns.ts `persistRun`.
+describe('resolveDocumentSearch — discussion-output documents', () => {
+  let adminToken: string;
+  let projectId: string;
+  let projectDbId: number;
+  const discussionOutputPath = '/discussions/disc_1/runs/run_1/outcome.txt';
+  const normalPath = '/playbooks/normal.md';
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'resolveDocumentSearch discussion-output Test Project' });
+    projectId = projectRes.body.id;
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    projectDbId = project!.id;
+
+    await authenticatedTestClient(adminToken).post('/api/v1/documents').send({
+      project_id: projectId,
+      content: 'VEREDITO FINAL: APROVADO. JUSTIFICATIVA: ...',
+      filename: 'outcome.txt',
+      path: discussionOutputPath,
+    });
+    await authenticatedTestClient(adminToken).post('/api/v1/documents').send({
+      project_id: projectId,
+      content: 'Real project knowledge content.',
+      filename: 'normal.md',
+      path: normalPath,
+    });
+  });
+
+  test('a plain search excludes documents under /discussions/ by default', async () => {
+    const results = await resolveDocumentSearch({
+      projectIds: [projectDbId],
+      config: {},
+    });
+
+    expect(
+      results.some((r) => {
+        return r.path === discussionOutputPath;
+      })
+    ).toBe(false);
+    expect(
+      results.some((r) => {
+        return r.path === normalPath;
+      })
+    ).toBe(true);
+  });
+
+  test('an explicit paths filter targeting /discussions/ still returns it', async () => {
+    const results = await resolveDocumentSearch({
+      projectIds: [projectDbId],
+      config: { paths: ['/discussions/'] },
+    });
+
+    expect(
+      results.some((r) => {
+        return r.path === discussionOutputPath;
+      })
+    ).toBe(true);
+  });
+});

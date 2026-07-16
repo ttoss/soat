@@ -15,6 +15,12 @@ import {
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+const sleep = (ms: number) => {
+  return new Promise((resolve) => {
+    return setTimeout(resolve, ms);
+  });
+};
+
 describe('Agent Generation Routes', () => {
   afterEach(() => {
     jest.clearAllMocks();
@@ -470,7 +476,12 @@ describe('Agent Generation Routes', () => {
             statement: [
               {
                 effect: 'Allow',
-                action: ['agents:CreateAgent', 'agents:CreateAgentGeneration'],
+                action: [
+                  'agents:CreateAgent',
+                  'agents:CreateAgentGeneration',
+                  'usage:ListUsageMeters',
+                  'usage:GetReceipt',
+                ],
               },
             ],
           },
@@ -600,6 +611,74 @@ describe('Agent Generation Routes', () => {
       expect(response.body.id).toBe('gen_recovered');
       expect(response.body.status).toBe('completed');
       expect(response.body.output.content).toBe('final answer');
+    });
+
+    // The tool-outputs continuation completes the generation via
+    // `resolveToolOutputsResult` -> `fireCompletionSideEffects`, a different
+    // code path than the direct (no-pending-tool) completion in
+    // `buildCompletedGenerationResult`. Only the latter called
+    // `recordGenerationUsage`, so any generation that pauses for a client
+    // tool call never got a UsageMeter row, even though the stub server
+    // above returns real `usage` on every response.
+    test('tool-outputs continuation records usage — meters and receipt reflect it', async () => {
+      await createGenerationRecord({
+        publicId: 'gen_usage_metered',
+        projectId: projectDbId,
+        agentId,
+        traceId: 'trc_usage_metered',
+      });
+      await updateGenerationRecord({
+        publicId: 'gen_usage_metered',
+        metadata: {
+          pendingState: {
+            pendingToolCalls: [
+              { toolCallId: 'tc_1', toolName: 'noop', args: {} },
+            ],
+            messages: [{ role: 'user', content: 'hello' }],
+            steps: [],
+            parentTraceId: null,
+            rootTraceId: null,
+            toolContext: null,
+            remainingDepth: null,
+          },
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(
+          `/api/v1/agents/${agentId}/generate/gen_usage_metered/tool-outputs`
+        )
+        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+      expect(response.status).toBe(200);
+      expect(response.body.status).toBe('completed');
+
+      // The tool-outputs continuation completes via a fire-and-forget side
+      // effect (`fireCompletionSideEffects`, not awaited by the response), so
+      // the UsageMeter row lands asynchronously — poll for it within a bound
+      // instead of asserting immediately after the response returns.
+      let metersRes = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?generation_id=gen_usage_metered'
+      );
+      const startedAt = Date.now();
+      while (metersRes.body.total === 0 && Date.now() - startedAt < 5000) {
+        await sleep(50);
+        metersRes = await authenticatedTestClient(userToken).get(
+          '/api/v1/usage/meters?generation_id=gen_usage_metered'
+        );
+      }
+      expect(metersRes.status).toBe(200);
+      expect(metersRes.body.total).toBe(1);
+      expect(metersRes.body.data[0].input_tokens).toBe(1);
+      expect(metersRes.body.data[0].output_tokens).toBe(1);
+
+      const receiptRes = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/receipt?generation_id=gen_usage_metered'
+      );
+      expect(receiptRes.status).toBe(200);
+      expect(receiptRes.body.line_items).toHaveLength(1);
+      expect(receiptRes.body.total_input_tokens).toBe(1);
+      expect(receiptRes.body.total_output_tokens).toBe(1);
     });
   });
 });

@@ -28,6 +28,7 @@ describe('Discussions', () => {
         'tools:CreateTool',
         'tools:GetTool',
         'tools:DeleteTool',
+        'documents:GetDocument',
       ],
     });
 
@@ -484,6 +485,23 @@ describe('Discussions', () => {
       if (res.body.conversation_id !== null) {
         expect(res.body.conversation_id).toMatch(/^conv_/);
         expect(res.body.outcome_document_id).toMatch(/^doc_/);
+
+        // The outcome document must be distinguishable from real project
+        // knowledge (issue: discussion outputs pollute search-knowledge) —
+        // it carries a /discussions/ path and identifying metadata/tags.
+        const docRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/documents/${res.body.outcome_document_id}`
+        );
+        expect(docRes.status).toBe(200);
+        expect(docRes.body.path).toMatch(
+          new RegExp(`^/discussions/${created.body.id}/runs/${res.body.id}/`)
+        );
+        expect(docRes.body.metadata).toMatchObject({
+          source: 'discussion-run',
+          discussionId: created.body.id,
+          runId: res.body.id,
+        });
+        expect(docRes.body.tags).toMatchObject({ source: 'discussion' });
       }
     });
 

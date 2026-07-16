@@ -1,3 +1,4 @@
+import type { LanguageModelUsage } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
@@ -9,6 +10,7 @@ import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { buildGenerationErrorPayload } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
+import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
 
@@ -69,7 +71,12 @@ export const recordGenerationFailure = async (args: {
 type CompletionSideEffectsArgs = {
   generationId: string;
   pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
-  result: { steps: unknown[]; finishReason: string };
+  result: {
+    steps: unknown[];
+    finishReason: string;
+    response?: { modelId?: string };
+    usage?: LanguageModelUsage;
+  };
   completedResult: GenerationResult;
 };
 
@@ -94,6 +101,16 @@ const runCompletionSideEffects = async (
       status: 'completed',
       completedAt: new Date(),
       stopReason: args.result.finishReason,
+    }),
+    // The tool-outputs continuation is a separate completion path from
+    // `buildCompletedGenerationResult`/`runStreamGeneration`'s `onEnd` — both
+    // of which already meter usage. Without this, a generation that paused
+    // for a client tool call never got a UsageMeter row, even though the
+    // provider's response carried real usage.
+    recordGenerationUsage({
+      generationId: args.generationId,
+      model: args.result.response?.modelId ?? '',
+      usage: args.result.usage,
     }),
   ]);
 
