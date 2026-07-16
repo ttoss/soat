@@ -129,8 +129,8 @@ const sidebars: SidebarsConfig = {
     {
       type: 'category',
       label: 'Self-Hosting & Production',
-      link: { type: 'doc', id: 'getting-started/advanced-config' },
-      items: ['getting-started/advanced-config'],
+      link: { type: 'doc', id: 'self-hosting/configuration' },
+      items: ['self-hosting/configuration'],
     },
   ],
 

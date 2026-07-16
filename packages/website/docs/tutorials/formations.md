@@ -27,7 +27,7 @@ By the end you will understand how [Agent Formation](/docs/modules/formations#ke
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and sessions before diving in.
 - Want to see the same pipeline built step by step? Read [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) first.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/getting-started/advanced-config).
+- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
 - [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
 - Server is at `http://localhost:5047`.
 

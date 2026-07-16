@@ -26,7 +26,7 @@ You will:
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, and orchestrations before diving in.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/getting-started/advanced-config).
+- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
 - [Ollama](https://ollama.com) running locally with `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`).
 - Server is at `http://localhost:5047`.
 

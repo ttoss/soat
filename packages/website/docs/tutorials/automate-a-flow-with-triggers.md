@@ -29,7 +29,7 @@ of the three starters.
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, orchestrations, and the IAM model first.
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
-- For production hardening (secrets, env vars), see [Configuration](/docs/getting-started/advanced-config).
+- For production hardening (secrets, env vars), see [Configuration](/docs/self-hosting/configuration).
 - Server is at `http://localhost:5047`.
 
 <Tabs groupId="client">

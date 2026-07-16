@@ -21,7 +21,7 @@ By the end you will know how to generate embeddings via SOAT and wire them into 
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
-- For production hardening (env vars, secrets), see [Configuration](/docs/getting-started/advanced-config).
+- For production hardening (env vars, secrets), see [Configuration](/docs/self-hosting/configuration).
 - [Ollama](https://ollama.com) running locally with an embedding model pulled, for example:
   ```bash
   ollama pull qwen3-embedding:0.6b

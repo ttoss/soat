@@ -59,7 +59,7 @@ tutorial fails loudly in CI instead of silently passing on the wrong input.
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide.
 - New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) first.
 - For production hardening (storing provider keys as secrets), see
-  [Configuration](/docs/getting-started/advanced-config).
+  [Configuration](/docs/self-hosting/configuration).
 - CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
 - Provider credentials for **real** runs: an
   [OpenAI API key](https://platform.openai.com/docs) with access to a **vision**

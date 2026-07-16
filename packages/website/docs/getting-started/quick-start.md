@@ -88,7 +88,7 @@ volumes:
 :::warning
 Change the secrets before going to production
 
-Replace `SOAT_ADMIN_PASSWORD` and `SECRETS_ENCRYPTION_KEY` with strong values before exposing SOAT outside of localhost. See [Configuration](/docs/getting-started/advanced-config) for details.
+Replace `SOAT_ADMIN_PASSWORD` and `SECRETS_ENCRYPTION_KEY` with strong values before exposing SOAT outside of localhost. See [Configuration](/docs/self-hosting/configuration) for details.
 :::
 
 ## 2. Start the stack
@@ -190,4 +190,4 @@ If you continue with the CLI docs and tutorials, path parameters use resource-sp
 | Interact via MCP                               | [MCP docs](/docs/mcp)                                           |
 | Use the TypeScript SDK                         | [SDK docs](/docs/sdk)                                           |
 | Full REST reference                            | [API Reference](/docs/api)                                      |
-| Tune environment variables                     | [Configuration](/docs/getting-started/advanced-config) |
+| Tune environment variables                     | [Configuration](/docs/self-hosting/configuration) |

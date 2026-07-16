@@ -25,7 +25,7 @@ The navbar has three documentation tabs, each backed by a sidebar defined in `si
   - **Getting Started** — quick start, key concepts, and choosing a client surface.
   - **Client Surfaces** — setup and usage guides for the SDK, CLI, and MCP server.
   - **Platform** — one page per module (`docs/modules/*.md`), grouped into: Identity & Access, Storage & Retrieval, Agents & Conversations, Orchestration & Automation, Declarative Deployment, and Operations. The grouping mirrors `introduction.md`; `docs/modules/index.md` is the category landing page.
-  - **Self-Hosting & Production** — environment variables and production configuration.
+  - **Self-Hosting & Production** — environment variables and production configuration (`docs/self-hosting/configuration.md`).
 - **Tutorials** (`tutorialSidebar`) — end-to-end walkthroughs (`docs/tutorials/*.md`), grouped by theme: Basics, Agents, Knowledge & RAG, Orchestration & Multi-Agent, Automation & Deployment. Tutorial files are also executed by CI (`tests/run-tutorials.sh`), so keep their CLI code blocks runnable.
 - **Reference** (`referenceSidebar`) — generated and lookup-oriented material: REST API (OpenAPI-generated), SDK Services, CLI Commands, MCP Tools, Formation Types, Expressions & Templating, Permissions Reference, and OpenAPI Specs.
 
