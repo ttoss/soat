@@ -668,6 +668,57 @@ describe('immutable update no-ops', () => {
   });
 });
 
+// ── document chunk strategy pass-through ────────────────────────────────────
+
+describe('documentsFormationModule chunking', () => {
+  const countChunks = async (physicalId: string): Promise<number> => {
+    const doc = await db.Document.findOne({ where: { publicId: physicalId } });
+    return db.DocumentChunk.count({ where: { documentId: doc!.id } });
+  };
+
+  test('create passes snake_case chunk_strategy/size/overlap to the documents API', async () => {
+    const physicalId = await applyCreateResource({
+      resourceType: 'document',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        content: 'a'.repeat(2500),
+        title: 'Chunked Doc',
+        chunk_strategy: 'size',
+        chunk_size: 1000,
+        chunk_overlap: 0,
+      },
+    });
+
+    // 2500 chars / 1000 step (no overlap) => 3 chunks
+    expect(await countChunks(physicalId)).toBe(3);
+  });
+
+  test('create normalizes camelCase chunk keys', async () => {
+    const physicalId = await applyCreateResource({
+      resourceType: 'document',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        content: 'b'.repeat(2500),
+        chunkStrategy: 'size',
+        chunkSize: 1000,
+        chunkOverlap: 0,
+      },
+    });
+
+    expect(await countChunks(physicalId)).toBe(3);
+  });
+
+  test('defaults to the whole strategy (one chunk) when omitted', async () => {
+    const physicalId = await applyCreateResource({
+      resourceType: 'document',
+      projectId: internalProjectId,
+      resolvedProperties: { content: 'c'.repeat(2500) },
+    });
+
+    expect(await countChunks(physicalId)).toBe(1);
+  });
+});
+
 // ── api_key policy references ───────────────────────────────────────────────
 
 describe('apiKeysFormationModule', () => {

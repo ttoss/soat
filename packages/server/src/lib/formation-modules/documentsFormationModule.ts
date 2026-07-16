@@ -1,9 +1,11 @@
 import createDebug from 'debug';
 
+import type { ChunkStrategy } from '../chunking';
 import { createDocument, deleteDocument, getDocument } from '../documents';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   normalizePropertyKeys,
+  toNullableNumber,
   toNullableObject,
   toOptionalString,
 } from '../resource-inputs/normalizers';
@@ -14,6 +16,15 @@ import {
   pushRequiredFieldErrors,
   pushUnknownFieldErrors,
 } from './formationSpecLoader';
+
+const CHUNK_STRATEGIES: readonly ChunkStrategy[] = ['page', 'whole', 'size'];
+
+const toChunkStrategy = (value: unknown): ChunkStrategy | undefined => {
+  return typeof value === 'string' &&
+    (CHUNK_STRATEGIES as readonly string[]).includes(value)
+    ? (value as ChunkStrategy)
+    : undefined;
+};
 
 const log = createDebug('soat:formations:documents');
 
@@ -87,6 +98,9 @@ export const documentsFormationModule: FormationModule = {
         Record<string, unknown> | undefined,
       tags: (toNullableObject(properties.tags) ?? undefined) as
         Record<string, string> | undefined,
+      chunkStrategy: toChunkStrategy(properties.chunk_strategy),
+      chunkSize: toNullableNumber(properties.chunk_size) ?? undefined,
+      chunkOverlap: toNullableNumber(properties.chunk_overlap) ?? undefined,
     });
 
     log(

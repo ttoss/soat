@@ -823,6 +823,21 @@ components:
           type: object
           nullable: true
           description: Tag key-value pairs for filtering
+        chunk_strategy:
+          type: string
+          enum: [page, whole, size]
+          description: >-
+            How to split the content into embeddable chunks, matching
+            `POST /documents`. `whole` (default) stores the content as a single
+            chunk; `size` splits into fixed-size character windows with overlap.
+            `page` is equivalent to `whole` for plain text.
+          default: whole
+        chunk_size:
+          type: integer
+          description: Window size in characters when `chunk_strategy=size`. Defaults to 1000.
+        chunk_overlap:
+          type: integer
+          description: Overlap in characters between consecutive windows when `chunk_strategy=size`. Defaults to 200.
 
     MemoryResourceProperties:
       description: >-
