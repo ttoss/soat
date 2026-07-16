@@ -733,5 +733,34 @@ describe('Usage', () => {
       expect(res.body.by_meter_type[0].meter_type).toBe('llm_tokens');
       expect(res.body.by_meter_type[0].cost_usd).toBe(res.body.total_cost_usd);
     });
+
+    test('an admin gets an unpriced receipt with null costs', async () => {
+      // The first generation (from beforeAll) was metered before any price
+      // existed, so its cost is frozen null. Fetched as admin (unscoped), this
+      // exercises the null-cost line/rollup paths and the unscoped receipt path.
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/receipt?generation_id=${generationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.line_items).toHaveLength(1);
+
+      const line = res.body.line_items[0];
+      expect(line.cost_usd).toBeNull();
+      const inputComponent = line.components.find(
+        (c: { component: string }) => {
+          return c.component === 'input_tokens';
+        }
+      );
+      expect(inputComponent.unit_price).toBeNull();
+      expect(inputComponent.cost_usd).toBeNull();
+      expect(inputComponent.price_id).toBeNull();
+
+      expect(res.body.total_cost_usd).toBeNull();
+      expect(res.body.by_meter_type).toHaveLength(1);
+      expect(res.body.by_meter_type[0].cost_usd).toBeNull();
+      // Token totals are still reconstructed from the components.
+      expect(res.body.total_input_tokens).toBe(10);
+      expect(res.body.total_cached_tokens).toBe(4);
+    });
   });
 });

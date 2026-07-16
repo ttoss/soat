@@ -84,25 +84,23 @@ const sumLineCosts = (lines: UsageReceiptLine[]): number | null => {
   );
 };
 
-// Rolls the lines up by meter type, preserving first-seen order so the
-// breakdown is deterministic and single-type receipts stay a one-element list.
+// Rolls the lines up by meter type. `Map` iteration preserves insertion order,
+// so the breakdown is deterministic and single-type receipts stay a one-element
+// list without a separate order array.
 const groupByMeterType = (
   lines: UsageReceiptLine[]
 ): UsageReceiptMeterTypeTotal[] => {
-  const order: string[] = [];
   const linesByType = new Map<string, UsageReceiptLine[]>();
   for (const line of lines) {
-    if (!linesByType.has(line.meterType)) {
-      linesByType.set(line.meterType, []);
-      order.push(line.meterType);
+    const group = linesByType.get(line.meterType);
+    if (group) {
+      group.push(line);
+    } else {
+      linesByType.set(line.meterType, [line]);
     }
-    linesByType.get(line.meterType)?.push(line);
   }
-  return order.map((meterType) => {
-    return {
-      meterType,
-      costUsd: sumLineCosts(linesByType.get(meterType) ?? []),
-    };
+  return [...linesByType.entries()].map(([meterType, group]) => {
+    return { meterType, costUsd: sumLineCosts(group) };
   });
 };
 
