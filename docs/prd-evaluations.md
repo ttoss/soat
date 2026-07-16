@@ -7,7 +7,7 @@
 > **before** a change rolls out. Cross-references
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) (async execution),
 > [prd-usage-metering.md](./prd-usage-metering.md) (cost attribution),
-> [prd-schedules.md](./prd-schedules.md) (scheduled evals), and
+> the [Triggers module](../packages/website/docs/modules/triggers.md) (scheduled evals), and
 > `docs/prd-agent-versions.md` (eval-gated promotion; written in parallel).
 
 ## Implementation Status
@@ -24,7 +24,7 @@
 | Baseline comparison + pass/fail gating           | ❌ Not started | `baseline_run_id`, per-scorer deltas, `pass_threshold`              |
 | Webhook events (`eval_run.completed` / `.failed`)| ❌ Not started | Existing webhooks module                                            |
 | Curate dataset items from traces/generations     | ❌ Not started | `POST /datasets/{dataset_id}/items/from-generation`                 |
-| Scheduled evals + `eval` formation resource type | ❌ Not started | [prd-schedules.md](./prd-schedules.md); `formations.yaml` sync      |
+| Scheduled evals + `eval` formation resource type | ❌ Not started | Cron [triggers](../packages/website/docs/modules/triggers.md); `formations.yaml` sync |
 
 ## Problem
 
@@ -303,7 +303,7 @@ dataset capped at 25 items for sync) with `exact_match`, `contains`,
 
 ### Phase 3 — Scheduled Evals + Formation Resource ❌ Not started
 
-Schedules integration ([prd-schedules.md](./prd-schedules.md)) so an eval
+Schedules integration (cron [triggers](../packages/website/docs/modules/triggers.md)) so an eval
 run fires on a cron cadence; `eval` and `dataset` formation resource types.
 
 **Acceptance criteria:**

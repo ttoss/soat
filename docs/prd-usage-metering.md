@@ -23,13 +23,13 @@
 | Per-generation receipt                     | ✅ Done                     | `GET /api/v1/usage/receipt` sums a generation's meters (tokens, cost, price rows used) |
 | Run/node attribution (`run_id`, `node_id`) | ✅ Done (#562)              | Threaded through the generation metadata; the run's public id is resolved to its FK at write time, and the idempotency key is scoped by node execution |
 | Run roll-up (per-run token/cost sum)       | ✅ Done (#562)              | `GET /api/v1/usage/receipt?run_id=…` per-run receipt + a `usage` object on the orchestration-run response |
-| Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
+| Aggregation endpoint                       | ✅ Done (#564)              | `GET /api/v1/usage` grouped rollups by `model`/`agent`/`run`/`day`/`meter_type` over an optional `[from, to]` window |
 | Meter-type generalization                  | ✅ Done                     | Rebuilt as `UsageEvent` (one metered occurrence) + `UsageComponent` (one priced dimension); `PriceBook` prices a SKU component. See [Meter-Type Generalization](#meter-type-generalization) |
 | Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
 | Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
-| `usage.threshold_crossed` webhook event    | ❌ Not started              | For downstream billing/alerting pipelines                             |
-| Threshold config (`UsageThreshold` table)  | ❌ Not started              | Per-project thresholds + fire state driving `usage.threshold_crossed` |
+| `usage.threshold_crossed` webhook event    | ✅ Done (#565)              | Fired after each usage-event write when a windowed metric crosses a threshold; once-per-window / 10% re-arm hysteresis |
+| Threshold config (`UsageThreshold` table)  | ✅ Done (#565)              | Per-project thresholds + fire state (`UsageThreshold`) + CRUD driving `usage.threshold_crossed` |
 | `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([prd-guardrails.md](./prd-guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read |
 
 ## Overview
@@ -271,27 +271,28 @@ table was dropped).
 **Unlocks:** Phases 4–6 become emitter-only work; the "tokens + infra" split
 of the receipt.
 
-### Phase 3c — Aggregation + Events ❌ Not started
+### Phase 3c — Aggregation + Events ✅ Done
 
-> A raw meter list (`GET /api/v1/usage/meters`) with agent/generation/trace/
-> trigger/action filters exists; the grouped aggregation endpoint, thresholds,
-> and the `usage.threshold_crossed` webhook are not yet built.
+> **Shipped (#564, #565).** The grouped aggregation endpoint, the
+> `UsageThreshold` table + CRUD, and the `usage.threshold_crossed` webhook all
+> landed on top of the existing raw meter list.
 
 **Goal:** Usage is queryable and pushable, not just stored — a per-project
 monthly cost figure without scanning every meter row client-side.
 
 **Deliverables:**
 
-- `GET /api/v1/usage?project_id&from&to&group_by=model|agent|run|day|meter_type`
+- ✅ `GET /api/v1/usage?project_id&from&to&group_by=model|agent|run|day|meter_type`
   returning token and cost rollups (SUM over the indexed
-  `(project_id, created_at)` meter rows)
-- `UsageThreshold` table + CRUD endpoints (see
+  `(project_id, created_at)` meter rows) (#564)
+- ✅ `UsageThreshold` table + CRUD endpoints (see
   [Usage Thresholds](#usage-thresholds)) — per-project thresholds on cost or
-  tokens over a calendar-month or rolling-24h window
-- Webhook event `usage.threshold_crossed` — fired when a project's
+  tokens over a calendar-month or rolling-24h window (#565)
+- ✅ Webhook event `usage.threshold_crossed` — fired when a project's
   cost/tokens in the configured window crosses a configured threshold, with
   the once-per-window / hysteresis re-fire rules defined in
-  [Usage Thresholds](#usage-thresholds)
+  [Usage Thresholds](#usage-thresholds); evaluated synchronously after each
+  usage-event write (#565)
 
 **Unlocks:** Unit-economics reporting per project/cycle/role and proactive
 budget alerts without polling; the monthly per-project figure billing
@@ -506,9 +507,9 @@ Index: `(projectId)`. Fire-state semantics are defined in
 | `usage:GetReceipt`        | `GET /api/v1/usage/receipt`                          | ✅     |
 | `usage:GetPriceBook`      | `GET /api/v1/usage/prices`                           | ✅     |
 | `usage:ManagePriceBook`   | `PUT /api/v1/usage/prices` (admin)                   | ✅     |
-| `usage:GetUsage`          | `GET /api/v1/usage`                                  | ❌ Phase 3c |
-| `usage:ListThresholds`    | `GET /api/v1/usage/thresholds`                       | ❌ Phase 3c |
-| `usage:ManageThresholds`  | `POST /api/v1/usage/thresholds`, `DELETE /api/v1/usage/thresholds/{threshold_id}` | ❌ Phase 3c |
+| `usage:GetUsage`          | `GET /api/v1/usage`                                  | ✅     |
+| `usage:ListThresholds`    | `GET /api/v1/usage/thresholds`                       | ✅     |
+| `usage:ManageThresholds`  | `POST /api/v1/usage/thresholds`, `DELETE /api/v1/usage/thresholds/{threshold_id}` | ✅     |
 
 Actions are defined in `packages/server/src/permissions/usage.json`.
 Per-provider and per-project price endpoints carry their own module
@@ -524,10 +525,10 @@ permissions (`ai-providers`, `projects`).
 | PUT    | `/api/v1/usage/prices`                     | Upsert global price rows (admin)                         | ✅ |
 | GET/PUT | `/api/v1/ai-providers/{id}/prices`        | Per-provider price overrides (tier 1)                    | ✅ |
 | GET/PUT | `/api/v1/projects/{id}/prices`            | Project + provider-slug prices (tier 2)                  | ✅ |
-| GET    | `/api/v1/usage`                            | Aggregated usage (`project_id`, `from`, `to`, `group_by=model\|agent\|run\|day\|meter_type`) | ❌ Phase 3c |
-| GET    | `/api/v1/usage/thresholds`                 | List thresholds (`project_id` filter)                     | ❌ Phase 3c |
-| POST   | `/api/v1/usage/thresholds`                 | Create a threshold                                        | ❌ Phase 3c |
-| DELETE | `/api/v1/usage/thresholds/{threshold_id}`  | Delete a threshold (resets its fire state)                | ❌ Phase 3c |
+| GET    | `/api/v1/usage`                            | Aggregated usage (`project_id`, `from`, `to`, `group_by=model\|agent\|run\|day\|meter_type`) | ✅ |
+| GET    | `/api/v1/usage/thresholds`                 | List thresholds (`project_id` filter)                     | ✅ |
+| POST   | `/api/v1/usage/thresholds`                 | Create a threshold                                        | ✅ |
+| DELETE | `/api/v1/usage/thresholds/{threshold_id}`  | Delete a threshold (resets its fire state)                | ✅ |
 
 ### Price book upsert
 

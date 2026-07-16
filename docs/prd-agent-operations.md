@@ -9,7 +9,7 @@
 
 | Capability                                | PRD                                                    |
 | ----------------------------------------- | ------------------------------------------------------ |
-| Cron-triggered orchestration runs         | [prd-schedules.md](./prd-schedules.md)                 |
+| Cron-triggered orchestration runs         | [Triggers module](../packages/website/docs/modules/triggers.md) (`type: schedule`) |
 | Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
 | Guardrail policies (action classes)       | [prd-guardrails.md](./prd-guardrails.md)               |
@@ -85,7 +85,7 @@ With all seven PRDs shipped, a single template expresses an operating stack.
 Canonical end-state example (node and resource properties follow the child
 PRDs: the `approval` node schema from
 [prd-approvals.md](./prd-approvals.md#the-approval-node--template-schema), the
-`schedule` resource from [prd-schedules.md](./prd-schedules.md), the
+`schedule` trigger from the [Triggers module](../packages/website/docs/modules/triggers.md), the
 `action_classes` policy from [prd-guardrails.md](./prd-guardrails.md), and the
 `knowledge_package` resource from
 [prd-knowledge-packages.md](./prd-knowledge-packages.md)):
