@@ -20,7 +20,7 @@ import { UsageComponent } from './UsageComponent';
 
 /**
  * Append-only, billing-grade record of a single metered occurrence — one
- * completed LLM call, one node execution, one request batch, one storage
+ * completed LLM call, one compute execution, one request batch, one storage
  * snapshot. Attribution and idempotency live here once; the metered quantities
  * live in child {@link UsageComponent} rows (one per priced dimension), so no
  * meter type is privileged: `llm_tokens` is simply an event with several
@@ -165,14 +165,14 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare actionId: string | null;
 
-  // Meter-type discriminator: `llm_tokens`, `node_execution`, `api_request`,
+  // Meter-type discriminator: `llm_tokens`, `compute_execution`, `api_request`,
   // `storage`. Selects which components an event carries.
   @Column({ type: DataType.STRING, allowNull: false })
   declare meterType: string;
 
   // Denormalized as-billed SKU: the vendor slug (`openai`, or `soat` for
   // platform meter types) and the billed unit — the model id for LLM calls,
-  // the platform unit (e.g. `node-second`) otherwise. Retained even if the AI
+  // the platform unit (e.g. `compute-second`) otherwise. Retained even if the AI
   // provider is later deleted so historical receipts stay accurate.
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;

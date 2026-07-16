@@ -73,7 +73,7 @@ paths:
           in: query
           required: false
           description: >
-            Filter by meter type (e.g. `llm_tokens`, `node_execution`,
+            Filter by meter type (e.g. `llm_tokens`, `compute_execution`,
             `api_request`, `storage`)
           schema:
             type: string
@@ -242,18 +242,18 @@ components:
         One priced dimension of a usage event. Every meter type is expressed as
         components, so tokens and infra are uniform: an `llm_tokens` event has
         `input_tokens` / `output_tokens` (+ `cached_tokens`, and a non-billable
-        `reasoning_tokens` detail), a `node_execution` event has one
-        `node_second` component.
+        `reasoning_tokens` detail), a `compute_execution` event has one
+        `compute_second` component.
       properties:
         component:
           type: string
-          description: The measured dimension (e.g. `input_tokens`, `node_second`)
+          description: The measured dimension (e.g. `input_tokens`, `compute_second`)
         quantity:
           type: number
           description: The measured amount, expressed in `unit`
         unit:
           type: string
-          description: Unit `quantity` is measured in (`token`, `node_second`, …)
+          description: Unit `quantity` is measured in (`token`, `compute_second`, …)
         billable:
           type: boolean
           description: >
@@ -337,7 +337,7 @@ components:
         meter_type:
           type: string
           description: >
-            What the event measures: `llm_tokens`, `node_execution`,
+            What the event measures: `llm_tokens`, `compute_execution`,
             `api_request`, or `storage`.
         provider:
           type: string
@@ -440,7 +440,7 @@ components:
             per-provider override for a specific AI provider instance.
         meter_type:
           type: string
-          description: Meter type this SKU belongs to (`llm_tokens`, `node_execution`, …)
+          description: Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …)
         provider:
           type: string
           description: SKU vendor slug (`openai`, or `soat` for platform SKUs)
@@ -451,10 +451,10 @@ components:
           example: gpt-4o
         component:
           type: string
-          description: The component this row prices (`input_tokens`, `node_second`, …)
+          description: The component this row prices (`input_tokens`, `compute_second`, …)
         unit:
           type: string
-          description: Unit `unit_price` is denominated in (`token`, `node_second`, …)
+          description: Unit `unit_price` is denominated in (`token`, `compute_second`, …)
         unit_price:
           type: number
           description: USD per `unit` (for token components, USD per token)
@@ -494,7 +494,7 @@ components:
               A price row for one component of a SKU. For LLM SKUs supply the
               `input_tokens` / `output_tokens` (and optionally `cached_tokens`)
               components with unit `token`; for platform SKUs supply the
-              platform component (e.g. `node_second`).
+              platform component (e.g. `compute_second`).
             properties:
               ai_provider_id:
                 x-soat-ref: ai-providers
@@ -508,17 +508,17 @@ components:
                 default: llm_tokens
                 description: >
                   Defaults to `llm_tokens`. Set to a platform meter type
-                  (e.g. `node_execution`) for a platform SKU.
+                  (e.g. `compute_execution`) for a platform SKU.
               provider:
                 type: string
               model:
                 type: string
               component:
                 type: string
-                description: The component this row prices (`input_tokens`, `node_second`, …)
+                description: The component this row prices (`input_tokens`, `compute_second`, …)
               unit:
                 type: string
-                description: Unit `unit_price` is denominated in (`token`, `node_second`, …)
+                description: Unit `unit_price` is denominated in (`token`, `compute_second`, …)
               unit_price:
                 type: number
                 description: USD per `unit`

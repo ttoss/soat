@@ -16,7 +16,7 @@ import { UsageEvent } from './UsageEvent';
  * usage as one or more components, so the model treats tokens and infra
  * identically: an `llm_tokens` event carries `input_tokens` / `cached_tokens` /
  * `output_tokens` (plus a non-billable `reasoning_tokens` detail), while a
- * `node_execution` event carries a single `node_second` component. `quantity`
+ * `compute_execution` event carries a single `compute_second` component. `quantity`
  * is always expressed in `unit`, and `unitPrice` prices exactly that unit, so
  * `costUsd = quantity × unitPrice` holds uniformly. Append-only and immutable,
  * like its parent event.
@@ -57,7 +57,7 @@ export class UsageComponent extends Model {
   declare usageEvent: UsageEvent;
 
   // The measured dimension: `input_tokens` | `cached_tokens` | `output_tokens`
-  // | `reasoning_tokens` | `node_second` | `request` | `gb_day` | …
+  // | `reasoning_tokens` | `compute_second` | `request` | `gb_day` | …
   @Column({ type: DataType.STRING, allowNull: false })
   declare component: string;
 
@@ -66,7 +66,7 @@ export class UsageComponent extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: false })
   declare quantity: string;
 
-  // Unit `quantity` is measured in: `token` | `node_second` | `request` |
+  // Unit `quantity` is measured in: `token` | `compute_second` | `request` |
   // `gb_day`. Must match the price row's unit for the cost to be well-defined.
   @Column({ type: DataType.STRING, allowNull: false })
   declare unit: string;

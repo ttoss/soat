@@ -46,7 +46,7 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 | # | Task | Notes |
 |---|------|-------|
 | 2.1 | `UsageMeter`: add `meter_type` (default `llm_tokens`), `quantity`, `unit` | Purely additive migration |
-| 2.2 | `PriceBook`: add `meter_type`, `unit_price`, `unit`; upsert validation (token prices XOR unit price) | `(provider, model)` generalizes to a SKU, e.g. `soat`/`node-second` |
+| 2.2 | `PriceBook`: add `meter_type`, `unit_price`, `unit`; upsert validation (token prices XOR unit price) | `(provider, model)` generalizes to a SKU, e.g. `soat`/`compute-second` |
 | 2.3 | `computeCostUsd` branches: token formula vs `quantity × unit_price` | |
 | 2.4 | `meter_type` filter on `GET /usage/meters`; receipt gains a by-type breakdown | |
 
@@ -62,14 +62,14 @@ keys), [prd-agent-operations.md](./prd-agent-operations.md) (G5 umbrella).
 
 ## Milestone 4 — Infra meter emitters (the "+ infra" half of the bill)
 
-> Metering [Phase 4](./prd-usage-metering.md#phase-4--compute-metering-node_execution--not-started)
+> Metering [Phase 4](./prd-usage-metering.md#phase-4--compute-metering-compute_execution--not-started)
 > / [Phase 5](./prd-usage-metering.md#phase-5--storage-metering--not-started)
 > / [Phase 6](./prd-usage-metering.md#phase-6--api-request-metering--not-started).
 > All depend on Milestone 2; 4.1 also rides on Milestone 1's run wiring.
 
 | # | Task | Notes |
 |---|------|-------|
-| 4.1 | Compute: `node_execution` meter on node completion | Duration from existing `started_at`/`completed_at`; `soat`/`node-second` SKU |
+| 4.1 | Compute: `compute_execution` meter on node completion | Duration from existing `started_at`/`completed_at`; `soat`/`compute-second` SKU |
 | 4.2 | Storage: daily per-project snapshot job | `gb_day` quantity; idempotency key `storage:{project}:{date}` |
 | 4.3 | Requests: counting middleware, flush-aggregated | Never one row per request; enforcement counters stay in [prd-quotas.md](./prd-quotas.md) |
 

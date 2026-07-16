@@ -12,7 +12,7 @@ import {
 describe('priceCompute', () => {
   describe('computeComponentCostUsd', () => {
     test('multiplies quantity by the per-unit price', () => {
-      // 3600 node-seconds × 0.0001 USD = 0.36
+      // 3600 compute-seconds × 0.0001 USD = 0.36
       expect(
         computeComponentCostUsd({ quantity: 3600, unitPrice: 0.0001 })
       ).toBe('0.3600000000');

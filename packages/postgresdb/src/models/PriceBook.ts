@@ -15,7 +15,7 @@ import { Project } from './Project';
  * Versioned unit price for a single billable **component** of a SKU. Cost is
  * uniform across meter types — `costUsd = quantity × unitPrice` — so a price
  * row prices one `(provider, model, component)` at a time: e.g. `openai` /
- * `gpt-4o` / `output_tokens`, or `soat` / `node-second` / `node_second`.
+ * `gpt-4o` / `output_tokens`, or `soat` / `compute-second` / `compute_second`.
  *
  * Three scopes live in one table, resolved most-specific first: a
  * **per-provider override** (`aiProviderId` set) for one AI provider instance;
@@ -96,7 +96,7 @@ export class PriceBook extends Model {
   )
   declare project: Project | null;
 
-  // Meter type this SKU belongs to (`llm_tokens`, `node_execution`, …).
+  // Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …).
   @Column({ type: DataType.STRING, allowNull: false })
   declare meterType: string;
 
@@ -109,11 +109,11 @@ export class PriceBook extends Model {
   declare model: string;
 
   // The component this row prices (`input_tokens`, `output_tokens`,
-  // `cached_tokens`, `node_second`, …).
+  // `cached_tokens`, `compute_second`, …).
   @Column({ type: DataType.STRING, allowNull: false })
   declare component: string;
 
-  // Unit `unitPrice` is denominated in (`token`, `node_second`, …). Must match
+  // Unit `unitPrice` is denominated in (`token`, `compute_second`, …). Must match
   // the metered component's unit.
   @Column({ type: DataType.STRING, allowNull: false })
   declare unit: string;

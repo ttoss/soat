@@ -25,7 +25,7 @@
 | Run roll-up (per-run token/cost sum)       | ❌ Not started              | Blocked on run/node attribution                                       |
 | Aggregation endpoint                       | ❌ Not started              | Grouped rollups (a raw meter list with filters exists today)          |
 | Meter-type generalization                  | ❌ Not started              | `meter_type` discriminator + `quantity`/`unit`; see [Meter-Type Generalization](#meter-type-generalization) |
-| Compute (`node_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
+| Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
 | Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
 | `usage.threshold_crossed` webhook event    | ❌ Not started              | For downstream billing/alerting pipelines                             |
@@ -67,7 +67,7 @@ fork billing logic four ways.
 | `meter_type`     | What one row records                                        | `quantity` / `unit`        | Emitter (write path)                                                    |
 | ---------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
 | `llm_tokens`     | One completed LLM call's token usage (today's rows)         | `null` — token columns used | `recordGenerationUsage` at generation completion (exists)                |
-| `node_execution` | One orchestration node execution's wall-clock compute time  | seconds / `node_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
+| `compute_execution` | One orchestration node execution's wall-clock compute time  | seconds / `compute_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
 | `api_request`    | A batch of API requests served for a project                | requests / `request`       | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
 | `storage`        | One project's stored bytes for one day                      | GB-days / `gb_day`         | Daily snapshot job summing `File.size` + document/chunk byte counts      |
 
@@ -85,7 +85,7 @@ fork billing logic four ways.
   for other types.
 - `generation_id`/`agent_id` are already nullable, so non-LLM rows fit the
   existing attribution model unchanged (`storage` rows carry only
-  `project_id`; `node_execution` rows carry `run_id` + `node_id`).
+  `project_id`; `compute_execution` rows carry `run_id` + `node_id`).
 
 **`PriceBook`** gains:
 
@@ -95,7 +95,7 @@ fork billing logic four ways.
   rows and vice versa.
 - The `(provider, model)` pair generalizes to a **SKU**: for platform meters
   `provider` is `soat` and `model` names the billable unit
-  (e.g. `node-second`, `request`, `gb-day`). This keeps the unique upsert key,
+  (e.g. `compute-second`, `request`, `gb-day`). This keeps the unique upsert key,
   the three-tier resolution (per-provider override → project + provider-slug
   → global default), the `effective_from` versioning, and the
   past-rows-are-immutable rule working unchanged for every meter type.
@@ -266,13 +266,13 @@ monthly cost figure without scanning every meter row client-side.
 budget alerts without polling; the monthly per-project figure billing
 reconciles against.
 
-### Phase 4 — Compute Metering (`node_execution`) ❌ Not started
+### Phase 4 — Compute Metering (`compute_execution`) ❌ Not started
 
 **Depends on Phases 3a + 3b.** Rides on the same run/node wiring: the
-node-completion hook that stamps `completed_at` writes one `node_execution`
+node-completion hook that stamps `completed_at` writes one `compute_execution`
 meter row (`quantity` = wall-clock seconds from the execution's own
 timestamps, `run_id`/`node_id` attribution, idempotency key from the node
-execution). Priced via a `soat`/`node-second` SKU when the operator defines
+execution). Priced via a `soat`/`compute-second` SKU when the operator defines
 one; `cost_usd = null` otherwise.
 
 **Unlocks:** The compute half of "tokens + infra"; per-run receipts that
@@ -407,7 +407,7 @@ Columns marked **(3b)** are added by the generalization phase.
 | aiProviderId    | INTEGER      | FK → AiProvider, NULL                               |
 | triggerId       | VARCHAR      | NULL; initiating trigger's public id                |
 | actionId        | VARCHAR      | NULL; caller-supplied logical action id (from `generation.metadata`) |
-| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `node_execution` \| `api_request` \| `storage` |
+| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `compute_execution` \| `api_request` \| `storage` |
 | provider        | VARCHAR      | NOT NULL (`soat` for platform meter types)          |
 | model           | VARCHAR      | NOT NULL (the SKU for platform meter types)         |
 | inputTokens     | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
@@ -415,7 +415,7 @@ Columns marked **(3b)** are added by the generalization phase.
 | cachedTokens    | INTEGER      | NOT NULL DEFAULT 0                                  |
 | reasoningTokens | INTEGER      | NOT NULL DEFAULT 0                                  |
 | quantity        | DECIMAL      | **(3b)** NULL; the measure for non-LLM types        |
-| unit            | VARCHAR      | **(3b)** NULL; `node_second` \| `request` \| `gb_day` |
+| unit            | VARCHAR      | **(3b)** NULL; `compute_second` \| `request` \| `gb_day` |
 | costUsd         | DECIMAL      | NULL when no price row matched                      |
 | priceId         | INTEGER      | FK → PriceBook, NULL; the price row applied         |
 | idempotencyKey  | VARCHAR      | UNIQUE, NOT NULL                                    |
@@ -532,11 +532,11 @@ After Phase 3b, platform SKUs use the unit-price shape instead:
 {
   "prices": [
     {
-      "meter_type": "node_execution",
+      "meter_type": "compute_execution",
       "provider": "soat",
-      "model": "node-second",
+      "model": "compute-second",
       "unit_price": 0.0001,
-      "unit": "node_second",
+      "unit": "compute_second",
       "effective_from": "2026-08-01T00:00:00Z"
     }
   ]

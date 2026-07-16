@@ -421,18 +421,18 @@ describe('Usage', () => {
       expect(models).toContain('usage-test-model');
     });
 
-    test('upserts a unit-priced platform SKU (node_execution)', async () => {
+    test('upserts a unit-priced platform SKU (compute_execution)', async () => {
       const effectiveFrom = new Date(Date.now() + 5 * 86_400_000).toISOString();
       const res = await authenticatedTestClient(adminToken)
         .put('/api/v1/usage/prices')
         .send({
           prices: [
             {
-              meter_type: 'node_execution',
+              meter_type: 'compute_execution',
               provider: 'soat',
-              model: 'node-second',
-              component: 'node_second',
-              unit: 'node_second',
+              model: 'compute-second',
+              component: 'compute_second',
+              unit: 'compute_second',
               unit_price: 0.0001,
               effective_from: effectiveFrom,
             },
@@ -440,9 +440,9 @@ describe('Usage', () => {
         });
       expect(res.status).toBe(200);
       const price = res.body.prices[0];
-      expect(price.meter_type).toBe('node_execution');
-      expect(price.component).toBe('node_second');
-      expect(price.unit).toBe('node_second');
+      expect(price.meter_type).toBe('compute_execution');
+      expect(price.component).toBe('compute_second');
+      expect(price.unit).toBe('compute_second');
       expect(price.unit_price).toBe(0.0001);
     });
 

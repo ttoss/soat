@@ -35,7 +35,7 @@ Every event links back to the resources it attributes spend to: the [generation]
 | `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book                          |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
-| `meter_type`     | string          | What the event measures: `llm_tokens`, `node_execution`, `api_request`, or `storage`         |
+| `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, or `storage`         |
 | `provider`       | string          | As-billed SKU vendor slug (e.g. `openai`); `soat` for platform meter types                   |
 | `model`          | string          | Model identifier the provider billed; the billable SKU for platform meter types              |
 | `cost_usd`       | number \| null  | Total cost in USD — the sum of the priced component costs, frozen at write time; `null` when nothing is priced |
@@ -48,9 +48,9 @@ One priced dimension of an event. Every meter type is expressed as components, s
 
 | Field        | Type            | Description                                                                                   |
 | ------------ | --------------- | --------------------------------------------------------------------------------------------- |
-| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `node_second`, `request`, `gb_day`, … |
+| `component`  | string          | The measured dimension: `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens`, `compute_second`, `request`, `gb_day`, … |
 | `quantity`   | number          | The measured amount, expressed in `unit`                                                      |
-| `unit`       | string          | Unit `quantity` is measured in (`token`, `node_second`, `request`, `gb_day`)                  |
+| `unit`       | string          | Unit `quantity` is measured in (`token`, `compute_second`, `request`, `gb_day`)                  |
 | `billable`   | boolean         | Whether the component contributes to cost. `reasoning_tokens` (a subset of `output_tokens`) is non-billable and excluded from cost and billable totals |
 | `unit_price` | number \| null  | USD per `unit`, frozen at write time; `null` when unpriced                                    |
 | `cost_usd`   | number \| null  | `quantity × unit_price`, frozen at write time; `null` when unpriced                           |
@@ -65,11 +65,11 @@ A versioned unit price for one billable **component** of a SKU: cost is uniform 
 | `id`             | string          | Public identifier for the price row (`price_` prefix)              |
 | `ai_provider_id` | string \| null  | Set for a per-provider override; `null` otherwise                   |
 | `project_id`     | string \| null  | Set for a project + provider-slug price; `null` otherwise           |
-| `meter_type`     | string          | Meter type this SKU belongs to (`llm_tokens`, `node_execution`, …) |
+| `meter_type`     | string          | Meter type this SKU belongs to (`llm_tokens`, `compute_execution`, …) |
 | `provider`       | string          | SKU vendor slug (e.g. `openai`); `soat` for platform SKUs          |
 | `model`          | string          | Model identifier, or the billable SKU for platform meter types    |
-| `component`      | string          | The component this row prices (`input_tokens`, `node_second`, …)   |
-| `unit`           | string          | Unit `unit_price` is denominated in (`token`, `node_second`, …)   |
+| `component`      | string          | The component this row prices (`input_tokens`, `compute_second`, …)   |
+| `unit`           | string          | Unit `unit_price` is denominated in (`token`, `compute_second`, …)   |
 | `unit_price`     | number          | USD per `unit` (for token components, USD per token)               |
 | `effective_from` | string          | ISO 8601; the latest row `<= now()` prices a call                  |
 | `created_at`     | string          | ISO 8601 creation timestamp                                        |
@@ -83,11 +83,11 @@ Every event carries a `meter_type`, and its measured quantities live in componen
 | `meter_type`     | What one event records                              | Components                                        |
 | ---------------- | --------------------------------------------------- | ------------------------------------------------- |
 | `llm_tokens`     | One completed LLM call's token usage (today's events) | `input_tokens`, `output_tokens`, `cached_tokens`, `reasoning_tokens` |
-| `node_execution` | One orchestration node's wall-clock compute time    | `node_second`                                     |
+| `compute_execution` | Wall-clock compute time of a unit of work (orchestration node, agent generation, tool call) | `compute_second`                                     |
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored bytes for one day              | `gb_day`                                          |
 
-For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `node-second`). Emitters for the non-LLM types land in later milestones; the schema and per-component pricing exist now, so those become emitter-only work.
+For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`). Emitters for the non-LLM types land in later milestones; the schema and per-component pricing exist now, so those become emitter-only work.
 
 ### Token components
 
