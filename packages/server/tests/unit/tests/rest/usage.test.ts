@@ -7,7 +7,10 @@ import { db } from 'src/db';
 import { createGeneration } from 'src/lib/agents';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
-import { recordGenerationUsage } from 'src/lib/usage';
+import {
+  evaluateProjectThresholds,
+  recordGenerationUsage,
+} from 'src/lib/usage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -1015,6 +1018,29 @@ describe('Usage', () => {
         ).toBe(false);
       });
 
+      test('listing thresholds for an unknown project returns an empty list', async () => {
+        const res = await authenticatedTestClient(userToken).get(
+          '/api/v1/usage/thresholds?project_id=proj_doesNotExist01'
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+      });
+
+      test('listing thresholds for an out-of-scope project returns an empty list', async () => {
+        // A project the user cannot access: filtering by it yields nothing
+        // rather than leaking another project's thresholds.
+        const other = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: `usage-thresholds-other-${Date.now()}` });
+        expect(other.status).toBe(201);
+
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${other.body.id}`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+      });
+
       test('deleting an unknown threshold returns 404', async () => {
         const res = await authenticatedTestClient(userToken).delete(
           '/api/v1/usage/thresholds/uthr_doesNotExist01'
@@ -1239,6 +1265,35 @@ describe('Usage', () => {
         expect(data.window_key).toBeNull();
       });
 
+      test('a fired rolling_24h threshold re-arms once usage falls below 90%', async () => {
+        // The re-arm branch only triggers when a rolling window's value drops
+        // below 90% of the limit — unreachable through the append-only API, so
+        // it is driven directly: mark a high threshold as already fired, then
+        // evaluate against the project's (far lower) current usage.
+        const project = await db.Project.findOne({
+          where: { publicId: projectId },
+        });
+        const thresholdId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 1_000_000,
+        });
+        await db.UsageThreshold.update(
+          { lastFiredAt: new Date() },
+          { where: { publicId: thresholdId } }
+        );
+
+        await evaluateProjectThresholds({ projectId: project?.id as number });
+
+        const get = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        const row = get.body.data.find((t: { id: string }) => {
+          return t.id === thresholdId;
+        });
+        expect(row.last_fired_at).toBeNull();
+      });
+
       test('a threshold above current usage does not fire', async () => {
         // Create the high threshold first (lower id → evaluated first), then a
         // low sentinel. When the sentinel's event arrives, the high threshold has
@@ -1267,6 +1322,97 @@ describe('Usage', () => {
             return e.resourceId === highId;
           })
         ).toHaveLength(0);
+      });
+
+      test('two thresholds firing in one evaluation pass share the resolved project', async () => {
+        // Both low thresholds cross in a single evaluateProjectThresholds pass,
+        // exercising the branch that reuses the already-resolved project public
+        // id for the second (and later) fire.
+        const project = await db.Project.findOne({
+          where: { publicId: projectId },
+        });
+        const firstId = await createThreshold({
+          metric: 'tokens',
+          window: 'calendar_month',
+          threshold: 5,
+        });
+        const secondId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 5,
+        });
+
+        const captured = await withCapture(async () => {
+          await evaluateProjectThresholds({ projectId: project?.id as number });
+        });
+        const firedIds = captured.map((e) => {
+          return e.resourceId;
+        });
+        expect(firedIds).toContain(firstId);
+        expect(firedIds).toContain(secondId);
+      });
+    });
+
+    describe('admin scope and empty-project evaluation', () => {
+      test('an admin lists and deletes thresholds without project scoping', async () => {
+        const created = await authenticatedTestClient(adminToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'cost_usd',
+            window: 'calendar_month',
+            threshold: 500,
+          });
+        expect(created.status).toBe(201);
+        const thresholdId = created.body.id;
+
+        // Admin resolveProjectIds returns undefined (no filter) — the unscoped
+        // list and delete branches.
+        const list = await authenticatedTestClient(adminToken).get(
+          '/api/v1/usage/thresholds'
+        );
+        expect(list.status).toBe(200);
+        expect(
+          list.body.data.some((t: { id: string }) => {
+            return t.id === thresholdId;
+          })
+        ).toBe(true);
+
+        const del = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/usage/thresholds/${thresholdId}`
+        );
+        expect(del.status).toBe(204);
+      });
+
+      test('thresholds on a project with no usage never fire', async () => {
+        // A fresh project has no usage events, exercising the empty-window
+        // token sum and the null cost aggregate (both resolve to 0, below any
+        // positive threshold, so nothing fires).
+        const projRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: `usage-thresholds-empty-${Date.now()}` });
+        expect(projRes.status).toBe(201);
+        const emptyProjectPublicId = projRes.body.id;
+        const emptyProject = await db.Project.findOne({
+          where: { publicId: emptyProjectPublicId },
+        });
+
+        for (const body of [
+          { metric: 'tokens', window: 'calendar_month', threshold: 1 },
+          { metric: 'cost_usd', window: 'rolling_24h', threshold: 1 },
+        ]) {
+          const res = await authenticatedTestClient(adminToken)
+            .post('/api/v1/usage/thresholds')
+            .send({ project_id: emptyProjectPublicId, ...body });
+          expect(res.status).toBe(201);
+        }
+
+        const captured = await withCapture(async () => {
+          await evaluateProjectThresholds({
+            projectId: emptyProject?.id as number,
+          });
+        });
+        expect(captured).toHaveLength(0);
       });
     });
   });
