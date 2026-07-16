@@ -1,5 +1,6 @@
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { parseDuration } from 'src/lib/orchestrationDuration';
 import {
   applyInputMapping,
@@ -7,6 +8,7 @@ import {
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
+  executeEmitEventNode,
   executeHumanNode,
   executeLoopNode,
   executeMemoryWriteNode,
@@ -440,173 +442,11 @@ describe('executeHumanNode', () => {
   });
 });
 
-// ── executeWebhookNode ─────────────────────────────────────────────────────
+// ── executeWebhookNode (receive-only) ──────────────────────────────────────
 
 describe('executeWebhookNode', () => {
-  const realFetch = global.fetch;
-  afterEach(() => {
-    global.fetch = realFetch;
-  });
-
-  test('emit mode without webhookUrl returns emitted artifact', async () => {
-    const result = await executeWebhookNode({
-      node: makeNode({ type: 'webhook', mode: 'emit' }),
-      state: {},
-    });
-    expect(result).toEqual({ kind: 'artifact', artifact: { emitted: true } });
-  });
-
-  test('undefined mode defaults to emit behaviour', async () => {
-    const result = await executeWebhookNode({
-      node: makeNode({ type: 'webhook' }),
-      state: {},
-    });
-    expect(result).toEqual({ kind: 'artifact', artifact: { emitted: true } });
-  });
-
-  test('emit awaits fetch and reports delivery status', async () => {
-    const calls: Array<{ url: string; init: RequestInit }> = [];
-    global.fetch = (async (url: string, init: RequestInit) => {
-      calls.push({ url, init });
-      return { ok: true, status: 202 } as Response;
-    }) as typeof fetch;
-
-    const result = await executeWebhookNode({
-      node: makeNode({
-        type: 'webhook',
-        mode: 'emit',
-        webhookUrl: 'http://example.test/hook',
-        inputMapping: { val: { var: 'val' } },
-      }),
-      state: { val: 1 },
-    });
-
-    expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('http://example.test/hook');
-    expect(JSON.parse(calls[0].init.body as string)).toEqual({ val: 1 });
-    expect(result).toEqual({
-      kind: 'artifact',
-      artifact: { emitted: true, delivered: true, status: 202, signed: false },
-    });
-  });
-
-  test('a transport failure records delivered=false without throwing', async () => {
-    global.fetch = (async () => {
-      throw new Error('network down');
-    }) as typeof fetch;
-
-    const result = await executeWebhookNode({
-      node: makeNode({
-        type: 'webhook',
-        mode: 'emit',
-        webhookUrl: 'http://example.test/hook',
-      }),
-      state: {},
-    });
-
-    expect(result).toEqual({
-      kind: 'artifact',
-      artifact: { emitted: true, delivered: false, signed: false },
-    });
-  });
-
-  test('emit sends literal headers and an HMAC signature (F-12)', async () => {
-    let sent: Record<string, string> = {};
-    let sentBody = '';
-    global.fetch = (async (_url: string, init: RequestInit) => {
-      sent = init.headers as Record<string, string>;
-      sentBody = init.body as string;
-      return { ok: true, status: 200 } as Response;
-    }) as typeof fetch;
-
-    const result = await executeWebhookNode({
-      node: makeNode({
-        type: 'webhook',
-        mode: 'emit',
-        webhookUrl: 'http://example.test/hook',
-        headers: { 'X-Auth': 'static-token' },
-        signingSecret: 'shhh',
-        inputMapping: { alert: { var: 'alert' } },
-      }),
-      state: { alert: 'exception' },
-    });
-
-    // Header is forwarded verbatim (no project scope → literal pass-through).
-    expect(sent['X-Auth']).toBe('static-token');
-    // Signature is HMAC-SHA256 over the exact serialized body.
-    const { createHmac } = await import('node:crypto');
-    const expected =
-      'sha256=' + createHmac('sha256', 'shhh').update(sentBody).digest('hex');
-    expect(sent['X-Soat-Signature']).toBe(expected);
-    expect(result).toMatchObject({
-      artifact: { signed: true, delivered: true },
-    });
-  });
-
-  test('require_delivery: a transport failure throws a retriable delivery error (F-12)', async () => {
-    global.fetch = (async () => {
-      throw new Error('network down');
-    }) as typeof fetch;
-
-    await expect(
-      executeWebhookNode({
-        node: makeNode({
-          type: 'webhook',
-          mode: 'emit',
-          webhookUrl: 'http://example.test/hook',
-          requireDelivery: true,
-        }),
-        state: {},
-      })
-    ).rejects.toMatchObject({
-      code: 'ORCHESTRATION_WEBHOOK_DELIVERY_FAILED',
-      httpStatus: 502,
-    });
-  });
-
-  test('require_delivery: a non-2xx response throws a retriable delivery error (F-12)', async () => {
-    global.fetch = (async () => {
-      return { ok: false, status: 503 } as Response;
-    }) as typeof fetch;
-
-    const promise = executeWebhookNode({
-      node: makeNode({
-        type: 'webhook',
-        mode: 'emit',
-        webhookUrl: 'http://example.test/hook',
-        requireDelivery: true,
-      }),
-      state: {},
-    });
-    await expect(promise).rejects.toBeInstanceOf(DomainError);
-    await expect(promise).rejects.toMatchObject({
-      code: 'ORCHESTRATION_WEBHOOK_DELIVERY_FAILED',
-    });
-  });
-
-  test('require_delivery: a 2xx response completes normally with delivered=true (F-12)', async () => {
-    global.fetch = (async () => {
-      return { ok: true, status: 200 } as Response;
-    }) as typeof fetch;
-
-    const result = await executeWebhookNode({
-      node: makeNode({
-        type: 'webhook',
-        mode: 'emit',
-        webhookUrl: 'http://example.test/hook',
-        requireDelivery: true,
-      }),
-      state: {},
-    });
-
-    expect(result).toEqual({
-      kind: 'artifact',
-      artifact: { emitted: true, delivered: true, status: 200, signed: false },
-    });
-  });
-
-  test('receive mode returns requires_action with prompt and context', async () => {
-    const result = await executeWebhookNode({
+  test('parks the run awaiting a callback with prompt and context', () => {
+    const result = executeWebhookNode({
       node: makeNode({
         type: 'webhook',
         mode: 'receive',
@@ -616,8 +456,79 @@ describe('executeWebhookNode', () => {
     });
     expect(result.kind).toBe('requires_action');
     const ra = result as Extract<typeof result, { kind: 'requires_action' }>;
+    expect(ra.type).toBe('webhook_receive');
     expect(ra.prompt).toBe('Waiting for webhook callback.');
     expect(ra.context).toEqual({ token: 'abc' });
+  });
+});
+
+// ── executeEmitEventNode ───────────────────────────────────────────────────
+
+describe('executeEmitEventNode', () => {
+  test('throws when eventType is missing', async () => {
+    await expect(
+      executeEmitEventNode({
+        node: makeNode({ type: 'emit_event' }),
+        state: {},
+      })
+    ).rejects.toThrow(DomainError);
+  });
+
+  test('without a project scope, completes without emitting', async () => {
+    const events: SoatEvent[] = [];
+    const capture = (e: SoatEvent) => {
+      events.push(e);
+    };
+    eventBus.on('soat:event', capture);
+    try {
+      const result = await executeEmitEventNode({
+        node: makeNode({
+          type: 'emit_event',
+          eventType: 'guardrail.exception',
+        }),
+        state: {},
+      });
+      expect(result).toEqual({
+        kind: 'artifact',
+        artifact: { emitted: true, eventType: 'guardrail.exception' },
+      });
+      expect(events).toHaveLength(0);
+    } finally {
+      eventBus.off('soat:event', capture);
+    }
+  });
+
+  test('emits an event of the given type with the input-mapped payload as data', async () => {
+    const events: SoatEvent[] = [];
+    const capture = (e: SoatEvent) => {
+      events.push(e);
+    };
+    eventBus.on('soat:event', capture);
+    try {
+      const result = await executeEmitEventNode({
+        node: makeNode({
+          type: 'emit_event',
+          eventType: 'guardrail.exception',
+          inputMapping: { reason: { var: 'reason' } },
+        }),
+        state: { reason: 'kill-switch' },
+        // A project that does not exist resolves to an empty public id without
+        // throwing — enough to exercise the emit path deterministically.
+        projectId: 987654321,
+        runPublicId: 'orun_test123',
+      });
+
+      expect(result.kind).toBe('artifact');
+      const emitted = events.find((e) => {
+        return e.type === 'guardrail.exception';
+      });
+      expect(emitted).toBeDefined();
+      expect(emitted?.resourceType).toBe('orchestration_run');
+      expect(emitted?.resourceId).toBe('orun_test123');
+      expect(emitted?.data).toEqual({ reason: 'kill-switch' });
+    } finally {
+      eventBus.off('soat:event', capture);
+    }
   });
 });
 
