@@ -12,6 +12,11 @@
       "description": "Get a billing receipt for a generation"
     },
     {
+      "operationId": "getUsage",
+      "action": "usage:GetUsage",
+      "description": "Read a project's aggregated usage rollup"
+    },
+    {
       "operationId": "getPriceBook",
       "action": "usage:GetPriceBook",
       "description": "Read the global price book"

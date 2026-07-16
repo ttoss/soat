@@ -119,6 +119,24 @@ describe('MCP tools - happy path', () => {
     expect(names).toContain('upload-file-with-token');
   });
 
+  // ── Usage ────────────────────────────────────────────────────────────────
+
+  test('get-usage returns an aggregate rollup for a project', async () => {
+    const res = await mcpCall('get-usage', {
+      projectId,
+      groupBy: 'meter_type',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    // MCP responses are camelCase. No generation has been metered on this
+    // project, so the rollup is empty with zeroed totals — but well-formed.
+    expect(result.projectId).toBe(projectId);
+    expect(result.groupBy).toBe('meter_type');
+    expect(Array.isArray(result.groups)).toBe(true);
+    expect(result.totals.inputTokens).toBe(0);
+    expect(result.totals.costUsd).toBeNull();
+  });
+
   test('upload-file-with-token uploads via a presigned token', async () => {
     const presigned = parseResult(
       await mcpCall('create-presigned-url', {

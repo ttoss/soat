@@ -86,6 +86,7 @@ describe('Usage', () => {
         'agents:CreateAgentGeneration',
         'usage:ListUsageMeters',
         'usage:GetReceipt',
+        'usage:GetUsage',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',
@@ -765,6 +766,135 @@ describe('Usage', () => {
       // Token totals are still reconstructed from the components.
       expect(res.body.total_input_tokens).toBe(10);
       expect(res.body.total_cached_tokens).toBe(4);
+    });
+  });
+
+  describe('GET /api/v1/usage (aggregate)', () => {
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model`
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model`
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('missing project_id returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage?group_by=model'
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('invalid group_by returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=nonsense`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('missing group_by returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('invalid from timestamp returns 400', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model&from=not-a-date`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an unknown project returns 403 (not visible in scope)', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage?project_id=proj_doesNotExist01&group_by=model'
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('groups by model with token and cost totals', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.project_id).toBe(projectId);
+      expect(res.body.group_by).toBe('model');
+      expect(Array.isArray(res.body.groups)).toBe(true);
+
+      const stub = res.body.groups.find((g: { key: string }) => {
+        return g.key === 'stub-model';
+      });
+      expect(stub).toBeDefined();
+      // Every metered generation in this suite used the deterministic stub:
+      // 10 prompt (4 cached) / 20 completion / 7 reasoning tokens.
+      expect(stub.input_tokens).toBeGreaterThanOrEqual(10);
+      expect(stub.output_tokens).toBeGreaterThanOrEqual(20);
+      expect(stub.cached_tokens).toBeGreaterThanOrEqual(4);
+      expect(stub.reasoning_tokens).toBeGreaterThanOrEqual(7);
+
+      // Grand totals are at least the sum of the stub bucket's counts.
+      expect(res.body.totals.input_tokens).toBeGreaterThanOrEqual(
+        stub.input_tokens
+      );
+      expect('cost_usd' in res.body.totals).toBe(true);
+    });
+
+    test('groups by meter_type', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+      const llm = res.body.groups.find((g: { key: string }) => {
+        return g.key === 'llm_tokens';
+      });
+      expect(llm).toBeDefined();
+      expect(llm.output_tokens).toBeGreaterThanOrEqual(20);
+    });
+
+    test('groups by agent', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=agent`
+      );
+      expect(res.status).toBe(200);
+      const byAgent = res.body.groups.find((g: { key: string }) => {
+        return g.key === agentId;
+      });
+      expect(byAgent).toBeDefined();
+      expect(byAgent.input_tokens).toBeGreaterThanOrEqual(10);
+    });
+
+    test('groups by day (UTC calendar day key)', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=day`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.groups.length).toBeGreaterThanOrEqual(1);
+      for (const group of res.body.groups) {
+        expect(group.key).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      }
+    });
+
+    test('a future-only window returns empty groups and zeroed totals', async () => {
+      const from = new Date(Date.now() + 10 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model&from=${from}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
+      expect(res.body.from).toBe(from);
+      expect(res.body.totals.input_tokens).toBe(0);
+      expect(res.body.totals.cost_usd).toBeNull();
     });
   });
 
