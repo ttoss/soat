@@ -36,10 +36,24 @@ export type UsageReceiptMeterTypeTotal = {
 };
 
 export type UsageReceipt = {
-  generationId: string;
+  // Present on a per-generation receipt; absent on a per-run receipt.
+  generationId?: string;
+  // Present on a per-run receipt (summed across the run's meters); absent on a
+  // per-generation receipt.
+  runId?: string;
   currency: string;
   lineItems: UsageReceiptLine[];
   byMeterType: UsageReceiptMeterTypeTotal[];
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCachedTokens: number;
+  totalReasoningTokens: number;
+  totalCostUsd: number | null;
+};
+
+// The token/cost roll-up of a receipt without its line items — surfaced on the
+// orchestration-run response so callers see run spend without a second request.
+export type UsageTotals = {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalCachedTokens: number;
@@ -104,27 +118,13 @@ const groupByMeterType = (
   });
 };
 
-/**
- * Builds a billing receipt for a completed generation: one line item per usage
- * event (its SKU, cost, and component breakdown), a per-meter-type cost split,
- * reconstructed token totals, and a grand total. `totalCostUsd` is null only
- * when nothing on the receipt was priced. Returns null when the generation is
- * not visible in scope (the route yields 404).
- */
-export const getReceipt = async (args: {
-  generationId: string;
-  projectIds?: number[];
-}): Promise<UsageReceipt | null> => {
-  const genWhere: { publicId: string; projectId?: number[] } = {
-    publicId: args.generationId,
-  };
-  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
-
-  const generation = await db.Generation.findOne({ where: genWhere });
-  if (!generation) return null;
-
+// Loads a set of usage events (with their priced components) and maps them into
+// receipt line items, oldest-first. Shared by the generation and run receipts.
+const loadLineItems = async (
+  where: Record<string, unknown>
+): Promise<UsageReceiptLine[]> => {
   const events = await db.UsageEvent.findAll({
-    where: { generationId: generation.id },
+    where,
     include: [
       {
         model: db.UsageComponent,
@@ -135,7 +135,7 @@ export const getReceipt = async (args: {
     order: [['createdAt', 'ASC']],
   });
 
-  const lineItems: UsageReceiptLine[] = events.map((event) => {
+  return events.map((event) => {
     const components = (event.components ?? []).map((component) => {
       return {
         component: component.component,
@@ -157,13 +157,20 @@ export const getReceipt = async (args: {
       components,
     };
   });
+};
 
+// Assembles the totals + breakdowns shared by every receipt shape from a set of
+// line items. `identity` stamps the receipt with either a generationId or a
+// runId (never both).
+const assembleReceipt = (
+  lineItems: UsageReceiptLine[],
+  identity: { generationId?: string; runId?: string }
+): UsageReceipt => {
   // Reconstruct the provider's reported counts: `input_tokens` components hold
   // the uncached input, so full prompt tokens = input + cached.
   const cached = sumQuantity(lineItems, 'cached_tokens');
-
   return {
-    generationId: args.generationId,
+    ...identity,
     currency: 'USD',
     lineItems,
     byMeterType: groupByMeterType(lineItems),
@@ -172,5 +179,79 @@ export const getReceipt = async (args: {
     totalCachedTokens: cached,
     totalReasoningTokens: sumQuantity(lineItems, 'reasoning_tokens'),
     totalCostUsd: sumLineCosts(lineItems),
+  };
+};
+
+/**
+ * Builds a billing receipt for a completed generation: one line item per usage
+ * event (its SKU, cost, and component breakdown), a per-meter-type cost split,
+ * reconstructed token totals, and a grand total. `totalCostUsd` is null only
+ * when nothing on the receipt was priced. Returns null when the generation is
+ * not visible in scope (the route yields 404).
+ */
+export const getReceipt = async (args: {
+  generationId: string;
+  projectIds?: number[];
+}): Promise<UsageReceipt | null> => {
+  const genWhere: { publicId: string; projectId?: number[] } = {
+    publicId: args.generationId,
+  };
+  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
+
+  const generation = await db.Generation.findOne({ where: genWhere });
+  if (!generation) return null;
+
+  const lineItems = await loadLineItems({ generationId: generation.id });
+  return assembleReceipt(lineItems, { generationId: args.generationId });
+};
+
+// Resolves an orchestration run's public id to its internal id within scope.
+// Returns null when the run is not visible (the route yields 404).
+const resolveRunInternalId = async (args: {
+  runId: string;
+  projectIds?: number[];
+}): Promise<number | null> => {
+  const where: { publicId: string; projectId?: number[] } = {
+    publicId: args.runId,
+  };
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  const run = await db.OrchestrationRun.findOne({ where });
+  return (run?.id as number | undefined) ?? null;
+};
+
+/**
+ * Builds a billing receipt for an orchestration run: the same shape as the
+ * per-generation receipt, but its line items are every usage event recorded
+ * across the run's nodes (summed for the totals and the per-meter-type split).
+ * "One operating cycle → one action" billing. Returns null when the run is not
+ * visible in scope (the route yields 404).
+ */
+export const getRunReceipt = async (args: {
+  runId: string;
+  projectIds?: number[];
+}): Promise<UsageReceipt | null> => {
+  const runInternalId = await resolveRunInternalId(args);
+  if (runInternalId === null) return null;
+
+  const lineItems = await loadLineItems({ runId: runInternalId });
+  return assembleReceipt(lineItems, { runId: args.runId });
+};
+
+/**
+ * Rolls a run's usage up to its token/cost totals (no line items) for the
+ * orchestration-run response. Takes the internal run id — the caller has
+ * already loaded the run — so it never re-resolves the public id.
+ */
+export const getRunUsageTotals = async (args: {
+  runInternalId: number;
+}): Promise<UsageTotals> => {
+  const lineItems = await loadLineItems({ runId: args.runInternalId });
+  const receipt = assembleReceipt(lineItems, {});
+  return {
+    totalInputTokens: receipt.totalInputTokens,
+    totalOutputTokens: receipt.totalOutputTokens,
+    totalCachedTokens: receipt.totalCachedTokens,
+    totalReasoningTokens: receipt.totalReasoningTokens,
+    totalCostUsd: receipt.totalCostUsd,
   };
 };

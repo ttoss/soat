@@ -98,6 +98,14 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare traceId: string | null;
 
+  // Public id of the trigger firing that started this run, when it was launched
+  // by an agent-target/orchestration-target trigger. Denormalized (not an FK) so
+  // it survives trigger deletion and can be propagated onto the usage events of
+  // the run's in-run generations for correct in-run trigger attribution. Null
+  // for runs started directly via the API.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare triggerId: string | null;
+
   // Durable background execution. When `status` is 'sleeping', the run is
   // parked on a scheduled wait (a `delay` timer or the interval between `poll`
   // attempts) and `wakeAt` holds when it should resume. The background

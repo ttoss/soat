@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { createGeneration } from 'src/lib/agents';
+import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
 import { recordGenerationUsage } from 'src/lib/usage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -85,6 +86,9 @@ describe('Usage', () => {
         'agents:CreateAgentGeneration',
         'usage:ListUsageMeters',
         'usage:GetReceipt',
+        'orchestrations:CreateOrchestration',
+        'orchestrations:StartRun',
+        'orchestrations:GetRun',
       ],
     });
     adminToken = setup.adminToken;
@@ -761,6 +765,154 @@ describe('Usage', () => {
       // Token totals are still reconstructed from the components.
       expect(res.body.total_input_tokens).toBe(10);
       expect(res.body.total_cached_tokens).toBe(4);
+    });
+  });
+
+  describe('orchestration run attribution and receipt', () => {
+    let runId: string;
+    const nodeId = 'metered-agent';
+
+    // Runs a one-agent-node orchestration to completion so its node dispatches a
+    // real (stubbed) generation, which meters with the run's run_id + node_id.
+    const runSingleAgentOrchestration = async (): Promise<string> => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Metered Orchestration ${nodeId}`,
+          nodes: [{ id: nodeId, type: 'agent', agent_id: agentId }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      return runRes.body.id as string;
+    };
+
+    beforeAll(async () => {
+      runId = await runSingleAgentOrchestration();
+    }, 60000);
+
+    test('the run node meters with run_id and node_id', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/usage/meters'
+      );
+      expect(res.status).toBe(200);
+      const runEvents = res.body.data.filter((e: { run_id: string | null }) => {
+        return e.run_id === runId;
+      });
+      expect(runEvents).toHaveLength(1);
+      expect(runEvents[0].node_id).toBe(nodeId);
+      expect(runEvents[0].meter_type).toBe('llm_tokens');
+    });
+
+    test('GET /usage/receipt?run_id returns a receipt summed across the run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?run_id=${runId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.run_id).toBe(runId);
+      expect(res.body.generation_id).toBeUndefined();
+      expect(res.body.currency).toBe('USD');
+      expect(res.body.line_items.length).toBeGreaterThanOrEqual(1);
+      // Deterministic stub token counts, reconstructed from the components.
+      expect(res.body.total_input_tokens).toBe(10);
+      expect(res.body.total_output_tokens).toBe(20);
+      expect(res.body.total_cached_tokens).toBe(4);
+      expect(res.body.total_reasoning_tokens).toBe(7);
+      expect(res.body.by_meter_type[0].meter_type).toBe('llm_tokens');
+    });
+
+    test('GET /usage/receipt?run_id for an unknown run returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/receipt?run_id=run_doesNotExist01'
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('the orchestration-run response surfaces usage totals', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.usage).toBeDefined();
+      expect(res.body.usage.total_input_tokens).toBe(10);
+      expect(res.body.usage.total_output_tokens).toBe(20);
+      expect(res.body.usage.total_cached_tokens).toBe(4);
+      expect(res.body.usage.total_reasoning_tokens).toBe(7);
+      // total_cost_usd is present (a number or null); its value depends on the
+      // price-book timeline, so only its presence is asserted here.
+      expect('total_cost_usd' in res.body.usage).toBe(true);
+    });
+
+    test('a replayed node upserts into a no-op (idempotent by run:node)', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?run_id=${runId}`
+      );
+      const beforeCount = before.body.line_items.length;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // A replayed node execution: a fresh generation carrying the same run/node
+      // attribution. Its usage event collides on the run:node idempotency key, so
+      // no second event is written for the node.
+      await createGeneration({
+        agentId,
+        projectIds: [project?.id as number],
+        messages: [{ role: 'user', content: 'replayed node' }],
+        stream: false,
+        authHeader: `Bearer ${userToken}`,
+        runId,
+        nodeId,
+      });
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?run_id=${runId}`
+      );
+      expect(after.body.line_items.length).toBe(beforeCount);
+    });
+
+    test('a trigger-started run attributes its in-run generations to the trigger', async () => {
+      const triggerPublicId = generatePublicId(PUBLIC_ID_PREFIXES.trigger);
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Trigger Attributed Orchestration',
+          nodes: [{ id: 'triggered-agent', type: 'agent', agent_id: agentId }],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const run = await startOrchestrationRun({
+        orchestrationPublicId: createRes.body.id,
+        projectId: project?.id as number,
+        projectIds: [project?.id as number],
+        input: {},
+        authHeader: `Bearer ${userToken}`,
+        wait: true,
+        triggerId: triggerPublicId,
+      });
+      expect(run.status).toBe('succeeded');
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?trigger_id=${triggerPublicId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(1);
+      expect(res.body.data[0].run_id).toBe(run.id);
+      expect(res.body.data[0].node_id).toBe('triggered-agent');
+      expect(res.body.data[0].trigger_id).toBe(triggerPublicId);
     });
   });
 });

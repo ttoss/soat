@@ -775,6 +775,13 @@ components:
             node execution — the orchestration analogue of an LLM trace.
           items:
             $ref: '#/components/schemas/NodeExecution'
+        usage:
+          allOf:
+            - $ref: '#/components/schemas/RunUsageTotals'
+          description: >-
+            Usage roll-up (token counts and cost_usd) summed across every
+            metered generation the run produced. Present on the single-run read;
+            omitted from run list responses.
         required_action:
           allOf:
             - $ref: '#/components/schemas/RequiredAction'
@@ -793,6 +800,27 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    RunUsageTotals:
+      type: object
+      description: >-
+        Token and cost roll-up for an orchestration run, summed across every
+        usage event the run's generations produced.
+      properties:
+        total_input_tokens:
+          type: integer
+        total_output_tokens:
+          type: integer
+        total_cached_tokens:
+          type: integer
+        total_reasoning_tokens:
+          type: integer
+        total_cost_usd:
+          type: number
+          nullable: true
+          description: >-
+            Sum of the run's priced component costs in USD. Null when nothing on
+            the run was priced.
 
     NodeExecution:
       type: object

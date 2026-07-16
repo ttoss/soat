@@ -76,8 +76,12 @@ type DispatchArgs = {
   // The run's own project id — used for project-scoped resolution (secrets) and
   // to scope an emit_event node's event to the run's project.
   projectId?: number;
-  // The run's public id — used as the resourceId of an emit_event node's event.
+  // The run's public id — used as the resourceId of an emit_event node's event
+  // and stamped onto in-run generations' usage events for per-run roll-up.
   runPublicId?: string;
+  // The trigger firing (if any) that started the run — propagated onto in-run
+  // generations' usage events for in-run trigger attribution.
+  triggerId?: string;
   traceId: string | null;
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
@@ -113,6 +117,7 @@ const dispatchNodeExecution = async (
     projectIds,
     projectId,
     runPublicId,
+    triggerId,
     traceId,
     authHeader,
     pollAttempt,
@@ -134,6 +139,8 @@ const dispatchNodeExecution = async (
         projectIds,
         traceId,
         authHeader,
+        runPublicId,
+        triggerId,
       });
     case 'tool':
       return executeToolNode({ node: nodeDefn, state, projectIds, authHeader });
@@ -180,6 +187,7 @@ export const executeNodeById = async (args: {
   projectIds: number[];
   projectId?: number;
   runPublicId?: string;
+  triggerId?: string;
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
@@ -195,6 +203,7 @@ export const executeNodeById = async (args: {
     projectIds,
     projectId,
     runPublicId,
+    triggerId,
     traceId,
     authHeader,
     pollAttempt,
@@ -214,6 +223,7 @@ export const executeNodeById = async (args: {
     projectIds,
     projectId,
     runPublicId,
+    triggerId,
     traceId,
     authHeader,
     pollAttempt,

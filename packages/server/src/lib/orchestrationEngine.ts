@@ -335,6 +335,10 @@ export const startOrchestrationRun = async (args: {
   input?: Record<string, unknown>;
   authHeader?: string;
   wait?: boolean;
+  // Public id of the trigger firing that started this run, when launched by a
+  // trigger. Persisted on the run and propagated to in-run generations' usage
+  // events for in-run trigger attribution.
+  triggerId?: string;
 }): Promise<MappedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
@@ -371,6 +375,7 @@ export const startOrchestrationRun = async (args: {
     activeNodes: [],
     artifacts,
     input: args.input ?? null,
+    triggerId: args.triggerId ?? null,
     startedAt: new Date(),
     // The run enters `running` immediately; acquire a lease so the reaper can
     // reclaim it if this driver crashes before the first checkpoint refresh.

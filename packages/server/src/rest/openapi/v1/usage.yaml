@@ -124,22 +124,33 @@ paths:
     get:
       tags:
         - Usage
-      summary: Get a generation's billing receipt
+      summary: Get a generation or run billing receipt
       description: >
-        Returns a billing receipt for a completed generation: per-model line
-        items (tokens, the price-book version that priced them, and cost) plus
-        totals.
+        Returns a billing receipt. Pass generation_id for a per-generation
+        receipt, or run_id for a per-run receipt summed across the orchestration
+        run's meters — both share the same shape (per-model line items with
+        tokens, the price-book version that priced them, and cost, plus totals).
+        Exactly one of generation_id or run_id must be supplied.
       operationId: getUsageReceipt
       parameters:
         - name: generation_id
           in: query
-          required: true
-          description: Generation public ID
+          required: false
+          description: >
+            Generation public ID. Mutually exclusive with run_id.
+          schema:
+            type: string
+        - name: run_id
+          in: query
+          required: false
+          description: >
+            Orchestration run public ID. Returns the receipt summed across every
+            generation the run metered. Mutually exclusive with generation_id.
           schema:
             type: string
       responses:
         '200':
-          description: The generation's usage receipt
+          description: The generation or run usage receipt
           content:
             application/json:
               schema:
@@ -367,14 +378,24 @@ components:
       type: object
       properties:
         generation_id:
+          description: >
+            Present on a per-generation receipt; absent on a per-run receipt.
           x-soat-ref: generations
+          type: string
+        run_id:
+          description: >
+            Present on a per-run receipt (summed across the run's meters); absent
+            on a per-generation receipt.
+          x-soat-ref: orchestration-runs
           type: string
         currency:
           type: string
           example: USD
         line_items:
           type: array
-          description: One line per usage event on the generation
+          description: >
+            One line per usage event — for a generation receipt, the events on
+            that generation; for a run receipt, every event across the run.
           items:
             type: object
             properties:

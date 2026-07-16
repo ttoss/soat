@@ -60,6 +60,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 | `artifacts`        | object         | Outputs keyed by node ID                                          |
 | `error`            | object \| null | Error details if failed                                           |
 | `node_executions`  | array          | Per-node execution records (see [Node Executions](#node-executions)) |
+| `usage`            | object         | Token/cost roll-up (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across every metered generation the run produced (see [Run usage](#run-usage)). Present on the single-run read; omitted from run list responses |
 | `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
@@ -388,6 +389,12 @@ When a run completes, nodes that were never reached (because they were on an un-
 ```
 
 Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` (or `resume-orchestration-run`) satisfies the pause, that same record is updated to `status: "completed"` with `output` set to the submitted payload and `completed_at` set to the resume time — it is never left behind as `requires_action` in a finished run. A node that was never reached is recorded with `status: "skipped"` once the run completes. For a worked example of reading back the accumulated state and per-node output of a finished run, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
+
+### Run usage
+
+Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across the run's generations — "one operating cycle → one action" cost, without a second request. For the full per-event breakdown (line items, price rows, `by_meter_type` split), fetch the run receipt at `GET /api/v1/usage/receipt?run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation).
+
+When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger via the [usage](./usage.md) event list (`?trigger_id=`).
 
 ### Human Nodes
 

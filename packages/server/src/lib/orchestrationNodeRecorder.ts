@@ -197,6 +197,7 @@ export const executeAndRecordNode = async (args: {
       projectIds,
       projectId: runRecord.projectId as number,
       runPublicId: runRecord.publicId as string,
+      triggerId: runRecord.triggerId ?? undefined,
       traceId,
       authHeader,
       pollAttempt,
