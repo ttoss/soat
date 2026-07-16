@@ -41,6 +41,7 @@ export const PUBLIC_ID_PREFIXES = {
   triggerFiring: 'trg_fire_',
   usageEvent: 'ue_',
   usageComponent: 'uc_',
+  usageThreshold: 'uthr_',
   price: 'price_',
   approval: 'apr_',
 } as const;

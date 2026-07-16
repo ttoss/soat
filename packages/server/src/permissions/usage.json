@@ -17,6 +17,21 @@
       "description": "Read a project's aggregated usage rollup"
     },
     {
+      "operationId": "listUsageThresholds",
+      "action": "usage:ListThresholds",
+      "description": "List a project's usage alert thresholds"
+    },
+    {
+      "operationId": "createUsageThreshold",
+      "action": "usage:ManageThresholds",
+      "description": "Create a usage alert threshold"
+    },
+    {
+      "operationId": "deleteUsageThreshold",
+      "action": "usage:ManageThresholds",
+      "description": "Delete a usage alert threshold"
+    },
+    {
       "operationId": "getPriceBook",
       "action": "usage:GetPriceBook",
       "description": "Read the global price book"
