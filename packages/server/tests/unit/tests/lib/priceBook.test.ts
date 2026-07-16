@@ -1,5 +1,9 @@
 import { db } from 'src/db';
-import { computeCostUsd, getEffectivePrice } from 'src/lib/priceBook';
+import {
+  computeCostUsd,
+  getEffectivePrice,
+  validatePriceShape,
+} from 'src/lib/priceBook';
 
 /**
  * Pure cost arithmetic plus the DB-backed effective-price selection.
@@ -49,6 +53,114 @@ describe('priceBook', () => {
           cachedTokens: 0,
         })
       ).toBeNull();
+    });
+
+    test('prices a non-LLM meter as quantity × unit_price', () => {
+      // 3600 node-seconds × 0.0001 USD = 0.36
+      expect(
+        computeCostUsd({
+          price: {
+            meterType: 'node_execution',
+            inputPricePerM: null,
+            outputPricePerM: null,
+            cachedPricePerM: null,
+            unitPrice: '0.0001',
+          },
+          quantity: 3600,
+        })
+      ).toBe('0.360000');
+    });
+
+    test('returns null for a non-LLM meter when quantity or unit price is absent', () => {
+      const price = {
+        meterType: 'node_execution',
+        inputPricePerM: null,
+        outputPricePerM: null,
+        cachedPricePerM: null,
+        unitPrice: '0.0001',
+      };
+      // No quantity to multiply.
+      expect(computeCostUsd({ price, quantity: null })).toBeNull();
+      // No unit price on the row.
+      expect(
+        computeCostUsd({
+          price: { ...price, unitPrice: null },
+          quantity: 100,
+        })
+      ).toBeNull();
+    });
+
+    test('returns null for an llm_tokens row missing token rates', () => {
+      expect(
+        computeCostUsd({
+          price: {
+            meterType: 'llm_tokens',
+            inputPricePerM: null,
+            outputPricePerM: null,
+            cachedPricePerM: null,
+          },
+          inputTokens: 10,
+          outputTokens: 20,
+          cachedTokens: 0,
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('validatePriceShape', () => {
+    test('accepts a valid llm_tokens price', () => {
+      expect(
+        validatePriceShape({
+          meterType: 'llm_tokens',
+          inputPricePerM: 2.5,
+          outputPricePerM: 10,
+        })
+      ).toBeNull();
+    });
+
+    test('rejects an llm_tokens price missing token rates', () => {
+      expect(
+        validatePriceShape({ meterType: 'llm_tokens', inputPricePerM: 2.5 })
+      ).toMatch(/input_price_per_m and output_price_per_m/);
+    });
+
+    test('rejects an llm_tokens price that also sets a unit price', () => {
+      expect(
+        validatePriceShape({
+          meterType: 'llm_tokens',
+          inputPricePerM: 2.5,
+          outputPricePerM: 10,
+          unitPrice: 0.1,
+          unit: 'node_second',
+        })
+      ).toMatch(/must not set unit_price/);
+    });
+
+    test('accepts a valid non-LLM unit price', () => {
+      expect(
+        validatePriceShape({
+          meterType: 'node_execution',
+          unitPrice: 0.0001,
+          unit: 'node_second',
+        })
+      ).toBeNull();
+    });
+
+    test('rejects a non-LLM price missing unit_price or unit', () => {
+      expect(
+        validatePriceShape({ meterType: 'node_execution', unitPrice: 0.0001 })
+      ).toMatch(/require unit_price and unit/);
+    });
+
+    test('rejects a non-LLM price that also sets token rates', () => {
+      expect(
+        validatePriceShape({
+          meterType: 'node_execution',
+          unitPrice: 0.0001,
+          unit: 'node_second',
+          inputPricePerM: 1,
+        })
+      ).toMatch(/must not set token prices/);
     });
   });
 

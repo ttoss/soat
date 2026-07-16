@@ -97,25 +97,47 @@ export class PriceBook extends Model {
   )
   declare project: Project | null;
 
+  // Meter-type discriminator, mirroring `UsageMeter.meterType`. `llm_tokens`
+  // (the default) prices with the per-million token columns below;
+  // every other type prices with `unitPrice`/`unit`. Existing rows backfill to
+  // `llm_tokens` via the default.
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'llm_tokens',
+  })
+  declare meterType: string;
+
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
 
   @Column({ type: DataType.STRING, allowNull: false })
   declare model: string;
 
-  // USD per one million input (prompt) tokens.
-  @Column({ type: DataType.DECIMAL, allowNull: false })
-  declare inputPricePerM: string;
+  // USD per one million input (prompt) tokens. Null on non-`llm_tokens` rows,
+  // which price via `unitPrice` instead.
+  @Column({ type: DataType.DECIMAL, allowNull: true })
+  declare inputPricePerM: string | null;
 
   // USD per one million output (completion) tokens. Reasoning tokens are part
-  // of the output count and are billed at this rate.
-  @Column({ type: DataType.DECIMAL, allowNull: false })
-  declare outputPricePerM: string;
+  // of the output count and are billed at this rate. Null on non-LLM rows.
+  @Column({ type: DataType.DECIMAL, allowNull: true })
+  declare outputPricePerM: string | null;
 
   // USD per one million cached input tokens read. Null falls back to the input
   // price (i.e. no cache discount).
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare cachedPricePerM: string | null;
+
+  // USD per `unit` for non-`llm_tokens` meter types (e.g. per node-second).
+  // Null on `llm_tokens` rows, which price via the per-million columns above.
+  @Column({ type: DataType.DECIMAL, allowNull: true })
+  declare unitPrice: string | null;
+
+  // The unit `unitPrice` is denominated in; must match the meter's `unit`
+  // (e.g. `node_second`). Null on `llm_tokens` rows.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare unit: string | null;
 
   // The row with the latest effectiveFrom <= now() prices a call.
   @Column({ type: DataType.DATE, allowNull: false })

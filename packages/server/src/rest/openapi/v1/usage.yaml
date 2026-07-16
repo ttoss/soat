@@ -69,6 +69,14 @@ paths:
           description: Filter by logical action id
           schema:
             type: string
+        - name: meter_type
+          in: query
+          required: false
+          description: >
+            Filter by meter type (e.g. `llm_tokens`, `node_execution`,
+            `api_request`, `storage`)
+          schema:
+            type: string
         - name: limit
           in: query
           required: false
@@ -285,11 +293,17 @@ components:
           description: >
             Caller-supplied logical action label, for rolling spend up per
             action. Null when the caller did not label the action.
+        meter_type:
+          type: string
+          description: >
+            What the row measures. `llm_tokens` (default) uses the token
+            columns; `node_execution`, `api_request`, and `storage` use
+            `quantity`/`unit` and leave the token columns at 0.
         provider:
           type: string
           description: >
             Denormalized as-billed provider slug, retained even if the AI
-            provider is later deleted
+            provider is later deleted. `soat` for platform meter types.
           example: openai
         model:
           type: string
@@ -309,6 +323,18 @@ components:
           description: >
             Reasoning tokens the provider reports separately (e.g. OpenAI
             `completion_tokens_details.reasoning_tokens`). 0 when unreported.
+        quantity:
+          type: number
+          nullable: true
+          description: >
+            Generic measure for non-`llm_tokens` meter types (e.g. node-seconds,
+            request count, GB-days). Null for `llm_tokens` rows.
+        unit:
+          type: string
+          nullable: true
+          description: >
+            Unit `quantity` is measured in (`node_second` | `request` |
+            `gb_day`). Null for `llm_tokens` rows.
         cost_usd:
           type: number
           nullable: true
@@ -339,6 +365,8 @@ components:
           items:
             type: object
             properties:
+              meter_type:
+                type: string
               provider:
                 type: string
               model:
@@ -355,6 +383,38 @@ components:
                 type: integer
               reasoning_tokens:
                 type: integer
+              quantity:
+                type: number
+                nullable: true
+                description: Measure for non-`llm_tokens` lines; null otherwise
+              unit:
+                type: string
+                nullable: true
+              cost_usd:
+                type: number
+                nullable: true
+        by_meter_type:
+          type: array
+          description: >
+            Per-meter-type rollup of the lines above — the "tokens + infra"
+            split. A single-type receipt has one entry whose totals equal the
+            receipt totals.
+          items:
+            type: object
+            properties:
+              meter_type:
+                type: string
+              input_tokens:
+                type: integer
+              output_tokens:
+                type: integer
+              cached_tokens:
+                type: integer
+              reasoning_tokens:
+                type: integer
+              quantity:
+                type: number
+                nullable: true
               cost_usd:
                 type: number
                 nullable: true
@@ -385,22 +445,38 @@ components:
           description: >
             Null for a global default price. Set when this row is a
             per-provider override for a specific AI provider instance.
+        meter_type:
+          type: string
+          description: >
+            Meter type this price applies to. `llm_tokens` (default) uses the
+            per-million token rates; other types use `unit_price`/`unit`.
         provider:
           type: string
           example: openai
         model:
           type: string
+          description: Model id, or the billable SKU for platform meter types
           example: gpt-4o
         input_price_per_m:
           type: number
-          description: USD per one million input (prompt) tokens
+          nullable: true
+          description: USD per one million input (prompt) tokens; null on non-LLM rows
         output_price_per_m:
           type: number
-          description: USD per one million output (completion) tokens
+          nullable: true
+          description: USD per one million output (completion) tokens; null on non-LLM rows
         cached_price_per_m:
           type: number
           nullable: true
           description: USD per one million cached input tokens; null falls back to the input price
+        unit_price:
+          type: number
+          nullable: true
+          description: USD per `unit` on non-`llm_tokens` rows; null on LLM rows
+        unit:
+          type: string
+          nullable: true
+          description: Unit `unit_price` is denominated in (e.g. `node_second`)
         effective_from:
           type: string
           format: date-time
@@ -429,9 +505,12 @@ components:
             required:
               - provider
               - model
-              - input_price_per_m
-              - output_price_per_m
               - effective_from
+            description: >
+              A price row. `llm_tokens` rows (the default) require
+              `input_price_per_m` and `output_price_per_m` and must omit
+              `unit_price`/`unit`; other meter types require `unit_price` and
+              `unit` and must omit the token rates.
             properties:
               ai_provider_id:
                 x-soat-ref: ai-providers
@@ -440,17 +519,33 @@ components:
                 description: >
                   Omit for a global default price; set to a provider public ID
                   to record a per-provider override.
+              meter_type:
+                type: string
+                default: llm_tokens
+                description: >
+                  Defaults to `llm_tokens`. Set to a platform meter type
+                  (e.g. `node_execution`) to record a unit-priced SKU.
               provider:
                 type: string
               model:
                 type: string
               input_price_per_m:
                 type: number
+                nullable: true
               output_price_per_m:
                 type: number
+                nullable: true
               cached_price_per_m:
                 type: number
                 nullable: true
+              unit_price:
+                type: number
+                nullable: true
+                description: USD per `unit`; required on non-`llm_tokens` rows
+              unit:
+                type: string
+                nullable: true
+                description: Unit `unit_price` is denominated in (e.g. `node_second`)
               effective_from:
                 type: string
                 format: date-time

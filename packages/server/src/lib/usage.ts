@@ -5,6 +5,13 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { computeCostUsd, getEffectivePrice } from './priceBook';
 
+export type {
+  UsageReceipt,
+  UsageReceiptLine,
+  UsageReceiptMeterTypeTotal,
+} from './usageReceipt';
+export { getReceipt } from './usageReceipt';
+
 const log = createDebug('soat:usage');
 
 export type UsageTokens = {
@@ -49,12 +56,15 @@ export type PersistedUsageMeter = {
   aiProviderId: string | null;
   triggerId: string | null;
   actionId: string | null;
+  meterType: string;
   provider: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
   cachedTokens: number;
   reasoningTokens: number;
+  quantity: number | null;
+  unit: string | null;
   costUsd: number | null;
   priceId: string | null;
   createdAt: Date;
@@ -100,12 +110,15 @@ const mapUsageMeter = (
     aiProviderId: assocPublicId(meter.aiProvider),
     triggerId: meter.triggerId,
     actionId: meter.actionId,
+    meterType: meter.meterType,
     provider: meter.provider,
     model: meter.model,
     inputTokens: meter.inputTokens,
     outputTokens: meter.outputTokens,
     cachedTokens: meter.cachedTokens,
     reasoningTokens: meter.reasoningTokens,
+    quantity: meter.quantity === null ? null : Number(meter.quantity),
+    unit: meter.unit,
     costUsd: meter.costUsd === null ? null : Number(meter.costUsd),
     priceId: assocPublicId(meter.price),
     createdAt: meter.createdAt,
@@ -193,12 +206,15 @@ const writeGenerationMeter = async (args: {
       aiProviderId: attribution.aiProviderId,
       triggerId: attribution.triggerId,
       actionId: attribution.actionId,
+      meterType: 'llm_tokens',
       provider: attribution.provider,
       model,
       inputTokens: tokens.inputTokens,
       outputTokens: tokens.outputTokens,
       cachedTokens: tokens.cachedTokens,
       reasoningTokens: tokens.reasoningTokens,
+      quantity: null,
+      unit: null,
       costUsd,
       priceId,
       idempotencyKey: args.generationId,
@@ -313,6 +329,7 @@ export const listUsageMeters = async (args: {
   traceId?: string;
   triggerId?: string;
   actionId?: string;
+  meterType?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -328,9 +345,10 @@ export const listUsageMeters = async (args: {
     where.projectId = args.projectIds;
   }
 
-  // triggerId/actionId are denormalized string columns — filter directly.
+  // triggerId/actionId/meterType are denormalized columns — filter directly.
   if (args.triggerId !== undefined) where.triggerId = args.triggerId;
   if (args.actionId !== undefined) where.actionId = args.actionId;
+  if (args.meterType !== undefined) where.meterType = args.meterType;
 
   const resolved = await applyUsageScopeFilters(where, {
     agentId: args.agentId,
@@ -357,95 +375,4 @@ export const listUsageMeters = async (args: {
   });
 
   return { data: rows.map(mapUsageMeter), total: count, limit, offset };
-};
-
-export type UsageReceiptLine = {
-  provider: string;
-  model: string;
-  priceId: string | null;
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-  reasoningTokens: number;
-  costUsd: number | null;
-};
-
-export type UsageReceipt = {
-  generationId: string;
-  currency: string;
-  lineItems: UsageReceiptLine[];
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCachedTokens: number;
-  totalReasoningTokens: number;
-  totalCostUsd: number | null;
-};
-
-/**
- * Builds a billing receipt for a completed generation: one line item per meter
- * row (model, tokens, the price-book version that priced it, and cost) plus
- * totals. `totalCostUsd` is null only when no line is priced. Returns null when
- * the generation is not visible in scope (the route yields 404).
- */
-export const getReceipt = async (args: {
-  generationId: string;
-  projectIds?: number[];
-}): Promise<UsageReceipt | null> => {
-  const genWhere: { publicId: string; projectId?: number[] } = {
-    publicId: args.generationId,
-  };
-  if (args.projectIds !== undefined) genWhere.projectId = args.projectIds;
-
-  const generation = await db.Generation.findOne({ where: genWhere });
-  if (!generation) return null;
-
-  const meters = await db.UsageMeter.findAll({
-    where: { generationId: generation.id },
-    include: [{ model: db.PriceBook, as: 'price' }],
-    order: [['createdAt', 'ASC']],
-  });
-
-  const lineItems: UsageReceiptLine[] = meters.map((meter) => {
-    return {
-      provider: meter.provider,
-      model: meter.model,
-      priceId: assocPublicId(meter.price),
-      inputTokens: meter.inputTokens,
-      outputTokens: meter.outputTokens,
-      cachedTokens: meter.cachedTokens,
-      reasoningTokens: meter.reasoningTokens,
-      costUsd: meter.costUsd === null ? null : Number(meter.costUsd),
-    };
-  });
-
-  const pricedCosts = lineItems
-    .map((line) => {
-      return line.costUsd;
-    })
-    .filter((cost): cost is number => {
-      return cost !== null;
-    });
-
-  return {
-    generationId: args.generationId,
-    currency: 'USD',
-    lineItems,
-    totalInputTokens: lineItems.reduce((sum, l) => {
-      return sum + l.inputTokens;
-    }, 0),
-    totalOutputTokens: lineItems.reduce((sum, l) => {
-      return sum + l.outputTokens;
-    }, 0),
-    totalCachedTokens: lineItems.reduce((sum, l) => {
-      return sum + l.cachedTokens;
-    }, 0),
-    totalReasoningTokens: lineItems.reduce((sum, l) => {
-      return sum + l.reasoningTokens;
-    }, 0),
-    totalCostUsd: pricedCosts.length
-      ? pricedCosts.reduce((sum, c) => {
-          return sum + c;
-        }, 0)
-      : null,
-  };
 };

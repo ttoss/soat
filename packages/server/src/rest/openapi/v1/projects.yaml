@@ -310,6 +310,9 @@ components:
           type: string
           nullable: true
           description: Always null for a project + provider-slug price
+        meter_type:
+          type: string
+          description: Always `llm_tokens` for project prices
         provider:
           type: string
           example: openai
@@ -318,14 +321,24 @@ components:
           example: gpt-4o
         input_price_per_m:
           type: number
+          nullable: true
           description: USD per one million input (prompt) tokens
         output_price_per_m:
           type: number
+          nullable: true
           description: USD per one million output (completion) tokens
         cached_price_per_m:
           type: number
           nullable: true
           description: USD per one million cached input tokens; null falls back to the input price
+        unit_price:
+          type: number
+          nullable: true
+          description: Always null for token prices
+        unit:
+          type: string
+          nullable: true
+          description: Always null for token prices
         effective_from:
           type: string
           format: date-time

@@ -3,22 +3,34 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { DEFAULT_METER_TYPE, validatePriceShape } from './priceCompute';
+
+export {
+  computeCostUsd,
+  DEFAULT_METER_TYPE,
+  validatePriceShape,
+} from './priceCompute';
 
 const log = createDebug('soat:priceBook');
-
-const PER_MILLION = 1_000_000;
 
 export type PersistedPrice = {
   id: string;
   aiProviderId: string | null;
   projectId: string | null;
+  meterType: string;
   provider: string;
   model: string;
-  inputPricePerM: number;
-  outputPricePerM: number;
+  inputPricePerM: number | null;
+  outputPricePerM: number | null;
   cachedPricePerM: number | null;
+  unitPrice: number | null;
+  unit: string | null;
   effectiveFrom: Date;
   createdAt: Date;
+};
+
+const decimalOrNull = (value: string | null): number | null => {
+  return value === null ? null : Number(value);
 };
 
 const mapPrice = (
@@ -31,12 +43,14 @@ const mapPrice = (
     id: price.publicId,
     aiProviderId: price.aiProvider?.publicId ?? null,
     projectId: price.project?.publicId ?? null,
+    meterType: price.meterType,
     provider: price.provider,
     model: price.model,
-    inputPricePerM: Number(price.inputPricePerM),
-    outputPricePerM: Number(price.outputPricePerM),
-    cachedPricePerM:
-      price.cachedPricePerM === null ? null : Number(price.cachedPricePerM),
+    inputPricePerM: decimalOrNull(price.inputPricePerM),
+    outputPricePerM: decimalOrNull(price.outputPricePerM),
+    cachedPricePerM: decimalOrNull(price.cachedPricePerM),
+    unitPrice: decimalOrNull(price.unitPrice),
+    unit: price.unit,
     effectiveFrom: price.effectiveFrom,
     createdAt: price.createdAt,
   };
@@ -98,38 +112,6 @@ export const getEffectivePrice = async (args: {
   });
 };
 
-/**
- * Computes a call's cost in USD from a price row and its token counts. Cached
- * input tokens are billed at the cached rate (falling back to the input rate
- * when unset); reasoning tokens are already part of `outputTokens`. Returns a
- * fixed-precision string for the DECIMAL column, or null when there is no price.
- */
-export const computeCostUsd = (args: {
-  price: {
-    inputPricePerM: string;
-    outputPricePerM: string;
-    cachedPricePerM: string | null;
-  } | null;
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-}): string | null => {
-  if (!args.price) return null;
-  const inputRate = Number(args.price.inputPricePerM);
-  const outputRate = Number(args.price.outputPricePerM);
-  const cachedRate =
-    args.price.cachedPricePerM === null
-      ? inputRate
-      : Number(args.price.cachedPricePerM);
-  const uncachedInput = Math.max(0, args.inputTokens - args.cachedTokens);
-  const cost =
-    (uncachedInput * inputRate +
-      args.cachedTokens * cachedRate +
-      args.outputTokens * outputRate) /
-    PER_MILLION;
-  return cost.toFixed(6);
-};
-
 // Lists the global default prices only. Per-provider overrides and project +
 // provider-slug prices are not exposed here — they're read through their own
 // project-scoped endpoints, so one project never sees another's rates.
@@ -147,11 +129,14 @@ export const listPrices = async (): Promise<{ prices: PersistedPrice[] }> => {
 
 type PriceInput = {
   aiProviderId?: string | null;
+  meterType?: string;
   provider: string;
   model: string;
-  inputPricePerM: number;
-  outputPricePerM: number;
+  inputPricePerM?: number | null;
+  outputPricePerM?: number | null;
   cachedPricePerM?: number | null;
+  unitPrice?: number | null;
+  unit?: string | null;
   effectiveFrom: string;
 };
 
@@ -176,36 +161,69 @@ const resolveAiProviderId = async (
 // (null = global default). Past-effective prices are immutable: a recorded cost
 // must always be explainable by the row that produced it, so corrections ship
 // as new future-dated rows rather than edits to historical prices.
+const toDecimalString = (value: number | null | undefined): string | null => {
+  return value === undefined || value === null ? null : String(value);
+};
+
+// Throws VALIDATION_FAILED when the row's rate columns don't match its type.
+const assertPriceShape = (
+  meterType: string,
+  args: {
+    inputPricePerM?: number | null;
+    outputPricePerM?: number | null;
+    cachedPricePerM?: number | null;
+    unitPrice?: number | null;
+    unit?: string | null;
+  }
+): void => {
+  const shapeError = validatePriceShape({ ...args, meterType });
+  if (shapeError) {
+    throw new DomainError('VALIDATION_FAILED', shapeError);
+  }
+};
+
+// Past-effective prices are immutable, so only a valid future timestamp is
+// accepted; anything else is a bad request.
+const parseFutureEffectiveFrom = (value: string, now: Date): Date => {
+  const effectiveFrom = new Date(value);
+  if (Number.isNaN(effectiveFrom.getTime()) || effectiveFrom <= now) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `effective_from must be a valid future timestamp (got '${value}').`
+    );
+  }
+  return effectiveFrom;
+};
+
 const writePriceRow = async (args: {
   aiProviderId: number | null;
   projectId: number | null;
+  meterType?: string;
   provider: string;
   model: string;
-  inputPricePerM: number;
-  outputPricePerM: number;
+  inputPricePerM?: number | null;
+  outputPricePerM?: number | null;
   cachedPricePerM?: number | null;
+  unitPrice?: number | null;
+  unit?: string | null;
   effectiveFrom: string;
   now: Date;
 }): Promise<number> => {
-  const effectiveFrom = new Date(args.effectiveFrom);
-  if (Number.isNaN(effectiveFrom.getTime()) || effectiveFrom <= args.now) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `effective_from must be a valid future timestamp (got '${args.effectiveFrom}').`
-    );
-  }
+  const meterType = args.meterType ?? DEFAULT_METER_TYPE;
+  assertPriceShape(meterType, args);
+  const effectiveFrom = parseFutureEffectiveFrom(args.effectiveFrom, args.now);
 
   const values = {
     aiProviderId: args.aiProviderId,
     projectId: args.projectId,
+    meterType,
     provider: args.provider,
     model: args.model,
-    inputPricePerM: String(args.inputPricePerM),
-    outputPricePerM: String(args.outputPricePerM),
-    cachedPricePerM:
-      args.cachedPricePerM === undefined || args.cachedPricePerM === null
-        ? null
-        : String(args.cachedPricePerM),
+    inputPricePerM: toDecimalString(args.inputPricePerM),
+    outputPricePerM: toDecimalString(args.outputPricePerM),
+    cachedPricePerM: toDecimalString(args.cachedPricePerM),
+    unitPrice: toDecimalString(args.unitPrice),
+    unit: args.unit ?? null,
     effectiveFrom,
   };
 
@@ -222,9 +240,12 @@ const writePriceRow = async (args: {
 
   if (!created) {
     await row.update({
+      meterType: values.meterType,
       inputPricePerM: values.inputPricePerM,
       outputPricePerM: values.outputPricePerM,
       cachedPricePerM: values.cachedPricePerM,
+      unitPrice: values.unitPrice,
+      unit: values.unit,
     });
   }
 
@@ -239,11 +260,14 @@ const upsertPriceRow = async (args: {
   return writePriceRow({
     aiProviderId,
     projectId: null,
+    meterType: args.price.meterType,
     provider: args.price.provider,
     model: args.price.model,
     inputPricePerM: args.price.inputPricePerM,
     outputPricePerM: args.price.outputPricePerM,
     cachedPricePerM: args.price.cachedPricePerM,
+    unitPrice: args.price.unitPrice,
+    unit: args.price.unit,
     effectiveFrom: args.price.effectiveFrom,
     now: args.now,
   });

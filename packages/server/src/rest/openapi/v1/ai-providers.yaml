@@ -368,6 +368,9 @@ components:
           type: string
           description: The AI provider instance this override prices
           example: aip_V1StGXR8Z5jdHi6B
+        meter_type:
+          type: string
+          description: Always `llm_tokens` for provider price overrides
         provider:
           type: string
           description: Provider slug (taken from the AI provider instance)
@@ -377,14 +380,24 @@ components:
           example: gpt-4o
         input_price_per_m:
           type: number
+          nullable: true
           description: USD per one million input (prompt) tokens
         output_price_per_m:
           type: number
+          nullable: true
           description: USD per one million output (completion) tokens
         cached_price_per_m:
           type: number
           nullable: true
           description: USD per one million cached input tokens; null falls back to the input price
+        unit_price:
+          type: number
+          nullable: true
+          description: Always null for token price overrides
+        unit:
+          type: string
+          nullable: true
+          description: Always null for token price overrides
         effective_from:
           type: string
           format: date-time

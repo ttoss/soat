@@ -160,8 +160,20 @@ export class UsageMeter extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare actionId: string | null;
 
+  // Meter-type discriminator. `llm_tokens` (the default, today's rows) uses the
+  // token columns below; other types (`node_execution`, `api_request`,
+  // `storage`) use `quantity`/`unit` instead and leave the token columns at 0.
+  // All existing rows backfill to `llm_tokens` via the default.
+  @Column({
+    type: DataType.STRING,
+    allowNull: false,
+    defaultValue: 'llm_tokens',
+  })
+  declare meterType: string;
+
   // Denormalized as-billed provider slug (e.g. `openai`), retained even if the
-  // AI provider row is later deleted so historical receipts stay accurate.
+  // AI provider row is later deleted so historical receipts stay accurate. For
+  // platform meter types this is `soat` and `model` names the billable SKU.
   @Column({ type: DataType.STRING, allowNull: false })
   declare provider: string;
 
@@ -181,6 +193,18 @@ export class UsageMeter extends Model {
   // `completion_tokens_details.reasoning_tokens`). 0 when unreported.
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare reasoningTokens: number;
+
+  // Generic measure for non-`llm_tokens` meter types (e.g. wall-clock seconds
+  // for `node_execution`, request counts for `api_request`, GB-days for
+  // `storage`). Null for `llm_tokens` rows, where the token columns above are
+  // the source of truth — the same number is never double-encoded.
+  @Column({ type: DataType.DECIMAL, allowNull: true })
+  declare quantity: string | null;
+
+  // Unit the `quantity` is measured in (e.g. `node_second`, `request`,
+  // `gb_day`). Null for `llm_tokens` rows.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare unit: string | null;
 
   // Cost in USD computed at write time from the versioned price book. Null
   // until price-book pricing lands; a null cost means "tokens captured, not yet

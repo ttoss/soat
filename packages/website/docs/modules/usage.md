@@ -35,12 +35,15 @@ Every meter row links back to the resources it attributes spend to: the [generat
 | `ai_provider_id`   | string \| null  | AI provider instance billed; correlates the meter to the price book                          |
 | `trigger_id`       | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`        | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
-| `provider`         | string          | Denormalized as-billed provider slug (e.g. `openai`), retained if the provider is deleted    |
-| `model`            | string          | Model identifier the provider billed                                                         |
-| `input_tokens`     | number          | Input (prompt) tokens reported by the provider                                               |
-| `output_tokens`    | number          | Output (completion) tokens reported by the provider                                          |
+| `meter_type`       | string          | What the row measures: `llm_tokens` (default), `node_execution`, `api_request`, or `storage` |
+| `provider`         | string          | Denormalized as-billed provider slug (e.g. `openai`); `soat` for platform meter types        |
+| `model`            | string          | Model identifier the provider billed; the billable SKU for platform meter types              |
+| `input_tokens`     | number          | Input (prompt) tokens reported by the provider (`llm_tokens` rows; `0` otherwise)            |
+| `output_tokens`    | number          | Output (completion) tokens reported by the provider (`llm_tokens` rows; `0` otherwise)       |
 | `cached_tokens`    | number          | Cached input tokens read, when the provider reports them (else `0`)                          |
 | `reasoning_tokens` | number          | Reasoning tokens the provider reports separately (else `0`)                                  |
+| `quantity`         | number \| null  | Generic measure for non-`llm_tokens` types (node-seconds, requests, GB-days); `null` for token rows |
+| `unit`             | string \| null  | Unit `quantity` is measured in (`node_second` \| `request` \| `gb_day`); `null` for token rows |
 | `cost_usd`         | number \| null  | Cost in USD computed at write time from the price book; `null` when no price row covers the model |
 | `price_id`         | string \| null  | Price-book row that produced `cost_usd` (the price-table version); `null` when unpriced       |
 | `created_at`       | string          | ISO 8601 creation timestamp                                                                  |
@@ -54,15 +57,31 @@ Versioned unit prices used to compute `cost_usd`, in **three scopes** within one
 | `id`                 | string          | Public identifier for the price row (`price_` prefix)              |
 | `ai_provider_id`     | string \| null  | Set for a per-provider override; `null` otherwise                   |
 | `project_id`         | string \| null  | Set for a project + provider-slug price; `null` otherwise           |
-| `provider`           | string          | AI provider slug (e.g. `openai`)                                   |
-| `model`              | string          | Model identifier                                                   |
-| `input_price_per_m`  | number          | USD per one million input (prompt) tokens                          |
-| `output_price_per_m` | number          | USD per one million output (completion) tokens                     |
+| `meter_type`         | string          | Meter type this price applies to; `llm_tokens` (default) uses the token rates, others use `unit_price` |
+| `provider`           | string          | AI provider slug (e.g. `openai`); `soat` for platform SKUs         |
+| `model`              | string          | Model identifier, or the billable SKU for platform meter types    |
+| `input_price_per_m`  | number \| null  | USD per one million input (prompt) tokens; `null` on non-LLM rows   |
+| `output_price_per_m` | number \| null  | USD per one million output (completion) tokens; `null` on non-LLM rows |
 | `cached_price_per_m` | number \| null  | USD per one million cached input tokens; `null` falls back to input |
+| `unit_price`         | number \| null  | USD per `unit` on non-`llm_tokens` rows; `null` on token rows        |
+| `unit`               | string \| null  | Unit `unit_price` is denominated in (e.g. `node_second`); `null` on token rows |
 | `effective_from`     | string          | ISO 8601; the latest row `<= now()` prices a call                  |
 | `created_at`         | string          | ISO 8601 creation timestamp                                        |
 
 ## Key Concepts
+
+### Meter types
+
+Every meter row carries a `meter_type` discriminator so cost dimensions beyond LLM tokens share one metering pipeline (attribution chain, append-only/idempotency guarantees, write-time pricing, and aggregation) rather than forking a table per dimension.
+
+| `meter_type`     | What one row records                                | Measure                          |
+| ---------------- | --------------------------------------------------- | -------------------------------- |
+| `llm_tokens`     | One completed LLM call's token usage (today's rows) | token columns; `quantity` `null` |
+| `node_execution` | One orchestration node's wall-clock compute time    | `quantity` seconds / `node_second` |
+| `api_request`    | A batch of API requests served for a project        | `quantity` requests / `request`  |
+| `storage`        | One project's stored bytes for one day              | `quantity` GB-days / `gb_day`    |
+
+`llm_tokens` rows use the four token columns and leave `quantity`/`unit` null; every other type records its measure in `quantity`/`unit` and leaves the token columns at `0` — the same number is never double-encoded. For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `node-second`). Emitters for the non-LLM types are added in later milestones; the schema and pricing carry `meter_type` now so those become emitter-only work.
 
 ### Token breakdown
 
@@ -78,7 +97,9 @@ Usage is metered for agent generations — including [conversations](./conversat
 
 ### Pricing
 
-`cost_usd` is computed at write time from the effective price row for the meter's `(provider, model)`, resolved most-specific first: the AI provider instance → the project's rate for that slug → the global default. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Cached input tokens are billed at `cached_price_per_m` (falling back to the input rate); reasoning tokens are part of the output count. `cost_usd` is `null` only when no price row covers the model — the tokens are still captured, it does not mean the call was free.
+`cost_usd` is computed at write time from the effective price row for the meter's `(provider, model)`, resolved most-specific first: the AI provider instance → the project's rate for that slug → the global default. Cost is frozen onto the meter, so later price changes never alter it — swapping a model changes new-run cost while historical receipts stay put. Computation branches on meter type: `llm_tokens` uses the per-million token formula (cached input billed at `cached_price_per_m`, falling back to the input rate; reasoning tokens are part of the output count), while every other type is `quantity × unit_price`. `cost_usd` is `null` only when no price row covers the SKU — the tokens or quantity are still captured, it does not mean the call was free.
+
+A price row must match its `meter_type`'s shape: `llm_tokens` rows require `input_price_per_m` and `output_price_per_m` and must omit `unit_price`/`unit`; other meter types require `unit_price` and `unit` and must omit the token rates. Upserts that mix the two shapes are rejected with `400`.
 
 Each meter records `price_id` — the exact price-book row that produced its `cost_usd`. Because cost is frozen and the price row is versioned, a receipt is auditable to the precise price applied even after prices change.
 
@@ -92,7 +113,7 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 
 ### Receipts and reconciliation
 
-`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: per-model line items (tokens in/out, the `price_id` version that priced them, and cost) plus totals. Because every line carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it. Per-**run** receipts (summing a run's generations) follow once run-scoping lands.
+`GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: per-model line items (tokens in/out, the `price_id` version that priced them, and cost), a `by_meter_type` breakdown (the "tokens + infra" split — one entry per distinct meter type, each with its own token/quantity/cost totals), plus grand totals. A single-type receipt has one `by_meter_type` entry whose totals equal the receipt totals. Because every line carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it. Per-**run** receipts (summing a run's generations) follow once run-scoping lands.
 
 ## Examples
 

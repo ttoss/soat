@@ -170,6 +170,24 @@ describe('Usage', () => {
       expect(meter.run_id).toBeNull();
       expect(meter.trigger_id).toBeNull();
       expect(meter.action_id).toBeNull();
+      expect(meter.meter_type).toBe('llm_tokens');
+      expect(meter.quantity).toBeNull();
+      expect(meter.unit).toBeNull();
+    });
+
+    test('filters by meter_type', async () => {
+      const matches = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${generationId}&meter_type=llm_tokens`
+      );
+      expect(matches.status).toBe(200);
+      expect(matches.body.total).toBe(1);
+      expect(matches.body.data[0].meter_type).toBe('llm_tokens');
+
+      const none = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${generationId}&meter_type=storage`
+      );
+      expect(none.status).toBe(200);
+      expect(none.body.total).toBe(0);
     });
 
     test('does not expose internal numeric IDs', async () => {
@@ -500,6 +518,72 @@ describe('Usage', () => {
       expect(res.body.prices[0].ai_provider_id).toBe(aiProviderId);
     });
 
+    test('upserts a unit-priced platform SKU (node_execution)', async () => {
+      const effectiveFrom = new Date(Date.now() + 5 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              meter_type: 'node_execution',
+              provider: 'soat',
+              model: 'node-second',
+              unit_price: 0.0001,
+              unit: 'node_second',
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(200);
+      const price = res.body.prices[0];
+      expect(price.id).toMatch(/^price_/);
+      expect(price.meter_type).toBe('node_execution');
+      expect(price.unit_price).toBe(0.0001);
+      expect(price.unit).toBe('node_second');
+      expect(price.input_price_per_m).toBeNull();
+      expect(price.output_price_per_m).toBeNull();
+    });
+
+    test('rejects an llm_tokens price that also sets a unit price', async () => {
+      const effectiveFrom = new Date(Date.now() + 5 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              provider: 'openai',
+              model: 'xor-bad-llm',
+              input_price_per_m: 1,
+              output_price_per_m: 2,
+              unit_price: 0.5,
+              unit: 'request',
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a non-LLM price missing unit_price', async () => {
+      const effectiveFrom = new Date(Date.now() + 5 * 86_400_000).toISOString();
+      const res = await authenticatedTestClient(adminToken)
+        .put('/api/v1/usage/prices')
+        .send({
+          prices: [
+            {
+              meter_type: 'storage',
+              provider: 'soat',
+              model: 'gb-day',
+              unit: 'gb_day',
+              effective_from: effectiveFrom,
+            },
+          ],
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('rejects an override for an unknown provider', async () => {
       const effectiveFrom = new Date(Date.now() + 3 * 86_400_000).toISOString();
       const res = await authenticatedTestClient(adminToken)
@@ -627,6 +711,7 @@ describe('Usage', () => {
       expect(res.body.line_items.length).toBeGreaterThan(0);
 
       const line = res.body.line_items[0];
+      expect(line.meter_type).toBe('llm_tokens');
       expect(line.provider).toBe('ollama');
       expect(line.model).toBe('stub-model');
       expect(line.price_id).toMatch(/^price_/);
@@ -634,6 +719,8 @@ describe('Usage', () => {
       expect(line.output_tokens).toBe(20);
       expect(line.cached_tokens).toBe(4);
       expect(line.reasoning_tokens).toBe(7);
+      expect(line.quantity).toBeNull();
+      expect(line.unit).toBeNull();
       expect(line.cost_usd).toBeGreaterThan(0);
 
       expect(res.body.total_input_tokens).toBe(10);
@@ -641,6 +728,16 @@ describe('Usage', () => {
       expect(res.body.total_cached_tokens).toBe(4);
       expect(res.body.total_reasoning_tokens).toBe(7);
       expect(res.body.total_cost_usd).toBeGreaterThan(0);
+
+      // A single-type receipt breaks down to exactly one entry whose totals
+      // equal the receipt totals.
+      expect(Array.isArray(res.body.by_meter_type)).toBe(true);
+      expect(res.body.by_meter_type).toHaveLength(1);
+      const breakdown = res.body.by_meter_type[0];
+      expect(breakdown.meter_type).toBe('llm_tokens');
+      expect(breakdown.input_tokens).toBe(res.body.total_input_tokens);
+      expect(breakdown.output_tokens).toBe(res.body.total_output_tokens);
+      expect(breakdown.cost_usd).toBe(res.body.total_cost_usd);
     });
   });
 });
