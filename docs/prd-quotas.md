@@ -47,6 +47,13 @@ budgets.
 No overlap: quotas never inspect action arguments (guardrails' job) and never
 compute cost (metering's job) — they compare a windowed aggregate to a limit.
 
+The same holds for **request counting**: `QuotaWindowCounter` (this PRD,
+atomic per-request increments to block) and the planned `api_request` meter
+rows ([metering Phase 6](./prd-usage-metering.md#phase-6--api-request-metering--not-started),
+flush-aggregated batches to bill) both count requests but are deliberately
+separate — enforcement needs synchronous atomicity, billing needs cheap
+batched writes, and neither can serve the other's write pattern.
+
 ## Goals
 
 - Hard, fail-closed enforcement of request rates and token/cost budgets per
