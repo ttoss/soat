@@ -1,6 +1,7 @@
 type CapturedRequest = {
   method: string;
   path: string;
+  query: Record<string, string>;
   body: unknown;
 };
 
@@ -30,6 +31,7 @@ export const createCliTestClient = (): CliTestClient => {
     requests.push({
       method: request.method,
       path: url.pathname,
+      query: Object.fromEntries(url.searchParams),
       body,
     });
 
