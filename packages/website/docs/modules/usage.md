@@ -74,6 +74,21 @@ A versioned unit price for one billable **component** of a SKU: cost is uniform 
 | `effective_from` | string          | ISO 8601; the latest row `<= now()` prices a call                  |
 | `created_at`     | string          | ISO 8601 creation timestamp                                        |
 
+### UsageThreshold
+
+A per-project alert rule on windowed usage. When the project's `metric` over `window` crosses `threshold`, a `usage.threshold_crossed` [webhook](./webhooks.md) fires. Thresholds are immutable apart from deletion — to change one, delete and recreate it (which resets its fire state).
+
+| Field              | Type            | Description                                                                       |
+| ------------------ | --------------- | -------------------------------------------------------------------------------- |
+| `id`               | string          | Public identifier for the threshold (`uthr_` prefix)                              |
+| `project_id`       | string          | Project the threshold applies to                                                 |
+| `metric`           | string          | `cost_usd` (across all meter types) or `tokens` (input + output + cached)         |
+| `window`           | string          | `calendar_month` (current UTC month) or `rolling_24h` (trailing 24 hours)        |
+| `threshold`        | number          | The value the windowed aggregate must cross to fire (`> 0`)                       |
+| `last_fired_at`    | string \| null  | When it last fired; `null` until the first fire                                   |
+| `fired_window_key` | string \| null  | `YYYY-MM` key of the last fire (`calendar_month` hysteresis); `null` for `rolling_24h` |
+| `created_at`       | string          | ISO 8601 creation timestamp                                                       |
+
 ## Key Concepts
 
 ### Meter types and components
@@ -126,6 +141,31 @@ Past-effective prices are immutable — corrections ship as new future-dated row
 ### Aggregation
 
 `GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), or `meter_type`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`) collapses into a group with a `null` `key`. Requires `usage:GetUsage` on the project.
+
+### Thresholds and alerts
+
+A project can carry any number of [`UsageThreshold`](#usagethreshold) rules. After **each** usage-event write — the single metering choke point — every threshold on the event's project is evaluated against its windowed aggregate, and a `usage.threshold_crossed` [webhook](./webhooks.md) fires for any that cross. Because evaluation rides the write path, infra meters count toward a `cost_usd` threshold the moment those emitters land.
+
+Re-fire is governed by hysteresis so a project is not spammed while usage hovers at a limit:
+
+- **`calendar_month`** — fires **at most once per window**. On firing, `fired_window_key` is stamped with the current `YYYY-MM`; it cannot fire again until the key changes at the month boundary. Usage in a calendar window only grows (meters are append-only), so no band is needed.
+- **`rolling_24h`** — the windowed value can fall as old meters age out, so a fired threshold **re-arms only once the value drops below 90% of the threshold** (a 10% band), then may fire again on the next crossing.
+
+The webhook payload (`data`) is:
+
+```json
+{
+  "threshold_id": "uthr_V1StGXR8Z5jdHi6B",
+  "project_id": "proj_V1StGXR8Z5jdHi6B",
+  "metric": "cost_usd",
+  "window": "calendar_month",
+  "window_key": "2026-07",
+  "threshold": 100,
+  "observed_value": 101.37
+}
+```
+
+`window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it. Deleting and recreating a threshold resets its fire state.
 
 ## Examples
 
@@ -251,6 +291,47 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=meter_type&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z" \
   -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Create a usage threshold (alerts when monthly cost crosses 100 USD):
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-usage-threshold \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --metric cost_usd \
+  --window calendar_month \
+  --threshold 100
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.createUsageThreshold({
+  body: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    metric: 'cost_usd',
+    window: 'calendar_month',
+    threshold: 100,
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST "https://api.example.com/api/v1/usage/thresholds" \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"proj_V1StGXR8Z5jdHi6B","metric":"cost_usd","window":"calendar_month","threshold":100}'
 ```
 
 </TabItem>

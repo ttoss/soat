@@ -20,6 +20,16 @@ export type {
 export { getReceipt, getRunReceipt, getRunUsageTotals } from './usageReceipt';
 export type { UsageTokens } from './usageRecording';
 export { extractUsageTokens, recordGenerationUsage } from './usageRecording';
+export type { PersistedUsageThreshold } from './usageThresholds';
+export {
+  createThreshold,
+  deleteThreshold,
+  evaluateProjectThresholds,
+  listThresholds,
+  USAGE_THRESHOLD_CROSSED_EVENT,
+  USAGE_THRESHOLD_METRICS,
+  USAGE_THRESHOLD_WINDOWS,
+} from './usageThresholds';
 
 export type PersistedUsageComponent = {
   component: string;

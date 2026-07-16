@@ -4,10 +4,15 @@ import { DomainError } from 'src/errors';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
 import {
   aggregateUsage,
+  createThreshold,
+  deleteThreshold,
   getReceipt,
   getRunReceipt,
+  listThresholds,
   listUsageEvents,
 } from 'src/lib/usage';
+
+import { checkAuth, resolveWriteProjectId } from './helpers';
 
 export const usageRouter = new Router<Context>();
 
@@ -128,6 +133,123 @@ usageRouter.get('/usage', async (ctx: Context) => {
     to,
     groupBy,
   });
+});
+
+/**
+ * @openapi
+ * GET /api/v1/usage/thresholds
+ * operationId: listUsageThresholds
+ * Lists the usage thresholds the caller can access, optionally filtered by
+ * project_id. Each threshold alerts (via the usage.threshold_crossed webhook)
+ * when a project's cost or token usage over a calendar-month or rolling-24h
+ * window crosses the configured value. Requires usage:ListThresholds.
+ */
+usageRouter.get('/usage/thresholds', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'usage:ListThresholds',
+  });
+
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  const { projectId } = ctx.query as Record<string, string | undefined>;
+
+  ctx.body = {
+    data: await listThresholds({
+      projectIds: projectIds ?? undefined,
+      projectId,
+    }),
+  };
+});
+
+/**
+ * @openapi
+ * POST /api/v1/usage/thresholds
+ * operationId: createUsageThreshold
+ * Creates a usage threshold on a project. metric is cost_usd or tokens; window
+ * is calendar_month or rolling_24h; threshold is the value to cross. Thresholds
+ * are immutable apart from deletion. Requires usage:ManageThresholds.
+ */
+usageRouter.post('/usage/thresholds', async (ctx: Context) => {
+  if (!checkAuth(ctx)) return;
+
+  const body = ctx.request.body as {
+    projectId?: string;
+    metric?: string;
+    window?: string;
+    threshold?: number;
+  };
+
+  const targetProjectId = await resolveWriteProjectId({
+    ctx,
+    projectPublicId: body.projectId,
+    action: 'usage:ManageThresholds',
+  });
+  if (targetProjectId === null) return;
+
+  if (
+    body.metric === undefined ||
+    body.window === undefined ||
+    body.threshold === undefined
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'metric, window, and threshold are required.'
+    );
+  }
+
+  ctx.status = 201;
+  ctx.body = await createThreshold({
+    projectId: Number(targetProjectId),
+    metric: body.metric,
+    window: body.window,
+    threshold: body.threshold,
+  });
+});
+
+/**
+ * @openapi
+ * DELETE /api/v1/usage/thresholds/{threshold_id}
+ * operationId: deleteUsageThreshold
+ * Deletes a usage threshold, resetting its fire state. Requires
+ * usage:ManageThresholds.
+ */
+usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
+  }
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action: 'usage:ManageThresholds',
+  });
+
+  if (
+    projectIds === null ||
+    (Array.isArray(projectIds) && projectIds.length === 0)
+  ) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  const deleted = await deleteThreshold({
+    id: ctx.params.threshold_id,
+    projectIds: projectIds ?? undefined,
+  });
+  if (!deleted) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Usage threshold '${ctx.params.threshold_id}' not found.`
+    );
+  }
+
+  ctx.status = 204;
 });
 
 // Resolves the receipt for either addressing mode (run_id or generation_id, the

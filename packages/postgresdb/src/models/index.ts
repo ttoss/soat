@@ -39,6 +39,7 @@ export { TriggerFiring } from './TriggerFiring';
 export { UploadToken } from './UploadToken';
 export { UsageComponent } from './UsageComponent';
 export { UsageEvent } from './UsageEvent';
+export { UsageThreshold } from './UsageThreshold';
 export { User } from './User';
 export { Webhook } from './Webhook';
 export { WebhookDelivery } from './WebhookDelivery';

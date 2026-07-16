@@ -5,8 +5,12 @@ import type { AddressInfo } from 'node:net';
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { createGeneration } from 'src/lib/agents';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
-import { recordGenerationUsage } from 'src/lib/usage';
+import {
+  evaluateProjectThresholds,
+  recordGenerationUsage,
+} from 'src/lib/usage';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -87,6 +91,8 @@ describe('Usage', () => {
         'usage:ListUsageMeters',
         'usage:GetReceipt',
         'usage:GetUsage',
+        'usage:ListThresholds',
+        'usage:ManageThresholds',
         'orchestrations:CreateOrchestration',
         'orchestrations:StartRun',
         'orchestrations:GetRun',
@@ -895,6 +901,519 @@ describe('Usage', () => {
       expect(res.body.from).toBe(from);
       expect(res.body.totals.input_tokens).toBe(0);
       expect(res.body.totals.cost_usd).toBeNull();
+    });
+  });
+
+  describe('usage thresholds and alerts', () => {
+    // Bounded poll on a predicate — no fixed settle sleep. Metering (and the
+    // threshold evaluation it drives) runs fire-and-forget after the generation
+    // response, so tests wait for the observable `usage.threshold_crossed`
+    // emission rather than a timer.
+    const pollUntil = async (predicate: () => boolean): Promise<void> => {
+      for (let attempt = 0; attempt < 100; attempt++) {
+        if (predicate()) return;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 50);
+        });
+      }
+      throw new Error('pollUntil: predicate never became true');
+    };
+
+    // Runs `action` with a live listener collecting `usage.threshold_crossed`
+    // events, then tears it down so it never leaks into later tests.
+    const withCapture = async (
+      action: (captured: SoatEvent[]) => Promise<void>
+    ): Promise<SoatEvent[]> => {
+      const captured: SoatEvent[] = [];
+      const handler = (event: SoatEvent) => {
+        if (event.type === 'usage.threshold_crossed') captured.push(event);
+      };
+      eventBus.on('soat:event', handler);
+      try {
+        await action(captured);
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
+      return captured;
+    };
+
+    const generate = async (content: string): Promise<string> => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content }] });
+      expect(res.status).toBe(200);
+      return res.body.id as string;
+    };
+
+    describe('CRUD', () => {
+      test('unauthenticated requests return 401', async () => {
+        expect((await testClient.get('/api/v1/usage/thresholds')).status).toBe(
+          401
+        );
+        expect(
+          (await testClient.post('/api/v1/usage/thresholds').send({})).status
+        ).toBe(401);
+        expect(
+          (await testClient.delete('/api/v1/usage/thresholds/uthr_x')).status
+        ).toBe(401);
+      });
+
+      test('a user without permission returns 403', async () => {
+        const list = await authenticatedTestClient(noPermToken).get(
+          '/api/v1/usage/thresholds'
+        );
+        expect(list.status).toBe(403);
+        const create = await authenticatedTestClient(noPermToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'cost_usd',
+            window: 'calendar_month',
+            threshold: 100,
+          });
+        expect(create.status).toBe(403);
+      });
+
+      test('creates, lists, and deletes a threshold', async () => {
+        const create = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'cost_usd',
+            window: 'calendar_month',
+            threshold: 100,
+          });
+        expect(create.status).toBe(201);
+        expect(create.body.id).toMatch(/^uthr_/);
+        expect(create.body.project_id).toBe(projectId);
+        expect(create.body.metric).toBe('cost_usd');
+        expect(create.body.window).toBe('calendar_month');
+        expect(create.body.threshold).toBe(100);
+        expect(create.body.last_fired_at).toBeNull();
+        expect(create.body.fired_window_key).toBeNull();
+        const thresholdId = create.body.id;
+
+        const list = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        expect(list.status).toBe(200);
+        expect(
+          list.body.data.some((t: { id: string }) => {
+            return t.id === thresholdId;
+          })
+        ).toBe(true);
+
+        const del = await authenticatedTestClient(userToken).delete(
+          `/api/v1/usage/thresholds/${thresholdId}`
+        );
+        expect(del.status).toBe(204);
+
+        const after = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        expect(
+          after.body.data.some((t: { id: string }) => {
+            return t.id === thresholdId;
+          })
+        ).toBe(false);
+      });
+
+      test('listing thresholds for an unknown project returns an empty list', async () => {
+        const res = await authenticatedTestClient(userToken).get(
+          '/api/v1/usage/thresholds?project_id=proj_doesNotExist01'
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+      });
+
+      test('listing thresholds for an out-of-scope project returns an empty list', async () => {
+        // A project the user cannot access: filtering by it yields nothing
+        // rather than leaking another project's thresholds.
+        const other = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: `usage-thresholds-other-${Date.now()}` });
+        expect(other.status).toBe(201);
+
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${other.body.id}`
+        );
+        expect(res.status).toBe(200);
+        expect(res.body.data).toEqual([]);
+      });
+
+      test('deleting an unknown threshold returns 404', async () => {
+        const res = await authenticatedTestClient(userToken).delete(
+          '/api/v1/usage/thresholds/uthr_doesNotExist01'
+        );
+        expect(res.status).toBe(404);
+        expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      });
+
+      test('rejects an invalid metric', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'bananas',
+            window: 'calendar_month',
+            threshold: 100,
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('rejects an invalid window', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'tokens',
+            window: 'fortnight',
+            threshold: 100,
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('rejects a non-positive threshold', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'tokens',
+            window: 'calendar_month',
+            threshold: 0,
+          });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+
+      test('rejects a missing field', async () => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({ project_id: projectId, metric: 'tokens' });
+        expect(res.status).toBe(400);
+        expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      });
+    });
+
+    describe('firing and hysteresis', () => {
+      // Deletes any thresholds left on the project so each firing test starts
+      // from a clean fire state (thresholds are immutable + persist otherwise).
+      const clearThresholds = async (): Promise<void> => {
+        const list = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        for (const t of list.body.data as Array<{ id: string }>) {
+          await authenticatedTestClient(userToken).delete(
+            `/api/v1/usage/thresholds/${t.id}`
+          );
+        }
+      };
+
+      afterEach(async () => {
+        await clearThresholds();
+      });
+
+      const createThreshold = async (body: {
+        metric: string;
+        window: string;
+        threshold: number;
+      }): Promise<string> => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/usage/thresholds')
+          .send({ project_id: projectId, ...body });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
+      };
+
+      test('a calendar_month token threshold fires once and re-arms only next window', async () => {
+        const thresholdId = await createThreshold({
+          metric: 'tokens',
+          window: 'calendar_month',
+          threshold: 5,
+        });
+
+        // The project already has metered usage this month, so the next metered
+        // generation drives evaluation and fires the (low) threshold.
+        const firstRound = await withCapture(async (captured) => {
+          await generate('threshold fire 1');
+          await pollUntil(() => {
+            return captured.some((e) => {
+              return e.resourceId === thresholdId;
+            });
+          });
+        });
+        const fired = firstRound.filter((e) => {
+          return e.resourceId === thresholdId;
+        });
+        expect(fired).toHaveLength(1);
+        const data = fired[0].data as Record<string, unknown>;
+        expect(data.threshold_id).toBe(thresholdId);
+        expect(data.project_id).toBe(projectId);
+        expect(data.metric).toBe('tokens');
+        expect(data.window).toBe('calendar_month');
+        expect(data.window_key).toMatch(/^\d{4}-\d{2}$/);
+        expect(data.threshold).toBe(5);
+        expect(Number(data.observed_value)).toBeGreaterThanOrEqual(5);
+
+        // Fire state is persisted on the threshold.
+        const get = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        const row = get.body.data.find((t: { id: string }) => {
+          return t.id === thresholdId;
+        });
+        expect(row.last_fired_at).not.toBeNull();
+        expect(row.fired_window_key).toMatch(/^\d{4}-\d{2}$/);
+
+        // Hysteresis: a second generation in the same window does not re-fire.
+        // A low sentinel added after the main threshold fires in the same eval
+        // pass (ordered by id), proving evaluation ran without the main one
+        // re-firing.
+        const sentinelId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 5,
+        });
+        const secondRound = await withCapture(async (captured) => {
+          await generate('threshold fire 2');
+          await pollUntil(() => {
+            return captured.some((e) => {
+              return e.resourceId === sentinelId;
+            });
+          });
+        });
+        expect(
+          secondRound.filter((e) => {
+            return e.resourceId === thresholdId;
+          })
+        ).toHaveLength(0);
+      });
+
+      test('a cost_usd threshold fires once its priced usage crosses it', async () => {
+        // Ensure the stub SKU is priced so metered generations carry a cost.
+        const past = new Date('2017-01-01T00:00:00.000Z');
+        const seedPrice = (component: string, unitPrice: string) => {
+          return db.PriceBook.findOrCreate({
+            where: {
+              aiProviderId: null,
+              projectId: null,
+              provider: 'ollama',
+              model: 'stub-model',
+              component,
+              effectiveFrom: past,
+            },
+            defaults: {
+              meterType: 'llm_tokens',
+              provider: 'ollama',
+              model: 'stub-model',
+              component,
+              unit: 'token',
+              unitPrice,
+              effectiveFrom: past,
+            },
+          });
+        };
+        await seedPrice('input_tokens', '0.000001');
+        await seedPrice('output_tokens', '0.000001');
+
+        const thresholdId = await createThreshold({
+          metric: 'cost_usd',
+          window: 'calendar_month',
+          threshold: 0.000001,
+        });
+
+        const round = await withCapture(async (captured) => {
+          await generate('cost threshold fire');
+          await pollUntil(() => {
+            return captured.some((e) => {
+              return e.resourceId === thresholdId;
+            });
+          });
+        });
+        const fired = round.filter((e) => {
+          return e.resourceId === thresholdId;
+        });
+        expect(fired).toHaveLength(1);
+        const data = fired[0].data as Record<string, unknown>;
+        expect(data.metric).toBe('cost_usd');
+        expect(Number(data.observed_value)).toBeGreaterThan(0);
+      });
+
+      test('a rolling_24h token threshold fires with a null window key', async () => {
+        const thresholdId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 5,
+        });
+
+        const round = await withCapture(async (captured) => {
+          await generate('rolling threshold fire');
+          await pollUntil(() => {
+            return captured.some((e) => {
+              return e.resourceId === thresholdId;
+            });
+          });
+        });
+        const fired = round.filter((e) => {
+          return e.resourceId === thresholdId;
+        });
+        expect(fired).toHaveLength(1);
+        const data = fired[0].data as Record<string, unknown>;
+        expect(data.window).toBe('rolling_24h');
+        expect(data.window_key).toBeNull();
+      });
+
+      test('a fired rolling_24h threshold re-arms once usage falls below 90%', async () => {
+        // The re-arm branch only triggers when a rolling window's value drops
+        // below 90% of the limit — unreachable through the append-only API, so
+        // it is driven directly: mark a high threshold as already fired, then
+        // evaluate against the project's (far lower) current usage.
+        const project = await db.Project.findOne({
+          where: { publicId: projectId },
+        });
+        const thresholdId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 1_000_000,
+        });
+        await db.UsageThreshold.update(
+          { lastFiredAt: new Date() },
+          { where: { publicId: thresholdId } }
+        );
+
+        await evaluateProjectThresholds({ projectId: project?.id as number });
+
+        const get = await authenticatedTestClient(userToken).get(
+          `/api/v1/usage/thresholds?project_id=${projectId}`
+        );
+        const row = get.body.data.find((t: { id: string }) => {
+          return t.id === thresholdId;
+        });
+        expect(row.last_fired_at).toBeNull();
+      });
+
+      test('a threshold above current usage does not fire', async () => {
+        // Create the high threshold first (lower id → evaluated first), then a
+        // low sentinel. When the sentinel's event arrives, the high threshold has
+        // already been decided in the same ordered eval pass.
+        const highId = await createThreshold({
+          metric: 'tokens',
+          window: 'calendar_month',
+          threshold: 1_000_000_000,
+        });
+        const sentinelId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 5,
+        });
+
+        const round = await withCapture(async (captured) => {
+          await generate('below threshold');
+          await pollUntil(() => {
+            return captured.some((e) => {
+              return e.resourceId === sentinelId;
+            });
+          });
+        });
+        expect(
+          round.filter((e) => {
+            return e.resourceId === highId;
+          })
+        ).toHaveLength(0);
+      });
+
+      test('two thresholds firing in one evaluation pass share the resolved project', async () => {
+        // Both low thresholds cross in a single evaluateProjectThresholds pass,
+        // exercising the branch that reuses the already-resolved project public
+        // id for the second (and later) fire.
+        const project = await db.Project.findOne({
+          where: { publicId: projectId },
+        });
+        const firstId = await createThreshold({
+          metric: 'tokens',
+          window: 'calendar_month',
+          threshold: 5,
+        });
+        const secondId = await createThreshold({
+          metric: 'tokens',
+          window: 'rolling_24h',
+          threshold: 5,
+        });
+
+        const captured = await withCapture(async () => {
+          await evaluateProjectThresholds({ projectId: project?.id as number });
+        });
+        const firedIds = captured.map((e) => {
+          return e.resourceId;
+        });
+        expect(firedIds).toContain(firstId);
+        expect(firedIds).toContain(secondId);
+      });
+    });
+
+    describe('admin scope and empty-project evaluation', () => {
+      test('an admin lists and deletes thresholds without project scoping', async () => {
+        const created = await authenticatedTestClient(adminToken)
+          .post('/api/v1/usage/thresholds')
+          .send({
+            project_id: projectId,
+            metric: 'cost_usd',
+            window: 'calendar_month',
+            threshold: 500,
+          });
+        expect(created.status).toBe(201);
+        const thresholdId = created.body.id;
+
+        // Admin resolveProjectIds returns undefined (no filter) — the unscoped
+        // list and delete branches.
+        const list = await authenticatedTestClient(adminToken).get(
+          '/api/v1/usage/thresholds'
+        );
+        expect(list.status).toBe(200);
+        expect(
+          list.body.data.some((t: { id: string }) => {
+            return t.id === thresholdId;
+          })
+        ).toBe(true);
+
+        const del = await authenticatedTestClient(adminToken).delete(
+          `/api/v1/usage/thresholds/${thresholdId}`
+        );
+        expect(del.status).toBe(204);
+      });
+
+      test('thresholds on a project with no usage never fire', async () => {
+        // A fresh project has no usage events, exercising the empty-window
+        // token sum and the null cost aggregate (both resolve to 0, below any
+        // positive threshold, so nothing fires).
+        const projRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/projects')
+          .send({ name: `usage-thresholds-empty-${Date.now()}` });
+        expect(projRes.status).toBe(201);
+        const emptyProjectPublicId = projRes.body.id;
+        const emptyProject = await db.Project.findOne({
+          where: { publicId: emptyProjectPublicId },
+        });
+
+        for (const body of [
+          { metric: 'tokens', window: 'calendar_month', threshold: 1 },
+          { metric: 'cost_usd', window: 'rolling_24h', threshold: 1 },
+        ]) {
+          const res = await authenticatedTestClient(adminToken)
+            .post('/api/v1/usage/thresholds')
+            .send({ project_id: emptyProjectPublicId, ...body });
+          expect(res.status).toBe(201);
+        }
+
+        const captured = await withCapture(async () => {
+          await evaluateProjectThresholds({
+            projectId: emptyProject?.id as number,
+          });
+        });
+        expect(captured).toHaveLength(0);
+      });
     });
   });
 

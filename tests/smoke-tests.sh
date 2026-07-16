@@ -2264,6 +2264,31 @@ if [ "$PROJECT_PRICE_GET_OK" != "true" ]; then
 fi
 echo "Project + provider-slug price: OK"
 
+# 34f. Usage thresholds — create, list, and delete a per-project alert rule
+echo "--- Verifying usage thresholds ---"
+THRESHOLD_PUT=$($SOAT_CLI create-usage-threshold \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --metric cost_usd \
+  --window calendar_month \
+  --threshold 100 \
+  | sanitize_json)
+THRESHOLD_ID=$(printf '%s\n' "$THRESHOLD_PUT" | jq -r '.id // empty')
+THRESHOLD_OK=$(printf '%s\n' "$THRESHOLD_PUT" | jq -r '(.id | startswith("uthr_")) and (.metric == "cost_usd") and (.window == "calendar_month") and (.threshold == 100) and (.last_fired_at == null)')
+if [ "$THRESHOLD_OK" != "true" ]; then
+  echo "ERROR: create-usage-threshold did not return a well-formed threshold" >&2
+  echo "$THRESHOLD_PUT" >&2
+  exit 1
+fi
+THRESHOLD_LIST=$($SOAT_CLI list-usage-thresholds --project-id "$PROJECT_PUBLIC_ID" | sanitize_json)
+THRESHOLD_LIST_OK=$(printf '%s\n' "$THRESHOLD_LIST" | jq -r --arg id "$THRESHOLD_ID" '[.data[] | select(.id == $id)] | length == 1')
+if [ "$THRESHOLD_LIST_OK" != "true" ]; then
+  echo "ERROR: list-usage-thresholds did not include the created threshold" >&2
+  echo "$THRESHOLD_LIST" >&2
+  exit 1
+fi
+$SOAT_CLI delete-usage-threshold --threshold-id "$THRESHOLD_ID"
+echo "Usage thresholds endpoint (create + list + delete): OK"
+
 # 35. Client-tool agent is delete-blocked after generation persists trace data
 echo "--- Verifying client-tool agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$CLIENT_AGENT_ID"

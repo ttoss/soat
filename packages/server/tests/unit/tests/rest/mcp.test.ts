@@ -137,6 +137,35 @@ describe('MCP tools - happy path', () => {
     expect(result.totals.costUsd).toBeNull();
   });
 
+  test('create-, list-, and delete-usage-threshold manage a threshold', async () => {
+    const created = parseResult(
+      await mcpCall('create-usage-threshold', {
+        projectId,
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        threshold: 250,
+      })
+    );
+    expect(created.id).toMatch(/^uthr_/);
+    expect(created.metric).toBe('cost_usd');
+    expect(created.window).toBe('calendar_month');
+    expect(created.threshold).toBe(250);
+
+    const listed = parseResult(
+      await mcpCall('list-usage-thresholds', { projectId })
+    );
+    expect(
+      listed.data.some((t: { id: string }) => {
+        return t.id === created.id;
+      })
+    ).toBe(true);
+
+    const del = await mcpCall('delete-usage-threshold', {
+      thresholdId: created.id,
+    });
+    expect(del.status).toBe(200);
+  });
+
   test('upload-file-with-token uploads via a presigned token', async () => {
     const presigned = parseResult(
       await mcpCall('create-presigned-url', {

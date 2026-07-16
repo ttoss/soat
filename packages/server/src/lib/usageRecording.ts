@@ -10,6 +10,7 @@ import {
   sumComponentCostUsd,
   type TokenComponent,
 } from './priceCompute';
+import { evaluateProjectThresholds } from './usageThresholds';
 
 const log = createDebug('soat:usage');
 
@@ -305,6 +306,13 @@ const writeGenerationEvent = async (args: {
     priced.length,
     costUsd
   );
+
+  // Threshold evaluation is the choke point's responsibility: only a newly
+  // written event can move a windowed total across a threshold, so a replayed
+  // (idempotent no-op) event never re-fires. Best-effort — never throws.
+  if (created) {
+    await evaluateProjectThresholds({ projectId: generation.projectId });
+  }
 };
 
 /**
