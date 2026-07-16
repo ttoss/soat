@@ -104,6 +104,18 @@ token-rate formula; every other type is `quantity × unit_price`. As with
 tokens today, a missing price row records the quantity with
 `cost_usd = null` — usage is never lost because pricing lagged.
 
+**Decision — USD is the fixed metering currency.** All price and cost
+fields are and stay USD-denominated, with the `_usd` suffix in column and
+API field names making mixed-currency aggregation unrepresentable. Every
+upstream provider quotes in USD, and `SUM(cost_usd)` must never silently
+mix currencies. Currency **presentation** (invoicing in BRL/EUR/…) is a
+billing concern: the consuming billing layer converts at invoice time with
+its own dated FX rate — converting at meter-write time would import an FX
+table into metering and, combined with frozen write-time costs, turn every
+FX correction into a request to mutate history. Non-USD-priced SKUs, if
+they ever appear, are entered in the price book as USD equivalents by the
+operator (who owns price data since #546).
+
 ### Consumer-facing effects
 
 - `GET /api/v1/usage/meters` gains a `meter_type` filter.
