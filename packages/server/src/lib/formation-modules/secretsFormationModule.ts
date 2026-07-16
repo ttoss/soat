@@ -119,11 +119,15 @@ export const secretsFormationModule: FormationModule = {
     log('deleted secret from formation: id=%s', physicalResourceId);
   },
 
-  // Secrets are write-only: the value cannot be read back. Always return null
-  // so the planner treats any existing secret as needing an update.
+  // Secrets are write-only: the value cannot be read back. Always return
+  // null; `writeOnly: true` below tells the planner to diff against the
+  // persisted lastAppliedProperties snapshot instead of treating this as
+  // "resource deleted externally".
   read: async () => {
     return null;
   },
+
+  writeOnly: true,
 
   // Strip the plaintext value before it is stored in lastAppliedProperties so
   // it is never persisted unencrypted in the formation_resources table.

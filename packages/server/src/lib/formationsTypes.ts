@@ -88,6 +88,15 @@ export type FormationModule = {
     properties: Record<string, unknown>
   ) => Record<string, unknown>;
   /**
+   * True for resources whose live state cannot be read back at all (e.g. a
+   * secret's value is encrypted at rest), so `read` always returns null
+   * structurally rather than as a "resource deleted externally" signal. When
+   * set, the planner diffs the resolved template against the resource's
+   * persisted `lastAppliedProperties` snapshot instead of treating the null
+   * read as drift.
+   */
+  writeOnly?: boolean;
+  /**
    * Return named attributes for a resource beyond its physical resource ID.
    * Used to resolve `ref_attr` expressions in formation outputs.
    */
@@ -102,6 +111,16 @@ export type PlanChange = {
   action: 'create' | 'update' | 'delete' | 'no-op';
   /** The physical resource ID for existing resources (update / no-op / delete). */
   physicalResourceId?: string;
+  /**
+   * Resolved desired-state properties (post parameter/ref substitution) and,
+   * when available, the current live/last-applied properties they are being
+   * compared against. Omitted when neither side could be computed (e.g. an
+   * unregistered resource type).
+   */
+  diff?: {
+    desired: Record<string, unknown>;
+    current: Record<string, unknown> | null;
+  };
 };
 
 export type PlanResult = {

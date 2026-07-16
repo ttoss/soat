@@ -1469,6 +1469,27 @@ components:
             - update
             - delete
             - no-op
+        physical_resource_id:
+          type: string
+          description: >-
+            The existing resource's physical ID. Present for update / no-op /
+            delete actions, absent for create.
+        diff:
+          type: object
+          description: >-
+            Resolved desired-state properties (post parameter/ref
+            substitution) and, when available, the current live or
+            last-applied properties they were compared against. Omitted when
+            neither side could be computed (e.g. an unregistered resource
+            type).
+          properties:
+            desired:
+              type: object
+              additionalProperties: true
+            current:
+              type: object
+              additionalProperties: true
+              nullable: true
 
     PlanResult:
       type: object
