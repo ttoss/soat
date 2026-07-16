@@ -150,6 +150,11 @@ export const ERROR_CODES = {
     description:
       'The orchestration graph is invalid (e.g. a dangling edge, a node missing a required field, a cycle, or an input_mapping that references a state key no upstream node writes).',
   },
+  ORCHESTRATION_WEBHOOK_DELIVERY_FAILED: {
+    httpStatus: 502,
+    description:
+      'A webhook emit node with require_delivery could not deliver its POST (transport error or non-2xx response). Retriable — participates in the node retry policy.',
+  },
   FORMATION_MISSING_PARAMETERS: {
     httpStatus: 400,
     description:

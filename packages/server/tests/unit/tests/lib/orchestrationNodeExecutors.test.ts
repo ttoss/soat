@@ -543,6 +543,68 @@ describe('executeWebhookNode', () => {
     });
   });
 
+  test('require_delivery: a transport failure throws a retriable delivery error (F-12)', async () => {
+    global.fetch = (async () => {
+      throw new Error('network down');
+    }) as typeof fetch;
+
+    await expect(
+      executeWebhookNode({
+        node: makeNode({
+          type: 'webhook',
+          mode: 'emit',
+          webhookUrl: 'http://example.test/hook',
+          requireDelivery: true,
+        }),
+        state: {},
+      })
+    ).rejects.toMatchObject({
+      code: 'ORCHESTRATION_WEBHOOK_DELIVERY_FAILED',
+      httpStatus: 502,
+    });
+  });
+
+  test('require_delivery: a non-2xx response throws a retriable delivery error (F-12)', async () => {
+    global.fetch = (async () => {
+      return { ok: false, status: 503 } as Response;
+    }) as typeof fetch;
+
+    const promise = executeWebhookNode({
+      node: makeNode({
+        type: 'webhook',
+        mode: 'emit',
+        webhookUrl: 'http://example.test/hook',
+        requireDelivery: true,
+      }),
+      state: {},
+    });
+    await expect(promise).rejects.toBeInstanceOf(DomainError);
+    await expect(promise).rejects.toMatchObject({
+      code: 'ORCHESTRATION_WEBHOOK_DELIVERY_FAILED',
+    });
+  });
+
+  test('require_delivery: a 2xx response completes normally with delivered=true (F-12)', async () => {
+    global.fetch = (async () => {
+      return { ok: true, status: 200 } as Response;
+    }) as typeof fetch;
+
+    const result = await executeWebhookNode({
+      node: makeNode({
+        type: 'webhook',
+        mode: 'emit',
+        webhookUrl: 'http://example.test/hook',
+        requireDelivery: true,
+      }),
+      state: {},
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { emitted: true, delivered: true, status: 200, signed: false },
+    });
+  });
+
   test('receive mode returns requires_action with prompt and context', async () => {
     const result = await executeWebhookNode({
       node: makeNode({

@@ -535,6 +535,16 @@ components:
             signed with this secret and the digest is sent as the
             `X-Soat-Signature: sha256=<hex>` header so the receiver can
             authenticate the payload. Supports `{{secret:...}}` templating.
+        require_delivery:
+          type: boolean
+          description: >
+            For webhook emit nodes — when true, a failed delivery (transport
+            error or a non-2xx response) fails the node with a retriable
+            `ORCHESTRATION_WEBHOOK_DELIVERY_FAILED` error instead of completing
+            with `delivered: false`. Combine with a `retry` policy to re-deliver
+            a critical alert; once attempts are exhausted the run fails rather
+            than silently dropping it. Defaults to false (the run continues
+            regardless of delivery).
         orchestration_id:
           x-soat-ref: orchestrations
           type: string
