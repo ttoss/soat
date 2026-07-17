@@ -1,7 +1,8 @@
 # PRD: Workflows & Tasks (Stateful Work Items)
 
-- **Status:** Draft v1
+- **Status:** Draft v1 — naming and all open questions resolved (§11)
 - **Area:** Execution models — the stateful-entity layer between orchestrations and conversations
+- **Module names:** `workflows` (definition) + `tasks` (instance), conditional on the orchestration → "pipeline" vocabulary reclaim (§11 D1a)
 - **Consumes:** agents (generation dispatch), orchestrations (run dispatch), approvals (gated transitions), triggers/webhooks (event surface), IAM (permissions)
 - **Feeds:** kanban/board UIs, activity/audit surfaces, usage metering
 
@@ -389,23 +390,89 @@ Bodies snake_case per the case convention; MCP tools (`create-workflow`,
   the scheduler, expressions reuse JSON Logic, dispatch reuses
   generations/runs as-is.
 
-## 11. Open questions
+## 11. Decisions
 
-1. **Naming.** `workflows` risks confusion with orchestrations in docs and
-   marketing ("workflow engine"). Alternatives: `taskflows`, `boards`
-   (too UI-flavored), `state-machines` (precise but dry). Recommend
-   `workflows`/`tasks` with the boundary rule stated prominently, but this
-   deserves a deliberate call before the OpenAPI surface ships.
-2. **`on_complete` result shape for orchestration dispatch.** Expose the full
-   run `artifacts`, only `state`, or a declared output mapping on the
-   orchestration? (Recommend: run `state` namespaced under `result`, matching
-   sub-orchestration semantics.)
-3. **Payload size and mutability.** Should `payload` writes be versioned in
-   history like transitions are? (Recommend: no in v1; `payload` is data,
-   transitions are the audited contract — revisit if audit demand appears.)
-4. **Multi-dispatch states.** v1 allows one dispatch per state. Fan-out
-   ("three agents review in parallel") is expressible today by dispatching an
-   orchestration that fans out internally — keep it that way, or allow
-   dispatch lists later?
-5. **Task→task relations** (parent/child, blocking). Real boards want them
-   eventually; deliberately out of v1 to keep the model small.
+The five questions this draft opened are now resolved.
+
+### D1 — Naming: `workflows` (definition) + `tasks` (instance) ✅ Decided
+
+The module ships as **`workflows`** for the definition resource and **`tasks`**
+for the instance resource.
+
+- **`tasks`** was uncontested: short, universal, exactly what a kanban card is,
+  and the `task_` prefix is unclaimed in `publicId.ts`. Users touch it in ~90%
+  of calls (`create-task`, `transition-task`, `list-tasks`) — the friendliest
+  word in the set carrying the most traffic is the right outcome.
+- **`workflows`** was chosen over the confusion-proof alternative `lifecycles`
+  on the principle *name the module for its users, not for internal purity*.
+  The board/ops audience that drives demand for this module arrives from
+  Jira/Linear/Asana already calling this exact object — statuses + transitions
+  + guards — a "workflow". Fighting a universally installed mental model with a
+  more-correct word (`lifecycles`, `state-machines`, `taskflows`) loses
+  discoverability for a precision the boundary rule already provides.
+
+The known cost is the word's second sense (Temporal/n8n/LangGraph = executable
+pipeline), which is what **orchestrations** are. `workflows` is therefore
+**conditional on the vocabulary reclaim** in D1a — without it, the two senses
+collide in SOAT's own docs.
+
+> **Ranking of alternatives considered:** `workflows` *with* reclaim (chosen) >
+> `lifecycles` (confusion-proof, but abstract and undiscoverable) > `workflows`
+> *without* reclaim > `state-machines` (names the mechanism, not the domain;
+> awkward surface) > `taskflows` (neologism; collides with Airflow's TaskFlow) >
+> `boards` (one UI rendering; invites the PM-tool feature tail) > `processes`
+> (contradicts the boundary rule) / `cases` (narrows to support desks).
+
+### D1a — Vocabulary reclaim (required, ships with the API surface)
+
+`workflows` is only safe if "workflow" stops meaning two things inside SOAT.
+The following MUST land in the same change set that introduces the OpenAPI
+surface — it is a blocking prerequisite, not a follow-up:
+
+1. **Scrub "workflow" from orchestration vocabulary.** In
+   `packages/website/docs/modules/orchestrations.md`, "DAG-based **workflow**
+   definitions … into repeatable pipelines" becomes "DAG-based **pipeline**
+   definitions". Canonical vocabulary from then on: *orchestration = pipeline
+   that ends; workflow = state graph a task lives in.*
+2. **A "which one do I use?" table at the top of both module docs**, each
+   cross-linking the other (orchestrations → "looking for statuses /
+   transitions / boards? → workflows"; workflows → the reverse).
+3. **Never let the two words cross again** — no "orchestration workflows", no
+   "workflow pipelines" in docs, error messages, CLI help, or marketing. Add
+   any newly-forbidden term to the `docs-lint.mjs` denylist so CI enforces it.
+
+> **Live-doc note:** this PRD does not itself edit the live orchestrations doc —
+> that scrub executes when the module is built (or as a standalone reclaim PR if
+> the team wants the vocabulary fixed ahead of implementation).
+
+### D2 — `on_complete` result shape for orchestration dispatch ✅ Decided
+
+An orchestration dispatch exposes its run **`state`** namespaced under
+`{result}`, matching sub-orchestration semantics. Not the full `node_executions`
+trace (too large, leaks internal structure) and not a bespoke per-workflow
+output mapping (unnecessary indirection — the orchestration already shapes its
+own final state). Agent dispatches expose their generation output under the same
+`{result}` handle, so `on_complete` rules read one consistent shape.
+
+### D3 — Payload versioning ✅ Decided
+
+`payload` writes are **not** versioned in v1. Transitions are the audited
+contract (append-only `TaskTransition` history); `payload` is mutable working
+data. Revisit only if concrete audit demand for field-level payload history
+appears — at which point it is an additive history stream, not a model change.
+
+### D4 — One dispatch per state ✅ Decided
+
+A state dispatches **at most one** agent generation or orchestration run.
+Parallel fan-out ("three reviewers at once") is already expressible by
+dispatching an orchestration that fans out internally via `Promise.all` node
+rounds — so the single-dispatch rule adds no real constraint while keeping the
+task state machine's "one active dispatch" invariant (§2 Phase 2) simple.
+Dispatch lists remain a possible future addition with no history-model change.
+
+### D5 — Task→task relations ✅ Decided (out of scope for v1)
+
+Parent/child and blocking relations are **deliberately excluded** from v1 to
+keep the model small. They are real ("epic → stories", "blocked by") and
+likely a future phase, but nothing in the v1 data model precludes adding a
+`TaskRelation` join later.
