@@ -405,6 +405,13 @@ components:
           type: object
           additionalProperties: true
           nullable: true
+          description: >
+            Arbitrary metadata attached to the template. Supports the same
+            substitution as `outputs`: `{ "ref": "logicalId" }` resolves to a
+            created resource's physical ID, and `{ "param": "ParamName" }` /
+            `{ "sub": "text ${ParamName}" }` embed parameter values. The raw
+            expressions are preserved here; the resolved values from the last
+            deploy are exposed on the formation's `resolved_metadata` field.
 
     ParameterDeclaration:
       type: object
@@ -1476,6 +1483,24 @@ components:
           type: object
           additionalProperties: true
           nullable: true
+          description: Arbitrary metadata stored on the formation record (supplied at create/update).
+        resolved_metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >
+            The template's top-level `metadata` block after parameter (`sub`/`param`)
+            and resource (`ref`) substitution at the last deploy. Null when the
+            template declares no metadata.
+        resolved_parameters:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: >
+            Parameter values applied at the last deploy, for auditability.
+            `no_echo` parameters are masked (`***`). Null when the template
+            declares no parameters.
         resources:
           type: array
           items:

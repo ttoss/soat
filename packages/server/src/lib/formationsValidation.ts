@@ -221,7 +221,38 @@ const validateResourceDeclaration = (args: {
   return { errors, warnings };
 };
 
-// ── Output Refs Validation ────────────────────────────────────────────────
+// ── Ref / Param Token Validation ──────────────────────────────────────────
+
+// Validates `ref` and `param`/`sub` tokens anywhere within `value`, attributing
+// every error to `path`. Shared by the top-level `outputs` and `metadata`
+// substitution sites.
+const validateRefAndParamTokens = (
+  value: unknown,
+  path: string,
+  logicalIds: Set<string>,
+  paramNames: Set<string>
+): ValidationError[] => {
+  const errors: ValidationError[] = [];
+  for (const ref of collectRefs(value)) {
+    if (!logicalIds.has(ref)) {
+      errors.push({
+        path,
+        message: `Referenced resource '${ref}' does not exist in template`,
+      });
+    }
+  }
+  for (const ref of collectParamRefs(value)) {
+    if (ref.startsWith('body.')) continue;
+    if (logicalIds.has(ref)) continue;
+    if (!paramNames.has(ref)) {
+      errors.push({
+        path,
+        message: `'${ref}' is neither a parameter nor a resource logical id`,
+      });
+    }
+  }
+  return errors;
+};
 
 const validateOutputRefs = (
   outputs: Record<string, unknown>,
@@ -230,36 +261,23 @@ const validateOutputRefs = (
 ): ValidationError[] => {
   const errors: ValidationError[] = [];
   for (const [outputName, outputValue] of Object.entries(outputs)) {
-    for (const ref of collectRefs(outputValue)) {
-      if (!logicalIds.has(ref)) {
-        errors.push({
-          path: `outputs.${outputName}`,
-          message: `Referenced resource '${ref}' does not exist in template`,
-        });
-      }
-    }
+    const path = `outputs.${outputName}`;
+    errors.push(
+      ...validateRefAndParamTokens(outputValue, path, logicalIds, paramNames)
+    );
     for (const refAttr of collectRefAttrs(outputValue)) {
       const parsed = parseRefAttr(refAttr);
       if (!parsed) {
         errors.push({
-          path: `outputs.${outputName}`,
+          path,
           message: `ref_attr '${refAttr}' must be in the form '<ResourceName>.<attribute>'`,
         });
         continue;
       }
       if (!logicalIds.has(parsed.logicalId)) {
         errors.push({
-          path: `outputs.${outputName}`,
+          path,
           message: `Referenced resource '${parsed.logicalId}' does not exist in template`,
-        });
-      }
-    }
-    for (const ref of collectParamRefs(outputValue)) {
-      if (logicalIds.has(ref)) continue;
-      if (!paramNames.has(ref)) {
-        errors.push({
-          path: `outputs.${outputName}`,
-          message: `'${ref}' is neither a parameter nor a resource logical id`,
         });
       }
     }
@@ -306,28 +324,14 @@ const parseTemplateObject = (
   return template as Record<string, unknown>;
 };
 
-const parseResourcesObject = (
-  tmpl: Record<string, unknown>
+// Returns `tmpl[key]` when it is a non-null, non-array plain object; else null.
+const getPlainObjectField = (
+  tmpl: Record<string, unknown>,
+  key: string
 ): Record<string, unknown> | null => {
-  if (
-    !tmpl.resources ||
-    typeof tmpl.resources !== 'object' ||
-    Array.isArray(tmpl.resources)
-  )
-    return null;
-  return tmpl.resources as Record<string, unknown>;
-};
-
-const getOutputsObject = (
-  tmpl: Record<string, unknown>
-): Record<string, unknown> | null => {
-  if (
-    !tmpl.outputs ||
-    typeof tmpl.outputs !== 'object' ||
-    Array.isArray(tmpl.outputs)
-  )
-    return null;
-  return tmpl.outputs as Record<string, unknown>;
+  const value = tmpl[key];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
 };
 
 type ResolvedParams = {
@@ -391,7 +395,7 @@ export const validateFormationTemplate = (
     };
   }
 
-  const resources = parseResourcesObject(tmpl);
+  const resources = getPlainObjectField(tmpl, 'resources');
   if (!resources) {
     return {
       valid: false,
@@ -419,9 +423,16 @@ export const validateFormationTemplate = (
     warnings.push(...declResult.warnings);
   }
 
-  const outputs = getOutputsObject(tmpl);
+  const outputs = getPlainObjectField(tmpl, 'outputs');
   if (outputs) {
     errors.push(...validateOutputRefs(outputs, logicalIds, paramNames));
+  }
+
+  const metadata = getPlainObjectField(tmpl, 'metadata');
+  if (metadata) {
+    errors.push(
+      ...validateRefAndParamTokens(metadata, 'metadata', logicalIds, paramNames)
+    );
   }
 
   // Check for circular dependencies only when all declarations are valid

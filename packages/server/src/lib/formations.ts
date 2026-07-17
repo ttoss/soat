@@ -73,6 +73,8 @@ const mapFormation = (
     outputs: instance.outputs,
     status: instance.status,
     metadata: instance.metadata,
+    resolvedMetadata: instance.resolvedMetadata,
+    resolvedParameters: instance.resolvedParameters,
     ...(resources !== undefined ? { resources } : {}),
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,

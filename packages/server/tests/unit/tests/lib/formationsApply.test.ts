@@ -4,8 +4,8 @@ import {
   handleOrphanedDeletes,
   performResourceDeletions,
   processResourceChange,
-  resolveFormationOutputs,
 } from 'src/lib/formationsApply';
+import { resolveFormationOutputs } from 'src/lib/formationsResolve';
 import type {
   FormationEvent,
   FormationTemplate,

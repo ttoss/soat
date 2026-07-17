@@ -477,6 +477,55 @@ resources:
       expect(res.body.metadata).toEqual({ env: 'test' });
     });
 
+    test('resolves `sub` in top-level template metadata and records deploy parameters (F-16)', async () => {
+      const template = {
+        parameters: {
+          my_version: { type: 'string', default: 'unpinned' },
+          db_password: { type: 'string', default: 'hunter2', no_echo: true },
+        },
+        resources: {
+          MyMemory: {
+            type: 'memory',
+            properties: { name: 'F16 Memory' },
+          },
+        },
+        metadata: {
+          my_version: { sub: '${my_version}' },
+          memory_ref: { ref: 'MyMemory' },
+          static: 'kept',
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `f16-metadata-sub-${Date.now()}`,
+          template,
+          parameters: { my_version: '1.2.3' },
+        });
+
+      expect(res.status).toBe(201);
+
+      // Raw template metadata keeps the unresolved expressions (re-deploy source).
+      expect(res.body.template.metadata.my_version).toEqual({
+        sub: '${my_version}',
+      });
+
+      // resolved_metadata reflects the deploy-time values: param substituted,
+      // resource ref resolved to a physical id, static values preserved.
+      expect(res.body.resolved_metadata.my_version).toBe('1.2.3');
+      expect(res.body.resolved_metadata.static).toBe('kept');
+      expect(res.body.resolved_metadata.memory_ref).toBe(
+        res.body.resources[0].physical_resource_id
+      );
+
+      // resolved_parameters records deploy-time values for auditability, with
+      // no_echo parameters masked.
+      expect(res.body.resolved_parameters.my_version).toBe('1.2.3');
+      expect(res.body.resolved_parameters.db_password).toBe('***');
+    });
+
     test('re-planning a formation with a resource that failed to create treats it as create', async () => {
       const failingTemplate = {
         resources: {

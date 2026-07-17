@@ -155,6 +155,8 @@ export type MappedFormation = {
   outputs: Record<string, string> | null;
   status: string;
   metadata: Record<string, unknown> | null;
+  resolvedMetadata: Record<string, unknown> | null;
+  resolvedParameters: Record<string, string> | null;
   resources?: MappedFormationResource[];
   createdAt: Date;
   updatedAt: Date;

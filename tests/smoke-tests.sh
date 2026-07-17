@@ -2930,6 +2930,31 @@ if [ -z "$FORMATION_ID" ] || [ "$FORMATION_ID" = "null" ]; then
 fi
 echo "Formation created: $FORMATION_ID"
 
+# Metadata substitution (F-16): top-level `metadata` resolves `sub`/`param`/`ref`
+# at deploy, exposed on `resolved_metadata`; deploy parameter values are recorded
+# on `resolved_parameters`.
+echo "--- Creating formation with metadata substitution ---"
+META_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-metadata-formation" \
+  --template '{"parameters":{"my_version":{"type":"string","default":"unpinned"}},"resources":{"myMemory":{"type":"memory","properties":{"name":"Smoke Metadata Memory"}}},"metadata":{"my_version":{"sub":"${my_version}"},"memory_ref":{"ref":"myMemory"}}}' \
+  --parameter my_version=1.2.3)
+META_RESOLVED_VERSION=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.my_version')
+META_RESOLVED_PARAM=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_parameters.my_version')
+META_MEMORY_PHYS=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
+META_RESOLVED_MEMORY=$(printf '%s\n' "$META_FORMATION_RESP" | jq -r '.resolved_metadata.memory_ref')
+if [ "$META_RESOLVED_VERSION" != "1.2.3" ] || [ "$META_RESOLVED_PARAM" != "1.2.3" ]; then
+  echo "ERROR: formation did not resolve metadata/parameter substitution" >&2
+  echo "$META_FORMATION_RESP" >&2
+  exit 1
+fi
+if [ "$META_RESOLVED_MEMORY" != "$META_MEMORY_PHYS" ]; then
+  echo "ERROR: formation did not resolve metadata ref to physical id" >&2
+  echo "$META_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Formation metadata substitution resolved."
+
 # List
 echo "--- Listing formations ---"
 FORMATION_LIST_RESP=$($SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID")

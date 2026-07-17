@@ -8,14 +8,16 @@ import {
   failFormationOperation,
 } from './formationsApplyHelpers';
 import {
+  buildAuditableParameters,
   buildDependencyGraph,
-  isRefAttr,
-  parseRefAttr,
   resolveRefs,
   resolveWorkingTemplate,
   topologicalSort,
 } from './formationsHelpers';
-import { getFormationModule } from './formationsRegistry';
+import {
+  resolveFormationMetadata,
+  resolveFormationOutputs,
+} from './formationsResolve';
 import { applyDeleteResource } from './formationsResourceHandlers';
 import type {
   FormationEvent,
@@ -43,81 +45,6 @@ const markResourceDeleted = async (args: {
     status: 'succeeded',
     physicalResourceId: resource.physicalResourceId ?? undefined,
   });
-};
-
-const resolveRefAttrOutput = async (
-  refAttrStr: string,
-  template: FormationTemplate,
-  resolvedIds: Map<string, string>
-): Promise<string | undefined> => {
-  const parsed = parseRefAttr(refAttrStr);
-  if (!parsed) {
-    log(
-      'resolveFormationOutputs: skipping ref_attr "%s" — missing dot separator',
-      refAttrStr
-    );
-    return undefined;
-  }
-  const { logicalId, attrName } = parsed;
-  const physicalId = resolvedIds.get(logicalId);
-  if (physicalId === undefined) {
-    log(
-      'resolveFormationOutputs: skipping ref_attr "%s" — no physical ID for "%s"',
-      refAttrStr,
-      logicalId
-    );
-    return undefined;
-  }
-  const resourceType = template.resources[logicalId]?.type;
-  if (!resourceType) return undefined;
-  const mod = getFormationModule({ resourceType });
-  if (!mod?.getAttributes) {
-    log(
-      'resolveFormationOutputs: skipping ref_attr "%s" — resource type "%s" has no getAttributes',
-      refAttrStr,
-      resourceType
-    );
-    return undefined;
-  }
-  const attrs = await mod.getAttributes({
-    physicalResourceId: physicalId,
-  });
-  if (typeof attrs[attrName] !== 'string') {
-    log(
-      'resolveFormationOutputs: skipping ref_attr "%s" — attribute "%s" not found in resource "%s"',
-      refAttrStr,
-      attrName,
-      logicalId
-    );
-    return undefined;
-  }
-  return attrs[attrName];
-};
-
-export const resolveFormationOutputs = async (
-  template: FormationTemplate,
-  resolvedIds: Map<string, string>
-): Promise<Record<string, string>> => {
-  const outputs: Record<string, string> = {};
-  if (!template.outputs) return outputs;
-  for (const [outputName, outputValue] of Object.entries(template.outputs)) {
-    try {
-      if (isRefAttr(outputValue)) {
-        const value = await resolveRefAttrOutput(
-          outputValue.ref_attr,
-          template,
-          resolvedIds
-        );
-        if (value !== undefined) outputs[outputName] = value;
-      } else {
-        const resolved = resolveRefs(outputValue, resolvedIds);
-        if (typeof resolved === 'string') outputs[outputName] = resolved;
-      }
-    } catch {
-      // Skip unresolvable outputs
-    }
-  }
-  return outputs;
 };
 
 export const handleOrphanedDeletes = async (args: {
@@ -256,6 +183,92 @@ export const processResourceChange = async (args: {
   }
 };
 
+// Applies each resource change in dependency order. Returns true on success;
+// on the first failure it records the failed operation and returns false so the
+// caller stops before finalizing.
+const runResourceChanges = async (args: {
+  sortedOrder: string[];
+  workingTemplate: FormationTemplate;
+  existingMap: Map<string, ResourceRow>;
+  resolvedIds: Map<string, string>;
+  events: FormationEvent[];
+  projectId: number;
+  formationId: number;
+  formation: InstanceType<(typeof db)['Formation']>;
+  operation: InstanceType<(typeof db)['FormationOperation']>;
+}): Promise<boolean> => {
+  const { sortedOrder, workingTemplate, existingMap, events } = args;
+  for (const logicalId of sortedOrder) {
+    const decl = workingTemplate.resources[logicalId];
+    const existing = existingMap.get(logicalId);
+    try {
+      await processResourceChange({
+        logicalId,
+        decl,
+        existing,
+        resolvedIds: args.resolvedIds,
+        events,
+        projectId: args.projectId,
+        formationId: args.formationId,
+      });
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      log(
+        'applyFormationTemplate: failed logicalId=%s error=%s',
+        logicalId,
+        errorMsg
+      );
+      await failFormationOperation({
+        operation: args.operation,
+        formation: args.formation,
+        events,
+        logicalId,
+        resourceType: decl.type,
+        action: existing ? 'update' : 'create',
+        errorMessage: errorMsg,
+      });
+      return false;
+    }
+  }
+  return true;
+};
+
+// Persists a successful apply: resolves outputs, top-level metadata, and the
+// auditable parameter set, then flips the formation to `active`.
+const finalizeSucceededFormation = async (args: {
+  formation: InstanceType<(typeof db)['Formation']>;
+  template: FormationTemplate;
+  workingTemplate: FormationTemplate;
+  parameters?: Record<string, string>;
+  operation: InstanceType<(typeof db)['FormationOperation']>;
+  events: FormationEvent[];
+  resolvedIds: Map<string, string>;
+}): Promise<void> => {
+  const {
+    formation,
+    template,
+    workingTemplate,
+    parameters,
+    operation,
+    events,
+  } = args;
+  const outputs = await resolveFormationOutputs(
+    workingTemplate,
+    args.resolvedIds
+  );
+  await operation.update({ status: 'succeeded', events });
+  await formation.update({
+    status: 'active',
+    outputs,
+    template,
+    resolvedMetadata: resolveFormationMetadata(
+      workingTemplate,
+      args.resolvedIds
+    ),
+    resolvedParameters: buildAuditableParameters(template, parameters),
+  });
+};
+
 export const applyFormationTemplate = async (args: {
   formation: InstanceType<(typeof db)['Formation']>;
   template: FormationTemplate;
@@ -264,14 +277,8 @@ export const applyFormationTemplate = async (args: {
   operation: InstanceType<(typeof db)['FormationOperation']>;
   parameters?: Record<string, string>;
 }): Promise<void> => {
-  const {
-    formation,
-    template,
-    existingResources,
-    projectId,
-    operation,
-    parameters,
-  } = args;
+  const { formation, template, existingResources, operation, parameters } =
+    args;
   const workingTemplate = resolveWorkingTemplate({ template, parameters });
 
   const graph = buildDependencyGraph(workingTemplate);
@@ -295,38 +302,18 @@ export const applyFormationTemplate = async (args: {
     sortedOrder.length
   );
 
-  for (const logicalId of sortedOrder) {
-    const decl = workingTemplate.resources[logicalId];
-    const existing = existingMap.get(logicalId);
-    try {
-      await processResourceChange({
-        logicalId,
-        decl,
-        existing,
-        resolvedIds,
-        events,
-        projectId,
-        formationId,
-      });
-    } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      log(
-        'applyFormationTemplate: failed logicalId=%s error=%s',
-        logicalId,
-        errorMsg
-      );
-      await failFormationOperation({
-        operation,
-        formation,
-        events,
-        logicalId,
-        resourceType: decl.type,
-        action: existing ? 'update' : 'create',
-        errorMessage: errorMsg,
-      });
-      return;
-    }
-  }
+  const ok = await runResourceChanges({
+    sortedOrder,
+    workingTemplate,
+    existingMap,
+    resolvedIds,
+    events,
+    projectId: args.projectId,
+    formationId,
+    formation,
+    operation,
+  });
+  if (!ok) return;
 
   await handleOrphanedDeletes({
     template: workingTemplate,
@@ -334,9 +321,15 @@ export const applyFormationTemplate = async (args: {
     events,
   });
 
-  const outputs = await resolveFormationOutputs(workingTemplate, resolvedIds);
-  await operation.update({ status: 'succeeded', events });
-  await formation.update({ status: 'active', outputs, template });
+  await finalizeSucceededFormation({
+    formation,
+    template,
+    workingTemplate,
+    parameters,
+    operation,
+    events,
+    resolvedIds,
+  });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
 };
 

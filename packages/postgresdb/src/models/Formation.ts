@@ -62,6 +62,18 @@ export class Formation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
+  // Top-level template `metadata` after parameter (`sub`/`param`) and resource
+  // (`ref`) substitution at the last deploy. The raw expressions are preserved
+  // in `template.metadata`; this column holds the resolved view (mirrors how
+  // `outputs` relates to `template.outputs`).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare resolvedMetadata: Record<string, unknown> | null;
+
+  // Parameter values applied at the last deploy, for auditability. `no_echo`
+  // parameters are masked.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare resolvedParameters: Record<string, string> | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 
