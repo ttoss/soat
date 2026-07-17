@@ -577,6 +577,63 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(true);
   });
 
+  // ── metadata (F-16) ──────────────────────────────────────────────────────
+
+  test('returns invalid when top-level metadata references an unknown resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+      metadata: { ref: { ref: 'NonExistent' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'metadata' && e.message.includes("'NonExistent'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns invalid when metadata sub references an undeclared parameter', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+      metadata: { version: { sub: '${undeclared}' } },
+    });
+    expect(result.valid).toBe(false);
+    expect(
+      result.errors.some((e) => {
+        return e.path === 'metadata' && e.message.includes("'undeclared'");
+      })
+    ).toBe(true);
+  });
+
+  test('returns valid when metadata substitutes a declared param and a known resource', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+      parameters: { version: { default: 'v1' } },
+      metadata: {
+        version: { sub: '${version}' },
+        memory: { ref: 'MyMemory' },
+      },
+    });
+    expect(result.valid).toBe(true);
+    expect(result.errors).toHaveLength(0);
+  });
+
+  test('skips metadata validation when metadata is not a plain object', () => {
+    const result = validateFormationTemplate({
+      resources: {
+        MyMemory: { type: 'memory', properties: { name: 'test' } },
+      },
+      metadata: ['bad'],
+    });
+    expect(result.valid).toBe(true);
+  });
+
   // ── circular dependency ────────────────────────────────────────────────
 
   test('returns invalid when resources have a circular dependency', () => {

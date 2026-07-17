@@ -251,6 +251,32 @@ export const buildResolvedParamsMap = (
   return resolved;
 };
 
+// Placeholder written to `resolvedParameters` for `no_echo` parameters so a
+// deploy's parameter set stays auditable without persisting the sensitive value.
+export const MASKED_PARAMETER_VALUE = '***';
+
+/**
+ * Builds the auditable record of parameter values applied at a deploy: declared
+ * parameters resolved to their provided-or-default value, with `no_echo`
+ * parameters masked. Parameters left unresolved (e.g. an omitted
+ * `use_previous_value` parameter) are excluded. Returns null when there are no
+ * recordable parameters.
+ */
+export const buildAuditableParameters = (
+  template: FormationTemplate,
+  provided?: Record<string, string>
+): Record<string, string> | null => {
+  if (!template.parameters) return null;
+  const resolved = buildResolvedParamsMap(template, provided);
+  const result: Record<string, string> = {};
+  for (const [name, decl] of Object.entries(template.parameters)) {
+    const value = resolved.get(name);
+    if (value === undefined) continue;
+    result[name] = decl.no_echo ? MASKED_PARAMETER_VALUE : value;
+  }
+  return Object.keys(result).length > 0 ? result : null;
+};
+
 // Build the template with param expressions resolved. Resolution runs whenever
 // the template declares parameters (not only when values resolved): a
 // `use_previous_value` parameter that is omitted yields no entry in the map,
@@ -297,6 +323,7 @@ export const getMissingParams = (
     [
       ...collectParamRefs(template.resources),
       ...collectParamRefs(template.outputs ?? {}),
+      ...collectParamRefs(template.metadata ?? {}),
     ].filter((name) => {
       // A sub token naming a resource logical id is a resource ref, not a param.
       return !logicalIds.has(name);

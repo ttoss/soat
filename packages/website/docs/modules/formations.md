@@ -69,10 +69,12 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 | `id`         | string   | Public ID (`form_` prefix)                                                       |
 | `project_id` | string   | Project public ID                                                              |
 | `name`       | string   | Formation name (unique per project)                                            |
-| `template`   | object   | The last applied template                                                      |
+| `template`   | object   | The last applied template (raw — substitution expressions preserved)          |
 | `outputs`    | object   | Resolved output values                                                         |
 | `status`     | string   | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed` |
-| `metadata`   | object   | Arbitrary metadata                                                             |
+| `metadata`   | object   | Arbitrary metadata stored on the record (supplied at create/update)           |
+| `resolved_metadata`   | object   | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata) |
+| `resolved_parameters` | object   | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters) |
 | `resources`  | array    | Resources managed by the formation                                             |
 | `created_at` | string   | ISO 8601 creation timestamp                                                    |
 | `updated_at` | string   | ISO 8601 last-updated timestamp                                                |
@@ -111,7 +113,7 @@ A template has four top-level keys. For a complete worked template wiring 14 res
 | `parameters` | No       | Map of parameter names → parameter declarations              |
 | `resources`  | Yes      | Map of logical resource ID → resource declaration            |
 | `outputs`    | No       | Map of output names → values (may contain `ref` expressions) |
-| `metadata`   | No       | Arbitrary metadata stored with the formation                 |
+| `metadata`   | No       | Arbitrary metadata; supports `sub`/`param`/`ref` substitution (see [Metadata Substitution](#metadata-substitution)) |
 
 #### Key Naming and Case
 
@@ -370,6 +372,24 @@ The main use case is embedding a [secret reference](./secrets.md#secret-referenc
 ```
 
 After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — the decrypted value is only substituted server-side when the tool is called, and is never echoed back by any API response.
+
+### Metadata Substitution
+
+The template's top-level `metadata` block is a substitution site, exactly like `outputs`: `{ "ref": "logicalId" }`, `{ "param": "Name" }`, and `{ "sub": "text ${Name}" }` are resolved at deploy time. The raw expressions stay in `template.metadata` (so a re-deploy re-resolves them against new parameter values), and the resolved values are exposed on the formation's `resolved_metadata` field.
+
+```yaml
+parameters:
+  my_version: { type: string, default: unpinned }
+resources:
+  MyMemory: { type: memory, properties: { name: shared } }
+metadata:
+  my_version: { sub: '${my_version}' }
+  memory: { ref: MyMemory }
+```
+
+Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "my_version": "1.2.3", "memory": "mem_01HXYZ" }`, while `template.metadata.my_version` remains `{ "sub": "${my_version}" }`.
+
+The parameter values used on the last deploy are also recorded on `resolved_parameters` for auditability. Parameters declared `no_echo: true` are masked (`***`) so sensitive values are never persisted in plaintext.
 
 ### Topological Ordering
 

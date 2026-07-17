@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 import {
+  buildAuditableParameters,
   buildDependencyGraph,
   buildResolvedParamsMap,
   collectParamRefs,
@@ -536,6 +537,56 @@ describe('formationsHelpers', () => {
       expect(getMissingParams(template, undefined, false)).toContain(
         'agentName'
       );
+    });
+
+    test('reports a param used only in top-level metadata (F-16)', () => {
+      const template: FormationTemplate = {
+        resources: {
+          A: { type: 'memory', properties: { name: 'm' } },
+        },
+        parameters: { version: {} },
+        metadata: { version: { sub: '${version}' } },
+      };
+      expect(getMissingParams(template)).toContain('version');
+      expect(getMissingParams(template, { version: '1.0.0' })).toEqual([]);
+    });
+  });
+
+  // ── buildAuditableParameters ──────────────────────────────────────────────
+
+  describe('buildAuditableParameters', () => {
+    test('returns null when the template declares no parameters', () => {
+      const template: FormationTemplate = { resources: {} };
+      expect(buildAuditableParameters(template)).toBeNull();
+    });
+
+    test('records provided and default values used at deploy', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { a: {}, b: { default: 'def' } },
+      };
+      expect(buildAuditableParameters(template, { a: 'given' })).toEqual({
+        a: 'given',
+        b: 'def',
+      });
+    });
+
+    test('masks no_echo parameters', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { secret: { no_echo: true }, plain: {} },
+      };
+      expect(
+        buildAuditableParameters(template, { secret: 's3cr3t', plain: 'ok' })
+      ).toEqual({ secret: '***', plain: 'ok' });
+    });
+
+    test('excludes an unresolved use_previous_value parameter', () => {
+      const template: FormationTemplate = {
+        resources: {},
+        parameters: { keep: { use_previous_value: true }, a: { default: 'x' } },
+      };
+      expect(buildAuditableParameters(template)).toEqual({ a: 'x' });
     });
   });
 
