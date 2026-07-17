@@ -2470,6 +2470,39 @@ resources:
       memoryEntryFormationId = res.body.id;
     });
 
+    test('creates a memory_entry with tags and metadata via formation', async () => {
+      const template = {
+        resources: {
+          TaggedEntry: {
+            type: 'memory_entry',
+            properties: {
+              memory_id: standaloneMemoryId,
+              content: 'Tagged entry from formation',
+              tags: ['role:pilot', 'source:formation'],
+              metadata: { origin: 'formation' },
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `memory-entry-tags-formation-${Date.now()}`,
+          template,
+        });
+
+      expect(res.status).toBe(201);
+      const physicalId = res.body.resources[0].physical_resource_id;
+
+      const entry = await db.MemoryEntry.findOne({
+        where: { publicId: physicalId },
+      });
+      expect(entry!.tags).toEqual(['role:pilot', 'source:formation']);
+      expect(entry!.metadata).toEqual({ origin: 'formation' });
+    });
+
     test('plan reports no-op for an unchanged memory_entry resource', async () => {
       const template = {
         resources: {

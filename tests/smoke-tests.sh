@@ -867,15 +867,48 @@ if [ "$ME2_ACTION" != "created" ]; then
 fi
 echo "Unrelated entry created."
 
+echo "--- Memory entries: write with tags and metadata ---"
+ME_TAG_RESP=$($SOAT_CLI create-memory-entry \
+  --memory-id "$MEM_ID" \
+  --content "Smoke test reject refunds above 500 for the traffic-manager role" \
+  --tags '["role:smoke-traffic-manager", "source:rejected_approval"]' \
+  --metadata '{"evidence": "high"}')
+ME_TAG_ACTION=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.action')
+ME_TAG_TAG0=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.tags[0]')
+ME_TAG_META=$(printf '%s\n' "$ME_TAG_RESP" | jq -r '.metadata.evidence')
+if [ "$ME_TAG_ACTION" != "created" ]; then
+  echo "ERROR: Expected action=created for tagged entry, got $ME_TAG_ACTION" >&2
+  echo "$ME_TAG_RESP" >&2
+  exit 1
+fi
+if [ "$ME_TAG_TAG0" != "role:smoke-traffic-manager" ] || [ "$ME_TAG_META" != "high" ]; then
+  echo "ERROR: tagged entry did not persist tags/metadata" >&2
+  echo "$ME_TAG_RESP" >&2
+  exit 1
+fi
+echo "Tagged entry created with tags/metadata."
+
 echo "--- List memory entries ---"
 ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
 ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq 'length')
-if [ "$ME_LIST_COUNT" -ne 2 ]; then
-  echo "ERROR: Expected 2 entries after dedup writes, got $ME_LIST_COUNT" >&2
+if [ "$ME_LIST_COUNT" -ne 3 ]; then
+  echo "ERROR: Expected 3 entries after dedup writes, got $ME_LIST_COUNT" >&2
   echo "$ME_LIST_RESP" >&2
   exit 1
 fi
 echo "Memory entries listed: $ME_LIST_COUNT entries."
+
+echo "--- Knowledge search via per-entry memory_tags (entry granularity) ---"
+KS_TAG_RESP=$($SOAT_CLI search-knowledge \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --memory-tags '["role:smoke-traffic-manager"]')
+KS_TAG_MATCH=$(printf '%s\n' "$KS_TAG_RESP" | jq -r '[.results[] | select(.source_type == "memory")] | length')
+if [ "$KS_TAG_MATCH" -lt 1 ]; then
+  echo "ERROR: entry-tag knowledge search returned 0 memory results" >&2
+  echo "$KS_TAG_RESP" >&2
+  exit 1
+fi
+echo "Entry-granularity tag search returned $KS_TAG_MATCH memory result(s)."
 
 echo "--- Knowledge search via memory_ids ---"
 KS_RESP=$($SOAT_CLI search-knowledge \

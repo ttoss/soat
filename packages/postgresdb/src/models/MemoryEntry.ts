@@ -10,7 +10,12 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Memory } from './Memory';
 
-export const MEMORY_ENTRY_SOURCES = ['manual', 'agent', 'extraction'] as const;
+export const MEMORY_ENTRY_SOURCES = [
+  'manual',
+  'agent',
+  'extraction',
+  'orchestration',
+] as const;
 export type MemoryEntrySource = (typeof MEMORY_ENTRY_SOURCES)[number];
 
 @Table({
@@ -54,6 +59,12 @@ export class MemoryEntry extends Model {
     defaultValue: 'manual',
   })
   declare sourceType: MemoryEntrySource;
+
+  @Column({ type: DataType.ARRAY(DataType.STRING), allowNull: true })
+  declare tags: string[] | null;
+
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare metadata: Record<string, unknown> | null;
 
   @Column({
     type: DataType.VECTOR(

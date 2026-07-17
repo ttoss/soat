@@ -47,7 +47,9 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 | `id`         | `string` | Public ID (`mem_entry_` prefix)                         |
 | `memory_id`  | `string` | ID of the parent memory                                 |
 | `content`    | `string` | Text content of the entry                               |
-| `source_type` | `string` | How the entry was created: `manual` (default), `agent`, or `extraction` |
+| `source_type` | `string` | How the entry was created: `manual` (default), `agent`, `extraction`, or `orchestration` |
+| `tags`       | `string[] \| null` | Per-entry labels for entry-granularity tag filtering in [Knowledge search](./knowledge.md) |
+| `metadata`   | `object \| null`   | Arbitrary structured metadata attached to the entry     |
 | `created_at` | `string` | ISO 8601 creation timestamp                             |
 | `updated_at` | `string` | ISO 8601 last-updated timestamp                         |
 
@@ -75,12 +77,16 @@ See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Writ
 
 #### Request Fields
 
-| Field                 | Type   | Default  | Description                                 |
-| --------------------- | ------ | -------- | ------------------------------------------- |
-| `content`             | string | —        | The fact or observation to write            |
-| `source_type`         | string | `manual` | How the entry was created: `manual`, `agent`, `extraction` |
-| `duplicate_threshold` | number | `0.95`   | Similarity above which the write is skipped |
-| `update_threshold`    | number | `0.75`   | Similarity above which entries are merged   |
+| Field                 | Type     | Default  | Description                                 |
+| --------------------- | -------- | -------- | ------------------------------------------- |
+| `content`             | string   | —        | The fact or observation to write            |
+| `source_type`         | string   | `manual` | How the entry was created: `manual`, `agent`, `extraction`, `orchestration` |
+| `tags`                | string[] | —        | Per-entry labels for entry-granularity tag filtering |
+| `metadata`            | object   | —        | Arbitrary structured metadata attached to the entry |
+| `duplicate_threshold` | number   | `0.95`   | Similarity above which the write is skipped |
+| `update_threshold`    | number   | `0.75`   | Similarity above which entries are merged   |
+
+On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. `PUT /api/v1/memory-entries/:id` replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
 #### Response `action` Field
 
@@ -114,6 +120,26 @@ Use the `tags` query parameter on `GET /api/v1/memories` to filter. The paramete
 | `user-?refs` | `user-prefs`, `user-xrefs`, etc.                 |
 
 Multiple patterns are **ORed** — a memory is included if any of its tags match any pattern. The same glob syntax applies to `memory_tags` in [Knowledge search](./knowledge.md).
+
+### Entry-Level Tag Filtering
+
+Memory entries carry their own `tags` (and optional `metadata`), independent of the container's tags. `memory_tags` in [Knowledge search](./knowledge.md) and an agent's `knowledge_config.memory_tags` match at **entry granularity**: an entry is returned when either its parent memory's tags match the globs (container-level, all entries returned) **or** the entry's own tags match (only that entry returned). This lets a single memory hold entries for many roles/sources and retrieve just the relevant slice — e.g. tag captured rules with `role:traffic-manager` and `source:rejected_approval`, then search `memory_tags: ["role:traffic-manager"]` to read only those.
+
+```bash
+soat create-memory-entry \
+  --memory-id mem_01 \
+  --content "Reject refunds above $500 for the traffic-manager role" \
+  --tags '["role:traffic-manager", "source:rejected_approval"]' \
+  --metadata '{"evidence": "high"}'
+```
+
+### Orchestration `memory_write` Node
+
+The orchestration `memory_write` node maps its `input_mapping` into a memory-entry write. Besides `content`, the node honors:
+
+- `tags` — either a string array, or a `{ key: value }` mapping that is flattened into `key:value` tag strings (so `tags: { role: "traffic-manager" }` becomes `["role:traffic-manager"]`).
+- `metadata` — a plain object stored on the entry.
+- `source_type` — honored when supplied; defaults to `orchestration` for node-written entries.
 
 ### Agent Integration
 

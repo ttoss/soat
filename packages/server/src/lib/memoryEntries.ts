@@ -27,9 +27,32 @@ const mapMemoryEntry = (
     memoryId: instance.memory?.publicId,
     content: instance.content,
     sourceType: instance.sourceType,
+    tags: instance.tags ?? null,
+    metadata: instance.metadata ?? null,
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,
   };
+};
+
+/**
+ * Merges the incoming entry's tags/metadata into an existing entry during a
+ * consolidation write, so tags accumulate rather than being lost. Tags are
+ * unioned; metadata is shallow-merged with incoming keys winning.
+ */
+const mergeEntryTags = (args: {
+  existing: string[] | null;
+  incoming?: string[] | null;
+}): string[] | null => {
+  if (!args.incoming || args.incoming.length === 0) return args.existing;
+  return [...new Set([...(args.existing ?? []), ...args.incoming])];
+};
+
+const mergeEntryMetadata = (args: {
+  existing: Record<string, unknown> | null;
+  incoming?: Record<string, unknown> | null;
+}): Record<string, unknown> | null => {
+  if (!args.incoming) return args.existing;
+  return { ...(args.existing ?? {}), ...args.incoming };
 };
 
 export const mergeEntryContent = (args: {
@@ -69,6 +92,8 @@ const findTopSimilarEntry = async (args: {
 const mergeAndUpdateEntry = async (args: {
   match: Awaited<ReturnType<typeof findTopSimilarEntry>>;
   incoming: string;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
   consolidation?: MemoryConsolidationContext;
 }): Promise<ReturnType<typeof mapMemoryEntry>> => {
   const match = args.match!;
@@ -101,6 +126,11 @@ const mergeAndUpdateEntry = async (args: {
   }
 
   match.content = mergedContent;
+  match.tags = mergeEntryTags({ existing: match.tags, incoming: args.tags });
+  match.metadata = mergeEntryMetadata({
+    existing: match.metadata,
+    incoming: args.metadata,
+  });
   try {
     match.embedding = await getEmbedding({ text: mergedContent });
   } catch {
@@ -117,20 +147,73 @@ const mergeAndUpdateEntry = async (args: {
   return mapMemoryEntry(withMemory!);
 };
 
+type WriteMemoryEntryResult = {
+  action: 'created' | 'updated' | 'skipped';
+  entry: ReturnType<typeof mapMemoryEntry>;
+};
+
+/**
+ * Finds the most similar existing entry and decides whether the incoming write
+ * is a duplicate (skip) or a related fact (merge). Returns the resolved result,
+ * or null when no similar entry exists and the caller should create a new one.
+ */
+const resolveDedupAction = async (args: {
+  memoryId: number;
+  content: string;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
+  duplicateThreshold?: number;
+  updateThreshold?: number;
+  consolidation?: MemoryConsolidationContext;
+  embedding: number[] | null;
+}): Promise<WriteMemoryEntryResult | null> => {
+  if (!args.embedding) return null;
+
+  const duplicateThreshold = args.duplicateThreshold ?? 0.95;
+  const updateThreshold = args.updateThreshold ?? 0.75;
+  const embeddingLiteral = `[${args.embedding.join(',')}]`;
+  const topMatch = await findTopSimilarEntry({
+    memoryId: args.memoryId,
+    embeddingLiteral,
+  });
+  if (!topMatch) return null;
+
+  const distance = parseFloat(
+    (topMatch.getDataValue('distance') as string) ?? '1'
+  );
+  const score = 1 - distance;
+
+  // Step 3a: Duplicate — skip
+  if (score >= duplicateThreshold) {
+    return { action: 'skipped', entry: mapMemoryEntry(topMatch) };
+  }
+
+  // Step 3b: Related — merge (LLM consolidation when an agent context is
+  // available, concatenation otherwise)
+  if (score >= updateThreshold) {
+    const entry = await mergeAndUpdateEntry({
+      match: topMatch,
+      incoming: args.content,
+      tags: args.tags,
+      metadata: args.metadata,
+      consolidation: args.consolidation,
+    });
+    return { action: 'updated', entry };
+  }
+
+  return null;
+};
+
 export const writeMemoryEntry = async (args: {
   memoryId: number;
   content: string;
   sourceType?: MemoryEntrySource;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
   duplicateThreshold?: number;
   updateThreshold?: number;
   consolidation?: MemoryConsolidationContext;
-}): Promise<{
-  action: 'created' | 'updated' | 'skipped';
-  entry: ReturnType<typeof mapMemoryEntry>;
-}> => {
-  const duplicateThreshold = args.duplicateThreshold ?? 0.95;
-  const updateThreshold = args.updateThreshold ?? 0.75;
-
+}): Promise<WriteMemoryEntryResult> => {
   // Step 1: Generate embedding for incoming content
   let embedding: number[] | null = null;
   try {
@@ -139,43 +222,17 @@ export const writeMemoryEntry = async (args: {
     // embedding is optional
   }
 
-  // Step 2: Search for the most similar existing entry (only when we have an embedding)
-  if (embedding) {
-    const embeddingLiteral = `[${embedding.join(',')}]`;
-    const topMatch = await findTopSimilarEntry({
-      memoryId: args.memoryId,
-      embeddingLiteral,
-    });
-
-    if (topMatch) {
-      const distance = parseFloat(
-        (topMatch.getDataValue('distance') as string) ?? '1'
-      );
-      const score = 1 - distance;
-
-      // Step 3a: Duplicate — skip
-      if (score >= duplicateThreshold) {
-        return { action: 'skipped', entry: mapMemoryEntry(topMatch) };
-      }
-
-      // Step 3b: Related — merge (LLM consolidation when an agent context is
-      // available, concatenation otherwise)
-      if (score >= updateThreshold) {
-        const entry = await mergeAndUpdateEntry({
-          match: topMatch,
-          incoming: args.content,
-          consolidation: args.consolidation,
-        });
-        return { action: 'updated', entry };
-      }
-    }
-  }
+  // Step 2 & 3: dedup/merge against the most similar existing entry
+  const deduped = await resolveDedupAction({ ...args, embedding });
+  if (deduped) return deduped;
 
   // Step 3c: New — create
   const entry = await db.MemoryEntry.create({
     memoryId: args.memoryId,
     content: args.content,
     sourceType: args.sourceType ?? 'manual',
+    tags: args.tags ?? null,
+    metadata: args.metadata ?? null,
     embedding,
   });
 
@@ -191,6 +248,8 @@ export const createMemoryEntry = async (args: {
   memoryId: number;
   content: string;
   sourceType?: MemoryEntrySource;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
 }) => {
   let embedding: number[] | null = null;
 
@@ -204,6 +263,8 @@ export const createMemoryEntry = async (args: {
     memoryId: args.memoryId,
     content: args.content,
     sourceType: args.sourceType ?? 'manual',
+    tags: args.tags ?? null,
+    metadata: args.metadata ?? null,
     embedding,
   });
 
@@ -236,6 +297,8 @@ export const getMemoryEntry = async (args: { id: string }) => {
 export const updateMemoryEntry = async (args: {
   id: string;
   content?: string;
+  tags?: string[] | null;
+  metadata?: Record<string, unknown> | null;
 }) => {
   const entry = await db.MemoryEntry.findOne({
     where: { publicId: args.id },
@@ -250,6 +313,14 @@ export const updateMemoryEntry = async (args: {
     } catch {
       // embedding is optional — continue without it
     }
+  }
+
+  if (args.tags !== undefined) {
+    entry.tags = args.tags;
+  }
+
+  if (args.metadata !== undefined) {
+    entry.metadata = args.metadata;
   }
 
   await entry.save();

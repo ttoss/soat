@@ -7,6 +7,7 @@ import { writeMemoryEntry } from './memoryEntries';
 import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
 import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
+import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
@@ -272,14 +273,9 @@ export const executeMemoryWriteNode = async (args: {
       `Memory '${node.memoryId}' not found.`
     );
 
-  const content =
-    typeof inputs['content'] === 'string'
-      ? inputs['content']
-      : JSON.stringify(inputs['content'] ?? '');
-
   const writeResult = await writeMemoryEntry({
     memoryId: memory.id as number,
-    content,
+    ...parseMemoryWriteInputs(inputs),
   });
 
   return { kind: 'artifact', artifact: { action: writeResult.action } };

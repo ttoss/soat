@@ -356,6 +356,46 @@ describe('Knowledge', () => {
       expect(memResult.memory_id).toBe(memoryId);
     });
 
+    test('memory_tags filters at entry granularity via per-entry tags', async () => {
+      // A memory container whose OWN tags do NOT match the searched tag, but
+      // holding one entry tagged with it. Entry-granularity filtering must
+      // return only that entry, proving the tag match happens per entry rather
+      // than only at the container level.
+      const containerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/memories')
+        .send({
+          project_id: projectId,
+          name: 'Entry-tag Memory',
+          tags: ['unrelated-container-tag'],
+        });
+      const containerId = containerRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/memory-entries')
+        .send({
+          memory_id: containerId,
+          content: 'Reject refunds above $500 for the traffic-manager role',
+          tags: ['role:traffic-manager'],
+        });
+
+      const response = await authenticatedTestClient(adminToken)
+        .post('/api/v1/knowledge/search')
+        .send({
+          project_id: projectId,
+          memory_tags: ['role:traffic-manager'],
+        });
+
+      expect(response.status).toBe(200);
+      const match = response.body.results.find(
+        (r: { source_type: string; content: string }) => {
+          return r.content.includes('traffic-manager role');
+        }
+      );
+      expect(match).toBeDefined();
+      expect(match.source_type).toBe('memory');
+      expect(match.memory_id).toBe(containerId);
+    });
+
     test('returns mixed results when searching with query, document_filters, and memory_ids', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/knowledge/search')

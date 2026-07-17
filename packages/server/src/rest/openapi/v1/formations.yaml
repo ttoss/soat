@@ -879,9 +879,20 @@ components:
           description: Text content of the memory entry
         source_type:
           type: string
-          enum: [manual, agent, extraction]
+          enum: [manual, agent, extraction, orchestration]
           nullable: true
           description: How this entry was created (defaults to manual)
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Per-entry tag strings for entry-granularity filtering
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Arbitrary structured metadata attached to the entry
 
     WebhookResourceProperties:
       description: >-
