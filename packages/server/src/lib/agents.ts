@@ -4,11 +4,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   type AgentToolBinding,
-  applyLegacyToolUpdates,
-  bindingsFromLegacyFields,
   deriveLegacyToolFields,
   readAgentToolBindings,
-  validateToolBindings,
+  resolveBindingsForCreate,
+  resolveBindingsForUpdate,
 } from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
@@ -17,25 +16,6 @@ import { type InlineToolDefinition } from './tools';
 const log = createDebug('soat:agents');
 
 export type { AgentToolBinding, InlineToolDefinition };
-
-// `tool_bindings` is canonical; `tool_ids`/`tools` are deprecated shorthands
-// for it. A request must pick one form (agents.md — Deprecated: tool_ids and
-// tools).
-const assertBindingFormsExclusive = (args: {
-  toolBindings?: AgentToolBinding[] | null;
-  toolIds?: string[] | null;
-  tools?: InlineToolDefinition[] | null;
-}): void => {
-  if (
-    args.toolBindings !== undefined &&
-    (args.toolIds !== undefined || args.tools !== undefined)
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'tool_bindings cannot be combined with the deprecated tool_ids/tools fields.'
-    );
-  }
-};
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -201,7 +181,6 @@ export const createAgent = async (args: {
   singleSessionPerActor?: boolean;
 }): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
-  assertBindingFormsExclusive(args);
 
   const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
   if (!aiProviderId)
@@ -210,21 +189,7 @@ export const createAgent = async (args: {
       `AI provider '${args.aiProviderId}' not found.`
     );
 
-  // Normalize either input form into canonical bindings; the deprecated
-  // shorthands ride the same validation path (their inline definitions were
-  // always validated on write).
-  const providedBindings =
-    args.toolBindings ??
-    bindingsFromLegacyFields({
-      toolIds: args.toolIds ?? null,
-      tools: args.tools ?? null,
-    });
-  const toolBindings = providedBindings
-    ? await validateToolBindings({
-        projectId: args.projectId,
-        bindings: providedBindings,
-      })
-    : null;
+  const toolBindings = await resolveBindingsForCreate(args);
 
   const defaults = {
     name: null,
@@ -312,7 +277,6 @@ export const updateAgent = async (
   } & AgentUpdateFields
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
-  assertBindingFormsExclusive(args);
 
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
@@ -324,39 +288,15 @@ export const updateAgent = async (
       `Agent '${args.id}' not found.`
     );
 
-  const agentProjectId = (agent as unknown as { projectId: number }).projectId;
-
-  // `tool_bindings` replaces the whole list; the deprecated shorthands keep
-  // their historical independence, each replacing only its own subset (with
-  // any approval_policy on replaced entries dropped — agents.md).
-  let bindingsUpdate: AgentToolBinding[] | null | undefined;
-  if (args.toolBindings !== undefined) {
-    bindingsUpdate =
-      args.toolBindings === null
-        ? null
-        : await validateToolBindings({
-            projectId: agentProjectId,
-            bindings: args.toolBindings,
-          });
-  } else if (args.toolIds !== undefined || args.tools !== undefined) {
-    if (args.tools) {
-      // New inline definitions are validated exactly as the old `tools`
-      // update path did; pre-existing entries are not re-validated.
-      await validateToolBindings({
-        projectId: agentProjectId,
-        bindings: args.tools.map((tool) => {
-          return { tool };
-        }),
-      });
-    }
-    bindingsUpdate = applyLegacyToolUpdates({
-      current: readAgentToolBindings(
-        agent as unknown as Parameters<typeof readAgentToolBindings>[0]
-      ),
-      toolIds: args.toolIds,
-      tools: args.tools,
-    });
-  }
+  const bindingsUpdate = await resolveBindingsForUpdate({
+    projectId: (agent as unknown as { projectId: number }).projectId,
+    current: readAgentToolBindings(
+      agent as unknown as Parameters<typeof readAgentToolBindings>[0]
+    ),
+    toolBindings: args.toolBindings,
+    toolIds: args.toolIds,
+    tools: args.tools,
+  });
 
   const updates = buildAgentUpdates(args);
   if (bindingsUpdate !== undefined) {

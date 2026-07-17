@@ -98,7 +98,7 @@ The optional `synthesis` object overrides the final pass:
 
 ### Invoking a discussion from an agent
 
-An agent thinks by attaching a **`discussion`-type tool** that references a discussion config (`{ "type": "discussion", "discussion": { "discussion_id": "disc_..." } }`). The model calls it mid-loop with a `topic`; the server runs the discussion synchronously and returns `{ outcome, run_id }` as the tool result. Use `tool_choice: required` or a step rule to force "discuss before acting". See [`discussion` tools](./tools.md#discussion).
+An agent thinks by attaching a **`discussion`-type tool** that references a discussion config (`{ "type": "discussion", "discussion_id": "disc_..." }`). The model calls it mid-loop with a `topic`; the server runs the discussion synchronously and returns `{ outcome, run_id }` as the tool result. Use `tool_choice: required` or a step rule to force "discuss before acting". See [`discussion` tools](./tools.md#discussion).
 
 The full transcript and outcome persist on the run (Conversation + Document); the tool result carries only the synthesized `outcome` plus the `run_id`, so it never floods the caller's context.
 

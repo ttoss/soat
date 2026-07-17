@@ -121,6 +121,58 @@ export const deriveLegacyToolFields = (
 
 // ── Validation ────────────────────────────────────────────────────────────
 
+const isApprovalEffect = (value: unknown): boolean => {
+  return typeof value === 'string' && APPROVAL_EFFECTS.includes(value);
+};
+
+const validatePolicyRules = (rules: unknown): void => {
+  if (rules === undefined) return;
+  if (!Array.isArray(rules)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'approval_policy.rules must be an array.'
+    );
+  }
+  for (const rule of rules) {
+    if (!isPlainObject(rule) || !isPlainObject(rule.when)) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'Each approval_policy rule requires a JSON Logic `when` object.'
+      );
+    }
+    if (!isApprovalEffect(rule.effect)) {
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        "Each approval_policy rule requires an effect of 'allow', 'require_approval', or 'deny'."
+      );
+    }
+  }
+};
+
+const validatePolicyExpiresIn = (expiresIn: unknown): void => {
+  if (expiresIn === undefined) return;
+  if (
+    typeof expiresIn !== 'number' ||
+    !Number.isInteger(expiresIn) ||
+    expiresIn <= 0
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'approval_policy.expires_in must be a positive integer (seconds).'
+    );
+  }
+};
+
+const validatePolicyReasoningPrompt = (reasoningPrompt: unknown): void => {
+  if (reasoningPrompt === undefined || reasoningPrompt === null) return;
+  if (typeof reasoningPrompt !== 'string') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'approval_policy.reasoning_prompt must be a string.'
+    );
+  }
+};
+
 const validateApprovalPolicyShape = (policy: unknown): ToolApprovalPolicy => {
   if (!isPlainObject(policy)) {
     throw new DomainError(
@@ -128,66 +180,15 @@ const validateApprovalPolicyShape = (policy: unknown): ToolApprovalPolicy => {
       'approval_policy must be an object.'
     );
   }
-
-  if (
-    typeof policy.default !== 'string' ||
-    !APPROVAL_EFFECTS.includes(policy.default)
-  ) {
+  if (!isApprovalEffect(policy.default)) {
     throw new DomainError(
       'VALIDATION_FAILED',
       "approval_policy.default is required and must be 'allow', 'require_approval', or 'deny'."
     );
   }
-
-  if (policy.rules !== undefined) {
-    if (!Array.isArray(policy.rules)) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'approval_policy.rules must be an array.'
-      );
-    }
-    for (const rule of policy.rules) {
-      if (!isPlainObject(rule) || !isPlainObject(rule.when)) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          'Each approval_policy rule requires a JSON Logic `when` object.'
-        );
-      }
-      if (
-        typeof rule.effect !== 'string' ||
-        !APPROVAL_EFFECTS.includes(rule.effect)
-      ) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          "Each approval_policy rule requires an effect of 'allow', 'require_approval', or 'deny'."
-        );
-      }
-    }
-  }
-
-  if (
-    policy.expiresIn !== undefined &&
-    (typeof policy.expiresIn !== 'number' ||
-      !Number.isInteger(policy.expiresIn) ||
-      policy.expiresIn <= 0)
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy.expires_in must be a positive integer (seconds).'
-    );
-  }
-
-  if (
-    policy.reasoningPrompt !== undefined &&
-    policy.reasoningPrompt !== null &&
-    typeof policy.reasoningPrompt !== 'string'
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy.reasoning_prompt must be a string.'
-    );
-  }
-
+  validatePolicyRules(policy.rules);
+  validatePolicyExpiresIn(policy.expiresIn);
+  validatePolicyReasoningPrompt(policy.reasoningPrompt);
   return policy as ToolApprovalPolicy;
 };
 
@@ -244,6 +245,63 @@ const validateBindingApprovalPolicy = async (args: {
   assertPolicyToolTypeSupported({ toolId: undefined, type: inline.type });
 };
 
+// An inline binding tool follows the same rules as the deprecated `tools`
+// field entries: a plain object, an ephemeral-supported type, and a valid
+// definition within the project.
+const validateInlineBindingTool = async (args: {
+  tool: unknown;
+  projectId: number;
+}): Promise<void> => {
+  if (!isPlainObject(args.tool)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'A tool_bindings inline tool must be an object.'
+    );
+  }
+  const definition = args.tool as InlineToolDefinition;
+  assertEphemeralTypeSupported(definition);
+  await validateToolDefinition({ definition, projectId: args.projectId });
+};
+
+// Validates a single binding entry — shape (exactly one of `tool_id`/`tool`),
+// inline definition rules, and its `approval_policy` — and returns the entry
+// with only its defined keys, ready to persist.
+const validateBindingEntry = async (args: {
+  entry: unknown;
+  projectId: number;
+}): Promise<AgentToolBinding> => {
+  const { entry, projectId } = args;
+  if (!isPlainObject(entry)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Each tool_bindings entry must be an object.'
+    );
+  }
+
+  const hasToolId = typeof entry.toolId === 'string' && entry.toolId !== '';
+  const hasInline = entry.tool !== undefined && entry.tool !== null;
+  if (hasToolId === hasInline) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'Each tool_bindings entry requires exactly one of tool_id or tool.'
+    );
+  }
+
+  if (hasInline) {
+    await validateInlineBindingTool({ tool: entry.tool, projectId });
+  }
+
+  await validateBindingApprovalPolicy({ binding: entry, projectId });
+
+  const clean: AgentToolBinding = {};
+  if (hasToolId) clean.toolId = entry.toolId as string;
+  if (hasInline) clean.tool = entry.tool as InlineToolDefinition;
+  if (entry.approvalPolicy !== undefined && entry.approvalPolicy !== null) {
+    clean.approvalPolicy = entry.approvalPolicy as ToolApprovalPolicy;
+  }
+  return clean;
+};
+
 /**
  * Validates newly provided `tool_bindings` entries: entry shape (exactly one
  * of `tool_id` / `tool`), inline definitions (same rules as the deprecated
@@ -268,50 +326,11 @@ export const validateToolBindings = async (args: {
   );
 
   const sanitized: AgentToolBinding[] = [];
-
   for (const entry of args.bindings) {
-    if (!isPlainObject(entry)) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'Each tool_bindings entry must be an object.'
-      );
-    }
-
-    const hasToolId = typeof entry.toolId === 'string' && entry.toolId !== '';
-    const hasInline = entry.tool !== undefined && entry.tool !== null;
-    if (hasToolId === hasInline) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'Each tool_bindings entry requires exactly one of tool_id or tool.'
-      );
-    }
-
-    if (hasInline) {
-      if (!isPlainObject(entry.tool)) {
-        throw new DomainError(
-          'VALIDATION_FAILED',
-          'A tool_bindings inline tool must be an object.'
-        );
-      }
-      const definition = entry.tool as InlineToolDefinition;
-      assertEphemeralTypeSupported(definition);
-      await validateToolDefinition({ definition, projectId: args.projectId });
-    }
-
-    await validateBindingApprovalPolicy({
-      binding: entry as Record<string, unknown>,
-      projectId: args.projectId,
-    });
-
-    const clean: AgentToolBinding = {};
-    if (hasToolId) clean.toolId = entry.toolId as string;
-    if (hasInline) clean.tool = entry.tool as InlineToolDefinition;
-    if (entry.approvalPolicy !== undefined && entry.approvalPolicy !== null) {
-      clean.approvalPolicy = entry.approvalPolicy as ToolApprovalPolicy;
-    }
-    sanitized.push(clean);
+    sanitized.push(
+      await validateBindingEntry({ entry, projectId: args.projectId })
+    );
   }
-
   return sanitized;
 };
 
@@ -351,4 +370,96 @@ export const applyLegacyToolUpdates = (args: {
 
   const merged = [...refs, ...inline];
   return merged.length > 0 ? merged : null;
+};
+
+// ── Write-path resolution ─────────────────────────────────────────────────
+
+/**
+ * `tool_bindings` is canonical; `tool_ids`/`tools` are deprecated shorthands
+ * for it. A request must pick one form (agents.md — Deprecated: tool_ids and
+ * tools).
+ */
+export const assertBindingFormsExclusive = (args: {
+  toolBindings?: AgentToolBinding[] | null;
+  toolIds?: string[] | null;
+  tools?: InlineToolDefinition[] | null;
+}): void => {
+  if (
+    args.toolBindings !== undefined &&
+    (args.toolIds !== undefined || args.tools !== undefined)
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'tool_bindings cannot be combined with the deprecated tool_ids/tools fields.'
+    );
+  }
+};
+
+/**
+ * Normalizes a create request's binding input — either the canonical
+ * `tool_bindings` or the deprecated shorthands — into validated canonical
+ * bindings (the shorthands' inline definitions were always validated on
+ * write, so both forms ride the same validation path).
+ */
+export const resolveBindingsForCreate = async (args: {
+  projectId: number;
+  toolBindings?: AgentToolBinding[] | null;
+  toolIds?: string[] | null;
+  tools?: InlineToolDefinition[] | null;
+}): Promise<AgentToolBinding[] | null> => {
+  assertBindingFormsExclusive(args);
+  const provided =
+    args.toolBindings ??
+    bindingsFromLegacyFields({
+      toolIds: args.toolIds ?? null,
+      tools: args.tools ?? null,
+    });
+  if (!provided) return null;
+  return validateToolBindings({
+    projectId: args.projectId,
+    bindings: provided,
+  });
+};
+
+/**
+ * Resolves an update request's binding change: `tool_bindings` replaces the
+ * whole list; the deprecated shorthands keep their historical independence,
+ * each replacing only its own subset (with any approval_policy on replaced
+ * entries dropped — agents.md). Returns `undefined` when the request touches
+ * no binding field.
+ */
+export const resolveBindingsForUpdate = async (args: {
+  projectId: number;
+  current: AgentToolBinding[] | null;
+  toolBindings?: AgentToolBinding[] | null;
+  toolIds?: string[] | null;
+  tools?: InlineToolDefinition[] | null;
+}): Promise<AgentToolBinding[] | null | undefined> => {
+  assertBindingFormsExclusive(args);
+
+  if (args.toolBindings !== undefined) {
+    if (args.toolBindings === null) return null;
+    return validateToolBindings({
+      projectId: args.projectId,
+      bindings: args.toolBindings,
+    });
+  }
+
+  if (args.toolIds === undefined && args.tools === undefined) return undefined;
+
+  if (args.tools) {
+    // New inline definitions are validated exactly as the old `tools` update
+    // path did; pre-existing entries are not re-validated.
+    await validateToolBindings({
+      projectId: args.projectId,
+      bindings: args.tools.map((tool) => {
+        return { tool };
+      }),
+    });
+  }
+  return applyLegacyToolUpdates({
+    current: args.current,
+    toolIds: args.toolIds,
+    tools: args.tools,
+  });
 };
