@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.6](https://127.0.0.1/41729/git/ttoss/compare/v0.15.5...v0.15.6) (2026-07-17)
+
+### Bug Fixes
+
+* **formations:** resolve sub/param/ref in top-level template metadata ([#578](https://127.0.0.1/41729/git/ttoss/issues/578)) ([842e496](https://127.0.0.1/41729/git/ttoss/commits/842e496e257159d9ae84051a8c33f3b761f0581e))
+
+### Features
+
+* **generations:** support writable generation.metadata (F-15) ([#577](https://127.0.0.1/41729/git/ttoss/issues/577)) ([10c8f14](https://127.0.0.1/41729/git/ttoss/commits/10c8f14c306e2ff79c276d28dccd0a0172bdf0df))
+
 ## [0.15.5](https://127.0.0.1/41729/git/ttoss/compare/v0.15.4...v0.15.5) (2026-07-17)
 
 ### Bug Fixes
