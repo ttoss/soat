@@ -56,12 +56,17 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > surfaces a DAG-resident gate never protects. Without it, "allow / ask /
 > deny" holds only inside orchestration.
 
+> **Docs-first:** the final user-facing contract is written ahead of the code —
+> [agents.md — Tool Bindings / Approval Policy](../packages/website/docs/modules/agents.md)
+> and [approvals.md — producers & return-pending](../packages/website/docs/modules/approvals.md).
+
 | # | Task | Notes |
 |---|------|-------|
-| 1.1 | `approval_policy` on the agent↔tool binding | JSON Logic over resolved tool args → `allow` \| `require_approval` \| `deny`; evaluated in the platform tool-dispatch path, not by the model or the DAG |
-| 1.2 | Return-pending suspension for synchronous generations | Intercepted call returns `{status: "pending_approval", approval_id, expires_at}` as the tool result; the turn completes normally |
-| 1.3 | Continuation generation on resolution | Re-drive the session/conversation injecting the `DecisionOutput` as the tool result; on approval the platform executes the frozen/edited args and populates `result` |
-| 1.4 | Dedup / idempotency | Key `(project_id, agent_id, tool_id, args_digest)` while an item is `pending`; a duplicate emit returns the existing item (the `dedup_key` column already exists) |
+| 1.0 | `tool_bindings` binding objects; deprecate `tool_ids` / `tools` | Canonical `[{ tool_id \| tool, approval_policy? }]` (the pipeline `steps[]` reference-or-inline pattern); shorthands normalize server-side and stay echoed (derived) in responses; formations `AgentResourceProperties` syncs the same field |
+| 1.1 | `approval_policy` on the `tool_bindings` entry | JSON Logic over `{action, arguments}` → `allow` \| `require_approval` \| `deny`; evaluated in the platform tool-dispatch path (the resolver's `execute` wrap point), not by the model or the DAG; rejected on `client` bindings |
+| 1.2 | Return-pending suspension for synchronous generations | Intercepted call returns `{status: "pending_approval", approval_id, expires_at}` as the tool result; the turn completes normally (no `requires_action` pause); `approval_*` justification fields injected into the model-visible schema and frozen onto the item |
+| 1.3 | Continuation generation on resolution | Registered via `registerApprovalResumeHandler` (`origin: tool_call` guard, mirroring the node handler); new generation linked via `initiator_generation_id`; on approval the platform executes the frozen/edited args and populates `DecisionOutput.result` |
+| 1.4 | Dedup / idempotency | Key over (project, agent, tool, action, args digest) while an item is `pending`; a duplicate emit returns the existing item (the `dedup_key` column + partial unique index already exist; the return-existing logic doesn't) |
 | 1.5 | `origin: tool_call` wiring end-to-end | Same item model, endpoints, events; `origin` stays analytics-only — the lifecycle never branches on it |
 
 ## Milestone 2 — Action classes & B→C downgrade (requirement 5)

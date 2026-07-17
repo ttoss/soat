@@ -17,7 +17,7 @@ Six tool types are supported: `http` (calls an external HTTP endpoint), `client`
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
-To invoke a tool automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: tool`.
+To invoke a tool automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: tool`. To require human approval before an agent's calls of a tool execute, set an [`approval_policy` on the agent's tool binding](./agents.md#approval-policy) — decisions land in the [approval queue](./approvals.md).
 
 ## Related Tutorials
 
@@ -61,7 +61,7 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 ### Tool ID vs Tool Name
 
-A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via `tool_ids`, `active_tool_ids`, and `step_rules[].active_tool_ids`.
+A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via [`tool_bindings`](./agents.md#tool-bindings) (or the deprecated `tool_ids` shorthand), and in `active_tool_ids` and `step_rules[].active_tool_ids`.
 
 A **tool name** is the name the AI model sees at runtime (e.g., `"search"`). For `http` and `client` tools, one tool ID → one tool name (the `name` field). For `mcp` and `soat` tools, one tool ID exposes **many** tool names discovered from the MCP server or the platform's action registry.
 

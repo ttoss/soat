@@ -222,7 +222,18 @@ the node path's `on_expired` edge.
 
 ## 5. `approval_policy` (tool binding) schema
 
-Attached where an agent binds a tool:
+**Binding decision (2026-07):** the agent↔tool attachment is promoted from the
+bare `tool_ids: string[]` / inline `tools[]` pair to a canonical
+**`tool_bindings`** array of objects `{ tool_id | tool, approval_policy? }`,
+mirroring the pipeline `steps[]` reference-or-inline pattern. `tool_ids` and
+`tools` become deprecated input shorthands, normalized server-side into bare
+bindings (and echoed, derived, in responses during the deprecation window);
+sending them together with `tool_bindings` is a `400`. `approval_policy` lives
+on the binding entry — per-agent-per-tool, exactly the granularity this section
+assumes. Final user-facing contract:
+[agents.md — Tool Bindings](../packages/website/docs/modules/agents.md).
+
+Attached on a `tool_bindings` entry:
 
 | Property | Type | Description |
 |---|---|---|
@@ -232,6 +243,18 @@ Attached where an agent binds a tool:
 | `rules[].effect` | string | `allow` \| `require_approval` \| `deny`. |
 | `expires_in` | integer | Seconds until item expiry (used when a rule yields `require_approval`). |
 | `reasoning_prompt` | string \| null | Optional instruction for the agent to supply reasoning/evidence/predicted-impact alongside guarded calls (attached to the item when provided). |
+
+**Justification mechanism:** when a binding's policy can yield
+`require_approval`, the tool's model-visible parameters schema gains three
+optional fields — `approval_reasoning` (string), `approval_evidence` (object),
+`approval_predicted_impact` (string) — the additive mirror of the
+`preset_parameters` schema-surgery already in the resolver. Supplied values are
+stripped from the executed arguments and frozen onto the item as
+`reasoning` / `evidence` / `predicted_impact`; `reasoning_prompt` customizes
+the guidance text (a default is injected when omitted). Policy `when` rules
+evaluate over the stripped arguments. `approval_policy` is rejected on
+`client` bindings — the platform cannot execute the approved action at
+resolution time (execution is caller-side).
 
 This is where deterministic action-class policy (A/B/C/D-style classification)
 becomes declarative platform config instead of DAG plumbing — the same JSON
