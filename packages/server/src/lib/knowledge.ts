@@ -1,46 +1,13 @@
 import { Op } from '@ttoss/postgresdb';
 
 import { db } from '../db';
+import { mapDocument } from './documentMapper';
 import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 
+export { mapDocument } from './documentMapper';
 export type { MemoryQueryConfig } from './knowledgeMemory';
-
-// ── Shared document mapper ───────────────────────────────────────────────
-
-const parseMetadata = (metadata: string | null | undefined): unknown => {
-  if (!metadata) return undefined;
-  try {
-    return JSON.parse(metadata);
-  } catch {
-    return metadata;
-  }
-};
-
-export const mapDocument = (
-  doc: InstanceType<(typeof db)['Document']> & {
-    file?: InstanceType<(typeof db)['File']> & {
-      project?: InstanceType<(typeof db)['Project']>;
-    };
-  }
-) => {
-  return {
-    id: doc.publicId,
-    fileId: doc.file?.publicId,
-    projectId: doc.file?.project?.publicId,
-    path: doc.file?.path ?? undefined,
-    filename: doc.file?.filename,
-    size: doc.file?.size,
-    title: doc.title ?? undefined,
-    metadata: parseMetadata(doc.metadata),
-    tags: doc.tags ?? undefined,
-    status: doc.status as
-      'pending' | 'processing' | 'ready' | 'failed' | undefined,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
-  };
-};
 
 // ── Types ────────────────────────────────────────────────────────────────
 

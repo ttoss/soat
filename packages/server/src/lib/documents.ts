@@ -1,13 +1,14 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
-import { emitEvent } from './eventBus';
+import type { ChunkStrategy } from './chunking';
 import {
-  getActiveStorageProvider,
-  getStorageProvider,
-  streamToBuffer,
-} from './fileStorage';
+  applyDocumentChunkChanges,
+  chunkDocumentText,
+  readFileContent,
+} from './documentContent';
+import { emitEvent } from './eventBus';
+import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { mapDocument } from './knowledge';
 import { registerResourceFieldMap } from './policyCompiler';
@@ -259,6 +260,14 @@ export const getDocumentStatus = async (args: { id: string }) => {
   };
 };
 
+export const getDocumentSourceContent = async (args: {
+  id: string;
+}): Promise<string | null> => {
+  const doc = await fetchDocumentWithContext(args.id);
+  if (!doc) return null;
+  return readFileContent(doc.file);
+};
+
 export const getDocument = async (args: { id: string }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
@@ -283,41 +292,37 @@ export const getDocument = async (args: { id: string }) => {
   }
 
   // Fallback: try reading from file for legacy documents without chunks
-  const legacyFile = doc.file;
-  if (legacyFile?.storagePath) {
-    const provider = getStorageProvider({
-      storageType: legacyFile.storageType,
-    });
-    const object = await provider.read({ storagePath: legacyFile.storagePath });
-    if (object) {
-      const content = (await streamToBuffer(object.stream)).toString('utf-8');
-      return { ...mapped, content };
-    }
-  }
-
-  return { ...mapped, content: null };
+  const content = await readFileContent(doc.file);
+  return { ...mapped, content };
 };
 
-/**
- * Chunk plain document text and persist the chunks. Treats the content as a
- * single source "page" and applies the requested strategy (default `whole`,
- * i.e. one chunk — the historical behavior). Lets any document creation chunk,
- * not just file ingestion.
- */
-const chunkDocumentText = async (args: {
-  documentId: number;
+// Create the backing File row and write the document's content to storage.
+const createStoredFile = async (args: {
+  projectId: number;
   content: string;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
+  path?: string;
+  filename?: string;
 }) => {
-  const chunks = chunkPages({
-    pages: [{ text: args.content }],
-    strategy: args.chunkStrategy ?? 'whole',
-    chunkSize: args.chunkSize,
-    chunkOverlap: args.chunkOverlap,
+  const provider = getActiveStorageProvider();
+  const rawPath = args.path ?? args.filename ?? null;
+  const size = Buffer.byteLength(args.content, 'utf-8');
+  const file = await db.File.create({
+    projectId: args.projectId,
+    path: rawPath === null ? null : normalizePath(rawPath),
+    filename: args.filename ?? 'document.txt',
+    contentType: 'text/plain',
+    size,
+    storageType: provider.storageType,
+    storagePath: '',
   });
-  await persistChunks({ documentId: args.documentId, chunks });
+
+  const { storagePath } = await provider.write({
+    objectPath: `${file.publicId}.txt`,
+    buffer: Buffer.from(args.content, 'utf-8'),
+    contentType: 'text/plain',
+  });
+  await file.update({ storagePath, size });
+  return file;
 };
 
 export const createDocument = async (args: {
@@ -334,27 +339,11 @@ export const createDocument = async (args: {
 }) => {
   log('createDocument: projectId=%d', args.projectId);
 
-  const provider = getActiveStorageProvider();
-
-  const rawPath = args.path ?? args.filename ?? null;
-  const file = await db.File.create({
+  const file = await createStoredFile({
     projectId: args.projectId,
-    path: rawPath === null ? null : normalizePath(rawPath),
-    filename: args.filename ?? 'document.txt',
-    contentType: 'text/plain',
-    size: Buffer.byteLength(args.content, 'utf-8'),
-    storageType: provider.storageType,
-    storagePath: '',
-  });
-
-  const { storagePath } = await provider.write({
-    objectPath: `${file.publicId}.txt`,
-    buffer: Buffer.from(args.content, 'utf-8'),
-    contentType: 'text/plain',
-  });
-  await file.update({
-    storagePath,
-    size: Buffer.byteLength(args.content, 'utf-8'),
+    content: args.content,
+    path: args.path,
+    filename: args.filename,
   });
 
   const doc = await db.Document.create({
@@ -362,6 +351,9 @@ export const createDocument = async (args: {
     title: args.title ?? null,
     metadata: args.metadata ? JSON.stringify(args.metadata) : null,
     tags: args.tags ?? null,
+    chunkStrategy: args.chunkStrategy ?? null,
+    chunkSize: args.chunkSize ?? null,
+    chunkOverlap: args.chunkOverlap ?? null,
   });
 
   await chunkDocumentText({
@@ -410,29 +402,26 @@ export const deleteDocument = async (args: { id: string }) => {
   return true;
 };
 
-const updateDocumentContent = async (args: {
-  doc: LoadedDoc;
-  content: string;
-}) => {
-  const file = args.doc.file;
-  if (file?.storagePath) {
-    const provider = getStorageProvider({ storageType: file.storageType });
-    // Overwrite in place — reuse the existing publicId-based object location.
-    await provider.write({
-      objectPath: `${file.publicId}.txt`,
-      buffer: Buffer.from(args.content, 'utf-8'),
-      contentType: 'text/plain',
-    });
-    await file.update({ size: Buffer.byteLength(args.content, 'utf-8') });
-  }
-
-  // Re-chunk: destroy existing chunks and create a single new one
-  await db.DocumentChunk.destroy({ where: { documentId: args.doc.id } });
-
-  await chunkDocumentText({
-    documentId: args.doc.id as number,
-    content: args.content,
-  });
+// Build the set of Document column updates from the (partial) update args.
+// Only fields that are explicitly provided are written.
+const buildDocumentColumnUpdates = (args: {
+  title?: string;
+  metadata?: Record<string, unknown>;
+  tags?: Record<string, string>;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
+}): Record<string, unknown> => {
+  const updates: Record<string, unknown> = {};
+  if (args.title !== undefined) updates.title = args.title;
+  if (args.metadata !== undefined)
+    updates.metadata = JSON.stringify(args.metadata);
+  if (args.tags !== undefined) updates.tags = args.tags;
+  if (args.chunkStrategy !== undefined)
+    updates.chunkStrategy = args.chunkStrategy;
+  if (args.chunkSize !== undefined) updates.chunkSize = args.chunkSize;
+  if (args.chunkOverlap !== undefined) updates.chunkOverlap = args.chunkOverlap;
+  return updates;
 };
 
 export const updateDocument = async (args: {
@@ -442,26 +431,28 @@ export const updateDocument = async (args: {
   path?: string | null;
   metadata?: Record<string, unknown>;
   tags?: Record<string, string>;
+  chunkStrategy?: ChunkStrategy;
+  chunkSize?: number;
+  chunkOverlap?: number;
 }) => {
   const doc = await fetchDocumentWithContext(args.id);
 
   if (!doc) return null;
 
-  if (args.content !== undefined) {
-    await updateDocumentContent({ doc, content: args.content });
-  }
+  await applyDocumentChunkChanges({
+    doc,
+    content: args.content,
+    chunkStrategy: args.chunkStrategy,
+    chunkSize: args.chunkSize,
+    chunkOverlap: args.chunkOverlap,
+  });
 
   if (args.path !== undefined && doc.file) {
     const normalizedPath = args.path === null ? null : normalizePath(args.path);
     await doc.file.update({ path: normalizedPath });
   }
 
-  const updates: Record<string, unknown> = {};
-  if (args.title !== undefined) updates.title = args.title;
-  if (args.metadata !== undefined)
-    updates.metadata = JSON.stringify(args.metadata);
-  if (args.tags !== undefined) updates.tags = args.tags;
-
+  const updates = buildDocumentColumnUpdates(args);
   if (Object.keys(updates).length > 0) {
     await doc.update(updates);
   }
