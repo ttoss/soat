@@ -624,11 +624,10 @@ components:
           description: Public ID of a persisted tool. Exactly one of `tool_id`/`tool`.
           example: tool_V1StGXR8Z5jdHi6B
         tool:
+          # Inline (ephemeral) tool definition — resolved fresh at generation
+          # time, never persisted as a Tool resource. Exactly one of
+          # `tool_id`/`tool`. Cannot be of type `pipeline`.
           $ref: './tools.yaml#/components/schemas/CreateToolRequest'
-          description: >-
-            Inline (ephemeral) tool definition — resolved fresh at generation
-            time, never persisted as a Tool resource. Exactly one of
-            `tool_id`/`tool`. Cannot be of type `pipeline`.
         approval_policy:
           $ref: '#/components/schemas/ToolApprovalPolicy'
 
