@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.5](https://127.0.0.1/41729/git/ttoss/compare/v0.15.4...v0.15.5) (2026-07-17)
+
+### Bug Fixes
+
+* **formations:** persist document chunk config so plans converge (F-13) ([#570](https://127.0.0.1/41729/git/ttoss/issues/570)) ([9549e21](https://127.0.0.1/41729/git/ttoss/commits/9549e2113b84042f31284ea1f3b6d4df41018502))
+
+### Features
+
+* **formations:** add project_price resource type for declarable usage pricing ([#572](https://127.0.0.1/41729/git/ttoss/issues/572)) ([33f9601](https://127.0.0.1/41729/git/ttoss/commits/33f960104adb095c8681b44fdbf9383076971aab))
+* **memories:** per-entry tags/metadata and entry-granularity tag filtering ([#571](https://127.0.0.1/41729/git/ttoss/issues/571)) ([0955ebc](https://127.0.0.1/41729/git/ttoss/commits/0955ebc819175d9002baa8fb4d456f0463f8eae5))
+
 ## [0.15.4](https://127.0.0.1/41729/git/ttoss/compare/v0.15.3...v0.15.4) (2026-07-16)
 
 ### Bug Fixes
