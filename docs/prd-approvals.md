@@ -1,5 +1,7 @@
 # PRD: Approvals, Exceptions & Activity Feed
 
+> Work sequencing lives in the [Manage-by-Exception Roadmap](./manage-by-exception-roadmap.md).
+
 - **Status:** Draft v2 — supersedes the node-centric draft
 - **Area:** Agent Operations on Formations (G3)
 - **Consumes:** run-parking from orchestration (`human` node machinery), guardrail classification
