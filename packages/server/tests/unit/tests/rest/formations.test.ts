@@ -526,6 +526,69 @@ resources:
       expect(res.body.resolved_parameters.db_password).toBe('***');
     });
 
+    test('rejects substitution expressions in the formation `metadata` field (F-16)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `f16-static-metadata-${Date.now()}`,
+          template: {
+            parameters: { my_version: { type: 'string', default: 'x' } },
+            resources: {
+              MyMemory: { type: 'memory', properties: { name: 'F16 static' } },
+            },
+          },
+          parameters: { my_version: '1.2.3' },
+          // The formation-level `metadata` field is static — a `sub` here would
+          // be stored verbatim and silently never resolved, so it is rejected.
+          metadata: { my_version: { sub: '${my_version}' } },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORMATION_INVALID_METADATA');
+      // `metadata` is not a caseTransform pass-through on the formations routes,
+      // so the inbound `my_version` key is camelCased before the handler (and
+      // the guard) sees it — the reported path reflects that.
+      expect(res.body.error.meta.details[0].path).toBe('metadata.myVersion');
+      expect(res.body.error.meta.details[0].message).toMatch(
+        /template.*top-level.*metadata/i
+      );
+    });
+
+    test('rejects a nested `ref` expression in the formation `metadata` field', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `f16-static-metadata-ref-${Date.now()}`,
+          template: simpleTemplate,
+          metadata: { audit: { source: { ref: 'MyMemory' } } },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORMATION_INVALID_METADATA');
+      expect(res.body.error.meta.details[0].path).toBe('metadata.audit.source');
+    });
+
+    test('accepts plain static metadata that looks structurally similar', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `f16-static-metadata-ok-${Date.now()}`,
+          template: simpleTemplate,
+          // No single-key sub/param/ref expression object — plain annotations.
+          metadata: { env: 'prod', owner: 'team-a', tags: ['x', 'y'] },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.metadata).toEqual({
+        env: 'prod',
+        owner: 'team-a',
+        tags: ['x', 'y'],
+      });
+    });
+
     test('re-planning a formation with a resource that failed to create treats it as create', async () => {
       const failingTemplate = {
         resources: {
@@ -744,6 +807,16 @@ resources:
 
       expect(res.status).toBe(200);
       expect(res.body.metadata).toEqual({ env: 'updated' });
+    });
+
+    test('rejects a substitution expression in metadata on update (F-16)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${metadataFormationId}`)
+        .send({ metadata: { version: { param: 'my_version' } } });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('FORMATION_INVALID_METADATA');
+      expect(res.body.error.meta.details[0].path).toBe('metadata.version');
     });
   });
 

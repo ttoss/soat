@@ -189,6 +189,13 @@ paths:
                   type: object
                   additionalProperties: true
                   nullable: true
+                  description: >
+                    Static annotations stored on the formation record. This
+                    field is NOT a substitution site: `sub`/`param`/`ref`
+                    expressions are rejected with 400
+                    (`FORMATION_INVALID_METADATA`). For deploy-time
+                    substitution use the template's top-level `metadata` block,
+                    which is resolved into `resolved_metadata`.
       responses:
         '201':
           description: Formation created
@@ -273,6 +280,13 @@ paths:
                   type: object
                   additionalProperties: true
                   nullable: true
+                  description: >
+                    Static annotations stored on the formation record. This
+                    field is NOT a substitution site: `sub`/`param`/`ref`
+                    expressions are rejected with 400
+                    (`FORMATION_INVALID_METADATA`). For deploy-time
+                    substitution use the template's top-level `metadata` block,
+                    which is resolved into `resolved_metadata`.
       responses:
         '200':
           description: Updated formation
@@ -1498,7 +1512,11 @@ components:
           type: object
           additionalProperties: true
           nullable: true
-          description: Arbitrary metadata stored on the formation record (supplied at create/update).
+          description: >
+            Static annotations stored on the formation record (supplied at
+            create/update). Not a substitution site — `sub`/`param`/`ref`
+            expressions are rejected. Use the template's top-level `metadata`
+            block for deploy-time substitution (see `resolved_metadata`).
         resolved_metadata:
           type: object
           additionalProperties: true

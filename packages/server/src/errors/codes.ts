@@ -155,6 +155,11 @@ export const ERROR_CODES = {
     description:
       'The formation template declares one or more required parameters (no default, not satisfied by use_previous_value) that were not supplied or were provided as an empty string.',
   },
+  FORMATION_INVALID_METADATA: {
+    httpStatus: 400,
+    description:
+      'The formation-level `metadata` field contains a `sub`/`param`/`ref`/`ref_attr` substitution expression. That field is a static annotation bag and is never resolved; put deploy-time substitutions in the template top-level `metadata` block instead.',
+  },
   ORCHESTRATION_CYCLE_DETECTED: {
     httpStatus: 422,
     description:
