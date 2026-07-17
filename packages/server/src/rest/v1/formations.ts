@@ -4,6 +4,7 @@ import { DomainError } from 'src/errors';
 import {
   createFormation,
   deleteFormation,
+  detectStaticMetadataViolations,
   type FormationTemplate,
   getFormation,
   getMissingParams,
@@ -29,6 +30,25 @@ const missingParamsToErrors = (
       message: `Parameter '${name}' is required and cannot be empty`,
     };
   });
+};
+
+// The formation-level `metadata` field is a static annotation bag, not a
+// substitution site (only `template.metadata` resolves at deploy). Reject any
+// `sub`/`param`/`ref` expression here so it fails loudly instead of being
+// stored verbatim and silently never resolved (F-16).
+const assertStaticMetadata = (metadata: unknown): void => {
+  if (metadata === undefined || metadata === null) return;
+  const violations = detectStaticMetadataViolations(metadata);
+  if (violations.length === 0) return;
+  throw new DomainError(
+    'FORMATION_INVALID_METADATA',
+    `Invalid formation metadata: ${violations
+      .map((v) => {
+        return v.message;
+      })
+      .join('; ')}`,
+    { details: violations }
+  );
 };
 
 const assertNoMissingParams = (
@@ -134,6 +154,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
   }
 
   assertNoMissingParams(parsedTemplate as FormationTemplate, body.parameters);
+  assertStaticMetadata(body.metadata);
 
   const result = await createFormation({
     projectId: Number(targetProjectId),
@@ -226,6 +247,8 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
     metadata?: Record<string, unknown> | null;
     parameters?: Record<string, string>;
   };
+
+  assertStaticMetadata(body.metadata);
 
   let parsedTemplate: unknown = undefined;
   if (body.template !== undefined) {

@@ -30,6 +30,7 @@ import type {
 const log = createDebug('soat:formations');
 
 export { getMissingParams } from './formationsHelpers';
+export { detectStaticMetadataViolations } from './formationsMetadata';
 export type {
   FormationEvent,
   FormationTemplate,

@@ -72,7 +72,7 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 | `template`   | object   | The last applied template (raw — substitution expressions preserved)          |
 | `outputs`    | object   | Resolved output values                                                         |
 | `status`     | string   | `creating` \| `active` \| `updating` \| `failed` \| `deleting` \| `deleted` \| `delete_failed` |
-| `metadata`   | object   | Arbitrary metadata stored on the record (supplied at create/update)           |
+| `metadata`   | object   | Static annotations stored on the record (supplied at create/update). Not a substitution site — `sub`/`param`/`ref` expressions are rejected (use `template.metadata` instead) |
 | `resolved_metadata`   | object   | The template's top-level `metadata` after `sub`/`param`/`ref` substitution at the last deploy (null when the template declares no metadata) |
 | `resolved_parameters` | object   | Parameter values applied at the last deploy, for auditability (`no_echo` values masked as `***`; null when the template declares no parameters) |
 | `resources`  | array    | Resources managed by the formation                                             |
@@ -390,6 +390,10 @@ metadata:
 Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "my_version": "1.2.3", "memory": "mem_01HXYZ" }`, while `template.metadata.my_version` remains `{ "sub": "${my_version}" }`.
 
 The parameter values used on the last deploy are also recorded on `resolved_parameters` for auditability. Parameters declared `no_echo: true` are masked (`***`) so sensitive values are never persisted in plaintext.
+
+:::warning The template `metadata` block is the only metadata substitution site
+The formation-level `metadata` field — the one supplied alongside `template` on `create-formation` / `update-formation` (and returned as the formation's `metadata`) — is a **static** annotation bag. It is never resolved, so a `sub`/`param`/`ref` expression placed there would be stored verbatim and silently never substituted. To catch this, create/update **reject** such expressions in the formation `metadata` field with `400 FORMATION_INVALID_METADATA`. Put deploy-time substitutions in the template's top-level `metadata` block (above), which is resolved into `resolved_metadata`.
+:::
 
 ### Topological Ordering
 
