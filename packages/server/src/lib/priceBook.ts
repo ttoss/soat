@@ -23,7 +23,7 @@ export type PersistedPrice = {
   createdAt: Date;
 };
 
-const mapPrice = (
+export const mapPrice = (
   price: InstanceType<(typeof db)['PriceBook']> & {
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
     project?: InstanceType<(typeof db)['Project']> | null;
@@ -158,12 +158,11 @@ const parseFutureEffectiveFrom = (value: string, now: Date): Date => {
   return effectiveFrom;
 };
 
-// Core price-row write shared by the global, per-provider, and per-project
-// paths. Keyed on (aiProviderId, projectId, provider, model, component,
-// effectiveFrom). Past-effective prices are immutable: a recorded cost must
-// always be explainable by the row that produced it, so corrections ship as new
-// future-dated rows rather than edits to historical prices.
-const writePriceRow = async (args: {
+// Core find-or-create keyed on (aiProviderId, projectId, provider, model,
+// component, effectiveFrom). Shared by every write path (global, per-provider,
+// per-project, and formation). Takes an already-resolved `effectiveFrom` so
+// each caller enforces its own timestamp policy.
+export const persistPriceRow = async (args: {
   aiProviderId: number | null;
   projectId: number | null;
   meterType?: string;
@@ -172,11 +171,9 @@ const writePriceRow = async (args: {
   component: string;
   unit: string;
   unitPrice: number;
-  effectiveFrom: string;
-  now: Date;
+  effectiveFrom: Date;
 }): Promise<number> => {
   assertPriceInput(args);
-  const effectiveFrom = parseFutureEffectiveFrom(args.effectiveFrom, args.now);
 
   const values = {
     aiProviderId: args.aiProviderId,
@@ -187,7 +184,7 @@ const writePriceRow = async (args: {
     component: args.component,
     unit: args.unit,
     unitPrice: String(args.unitPrice),
-    effectiveFrom,
+    effectiveFrom: args.effectiveFrom,
   };
 
   const [row, created] = await db.PriceBook.findOrCreate({
@@ -211,6 +208,26 @@ const writePriceRow = async (args: {
   }
 
   return row.id as number;
+};
+
+// Core price-row write shared by the global, per-provider, and per-project
+// REST paths. Past-effective prices are immutable: a recorded cost must always
+// be explainable by the row that produced it, so corrections ship as new
+// future-dated rows rather than edits to historical prices.
+const writePriceRow = async (args: {
+  aiProviderId: number | null;
+  projectId: number | null;
+  meterType?: string;
+  provider: string;
+  model: string;
+  component: string;
+  unit: string;
+  unitPrice: number;
+  effectiveFrom: string;
+  now: Date;
+}): Promise<number> => {
+  const effectiveFrom = parseFutureEffectiveFrom(args.effectiveFrom, args.now);
+  return persistPriceRow({ ...args, effectiveFrom });
 };
 
 const loadPrices = async (ids: number[]): Promise<PersistedPrice[]> => {

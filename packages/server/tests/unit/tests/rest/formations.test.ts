@@ -2686,6 +2686,146 @@ resources:
 
   // ── api_key resource type ─────────────────────────────────────────────────
 
+  describe('Formation with project_price resources', () => {
+    let priceFormationId: string;
+    const priceProps = {
+      provider: 'openai',
+      model: 'gpt-4o-formation',
+      component: 'output_tokens',
+      unit: 'token',
+      unit_price: 0.00001,
+    };
+
+    test('deploys a project_price and seeds a project-scoped price row', async () => {
+      const template = {
+        resources: {
+          OutputPrice: { type: 'project_price', properties: priceProps },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `project-price-formation-${Date.now()}`,
+          template,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+      expect(res.body.resources).toHaveLength(1);
+      expect(res.body.resources[0].logical_id).toBe('OutputPrice');
+      expect(res.body.resources[0].status).toBe('created');
+      expect(res.body.resources[0].physical_resource_id).toMatch(/^price_/);
+
+      priceFormationId = res.body.id;
+
+      // The deployed price is queryable at the project + provider-slug tier —
+      // the whole point of the resource: cost is billing-grade with no manual
+      // out-of-band pricing step.
+      const priceRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}/prices`
+      );
+      expect(priceRes.status).toBe(200);
+      const seeded = priceRes.body.prices.find(
+        (p: { model: string; component: string }) => {
+          return (
+            p.model === 'gpt-4o-formation' && p.component === 'output_tokens'
+          );
+        }
+      );
+      expect(seeded).toBeDefined();
+      expect(seeded.unit_price).toBe(0.00001);
+      expect(seeded.project_id).toBe(projectId);
+    });
+
+    test('plan reports no-op for an unchanged project_price (drift-safe read)', async () => {
+      const template = {
+        resources: {
+          OutputPrice: { type: 'project_price', properties: priceProps },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: priceFormationId,
+          template,
+        });
+
+      expect(res.status).toBe(200);
+      const change = res.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'OutputPrice';
+      });
+      expect(change).toBeDefined();
+      expect(change.action).toBe('no-op');
+    });
+
+    test('updates the project_price unit_price in place', async () => {
+      const template = {
+        resources: {
+          OutputPrice: {
+            type: 'project_price',
+            properties: { ...priceProps, unit_price: 0.00005 },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${priceFormationId}`)
+        .send({ template });
+
+      expect(res.status).toBe(200);
+
+      const priceRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}/prices`
+      );
+      const updated = priceRes.body.prices.find(
+        (p: { model: string; component: string }) => {
+          return (
+            p.model === 'gpt-4o-formation' && p.component === 'output_tokens'
+          );
+        }
+      );
+      expect(updated.unit_price).toBe(0.00005);
+    });
+
+    test('validates template with project_price missing required fields', async () => {
+      const invalidTemplate = {
+        resources: {
+          BadPrice: {
+            type: 'project_price',
+            properties: { provider: 'openai' },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: invalidTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('deletes formation and cleans up the project_price row', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${priceFormationId}`
+      );
+      expect(res.status).toBe(200);
+
+      const priceRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}/prices`
+      );
+      const gone = priceRes.body.prices.find((p: { model: string }) => {
+        return p.model === 'gpt-4o-formation';
+      });
+      expect(gone).toBeUndefined();
+    });
+  });
+
   describe('Formation with api_key resources', () => {
     let apiKeyFormationId: string;
 

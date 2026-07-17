@@ -189,6 +189,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'memory_entry',
   'orchestration',
   'policy',
+  'project_price',
   'secret',
   'session',
   'webhook',

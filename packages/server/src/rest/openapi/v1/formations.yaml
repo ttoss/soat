@@ -1149,6 +1149,50 @@ components:
           type: string
           description: The secret value to encrypt and store
 
+    ProjectPriceResourceProperties:
+      description: >-
+        Upserts a project-scoped price row so a deployed stack produces
+        billing-grade usage cost with no out-of-band pricing step. The row is
+        keyed on (provider, model, component, effective_from) within the
+        formation's project — the middle pricing tier that covers every one of
+        the project's instances of a given provider slug. When `effective_from`
+        is omitted the price takes effect at deploy time, so generations run
+        right after deploy are priced.
+      type: object
+      additionalProperties: false
+      required:
+        - provider
+        - model
+        - component
+        - unit
+        - unit_price
+      properties:
+        provider:
+          type: string
+          description: SKU vendor slug the price applies to (e.g. openai, anthropic, soat)
+        model:
+          type: string
+          description: SKU identifier — the model id for LLM SKUs, the platform unit otherwise
+        component:
+          type: string
+          description: The billable component this row prices (input_tokens, output_tokens, cached_tokens, compute_second, …)
+        unit:
+          type: string
+          description: Unit the unit_price is denominated in (token, compute_second, …); must match the metered component's unit
+        unit_price:
+          type: number
+          description: USD per unit. Must be a non-negative number
+        meter_type:
+          type: string
+          description: Meter type this SKU belongs to (defaults to llm_tokens)
+        effective_from:
+          type: string
+          format: date-time
+          description: >-
+            Timestamp from which this price applies. Omit to take effect at
+            deploy time. The row with the latest effective_from at or before
+            now() prices a call.
+
     SessionResourceProperties:
       description: >-
         Creates a session attached to an agent within the formation's project.
@@ -1313,6 +1357,7 @@ components:
             - memory_entry
             - orchestration
             - policy
+            - project_price
             - secret
             - session
             - webhook
@@ -1335,6 +1380,7 @@ components:
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'
             - $ref: '#/components/schemas/OrchestrationResourceProperties'
             - $ref: '#/components/schemas/PolicyResourceProperties'
+            - $ref: '#/components/schemas/ProjectPriceResourceProperties'
             - $ref: '#/components/schemas/SecretResourceProperties'
             - $ref: '#/components/schemas/SessionResourceProperties'
             - $ref: '#/components/schemas/WebhookResourceProperties'
