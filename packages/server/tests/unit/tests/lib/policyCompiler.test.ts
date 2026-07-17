@@ -13,6 +13,15 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
+// A resource type whose columns live on an associated (joined) model, so
+// colRef renders `$file.<column>$` references — exercises the alias branches.
+registerResourceFieldMap({
+  resourceType: 'aliasedResource',
+  publicIdColumn: { column: 'publicId', alias: 'file' },
+  pathColumn: { column: 'path', alias: 'file' },
+  tagsColumn: { column: 'tags', alias: 'file' },
+});
+
 describe('globToLike', () => {
   test('replaces * with %', () => {
     expect(globToLike('foo*bar')).toBe('foo%bar');
@@ -383,6 +392,219 @@ describe('compilePolicy', () => {
           [Op.or]: [{ [Op.and]: [{ path: { [Op.like]: '/docs/%' } }] }],
         },
       ],
+    });
+  });
+
+  test('aliased resource column renders $alias.column$ reference', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['soat:prj_1:aliasedResource:res_abc'],
+            },
+          ],
+        },
+      ],
+      action: 'test:Do',
+      resourceType: 'aliasedResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({
+      [Op.and]: [
+        { [Op.or]: [{ [Op.and]: [{ '$file.publicId$': 'res_abc' }] }] },
+      ],
+    });
+  });
+
+  test('aliased tags column compiles a StringLike condition', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['*'],
+              condition: { StringLike: { 'soat:ResourceTag/env': 'prod*' } },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'aliasedResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+  });
+
+  test('StringLike with an unsafe tag key is skipped', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['*'],
+              // The key after the prefix contains a space → rejected as unsafe.
+              condition: { StringLike: { 'soat:ResourceTag/bad key': 'x*' } },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    // No tag fragment was produced, so the '*' resource makes it an allow-all.
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({});
+  });
+
+  test('unrecognized condition operator produces no fragments', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['*'],
+              condition: { NumericEquals: { 'soat:ResourceTag/count': '1' } },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({});
+  });
+
+  test('falsy condition block is skipped', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['*'],
+              condition: { StringEquals: null },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({});
+  });
+
+  test('condition key that is not a ResourceTag key is skipped', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['*'],
+              condition: { StringEquals: { 'soat:CurrentTime': 'noon' } },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({});
+  });
+
+  test('SRN with fewer than 4 segments is treated as unrestricted', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: ['soat:prj_1:testResource'],
+            },
+          ],
+        },
+      ],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({});
+  });
+
+  test('empty resource array with a tag condition yields only tag fragments', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['test:Do'],
+              resource: [],
+              condition: { StringEquals: { 'soat:ResourceTag/env': 'prod' } },
+            },
+          ],
+        },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ] as any,
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({
+      [Op.and]: [
+        {
+          [Op.or]: [
+            { [Op.and]: [{ tags: { [Op.contains]: { env: 'prod' } } }] },
+          ],
+        },
+      ],
+    });
+  });
+
+  test('Deny with an empty resource array and no condition adds an empty NOT', () => {
+    const result = compilePolicy({
+      policies: [
+        {
+          statement: [
+            { effect: 'Allow', action: ['test:Do'], resource: ['*'] },
+            { effect: 'Deny', action: ['test:Do'], resource: [] },
+          ],
+        },
+      ],
+      action: 'test:Do',
+      resourceType: 'testResource',
+      projectPublicId: 'prj_1',
+    });
+    expect(result.hasAccess).toBe(true);
+    expect(result.where).toEqual({
+      [Op.and]: [{ [Op.not]: { [Op.or]: [{}] } }],
     });
   });
 });
