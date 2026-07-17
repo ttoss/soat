@@ -997,6 +997,129 @@ describe('conversationsFormationModule', () => {
   });
 });
 
+// ── agent tool bindings ─────────────────────────────────────────────────────
+
+describe('agentsFormationModule tool_bindings', () => {
+  test('create with tool_bindings persists policy and read returns both views', async () => {
+    const agentPhysId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        ai_provider_id: aiProviderId,
+        name: 'FM Binding Agent',
+        tool_bindings: [
+          // Full policy — exercises every optional field on the parse/read path.
+          {
+            tool_id: converterToolId,
+            approval_policy: {
+              default: 'require_approval',
+              rules: [{ when: { '==': [1, 1] }, effect: 'allow' }],
+              expires_in: 3600,
+              reasoning_prompt: 'explain the change',
+            },
+          },
+          // Minimal policy — exercises the optional-field-absent branches.
+          { tool_id: converterToolId, approval_policy: { default: 'deny' } },
+          // No policy — exercises the policy-absent branch.
+          { tool_id: converterToolId },
+        ],
+      },
+    });
+
+    const read = await readModule('agent').read?.({
+      physicalResourceId: agentPhysId,
+    });
+    // Canonical view carries the full policy (snake_case)...
+    expect(read).toMatchObject({
+      tool_bindings: [
+        {
+          tool_id: converterToolId,
+          approval_policy: {
+            default: 'require_approval',
+            expires_in: 3600,
+            reasoning_prompt: 'explain the change',
+          },
+        },
+        { tool_id: converterToolId, approval_policy: { default: 'deny' } },
+        { tool_id: converterToolId },
+      ],
+      // ...and the derived deprecated view lists each referenced tool.
+      tool_ids: [converterToolId, converterToolId, converterToolId],
+    });
+  });
+
+  test('create with the deprecated tool_ids shorthand derives bare bindings', async () => {
+    const agentPhysId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        ai_provider_id: aiProviderId,
+        name: 'FM Shorthand Agent',
+        tool_ids: [converterToolId],
+      },
+    });
+
+    const read = await readModule('agent').read?.({
+      physicalResourceId: agentPhysId,
+    });
+    expect(read).toMatchObject({
+      tool_bindings: [{ tool_id: converterToolId }],
+      tool_ids: [converterToolId],
+    });
+  });
+
+  test('validateProperties rejects tool_bindings combined with tool_ids', () => {
+    const errors = readModule('agent').validateProperties?.({
+      properties: {
+        ai_provider_id: aiProviderId,
+        tool_bindings: [{ tool_id: converterToolId }],
+        tool_ids: [converterToolId],
+      },
+      basePath: 'resources.<agent>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+    expect(
+      errors?.some((e) => {
+        return /cannot be combined/i.test(e.message);
+      })
+    ).toBe(true);
+  });
+
+  test('validateProperties rejects an inline tool binding', () => {
+    const errors = readModule('agent').validateProperties?.({
+      properties: {
+        ai_provider_id: aiProviderId,
+        tool_bindings: [{ tool: { name: 'inline', type: 'http' } }],
+      },
+      basePath: 'resources.<agent>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+    expect(
+      errors?.some((e) => {
+        return /inline `tool` bindings are not supported/i.test(e.message);
+      })
+    ).toBe(true);
+  });
+
+  test('validateProperties rejects an unknown boundary_policy action', () => {
+    const errors = readModule('agent').validateProperties?.({
+      properties: {
+        ai_provider_id: aiProviderId,
+        boundary_policy: {
+          statement: [{ effect: 'Deny', action: ['bogus:NotARealAction'] }],
+        },
+      },
+      basePath: 'resources.<agent>.properties',
+    });
+    expect(errors?.length).toBeGreaterThan(0);
+    expect(
+      errors?.some((e) => {
+        return e.path.endsWith('.boundary_policy');
+      })
+    ).toBe(true);
+  });
+});
+
 // ── file storage fields are system-managed ─────────────────────────────────
 
 describe('filesFormationModule', () => {

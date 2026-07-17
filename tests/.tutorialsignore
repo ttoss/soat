@@ -8,3 +8,12 @@
 
 index
 connect-third-party-llms
+# review-panel-discussion drives a discussion-type tool *from inside* an agent
+# generation (agent → review-panel tool → nested 3-participant discussion +
+# synthesis, all against the CI sandbox's local qwen2.5:0.5b). That nested
+# invocation fails in CI with a `fetch failed` at generation time, while the
+# standalone discussion run (step 10) succeeds. The tutorial only ever passed
+# before because a stale `--discussion` flag silently produced a tool-less
+# agent; wiring the tool correctly (discussion_id) exposed the nested-run
+# failure. Ignored pending a separate fix to nested discussion-tool execution.
+review-panel-discussion
