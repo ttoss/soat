@@ -1,7 +1,11 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
-import type { InlineToolDefinition } from './tools';
+import {
+  assertEphemeralTypeSupported,
+  type InlineToolDefinition,
+  validateToolDefinition,
+} from './tools';
 
 // ── Types ───────────────────────────────────────────────────────────────────
 
@@ -262,11 +266,6 @@ export const assertPipelineStepToolsValid = async (args: {
   projectId: number;
   projectIds?: number[];
 }): Promise<void> => {
-  // Dynamically imported to avoid a circular import with tools.ts, which
-  // imports this module.
-  const { assertEphemeralTypeSupported, validateToolDefinition } =
-    await import('./tools');
-
   for (const step of args.steps) {
     if (step.tool) {
       assertEphemeralTypeSupported(step.tool);

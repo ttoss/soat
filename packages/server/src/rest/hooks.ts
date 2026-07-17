@@ -79,8 +79,8 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
   // Loaded lazily (not a static import) so mounting this router at app level
   // does not front-load triggerDispatch's heavy graph (agents/tools/
   // orchestration) at server init — that reordered module init and broke the
-  // orchestrations↔engine import cycle. By first hook call, all modules are
-  // fully initialized.
+  // orchestrations↔engine import cycle (every orchestration-run POST 500s). By
+  // first hook call, all modules are fully initialized.
   const { prepareFiring, runFiringDispatch } =
     await import('../lib/triggerDispatch');
 

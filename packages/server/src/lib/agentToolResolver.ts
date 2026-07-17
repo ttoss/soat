@@ -14,12 +14,17 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import { runDiscussion } from './discussionRuns';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   resolveSecretRefsInRecord,
   resolveSecretRefsInString,
 } from './secrets';
-import type { InlineToolDefinition } from './tools';
+import {
+  assertEphemeralTypeSupported,
+  callTool,
+  type InlineToolDefinition,
+} from './tools';
 
 const log = createDebug('soat:toolResolver');
 
@@ -591,7 +596,6 @@ const resolveDiscussionTool = (
     description: typedTool.description ?? undefined,
     inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
     execute: async (input: Record<string, unknown>) => {
-      const { runDiscussion } = await import('./discussionRuns');
       const run = await runDiscussion({
         discussionId,
         topic: String(input.topic ?? ''),
@@ -721,8 +725,6 @@ const resolvePipelineTool = (
         toolArgs && typeof toolArgs === 'object' && !Array.isArray(toolArgs)
           ? (toolArgs as Record<string, unknown>)
           : {};
-      // Imported lazily to avoid a static import cycle with tools.ts.
-      const { callTool } = await import('./tools');
       return callTool({
         projectIds: args.projectIds,
         id: typedTool.publicId,
@@ -841,7 +843,6 @@ export const resolveEphemeralAgentTool = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
 }): Promise<Record<string, Tool>> => {
-  const { assertEphemeralTypeSupported } = await import('./tools');
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);

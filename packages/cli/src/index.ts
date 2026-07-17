@@ -4,6 +4,8 @@ import { createServer } from 'node:http';
 import * as nodePath from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import input from '@inquirer/input';
+import password from '@inquirer/password';
 import * as sdk from '@soat/sdk';
 import { program } from 'commander';
 
@@ -116,11 +118,6 @@ program
   .description('Save credentials to a named profile (~/.soat/config.json)')
   .option('-p, --profile <name>', 'profile name', 'default')
   .action(async (opts) => {
-    const [{ default: input }, { default: password }] = await Promise.all([
-      import('@inquirer/input'),
-      import('@inquirer/password'),
-    ]);
-
     const baseUrl = await input({
       message: 'Base URL:',
     });
