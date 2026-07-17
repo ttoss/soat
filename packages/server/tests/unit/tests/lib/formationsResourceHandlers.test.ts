@@ -535,23 +535,26 @@ describe('formationsResourceHandlers', () => {
       });
     });
 
-    test('ignores document (no-op update)', async () => {
+    test('applies document update (content + title)', async () => {
       const id = await applyCreateResource({
         resourceType: 'document',
         projectId: projectDbId,
-        resolvedProperties: { content: 'Immutable body', title: 'Original' },
+        resolvedProperties: { content: 'Original body', title: 'Original' },
       });
 
       await expect(
         applyUpdateResource({
           resourceType: 'document',
           physicalResourceId: id,
-          resolvedProperties: { title: 'ignored' },
+          resolvedProperties: { content: 'Updated body', title: 'Updated' },
         })
       ).resolves.toBeUndefined();
 
       const read = await readResource('document', id);
-      expect(read).toMatchObject({ title: 'Original' });
+      expect(read).toMatchObject({
+        content: 'Updated body',
+        title: 'Updated',
+      });
     });
 
     test('throws when agent to update is missing', async () => {

@@ -60,6 +60,31 @@ export class Document extends Model {
   })
   declare tags: Record<string, string> | null;
 
+  /**
+   * The chunking configuration the document was last (re-)ingested with.
+   * Persisted so a formation `document` resource can read its chunk settings
+   * back and a re-plan of the same template converges to a no-op instead of
+   * perpetually re-reporting these fields as changed. `null` means the default
+   * (`whole`) strategy / library defaults were used.
+   */
+  @Column({
+    type: DataType.STRING(16),
+    allowNull: true,
+  })
+  declare chunkStrategy: 'page' | 'whole' | 'size' | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare chunkSize: number | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+  })
+  declare chunkOverlap: number | null;
+
   @Column({
     type: DataType.STRING(16),
     allowNull: false,

@@ -2281,13 +2281,13 @@ resources:
       documentFormationId = res.body.id;
     });
 
-    test('updating a formation with a document resource is a no-op (documents are immutable)', async () => {
+    test('updating a formation document with new content applies the change', async () => {
       const updatedTemplate = {
         resources: {
           MyDoc: {
             type: 'document',
             properties: {
-              content: 'Updated content (should not change)',
+              content: 'Updated content (now applied)',
             },
           },
         },
@@ -2305,8 +2305,22 @@ resources:
         }
       );
       expect(docResource).toBeDefined();
-      // update is a no-op, so status should reflect no-op/updated
-      expect(['updated', 'no-op']).toContain(docResource.status);
+      // Documents are no longer immutable on update: the changed content is a
+      // real diff, so the resource is updated (not a no-op).
+      expect(docResource.status).toBe('updated');
+
+      // Restore the original content so the subsequent no-op plan test — which
+      // plans against `documentTemplate` — sees an unchanged resource.
+      const restore = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${documentFormationId}`)
+        .send({ template: documentTemplate });
+      expect(restore.status).toBe(200);
+      const restoredDoc = restore.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyDoc';
+        }
+      );
+      expect(restoredDoc.status).toBe('updated');
     });
 
     test('validates template with document missing required content', async () => {

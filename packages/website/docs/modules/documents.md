@@ -45,6 +45,9 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `metadata`   | object \| null | Arbitrary JSON metadata. After ingestion: `source_file_id`, `total_pages`, `chunk_count`. On failure: `failure_reason`. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
 | `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
+| `chunk_strategy` | string \| null | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). `null` when the default (`whole`) was used. |
+| `chunk_size`   | number \| null | Window size in characters used when `chunk_strategy` is `size`. `null` otherwise.                                |
+| `chunk_overlap`| number \| null | Overlap in characters between consecutive windows used when `chunk_strategy` is `size`. `null` otherwise.        |
 | `created_at` | string         | ISO 8601 creation timestamp                                                                                        |
 | `updated_at` | string         | ISO 8601 last-updated timestamp                                                                                    |
 
@@ -156,6 +159,8 @@ The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also acce
 Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers. Embeddings are computed concurrently across chunks, and an embedding failure is non-fatal — the chunk is stored without a vector.
 
 After ingestion completes, `metadata.chunk_count` records the number of chunks created. Note this can differ from the source's `total_pages` (recorded in `metadata`): with `whole` it is always `1`, and with `size` it depends on the text length.
+
+The chunk configuration a document was last (re-)ingested with is persisted on the document itself and returned as `chunk_strategy` / `chunk_size` / `chunk_overlap`. This lets a [Formation](./formations.md) `document` resource read its chunk settings back, so a re-plan of an unchanged template converges to a no-op instead of perpetually re-reporting these fields as changed. Updating a formation document's `chunk_strategy` re-chunks the stored source text on the next `update-formation` (no out-of-band re-ingest required).
 
 ### Path-Based SRNs
 

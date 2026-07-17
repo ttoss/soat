@@ -816,6 +816,22 @@ components:
           nullable: true
           description: Text content (only present on getDocument, and only when status is ready)
           example: 'The quick brown fox jumps over the lazy dog.'
+        chunk_strategy:
+          type: string
+          enum: [page, whole, size]
+          nullable: true
+          description: The chunk strategy the document was last (re-)ingested with. `null` when the default (`whole`) was used.
+          example: 'size'
+        chunk_size:
+          type: integer
+          nullable: true
+          description: Window size in characters used when `chunk_strategy=size`.
+          example: 800
+        chunk_overlap:
+          type: integer
+          nullable: true
+          description: Overlap in characters between consecutive windows used when `chunk_strategy=size`.
+          example: 120
         created_at:
           type: string
           format: date-time

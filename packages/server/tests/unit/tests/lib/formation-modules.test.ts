@@ -157,11 +157,9 @@ const NON_OBJECT: Array<[string, string]> = [
   ['document', 'Document `properties` must be an object'],
 ];
 
-// `document` update is a no-op and performs no validation; every other module
-// validates on update too.
-const UPDATE_NON_OBJECT = NON_OBJECT.filter(([resourceType]) => {
-  return resourceType !== 'document';
-});
+// Every module — including `document` since it now re-chunks on update —
+// validates its `properties` on update too.
+const UPDATE_NON_OBJECT = NON_OBJECT;
 
 describe('non-object properties are rejected', () => {
   test.each(NON_OBJECT)('create %s', async (resourceType, message) => {
@@ -306,9 +304,34 @@ const CASES: RoundTripCase[] = [
   {
     resourceType: 'document',
     build: () => {
+      // Long content so `chunk_strategy: size` (size=800) actually splits into
+      // more than one chunk — the F-13 repro condition. The three chunk fields
+      // must round-trip through `read` so a re-plan of the same template is a
+      // no-op instead of perpetually re-reporting them as changed.
+      const content = 'a'.repeat(900);
+      const updatedContent = 'b'.repeat(900);
       return {
-        create: { content: 'hello world', title: 'Doc A' },
-        expectRead: { content: 'hello world', title: 'Doc A' },
+        create: {
+          content,
+          title: 'Doc A',
+          chunk_strategy: 'size',
+          chunk_size: 800,
+          chunk_overlap: 120,
+        },
+        expectRead: {
+          content,
+          title: 'Doc A',
+          chunk_strategy: 'size',
+          chunk_size: 800,
+          chunk_overlap: 120,
+        },
+        // Changing the strategy on update must re-chunk (honored, not a no-op)
+        // and read back the new strategy so the plan converges.
+        update: { content: updatedContent, chunk_strategy: 'whole' },
+        expectAfterUpdate: {
+          content: updatedContent,
+          chunk_strategy: 'whole',
+        },
       };
     },
   },
@@ -638,7 +661,7 @@ describe('formation module create → read round-trips', () => {
   );
 });
 
-// ── chat / document immutable-update no-ops ─────────────────────────────────
+// ── chat immutable-update no-op ─────────────────────────────────────────────
 
 describe('immutable update no-ops', () => {
   test('chat update validates but performs no operation', async () => {
@@ -652,16 +675,6 @@ describe('immutable update no-ops', () => {
       applyUpdateResource({
         resourceType: 'chat',
         physicalResourceId: chatId,
-        resolvedProperties: {},
-      })
-    ).resolves.toBeUndefined();
-  });
-
-  test('document update is a no-op and never touches the resource', async () => {
-    await expect(
-      applyUpdateResource({
-        resourceType: 'document',
-        physicalResourceId: 'doc_anything',
         resolvedProperties: {},
       })
     ).resolves.toBeUndefined();
@@ -715,6 +728,33 @@ describe('documentsFormationModule chunking', () => {
       resolvedProperties: { content: 'c'.repeat(2500) },
     });
 
+    expect(await countChunks(physicalId)).toBe(1);
+  });
+
+  test('update re-chunks when chunk_strategy changes', async () => {
+    const physicalId = await applyCreateResource({
+      resourceType: 'document',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        content: 'd'.repeat(2500),
+        chunk_strategy: 'size',
+        chunk_size: 1000,
+        chunk_overlap: 0,
+      },
+    });
+    // 2500 chars / 1000 step (no overlap) => 3 chunks
+    expect(await countChunks(physicalId)).toBe(3);
+
+    await applyUpdateResource({
+      resourceType: 'document',
+      physicalResourceId: physicalId,
+      resolvedProperties: {
+        content: 'd'.repeat(2500),
+        chunk_strategy: 'whole',
+      },
+    });
+
+    // Switching to `whole` collapses the document back to a single chunk.
     expect(await countChunks(physicalId)).toBe(1);
   });
 });

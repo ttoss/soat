@@ -141,9 +141,10 @@ export const finalizeIngestedPages = async (
     return;
   }
 
+  const chunkConfig = resolveChunkConfig(args, args.rule);
   const chunks = chunkPages({
     pages: args.pages,
-    ...resolveChunkConfig(args, args.rule),
+    ...chunkConfig,
   });
 
   await persistChunksWithProgress({
@@ -162,6 +163,11 @@ export const finalizeIngestedPages = async (
   await doc.update({
     status: 'ready',
     conversionAttemptId: null,
+    // Persist the effective chunk config so the document reads back the settings
+    // it was ingested with (formation round-trip / drift convergence).
+    chunkStrategy: chunkConfig.strategy,
+    chunkSize: chunkConfig.chunkSize ?? null,
+    chunkOverlap: chunkConfig.chunkOverlap ?? null,
     metadata: JSON.stringify({
       source_file_id: args.fileId,
       total_pages: args.pages.length,
