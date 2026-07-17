@@ -412,6 +412,72 @@ describe('Memories', () => {
         expect(response.body.action).toBe('updated');
         expect(response.body.id).toMatch(/^mem_entry_/);
       });
+
+      test('can create an entry with tags and metadata', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Approve refunds under $50 automatically',
+            tags: ['role:traffic-manager', 'source:rejected_approval'],
+            metadata: { action_id: 'act_01', evidence: 'high' },
+          });
+
+        expect(response.status).toBe(201);
+        expect(response.body.action).toBe('created');
+        expect(response.body.tags).toEqual([
+          'role:traffic-manager',
+          'source:rejected_approval',
+        ]);
+        expect(response.body.metadata).toEqual({
+          action_id: 'act_01',
+          evidence: 'high',
+        });
+      });
+
+      test('entry created without tags/metadata returns null for both', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: freshMemoryId, content: 'Untagged entry' });
+
+        expect(response.status).toBe(201);
+        expect(response.body.tags).toBeNull();
+        expect(response.body.metadata).toBeNull();
+      });
+
+      test('honors source_type orchestration', async () => {
+        const freshMemoryId = await createTestMemory();
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({
+            memory_id: freshMemoryId,
+            content: 'Written by an orchestration node',
+            source_type: 'orchestration',
+          });
+
+        expect(response.status).toBe(201);
+        expect(response.body.source_type).toBe('orchestration');
+      });
+
+      test('returns 400 when tags is not an array of strings', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memoryId, content: 'x', tags: [1, 2, 3] });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toMatch(/tags/);
+      });
+
+      test('returns 400 when metadata is not an object', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memoryId, content: 'x', metadata: 'nope' });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toMatch(/metadata/);
+      });
     });
 
     describe('GET /api/v1/memory-entries', () => {
@@ -531,6 +597,37 @@ describe('Memories', () => {
           .send({ content: 'x' });
 
         expect(response.status).toBe(403);
+      });
+
+      test('can set and then clear tags/metadata', async () => {
+        const memId = await createTestMemory();
+        const created = await authenticatedTestClient(userToken)
+          .post('/api/v1/memory-entries')
+          .send({ memory_id: memId, content: 'Taggable entry' });
+        const id = created.body.id;
+
+        const set = await authenticatedTestClient(userToken)
+          .put(`/api/v1/memory-entries/${id}`)
+          .send({ tags: ['role:pilot'], metadata: { k: 'v' } });
+        expect(set.status).toBe(200);
+        expect(set.body.tags).toEqual(['role:pilot']);
+        expect(set.body.metadata).toEqual({ k: 'v' });
+
+        const cleared = await authenticatedTestClient(userToken)
+          .put(`/api/v1/memory-entries/${id}`)
+          .send({ tags: null, metadata: null });
+        expect(cleared.status).toBe(200);
+        expect(cleared.body.tags).toBeNull();
+        expect(cleared.body.metadata).toBeNull();
+      });
+
+      test('returns 400 when tags is invalid', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .put(`/api/v1/memory-entries/${entryId}`)
+          .send({ tags: [1] });
+
+        expect(response.status).toBe(400);
+        expect(response.body.error).toMatch(/tags/);
       });
     });
 

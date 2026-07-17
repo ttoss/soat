@@ -70,7 +70,7 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 | ---------------- | ---------- | ------------------------------------------------------------------------------------------ |
 | `query`          | `string`   | Semantic search query — ranks results by vector similarity                                 |
 | `memory_ids`     | `string[]` | Search entries within these specific memories                                              |
-| `memory_tags`    | `string[]` | Search entries in memories whose tags match any of these patterns (supports glob: `user*`) |
+| `memory_tags`    | `string[]` | Match entries by tag at entry granularity: returns entries whose parent memory's tags match **or** whose own per-entry tags match any of these patterns (supports glob: `user*`) |
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
@@ -79,6 +79,8 @@ When `query` is set, results include a `similarity_score` field and are ordered 
 Which sources a request searches follows from which filters it carries, and the single endpoint can span both at once. Document results are included whenever you pass a `query`, `document_paths`, or `document_ids`; memory entries are included whenever you pass `memory_ids` or `memory_tags`. To search both sources simultaneously and get the interleaved, source-tagged list described in the [Overview](#overview), pass a `query` **together with** `memory_ids` or `memory_tags` — the two source sets are then merged and, when `query` is set, ranked together by descending similarity before `limit` is applied.
 
 `memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
+
+`memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs (container-level — every entry in that memory) or when the entry's own `tags` match (only that entry). Tagging entries individually (see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering)) lets one memory hold many roles/sources and retrieve just the relevant slice.
 
 ### Project Scoping
 

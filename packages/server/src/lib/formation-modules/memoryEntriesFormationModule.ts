@@ -1,3 +1,4 @@
+import type { MemoryEntrySource } from '@soat/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
@@ -90,7 +91,13 @@ export const memoryEntriesFormationModule: FormationModule = {
       memoryId,
       content: properties.content as string,
       sourceType: toOptionalString(properties.source_type) as
-        'manual' | 'agent' | undefined,
+        MemoryEntrySource | undefined,
+      tags: Array.isArray(properties.tags)
+        ? (properties.tags as string[])
+        : null,
+      metadata: isObjectRecord(properties.metadata)
+        ? properties.metadata
+        : null,
     });
 
     log(
@@ -128,6 +135,18 @@ export const memoryEntriesFormationModule: FormationModule = {
       entry.content = content;
     }
 
+    if (properties.tags !== undefined) {
+      entry.tags = Array.isArray(properties.tags)
+        ? (properties.tags as string[])
+        : null;
+    }
+
+    if (properties.metadata !== undefined) {
+      entry.metadata = isObjectRecord(properties.metadata)
+        ? properties.metadata
+        : null;
+    }
+
     await entry.save();
 
     log('updated memory entry from formation: id=%s', physicalResourceId);
@@ -146,6 +165,8 @@ export const memoryEntriesFormationModule: FormationModule = {
         memory_id: entry.memoryId,
         content: entry.content,
         source_type: entry.sourceType,
+        tags: entry.tags,
+        metadata: entry.metadata,
       };
     } catch {
       return null;

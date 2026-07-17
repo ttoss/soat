@@ -2470,6 +2470,72 @@ resources:
       memoryEntryFormationId = res.body.id;
     });
 
+    test('creates, updates, and clears memory_entry tags/metadata via formation', async () => {
+      const makeTemplate = (props: Record<string, unknown>) => {
+        return {
+          resources: {
+            TaggedEntry: {
+              type: 'memory_entry',
+              properties: { memory_id: standaloneMemoryId, ...props },
+            },
+          },
+        };
+      };
+
+      // Create with tags + metadata.
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `memory-entry-tags-formation-${Date.now()}`,
+          template: makeTemplate({
+            content: 'Tagged entry from formation',
+            tags: ['role:pilot', 'source:formation'],
+            metadata: { origin: 'formation' },
+          }),
+        });
+
+      expect(createRes.status).toBe(201);
+      const formationId = createRes.body.id;
+      const physicalId = createRes.body.resources[0].physical_resource_id;
+
+      const created = await db.MemoryEntry.findOne({
+        where: { publicId: physicalId },
+      });
+      expect(created!.tags).toEqual(['role:pilot', 'source:formation']);
+      expect(created!.metadata).toEqual({ origin: 'formation' });
+
+      // Update to new tags + metadata.
+      const updateRes = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({
+          template: makeTemplate({
+            content: 'Tagged entry from formation',
+            tags: ['role:copilot'],
+            metadata: { origin: 'formation-update' },
+          }),
+        });
+      expect(updateRes.status).toBe(200);
+      await created!.reload();
+      expect(created!.tags).toEqual(['role:copilot']);
+      expect(created!.metadata).toEqual({ origin: 'formation-update' });
+
+      // Clear both via explicit null (nullable formation properties).
+      const clearRes = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${formationId}`)
+        .send({
+          template: makeTemplate({
+            content: 'Tagged entry from formation',
+            tags: null,
+            metadata: null,
+          }),
+        });
+      expect(clearRes.status).toBe(200);
+      await created!.reload();
+      expect(created!.tags).toBeNull();
+      expect(created!.metadata).toBeNull();
+    });
+
     test('plan reports no-op for an unchanged memory_entry resource', async () => {
       const template = {
         resources: {

@@ -80,10 +80,21 @@ paths:
                   example: The customer prefers email communication over phone calls
                 source_type:
                   type: string
-                  enum: [manual, agent, extraction]
+                  enum: [manual, agent, extraction, orchestration]
                   description: How this entry was created
                   default: manual
                   example: manual
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Per-entry tag strings, used for entry-granularity filtering in search-knowledge (memory_tags)
+                  example: [role:traffic-manager, source:rejected_approval]
+                metadata:
+                  type: object
+                  additionalProperties: true
+                  description: Arbitrary structured metadata attached to the entry
+                  example: { evidence: high, quarter: Q3 }
                 duplicate_threshold:
                   type: number
                   description: Cosine similarity score at or above which the incoming content is considered a duplicate and skipped (default 0.95)
@@ -173,6 +184,18 @@ paths:
                 content:
                   type: string
                   description: Updated text content
+                tags:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: Replaces the entry's tags. Pass null or an empty array to clear.
+                  example: [role:traffic-manager]
+                metadata:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: Replaces the entry's metadata. Pass null to clear.
       responses:
         '200':
           description: Memory entry updated
@@ -235,8 +258,21 @@ components:
           example: The customer prefers email communication over phone calls
         source_type:
           type: string
-          enum: [manual, agent, extraction]
+          enum: [manual, agent, extraction, orchestration]
           example: manual
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Per-entry tag strings
+          example: [role:traffic-manager, source:rejected_approval]
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Arbitrary structured metadata attached to the entry
+          example: { evidence: high }
         created_at:
           type: string
           format: date-time

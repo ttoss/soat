@@ -119,4 +119,42 @@ describe('writeMemoryEntry merge consolidation', () => {
     expect(result.entry.content).toBe('Alpha\nBeta');
     expect(mockRunConsolidationCompletion).not.toHaveBeenCalled();
   });
+
+  test('persists tags and metadata on a newly created entry', async () => {
+    const memoryId = await createMemoryId('Tagged Create');
+    const result = await writeMemoryEntry({
+      memoryId,
+      content: 'Prefers async standups',
+      tags: ['role:manager'],
+      metadata: { source: 'interview' },
+    });
+
+    expect(result.action).toBe('created');
+    expect(result.entry.tags).toEqual(['role:manager']);
+    expect(result.entry.metadata).toEqual({ source: 'interview' });
+  });
+
+  test('unions tags and shallow-merges metadata on a merge write', async () => {
+    const memoryId = await createMemoryId('Tagged Merge');
+    await writeMemoryEntry({
+      memoryId,
+      content: 'First fact',
+      tags: ['role:manager'],
+      metadata: { a: 1 },
+    });
+
+    const result = await writeMemoryEntry({
+      memoryId,
+      content: 'Second fact',
+      tags: ['source:rejected_approval'],
+      metadata: { b: 2 },
+      ...FORCE_MERGE,
+    });
+
+    expect(result.action).toBe('updated');
+    expect(result.entry.tags).toEqual(
+      expect.arrayContaining(['role:manager', 'source:rejected_approval'])
+    );
+    expect(result.entry.metadata).toEqual({ a: 1, b: 2 });
+  });
 });

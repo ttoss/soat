@@ -1,3 +1,5 @@
+import type { MemoryEntrySource } from '@soat/postgresdb';
+import { MEMORY_ENTRY_SOURCES } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
@@ -12,6 +14,54 @@ import {
 } from 'src/lib/memoryEntries';
 
 export const memoryEntriesRouter = new Router<Context>();
+
+const normalizeSourceType = (value: unknown): MemoryEntrySource | undefined => {
+  return MEMORY_ENTRY_SOURCES.includes(value as MemoryEntrySource)
+    ? (value as MemoryEntrySource)
+    : undefined;
+};
+
+const isStringArray = (value: unknown): value is string[] => {
+  return (
+    Array.isArray(value) &&
+    value.every((v) => {
+      return typeof v === 'string';
+    })
+  );
+};
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+/**
+ * Validates optional `tags` / `metadata` on a request body. `allowNull` permits
+ * an explicit null (used by the update route to clear a field). Returns an error
+ * message, or null when the fields are valid or absent.
+ */
+const validateTagsMetadata = (
+  body: { tags?: unknown; metadata?: unknown },
+  opts: { allowNull: boolean }
+): string | null => {
+  const nullable = (v: unknown) => {
+    return opts.allowNull && v === null;
+  };
+  if (
+    body.tags !== undefined &&
+    !nullable(body.tags) &&
+    !isStringArray(body.tags)
+  ) {
+    return 'tags must be an array of strings';
+  }
+  if (
+    body.metadata !== undefined &&
+    !nullable(body.metadata) &&
+    !isPlainObject(body.metadata)
+  ) {
+    return 'metadata must be an object';
+  }
+  return null;
+};
 
 // Memory entries are a top-level resource (/memory-entries) but every entry
 // belongs to a memory; access is governed by the owning memory's project.
@@ -124,9 +174,18 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
     memoryId?: string;
     content: string;
     sourceType?: string;
+    tags?: unknown;
+    metadata?: unknown;
     duplicateThreshold?: number;
     updateThreshold?: number;
   };
+
+  const validationError = validateTagsMetadata(body, { allowNull: false });
+  if (validationError) {
+    ctx.status = 400;
+    ctx.body = { error: validationError };
+    return;
+  }
 
   const memoryRowId = await resolveMemoryForAction(
     ctx,
@@ -138,10 +197,9 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
   const result = await writeMemoryEntry({
     memoryId: memoryRowId,
     content: body.content,
-    sourceType:
-      body.sourceType === 'agent' || body.sourceType === 'extraction'
-        ? body.sourceType
-        : 'manual',
+    sourceType: normalizeSourceType(body.sourceType) ?? 'manual',
+    tags: isStringArray(body.tags) ? body.tags : undefined,
+    metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
     duplicateThreshold: body.duplicateThreshold,
     updateThreshold: body.updateThreshold,
   });
@@ -181,11 +239,27 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
   );
   if (!entry) return;
 
-  const body = ctx.request.body as { content?: string };
+  const body = ctx.request.body as {
+    content?: string;
+    tags?: unknown;
+    metadata?: unknown;
+  };
+
+  const validationError = validateTagsMetadata(body, { allowNull: true });
+  if (validationError) {
+    ctx.status = 400;
+    ctx.body = { error: validationError };
+    return;
+  }
 
   ctx.body = await updateMemoryEntry({
     id: ctx.params.entry_id,
     content: body.content,
+    tags: body.tags === undefined ? undefined : (body.tags as string[] | null),
+    metadata:
+      body.metadata === undefined
+        ? undefined
+        : (body.metadata as Record<string, unknown> | null),
   });
 });
 
