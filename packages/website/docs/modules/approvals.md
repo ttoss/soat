@@ -21,10 +21,17 @@ decision output shape, so every consumer (activity feed, webhooks, UIs) treats a
 item the same regardless of where it came from.
 
 Items are **created by the platform only** — there is no public create endpoint.
-The Phase 1 producer is the `approval` orchestration node; tool-call interception
-follows in Phase 2. The `origin` field (`node` \| `tool_call`) records which
-producer filed an item, for analytics and filtering only — the lifecycle never
-branches on it.
+Two producers file items today:
+
+- the [`approval` orchestration node](./orchestrations.md) — declarative
+  placement in a DAG (`origin: node`);
+- **tool-call interception** — an
+  [`approval_policy` on an agent's tool binding](./agents.md#approval-policy)
+  gates every call of that tool, on every execution surface: chat sessions,
+  direct generations, MCP (`origin: tool_call`).
+
+The `origin` field records which producer filed an item, for analytics and
+filtering only — the lifecycle never branches on it.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -67,6 +74,38 @@ All of an item's evidence (`proposed_action`, `reasoning`, `evidence`,
 onto the item. Later state changes never alter what the approver sees — a decision
 is made on exactly the evidence the agent had.
 
+### How producers suspend and resume
+
+The two producers share the item lifecycle but suspend differently:
+
+- **`approval` node — the run parks.** Orchestration runs are durable: the node
+  emits the item and parks the run as `awaiting_input`. Resolution re-enqueues
+  the run with the [decision output](#decision-output) as the node result,
+  routing `approved` / `rejected` / `on_expired` edges.
+- **Tool-call interception — return-pending.** A synchronous generation cannot
+  be held open for hours. The intercepted call files the item and returns
+  `{ "status": "pending_approval", "approval_id": "apr_…", "expires_at": "…" }`
+  as the **tool result**; the generation completes its turn normally (the model
+  reads the result and closes with "queued for your approval"). On resolution,
+  the platform starts a **continuation generation** — linked to the original
+  via `initiator_generation_id` — feeding the decision output back into the
+  agent's context. On approval the platform first executes the frozen (or
+  edited) arguments and includes the tool's output as the decision's `result`;
+  on rejection or expiry nothing executes and the continuation carries the
+  decision (`{ "decision": "expired" }` is the exact counterpart of the node
+  path's `on_expired` edge). When the original generation ran in a session or
+  conversation, the continuation's messages append there.
+
+### Duplicate proposals (dedup)
+
+An agent retrying a proposal must not spam the queue. Tool-call items carry a
+`dedup_key` derived from the proposing agent, tool, action, and resolved
+arguments: while a matching item is `pending`, a duplicate emit files nothing
+and returns the existing item — the agent's tool result carries the existing
+`approval_id`. Once the item resolves (approved, rejected, or expired), the
+same proposal files a fresh item. Node-produced items are not deduplicated —
+each run pauses exactly once per `approval` node.
+
 ### Expiry is a hard gate
 
 Evidence goes stale, so expiry is enforced server-side in **both directions**:
@@ -81,7 +120,9 @@ Evidence goes stale, so expiry is enforced server-side in **both directions**:
 
 - **Approve** resolves the item and resumes its producer with the decision — an
   `approval` orchestration node routes down its `approved` edge (where a
-  downstream `tool` node acts on the frozen or edited arguments).
+  downstream `tool` node acts on the frozen or edited arguments); a tool-call
+  item has its frozen or edited arguments executed by the platform, and the
+  result flows into the [continuation generation](#how-producers-suspend-and-resume).
 - **Edit-then-approve** replaces the arguments via the `arguments` field on the
   approve call. Edited arguments must be a JSON object; the original proposal is
   preserved in `proposed_action`, and the edit is recorded in `edited_arguments`.
@@ -109,8 +150,10 @@ consumes it as the tool result. Identical shape for both:
 - `resolved_by` — resolving user's public ID; `null` on expiry
 - `edited_args` — `null` unless edit-then-approve
 - `reason` — required (non-null) on rejection
-- `result` — the executed tool output on approval (populated by the producer that
-  executes the approved action)
+- `result` — the executed tool output on approval. For `tool_call` items the
+  platform executes the frozen (or edited) arguments at resolution time and
+  populates it; for `node` items execution belongs to the downstream `tool`
+  node, so it stays `null` in the node result
 
 ### Who may resolve
 

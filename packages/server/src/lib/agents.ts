@@ -2,29 +2,20 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  type AgentToolBinding,
+  deriveLegacyToolFields,
+  readAgentToolBindings,
+  resolveBindingsForCreate,
+  resolveBindingsForUpdate,
+} from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { validateOutputSchema } from './outputSchema';
-import {
-  assertEphemeralTypeSupported,
-  type InlineToolDefinition,
-  validateToolDefinition,
-} from './tools';
+import { type InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:agents');
 
-export type { InlineToolDefinition };
-
-// Validates every inline tool definition in an agent's `tools` field —
-// shared with pipeline steps' inline `tool` via `tools.ts#validateToolDefinition`.
-const validateAgentInlineTools = async (args: {
-  projectId: number;
-  tools: InlineToolDefinition[] | null | undefined;
-}): Promise<void> => {
-  for (const definition of args.tools ?? []) {
-    assertEphemeralTypeSupported(definition);
-    await validateToolDefinition({ definition, projectId: args.projectId });
-  }
-};
+export type { AgentToolBinding, InlineToolDefinition };
 
 // Re-export symbols that callers expect from this module.
 export {
@@ -43,6 +34,7 @@ export type MappedAgent = {
   name: string | null;
   instructions: string | null;
   model: string | null;
+  toolBindings: AgentToolBinding[] | null;
   toolIds: string[] | null;
   tools: InlineToolDefinition[] | null;
   maxSteps: number | null;
@@ -75,6 +67,11 @@ const mapAgent = (
     aiProvider: InstanceType<typeof db.AiProvider>;
   }
 ): MappedAgent => {
+  // Canonical bindings (legacy rows normalize lazily); the deprecated
+  // `toolIds`/`tools` views are derived from them for the response echo.
+  const toolBindings = readAgentToolBindings(agent);
+  const legacyViews = deriveLegacyToolFields(toolBindings);
+
   return {
     id: agent.publicId,
     projectId: agent.project.publicId,
@@ -82,8 +79,9 @@ const mapAgent = (
     name: agent.name,
     instructions: agent.instructions,
     model: agent.model,
-    toolIds: agent.toolIds,
-    tools: agent.tools as InlineToolDefinition[] | null,
+    toolBindings,
+    toolIds: legacyViews.toolIds,
+    tools: legacyViews.tools,
     maxSteps: agent.maxSteps,
     toolChoice: agent.toolChoice,
     stopConditions: agent.stopConditions,
@@ -107,6 +105,7 @@ type AgentUpdateFields = {
   name?: string | null;
   instructions?: string | null;
   model?: string | null;
+  toolBindings?: AgentToolBinding[] | null;
   toolIds?: string[] | null;
   tools?: InlineToolDefinition[] | null;
   maxSteps?: number | null;
@@ -122,12 +121,12 @@ type AgentUpdateFields = {
   singleSessionPerActor?: boolean;
 };
 
+// `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
+// path, not copied verbatim.
 const AGENT_SCALAR_FIELDS = [
   'name',
   'instructions',
   'model',
-  'toolIds',
-  'tools',
   'maxSteps',
   'toolChoice',
   'stopConditions',
@@ -166,6 +165,7 @@ export const createAgent = async (args: {
   name?: string;
   instructions?: string;
   model?: string;
+  toolBindings?: AgentToolBinding[] | null;
   toolIds?: string[];
   tools?: InlineToolDefinition[];
   maxSteps?: number;
@@ -189,17 +189,12 @@ export const createAgent = async (args: {
       `AI provider '${args.aiProviderId}' not found.`
     );
 
-  await validateAgentInlineTools({
-    projectId: args.projectId,
-    tools: args.tools,
-  });
+  const toolBindings = await resolveBindingsForCreate(args);
 
   const defaults = {
     name: null,
     instructions: null,
     model: null,
-    toolIds: null,
-    tools: null,
     maxSteps: 20,
     toolChoice: null,
     stopConditions: null,
@@ -212,6 +207,10 @@ export const createAgent = async (args: {
   const agent = await db.Agent.create({
     ...defaults,
     ...buildAgentUpdates(args),
+    // Canonical storage only — the legacy columns stay null on new rows.
+    toolBindings,
+    toolIds: null,
+    tools: null,
     projectId: args.projectId,
     aiProviderId,
   });
@@ -289,14 +288,22 @@ export const updateAgent = async (
       `Agent '${args.id}' not found.`
     );
 
-  if (args.tools !== undefined) {
-    await validateAgentInlineTools({
-      projectId: (agent as unknown as { projectId: number }).projectId,
-      tools: args.tools,
-    });
-  }
+  const bindingsUpdate = await resolveBindingsForUpdate({
+    projectId: (agent as unknown as { projectId: number }).projectId,
+    current: readAgentToolBindings(
+      agent as unknown as Parameters<typeof readAgentToolBindings>[0]
+    ),
+    toolBindings: args.toolBindings,
+    toolIds: args.toolIds,
+    tools: args.tools,
+  });
 
   const updates = buildAgentUpdates(args);
+  if (bindingsUpdate !== undefined) {
+    updates.toolBindings = bindingsUpdate;
+    updates.toolIds = null;
+    updates.tools = null;
+  }
 
   if (args.aiProviderId !== undefined) {
     const dbId = await resolveAiProviderDbId(args.aiProviderId);

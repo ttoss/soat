@@ -1196,6 +1196,296 @@ describe('Agents', () => {
     });
   });
 
+  // ── Tool bindings ────────────────────────────────────────────────────────
+
+  describe('tool_bindings', () => {
+    let httpToolId: string;
+    let clientToolId: string;
+
+    const approvalPolicy = {
+      default: 'require_approval',
+      rules: [
+        { when: { '<': [{ var: 'arguments.amount' }, 100] }, effect: 'allow' },
+      ],
+      expires_in: 259200,
+      reasoning_prompt: 'Explain the change.',
+    };
+
+    beforeAll(async () => {
+      const httpRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bindings-http-tool',
+          type: 'http',
+          execute: { url: 'https://example.com/hook', method: 'POST' },
+          parameters: {
+            type: 'object',
+            properties: { amount: { type: 'number' } },
+          },
+        });
+      httpToolId = httpRes.body.id;
+
+      const clientRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bindings-client-tool',
+          type: 'client',
+          parameters: { type: 'object', properties: {} },
+        });
+      clientToolId = clientRes.body.id;
+    });
+
+    const createAgentWith = (body: Record<string, unknown>) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'bindings-agent',
+          ...body,
+        });
+    };
+
+    test('create with tool_bindings echoes canonical bindings and derived shorthands', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          { tool_id: httpToolId },
+          {
+            tool: {
+              name: 'inline-lookup',
+              type: 'http',
+              execute: { url: 'https://example.com/lookup' },
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.tool_bindings).toHaveLength(2);
+      expect(res.body.tool_bindings[0].tool_id).toBe(httpToolId);
+      expect(res.body.tool_bindings[1].tool.name).toBe('inline-lookup');
+      // Deprecated shorthands stay echoed, derived from the bindings.
+      expect(res.body.tool_ids).toEqual([httpToolId]);
+      expect(res.body.tools).toHaveLength(1);
+      expect(res.body.tools[0].name).toBe('inline-lookup');
+    });
+
+    test('binding approval_policy round-trips', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          { tool_id: httpToolId, approval_policy: approvalPolicy },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      const binding = res.body.tool_bindings[0];
+      expect(binding.approval_policy.default).toBe('require_approval');
+      expect(binding.approval_policy.rules).toHaveLength(1);
+      expect(binding.approval_policy.rules[0].effect).toBe('allow');
+      expect(binding.approval_policy.expires_in).toBe(259200);
+      expect(binding.approval_policy.reasoning_prompt).toBe(
+        'Explain the change.'
+      );
+    });
+
+    test('mixing tool_bindings with tool_ids returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [{ tool_id: httpToolId }],
+        tool_ids: [httpToolId],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('mixing tool_bindings with tools returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [{ tool_id: httpToolId }],
+        tools: [{ name: 'x', type: 'http', execute: { url: 'https://e.co' } }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('binding entry with both tool_id and tool returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          {
+            tool_id: httpToolId,
+            tool: {
+              name: 'x',
+              type: 'http',
+              execute: { url: 'https://e.co' },
+            },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('binding entry with neither tool_id nor tool returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [{ approval_policy: approvalPolicy }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('approval_policy without default returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          { tool_id: httpToolId, approval_policy: { expires_in: 3600 } },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('approval_policy with invalid effect returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          {
+            tool_id: httpToolId,
+            approval_policy: {
+              default: 'allow',
+              rules: [{ when: { '==': [1, 1] }, effect: 'maybe' }],
+            },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('approval_policy on a client tool binding returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          { tool_id: clientToolId, approval_policy: { default: 'deny' } },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('approval_policy referencing a missing tool returns 400', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          {
+            tool_id: 'tool_doesnotexist000',
+            approval_policy: { default: 'deny' },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TOOL_NOT_FOUND');
+    });
+
+    test('deprecated tool_ids write still works and derives tool_bindings', async () => {
+      const res = await createAgentWith({ tool_ids: [httpToolId] });
+
+      expect(res.status).toBe(201);
+      expect(res.body.tool_ids).toEqual([httpToolId]);
+      expect(res.body.tool_bindings).toEqual([{ tool_id: httpToolId }]);
+    });
+
+    test('updating via deprecated tool_ids replaces reference bindings, keeps inline ones, and drops policies', async () => {
+      const createRes = await createAgentWith({
+        tool_bindings: [
+          { tool_id: httpToolId, approval_policy: { default: 'deny' } },
+          {
+            tool: {
+              name: 'inline-keep',
+              type: 'http',
+              execute: { url: 'https://example.com/keep' },
+              parameters: { type: 'object', properties: {} },
+            },
+          },
+        ],
+      });
+      expect(createRes.status).toBe(201);
+
+      const updateRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${createRes.body.id}`)
+        .send({ tool_ids: [httpToolId] });
+
+      expect(updateRes.status).toBe(200);
+      const bindings = updateRes.body.tool_bindings;
+      expect(bindings).toHaveLength(2);
+      // Reference binding rewritten bare (policy dropped), inline kept.
+      expect(bindings[0]).toEqual({ tool_id: httpToolId });
+      expect(bindings[1].tool.name).toBe('inline-keep');
+    });
+
+    test('update with tool_bindings replaces the full list', async () => {
+      const createRes = await createAgentWith({ tool_ids: [httpToolId] });
+      expect(createRes.status).toBe(201);
+
+      const updateRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${createRes.body.id}`)
+        .send({
+          tool_bindings: [
+            { tool_id: httpToolId, approval_policy: { default: 'deny' } },
+          ],
+        });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.tool_bindings).toHaveLength(1);
+      expect(updateRes.body.tool_bindings[0].approval_policy.default).toBe(
+        'deny'
+      );
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${createRes.body.id}`
+      );
+      expect(getRes.body.tool_bindings[0].approval_policy.default).toBe('deny');
+    });
+
+    test('agent row created before tool_bindings existed still reads as bindings', async () => {
+      // Pre-upgrade rows have only the legacy columns populated. Unreachable
+      // through the API (which always writes toolBindings), so seed directly.
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const provider = await db.AiProvider.findOne({
+        where: { publicId: aiProviderId },
+      });
+      const legacy = await db.Agent.create({
+        projectId: project!.id,
+        aiProviderId: provider!.id,
+        name: 'legacy-agent',
+        toolIds: [httpToolId],
+        tools: [
+          {
+            name: 'legacy-inline',
+            type: 'http',
+            execute: { url: 'https://example.com/legacy' },
+          },
+        ],
+      });
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${legacy.publicId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.tool_bindings).toHaveLength(2);
+      expect(res.body.tool_bindings[0]).toEqual({ tool_id: httpToolId });
+      expect(res.body.tool_bindings[1].tool.name).toBe('legacy-inline');
+      expect(res.body.tool_ids).toEqual([httpToolId]);
+    });
+  });
+
   // ── Generation ───────────────────────────────────────────────────────────
 
   describe('POST /api/v1/agents/:agentId/generate', () => {

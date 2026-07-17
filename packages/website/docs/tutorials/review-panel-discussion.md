@@ -356,7 +356,7 @@ REVIEW_TOOL_ID=$(soat create-tool \
   --name "review-panel" \
   --type discussion \
   --description "Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes." \
-  --discussion '{"discussion_id": "'"$DISCUSSION_ID"'"}' | jq -r '.id')
+  --discussion-id "$DISCUSSION_ID" | jq -r '.id')
 echo "Tool: $REVIEW_TOOL_ID"
 ```
 
@@ -371,7 +371,7 @@ const { data: reviewTool } = await adminSoat.tools.createTool({
     type: 'discussion',
     description:
       'Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes.',
-    discussion: { discussion_id: discussionId },
+    discussion_id: discussionId,
   },
 });
 const reviewToolId = reviewTool!.id;
@@ -389,7 +389,7 @@ REVIEW_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
     "name": "review-panel",
     "type": "discussion",
     "description": "Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes.",
-    "discussion": { "discussion_id": "'"$DISCUSSION_ID"'" }
+    "discussion_id": "'"$DISCUSSION_ID"'"
   }' | jq -r '.id')
 echo "Tool: $REVIEW_TOOL_ID"
 ```

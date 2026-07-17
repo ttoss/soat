@@ -74,6 +74,7 @@ export type GenerationResult = {
 export type TypedAgent = {
   instructions: string | null;
   model: string | null;
+  toolBindings?: unknown;
   toolIds: unknown;
   tools: unknown;
   maxSteps: unknown;

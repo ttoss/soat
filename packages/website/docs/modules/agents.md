@@ -36,12 +36,13 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 | `name`                     | string        | Display name                                                                                                                     |
 | `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
 | `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
-| `tool_ids`                 | array         | IDs of tools attached to this agent — see [Tools](./tools.md)                                                                   |
-| `tools`                    | array         | Ephemeral inline tool definitions, resolved only for this agent's generations — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions) |
+| `tool_bindings`            | array         | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                  |
+| `tool_ids`                 | array         | **Deprecated** shorthand for reference-only bindings — see [Deprecated: `tool_ids` and `tools`](#deprecated-tool_ids-and-tools) |
+| `tools`                    | array         | **Deprecated** shorthand for inline-only bindings — see [Deprecated: `tool_ids` and `tools`](#deprecated-tool_ids-and-tools)    |
 | `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
 | `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
-| `active_tool_ids`          | array         | Subset of `tool_ids` available at each step — see [Active Tools](#active-tools)                                                  |
+| `active_tool_ids`          | array         | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                              |
 | `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
 | `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |
@@ -97,15 +98,82 @@ When `status` is `completed`, `stop_reason` indicates why:
 
 ### Tools
 
-Agents reference [Tools](./tools.md) by their IDs via the `tool_ids` field. A single tool can be attached to many agents. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
+Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool. A single persisted tool can be bound to many agents, and each binding carries that agent's per-tool configuration (today: an optional [`approval_policy`](#approval-policy)). For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
+#### Tool Bindings
+
+Each entry in `tool_bindings` is an object:
+
+| Property          | Type           | Description                                                                                                          |
+| ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| `tool_id`         | string         | Public ID of a persisted tool. Exactly one of `tool_id` / `tool` per entry.                                           |
+| `tool`            | object         | Inline (ephemeral) tool definition — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions).   |
+| `approval_policy` | object \| null | Optional allow / require-approval / deny gate evaluated on every call of this tool — see [Approval Policy](#approval-policy). |
+
+```json
+{
+  "tool_bindings": [
+    { "tool_id": "tool_k8x2f3np" },
+    {
+      "tool_id": "tool_m3p9qw7j",
+      "approval_policy": {
+        "default": "require_approval",
+        "expires_in": 259200
+      }
+    },
+    { "tool": { "name": "lookup", "type": "http", "execute": { "url": "https://api.example.com/lookup" }, "parameters": { "type": "object", "properties": { "q": { "type": "string" } } } } }
+  ]
+}
+```
+
+An entry must contain exactly one of `tool_id` or `tool` (`400 VALIDATION_FAILED` otherwise). On update, `tool_bindings` replaces the whole list. `active_tool_ids` and `step_rules[].active_tool_ids` reference **persisted** tools only — the `tool_id` of a binding; inline entries have no ID and cannot be targeted.
+
+#### Deprecated: `tool_ids` and `tools`
+
+`tool_ids` (array of tool IDs) and `tools` (array of inline definitions) are **deprecated input shorthands** for `tool_bindings`. They are still accepted on create and update and are normalized server-side: each entry of `tool_ids` becomes a `{ "tool_id": … }` binding and each entry of `tools` becomes a `{ "tool": … }` binding. Responses return the canonical `tool_bindings` and continue to echo derived `tool_ids` / `tools` during the deprecation window.
+
+- A request may use either the canonical field or the shorthands, not both: sending `tool_bindings` together with `tool_ids` or `tools` returns `400 VALIDATION_FAILED`.
+- The shorthands preserve their historical update semantics: updating `tool_ids` replaces only the reference bindings and updating `tools` replaces only the inline bindings — the two remain independent.
+- The shorthands produce **bare** bindings. Updating through `tool_ids` rewrites the reference bindings without `approval_policy` — any policy previously set on those bindings is dropped. Manage bindings that carry a policy through `tool_bindings` only.
+
+New integrations should write `tool_bindings`; the shorthands exist so pre-existing clients and templates keep working unchanged.
+
 #### Inline (Ephemeral) Tool Definitions
 
-`tools` accepts an array of inline tool definitions — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). Unlike `tool_ids`, these are **ephemeral**: they are stored directly on the agent record and resolved fresh at generation time, without creating a separate Tool resource. They never appear in `GET /tools` and cannot be targeted by `active_tool_ids` or `step_rules`, both of which reference `tool_ids`. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via `tool_ids` instead.
+A binding's `tool` property accepts an inline tool definition — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). Unlike `tool_id` bindings, these are **ephemeral**: they are stored directly on the agent record and resolved fresh at generation time, without creating a separate Tool resource. They never appear in `GET /tools` and cannot be targeted by `active_tool_ids` or `step_rules`, both of which reference persisted tool IDs. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via a `tool_id` binding instead.
 
-`tools` is a convenience for defining a tool that only ever makes sense for one agent (skipping the separate `POST /tools` call and any tool-lifecycle bookkeeping); use `tool_ids` for tools that are reused across agents or need to be independently manageable. `tools` and `tool_ids` are independent — updating one never affects the other. Send `tools: null` to clear an agent's ephemeral tools.
+Inline definitions are a convenience for a tool that only ever makes sense for one agent (skipping the separate `POST /tools` call and any tool-lifecycle bookkeeping); use `tool_id` bindings for tools that are reused across agents or need to be independently manageable.
+
+#### Approval Policy
+
+A binding's `approval_policy` turns the tool into an **approval-gated** tool: every call the model makes is classified by the platform — in the server's tool-dispatch path, not by the model — as `allow`, `require_approval`, or `deny` before anything executes. `require_approval` files an item in the project's [approval queue](./approvals.md) and the action executes only if a human approves it before it expires.
+
+| Property           | Type           | Description                                                                                                                    |
+| ------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `default`          | string         | **Required.** `allow` \| `require_approval` \| `deny` — applied when no rule matches. Bindings guarding write tools should default to `require_approval` or `deny` (fail-closed). |
+| `rules`            | array          | Optional ordered rule list; first match wins.                                                                                   |
+| `rules[].when`     | object         | [JSON Logic](https://jsonlogic.com) over `{ "action": …, "arguments": … }` — the resolved call (see below).                     |
+| `rules[].effect`   | string         | `allow` \| `require_approval` \| `deny`.                                                                                        |
+| `expires_in`       | integer        | Seconds until a filed approval item expires (default `86400` = 24h). Expiry is a server-enforced hard gate — see [Approvals](./approvals.md#expiry-is-a-hard-gate). |
+| `reasoning_prompt` | string \| null | Optional guidance injected into the tool's model-visible description, telling the model how to justify guarded calls (see below). |
+
+**Evaluation context.** `action` is the resolved action name of the call — the MCP tool name for `mcp` tools, the platform action for `soat` tools (e.g. `update-document`), and the tool's own `name` otherwise. `arguments` are the resolved call arguments, after `preset_parameters` are merged and the `approval_*` justification fields (below) are stripped. A policy with no `rules` applies its `default` to every call.
+
+**Effects.**
+
+- `allow` — the call executes normally.
+- `deny` — the call never executes; the model receives `{ "status": "denied", "reason": "Denied by approval_policy." }` as the tool result and continues its turn.
+- `require_approval` — the platform freezes the proposed call into an [approval item](./approvals.md) (`origin: "tool_call"`) and returns `{ "status": "pending_approval", "approval_id": "apr_…", "expires_at": "…" }` as the tool result. The generation **completes its turn normally** — unlike [client tools](./tools.md#client), it does not pause in `requires_action`; the model typically closes with "queued for your approval".
+
+**Resolution and continuation.** When the item is approved, the platform executes the frozen (or [edited](./approvals.md#approve-reject-edit-then-approve)) arguments and starts a **continuation generation** — a new generation linked to the original via `initiator_generation_id` — feeding the [decision output](./approvals.md#decision-output) (including the executed tool's `result`) back into the agent's context so it can finish what it proposed. On rejection or expiry the continuation carries the decision (with the rejection `reason`) and nothing executes. When the original generation ran in a session or conversation, the continuation's messages append there.
+
+**Duplicate proposals.** While a matching item is `pending`, re-proposing the same call (same agent, tool, action, and arguments) does not file a second item — the tool result carries the existing `approval_id`. See [dedup keys](./approvals.md#data-model).
+
+**Justifying guarded calls.** When a binding's policy can yield `require_approval`, the tool's model-visible parameters schema gains three optional fields — `approval_reasoning` (string), `approval_evidence` (object), `approval_predicted_impact` (string). Values the model supplies are stripped from the executed arguments and frozen onto the item as its `reasoning` / `evidence` / `predicted_impact`, so the approver sees the agent's own justification. `reasoning_prompt` customizes the guidance the model sees for these fields; a sensible default instruction is used when it is omitted.
+
+**Restrictions.** `approval_policy` is not supported on `client` tool bindings (`400 VALIDATION_FAILED`) — a client tool executes on the caller's machine, so the platform cannot execute the approved action at resolution time. All server-executable types (`http`, `mcp`, `soat`, `pipeline`, `discussion`) support it. For `mcp` and `soat` tools the policy guards **every** action the binding exposes; use `rules[].when` on `action` to scope effects per action.
 
 ### Instructions
 
@@ -178,9 +246,9 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
 
 ### Active Tools
 
-By default, all tools in `tool_ids` are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
+By default, all bound tools are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
 
-`active_tool_ids` must be a subset of `tool_ids`. If omitted, all tools in `tool_ids` are active.
+`active_tool_ids` must be a subset of the persisted tool IDs bound via `tool_bindings` (the `tool_id` entries). If omitted, all bound tools are active.
 
 ### Generation Loop
 
@@ -520,7 +588,7 @@ curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
 {
   "ai_provider_id": "aip_openai",
   "instructions": "You are a research assistant.",
-  "tool_ids": ["tool_k8x2f3np", "tool_m3p9qw7j"],
+  "tool_bindings": [{ "tool_id": "tool_k8x2f3np" }, { "tool_id": "tool_m3p9qw7j" }],
   "max_steps": 10
 }
 ```
@@ -537,7 +605,7 @@ No `tool_choice`, `step_rules`, or `stop_conditions` — everything defaults to 
 {
   "ai_provider_id": "aip_openai",
   "instructions": "You help users analyze local data files.",
-  "tool_ids": ["tool_r7w4n1hc", "tool_j5v1d6yt"],
+  "tool_bindings": [{ "tool_id": "tool_r7w4n1hc" }, { "tool_id": "tool_j5v1d6yt" }],
   "max_steps": 10
 }
 ```
@@ -553,7 +621,11 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 ```json
 {
   "ai_provider_id": "aip_openai",
-  "tool_ids": ["tool_e2h6t0bx", "tool_n9c3y8ms", "tool_p4s8a2kd"],
+  "tool_bindings": [
+    { "tool_id": "tool_e2h6t0bx" },
+    { "tool_id": "tool_n9c3y8ms" },
+    { "tool_id": "tool_p4s8a2kd" }
+  ],
   "max_steps": 5,
   "step_rules": [
     { "step": 1, "tool_choice": { "type": "tool", "tool_name": "extract" } },
@@ -565,7 +637,36 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 
 ---
 
-### 4. Done Tool Pattern (forced structured output)
+### 4. Approval-Gated Writes (manage-by-exception)
+
+**Use when:** the agent may read freely but a write must be approved by a human before it executes.
+
+```json
+{
+  "ai_provider_id": "aip_openai",
+  "instructions": "You manage the campaign budget.",
+  "tool_bindings": [
+    { "tool_id": "tool_read_campaigns" },
+    {
+      "tool_id": "tool_update_budget",
+      "approval_policy": {
+        "default": "require_approval",
+        "rules": [
+          { "when": { "<": [{ "var": "arguments.amount" }, 100] }, "effect": "allow" }
+        ],
+        "expires_in": 259200,
+        "reasoning_prompt": "Explain why the budget change is needed and its expected impact."
+      }
+    }
+  ]
+}
+```
+
+Calls under $100 execute autonomously; anything else is frozen into the [approval queue](./approvals.md) with the model's own justification, and executes only if a human approves it within 72 hours. See [Approval Policy](#approval-policy) for the full flow.
+
+---
+
+### 5. Done Tool Pattern (forced structured output)
 
 **Use when:** the model should always commit its final answer through a structured tool.
 
@@ -573,7 +674,7 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 {
   "ai_provider_id": "aip_openai",
   "instructions": "Research the topic and call done with your structured answer.",
-  "tool_ids": ["tool_k8x2f3np", "tool_q6b2x5wf"],
+  "tool_bindings": [{ "tool_id": "tool_k8x2f3np" }, { "tool_id": "tool_q6b2x5wf" }],
   "tool_choice": "required",
   "stop_conditions": [{ "type": "hasToolCall", "tool_name": "done" }],
   "max_steps": 15
@@ -584,7 +685,7 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 
 ---
 
-### 5. MCP Tools (tools from an MCP server)
+### 6. MCP Tools (tools from an MCP server)
 
 **Use when:** you want the agent to use tools provided by an external MCP server (e.g., GitHub, Slack).
 
@@ -592,7 +693,7 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 {
   "ai_provider_id": "aip_anthropic",
   "instructions": "You manage GitHub repositories.",
-  "tool_ids": ["tool_c5n8f2vb"],
+  "tool_bindings": [{ "tool_id": "tool_c5n8f2vb" }],
   "max_steps": 10
 }
 ```
@@ -601,7 +702,7 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 
 ---
 
-### 6. SOAT Tools (platform actions)
+### 7. SOAT Tools (platform actions)
 
 **Use when:** the agent needs to interact with SOAT platform data — reading documents, searching files, managing conversations.
 
@@ -609,7 +710,7 @@ When the model calls the `client` tool, the generation suspends with `status: "r
 {
   "ai_provider_id": "aip_openai",
   "instructions": "You are a knowledge assistant. Use the project's documents to answer user questions.",
-  "tool_ids": ["tool_s2d7p4qx"],
+  "tool_bindings": [{ "tool_id": "tool_s2d7p4qx" }],
   "max_steps": 10
 }
 ```
