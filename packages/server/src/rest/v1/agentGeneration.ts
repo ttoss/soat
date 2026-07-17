@@ -5,6 +5,7 @@ import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
+import { validateGenerationMetadata } from 'src/lib/generations';
 import {
   type ExtractionMessage,
   fireMemoryExtraction,
@@ -88,6 +89,26 @@ const toObjectOrUndefined = (value: unknown): object | undefined => {
   return value && typeof value === 'object' ? value : undefined;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+// Validates the create-generation request body. Returns an error message when
+// invalid, or null when the body is acceptable. Kept out of the handler so the
+// handler stays within its complexity budget.
+const validateGenerateBody = (body: {
+  messages?: unknown;
+  metadata?: unknown;
+}): string | null => {
+  if (!Array.isArray(body.messages) || body.messages.length === 0) {
+    return 'messages is required and must be a non-empty array';
+  }
+  if (body.metadata !== undefined) {
+    return validateGenerationMetadata(body.metadata);
+  }
+  return null;
+};
+
 export const agentGenerationRouter = new Router<Context>();
 
 agentGenerationRouter.post(
@@ -120,6 +141,7 @@ agentGenerationRouter.post(
       knowledgeConfig,
       actionId,
       extract,
+      metadata,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -131,13 +153,13 @@ agentGenerationRouter.post(
       knowledgeConfig?: object;
       actionId?: string;
       extract?: boolean;
+      metadata?: unknown;
     };
 
-    if (!Array.isArray(messages) || messages.length === 0) {
+    const bodyError = validateGenerateBody({ messages, metadata });
+    if (bodyError) {
       ctx.status = 400;
-      ctx.body = {
-        error: 'messages is required and must be a non-empty array',
-      };
+      ctx.body = { error: bodyError };
       return;
     }
 
@@ -156,6 +178,7 @@ agentGenerationRouter.post(
       toolContext,
       knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
       actionId: typeof actionId === 'string' ? actionId : undefined,
+      metadata: isRecord(metadata) ? metadata : undefined,
     });
 
     fireExtractionForCompletedResult({

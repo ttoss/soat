@@ -1010,6 +1010,18 @@ components:
         action_id:
           type: string
           description: Logical action label recorded on the generation's usage meter, so spend can be rolled up per action (e.g. an A/B/C/D operating action).
+        metadata:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >-
+            Caller-supplied key/value metadata attached to the generation
+            record for per-run audit attribution (e.g. the knowledge-corpus
+            version that produced this action). Round-trips when the generation
+            is fetched via the generations API. Reserved server-owned keys
+            (`action_id`, `trigger_id`, `run_id`, `node_id`, `extraction`, and
+            internal recovery state) cannot be set here and are rejected with
+            400.
         extract:
           type: boolean
           description: >-

@@ -1642,6 +1642,29 @@ else
   echo "WARNING: Agent output may not contain the exact project name (LLM response varies), but generation completed successfully."
 fi
 
+# 22a2. Writable generation metadata (F-15): attach caller metadata after the
+# generation ran, then confirm it round-trips on get-generation.
+GEN_ID=$(printf '%s\n' "$GEN_RESP" | jq -r '.id')
+if [ -z "$GEN_ID" ] || [ "$GEN_ID" = "null" ]; then
+  echo "ERROR: generation response did not include an id" >&2
+  exit 1
+fi
+echo "--- Attaching audit metadata to generation $GEN_ID ---"
+GEN_PATCH_RESP=$($SOAT_CLI update-generation --generation-id "$GEN_ID" \
+  --metadata '{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}' | sanitize_json)
+if ! printf '%s\n' "$GEN_PATCH_RESP" | jq -e '.metadata.knowledge_version == "2026-07-01" and .metadata.playbook == "refunds-v3"' >/dev/null 2>&1; then
+  echo "ERROR: update-generation did not round-trip caller metadata" >&2
+  printf '%s\n' "$GEN_PATCH_RESP" | jq . >&2
+  exit 1
+fi
+GEN_GET_RESP=$($SOAT_CLI get-generation --generation-id "$GEN_ID" | sanitize_json)
+if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.knowledge_version == "2026-07-01" and .metadata.playbook == "refunds-v3"' >/dev/null 2>&1; then
+  echo "ERROR: get-generation did not return attached metadata" >&2
+  printf '%s\n' "$GEN_GET_RESP" | jq . >&2
+  exit 1
+fi
+echo "Generation metadata round-trip: OK"
+
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
 AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \

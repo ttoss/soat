@@ -83,8 +83,11 @@ const buildGenerationMetadata = (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
+  metadata?: Record<string, unknown> | null;
 }): Record<string, unknown> | null => {
-  const metadata: Record<string, unknown> = {};
+  // Caller-supplied metadata (F-15) seeds the bag; system attribution keys are
+  // layered on top. Reserved keys are rejected upstream, so they never collide.
+  const metadata: Record<string, unknown> = { ...(args.metadata ?? {}) };
   if (args.actionId !== undefined) metadata.actionId = args.actionId;
   if (args.triggerId !== undefined) metadata.triggerId = args.triggerId;
   // Orchestration attribution: the public run id and the node id that
@@ -112,6 +115,7 @@ const resolveContextAndRecord = async (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
+  metadata?: Record<string, unknown> | null;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -142,6 +146,7 @@ const resolveContextAndRecord = async (args: {
       triggerId: args.triggerId,
       runId: args.runId,
       nodeId: args.nodeId,
+      metadata: args.metadata,
     }),
   }).catch((error) => {
     log(
@@ -207,6 +212,7 @@ export const createGeneration = async (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
+  metadata?: Record<string, unknown> | null;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -238,6 +244,7 @@ export const createGeneration = async (args: {
     triggerId: args.triggerId,
     runId: args.runId,
     nodeId: args.nodeId,
+    metadata: args.metadata,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

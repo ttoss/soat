@@ -151,6 +151,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Generations
+      summary: Update generation metadata
+      description: >
+        Attaches caller-supplied key/value metadata to a generation record for
+        per-run audit attribution (e.g. recording which knowledge-corpus version
+        produced an AI action). The provided keys are shallow-merged over the
+        existing metadata, so repeated patches accumulate and system-owned keys
+        are preserved. Reserved keys (`action_id`, `trigger_id`, `run_id`,
+        `node_id`, `extraction`, and internal recovery state) cannot be set and
+        are rejected with 400.
+      operationId: updateGeneration
+      parameters:
+        - name: generation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGenerationRequest'
+            examples:
+              audit:
+                summary: Attach knowledge-version audit metadata
+                value:
+                  metadata:
+                    knowledge_version: kb_2026_07_01
+                    playbook: refunds-v3
+      responses:
+        '200':
+          description: Updated generation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Generation'
+        '400':
+          description: Bad Request (e.g. metadata is not an object or uses reserved keys)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
 components:
   securitySchemes:
@@ -235,11 +299,15 @@ components:
         metadata:
           type: object
           nullable: true
+          additionalProperties: true
           description: >
             Non-sensitive metadata recorded about the generation. May include
-            `action_id` (the logical action label supplied on the generate
-            request) and `trigger_id` (set when a trigger initiated the
-            generation), plus `extraction` — set when the agent's
+            caller-supplied key/value pairs attached at create time (via the
+            `metadata` field on the create-agent-generation request) or
+            afterwards (via the update-generation request), plus
+            server-owned keys: `action_id` (the logical action label supplied on
+            the generate request), `trigger_id` (set when a trigger initiated
+            the generation), and `extraction` — set when the agent's
             `knowledge_config.extraction` produced a memory-extraction summary
             for this turn (`candidates`, `created`, `updated`, `skipped`).
             Internal recovery state is never included here.
@@ -276,6 +344,23 @@ components:
         updated_at:
           type: string
           format: date-time
+
+    UpdateGenerationRequest:
+      type: object
+      required:
+        - metadata
+      properties:
+        metadata:
+          type: object
+          additionalProperties: true
+          description: >
+            Caller-supplied key/value metadata to shallow-merge into the
+            generation record. Reserved server-owned keys (`action_id`,
+            `trigger_id`, `run_id`, `node_id`, `extraction`, and internal
+            recovery state) are rejected with 400.
+          example:
+            knowledge_version: '2026-07-01'
+            playbook: refunds-v3
 
     ErrorResponse:
       type: object
