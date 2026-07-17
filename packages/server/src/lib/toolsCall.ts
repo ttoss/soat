@@ -8,6 +8,7 @@ import {
   buildMcpToolExecute,
   executeSoatTool,
 } from './agentToolResolverExternalTools';
+import { runDiscussion } from './discussionRuns';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
@@ -16,6 +17,7 @@ import {
   resolveSecretRefsInString,
 } from './secrets';
 import { soatTools } from './soatTools';
+import { callTool } from './tools';
 
 const noopLogToolCallingError = () => {};
 
@@ -106,8 +108,6 @@ export const callDiscussionTool = async (
       'A discussion tool call requires a string `topic`.'
     );
   }
-  // Dynamically imported to avoid a circular import at module load.
-  const { runDiscussion } = await import('./discussionRuns');
   const run = await runDiscussion({
     discussionId: tool.discussionId,
     topic,
@@ -339,17 +339,13 @@ export const callResolvedTool = async (args: {
             remainingDepth: step.remainingDepth,
           });
         }
-        // Dynamically imported to avoid a circular import — tools.ts imports
-        // this module for `callResolvedTool`.
-        return import('./tools').then(({ callTool }) => {
-          return callTool({
-            projectIds: args.projectIds,
-            id: step.toolId as string,
-            action: step.action,
-            input: step.input,
-            authHeader: args.authHeader,
-            remainingDepth: step.remainingDepth,
-          });
+        return callTool({
+          projectIds: args.projectIds,
+          id: step.toolId as string,
+          action: step.action,
+          input: step.input,
+          authHeader: args.authHeader,
+          remainingDepth: step.remainingDepth,
         });
       },
     });

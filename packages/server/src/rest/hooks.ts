@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { prepareFiring, runFiringDispatch } from 'src/lib/triggerDispatch';
 import { findWebhookTriggerForDelivery } from 'src/lib/triggers';
 
 const hooksRouter = new Router<Context>();
@@ -75,14 +76,6 @@ hooksRouter.post('/hooks/triggers/:trigger_id', async (ctx: Context) => {
   }
 
   const fireInput = parseHookInput(rawBody);
-
-  // Loaded lazily (not a static import) so mounting this router at app level
-  // does not front-load triggerDispatch's heavy graph (agents/tools/
-  // orchestration) at server init — that reordered module init and broke the
-  // orchestrations↔engine import cycle. By first hook call, all modules are
-  // fully initialized.
-  const { prepareFiring, runFiringDispatch } =
-    await import('../lib/triggerDispatch');
 
   // Pre-flight synchronously (invalid input → 400, etc.), then dispatch in the
   // background and acknowledge with 202 + the auditable firing id.
