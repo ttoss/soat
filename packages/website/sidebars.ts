@@ -185,6 +185,11 @@ const sidebars: SidebarsConfig = {
         'tutorials/automate-a-flow-with-triggers',
       ],
     },
+    {
+      type: 'category',
+      label: 'Cost & Operations',
+      items: ['tutorials/metering-and-budgets'],
+    },
   ],
 
   // Generated / lookup-oriented material. Most doc ids below only exist after
