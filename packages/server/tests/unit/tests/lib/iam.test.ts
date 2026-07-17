@@ -2,9 +2,12 @@ import {
   buildSrn,
   evaluateCondition,
   evaluatePolicies,
+  evaluatePoliciesMultiResource,
+  extractProjectIdsFromPolicies,
   matchesPattern,
   type PolicyDocument,
   statementMatches,
+  validatePolicyActions,
   validatePolicyDocument,
 } from 'src/lib/iam';
 
@@ -161,6 +164,129 @@ describe('IAM', () => {
         })
       ).toBe(true);
     });
+
+    test('resource present but not an array fails', () => {
+      const doc = {
+        statement: [
+          { effect: 'Allow', action: ['files:GetFile'], resource: 'nope' },
+        ],
+      };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('resource');
+        })
+      ).toBe(true);
+    });
+
+    test('empty resource array fails', () => {
+      const doc = {
+        statement: [
+          { effect: 'Allow', action: ['files:GetFile'], resource: [] },
+        ],
+      };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('resource');
+        })
+      ).toBe(true);
+    });
+
+    test('condition operator block that is not an object fails', () => {
+      const doc = {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['files:GetFile'],
+            condition: { StringEquals: 'not-an-object' },
+          },
+        ],
+      };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('must be an object');
+        })
+      ).toBe(true);
+    });
+
+    test('condition that is an array fails', () => {
+      const doc = {
+        statement: [
+          {
+            effect: 'Allow',
+            action: ['files:GetFile'],
+            condition: ['not-an-object'],
+          },
+        ],
+      };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('condition');
+        })
+      ).toBe(true);
+    });
+
+    test('statement entry that is not an object fails', () => {
+      const doc = { statement: ['not-an-object', null] };
+      const result = validatePolicyDocument(doc);
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('must be an object');
+        })
+      ).toBe(true);
+    });
+  });
+
+  describe('validatePolicyActions', () => {
+    test('non-object document is treated as valid (no actions to check)', () => {
+      expect(validatePolicyActions(null).valid).toBe(true);
+      expect(validatePolicyActions([]).valid).toBe(true);
+    });
+
+    test('document without a statement array is valid', () => {
+      expect(validatePolicyActions({ foo: 'bar' }).valid).toBe(true);
+    });
+
+    test('statement entry that is not an object is skipped', () => {
+      const result = validatePolicyActions({ statement: ['nope', null] });
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('statement with a non-array action is skipped', () => {
+      const result = validatePolicyActions({
+        statement: [{ effect: 'Allow', action: 'files:GetFile' }],
+      });
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    test('unknown action produces an error', () => {
+      const result = validatePolicyActions({
+        statement: [{ effect: 'Allow', action: ['files:NotARealAction'] }],
+      });
+      expect(result.valid).toBe(false);
+      expect(
+        result.errors.some((e) => {
+          return e.includes('not a known action');
+        })
+      ).toBe(true);
+    });
+
+    test('known action passes', () => {
+      const result = validatePolicyActions({
+        statement: [{ effect: 'Allow', action: ['*'] }],
+      });
+      expect(result.valid).toBe(true);
+    });
   });
 
   describe('buildSrn', () => {
@@ -282,6 +408,173 @@ describe('IAM', () => {
           context: { 'soat:tag:env': 'prod', 'soat:tag:region': 'us-east-1' },
         })
       ).toBe(false);
+    });
+
+    test('StringLike with a missing context key compares against empty string', () => {
+      // actual is undefined → falls back to '' inside evaluateConditionForKey
+      expect(
+        evaluateCondition({
+          condition: { StringLike: { 'soat:tag:env': '*' } },
+          context: {},
+        })
+      ).toBe(true);
+      expect(
+        evaluateCondition({
+          condition: { StringLike: { 'soat:tag:env': 'prod*' } },
+          context: {},
+        })
+      ).toBe(false);
+    });
+
+    test('a falsy operator block is skipped', () => {
+      expect(
+        evaluateCondition({
+          // StringEquals block is undefined → the loop continues past it
+          condition: { StringEquals: undefined },
+          context: {},
+        })
+      ).toBe(true);
+    });
+
+    test('an unrecognized operator is treated as a pass', () => {
+      expect(
+        evaluateCondition({
+          // Unknown operators fall through evaluateConditionForKey to `true`.
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          condition: { DateGreaterThan: { 'soat:tag:env': 'prod' } } as any,
+          context: { 'soat:tag:env': 'dev' },
+        })
+      ).toBe(true);
+    });
+  });
+
+  describe('evaluatePoliciesMultiResource', () => {
+    const scopedPolicy: PolicyDocument = {
+      statement: [
+        {
+          effect: 'Allow',
+          action: ['files:GetFile'],
+          resource: ['soat:proj_A:file:*'],
+        },
+      ],
+    };
+
+    test('grants access when one candidate resource matches (default context)', () => {
+      // Called without `context` so the `?? {}` default branch is exercised.
+      expect(
+        evaluatePoliciesMultiResource({
+          policies: [scopedPolicy],
+          action: 'files:GetFile',
+          resources: ['soat:proj_B:file:file_1', 'soat:proj_A:file:file_1'],
+        })
+      ).toBe(true);
+    });
+
+    test('denies when any candidate resource matches a Deny', () => {
+      const denyPolicy: PolicyDocument = {
+        statement: [
+          {
+            effect: 'Deny',
+            action: ['files:GetFile'],
+            resource: ['soat:proj_A:file:*'],
+          },
+        ],
+      };
+      expect(
+        evaluatePoliciesMultiResource({
+          policies: [scopedPolicy, denyPolicy],
+          action: 'files:GetFile',
+          resources: ['soat:proj_A:file:file_1'],
+          context: {},
+        })
+      ).toBe(false);
+    });
+
+    test('returns false when no candidate resource matches an Allow', () => {
+      expect(
+        evaluatePoliciesMultiResource({
+          policies: [scopedPolicy],
+          action: 'files:GetFile',
+          resources: ['soat:proj_Z:file:file_1'],
+        })
+      ).toBe(false);
+    });
+  });
+
+  describe('extractProjectIdsFromPolicies', () => {
+    test('collects distinct project ids from Allow statements', () => {
+      const result = extractProjectIdsFromPolicies([
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: [
+                'soat:proj_A:file:*',
+                'soat:proj_B:file:*',
+                'soat:proj_A:file:file_1',
+              ],
+            },
+          ],
+        },
+      ]);
+      expect(result).toEqual(['proj_A', 'proj_B']);
+    });
+
+    test('ignores Deny statements', () => {
+      const result = extractProjectIdsFromPolicies([
+        {
+          statement: [
+            {
+              effect: 'Deny',
+              action: ['files:GetFile'],
+              resource: ['soat:proj_A:file:*'],
+            },
+          ],
+        },
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    test('skips resources that are not soat SRNs or are too short', () => {
+      const result = extractProjectIdsFromPolicies([
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: ['other:thing', 'soat:proj_A'],
+            },
+          ],
+        },
+      ]);
+      expect(result).toEqual([]);
+    });
+
+    test('returns undefined for a wildcard * resource', () => {
+      const result = extractProjectIdsFromPolicies([
+        {
+          statement: [
+            { effect: 'Allow', action: ['files:GetFile'], resource: ['*'] },
+          ],
+        },
+      ]);
+      expect(result).toBeUndefined();
+    });
+
+    test('returns undefined for a wildcard project segment', () => {
+      const result = extractProjectIdsFromPolicies([
+        {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['files:GetFile'],
+              resource: ['soat:*:file:file_1'],
+            },
+          ],
+        },
+      ]);
+      expect(result).toBeUndefined();
     });
   });
 
