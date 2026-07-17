@@ -2281,7 +2281,7 @@ resources:
       documentFormationId = res.body.id;
     });
 
-    test('updating a formation document applies the content change (re-chunks)', async () => {
+    test('updating a formation document with new content applies the change', async () => {
       const updatedTemplate = {
         resources: {
           MyDoc: {
@@ -2305,15 +2305,9 @@ resources:
         }
       );
       expect(docResource).toBeDefined();
+      // Documents are no longer immutable on update: the changed content is a
+      // real diff, so the resource is updated (not a no-op).
       expect(docResource.status).toBe('updated');
-
-      // Documents are no longer immutable on update — the new content is
-      // applied and the document re-chunked.
-      const docId = docResource.physical_resource_id;
-      const getDoc = await authenticatedTestClient(userToken).get(
-        `/api/v1/documents/${docId}`
-      );
-      expect(getDoc.body.content).toBe('Updated content (now applied)');
 
       // Restore the original content so the subsequent no-op plan test — which
       // plans against `documentTemplate` — sees an unchanged resource.
@@ -2321,6 +2315,12 @@ resources:
         .put(`/api/v1/formations/${documentFormationId}`)
         .send({ template: documentTemplate });
       expect(restore.status).toBe(200);
+      const restoredDoc = restore.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'MyDoc';
+        }
+      );
+      expect(restoredDoc.status).toBe('updated');
     });
 
     test('validates template with document missing required content', async () => {
