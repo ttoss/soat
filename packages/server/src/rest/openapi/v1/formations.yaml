@@ -1179,8 +1179,8 @@ components:
           format: date-time
           description: >-
             Timestamp from which this price applies. Omit to take effect at
-            deploy time. The row with the latest effective_from <= now() prices
-            a call.
+            deploy time. The row with the latest effective_from at or before
+            now() prices a call.
 
     SessionResourceProperties:
       description: >-
