@@ -83,9 +83,9 @@ export const projectPricesFormationModule: FormationModule = {
       throw new Error(errors[0].message);
     }
 
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
+    // Validation above guarantees an object; `rawProperties` is already typed
+    // Record<string, unknown>, so normalize its keys directly.
+    const properties = normalizePropertyKeys(rawProperties);
 
     const result = await createFormationProjectPrice({
       projectId,
@@ -117,9 +117,7 @@ export const projectPricesFormationModule: FormationModule = {
       throw new Error(errors[0].message);
     }
 
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
+    const properties = normalizePropertyKeys(rawProperties);
 
     await updateFormationProjectPrice({
       id: physicalResourceId,

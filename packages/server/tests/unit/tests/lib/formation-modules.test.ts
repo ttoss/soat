@@ -1187,6 +1187,33 @@ describe('projectPricesFormationModule', () => {
     expect(count).toBe(1);
   });
 
+  test('update omitting unit_price leaves the price untouched', async () => {
+    const priceId = await applyCreateResource({
+      resourceType: 'project_price',
+      projectId: internalProjectId,
+      resolvedProperties: { ...baseProps, model: 'gpt-4o-partial' },
+    });
+
+    // forUpdate skips the required-field check, so a partial update (here only
+    // meter_type) is valid; unit_price is undefined and left as-is.
+    await applyUpdateResource({
+      resourceType: 'project_price',
+      physicalResourceId: priceId,
+      resolvedProperties: {
+        provider: 'openai',
+        model: 'gpt-4o-partial',
+        component: 'output_tokens',
+        unit: 'token',
+        meter_type: 'llm_tokens',
+      },
+    });
+
+    const read = await readModule('project_price').read?.({
+      physicalResourceId: priceId,
+    });
+    expect((read as { unit_price: number }).unit_price).toBe(0.00001);
+  });
+
   test('delete removes the price row', async () => {
     const priceId = await applyCreateResource({
       resourceType: 'project_price',

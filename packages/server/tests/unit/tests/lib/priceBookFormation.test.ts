@@ -67,10 +67,53 @@ describe('priceBookFormation', () => {
       expect(read?.unitPrice).toBe(0.00009);
     });
 
+    test('an explicit effective_from is honored on create and update', async () => {
+      const project = await db.Project.create({ name: 'fm-price-explicit' });
+
+      const created = await createFormationProjectPrice({
+        projectId: project.id as number,
+        provider: 'openai',
+        model: 'fm-explicit-model',
+        component: 'output_tokens',
+        unit: 'token',
+        unitPrice: 0.00001,
+        effectiveFrom: '2030-01-01T00:00:00.000Z',
+      });
+      expect(created.effectiveFrom.toISOString()).toBe(
+        '2030-01-01T00:00:00.000Z'
+      );
+
+      const updated = await updateFormationProjectPrice({
+        id: created.id,
+        effectiveFrom: '2031-06-01T00:00:00.000Z',
+      });
+      expect(updated.effectiveFrom.toISOString()).toBe(
+        '2031-06-01T00:00:00.000Z'
+      );
+      // unit_price was not part of this update, so it is left untouched.
+      expect(updated.unitPrice).toBe(0.00001);
+    });
+
     test('update throws RESOURCE_NOT_FOUND for a missing price', async () => {
       await expect(
         updateFormationProjectPrice({ id: 'price_missing', unitPrice: 1 })
       ).rejects.toMatchObject({ code: 'RESOURCE_NOT_FOUND' });
+    });
+
+    test('update rejects a negative unit_price', async () => {
+      const project = await db.Project.create({ name: 'fm-price-negative' });
+      const created = await createFormationProjectPrice({
+        projectId: project.id as number,
+        provider: 'openai',
+        model: 'fm-neg-model',
+        component: 'output_tokens',
+        unit: 'token',
+        unitPrice: 0.00001,
+      });
+
+      await expect(
+        updateFormationProjectPrice({ id: created.id, unitPrice: -1 })
+      ).rejects.toMatchObject({ code: 'VALIDATION_FAILED' });
     });
 
     test('an invalid effective_from is rejected', async () => {
