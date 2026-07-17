@@ -3,7 +3,6 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
-import { prepareFiring, runFiringDispatch } from './triggerDispatch';
 import { computeNextFireAt } from './triggerValidation';
 
 const log = createDebug('soat:triggers');
@@ -65,7 +64,14 @@ export const fireDueTriggers = createSweep({
     );
     return claimed > 0;
   },
+  // `prepareFiring` / `runFiringDispatch` are imported lazily (not statically)
+  // so this scheduler — started from `server.ts` — stays off the
+  // orchestrations↔engine import cycle, matching the inbound `/hooks` router.
+  // A static import here front-loads triggerDispatch's orchestration graph at
+  // app init and breaks that cycle (every orchestration-run POST 500s).
   handle: async ({ row: trigger }) => {
+    const { prepareFiring, runFiringDispatch } =
+      await import('./triggerDispatch');
     const prepared = await prepareFiring({
       triggerPublicId: trigger.publicId as string,
       source: 'schedule',
