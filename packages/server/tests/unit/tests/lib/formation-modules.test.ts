@@ -144,6 +144,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['conversation', 'Conversation `properties` must be an object'],
   ['file', 'File `properties` must be an object'],
   ['policy', 'Policy `properties` must be an object'],
+  ['project_price', 'Project price `properties` must be an object'],
   ['secret', 'Secret `properties` must be an object'],
   ['session', 'Session `properties` must be an object'],
   ['ingestion_rule', 'Ingestion rule `properties` must be an object'],
@@ -1093,6 +1094,133 @@ describe('secretsFormationModule', () => {
         resourceType: 'secret',
         projectId: internalProjectId,
         resolvedProperties: { value: 'x', someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
+  });
+});
+
+// ── project price CRUD + drift-safe read ────────────────────────────────────
+
+describe('projectPricesFormationModule', () => {
+  const baseProps = {
+    provider: 'openai',
+    model: 'gpt-4o',
+    component: 'output_tokens',
+    unit: 'token',
+    unit_price: 0.00001,
+  };
+
+  test('create requires unit_price', async () => {
+    const { unit_price: _omit, ...withoutPrice } = baseProps;
+    await expect(
+      applyCreateResource({
+        resourceType: 'project_price',
+        projectId: internalProjectId,
+        resolvedProperties: withoutPrice,
+      })
+    ).rejects.toThrow(/unit_price/);
+  });
+
+  test('create then read round-trips the priced fields', async () => {
+    const priceId = await applyCreateResource({
+      resourceType: 'project_price',
+      projectId: internalProjectId,
+      resolvedProperties: { ...baseProps, model: 'gpt-4o-read' },
+    });
+    expect(priceId).toMatch(/^price_/);
+
+    const read = await readModule('project_price').read?.({
+      physicalResourceId: priceId,
+    });
+    expect(read).toMatchObject({
+      provider: 'openai',
+      model: 'gpt-4o-read',
+      component: 'output_tokens',
+      unit: 'token',
+      unit_price: 0.00001,
+      meter_type: 'llm_tokens',
+    });
+    // effective_from defaults to deploy time so the price is live immediately.
+    expect(typeof (read as { effective_from: string }).effective_from).toBe(
+      'string'
+    );
+  });
+
+  test('create scopes the row to the project (project + provider-slug tier)', async () => {
+    const priceId = await applyCreateResource({
+      resourceType: 'project_price',
+      projectId: internalProjectId,
+      resolvedProperties: { ...baseProps, model: 'gpt-4o-scope' },
+    });
+
+    const row = await db.PriceBook.findOne({ where: { publicId: priceId } });
+    expect(row?.projectId).toBe(internalProjectId);
+    expect(row?.aiProviderId).toBeNull();
+  });
+
+  test('update changes the unit_price in place on the same row', async () => {
+    const priceId = await applyCreateResource({
+      resourceType: 'project_price',
+      projectId: internalProjectId,
+      resolvedProperties: { ...baseProps, model: 'gpt-4o-upd' },
+    });
+
+    await applyUpdateResource({
+      resourceType: 'project_price',
+      physicalResourceId: priceId,
+      resolvedProperties: {
+        ...baseProps,
+        model: 'gpt-4o-upd',
+        unit_price: 0.5,
+      },
+    });
+
+    const read = await readModule('project_price').read?.({
+      physicalResourceId: priceId,
+    });
+    expect((read as { unit_price: number }).unit_price).toBe(0.5);
+
+    // Same physical row — no new price version created by an in-place update.
+    const count = await db.PriceBook.count({
+      where: { projectId: internalProjectId, model: 'gpt-4o-upd' },
+    });
+    expect(count).toBe(1);
+  });
+
+  test('delete removes the price row', async () => {
+    const priceId = await applyCreateResource({
+      resourceType: 'project_price',
+      projectId: internalProjectId,
+      resolvedProperties: { ...baseProps, model: 'gpt-4o-del' },
+    });
+
+    await expect(
+      applyDeleteResource({
+        resourceType: 'project_price',
+        physicalResourceId: priceId,
+      })
+    ).resolves.toBeUndefined();
+
+    await expect(
+      readModule('project_price').read?.({ physicalResourceId: priceId })
+    ).resolves.toBeNull();
+  });
+
+  test('delete is a no-op for an already-absent row', async () => {
+    await expect(
+      applyDeleteResource({
+        resourceType: 'project_price',
+        physicalResourceId: 'price_does_not_exist',
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'project_price',
+        projectId: internalProjectId,
+        resolvedProperties: { ...baseProps, someUnknownKey: 'y' },
       })
     ).rejects.toThrow(/some_unknown_key/);
   });

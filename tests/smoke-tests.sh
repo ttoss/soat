@@ -2891,6 +2891,36 @@ if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e 'type == "array"' >/dev/null
 fi
 echo "Formation events listed."
 
+# Project price resource — a formation seeds a project + provider-slug price so
+# a deployed stack produces billing-grade cost with no out-of-band pricing step.
+echo "--- Creating formation with a project_price resource ---"
+PRICE_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-price-formation" \
+  --template '{"resources":{"outputPrice":{"type":"project_price","properties":{"provider":"ollama","model":"smoke-formation-model","component":"output_tokens","unit":"token","unit_price":0.000004}}}}')
+PRICE_FORMATION_ID=$(printf '%s\n' "$PRICE_FORMATION_RESP" | jq -r '.id')
+PRICE_PHYS_ID=$(printf '%s\n' "$PRICE_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
+if ! printf '%s\n' "$PRICE_PHYS_ID" | grep -q '^price_'; then
+  echo "ERROR: create-formation did not create a project_price row" >&2
+  echo "$PRICE_FORMATION_RESP" >&2
+  exit 1
+fi
+echo "Formation project_price created: $PRICE_PHYS_ID"
+
+echo "--- Verifying the formation-seeded project price is queryable ---"
+SEEDED_PRICE_RESP=$($SOAT_CLI get-project-prices --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
+SEEDED_PRICE_OK=$(printf '%s\n' "$SEEDED_PRICE_RESP" | jq -r '[.prices[] | select(.model == "smoke-formation-model" and .component == "output_tokens" and .unit_price == 0.000004 and .project_id != null)] | length >= 1')
+if [ "$SEEDED_PRICE_OK" != "true" ]; then
+  echo "ERROR: formation-seeded project price not found via get-project-prices" >&2
+  echo "$SEEDED_PRICE_RESP" >&2
+  exit 1
+fi
+echo "Formation-seeded project price verified."
+
+echo "--- Deleting project_price formation ---"
+$SOAT_CLI delete-formation --formation_id "$PRICE_FORMATION_ID"
+echo "Project_price formation deleted."
+
 # Update
 echo "--- Updating formation ---"
 FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \

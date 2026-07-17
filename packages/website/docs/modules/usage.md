@@ -132,6 +132,8 @@ SOAT ships **no default prices** — until an operator adds a price row, cost is
 
 Past-effective prices are immutable — corrections ship as new future-dated rows.
 
+Prices can also be **declared in a formation** with the `project_price` resource type, so a deployed stack produces billing-grade cost with no out-of-band pricing step. Each `project_price` upserts one project + provider-slug row keyed on `(provider, model, component, effective_from)`. Unlike the REST paths, `effective_from` is optional and defaults to deploy time — the price is live immediately for generations run right after deploy — and the formation owns the row declaratively (updates mutate it in place; already-recorded costs keep their frozen snapshot). See [Formations Types → Project Price](/docs/formations-types/project-price).
+
 ### Receipts and reconciliation
 
 `GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event (its SKU, cost, and component breakdown), a `by_meter_type` cost split (the "tokens + infra" split — one entry per distinct meter type), reconstructed token totals (`total_input_tokens` is uncached input + cached), plus a grand total. A single-type receipt has one `by_meter_type` entry whose cost equals the receipt total. Because every component carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it.
