@@ -59,6 +59,47 @@ const mapGeneration = (
 // `extraction`, written by recordExtractionSummary) are safe to expose.
 const INTERNAL_METADATA_KEYS = ['pendingState'];
 
+// Keys the server owns inside the metadata bag. Callers may attach arbitrary
+// key/value metadata for their own auditing (F-15), but must not clobber these:
+// `pendingState` is internal recovery state; `actionId`/`triggerId`/`runId`/
+// `nodeId` are usage-attribution keys read back by usageRecording.ts; and
+// `extraction` is the memory-extraction summary written on completion. Writes
+// that include any of these are rejected so caller metadata can never corrupt
+// system bookkeeping or usage rollups.
+export const RESERVED_GENERATION_METADATA_KEYS = [
+  'pendingState',
+  'actionId',
+  'triggerId',
+  'runId',
+  'nodeId',
+  'extraction',
+];
+
+// Validates caller-supplied generation metadata. Shared by the create-agent-
+// generation route and the update-generation route so both enforce the same
+// rule. Returns an error message string, or null when the metadata is valid.
+export const validateGenerationMetadata = (
+  metadata: unknown
+): string | null => {
+  if (
+    typeof metadata !== 'object' ||
+    metadata === null ||
+    Array.isArray(metadata)
+  ) {
+    return 'metadata must be a JSON object';
+  }
+
+  const reserved = Object.keys(metadata).filter((key) => {
+    return RESERVED_GENERATION_METADATA_KEYS.includes(key);
+  });
+
+  if (reserved.length > 0) {
+    return `metadata contains reserved keys that cannot be set by callers: ${reserved.join(', ')}`;
+  }
+
+  return null;
+};
+
 export const toPublicGenerationMetadata = (
   metadata: Record<string, unknown> | null
 ): Record<string, unknown> | null => {
@@ -394,4 +435,29 @@ export const getGeneration = async (args: {
   if (!gen) return null;
 
   return mapGeneration(gen);
+};
+
+// Attaches caller-supplied metadata to a generation (F-15). The provided keys
+// are shallow-merged over the existing metadata, so system-owned keys
+// (`pendingState`, attribution, `extraction`) are preserved and repeated
+// patches accumulate. Callers cannot set reserved keys — enforce
+// validateGenerationMetadata before calling. Returns null when the generation
+// does not exist within the caller's project scope.
+export const updateGenerationMetadata = async (args: {
+  publicId: string;
+  projectIds?: number[];
+  metadata: Record<string, unknown>;
+}): Promise<PersistedGeneration | null> => {
+  const existing = await getGeneration({
+    publicId: args.publicId,
+    projectIds: args.projectIds,
+  });
+  if (!existing) return null;
+
+  const merged = { ...(existing.metadata ?? {}), ...args.metadata };
+
+  return updateGenerationRecord({
+    publicId: args.publicId,
+    metadata: merged,
+  });
 };

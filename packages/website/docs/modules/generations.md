@@ -34,7 +34,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
 | `stop_reason`               | string \| null | Why the generation stopped (e.g. `stop`, `error`, `depth_guard`)                                     |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
-| `metadata`                  | object \| null | Non-sensitive structured metadata written by memory extraction (see [Metadata](#metadata)) |
+| `metadata`                  | object \| null | Non-sensitive structured metadata: caller-supplied key/value pairs plus server-written keys (see [Metadata](#metadata)) |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
 
@@ -88,7 +88,26 @@ The `meta` field includes the `generation_id` and `trace_id` of the failed run s
 
 ### Metadata
 
-The `metadata` field is written by the server to record the outcome of memory extraction. It is read-only and not settable by callers. Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored under the same DB column but is never exposed through the API.
+The `metadata` field is a JSONB bag that holds both **caller-supplied** key/value pairs and **server-written** keys. It is a place to attach per-run audit attribution — for example, which knowledge-corpus version produced an AI action.
+
+Callers can write metadata two ways:
+
+- **At create time** — pass a `metadata` object on `POST /agents/:id/generate`.
+- **After creation** — `PATCH /generations/:generation_id` with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate and server-written keys are preserved.
+
+Both paths require the `generations:UpdateGeneration` action for PATCH and `agents:CreateAgentGeneration` for the create path.
+
+Server-owned keys are **reserved** and cannot be set or overwritten by callers — a write that includes any of them is rejected with `400`:
+
+| Reserved key   | Written by                                                        |
+| -------------- | ----------------------------------------------------------------- |
+| `action_id`    | The logical action label supplied on the generate request          |
+| `trigger_id`   | Set when a trigger initiated the generation                        |
+| `run_id`       | Orchestration run attribution (usage rollup)                       |
+| `node_id`      | Orchestration node attribution (usage rollup)                      |
+| `extraction`   | The memory-extraction summary (see below)                          |
+
+Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored under the same DB column but is never exposed through the API.
 
 #### `metadata.extraction` — memory-extraction summary
 
@@ -185,6 +204,43 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl https://api.example.com/api/v1/generations/gen_abc123 \
   -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Attach audit metadata
+
+Merge caller-supplied metadata onto a generation for per-run audit attribution. Reserved server-owned keys are rejected.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-generation --generation-id gen_abc123 \
+  --metadata '{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.generations.updateGeneration({
+  path: { generation_id: 'gen_abc123' },
+  body: { metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' } },
+});
+if (error) throw new Error(JSON.stringify(error));
+// data.metadata.knowledge_version === "2026-07-01"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/generations/gen_abc123 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"metadata":{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}}'
 ```
 
 </TabItem>

@@ -10,6 +10,11 @@
       "operationId": "getGeneration",
       "action": "generations:GetGeneration",
       "description": "Get a generation record by ID"
+    },
+    {
+      "operationId": "updateGeneration",
+      "action": "generations:UpdateGeneration",
+      "description": "Attach caller-supplied metadata to a generation record"
     }
   ]
 }

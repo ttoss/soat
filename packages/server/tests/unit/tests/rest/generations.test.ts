@@ -56,6 +56,7 @@ describe('Generations', () => {
                 'agents:CreateAgentGeneration',
                 'generations:GetGeneration',
                 'generations:ListGenerations',
+                'generations:UpdateGeneration',
                 'traces:GetTrace',
               ],
             },
@@ -293,6 +294,146 @@ describe('Generations', () => {
         skipped: 1,
       });
       expect(response.body.metadata.pendingState).toBeUndefined();
+    });
+  });
+
+  describe('caller-supplied metadata on POST /api/v1/agents/:agent_id/generate', () => {
+    test('rejects reserved metadata keys with 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          metadata: { extraction: { candidates: 1 } },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/reserved/i);
+    });
+
+    test('rejects non-object metadata with 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          metadata: 'not-an-object',
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/object/i);
+    });
+
+    test('persists caller metadata on the generation record', async () => {
+      // The provider is unreachable, so the generation fails with 502 — but the
+      // record is created (with metadata) before the model call is attempted.
+      const genResponse = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' },
+        });
+
+      expect(genResponse.status).toBe(502);
+      const genId = genResponse.body.error.meta.generation_id;
+      expect(genId).toBeDefined();
+
+      const getResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${genId}`
+      );
+
+      expect(getResponse.status).toBe(200);
+      expect(getResponse.body.metadata.knowledge_version).toBe('2026-07-01');
+      expect(getResponse.body.metadata.playbook).toBe('refunds-v3');
+    }, 60000);
+  });
+
+  describe('PATCH /api/v1/generations/:generation_id', () => {
+    test('returns 401 when unauthenticated', async () => {
+      const response = await testClient
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({ metadata: { audit: 'x' } });
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 403 when user lacks permission', async () => {
+      const response = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({ metadata: { audit: 'x' } });
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when generation does not exist', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch('/api/v1/generations/gen_does_not_exist')
+        .send({ metadata: { audit: 'x' } });
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('rejects metadata that is not an object with 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({ metadata: ['not', 'an', 'object'] });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/object/i);
+    });
+
+    test('rejects reserved metadata keys with 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({ metadata: { run_id: 'run_hijack' } });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/reserved/i);
+    });
+
+    test('attaches caller metadata and round-trips it on GET', async () => {
+      const patchResponse = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({
+          metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' },
+        });
+
+      expect(patchResponse.status).toBe(200);
+      expect(patchResponse.body.id).toBe(failedGenerationId);
+      expect(patchResponse.body.metadata.knowledge_version).toBe('2026-07-01');
+      expect(patchResponse.body.metadata.playbook).toBe('refunds-v3');
+
+      const getResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${failedGenerationId}`
+      );
+      expect(getResponse.status).toBe(200);
+      expect(getResponse.body.metadata.knowledge_version).toBe('2026-07-01');
+      expect(getResponse.body.metadata.playbook).toBe('refunds-v3');
+    });
+
+    test('merges over existing metadata and preserves server-owned keys', async () => {
+      // Seed a system-owned key and an internal (never-exposed) key directly.
+      await updateGenerationRecord({
+        publicId: failedGenerationId,
+        metadata: {
+          extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
+          pendingState: { messages: [] },
+          knowledge_version: '2026-07-01',
+        },
+      });
+
+      const patchResponse = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/generations/${failedGenerationId}`)
+        .send({ metadata: { reviewer: 'alice' } });
+
+      expect(patchResponse.status).toBe(200);
+      // Newly attached key is present.
+      expect(patchResponse.body.metadata.reviewer).toBe('alice');
+      // Pre-existing caller key is preserved (merge, not replace).
+      expect(patchResponse.body.metadata.knowledge_version).toBe('2026-07-01');
+      // Server-owned key is preserved and still exposed.
+      expect(patchResponse.body.metadata.extraction).toEqual({
+        candidates: 2,
+        created: 1,
+        updated: 0,
+        skipped: 1,
+      });
+      // Internal recovery state is preserved in the column but never exposed.
+      expect(patchResponse.body.metadata.pendingState).toBeUndefined();
     });
   });
 });

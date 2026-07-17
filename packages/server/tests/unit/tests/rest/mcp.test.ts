@@ -3,6 +3,7 @@ import type http from 'node:http';
 import { app } from 'src/app';
 import { db } from 'src/db';
 import * as discussionCompletion from 'src/lib/discussionCompletion';
+import { createGenerationRecord } from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
 
@@ -794,6 +795,59 @@ describe('MCP tools - happy path', () => {
     test('delete-agent deletes the agent', async () => {
       const res = await mcpCall('delete-agent', { agentId });
       expect(res.status).toBe(200);
+    });
+  });
+
+  // ── Generations ────────────────────────────────────────────────────────
+  // create-agent-generation is skipped (needs a live AI service); seed a
+  // generation record directly so the read + update tools can be exercised.
+
+  describe('Generations tools', () => {
+    let genAgentId: string;
+    let mcpGenerationId: string;
+
+    beforeAll(async () => {
+      const agentRes = await mcpCall('create-agent', {
+        projectId,
+        aiProviderId: chatAiProviderId,
+        name: 'MCP Generations Agent',
+      });
+      genAgentId = parseResult(agentRes).id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const internalProjectId = project!.id;
+
+      mcpGenerationId = `gen_mcp_${Date.now()}`;
+      await createGenerationRecord({
+        publicId: mcpGenerationId,
+        projectId: internalProjectId,
+        agentId: genAgentId,
+        traceId: `trc_mcp_gen_${Date.now()}`,
+      });
+    });
+
+    test('list-generations returns the seeded generation', async () => {
+      const res = await mcpCall('list-generations', { agentId: genAgentId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(
+        result.data.some((g: { id: string }) => {
+          return g.id === mcpGenerationId;
+        })
+      ).toBe(true);
+    });
+
+    test('update-generation attaches caller metadata', async () => {
+      const res = await mcpCall('update-generation', {
+        generationId: mcpGenerationId,
+        metadata: { playbook: 'refunds-v3' },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(mcpGenerationId);
+      expect(result.metadata.playbook).toBe('refunds-v3');
     });
   });
 
