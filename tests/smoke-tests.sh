@@ -2194,6 +2194,42 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
 fi
 
+# 34b-iv. Usage thresholds — the spend-alert lifecycle (create → list → delete).
+# Independent of metered usage, so it runs unconditionally.
+echo "--- Verifying usage thresholds ---"
+THRESHOLD_CREATE=$($SOAT_CLI create-usage-threshold \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --metric cost_usd \
+  --window calendar_month \
+  --threshold 100 | sanitize_json)
+THRESHOLD_ID=$(printf '%s\n' "$THRESHOLD_CREATE" | jq -r '.id // empty')
+THRESHOLD_CREATE_OK=$(printf '%s\n' "$THRESHOLD_CREATE" | jq -r '(.id | startswith("uthr_")) and (.metric == "cost_usd") and (.window == "calendar_month") and (.threshold == 100)')
+if [ "$THRESHOLD_CREATE_OK" != "true" ] || [ -z "$THRESHOLD_ID" ]; then
+  echo "ERROR: create-usage-threshold did not return the created threshold" >&2
+  echo "$THRESHOLD_CREATE" >&2
+  exit 1
+fi
+echo "Create usage threshold: OK ($THRESHOLD_ID)"
+
+THRESHOLD_LIST=$($SOAT_CLI list-usage-thresholds --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
+THRESHOLD_LIST_OK=$(printf '%s\n' "$THRESHOLD_LIST" | jq -r --arg id "$THRESHOLD_ID" '(.data | type == "array") and ([.data[] | select(.id == $id)] | length == 1)')
+if [ "$THRESHOLD_LIST_OK" != "true" ]; then
+  echo "ERROR: list-usage-thresholds did not include the created threshold" >&2
+  echo "$THRESHOLD_LIST" >&2
+  exit 1
+fi
+echo "List usage thresholds: OK"
+
+$SOAT_CLI delete-usage-threshold "$THRESHOLD_ID" >/dev/null
+THRESHOLD_AFTER=$($SOAT_CLI list-usage-thresholds --project_id "$PROJECT_PUBLIC_ID" | sanitize_json)
+THRESHOLD_GONE=$(printf '%s\n' "$THRESHOLD_AFTER" | jq -r --arg id "$THRESHOLD_ID" '[.data[] | select(.id == $id)] | length == 0')
+if [ "$THRESHOLD_GONE" != "true" ]; then
+  echo "ERROR: delete-usage-threshold did not remove the threshold" >&2
+  echo "$THRESHOLD_AFTER" >&2
+  exit 1
+fi
+echo "Delete usage threshold: OK"
+
 # 34c. Price book — the global-defaults path (admin upsert + read-back)
 # No prices ship by default, so the global tier is exercised by upserting a
 # global default row (ai_provider_id null) and reading it back.
