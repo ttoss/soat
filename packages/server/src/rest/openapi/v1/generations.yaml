@@ -303,8 +303,8 @@ components:
           description: >
             Non-sensitive metadata recorded about the generation. May include
             caller-supplied key/value pairs attached at create time (via the
-            `metadata` field on POST /api/v1/agents/{agent_id}/generate) or
-            afterwards (via PATCH /api/v1/generations/{generation_id}), plus
+            `metadata` field on the create-agent-generation request) or
+            afterwards (via the update-generation request), plus
             server-owned keys: `action_id` (the logical action label supplied on
             the generate request), `trigger_id` (set when a trigger initiated
             the generation), and `extraction` — set when the agent's

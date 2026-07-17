@@ -913,8 +913,8 @@ components:
           description: >-
             Caller-supplied key/value metadata attached to the generation
             record for per-run audit attribution (e.g. the knowledge-corpus
-            version that produced this action). Round-trips on
-            GET /api/v1/generations/{generation_id}. Reserved server-owned keys
+            version that produced this action). Round-trips when the generation
+            is fetched via the generations API. Reserved server-owned keys
             (`action_id`, `trigger_id`, `run_id`, `node_id`, `extraction`, and
             internal recovery state) cannot be set here and are rejected with
             400.
