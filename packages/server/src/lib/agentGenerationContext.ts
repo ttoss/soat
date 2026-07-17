@@ -13,12 +13,15 @@ import {
   mergeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
+import {
+  deriveLegacyToolFields,
+  readAgentToolBindings,
+} from './agentToolBindings';
 import { resolveAgentTools } from './agentToolResolver';
 import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import type { InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:generation');
 
@@ -108,11 +111,14 @@ const resolveGenerationTools = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
 }): Promise<Record<string, Tool>> => {
-  // No branch on toolIds/tools presence — resolveAgentTools no-ops on empty
-  // input, so this covers "no tools at all" the same way as either alone.
+  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
+  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
+  const legacyViews = deriveLegacyToolFields(
+    readAgentToolBindings(args.typedAgent)
+  );
   const resolvedTools = await resolveAgentTools({
-    toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
-    tools: args.typedAgent.tools as InlineToolDefinition[] | null,
+    toolIds: legacyViews.toolIds ?? [],
+    tools: legacyViews.tools,
     projectId: args.typedAgent.project.id as number,
     projectIds: args.projectIds,
     boundaryPolicy: args.typedAgent.boundaryPolicy,
@@ -158,14 +164,15 @@ export const buildGenerationContext = async (args: {
       `Agent '${args.agentId}' not found.`
     );
 
+  const boundToolIds = deriveLegacyToolFields(
+    readAgentToolBindings(typedAgent)
+  ).toolIds;
   const resolvedMessages = await resolveGenerationInputMessages({
     projectIds: args.projectIds,
     messages: args.messages,
     authHeader: args.authHeader,
     authUser: args.authUser,
-    allowedToolIds: Array.isArray(typedAgent.toolIds)
-      ? (typedAgent.toolIds as string[])
-      : undefined,
+    allowedToolIds: boundToolIds ?? undefined,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
   const { model } = await resolveGenerationModel({

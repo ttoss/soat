@@ -479,25 +479,35 @@ components:
           type: string
           nullable: true
           description: Model identifier
+        tool_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ToolBinding'
+          description: >-
+            Tools attached to this agent, one binding object per tool — the
+            canonical attachment field. See
+            [Tool Bindings](/docs/modules/agents#tool-bindings).
         tool_ids:
           x-soat-ref: tools
           type: array
           nullable: true
           items:
             type: string
-          description: Public IDs of attached agent tools
+          deprecated: true
+          description: >-
+            Deprecated — derived view of the reference (`tool_id`) entries in
+            `tool_bindings`. Use `tool_bindings` instead.
         tools:
           type: array
           nullable: true
           items:
             $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          deprecated: true
           description: >-
-            Ephemeral tool definitions available only to this agent's
-            generations — not persisted as separate Tool resources, so they
-            never appear in `GET /tools` and cannot be targeted by
-            `active_tool_ids`/`step_rules` (which reference `tool_ids`).
-            Cannot be of type `pipeline`; nest a persisted pipeline tool via
-            `tool_ids` instead. See [Inline Tool Definitions](/docs/modules/agents#inline-tool-definitions).
+            Deprecated — derived view of the inline (`tool`) entries in
+            `tool_bindings`. Use `tool_bindings` instead. See
+            [Inline Tool Definitions](/docs/modules/agents#inline-ephemeral-tool-definitions).
         max_steps:
           type: integer
           nullable: true
@@ -601,6 +611,74 @@ components:
           type: string
           format: date-time
 
+    ToolBinding:
+      type: object
+      description: >-
+        One agent↔tool attachment. Exactly one of `tool_id` (persisted tool
+        reference) or `tool` (inline ephemeral definition) per entry, plus the
+        binding-scoped `approval_policy`.
+      properties:
+        tool_id:
+          x-soat-ref: tools
+          type: string
+          description: Public ID of a persisted tool. Exactly one of `tool_id`/`tool`.
+          example: tool_V1StGXR8Z5jdHi6B
+        tool:
+          $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          description: >-
+            Inline (ephemeral) tool definition — resolved fresh at generation
+            time, never persisted as a Tool resource. Exactly one of
+            `tool_id`/`tool`. Cannot be of type `pipeline`.
+        approval_policy:
+          $ref: '#/components/schemas/ToolApprovalPolicy'
+
+    ToolApprovalPolicy:
+      type: object
+      nullable: true
+      required:
+        - default
+      description: >-
+        Allow / require-approval / deny gate evaluated by the platform on
+        every call of the bound tool. `require_approval` files an item in the
+        approvals queue; the call executes only if approved before expiry. Not
+        supported on `client` tool bindings. See
+        [Approval Policy](/docs/modules/agents#approval-policy).
+      properties:
+        default:
+          type: string
+          enum: [allow, require_approval, deny]
+          description: Effect applied when no rule matches.
+        rules:
+          type: array
+          description: Ordered rule list; first match wins.
+          items:
+            type: object
+            required:
+              - when
+              - effect
+            properties:
+              when:
+                type: object
+                additionalProperties: true
+                description: >-
+                  JSON Logic over `{ "action": …, "arguments": … }` — the
+                  resolved call.
+              effect:
+                type: string
+                enum: [allow, require_approval, deny]
+        expires_in:
+          type: integer
+          description: >-
+            Seconds until a filed approval item expires (default 86400 = 24h).
+            Expiry is a server-enforced hard gate.
+        reasoning_prompt:
+          type: string
+          nullable: true
+          description: >-
+            Guidance injected into the tool's model-visible description telling
+            the model how to justify guarded calls (via the `approval_*`
+            fields). A default instruction is used when omitted.
+
     CreateAgentRequest:
       type: object
       required:
@@ -620,24 +698,36 @@ components:
           type: string
         model:
           type: string
+        tool_bindings:
+          type: array
+          items:
+            $ref: '#/components/schemas/ToolBinding'
+          description: >-
+            Tools to attach, one binding object per tool — the canonical
+            attachment field. Cannot be combined with the deprecated
+            `tool_ids`/`tools` shorthands (400). See
+            [Tool Bindings](/docs/modules/agents#tool-bindings).
         tool_ids:
           x-soat-ref: tools
           type: array
           items:
             type: string
+          deprecated: true
+          description: >-
+            Deprecated shorthand — each entry becomes a bare
+            `{ "tool_id": … }` binding. Use `tool_bindings` instead.
         tools:
           type: array
           items:
             $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          deprecated: true
           description: >-
-            Ephemeral tool definitions available only to this agent's
-            generations — no separate Tool resource is created (any
-            `project_id` on an entry is ignored), so they never appear in
-            `GET /tools` and cannot be targeted by `active_tool_ids`/
-            `step_rules` (which reference `tool_ids`). Cannot be of type
-            `pipeline`; nest a persisted pipeline tool via `tool_ids` instead.
-            Use `tool_ids` to reference existing tools and `tools` for ones
-            scoped to just this agent.
+            Deprecated shorthand — each entry becomes a bare `{ "tool": … }`
+            binding (an ephemeral definition: no separate Tool resource is
+            created, any `project_id` on an entry is ignored, entries never
+            appear in `GET /tools`, cannot be targeted by
+            `active_tool_ids`/`step_rules`, and cannot be of type
+            `pipeline`). Use `tool_bindings` instead.
         max_steps:
           type: integer
         tool_choice:
@@ -734,25 +824,40 @@ components:
         model:
           type: string
           nullable: true
+        tool_bindings:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/ToolBinding'
+          description: >-
+            Tools attached to the agent — the canonical attachment field.
+            Replaces the whole binding list; set to `null` to clear. Cannot be
+            combined with the deprecated `tool_ids`/`tools` shorthands (400).
+            See [Tool Bindings](/docs/modules/agents#tool-bindings).
         tool_ids:
           x-soat-ref: tools
           type: array
           nullable: true
           items:
             type: string
+          deprecated: true
+          description: >-
+            Deprecated shorthand — replaces only the reference (`tool_id`)
+            bindings, rewriting them bare (any `approval_policy` on them is
+            dropped). Use `tool_bindings` instead.
         tools:
           type: array
           nullable: true
           items:
             $ref: './tools.yaml#/components/schemas/CreateToolRequest'
+          deprecated: true
           description: >-
-            Ephemeral tool definitions available only to this agent's
-            generations — no separate Tool resource is created (any
-            `project_id` on an entry is ignored), so they never appear in
-            `GET /tools` and cannot be targeted by `active_tool_ids`/
-            `step_rules` (which reference `tool_ids`). Cannot be of type
-            `pipeline`; nest a persisted pipeline tool via `tool_ids` instead.
-            Replaces the agent's entire `tools` array; set to `null` to clear.
+            Deprecated shorthand — replaces only the inline (`tool`) bindings
+            (ephemeral definitions: no separate Tool resource is created, any
+            `project_id` on an entry is ignored, entries never appear in
+            `GET /tools`, cannot be targeted by `active_tool_ids`/`step_rules`,
+            and cannot be of type `pipeline`). Set to `null` to clear the
+            inline bindings. Use `tool_bindings` instead.
         max_steps:
           type: integer
           nullable: true

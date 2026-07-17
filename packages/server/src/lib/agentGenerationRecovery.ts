@@ -7,9 +7,12 @@ import {
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
+import {
+  deriveLegacyToolFields,
+  readAgentToolBindings,
+} from './agentToolBindings';
 import { resolveAgentTools } from './agentToolResolver';
 import { getGeneration, updateGenerationRecord } from './generations';
-import type { InlineToolDefinition } from './tools';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
@@ -113,11 +116,14 @@ const buildPendingFromState = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  // No branch on toolIds/tools presence — resolveAgentTools no-ops on empty
-  // input, so this covers "no tools at all" the same way as either alone.
+  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
+  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
+  const legacyViews = deriveLegacyToolFields(
+    readAgentToolBindings(args.typedAgent)
+  );
   const resolvedTools = await resolveAgentTools({
-    toolIds: (args.typedAgent.toolIds as string[] | null) ?? [],
-    tools: args.typedAgent.tools as InlineToolDefinition[] | null,
+    toolIds: legacyViews.toolIds ?? [],
+    tools: legacyViews.tools,
     projectId: args.typedAgent.project.id as number,
     projectIds: args.projectIds,
     boundaryPolicy: args.typedAgent.boundaryPolicy,

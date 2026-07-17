@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import type { InlineToolDefinition } from 'src/lib/agents';
+import type { AgentToolBinding, InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
   deleteAgent,
@@ -23,6 +23,7 @@ type CreateAgentBody = {
   name?: unknown;
   instructions?: unknown;
   model?: unknown;
+  toolBindings?: unknown;
   toolIds?: unknown;
   tools?: unknown;
   maxSteps?: unknown;
@@ -134,6 +135,7 @@ const parseUpdateAgentBody = (
     name: parseNullableString(body.name),
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
+    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
     toolIds: parseOptional<string[] | null>(body.toolIds),
     tools,
     maxSteps: parseOptional<number | null>(body.maxSteps),
@@ -187,6 +189,7 @@ const buildCreateAgentArgs = (
     instructions:
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
+    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
     toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
     tools,
     maxSteps: parseNumber(body.maxSteps),

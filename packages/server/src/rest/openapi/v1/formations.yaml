@@ -464,13 +464,28 @@ components:
           type: string
           nullable: true
           description: Model identifier (overrides provider default)
+        tool_bindings:
+          type: array
+          nullable: true
+          items:
+            type: object
+          description: >-
+            Tools to attach, one binding object per tool: `{ tool_id,
+            approval_policy? }`. Canonical form — cannot be combined with the
+            deprecated `tool_ids`. Inline `tool` entries are not supported in
+            templates; declare a tool resource and reference it via `tool_id`
+            (a `{ "ref": … }` to a tool resource in the same template
+            resolves at deploy time).
         tool_ids:
           x-soat-ref: tools
           type: array
           nullable: true
           items:
             type: string
-          description: Agent tool IDs to attach
+          deprecated: true
+          description: >-
+            Deprecated shorthand — each entry becomes a bare
+            `{ "tool_id": … }` binding. Use `tool_bindings` instead.
         max_steps:
           type: integer
           nullable: true

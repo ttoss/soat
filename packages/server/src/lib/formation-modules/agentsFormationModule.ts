@@ -5,6 +5,11 @@ import {
   normalizeKnowledgeConfig,
 } from '../agentKnowledge';
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
+import type {
+  AgentToolBinding,
+  ToolApprovalPolicy,
+} from '../agentToolBindings';
+import { bindingsFromLegacyFields } from '../agentToolBindings';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
 import {
@@ -30,6 +35,35 @@ const SCHEMA_NAME = 'AgentResourceProperties';
 const RESOURCE_LABEL = 'agent';
 
 // ── Property validation ──────────────────────────────────────────────────
+
+// `tool_bindings` is canonical; `tool_ids` is its deprecated shorthand — a
+// template must pick one form (mirrors the REST exclusivity rule). Inline
+// `tool` entries are rejected: templates declare a tool resource and
+// reference it via `tool_id` instead.
+const pushToolBindingErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  const { properties, basePath, errors } = args;
+  if (properties.tool_bindings != null && properties.tool_ids != null) {
+    errors.push({
+      path: `${basePath}.tool_bindings`,
+      message:
+        '`tool_bindings` cannot be combined with the deprecated `tool_ids` field',
+    });
+  }
+  if (!Array.isArray(properties.tool_bindings)) return;
+  for (const [index, entry] of properties.tool_bindings.entries()) {
+    if (isObjectRecord(entry) && entry.tool != null) {
+      errors.push({
+        path: `${basePath}.tool_bindings[${index}]`,
+        message:
+          'inline `tool` bindings are not supported in formation templates; declare a tool resource and reference it via `tool_id`',
+      });
+    }
+  }
+};
 
 const validateAgentProperties = (args: {
   properties: unknown;
@@ -73,7 +107,85 @@ const validateAgentProperties = (args: {
     }
   }
 
+  pushToolBindingErrors({ properties, basePath, errors });
+
   return errors;
+};
+
+// ── tool_bindings ↔ template shape ───────────────────────────────────────
+//
+// Binding entries are stored camelCase (internal convention) but declared and
+// read snake_case in templates. Only `tool_id` + `approval_policy` entries are
+// supported in formations (no inline `tool` — declare a tool resource
+// instead), so the conversion enumerates known keys.
+
+const parseFormationToolBindings = (
+  value: unknown
+): AgentToolBinding[] | null => {
+  const entries = toNullableArray<Record<string, unknown>>(value);
+  if (!entries) return null;
+  return entries.map((entry): AgentToolBinding => {
+    const binding: AgentToolBinding = {};
+    if (typeof entry.tool_id === 'string') binding.toolId = entry.tool_id;
+    const policy = entry.approval_policy;
+    if (isObjectRecord(policy)) {
+      const approvalPolicy = {
+        default: policy.default,
+        ...(policy.rules !== undefined ? { rules: policy.rules } : {}),
+        ...(policy.expires_in !== undefined
+          ? { expiresIn: policy.expires_in }
+          : {}),
+        ...(policy.reasoning_prompt !== undefined
+          ? { reasoningPrompt: policy.reasoning_prompt }
+          : {}),
+      };
+      binding.approvalPolicy = approvalPolicy as ToolApprovalPolicy;
+    }
+    return binding;
+  });
+};
+
+const readFormationToolBindings = (
+  bindings: AgentToolBinding[] | null
+): Record<string, unknown>[] | null => {
+  if (!bindings) return null;
+  return bindings.map((binding) => {
+    return {
+      ...(binding.toolId !== undefined ? { tool_id: binding.toolId } : {}),
+      ...(binding.approvalPolicy
+        ? {
+            approval_policy: {
+              default: binding.approvalPolicy.default,
+              ...(binding.approvalPolicy.rules !== undefined
+                ? { rules: binding.approvalPolicy.rules }
+                : {}),
+              ...(binding.approvalPolicy.expiresIn !== undefined
+                ? { expires_in: binding.approvalPolicy.expiresIn }
+                : {}),
+              ...(binding.approvalPolicy.reasoningPrompt !== undefined
+                ? { reasoning_prompt: binding.approvalPolicy.reasoningPrompt }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  });
+};
+
+// A formation declares the agent's full desired state, so the binding list is
+// always driven through the canonical `toolBindings` replace: an explicit
+// `tool_bindings` wins, a declared `tool_ids` shorthand maps to bare bindings,
+// and neither means "no tools".
+const resolveFormationToolBindings = (
+  properties: Record<string, unknown>
+): AgentToolBinding[] | null => {
+  if (properties.tool_bindings != null) {
+    return parseFormationToolBindings(properties.tool_bindings);
+  }
+  return bindingsFromLegacyFields({
+    toolIds: toNullableArray<string>(properties.tool_ids),
+    tools: null,
+  });
 };
 
 const toOptionalBoolean = (value: unknown): boolean | undefined => {
@@ -92,7 +204,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     name: toOptionalString(properties.name),
     instructions: toOptionalString(properties.instructions),
     model: toOptionalString(properties.model),
-    toolIds: toOptional(toNullableArray<string>(properties.tool_ids)),
+    toolBindings: toOptional(resolveFormationToolBindings(properties)),
     maxSteps: toOptional(toNullableNumber(properties.max_steps)),
     toolChoice: toOptional(toNullableStringOrObject(properties.tool_choice)),
     stopConditions: toOptional(
@@ -171,7 +283,7 @@ export const agentsFormationModule: FormationModule = {
       name: toNullableString(properties.name),
       instructions: toNullableString(properties.instructions),
       model: toNullableString(properties.model),
-      toolIds: toNullableArray<string>(properties.tool_ids),
+      toolBindings: resolveFormationToolBindings(properties),
       maxSteps: toNullableNumber(properties.max_steps),
       toolChoice: toNullableStringOrObject(properties.tool_choice),
       stopConditions: toNullableArray<object>(properties.stop_conditions),
@@ -200,6 +312,9 @@ export const agentsFormationModule: FormationModule = {
         name: agent.name,
         instructions: agent.instructions,
         model: agent.model,
+        // Both views: the diff only compares keys the template declares, so a
+        // template using either form converges against its own key.
+        tool_bindings: readFormationToolBindings(agent.toolBindings),
         tool_ids: agent.toolIds,
         max_steps: agent.maxSteps,
         tool_choice: agent.toolChoice,
