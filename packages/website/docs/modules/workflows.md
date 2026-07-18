@@ -201,6 +201,11 @@ leaving — task state is the source of truth (an entity that lives).
   concurrent transitions on one task serialize. A transition that is no longer
   valid from the committed state — or a transition on a `closed` task — returns
   `TASK_TRANSITION_CONFLICT` (409).
+- **Automation completion is atomic too.** The post-dispatch write (`active_dispatch`,
+  `automation_status`, and the `payload.last_result` merge) re-validates under the
+  same row lock immediately before writing. A concurrent transition that already
+  moved the task — or re-entered the same state — is detected there, and the
+  stale write is discarded instead of clobbering the new state's data.
 - **Definition updates re-validate.** Structural changes (states/transitions)
   are validated on `PATCH`. Existing tasks in a state a new definition removes
   stay put but can only leave via transitions valid in the new definition — the

@@ -135,13 +135,39 @@ const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_TRANSITION_CONFLICT',
 ]);
 
+// Applies a post-dispatch mutation to a task row atomically: locks the row
+// `FOR UPDATE`, re-runs `guard` against the freshly-locked read, and only
+// mutates + saves if it passes — all inside one transaction, so there is no
+// window between the check and the write for a concurrent `transitionTask` to
+// commit into. Returns the saved task, or `null` when the guard rejected
+// (the task moved, re-entered, or was already routed by the time we could
+// write), which is when a plain read-check-write would otherwise clobber the
+// concurrent write with a stale one (#590).
+const applyLocked = async (args: {
+  taskPublicId: string;
+  guard: (task: TaskWithWorkflow) => boolean;
+  mutate: (task: TaskWithWorkflow) => void;
+}): Promise<TaskWithWorkflow | null> => {
+  return db.sequelize.transaction(async (t) => {
+    const task = (await db.Task.findOne({
+      where: { publicId: args.taskPublicId },
+      transaction: t,
+      lock: t.LOCK.UPDATE,
+    })) as TaskWithWorkflow | null;
+    if (!task || !args.guard(task)) return null;
+    args.mutate(task);
+    await task.save({ transaction: t });
+    return task;
+  });
+};
+
 /**
  * Surfaces a dispatch whose outcome did not route: either no `on_complete` rule
  * matched, or the matched rule's transition was rejected. Emits an event so the
  * task is never silently stuck. For a rejected transition it also flags the task
- * `automation_status: 'unrouted'` (only while our completion is still current,
- * so a concurrent transition's state is never clobbered) so board queries can
- * find it.
+ * `automation_status: 'unrouted'` (atomically, only while our completion is
+ * still current, so a concurrent transition's state is never clobbered) so
+ * board queries can find it.
  */
 const surfaceUnrouted = async (args: {
   taskPublicId: string;
@@ -149,13 +175,22 @@ const surfaceUnrouted = async (args: {
   result: unknown;
   rejected?: { transition: string; code: string };
 }): Promise<void> => {
-  const task = await loadTask(args.taskPublicId);
-  if (!task) return;
-
-  if (args.rejected && task.automationStatus === 'completed') {
-    task.automationStatus = 'unrouted';
-    await task.save();
+  let task: TaskWithWorkflow | null = null;
+  if (args.rejected) {
+    task = await applyLocked({
+      taskPublicId: args.taskPublicId,
+      guard: (t) => {
+        return t.automationStatus === 'completed';
+      },
+      mutate: (t) => {
+        t.automationStatus = 'unrouted';
+      },
+    });
   }
+  if (!task) {
+    task = await loadTask(args.taskPublicId);
+  }
+  if (!task) return;
 
   await emitTaskEvent({
     type: args.rejected
@@ -256,14 +291,25 @@ const handleFailure = async (args: {
     args.taskPublicId,
     args.error
   );
-  const task = await loadTask(args.taskPublicId);
-  if (isStale({ task, stateName: args.stateName, token: args.token })) return;
-
-  await setDispatchState({
-    task: task!,
-    activeDispatch: { kind: args.dispatchKind, id: null, status: 'failed' },
-    automationStatus: 'failed',
+  const task = await applyLocked({
+    taskPublicId: args.taskPublicId,
+    guard: (t) => {
+      return !isStale({
+        task: t,
+        stateName: args.stateName,
+        token: args.token,
+      });
+    },
+    mutate: (t) => {
+      t.activeDispatch = {
+        kind: args.dispatchKind,
+        id: null,
+        status: 'failed',
+      };
+      t.automationStatus = 'failed';
+    },
   });
+  if (!task) return;
 
   if (args.onEnter.onFailure) {
     await transitionTask({
@@ -330,27 +376,35 @@ export const runStateAutomation = async (args: {
     return;
   }
 
-  // Cancellation-on-exit: the task moved (or re-entered) while the dispatch ran,
-  // so its result no longer applies.
-  const current = await loadTask(args.taskPublicId);
-  if (isStale({ task: current, stateName: args.stateName, token })) {
+  // Cancellation-on-exit, applied atomically: re-validate under a row lock that
+  // the task hasn't moved (or re-entered) since the dispatch started, and only
+  // then write the completion — closing the gap a separate check-then-write
+  // would leave for a concurrent transitionTask to commit into (#590).
+  const current = await applyLocked({
+    taskPublicId: args.taskPublicId,
+    guard: (t) => {
+      return !isStale({ task: t, stateName: args.stateName, token });
+    },
+    mutate: (t) => {
+      t.activeDispatch = {
+        kind: dispatchKind,
+        id: dispatched.generationId ?? dispatched.runId,
+        status: 'completed',
+      };
+      t.automationStatus = 'completed';
+      t.payload = {
+        ...(t.payload as Record<string, unknown>),
+        last_result: dispatched.result,
+      };
+    },
+  });
+  if (!current) {
     log(
       'runStateAutomation: discarding stale result task=%s',
       args.taskPublicId
     );
     return;
   }
-
-  await setDispatchState({
-    task: current!,
-    activeDispatch: {
-      kind: dispatchKind,
-      id: dispatched.generationId ?? dispatched.runId,
-      status: 'completed',
-    },
-    automationStatus: 'completed',
-    lastResult: dispatched.result,
-  });
 
   await routeOnComplete({
     taskPublicId: args.taskPublicId,
