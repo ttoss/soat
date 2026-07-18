@@ -30,6 +30,8 @@ A guardrail is a **reusable template**: defined once, it can govern agents acros
 | `description` | string  | Optional description                                               |
 | `version`     | integer | Incremented on every `document` write; prior versions are archived |
 | `document`    | object  | The action-class document (see below)                              |
+| `context_tool_id` | string | Optional [tool](./tools.md) the platform calls at evaluation time to fetch fresh [guardrail context](#guards-and-guardrail-context) |
+| `context_mode` | string | How tool-fetched context combines with the caller-supplied context: `merge` (default) or `replace` |
 | `created_at`  | string  | ISO 8601 creation timestamp                                        |
 | `updated_at`  | string  | ISO 8601 last-updated timestamp                                    |
 
@@ -91,26 +93,41 @@ Unmatched actions take `default_class`, which itself defaults to **C** — anyth
   "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
   "class": "B",
   "guards": [
-    { "<=": [{ "var": "args.amount" }, { "var": "project.context.max_daily_budget" }] },
-    { "<": [{ "var": "usage.cost_usd_24h" }, { "var": "project.context.cost_ceiling" }] }
+    { "<=": [{ "var": "args.amount" }, { "var": "context.max_daily_budget" }] },
+    { "<": [{ "var": "soat.usage.cost_usd_24h" }, { "var": "context.cost_ceiling" }] }
   ]
 }
 ```
 
-### Guards and the Context Provider Catalog
+### Guards and Guardrail Context
 
-Guards are JSON Logic expressions — the same evaluator [orchestration](./orchestrations.md) mappings use — with no `eval` and no I/O. They may reference **only** keys from a fixed catalog; windows are baked into the key name (a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`), each rolling and ending at evaluation time.
+Guards are JSON Logic expressions — the same evaluator [orchestration](./orchestrations.md) mappings use — with no `eval` and no LLM in the path. Every `var` resolves against exactly three namespaces:
 
-| Key                                              | Type       | Source                                            |
-| ------------------------------------------------ | ---------- | ------------------------------------------------- |
-| `args.*`                                         | any JSON   | The proposed call's arguments                     |
-| `project.context.*`                              | as configured | Project-level configuration values             |
-| `run.node_attempt` / `run.tool_calls`            | integer    | Current [orchestration run](./orchestrations.md) state |
-| `activity.actions_1h` / `activity.actions_24h`   | integer    | [Activity feed](./approvals.md) (per project)     |
-| `usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`    | number     | [Usage metering](./usage.md) (per project)        |
-| `usage.tokens_24h` / `usage.tokens_30d`          | integer    | [Usage metering](./usage.md) (per project)        |
+| Namespace   | Source                                                                                                         |
+| ----------- | -------------------------------------------------------------------------------------------------------------- |
+| `args.*`    | The proposed call's arguments (post preset-merge — the same frozen arguments an [approval item](./approvals.md) records) |
+| `context.*` | The **effective guardrail context** — application-owned, see below                                             |
+| `soat.*`    | Platform-computed values (fixed catalog below); reserved — never writable by the caller or the context tool     |
 
-**Fail-closed at both ends.** A document referencing any `var` outside this catalog is rejected with `400` at write time — never silently `null` at runtime. If a cataloged provider cannot resolve at evaluation time (e.g. metering is unavailable), the guard counts as **failed** and tripwire semantics apply.
+**Guardrail context is application-owned.** The caller passes a free-form `guardrail_context` object on the generation request or orchestration-run start; the platform never interprets it — it only evaluates guards over it. For long-lived work (an orchestration run can park at an approval node for days), a run-start snapshot goes stale, so a guardrail may also name a `context_tool_id` — an ordinary [tool](./tools.md) (typically HTTP) the platform calls at **evaluation time**, immediately before classifying each gated tool call. `context_mode` controls how the two combine:
+
+- `merge` (default) — shallow merge of top-level keys over the caller-supplied object; the tool's value wins on conflict (fresher data beats run-start data)
+- `replace` — the tool's output substitutes the caller-supplied object entirely
+
+The context-tool call is bounded — a per-call timeout and a short per-`(project, guardrail)` TTL cache — and it is invoked by the platform's dispatch path only: the model never sees it, calls it, or influences its output.
+
+The `soat.*` catalog (windows are baked into the key name — a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`, each rolling and ending at evaluation time):
+
+| Key                                                        | Type    | Source                                                  |
+| ---------------------------------------------------------- | ------- | ------------------------------------------------------- |
+| `soat.action` / `soat.tool.id` / `soat.tool.name`          | string  | The call being classified                               |
+| `soat.agent.id` / `soat.project.id`                        | string  | Evaluation identity                                     |
+| `soat.run.node_attempt` / `soat.run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
+| `soat.activity.actions_1h` / `soat.activity.actions_24h`   | integer | [Activity feed](./approvals.md) (per project)           |
+| `soat.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
+| `soat.usage.tokens_24h` / `soat.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
+
+**Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `soat.*` key outside the catalog — is rejected with `400`, never silently `null` at runtime. At evaluation time, a guard referencing a `context.*` key absent from the effective context, a context-tool failure or timeout, or a `soat.*` provider that cannot resolve all count as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture; it never loosens it.
 
 ### Tripwires and `escalate`
 
@@ -139,7 +156,9 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
   "class": "B",
   "decision": "execute",
   "guard_results": [{ "index": 0, "result": true }, { "index": 1, "result": true }],
-  "context_snapshot_keys": ["args.amount", "project.context.max_daily_budget", "usage.cost_usd_24h"],
+  "context_source": "merged",
+  "context_snapshot": { "max_daily_budget": 500, "cost_ceiling": 1000 },
+  "soat_snapshot_keys": ["soat.usage.cost_usd_24h"],
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
   "run_id": "orch_run_V1StGXR8Z5jdHi6B",
   "generation_id": "gen_V1StGXR8Z5jdHi6B"
@@ -149,7 +168,8 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 - `decision` is one of `execute` \| `route_to_approval` \| `blocked` \| `tripwire`.
 - `rule_index` is the first matching rule's index; `-1` means no rule matched and `default_class` applied.
 - `override_version` is `null` when no project override was layered in.
-- The record stores context snapshot **keys only**, not values — provider values can embed sensitive arguments, and the arguments already live on the approval item / generation record. Per-guard outcomes in `guard_results` keep the evaluation reconstructable against the archived version.
+- `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
+- `context_snapshot` freezes the **effective** `context.*` object (post merge/replace) — the exact values the guards saw, which is the only way to answer "why did this pass?" after the application's context has moved on. `args` are not repeated here; they already live on the approval item / generation record. For `soat.*`, the record stores referenced **keys only** (`soat_snapshot_keys`) — per-guard outcomes in `guard_results` keep the evaluation reconstructable against the archived version.
 
 ## Examples
 
@@ -166,7 +186,7 @@ soat create-guardrail \
     "rules": [
       { "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
         "class": "B",
-        "guards": [ { "<": [{ "var": "usage.cost_usd_24h" }, 1000] } ] },
+        "guards": [ { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } ] },
       { "match": { "tool": "update-budget" }, "class": "C" },
       { "match": { "tool": "delete-account" }, "class": "D" }
     ]
@@ -192,7 +212,7 @@ const { data, error } = await soat.guardrails.createGuardrail({
         {
           match: { tool: 'update-budget', where: { '<': [{ var: 'args.amount' }, 500] } },
           class: 'B',
-          guards: [{ '<': [{ var: 'usage.cost_usd_24h' }, 1000] }],
+          guards: [{ '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] }],
         },
         { match: { tool: 'update-budget' }, class: 'C' },
         { match: { tool: 'delete-account' }, class: 'D' },
@@ -216,7 +236,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
       "default_class": "C",
       "rules": [
         { "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
-          "class": "B", "guards": [ { "<": [{ "var": "usage.cost_usd_24h" }, 1000] } ] },
+          "class": "B", "guards": [ { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } ] },
         { "match": { "tool": "update-budget" }, "class": "C" },
         { "match": { "tool": "delete-account" }, "class": "D" }
       ]
@@ -262,6 +282,50 @@ curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/guardrail-overrides
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{ "document": { "rules": [ { "match": { "tool": "update-budget" }, "class": "C" } ] } }'
+```
+
+</TabItem>
+</Tabs>
+
+### Pass guardrail context on a generation
+
+The application supplies the `context.*` values guards evaluate over. If the guardrail also names a `context_tool_id`, the tool's output is combined over this object per `context_mode` at evaluation time.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-agent-generation \
+  --agent-id agent_01 \
+  --prompt "Raise the campaign budget to 450" \
+  --guardrail-context '{"max_daily_budget": 500, "cost_ceiling": 1000}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.createAgentGeneration({
+  path: { agent_id: 'agent_01' },
+  body: {
+    prompt: 'Raise the campaign budget to 450',
+    guardrail_context: { max_daily_budget: 500, cost_ceiling: 1000 },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Raise the campaign budget to 450",
+    "guardrail_context": { "max_daily_budget": 500, "cost_ceiling": 1000 }
+  }'
 ```
 
 </TabItem>

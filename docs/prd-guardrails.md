@@ -18,6 +18,22 @@
 > Guardrail, `pol_` → `guard_`, `policies:*` → `guardrails:*`,
 > `ProjectPolicyOverride` → `ProjectGuardrailOverride`).
 
+> **Context decision (2026-07) — supersedes the fixed provider-catalog framing
+> below (§ named context providers).** Guard context is **application-owned**.
+> Guards resolve `var`s against three namespaces: `args.*` (call arguments),
+> `context.*` (the effective guardrail context), and `soat.*` (the reserved
+> platform-computed catalog: identity, run state, usage, activity). The caller
+> passes a free-form `guardrail_context` object on the generation /
+> orchestration-run request; a guardrail may additionally name a
+> `context_tool_id` the platform calls at evaluation time — fresh context for
+> long-lived runs — combined with the caller object per `context_mode` (`merge`
+> default, tool wins on conflict; or `replace`). Fail-closed: a missing
+> `context.*` key, context-tool failure/timeout, or unresolvable `soat.*`
+> provider counts as a failed guard. The authoritative contract is
+> [guardrails.md — Guards and Guardrail Context](../packages/website/docs/modules/guardrails.md).
+> This also changes the audit record: the effective `context.*` object is
+> frozen as `context_snapshot` (values), with keys-only retained for `soat.*`.
+
 ## Implementation Status
 
 | Component                                     | Status         | Notes                                                              |

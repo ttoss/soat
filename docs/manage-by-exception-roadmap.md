@@ -79,8 +79,8 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 
 > **Docs-first:** the final user-facing contract is written ahead of the code —
 > [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
-> `guardrails` resource: action classes, guards + context catalog, tripwires,
-> per-project overrides, versioning, evaluation audit record).
+> `guardrails` resource: action classes, guards + application-owned guardrail
+> context, tripwires, per-project overrides, versioning, evaluation audit record).
 >
 > **Placement decision (2026-07):** guardrails ship as a **first-class
 > `guardrails` resource** (own `guard_` id, own `guardrails:*` permission
@@ -90,12 +90,24 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > principal), attach differently (`guardrail_id` on the agent, not user/key
 > attachment), and keeping them separate leaves the security-critical IAM module
 > untouched. Supersedes prd-guardrails.md's "reuses the policies module surface".
+>
+> **Context decision (2026-07):** guard context is **application-owned**, not a
+> platform-computed provider catalog. Guards see three namespaces: `args.*`
+> (call arguments), `context.*` (the effective guardrail context), `soat.*`
+> (reserved platform catalog — identity, run state, usage, activity). The caller
+> passes `guardrail_context` on the generation / orchestration-run request; a
+> guardrail may name a `context_tool_id` called at evaluation time — solving the
+> stale-context problem for long-lived runs — combined per `context_mode`
+> (`merge` default, tool wins; or `replace`). Fail-closed throughout: a missing
+> `context.*` key, a context-tool failure/timeout, or an unresolvable `soat.*`
+> provider counts as a failed guard. Supersedes prd-guardrails.md's fixed
+> `project.context.*` provider catalog.
 
 | # | Task | Notes |
 |---|------|-------|
 | 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ default_class, rules[] }` where each rule is `{ match, class, guards, escalate }`; own `guardrails:*` permissions |
 | 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously; agent opts in via `guardrail_id` |
-| 2.3 | Guard expression evaluation + named context providers | Reuses the orchestration JSON Logic evaluator (no LLM in the path); fixed key catalog `project.context.*` / `run.*` / `activity.*` / `usage.*` |
+| 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). `soat.*` is the reserved platform-computed catalog. Fail-closed: missing keys, tool failure/timeout → guard failed |
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
 | 2.5 | `escalate: true` downgrade-to-approval | A tripped guard files an exception or routes to the queue rather than silently downgrading |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
@@ -141,7 +153,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 | 5.1 | `ActivityEntry` feed (`acte_` prefix) | One entry per autonomously executed action; both producers write through the same module hook — or lands as one `detail` kind of `AuditEntry` (see prd-audit-log) |
 | 5.2 | Cursor-paginated `GET /api/v1/activity` | Type / severity filters; chronological, per project |
 | 5.3 | Evidence + drill-through linkage | Feed item → run → generations, with agent / node / guardrail-policy-version links (same evidence linkage as the queue) |
-| 5.4 | Write `activity.actions_24h` guard context | The context provider Milestone 2 guards assume that nothing currently populates |
+| 5.4 | Write `soat.activity.actions_24h` guard context | The platform-computed `soat.*` key Milestone 2 guards assume that nothing currently populates |
 
 ## Backlog (unsequenced)
 
