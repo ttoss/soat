@@ -14,18 +14,20 @@ const apiKeysRouter = new Router<Context>();
 /**
  * Resolves a project public ID to its internal ID.
  *
- * API keys are always scoped to a single project, so `projectId` is required.
- * `undefined` is allowed only on update (meaning "leave the scope unchanged");
- * a `null` is never a valid scope.
+ * API keys may be scoped to a single project or left unscoped:
+ * - `undefined` means "not provided" — an unscoped key on create, or "leave the
+ *   scope unchanged" on update.
+ * - `null` explicitly clears the scope (unscoped key).
+ * - a public ID resolves to the project's internal ID, or errors if unknown.
  */
 const resolveProjectId = async (args: {
   projectId: string | null | undefined;
-}): Promise<{ id: number | undefined; error?: string }> => {
+}): Promise<{ id: number | null | undefined; error?: string }> => {
   if (args.projectId === undefined) {
     return { id: undefined };
   }
   if (args.projectId === null) {
-    return { id: undefined, error: 'project_id cannot be null' };
+    return { id: null };
   }
 
   const project = await db.Project.findOne({
@@ -99,20 +101,15 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
 
   const { name, projectId, policyIds } = ctx.request.body as {
     name: string;
-    projectId?: string;
+    projectId?: string | null;
     policyIds?: string[];
   };
 
-  if (!projectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
-  }
-
+  // project_id is optional: an omitted or null value creates an unscoped key.
   const projectResult = await resolveProjectId({ projectId });
-  if (projectResult.error || projectResult.id === undefined) {
+  if (projectResult.error) {
     ctx.status = 400;
-    ctx.body = { error: projectResult.error ?? 'Invalid project' };
+    ctx.body = { error: projectResult.error };
     return;
   }
 
@@ -169,7 +166,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
 
   const { name, projectId, policyIds } = ctx.request.body as {
     name?: string;
-    projectId?: string;
+    projectId?: string | null;
     policyIds?: string[];
   };
 
@@ -209,8 +206,8 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     projectId: projectResult.id,
     policyIds: policyResult.ids,
   });
-  // projectResult.id is `undefined` only when project_id was omitted (scope
-  // unchanged); a `null` would have been rejected as an error above.
+  // projectResult.id: `undefined` = scope unchanged (project_id omitted),
+  // `null` = scope cleared (unscoped), a number = re-scoped to that project.
 
   ctx.body = updated;
 });
