@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: SOAT API Keys API
   version: 1.0.0
-  description: API for managing project-scoped API keys with optional policy attachments
+  description: API for managing API keys (optionally project-scoped) with optional policy attachments
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -49,9 +49,9 @@ paths:
       summary: Create an API key
       description: >
         Creates a new API key for the authenticated user.
-        - `project_id` is required: every key is scoped to exactly one project.
+        - `project_id` is optional. When set, the key is scoped to that single project. When omitted or null, the key is **unscoped** and spans every project its owner can reach.
         - If `policy_ids` is provided, the key's effective permissions are the intersection of the user's policies and the key's policies.
-        - Otherwise the key inherits the user's permissions, confined to the key's project.
+        - Otherwise the key inherits the user's permissions (confined to the key's project when scoped).
       operationId: createApiKey
       requestBody:
         required: true
@@ -61,7 +61,6 @@ paths:
               type: object
               required:
                 - name
-                - project_id
               properties:
                 name:
                   type: string
@@ -69,7 +68,8 @@ paths:
                   example: CI/CD Pipeline
                 project_id:
                   type: string
-                  description: Project ID this key is scoped to. Required — keys cannot span projects.
+                  nullable: true
+                  description: Optional project ID to scope the key to. Omit or set null to create an unscoped key that spans projects.
                   example: proj_V1StGXR8Z5jdHi6B
                   x-soat-ref: projects
                 policy_ids:
@@ -126,7 +126,7 @@ paths:
       tags:
         - API Keys
       summary: Update an API key
-      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project but never cleared. Only the owner or an admin can update it.
+      description: Updates an API key's name, project scope, or policies. The project scope can be changed to another project, set (scoping a previously unscoped key), or cleared with null (unscoping the key). Only the owner or an admin can update it.
       operationId: updateApiKey
       parameters:
         - name: api_key_id
@@ -149,7 +149,8 @@ paths:
                 project_id:
                   x-soat-ref: projects
                   type: string
-                  description: Re-scope the key to a different project. Cannot be null — keys are always project-scoped.
+                  nullable: true
+                  description: Re-scope the key to a different project, or set null to clear the scope (unscoped key). Omit to leave the scope unchanged.
                   example: proj_V1StGXR8Z5jdHi6B
                 policy_ids:
                   x-soat-ref: policies
@@ -229,7 +230,8 @@ components:
         project_id:
           x-soat-ref: projects
           type: string
-          description: The project this key is scoped to
+          nullable: true
+          description: The project this key is scoped to, or null for an unscoped key that spans projects
           example: proj_V1StGXR8Z5jdHi6B
         policy_ids:
           x-soat-ref: policies

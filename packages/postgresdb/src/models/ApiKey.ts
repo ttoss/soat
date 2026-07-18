@@ -40,11 +40,17 @@ export class ApiKey extends Model {
   })
   declare user: User;
 
+  /**
+   * The project this key is scoped to. Nullable: a key with a null projectId is
+   * "unscoped" — it is not confined to any single project and its effective
+   * permissions are the intersection of the owner's permissions and the key's
+   * own attached policies (if any), across every project the owner can reach.
+   */
   @ForeignKey(() => {
     return Project;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare projectId: number;
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare projectId: number | null;
 
   @BelongsTo(
     () => {

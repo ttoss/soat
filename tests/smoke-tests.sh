@@ -199,6 +199,31 @@ fi
 # DELETE api-key
 $SOAT_CLI delete-api-key --api-key-id "$API_KEY_ID"
 expect_cli_error_status 404 get-api-key --api-key-id "$API_KEY_ID"
+
+# Unscoped api-key (no project_id) — spans projects, bounded by owner permissions
+UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-unscoped-key)
+UNSCOPED_KEY_ID=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.id')
+UNSCOPED_KEY_RAW=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.key')
+if [ -z "$UNSCOPED_KEY_ID" ] || [ "$UNSCOPED_KEY_ID" = "null" ]; then
+  echo "ERROR: Failed to create unscoped api-key" >&2
+  echo "$UNSCOPED_KEY_RESP" >&2
+  exit 1
+fi
+UNSCOPED_KEY_PROJECT=$($SOAT_CLI get-api-key --api-key-id "$UNSCOPED_KEY_ID" | jq -r '.project_id')
+if [ "$UNSCOPED_KEY_PROJECT" != "null" ]; then
+  echo "ERROR: Expected unscoped api-key to report null project_id" >&2
+  exit 1
+fi
+# Verify the unscoped key authenticates
+set +e
+SOAT_TOKEN="$UNSCOPED_KEY_RAW" $SOAT_CLI list-projects >/dev/null 2>&1
+UNSCOPED_AUTH_STATUS=$?
+set -e
+if [ "$UNSCOPED_AUTH_STATUS" != "0" ]; then
+  echo "ERROR: Unscoped API key auth failed" >&2
+  exit 1
+fi
+$SOAT_CLI delete-api-key --api-key-id "$UNSCOPED_KEY_ID"
 echo "API keys coverage: OK"
 
 # Delete policies (cleanup + CRUD coverage)
