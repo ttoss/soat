@@ -7,6 +7,7 @@ import {
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
+import { buildResolverApprovalContext } from './agentToolApproval';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -118,9 +119,8 @@ const buildPendingFromState = async (args: {
 
   // Canonical bindings (legacy rows normalize lazily); no branch on presence —
   // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const legacyViews = deriveLegacyToolFields(
-    readAgentToolBindings(args.typedAgent)
-  );
+  const bindings = readAgentToolBindings(args.typedAgent);
+  const legacyViews = deriveLegacyToolFields(bindings);
   const resolvedTools = await resolveAgentTools({
     toolIds: legacyViews.toolIds ?? [],
     tools: legacyViews.tools,
@@ -130,6 +130,13 @@ const buildPendingFromState = async (args: {
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
+    approval: buildResolverApprovalContext({
+      bindings,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      projectId: args.typedAgent.project.id as number,
+      sessionId: args.pendingState.toolContext?.sessionId ?? null,
+    }),
   });
 
   return {

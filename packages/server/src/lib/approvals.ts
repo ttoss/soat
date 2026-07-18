@@ -24,6 +24,18 @@ type ApprovalInstance = InstanceType<(typeof db)['ApprovalItem']> & {
   resolvedByUser?: InstanceType<(typeof db)['User']> | null;
 };
 
+// A Sequelize unique-constraint violation surfaces as an error whose `name` is
+// `SequelizeUniqueConstraintError` — matched by name so no Sequelize error
+// class needs importing here.
+const isUniqueViolation = (error: unknown): boolean => {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name?: unknown }).name === 'SequelizeUniqueConstraintError'
+  );
+};
+
 // Built lazily inside each query: `db.*` models are only populated after the
 // database initializes, so referencing them at module load time would be
 // undefined.
@@ -55,6 +67,7 @@ export const mapApproval = (instance: ApprovalInstance) => {
     runId: instance.orchestrationRun?.publicId ?? null,
     nodeId: instance.nodeId,
     generationId: instance.generationId,
+    sessionId: instance.sessionId,
     agentId: instance.agentId,
     knowledgeVersion: instance.knowledgeVersion,
     policyVersion: instance.policyVersion,
@@ -155,6 +168,23 @@ const emitApprovalEvent = async (args: {
   });
 };
 
+// Returns the still-pending item matching a dedup key in a project, or null.
+// The partial unique index on `dedup_key WHERE status = 'pending'` guarantees at
+// most one, so this is the fast path (and the race-resolution look-up) for §3.
+const findPendingByDedupKey = async (args: {
+  projectId: number;
+  dedupKey: string;
+}): Promise<ApprovalInstance | null> => {
+  return db.ApprovalItem.findOne({
+    where: {
+      projectId: args.projectId,
+      dedupKey: args.dedupKey,
+      status: 'pending',
+    },
+    include: buildIncludes(),
+  });
+};
+
 const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
   const item = await db.ApprovalItem.findOne({
     where: { publicId: id },
@@ -176,7 +206,7 @@ const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
 export const emitApproval = async (args: {
   projectId: number;
   origin?: 'node' | 'tool_call';
-  proposedAction: { toolId: string; arguments: object };
+  proposedAction: { toolId: string; action?: string; arguments: object };
   reasoning?: string | null;
   evidence?: object | null;
   predictedImpact?: string | null;
@@ -185,6 +215,7 @@ export const emitApproval = async (args: {
   orchestrationRunId?: number | null;
   nodeId?: string | null;
   generationId?: string | null;
+  sessionId?: string | null;
   agentId?: string | null;
   knowledgeVersion?: string | null;
   policyVersion?: string | null;
@@ -197,27 +228,60 @@ export const emitApproval = async (args: {
     args.expiresInSeconds
   );
 
+  // Dedup (§3 Phase 2): while a matching proposal is still pending, a
+  // re-proposal returns the existing item instead of filing a second.
+  if (args.dedupKey) {
+    const existing = await findPendingByDedupKey({
+      projectId: args.projectId,
+      dedupKey: args.dedupKey,
+    });
+    if (existing) {
+      log('emitApproval: dedup hit id=%s', existing.publicId);
+      return mapApproval(existing);
+    }
+  }
+
   const expiresAt = new Date(Date.now() + args.expiresInSeconds * 1000);
 
   // Optional fields are passed through as-is: `undefined` falls back to each
   // column's default ('node'/'pending') or null (allowNull), so no manual
   // coalescing is needed.
-  const created = await db.ApprovalItem.create({
-    projectId: args.projectId,
-    origin: args.origin,
-    proposedAction: args.proposedAction,
-    reasoning: args.reasoning,
-    evidence: args.evidence,
-    predictedImpact: args.predictedImpact,
-    expiresAt,
-    dedupKey: args.dedupKey,
-    orchestrationRunId: args.orchestrationRunId,
-    nodeId: args.nodeId,
-    generationId: args.generationId,
-    agentId: args.agentId,
-    knowledgeVersion: args.knowledgeVersion,
-    policyVersion: args.policyVersion,
-  });
+  let created: ApprovalInstance;
+  try {
+    created = await db.ApprovalItem.create({
+      projectId: args.projectId,
+      origin: args.origin,
+      proposedAction: args.proposedAction,
+      reasoning: args.reasoning,
+      evidence: args.evidence,
+      predictedImpact: args.predictedImpact,
+      expiresAt,
+      dedupKey: args.dedupKey,
+      orchestrationRunId: args.orchestrationRunId,
+      nodeId: args.nodeId,
+      generationId: args.generationId,
+      sessionId: args.sessionId,
+      agentId: args.agentId,
+      knowledgeVersion: args.knowledgeVersion,
+      policyVersion: args.policyVersion,
+    });
+  } catch (error) {
+    // Race backstop: a concurrent emit won the partial unique index on
+    // `dedup_key WHERE status = 'pending'`. Return that winner rather than
+    // surfacing the constraint error — the retrying agent gets the existing
+    // item, exactly as the fast-path dedup look-up above would have.
+    if (args.dedupKey && isUniqueViolation(error)) {
+      const winner = await findPendingByDedupKey({
+        projectId: args.projectId,
+        dedupKey: args.dedupKey,
+      });
+      if (winner) {
+        log('emitApproval: dedup race resolved id=%s', winner.publicId);
+        return mapApproval(winner);
+      }
+    }
+    throw error;
+  }
 
   const withRefs = await db.ApprovalItem.findOne({
     where: { id: created.id },

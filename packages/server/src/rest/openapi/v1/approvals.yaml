@@ -210,6 +210,11 @@ components:
           properties:
             tool_id:
               type: string
+            action:
+              type: string
+              description: >-
+                Resolved action name (the soat/mcp action) for tool-call items;
+                omitted for single-action tools
             arguments:
               type: object
         reasoning:
@@ -244,6 +249,10 @@ components:
           type: string
           nullable: true
           description: Originating generation (tool-call producer)
+        session_id:
+          type: string
+          nullable: true
+          description: Session the originating generation ran in (tool-call producer)
         agent_id:
           type: string
           nullable: true

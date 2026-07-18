@@ -1,3 +1,7 @@
+// Side-effect import: registers the tool-call approval resume handler (Milestone
+// 1) so a resolved `origin: tool_call` item fires its continuation generation.
+import 'src/lib/agentToolApprovalContinuation';
+
 import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';

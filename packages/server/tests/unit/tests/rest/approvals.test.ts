@@ -91,6 +91,63 @@ describe('Approvals', () => {
       expect(found.resolved_by_user_id).toBeUndefined();
     });
 
+    test('exposes tool-call provenance and filters by origin', async () => {
+      const toolCall = await seedApproval({
+        origin: 'tool_call',
+        proposedAction: {
+          toolId: 'tool_refund000000',
+          action: 'refund',
+          arguments: { amount: 500 },
+        },
+        generationId: 'gen_toolcall00000',
+        sessionId: 'sess_toolcall0000',
+        dedupKey: 'dedup-abc',
+        agentId: 'agent_toolcall000',
+      });
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&origin=tool_call`
+      );
+
+      expect(res.status).toBe(200);
+      const found = res.body.find((a: { id: string }) => {
+        return a.id === toolCall.id;
+      });
+      expect(found).toBeDefined();
+      expect(found.origin).toBe('tool_call');
+      expect(found.proposed_action.action).toBe('refund');
+      expect(found.generation_id).toBe('gen_toolcall00000');
+      expect(found.session_id).toBe('sess_toolcall0000');
+      expect(found.dedup_key).toBe('dedup-abc');
+      // A node-origin item must be excluded by the origin filter.
+      const nodeItem = await seedApproval();
+      const excludes = res.body.some((a: { id: string }) => {
+        return a.id === nodeItem.id;
+      });
+      expect(excludes).toBe(false);
+    });
+
+    test('a concurrent dedup-race create surfaces the unique violation', async () => {
+      // The dedup fast-path find always catches an existing pending item, so
+      // the create-time unique-violation backstop (§3 race) is only reachable
+      // by forcing the write to reject — a sanctioned force-failure spy
+      // (tests.md exception #2). No pending winner exists for this key, so the
+      // error re-propagates rather than resolving to an existing item.
+      const uniqueError = Object.assign(new Error('duplicate key'), {
+        name: 'SequelizeUniqueConstraintError',
+      });
+      const spy = jest
+        .spyOn(db.ApprovalItem, 'create')
+        .mockRejectedValueOnce(uniqueError);
+      try {
+        await expect(
+          seedApproval({ origin: 'tool_call', dedupKey: 'race-no-winner' })
+        ).rejects.toThrow('duplicate key');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     test('filters by status', async () => {
       const pending = await seedApproval();
       const toReject = await seedApproval();
