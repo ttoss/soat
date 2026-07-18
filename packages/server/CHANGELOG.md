@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.9](https://127.0.0.1/41729/git/ttoss/compare/v0.15.8...v0.15.9) (2026-07-18)
+
+### Bug Fixes
+
+* **tasks:** make post-dispatch automation writes atomic under a row lock ([#601](https://127.0.0.1/41729/git/ttoss/issues/601)) ([5cc147b](https://127.0.0.1/41729/git/ttoss/commits/5cc147bf16e8142f74cdf11e2ce30f02aa3f3421)), closes [#589](https://127.0.0.1/41729/git/ttoss/issues/589) [#590](https://127.0.0.1/41729/git/ttoss/issues/590)
+* **tasks:** shallow-merge task payload on PATCH instead of replacing it ([#600](https://127.0.0.1/41729/git/ttoss/issues/600)) ([bca33bb](https://127.0.0.1/41729/git/ttoss/commits/bca33bb7fc21986f44a2cf138d1419222197cfee))
+* **tasks:** surface guard-rejected on_complete transitions instead of leaving tasks silently stuck ([#599](https://127.0.0.1/41729/git/ttoss/issues/599)) ([6a1a851](https://127.0.0.1/41729/git/ttoss/commits/6a1a8516d853b26f6d5741e74ff1b0e263cee0ee)), closes [#589](https://127.0.0.1/41729/git/ttoss/issues/589)
+* **workflows:** reject requires_approval: true at validation until Phase 3 ships ([#602](https://127.0.0.1/41729/git/ttoss/issues/602)) ([1e708f6](https://127.0.0.1/41729/git/ttoss/commits/1e708f6713e6ddd7f0f1d83ada7d55677ef3143d))
+
 ## [0.15.8](https://127.0.0.1/41729/git/ttoss/compare/v0.15.7...v0.15.8) (2026-07-18)
 
 ### Features
