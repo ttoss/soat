@@ -133,6 +133,40 @@ describe('Workflows', () => {
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
     });
+
+    test('401 for unauthenticated list requests', async () => {
+      const res = await testClient.get(
+        `/api/v1/workflows?project_id=${projectId}`
+      );
+      expect(res.status).toBe(401);
+    });
+  });
+
+  describe('GET /api/v1/workflows/:id', () => {
+    test('401 for unauthenticated requests', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await testClient.get(`/api/v1/workflows/${created.id}`);
+      expect(res.status).toBe(401);
+    });
+
+    test('returns a single workflow to a permitted user', async () => {
+      const created = (await createWorkflow(userToken, { name: 'get-one' }))
+        .body;
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/workflows/${created.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(created.id);
+      expect(res.body.name).toBe('get-one');
+    });
+
+    test('403 for a user without permission', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/workflows/${created.id}`
+      );
+      expect(res.status).toBe(403);
+    });
   });
 
   describe('PATCH /api/v1/workflows/:id', () => {
@@ -145,6 +179,52 @@ describe('Workflows', () => {
       expect(res.body.description).toBe('now documented');
     });
 
+    test('renames a workflow to a new unique name', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ name: `renamed-${Math.random().toString(36).slice(2)}` });
+      expect(res.status).toBe(200);
+      expect(res.body.name).toMatch(/^renamed-/);
+    });
+
+    test('rejects a rename that collides with an existing name', async () => {
+      await createWorkflow(adminToken, { name: 'taken-name' });
+      const created = (await createWorkflow(adminToken)).body;
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ name: 'taken-name' });
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('NAME_CONFLICT');
+    });
+
+    test('replaces the payload_schema', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const schema = { properties: { topic: { type: 'string' } } };
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ payload_schema: schema });
+      expect(res.status).toBe(200);
+      expect(res.body.payload_schema).toEqual(schema);
+    });
+
+    test('re-validates a structural change and persists new states', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const nextStates = [
+        { name: 'open', initial: true },
+        { name: 'closed', terminal: true },
+      ];
+      const nextTransitions = [
+        { name: 'finish', from: ['open'], to: 'closed' },
+      ];
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ states: nextStates, transitions: nextTransitions });
+      expect(res.status).toBe(200);
+      expect(res.body.states).toHaveLength(2);
+      expect(res.body.transitions).toHaveLength(1);
+    });
+
     test('rejects a structurally-invalid update', async () => {
       const created = (await createWorkflow(userToken)).body;
       const res = await authenticatedTestClient(userToken)
@@ -153,9 +233,55 @@ describe('Workflows', () => {
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
     });
+
+    test('404 for an unknown workflow', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch('/api/v1/workflows/wfl_missing')
+        .send({ description: 'x' });
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
+    });
+
+    test('403 for a user without permission', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ description: 'x' });
+      expect(res.status).toBe(403);
+    });
+
+    test('401 for unauthenticated requests', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await testClient
+        .patch(`/api/v1/workflows/${created.id}`)
+        .send({ description: 'x' });
+      expect(res.status).toBe(401);
+    });
   });
 
   describe('DELETE /api/v1/workflows/:id', () => {
+    test('404 for an unknown workflow', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        '/api/v1/workflows/wfl_missing'
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('WORKFLOW_NOT_FOUND');
+    });
+
+    test('403 for a user without permission', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/workflows/${created.id}`
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('401 for unauthenticated requests', async () => {
+      const created = (await createWorkflow(userToken)).body;
+      const res = await testClient.delete(`/api/v1/workflows/${created.id}`);
+      expect(res.status).toBe(401);
+    });
+
     test('deletes a workflow with no tasks', async () => {
       const created = (await createWorkflow(userToken)).body;
       const res = await authenticatedTestClient(userToken).delete(
