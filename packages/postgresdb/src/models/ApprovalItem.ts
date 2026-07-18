@@ -79,7 +79,11 @@ export class ApprovalItem extends Model {
   // the resolved `action` (the soat/mcp action name) so the platform can execute
   // the exact proposed call at resolution time.
   @Column({ type: DataType.JSONB, allowNull: false })
-  declare proposedAction: { toolId: string; action?: string; arguments: object };
+  declare proposedAction: {
+    toolId: string;
+    action?: string;
+    arguments: object;
+  };
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare reasoning: string | null;
