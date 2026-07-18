@@ -203,8 +203,11 @@ leaving — task state is the source of truth (an entity that lives).
 - **Delete is guarded.** A workflow with one or more **open** tasks cannot be
   deleted (`WORKFLOW_HAS_OPEN_TASKS`).
 - **Payload is working data.** `PATCH /tasks/{id}` updates `payload`, `title`, or
-  `assignee` (validated against `payload_schema`). Transitions are the audited
-  contract; payload writes are not versioned.
+  `assignee`. `payload` is **shallow-merged** over the current payload (PATCH
+  semantics): keys the request omits are kept, so setting `approved` never
+  discards a `last_result` an on_enter automation wrote. The merged payload is
+  validated against `payload_schema`. Transitions are the audited contract;
+  payload writes are not versioned.
 
 ## Error Codes
 

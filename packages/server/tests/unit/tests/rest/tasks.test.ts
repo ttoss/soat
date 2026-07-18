@@ -344,6 +344,26 @@ describe('Tasks', () => {
       expect(res.body.assignee).toBe('usr_someone');
     });
 
+    test('merges the payload rather than replacing it, preserving keys the patch omits', async () => {
+      const task = (await createTask({ topic: 'spring' })).body;
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tasks/${task.id}`)
+        .send({ payload: { approved: true } });
+      expect(res.status).toBe(200);
+      // `topic` (set at creation, and what an on_enter automation would write
+      // to `last_result`) survives a partial patch that only sets `approved`.
+      expect(res.body.payload).toEqual({ topic: 'spring', approved: true });
+    });
+
+    test('a payload key can be overwritten by the patch', async () => {
+      const task = (await createTask({ topic: 'spring' })).body;
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tasks/${task.id}`)
+        .send({ payload: { topic: 'summer' } });
+      expect(res.status).toBe(200);
+      expect(res.body.payload).toEqual({ topic: 'summer' });
+    });
+
     test('404 for an unknown task', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch('/api/v1/tasks/task_missing')
