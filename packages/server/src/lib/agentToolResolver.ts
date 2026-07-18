@@ -11,6 +11,11 @@ import {
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
+  gateResolvedTools,
+  type ResolverApprovalContext,
+} from './agentToolApproval';
+import type { ToolApprovalPolicy } from './agentToolBindings';
+import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
@@ -685,6 +690,22 @@ const wrapExecuteWithOutputMapping = (
   };
 };
 
+/**
+ * The parameter schema to hand the justification-field injector, or `undefined`
+ * to skip injection. Only `http` and `pipeline` tools carry their full
+ * model-visible schema in `typedTool.parameters`; `discussion` builds a
+ * `{ topic }` schema internally, and `mcp`/`soat` schemas are remote/per-action,
+ * so those are gated without justification-field injection.
+ */
+const localInjectableSchema = (
+  typedTool: AgentToolRow
+): Record<string, unknown> | undefined => {
+  if (typedTool.type === 'http' || typedTool.type === 'pipeline') {
+    return typedTool.parameters ?? {};
+  }
+  return undefined;
+};
+
 const wrapToolsWithOutputMapping = (
   tools: Record<string, Tool>,
   outputMapping: Record<string, unknown> | null
@@ -842,13 +863,80 @@ export const resolveEphemeralAgentTool = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  approvalPolicy?: ToolApprovalPolicy | null;
+  approval?: ResolverApprovalContext;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
 
   const tools = await resolveToolByType(typedTool, args);
-  return wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+  const mapped = wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+
+  if (!args.approvalPolicy || !args.approval) return mapped;
+  return gateResolvedTools({
+    tools: mapped,
+    policy: args.approvalPolicy,
+    toolId: typedTool.publicId,
+    toolType: typedTool.type,
+    toolName: typedTool.name,
+    presetParameters: typedTool.presetParameters,
+    rawParameters:
+      typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined,
+    context: args.approval,
+  });
+};
+
+type ResolveToolByTypeArgs = {
+  projectIds?: number[];
+  boundaryPolicy?: unknown;
+  authHeader?: string;
+  toolContext?: Record<string, string>;
+  traceId?: string;
+  parentTraceId?: string | null;
+  rootTraceId?: string | null;
+  remainingDepth?: number;
+};
+
+// Resolves one persisted-tool binding into its (output-mapped, optionally
+// approval-gated) AI-SDK tools. Extracted so `resolveAgentTools` stays within
+// its complexity budget.
+const resolveReferenceBinding = async (args: {
+  toolPublicId: string;
+  projectIds?: number[];
+  resolveArgs: ResolveToolByTypeArgs;
+  approval?: ResolverApprovalContext;
+}): Promise<Record<string, Tool>> => {
+  const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
+  if (args.projectIds !== undefined) {
+    toolWhere.projectId = args.projectIds;
+  }
+
+  const agentTool = await db.Tool.findOne({ where: toolWhere });
+  if (!agentTool) return {};
+
+  const typedTool = agentTool as unknown as AgentToolRow;
+  const tools = await resolveToolByType(typedTool, args.resolveArgs);
+  // Pipeline tools delegate execution to `callTool` (tools.ts), which already
+  // applies `outputMapping` to its return value — wrapping again here would
+  // double-apply the mapping.
+  const mapped =
+    typedTool.type === 'pipeline'
+      ? tools
+      : wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+
+  const policy = args.approval?.policyByToolId[args.toolPublicId] ?? null;
+  if (!policy || !args.approval) return mapped;
+  return gateResolvedTools({
+    tools: mapped,
+    policy,
+    toolId: typedTool.publicId,
+    toolType: typedTool.type,
+    toolName: typedTool.name,
+    presetParameters: typedTool.presetParameters,
+    rawParameters: localInjectableSchema(typedTool),
+    context: args.approval,
+  });
 };
 
 export const resolveAgentTools = async (args: {
@@ -863,33 +951,29 @@ export const resolveAgentTools = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  // Per-generation approval-gate context. When present, each binding's
+  // `approval_policy` (keyed by tool publicId for references, positional for
+  // inline tools) gates its resolved tools in the dispatch path (Milestone 1).
+  approval?: ResolverApprovalContext;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
   for (const toolPublicId of args.toolIds) {
-    const toolWhere: Record<string, unknown> = { publicId: toolPublicId };
-    if (args.projectIds !== undefined) {
-      toolWhere.projectId = args.projectIds;
-    }
-
-    const agentTool = await db.Tool.findOne({ where: toolWhere });
-    if (!agentTool) continue;
-
-    const typedTool = agentTool as unknown as AgentToolRow;
-    const tools = await resolveToolByType(typedTool, args);
-    // Pipeline tools delegate execution to `callTool` (tools.ts), which
-    // already applies `outputMapping` to its return value — wrapping again
-    // here would double-apply the mapping.
     Object.assign(
       resolvedTools,
-      typedTool.type === 'pipeline'
-        ? tools
-        : wrapToolsWithOutputMapping(tools, typedTool.outputMapping)
+      await resolveReferenceBinding({
+        toolPublicId,
+        projectIds: args.projectIds,
+        resolveArgs: args,
+        approval: args.approval,
+      })
     );
   }
 
   if (args.projectId !== undefined) {
+    let inlineIndex = -1;
     for (const definition of args.tools ?? []) {
+      inlineIndex += 1;
       const ephemeralTools = await resolveEphemeralAgentTool({
         definition,
         projectId: args.projectId,
@@ -900,6 +984,8 @@ export const resolveAgentTools = async (args: {
         parentTraceId: args.parentTraceId,
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
+        approvalPolicy: args.approval?.inlinePolicies[inlineIndex] ?? null,
+        approval: args.approval,
       });
       Object.assign(resolvedTools, ephemeralTools);
     }

@@ -75,9 +75,11 @@ export class ApprovalItem extends Model {
   })
   declare status: 'pending' | 'approved' | 'rejected' | 'expired';
 
-  // Frozen at emit time: `{ toolId, arguments }`.
+  // Frozen at emit time: `{ toolId, arguments }`. Tool-call items also freeze
+  // the resolved `action` (the soat/mcp action name) so the platform can execute
+  // the exact proposed call at resolution time.
   @Column({ type: DataType.JSONB, allowNull: false })
-  declare proposedAction: { toolId: string; arguments: object };
+  declare proposedAction: { toolId: string; action?: string; arguments: object };
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare reasoning: string | null;
@@ -117,6 +119,11 @@ export class ApprovalItem extends Model {
   // The generation that emitted the item (tool-call producer, Phase 2).
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare generationId: string | null;
+
+  // The session the emitting generation ran in, when any (tool-call producer).
+  // Lets a tool-call continuation append to the originating session thread.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare sessionId: string | null;
 
   // Proposing agent's public id (informational).
   @Column({ type: DataType.STRING(32), allowNull: true })

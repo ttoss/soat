@@ -1822,6 +1822,76 @@ echo "--- Deleting project-detail tool ---"
 $SOAT_CLI delete-tool --tool-id "$PROJECT_DETAIL_TOOL_ID"
 echo "Project-detail tool deleted."
 
+# 22g. Approval-gated tool binding (manage-by-exception, Milestone 1).
+# A tool bound with an approval_policy of default `require_approval` files a
+# tool-call approval item instead of executing; approving it resumes the flow.
+echo "--- Creating approval-gated tool ---"
+GATED_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name gated-project-detail \
+  --type http \
+  --description "Reads the smoke test project; approval-gated." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+GATED_TOOL_ID=$(echo "$GATED_TOOL_RESP" | jq -r '.id')
+echo "Approval-gated tool id: $GATED_TOOL_ID"
+
+echo "--- Creating approval-gated agent (tool_bindings + approval_policy) ---"
+GATED_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name approval-gated-agent \
+  --instructions "Call the gated-project-detail tool to fetch the project." \
+  --tool_bindings "[{\"tool_id\":\"$GATED_TOOL_ID\",\"approval_policy\":{\"default\":\"require_approval\",\"expires_in\":3600}}]" \
+  --tool_choice required \
+  --max_steps 2)
+GATED_AGENT_ID=$(echo "$GATED_AGENT_RESP" | jq -r '.id')
+echo "Approval-gated agent id: $GATED_AGENT_ID"
+
+# The binding's approval_policy must round-trip on the agent (deterministic).
+GATED_POLICY_DEFAULT=$(echo "$GATED_AGENT_RESP" | jq -r '.tool_bindings[0].approval_policy.default // empty')
+if [ "$GATED_POLICY_DEFAULT" != "require_approval" ]; then
+  echo "ERROR: approval_policy did not round-trip on the agent binding" >&2
+  exit 1
+fi
+echo "approval_policy round-trip: OK"
+
+# Force the gated tool call; tool_choice=required makes the model call it, so the
+# gate files a pending item and the turn completes normally (return-pending).
+echo "--- Running generation against the approval-gated tool ---"
+set +e
+$SOAT_CLI create-agent-generation --agent-id "$GATED_AGENT_ID" \
+  --messages '[{"role":"user","content":"fetch the project"}]' >/dev/null 2>&1
+set -e
+
+echo "--- Listing pending tool-call approvals ---"
+GATED_APPROVAL_ID=$($SOAT_CLI list-approvals \
+  --project-id "$PROJECT_PUBLIC_ID" --status pending --origin tool_call \
+  | sanitize_json | jq -r '[.[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
+
+if [ -n "$GATED_APPROVAL_ID" ]; then
+  echo "Filed tool-call approval id: $GATED_APPROVAL_ID"
+  APPROVE_RESP=$($SOAT_CLI approve-approval --approval-id "$GATED_APPROVAL_ID" | sanitize_json)
+  APPROVE_STATUS=$(echo "$APPROVE_RESP" | jq -r '.status')
+  if [ "$APPROVE_STATUS" != "approved" ]; then
+    echo "ERROR: Expected approval status 'approved', got '$APPROVE_STATUS'" >&2
+    exit 1
+  fi
+  APPROVE_ORIGIN=$(echo "$APPROVE_RESP" | jq -r '.origin')
+  if [ "$APPROVE_ORIGIN" != "tool_call" ]; then
+    echo "ERROR: Expected approval origin 'tool_call', got '$APPROVE_ORIGIN'" >&2
+    exit 1
+  fi
+  echo "Tool-call approval approved: OK"
+else
+  echo "WARNING: model did not call the gated tool (LLM response varies); skipping approve step." >&2
+fi
+
+# Cleanup — delete gated agent (force through dependent generations) and tool.
+$SOAT_CLI delete-agent --agent-id "$GATED_AGENT_ID" --force >/dev/null 2>&1 || true
+$SOAT_CLI delete-tool --tool-id "$GATED_TOOL_ID" >/dev/null 2>&1 || true
+echo "Approval-gated flow cleanup: OK"
+
 # 23. Generated agents are now delete-blocked by dependent generations/traces
 echo "--- Verifying agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"

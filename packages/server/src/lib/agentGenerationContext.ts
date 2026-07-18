@@ -13,6 +13,7 @@ import {
   mergeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
+import { buildResolverApprovalContext } from './agentToolApproval';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -102,6 +103,7 @@ const assembleContextMessages = async (args: {
 
 const resolveGenerationTools = async (args: {
   agentId: string;
+  generationId: string;
   projectIds?: number[];
   typedAgent: TypedAgent;
   authHeader?: string;
@@ -113,9 +115,8 @@ const resolveGenerationTools = async (args: {
 }): Promise<Record<string, Tool>> => {
   // Canonical bindings (legacy rows normalize lazily); no branch on presence —
   // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const legacyViews = deriveLegacyToolFields(
-    readAgentToolBindings(args.typedAgent)
-  );
+  const bindings = readAgentToolBindings(args.typedAgent);
+  const legacyViews = deriveLegacyToolFields(bindings);
   const resolvedTools = await resolveAgentTools({
     toolIds: legacyViews.toolIds ?? [],
     tools: legacyViews.tools,
@@ -128,6 +129,13 @@ const resolveGenerationTools = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
+    approval: buildResolverApprovalContext({
+      bindings,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      projectId: args.typedAgent.project.id as number,
+      sessionId: args.toolContext?.sessionId ?? null,
+    }),
   });
 
   buildKnowledgeTools({
@@ -180,8 +188,14 @@ export const buildGenerationContext = async (args: {
     typedAgent,
   });
 
+  // Generated up front (before tool resolution) so the approval gate can freeze
+  // it onto any item it files — a tool-call approval's continuation is linked
+  // back to this generation via `initiator_generation_id`.
+  const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
+
   const resolvedTools = await resolveGenerationTools({
     agentId: args.agentId,
+    generationId,
     projectIds: args.projectIds,
     typedAgent,
     authHeader: args.authHeader,
@@ -205,7 +219,7 @@ export const buildGenerationContext = async (args: {
     model,
     resolvedTools,
     allMessages,
-    generationId: generatePublicId(PUBLIC_ID_PREFIXES.generation),
+    generationId,
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
   };

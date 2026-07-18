@@ -91,6 +91,42 @@ describe('Approvals', () => {
       expect(found.resolved_by_user_id).toBeUndefined();
     });
 
+    test('exposes tool-call provenance and filters by origin', async () => {
+      const toolCall = await seedApproval({
+        origin: 'tool_call',
+        proposedAction: {
+          toolId: 'tool_refund000000',
+          action: 'refund',
+          arguments: { amount: 500 },
+        },
+        generationId: 'gen_toolcall00000',
+        sessionId: 'sess_toolcall0000',
+        dedupKey: 'dedup-abc',
+        agentId: 'agent_toolcall000',
+      });
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&origin=tool_call`
+      );
+
+      expect(res.status).toBe(200);
+      const found = res.body.find((a: { id: string }) => {
+        return a.id === toolCall.id;
+      });
+      expect(found).toBeDefined();
+      expect(found.origin).toBe('tool_call');
+      expect(found.proposed_action.action).toBe('refund');
+      expect(found.generation_id).toBe('gen_toolcall00000');
+      expect(found.session_id).toBe('sess_toolcall0000');
+      expect(found.dedup_key).toBe('dedup-abc');
+      // A node-origin item must be excluded by the origin filter.
+      const nodeItem = await seedApproval();
+      const excludes = res.body.some((a: { id: string }) => {
+        return a.id === nodeItem.id;
+      });
+      expect(excludes).toBe(false);
+    });
+
     test('filters by status', async () => {
       const pending = await seedApproval();
       const toReject = await seedApproval();

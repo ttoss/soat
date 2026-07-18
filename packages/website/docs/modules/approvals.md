@@ -47,7 +47,7 @@ filtering only — the lifecycle never branches on it.
 | `project_id`         | string          | ID of the owning project                                           |
 | `origin`             | string          | `node` \| `tool_call` — producer origin (analytics/filtering only) |
 | `status`             | string          | `pending` \| `approved` \| `rejected` \| `expired`                 |
-| `proposed_action`    | object          | Frozen `{ tool_id, arguments }` the decision governs               |
+| `proposed_action`    | object          | Frozen `{ tool_id, action?, arguments }` the decision governs      |
 | `reasoning`          | string \| null  | The proposing agent's rationale                                    |
 | `evidence`           | object \| null  | Structured supporting data                                         |
 | `predicted_impact`   | string \| null  | Expected execution effect                                          |
@@ -56,6 +56,7 @@ filtering only — the lifecycle never branches on it.
 | `run_id`             | string \| null  | Originating orchestration run (node producer)                      |
 | `node_id`            | string \| null  | Originating node id within the run's graph                         |
 | `generation_id`      | string \| null  | Originating generation (tool-call producer)                        |
+| `session_id`         | string \| null  | Session the originating generation ran in (tool-call producer)     |
 | `agent_id`           | string \| null  | Proposing agent                                                    |
 | `knowledge_version`  | string \| null  | Knowledge package version in context at emit time                  |
 | `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
