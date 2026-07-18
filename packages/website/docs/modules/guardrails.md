@@ -13,7 +13,7 @@ Guardrails classify every tool call an agent makes into an action class — exec
 
 A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md), which it deliberately does not touch. Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers a different question at a different layer: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
 
-Guardrails are the fleet-level form of the per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. An agent opts in by referencing a guardrail via its `guardrail_id`.
+Guardrails are the platform's **single tool-call gating mechanism**, superseding the deprecated per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md) with the same return-pending / continuation mechanics, guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. A guardrail [attaches](#attachment) to an **agent** (governing every tool the agent can call) or to a **tool** (governing that tool for every agent that uses it); when both apply, the stricter decision wins.
 
 A guardrail is a **reusable template**: defined once, it can govern agents across many projects — a central team sets the fleet's autonomy posture in one place. A single project then adapts that posture locally with a [per-project override](#per-project-overrides), which can only make the guardrail **stricter** (never looser). That is what the override earns you: one canonical guardrail, per-tenant tightening, no forking.
 
@@ -46,7 +46,7 @@ Each rule:
 
 | Field      | Type    | Description                                                                                  |
 | ---------- | ------- | -------------------------------------------------------------------------------------------- |
-| `match`    | object  | `{ tool, where? }` — the tool (by name or id) and an optional JSON Logic predicate over `args` |
+| `match`    | object  | Optional `{ tool?, where? }` — a tool (by name or id) and/or a JSON Logic predicate over `args`. An omitted `tool` (or omitted `match`) matches **any call in scope** |
 | `class`    | string  | `A` \| `B` \| `C` \| `D` (see [Action Classes](#action-classes))                             |
 | `guard`    | object  | A single JSON Logic expression; for class `B`, it must evaluate truthy to execute autonomously. Compose multiple conditions with `{ "and": [...] }` |
 | `escalate` | boolean | When `true`, a failing guard routes to approval instead of tripping fail-closed              |
@@ -69,9 +69,16 @@ Each rule:
 | `document`     | object  | A partial document layered over the template (**tighten-only**) |
 | `version`      | integer | Incremented on every override write                            |
 
-An agent references its guardrail through a `guardrail_id` field (project-gated, with a per-generate override) — a guardrail is **not** attached the way IAM policies attach to users and API keys.
-
 ## Key Concepts
+
+### Attachment
+
+A guardrail attaches through a `guardrail_id` field on either resource — it is **not** attached the way IAM policies attach to users and API keys:
+
+- **On an agent** — governs **every** tool call the agent makes, across all its bindings. This is the fleet-posture form: one document classifies the agent's entire tool surface, and `default_class` covers any tool nobody thought about.
+- **On a tool** — governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
+
+When both an agent-level and a tool-level guardrail apply to the same call, **both evaluate and the stricter decision wins** (`blocked` > `route_to_approval` > guarded execute > execute) — composition can only tighten, the same invariant as [per-project overrides](#per-project-overrides). One `guardrail_evaluation` record is written per guardrail evaluated.
 
 ### Action Classes
 
@@ -84,9 +91,11 @@ An agent references its guardrail through a `guardrail_id` field (project-gated,
 
 Unmatched actions take `default_class`, which itself defaults to **C** — anything nobody classified requires a human. Fail-closed is the invariant: a misconfigured or absent classification never grants autonomy.
 
+Class-C interception runs in the platform's tool-dispatch path with the return-pending mechanics the approval queue already defines: the call returns `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` as the tool result, the turn completes normally, and resolution starts a continuation generation that executes the frozen (or edited) arguments — including [duplicate-proposal dedup](./approvals.md#data-model) and the model-visible `approval_*` justification fields.
+
 ### Match Predicates
 
-`match.tool` names a tool by name or id. `match.where` is an optional JSON Logic predicate over `args` (the resolved call arguments), so the same tool can be class **B** below a threshold and class **C** above it. Rules are ordered and the first match wins.
+`match.tool` names a tool by name or id; when omitted (or when `match` is omitted entirely) the rule matches **any call in scope** — the natural form for a tool-attached guardrail, whose scope is already a single tool, or for a catch-all rule at the end of an agent-attached document. `match.where` is an optional JSON Logic predicate over `args` (the resolved call arguments), so the same tool can be class **B** below a threshold and class **C** above it. Rules are ordered and the first match wins.
 
 ```json
 {
@@ -249,6 +258,43 @@ curl -X POST https://api.example.com/api/v1/guardrails \
       ]
     }
   }'
+```
+
+</TabItem>
+</Tabs>
+
+### Attach a guardrail
+
+Attach to an agent to govern its whole tool surface, or to a tool (`soat update-tool --tool-id tool_01 --guardrail-id …`) to govern that tool for every agent.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat update-agent \
+  --agent-id agent_01 \
+  --guardrail-id guard_V1StGXR8Z5jdHi6B
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.agents.updateAgent({
+  path: { agent_id: 'agent_01' },
+  body: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X PATCH https://api.example.com/api/v1/agents/agent_01 \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{"guardrail_id": "guard_V1StGXR8Z5jdHi6B"}'
 ```
 
 </TabItem>

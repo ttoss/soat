@@ -74,8 +74,9 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > [prd-guardrails.md Phases 1–3](./prd-guardrails.md#implementation-phases).
 > The deterministic classify→route engine that decides *what* needs a human,
 > plus the per-project override that lets a customer downgrade any class-B
-> action to C. Feeds Milestone 1: `action_classes` becomes the project-level
-> policy source for tool-call routing.
+> action to C. Supersedes Milestone 1's policy source: the guardrail becomes
+> the **single** policy source for tool-call routing, replacing the per-binding
+> `approval_policy` (task 2.6) while keeping M1's dispatch machinery.
 
 > **Docs-first:** the final user-facing contract is written ahead of the code —
 > [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
@@ -102,14 +103,26 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > `context.*` key, a context-tool failure/timeout, or an unresolvable `soat.*`
 > provider counts as a failed guard. Supersedes prd-guardrails.md's fixed
 > `project.context.*` provider catalog.
+>
+> **Attachment decision (2026-07):** guardrails are the **single** tool-call
+> gating mechanism. A guardrail attaches via `guardrail_id` on an **agent**
+> (governs its whole tool surface) or on a **tool** (governs it for every
+> agent); when both apply, both evaluate and the **stricter decision wins**.
+> `match.tool` is optional — omitted matches any call in scope (the natural
+> form for tool-attached guardrails). The per-binding `approval_policy`
+> shipped in M1 task 1.1 is **deprecated and will be removed** (task 2.6);
+> M1's dispatch-path machinery (gate point, return-pending, continuation,
+> dedup, justification fields) is retained as the guardrail interceptor —
+> only the policy source changes.
 
 | # | Task | Notes |
 |---|------|-------|
 | 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ default_class, rules[] }` where each rule is `{ match, class, guard, escalate }` (`guard` is a single JSON Logic expression — compose with `{"and": [...]}`); own `guardrails:*` permissions |
-| 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously; agent opts in via `guardrail_id` |
+| 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue (reusing M1's return-pending / continuation / dedup machinery), class A/B execute autonomously; attach via `guardrail_id` on the agent (whole surface) or on the tool (every agent); both applying → stricter decision wins |
 | 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). `soat.*` is the reserved platform-computed catalog. Fail-closed: missing keys, tool failure/timeout → guard failed |
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
 | 2.5 | `escalate: true` downgrade-to-approval | A tripped guard files an exception or routes to the queue rather than silently downgrading |
+| 2.6 | Deprecate + remove per-binding `approval_policy` | Guardrails subsume it (a one-rule guardrail on the tool is the migration path); deprecation window on the field, then removal from `tool_bindings`, OpenAPI, formations schema |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
 
 ## Milestone 3 — Knowledge-version provenance (B.6 dependency)
@@ -177,14 +190,14 @@ baseline (approval queue + node + expiry, shipped)
    │
    ├─► M1 (tool-call approval on every surface)
    │        ▲
-   │        │ action_classes becomes the routing source
+   │        │ guardrails replace approval_policy as the routing source
 M2 (action classes + B→C downgrade) ──────────────┐
    │                                               │
 M3 (knowledge version, B.6) ──► M4 (audit trail) ──┴─► M5 (activity feed)
 ```
 
-M1 and M2 are independent of each other; M2 later refines M1's routing (a
-per-binding `approval_policy` is the tactical form, `action_classes` the
-project-level policy form). M3 is a small prerequisite that unblocks M4's
+M1 and M2 are independent of each other; M2 **supersedes** M1's policy source
+— the per-binding `approval_policy` is deprecated and removed (task 2.6), while
+M1's dispatch-path machinery survives as the guardrail interceptor. M3 is a small prerequisite that unblocks M4's
 audit answer; M5 needs both M2 (class A/B labels) and M4 (the audit/activity
 substrate).

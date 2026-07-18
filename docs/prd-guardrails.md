@@ -38,6 +38,14 @@
 > JSON Logic expression (compose with `{"and": [...]}`) rather than a `guards`
 > array — read `guards`/"all guards pass" below as the singular `guard`.
 
+> **Attachment decision (2026-07):** guardrails are the **single** tool-call
+> gating mechanism — attachable via `guardrail_id` on an **agent** (its whole
+> tool surface) or on a **tool** (every agent that uses it); when both apply,
+> the stricter decision wins. `match.tool` is optional (omitted = any call in
+> scope). The per-binding `approval_policy` (prd-approvals Phase 2 / roadmap
+> task 1.1) is deprecated and will be removed; its dispatch-path machinery is
+> retained as the guardrail interceptor.
+
 ## Implementation Status
 
 | Component                                     | Status         | Notes                                                              |

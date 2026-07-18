@@ -25,10 +25,11 @@ Two producers file items today:
 
 - the [`approval` orchestration node](./orchestrations.md) — declarative
   placement in a DAG (`origin: node`);
-- **tool-call interception** — an
-  [`approval_policy` on an agent's tool binding](./agents.md#approval-policy)
-  gates every call of that tool, on every execution surface: chat sessions,
-  direct generations, MCP (`origin: tool_call`).
+- **tool-call interception** — a [guardrail](./guardrails.md) attached to an
+  agent or tool (or the deprecated per-binding
+  [`approval_policy`](./agents.md#approval-policy)) gates tool calls on every
+  execution surface: chat sessions, direct generations, MCP
+  (`origin: tool_call`).
 
 The `origin` field records which producer filed an item, for analytics and
 filtering only — the lifecycle never branches on it.

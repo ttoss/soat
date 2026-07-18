@@ -98,7 +98,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 
 ### Tools
 
-Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool. A single persisted tool can be bound to many agents, and each binding carries that agent's per-tool configuration (today: an optional [`approval_policy`](#approval-policy)). For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
+Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool. A single persisted tool can be bound to many agents, and each binding carries that agent's per-tool configuration (today: an optional, [deprecated](#approval-policy) `approval_policy`; tool-call gating is moving to [Guardrails](./guardrails.md)). For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
@@ -110,7 +110,7 @@ Each entry in `tool_bindings` is an object:
 | ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `tool_id`         | string         | Public ID of a persisted tool. Exactly one of `tool_id` / `tool` per entry.                                           |
 | `tool`            | object         | Inline (ephemeral) tool definition — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions).   |
-| `approval_policy` | object \| null | Optional allow / require-approval / deny gate evaluated on every call of this tool — see [Approval Policy](#approval-policy). |
+| `approval_policy` | object \| null | **Deprecated** — superseded by [Guardrails](./guardrails.md). Optional allow / require-approval / deny gate evaluated on every call of this tool — see [Approval Policy](#approval-policy). |
 
 ```json
 {
@@ -147,6 +147,12 @@ A binding's `tool` property accepts an inline tool definition — the same shape
 Inline definitions are a convenience for a tool that only ever makes sense for one agent (skipping the separate `POST /tools` call and any tool-lifecycle bookkeeping); use `tool_id` bindings for tools that are reused across agents or need to be independently manageable.
 
 #### Approval Policy
+
+:::warning Deprecated — superseded by Guardrails
+
+`approval_policy` is deprecated in favor of [Guardrails](./guardrails.md), the platform's single tool-call gating mechanism — attachable to an agent (its whole tool surface) or to a tool (everywhere it's used), with fail-closed classification, runtime context, per-project overrides, and versioning. The dispatch-path mechanics documented below (return-pending, continuation generations, dedup, `approval_*` justification fields) carry over unchanged to guardrail class-C interception. `approval_policy` will be removed in a future release; migrate to a guardrail.
+
+:::
 
 A binding's `approval_policy` turns the tool into an **approval-gated** tool: every call the model makes is classified by the platform — in the server's tool-dispatch path, not by the model — as `allow`, `require_approval`, or `deny` before anything executes. `require_approval` files an item in the project's [approval queue](./approvals.md) and the action executes only if a human approves it before it expires.
 
