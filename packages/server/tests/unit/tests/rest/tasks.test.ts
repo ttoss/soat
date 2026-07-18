@@ -858,7 +858,10 @@ describe('Tasks', () => {
       // deterministically (there's no natural yield point between them), so we
       // widen it with a force-failure-style spy (tests.md exception #2, same
       // spirit as the dedup-race spy in approvals.test.ts) on the one `.save()`
-      // call the completion write makes.
+      // call the completion write makes. `on_complete` deliberately never
+      // matches: an auto-fired `to_done` runs in-process (no REST/auth
+      // overhead) and would always beat the externally-fired `abort` request
+      // to the row, confounding the race this test is actually after.
       let releaseGen: (() => void) | undefined;
       const gate = new Promise<void>((resolve) => {
         releaseGen = resolve;
@@ -882,7 +885,7 @@ describe('Tasks', () => {
         name: 'race',
         onEnter: {
           dispatch: { kind: 'agent', agent_id: agentId },
-          on_complete: [{ when: true, transition: 'to_done' }],
+          on_complete: [{ when: false, transition: 'to_done' }],
         },
         extraStates: [{ name: 'aborted', terminal: true }],
         extraTransitions: [{ name: 'abort', from: ['writing'], to: 'aborted' }],
@@ -918,13 +921,12 @@ describe('Tasks', () => {
         // the held write so it commits its stale snapshot afterward.
         await saveReached;
         const abortPromise = transition(taskId, 'abort');
-        // Give the concurrent transition a real head start into its own
-        // multi-step transaction before releasing the stale write — biasing
-        // towards the exact ordering #590 describes (concurrent commit, then
-        // the stale write fires anyway) without depending on it: the fix
-        // below makes the final assertions hold regardless of who wins.
+        // Give the concurrent transition, which goes through the full
+        // REST/auth stack, time to reach the DB before releasing the stale
+        // write — reproducing the ordering #590 describes: concurrent commit
+        // first, stale write fires anyway afterward.
         await new Promise((resolve) => {
-          setTimeout(resolve, 50);
+          setTimeout(resolve, 150);
         });
         releaseSave!();
         await Promise.all([abortPromise, flushTaskAutomations()]);
