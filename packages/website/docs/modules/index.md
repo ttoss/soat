@@ -54,7 +54,7 @@ Composing agents into workflows and reacting to events.
 - [Triggers](./triggers.md) — scheduled and on-demand flow execution
 - [Webhooks](./webhooks.md) — HMAC-signed event delivery to external systems
 - [Approvals](./approvals.md) — human-decision queue for agent-proposed actions
-- [Guardrails](./guardrails.md) — action-class rules that classify each agent tool call
+- [Guardrails](./guardrails.md) — action-class policies that classify each agent tool call
 
 ## Declarative Deployment
 

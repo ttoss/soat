@@ -46,6 +46,18 @@
 > task 1.1) is deprecated and will be removed; its dispatch-path machinery is
 > retained as the guardrail interceptor.
 
+> **Document-shape decision (2026-07) — supersedes the `rules[]` /
+> first-match-wins shape below.** The document is
+> `{ class, default_class, guard?, escalate? }` — no rule list, no `match`.
+> `class` is a literal or a single JSON Logic expression (typically an `if`
+> over `soat.tool.name` / `args.*` / `context.*`) returning the class; any
+> invalid result resolves to `default_class` (default `C`, fail-closed).
+> `guard` is a single JSON Logic expression over the same namespaces.
+> Overrides carry the same document shape and evaluate alongside the
+> template — effective class is the **stricter** result and both guards must
+> pass — making tighten-only a runtime composition property instead of a
+> static-analysis problem. Audit `rule_index` is dropped.
+
 ## Implementation Status
 
 | Component                                     | Status         | Notes                                                              |
