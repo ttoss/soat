@@ -13,7 +13,9 @@ Guardrails classify every tool call an agent makes into an action class — exec
 
 A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md), which it deliberately does not touch. Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers a different question at a different layer: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
 
-Guardrails are the project-level policy form of the per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. An agent opts in by referencing a guardrail via its `guardrail_id`.
+Guardrails are the fleet-level form of the per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. An agent opts in by referencing a guardrail via its `guardrail_id`.
+
+A guardrail is a **reusable template**: defined once, it can govern agents across many projects — a central team sets the fleet's autonomy posture in one place. A single project then adapts that posture locally with a [per-project override](#per-project-overrides), which can only make the guardrail **stricter** (never looser). That is what the override earns you: one canonical guardrail, per-tenant tightening, no forking.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
