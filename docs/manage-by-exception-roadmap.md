@@ -105,7 +105,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 
 | # | Task | Notes |
 |---|------|-------|
-| 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ default_class, rules[] }` where each rule is `{ match, class, guards, escalate }`; own `guardrails:*` permissions |
+| 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ default_class, rules[] }` where each rule is `{ match, class, guard, escalate }` (`guard` is a single JSON Logic expression — compose with `{"and": [...]}`); own `guardrails:*` permissions |
 | 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously; agent opts in via `guardrail_id` |
 | 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). `soat.*` is the reserved platform-computed catalog. Fail-closed: missing keys, tool failure/timeout → guard failed |
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |

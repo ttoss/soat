@@ -40,7 +40,7 @@ The `document`:
 | Field           | Type    | Description                                                                 |
 | --------------- | ------- | --------------------------------------------------------------------------- |
 | `default_class` | string  | Class applied when no rule matches. Defaults to `C` (fail-closed)           |
-| `rules`         | array   | Ordered; **first match wins**. Each rule is `{ match, class, guards?, escalate? }` |
+| `rules`         | array   | Ordered; **first match wins**. Each rule is `{ match, class, guard?, escalate? }` |
 
 Each rule:
 
@@ -48,7 +48,7 @@ Each rule:
 | ---------- | ------- | -------------------------------------------------------------------------------------------- |
 | `match`    | object  | `{ tool, where? }` — the tool (by name or id) and an optional JSON Logic predicate over `args` |
 | `class`    | string  | `A` \| `B` \| `C` \| `D` (see [Action Classes](#action-classes))                             |
-| `guards`   | array   | JSON Logic expressions; for class `B`, **all** must pass to execute autonomously             |
+| `guard`    | object  | A single JSON Logic expression; for class `B`, it must evaluate truthy to execute autonomously. Compose multiple conditions with `{ "and": [...] }` |
 | `escalate` | boolean | When `true`, a failing guard routes to approval instead of tripping fail-closed              |
 
 ### GuardrailVersion
@@ -78,7 +78,7 @@ An agent references its guardrail through a `guardrail_id` field (project-gated,
 | Class | Meaning                | Behavior                                                                                     |
 | ----- | ---------------------- | -------------------------------------------------------------------------------------------- |
 | **A** | Read-only / harmless   | Always execute; logged to the activity feed                                                  |
-| **B** | Autonomous with guards | Execute **iff all guards pass**; a failing guard trips fail-closed (or routes to approval — see [Tripwires](#tripwires-and-escalate)) |
+| **B** | Autonomous with a guard | Execute **iff the guard passes**; a failing guard trips fail-closed (or routes to approval — see [Tripwires](#tripwires-and-escalate)) |
 | **C** | Human sign-off         | Files an [`ApprovalItem`](./approvals.md) (`origin: tool_call`); executes only on approval    |
 | **D** | Forbidden              | The tool is never attached; the classifier blocks it as defense-in-depth                     |
 
@@ -92,16 +92,18 @@ Unmatched actions take `default_class`, which itself defaults to **C** — anyth
 {
   "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
   "class": "B",
-  "guards": [
-    { "<=": [{ "var": "args.amount" }, { "var": "context.max_daily_budget" }] },
-    { "<": [{ "var": "soat.usage.cost_usd_24h" }, { "var": "context.cost_ceiling" }] }
-  ]
+  "guard": {
+    "and": [
+      { "<=": [{ "var": "args.amount" }, { "var": "context.max_daily_budget" }] },
+      { "<": [{ "var": "soat.usage.cost_usd_24h" }, { "var": "context.cost_ceiling" }] }
+    ]
+  }
 }
 ```
 
 ### Guards and Guardrail Context
 
-Guards are JSON Logic expressions — the same evaluator [orchestration](./orchestrations.md) mappings use — with no `eval` and no LLM in the path. Every `var` resolves against exactly three namespaces:
+A rule's `guard` is a **single JSON Logic expression** — the same evaluator [orchestration](./orchestrations.md) mappings use — with no `eval` and no LLM in the path. JSON Logic composes on its own (`{ "and": [...] }`, `{ "or": [...] }`, `{ "!": ... }`), so there is no separate guard array. Every `var` resolves against exactly three namespaces:
 
 | Namespace   | Source                                                                                                         |
 | ----------- | -------------------------------------------------------------------------------------------------------------- |
@@ -135,7 +137,7 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 ### Per-project Overrides
 
-A `ProjectGuardrailOverride` layers over the template guardrail at evaluation time so one project can run a tighter risk posture than the fleet. Overrides can **tighten only** — downgrade `B → C`, add guards, or lower `default_class` — never upgrade `C → B` or remove guards. Downgrading `B → C` for one project leaves every other project on the template unchanged.
+A `ProjectGuardrailOverride` layers over the template guardrail at evaluation time so one project can run a tighter risk posture than the fleet. Overrides can **tighten only** — downgrade `B → C`, tighten a guard, or lower `default_class` — never upgrade `C → B` or weaken a guard. Downgrading `B → C` for one project leaves every other project on the template unchanged.
 
 ### Versioning
 
@@ -143,7 +145,7 @@ Every write to a guardrail's `document` increments `version` and archives the pr
 
 ### Evaluation Audit Record
 
-Every evaluation — execute, route-to-approval, block, or tripwire — writes a `guardrail_evaluation` activity entry (and stamps the generation/run record) capturing the governing `guardrail_version`, matched `rule_index`, per-guard results, and provenance:
+Every evaluation — execute, route-to-approval, block, or tripwire — writes a `guardrail_evaluation` activity entry (and stamps the generation/run record) capturing the governing `guardrail_version`, matched `rule_index`, the guard outcome, and provenance:
 
 ```json
 {
@@ -155,7 +157,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
   "rule_index": 0,
   "class": "B",
   "decision": "execute",
-  "guard_results": [{ "index": 0, "result": true }, { "index": 1, "result": true }],
+  "guard_result": true,
   "context_source": "merged",
   "context_snapshot": {
     "args.amount": 450,
@@ -173,7 +175,8 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 - `rule_index` is the first matching rule's index; `-1` means no rule matched and `default_class` applied.
 - `override_version` is `null` when no project override was layered in.
 - `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
-- `context_snapshot` is a flat map of **only the vars the evaluation actually referenced** — every `var` in the matched rule's `match.where` and `guards`, keyed by its fully-qualified path (`args.*` / `context.*` / `soat.*`) and frozen at its evaluation-time value. The full `guardrail_context` may carry many more keys; those are not recorded. This is the only way to answer "why did this pass?" after the application's context (or platform usage counters) have moved on, while keeping the record small and free of unreferenced — possibly sensitive — context.
+- `guard_result` is the guard expression's boolean outcome; `null` when the matched rule has no guard.
+- `context_snapshot` is a flat map of **only the vars the evaluation actually referenced** — every `var` in the matched rule's `match.where` and `guard`, keyed by its fully-qualified path (`args.*` / `context.*` / `soat.*`) and frozen at its evaluation-time value. The full `guardrail_context` may carry many more keys; those are not recorded. This is the only way to answer "why did this pass?" after the application's context (or platform usage counters) have moved on, while keeping the record small and free of unreferenced — possibly sensitive — context.
 
 ## Examples
 
@@ -190,7 +193,7 @@ soat create-guardrail \
     "rules": [
       { "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
         "class": "B",
-        "guards": [ { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } ] },
+        "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } },
       { "match": { "tool": "update-budget" }, "class": "C" },
       { "match": { "tool": "delete-account" }, "class": "D" }
     ]
@@ -216,7 +219,7 @@ const { data, error } = await soat.guardrails.createGuardrail({
         {
           match: { tool: 'update-budget', where: { '<': [{ var: 'args.amount' }, 500] } },
           class: 'B',
-          guards: [{ '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] }],
+          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
         },
         { match: { tool: 'update-budget' }, class: 'C' },
         { match: { tool: 'delete-account' }, class: 'D' },
@@ -240,7 +243,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
       "default_class": "C",
       "rules": [
         { "match": { "tool": "update-budget", "where": { "<": [{ "var": "args.amount" }, 500] } },
-          "class": "B", "guards": [ { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } ] },
+          "class": "B", "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] } },
         { "match": { "tool": "update-budget" }, "class": "C" },
         { "match": { "tool": "delete-account" }, "class": "D" }
       ]

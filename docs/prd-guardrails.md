@@ -34,7 +34,9 @@
 > This also changes the audit record: `context_snapshot` is a flat map of only
 > the vars the matched rule actually referenced (fully-qualified `args.*` /
 > `context.*` / `soat.*` paths → evaluation-time values) — superseding the
-> keys-only decision in § audit record below.
+> keys-only decision in § audit record below. A rule carries a single `guard`
+> JSON Logic expression (compose with `{"and": [...]}`) rather than a `guards`
+> array — read `guards`/"all guards pass" below as the singular `guard`.
 
 ## Implementation Status
 
