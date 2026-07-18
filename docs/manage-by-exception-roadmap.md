@@ -76,7 +76,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > plus the per-project override that lets a customer downgrade any class-B
 > action to C. Supersedes Milestone 1's policy source: the guardrail becomes
 > the **single** policy source for tool-call routing, replacing the per-binding
-> `approval_policy` (task 2.6) while keeping M1's dispatch machinery.
+> `approval_policy` (task 2.7) while keeping M1's dispatch machinery.
 
 > **Docs-first:** the final user-facing contract is written ahead of the code —
 > [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
@@ -108,21 +108,24 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > gating mechanism. A guardrail attaches via `guardrail_id` on an **agent**
 > (governs its whole tool surface) or on a **tool** (governs it for every
 > agent); when both apply, both evaluate and the **stricter decision wins**.
-> `match.tool` is optional — omitted matches any call in scope (the natural
-> form for tool-attached guardrails). The per-binding `approval_policy`
-> shipped in M1 task 1.1 is **deprecated and will be removed** (task 2.6);
-> M1's dispatch-path machinery (gate point, return-pending, continuation,
-> dedup, justification fields) is retained as the guardrail interceptor —
-> only the policy source changes.
+> There is no per-tool `match` — the document's single `class` JSON Logic
+> expression decides the class per call (keying on `soat.tool.name` when it
+> needs to), so a tool-attached guardrail is just `{ "class": "C" }` or an
+> `if` over its arguments. The per-binding `approval_policy` shipped in M1
+> task 1.1 is **deprecated and will be removed** (task 2.7); M1's
+> dispatch-path machinery (gate point, return-pending, continuation, dedup,
+> justification fields) is retained as the guardrail interceptor — only the
+> policy source changes.
 
 | # | Task | Notes |
 |---|------|-------|
 | 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ class, default_class, guard?, escalate? }` — no rule list: `class` is a literal or a single JSON Logic expression (`if` over `soat.tool.name` / `args` / `context`) returning the class, `guard` a single JSON Logic expression; invalid `class` result → `default_class` (C); own `guardrails:*` permissions |
-| 2.2 | Tool-boundary interceptor: classify → route | Evaluate the `class` expression; **fail-closed default class C** on any invalid result; class C routes to the approval queue (reusing M1's return-pending / continuation / dedup machinery), class A/B execute autonomously; attach via `guardrail_id` on the agent (whole surface) or on the tool (every agent); both applying → stricter decision wins |
+| 2.2 | Tool-boundary interceptor: classify → route | Evaluate the `class` expression; **fail-closed default class C** on any invalid result (`null`, typo, non-class); class A/B execute autonomously (B iff its guard passes), class C routes to the approval queue (reusing M1's return-pending / continuation / dedup machinery), class D is blocked at dispatch (model gets a blocked tool result and continues); attach via `guardrail_id` on the agent (whole surface) or on the tool (every agent); both applying → stricter decision wins |
 | 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). `soat.*` is the reserved platform-computed catalog. Fail-closed: missing keys, tool failure/timeout → guard failed |
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Same document shape, evaluated alongside the template; effective class = **stricter of the two**, guards AND — tighten-only by construction (no static analysis). Downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
-| 2.5 | `escalate: true` downgrade-to-approval | A tripped guard files an exception or routes to the queue rather than silently downgrading |
-| 2.6 | Deprecate + remove per-binding `approval_policy` | Guardrails subsume it (a one-rule guardrail on the tool is the migration path); deprecation window on the field, then removal from `tool_bindings`, OpenAPI, formations schema |
+| 2.5 | Tripwires + `escalate` on a failing class-B guard | Default: abort the action and file an exception (a hard, non-LLM stop on a runaway loop). `escalate: true` opts into the softer path — a failing guard routes the call to the approval queue instead of aborting. Never a silent downgrade either way |
+| 2.6 | `guardrail_evaluation` audit record | Every evaluation (execute / route-to-approval / block / tripwire) writes one activity entry per guardrail evaluated and stamps the generation/run record: governing `guardrail_version` + `override_version`, resolved `class`, `decision`, `guard_result`, `context_source`, and a flat `context_snapshot` of **only the referenced vars** (fully-qualified `args.*` / `context.*` / `soat.*`), frozen at evaluation-time values |
+| 2.7 | Deprecate + remove per-binding `approval_policy` | Guardrails subsume it (a `{ "class": "C" }` guardrail on the tool is the migration path); deprecation window on the field, then removal from `tool_bindings`, OpenAPI, formations schema |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
 
 ## Milestone 3 — Knowledge-version provenance (B.6 dependency)
@@ -197,7 +200,7 @@ M3 (knowledge version, B.6) ──► M4 (audit trail) ──┴─► M5 (activ
 ```
 
 M1 and M2 are independent of each other; M2 **supersedes** M1's policy source
-— the per-binding `approval_policy` is deprecated and removed (task 2.6), while
+— the per-binding `approval_policy` is deprecated and removed (task 2.7), while
 M1's dispatch-path machinery survives as the guardrail interceptor. M3 is a small prerequisite that unblocks M4's
 audit answer; M5 needs both M2 (class A/B labels) and M4 (the audit/activity
 substrate).
