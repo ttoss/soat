@@ -119,7 +119,7 @@ state in `from`) if a workflow needs one.
 | `payload`           | object           | Mutable task data; input to guards and dispatch `input_mapping`s        |
 | `assignee`          | string \| null   | Informational in v1 (user/actor public ID)                              |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any          |
-| `automation_status` | string \| null   | `running` \| `completed` \| `failed` for the current state's dispatch   |
+| `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
 | `updated_at`        | string           | ISO 8601 last-updated timestamp                                         |
@@ -179,7 +179,12 @@ run when a task enters it, and routes the outcome back into a transition:
   `{result}`; an orchestration dispatch exposes its final run state. The result
   is also written to `task.payload.last_result` for downstream states. No rule
   matches → the task stays put with `automation_status: completed` and a
-  `tasks.automation_unrouted` event fires (never silently stuck).
+  `tasks.automation_unrouted` event fires (never silently stuck). A rule
+  matches but its transition is rejected (its guard fails for the `automation`
+  actor, or a concurrent move invalidated it) → the task stays put with
+  `automation_status: unrouted` and a `tasks.automation_rejected` event fires
+  (carrying the matched `transition` and the rejection `errorCode`) — again,
+  never silently stuck.
 - **`on_failure`** — a transition to fire when the dispatch fails terminally.
   Omitted → the task stays in the state with `automation_status: failed` for a
   human to resolve.
@@ -227,6 +232,7 @@ leaving — task state is the source of truth (an entity that lives).
 | `tasks.transitioned`         | A task moves between states                              |
 | `tasks.closed`               | A task enters a terminal state                           |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   |
+| `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) |
 
 ## Related Tutorials
 

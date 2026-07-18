@@ -295,6 +295,7 @@ components:
             - running
             - completed
             - failed
+            - unrouted
         entered_state_at:
           type: string
           format: date-time
