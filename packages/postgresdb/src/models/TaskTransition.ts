@@ -22,9 +22,7 @@ import { Task } from './Task';
   hooks: {
     beforeValidate: (instance: TaskTransition) => {
       if (!instance.publicId) {
-        instance.publicId = generatePublicId(
-          PUBLIC_ID_PREFIXES.taskTransition
-        );
+        instance.publicId = generatePublicId(PUBLIC_ID_PREFIXES.taskTransition);
       }
     },
   },

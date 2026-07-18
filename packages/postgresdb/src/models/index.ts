@@ -44,5 +44,5 @@ export { UsageEvent } from './UsageEvent';
 export { UsageThreshold } from './UsageThreshold';
 export { User } from './User';
 export { Webhook } from './Webhook';
-export { Workflow } from './Workflow';
 export { WebhookDelivery } from './WebhookDelivery';
+export { Workflow } from './Workflow';
