@@ -99,11 +99,15 @@ const buildContinuationMessage = (args: {
 };
 
 /**
- * Fires the continuation generation that closes the return-pending loop (§4.2):
- * a new generation, linked to the original via `initiator_generation_id`, that
- * feeds the decision back into the agent's context. When the original ran in a
- * session, the continuation appends to that session's thread; otherwise it is a
- * standalone linked generation.
+ * Fires the continuation generation that closes the return-pending loop (§4.2),
+ * feeding the decision back into the agent's context. Two paths:
+ *
+ * - **Session-backed**: the continuation appends to the originating session's
+ *   thread via `sendSessionMessage`, so provenance flows through the shared
+ *   conversation. (Threading `initiator_generation_id` through the session
+ *   generation stack is a follow-up; the thread linkage is the provenance today.)
+ * - **Standalone**: a new generation linked to the original via
+ *   `initiator_generation_id`.
  */
 const fireContinuation = async (args: {
   item: MappedApproval;

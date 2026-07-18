@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 
 import type { Tool } from 'ai';
-import { jsonSchema, tool } from 'ai';
+import { jsonSchema } from 'ai';
 import createDebug from 'debug';
 
 import type {
@@ -114,7 +114,10 @@ export const evaluateApprovalEffect = (args: {
       action: args.action,
       arguments: args.arguments,
     });
-    if (matched === true || (matched != null && matched !== false)) {
+    // Plain JS truthiness, matching the JSON Logic convention used elsewhere
+    // (e.g. orchestrationPollNode): `0`, `''`, `null`, and `NaN` are falsy, so
+    // a rule whose `when` yields a falsy value does not fire.
+    if (matched) {
       return rule.effect;
     }
   }
@@ -320,12 +323,15 @@ const buildGatedExecute = (args: {
       typeof args.policy.expiresIn === 'number' && args.policy.expiresIn > 0
         ? args.policy.expiresIn
         : DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS;
+    // Freeze the effective (preset-merged) arguments the policy evaluated — not
+    // the bare model args — so the approver sees the full call and the platform
+    // re-executes exactly what was decided at resolution time.
     const dedupKey = computeToolCallDedupKey({
       projectId: args.context.projectId,
       agentId: args.context.agentId,
       toolId: args.toolId,
       action: args.action,
-      arguments: cleanArgs,
+      arguments: effectiveArgs,
     });
     const item = await emitApproval({
       projectId: args.context.projectId,
@@ -333,7 +339,7 @@ const buildGatedExecute = (args: {
       proposedAction: {
         toolId: args.toolId,
         action: args.action,
-        arguments: cleanArgs,
+        arguments: effectiveArgs,
       },
       reasoning,
       evidence,
@@ -355,10 +361,11 @@ const buildGatedExecute = (args: {
 /**
  * Applies a binding's approval policy to every resolved tool it produced (one
  * for most types; many for `mcp`/`soat`). Each entry's `execute` is gated; when
- * the policy can require approval and the tool's parameter schema is known
- * locally (`http`/`pipeline`/`discussion`/inline), the justification fields are
- * added to the model-visible schema. `client` bindings never carry a policy
- * (rejected at write time) and have no `execute`, so they pass through untouched.
+ * the policy can require approval and the caller supplies the tool's parameter
+ * schema (`rawParameters` — set for `http`/`pipeline` and inline `http` tools),
+ * the justification fields are added to the model-visible schema. `client`
+ * bindings never carry a policy (rejected at write time) and have no `execute`,
+ * so they pass through untouched.
  */
 export const gateResolvedTools = (args: {
   tools: Record<string, Tool>;
@@ -393,9 +400,11 @@ export const gateResolvedTools = (args: {
     });
 
     const injectSchema = canRequire && args.rawParameters !== undefined;
+    // Spread the resolved tool in both branches so any property beyond the
+    // three we set here (provider options, toModelOutput, …) survives gating.
     gated[key] = injectSchema
-      ? tool({
-          description: resolvedTool.description,
+      ? {
+          ...resolvedTool,
           inputSchema: jsonSchema(
             injectApprovalJustificationSchema(
               args.rawParameters,
@@ -403,7 +412,7 @@ export const gateResolvedTools = (args: {
             )
           ),
           execute: gatedExecute,
-        })
+        }
       : { ...resolvedTool, execute: gatedExecute };
   }
 

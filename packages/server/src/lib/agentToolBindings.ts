@@ -98,6 +98,11 @@ export const readAgentToolBindings = (
  * Derives the deprecated `toolIds` / `tools` response views from canonical
  * bindings, preserving the old "unset" semantics: a side with no entries maps
  * to `null`, not `[]`.
+ *
+ * Ordering invariant: the inline `tools` array is emitted in binding order.
+ * `buildResolverApprovalContext` builds its positional `inlinePolicies` from the
+ * same binding order, so the two must stay in lockstep — the resolver pairs each
+ * inline tool with the policy at the same index.
  */
 export const deriveLegacyToolFields = (
   bindings: AgentToolBinding[] | null

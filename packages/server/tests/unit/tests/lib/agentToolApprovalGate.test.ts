@@ -11,7 +11,12 @@ import {
 } from 'src/lib/agentToolApprovalContinuation';
 import type { ToolApprovalPolicy } from 'src/lib/agentToolBindings';
 import { resolveAgentTools } from 'src/lib/agentToolResolver';
-import type { DecisionOutput, MappedApproval } from 'src/lib/approvals';
+import {
+  approveApproval,
+  type DecisionOutput,
+  emitApproval,
+  type MappedApproval,
+} from 'src/lib/approvals';
 
 // Real DB + a local fake HTTP server for the tool target and a local fake
 // OpenAI-compatible server for the continuation's model call (the sanctioned
@@ -516,6 +521,67 @@ describe('agentToolApproval gate (resolver dispatch path)', () => {
       await expect(
         resumeToolCallApproval({ item, decision })
       ).resolves.toBeUndefined();
+    });
+
+    test('resolving an item invokes the registered handler end-to-end', async () => {
+      // Proves the resume handler is actually registered (issue: registration
+      // wiring) and fires through the same notifyResume path the REST
+      // approve/reject routes drive — not just when called directly.
+      const agent = await db.Agent.findOne({
+        where: { publicId: agentPublicId },
+      });
+      const trace = await db.Trace.create({
+        projectId,
+        agentId: agent!.id,
+        name: 'wiring trace',
+      });
+      const initiator = await db.Generation.create({
+        projectId,
+        agentId: agent!.id,
+        traceId: trace.id,
+        status: 'completed',
+        startedAt: new Date(),
+      });
+      const resolver = await db.User.create({
+        username: `approver_${initiator.publicId}`,
+        passwordHash: 'x',
+        role: 'user',
+        policyIds: [],
+      });
+
+      const seeded = await emitApproval({
+        projectId,
+        origin: 'tool_call',
+        proposedAction: {
+          toolId: httpToolId,
+          action: 'refund',
+          arguments: { amount: 33 },
+        },
+        expiresInSeconds: 3600,
+        generationId: initiator.publicId,
+        agentId: agentPublicId,
+      });
+
+      await approveApproval({
+        id: seeded.id,
+        resolvedByUserId: resolver.id as number,
+      });
+
+      // The continuation fires fire-and-forget; poll for its executed action.
+      let executed = false;
+      for (let i = 0; i < 40 && !executed; i += 1) {
+        if (
+          toolRequests.some((r) => {
+            return r.amount === 33;
+          })
+        )
+          executed = true;
+        else
+          await new Promise((resolve) => {
+            return setTimeout(resolve, 25);
+          });
+      }
+      expect(executed).toBe(true);
     });
 
     test('the resume handler ignores non tool_call items', async () => {
