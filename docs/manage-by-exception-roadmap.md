@@ -78,17 +78,25 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > policy source for tool-call routing.
 
 > **Docs-first:** the final user-facing contract is written ahead of the code —
-> [guardrails.md](../packages/website/docs/modules/guardrails.md) (action
-> classes, guards + context catalog, tripwires, per-project overrides, policy
-> versioning, evaluation audit record) and the `kind` discriminator on
-> [policies.md](../packages/website/docs/modules/policies.md).
+> [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
+> `guardrails` resource: action classes, guards + context catalog, tripwires,
+> per-project overrides, versioning, evaluation audit record).
+>
+> **Placement decision (2026-07):** guardrails ship as a **first-class
+> `guardrails` resource** (own `guard_` id, own `guardrails:*` permission
+> namespace, own versioning + overrides), **not** as a `kind` discriminator on
+> the IAM `policies` resource. Guardrails evaluate on a different layer (agent
+> tool-dispatch, by arguments/context) than IAM policies (request auth, by
+> principal), attach differently (`guardrail_id` on the agent, not user/key
+> attachment), and keeping them separate leaves the security-critical IAM module
+> untouched. Supersedes prd-guardrails.md's "reuses the policies module surface".
 
 | # | Task | Notes |
 |---|------|-------|
-| 2.1 | `kind: action_classes` discriminator on the policy resource | Existing `permissions` policies stay the default; versioned document of `{ match, class, guards, escalate }` rules |
-| 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously |
+| 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ default_class, rules[] }` where each rule is `{ match, class, guards, escalate }`; own `guardrails:*` permissions |
+| 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously; agent opts in via `guardrail_id` |
 | 2.3 | Guard expression evaluation + named context providers | Reuses the orchestration JSON Logic evaluator (no LLM in the path); fixed key catalog `project.context.*` / `run.*` / `activity.*` / `usage.*` |
-| 2.4 | Per-project overrides (`ProjectPolicyOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
+| 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
 | 2.5 | `escalate: true` downgrade-to-approval | A tripped guard files an exception or routes to the queue rather than silently downgrading |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
 

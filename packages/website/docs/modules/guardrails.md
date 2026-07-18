@@ -1,5 +1,5 @@
 ---
-description: "Deterministic action-class policies that classify each agent tool call — execute, require approval, or block — with non-LLM guard expressions and per-project overrides."
+description: "First-class action-class policies that classify each agent tool call — execute, require approval, or block — with non-LLM guard expressions and per-project overrides."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,25 +7,34 @@ import TabItem from '@theme/TabItem';
 
 # Guardrails
 
-Guardrail policies classify every tool call an agent makes into an action class — execute autonomously, route to human approval, or block — using deterministic, non-LLM guard expressions.
+Guardrails classify every tool call an agent makes into an action class — execute autonomously, route to human approval, or block — using deterministic, non-LLM guard expressions.
 
 ## Overview
 
-The [Policies](./policies.md) module answers _"may this caller invoke this endpoint?"_. Guardrails answer a different question: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail policy is a versioned document that maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model has produced the call and before anything touches the outside world. There is deliberately no LLM in the evaluation path.
+A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md), which it deliberately does not touch. Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers a different question at a different layer: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
 
-Guardrails are the project-level policy form of the per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md), and guards read spend from [usage metering](./usage.md). A guardrail policy is a [Policy](./policies.md) resource with `kind: action_classes` — it reuses the policies REST surface and the shared [JSON Logic](https://jsonlogic.com) evaluator.
+Guardrails are the project-level policy form of the per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md), guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. An agent opts in by referencing a guardrail via its `guardrail_id`.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
 ## Data Model
 
-A guardrail policy is a [Policy](./policies.md) with `kind` set to `action_classes`; its `document` follows the schema below. Two supporting resources are added:
+### Guardrail
 
-### Action-class policy document
+| Field         | Type    | Description                                                        |
+| ------------- | ------- | ------------------------------------------------------------------ |
+| `id`          | string  | Public identifier prefixed with `guard_`                           |
+| `name`        | string  | Human-readable name                                                |
+| `description` | string  | Optional description                                               |
+| `version`     | integer | Incremented on every `document` write; prior versions are archived |
+| `document`    | object  | The action-class document (see below)                              |
+| `created_at`  | string  | ISO 8601 creation timestamp                                        |
+| `updated_at`  | string  | ISO 8601 last-updated timestamp                                    |
+
+The `document`:
 
 | Field           | Type    | Description                                                                 |
 | --------------- | ------- | --------------------------------------------------------------------------- |
-| `version`       | integer | Incremented on every write; archived in `PolicyVersion` for audit           |
 | `default_class` | string  | Class applied when no rule matches. Defaults to `C` (fail-closed)           |
 | `rules`         | array   | Ordered; **first match wins**. Each rule is `{ match, class, guards?, escalate? }` |
 
@@ -38,23 +47,25 @@ Each rule:
 | `guards`   | array   | JSON Logic expressions; for class `B`, **all** must pass to execute autonomously             |
 | `escalate` | boolean | When `true`, a failing guard routes to approval instead of tripping fail-closed              |
 
-### PolicyVersion
+### GuardrailVersion
 
-| Field        | Type    | Description                                        |
-| ------------ | ------- | -------------------------------------------------- |
-| `policy_id`  | string  | The `pol_`-prefixed policy this version belongs to |
-| `version`    | integer | The archived version number                        |
-| `document`   | object  | The exact document that governed at that version   |
-| `created_at` | string  | ISO 8601 timestamp                                 |
+| Field          | Type    | Description                                          |
+| -------------- | ------- | --------------------------------------------------- |
+| `guardrail_id` | string  | The `guard_`-prefixed guardrail this version belongs to |
+| `version`      | integer | The archived version number                         |
+| `document`     | object  | The exact document that governed at that version    |
+| `created_at`   | string  | ISO 8601 timestamp                                  |
 
-### ProjectPolicyOverride
+### ProjectGuardrailOverride
 
-| Field        | Type    | Description                                                     |
-| ------------ | ------- | -------------------------------------------------------------- |
-| `project_id` | string  | The `proj_`-prefixed project the override applies to           |
-| `policy_id`  | string  | The guardrail policy being overridden                          |
-| `document`   | object  | A partial document layered over the template (**tighten-only**) |
-| `version`    | integer | Incremented on every override write                            |
+| Field          | Type    | Description                                                     |
+| -------------- | ------- | -------------------------------------------------------------- |
+| `project_id`   | string  | The `proj_`-prefixed project the override applies to           |
+| `guardrail_id` | string  | The guardrail being overridden                                 |
+| `document`     | object  | A partial document layered over the template (**tighten-only**) |
+| `version`      | integer | Incremented on every override write                            |
+
+An agent references its guardrail through a `guardrail_id` field (project-gated, with a per-generate override) — a guardrail is **not** attached the way IAM policies attach to users and API keys.
 
 ## Key Concepts
 
@@ -105,21 +116,21 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 ### Per-project Overrides
 
-A `ProjectPolicyOverride` layers over the template policy at evaluation time so one project can run a tighter risk posture than the fleet. Overrides can **tighten only** — downgrade `B → C`, add guards, or lower `default_class` — never upgrade `C → B` or remove guards. Downgrading `B → C` for one project leaves every other project on the template unchanged.
+A `ProjectGuardrailOverride` layers over the template guardrail at evaluation time so one project can run a tighter risk posture than the fleet. Overrides can **tighten only** — downgrade `B → C`, add guards, or lower `default_class` — never upgrade `C → B` or remove guards. Downgrading `B → C` for one project leaves every other project on the template unchanged.
 
-### Policy Versioning
+### Versioning
 
-Every write to an `action_classes` policy increments `version` and archives the prior `document` as a `PolicyVersion`. Approval items, activity entries, and exceptions record the version that governed them, so the audit chain survives policy edits. Fetch the exact governing document with [`GET /api/v1/policies/{policy_id}/versions/{version}`](#fetch-an-archived-policy-version).
+Every write to a guardrail's `document` increments `version` and archives the prior document as a `GuardrailVersion`. Approval items, activity entries, and exceptions record the version that governed them, so the audit chain survives edits. Fetch the exact governing document with [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](#fetch-an-archived-version).
 
 ### Evaluation Audit Record
 
-Every evaluation — execute, route-to-approval, block, or tripwire — writes a `guardrail_evaluation` activity entry (and stamps the generation/run record) capturing the governing `policy_version`, matched `rule_index`, per-guard results, and provenance:
+Every evaluation — execute, route-to-approval, block, or tripwire — writes a `guardrail_evaluation` activity entry (and stamps the generation/run record) capturing the governing `guardrail_version`, matched `rule_index`, per-guard results, and provenance:
 
 ```json
 {
   "kind": "guardrail_evaluation",
-  "policy_id": "pol_V1StGXR8Z5jdHi6B",
-  "policy_version": 3,
+  "guardrail_id": "guard_V1StGXR8Z5jdHi6B",
+  "guardrail_version": 3,
   "override_version": 1,
   "tool": "update-budget",
   "rule_index": 0,
@@ -140,15 +151,14 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 
 ## Examples
 
-### Create an action-class policy
+### Create a guardrail
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-policy \
-  --name "Agent Guardrails" \
-  --kind action_classes \
+soat create-guardrail \
+  --name "Budget Guardrails" \
   --document '{
     "default_class": "C",
     "rules": [
@@ -171,10 +181,9 @@ const soat = new SoatClient({
   token: 'sk_...',
 });
 
-const { data, error } = await soat.policies.createPolicy({
+const { data, error } = await soat.guardrails.createGuardrail({
   body: {
-    name: 'Agent Guardrails',
-    kind: 'action_classes',
+    name: 'Budget Guardrails',
     document: {
       default_class: 'C',
       rules: [
@@ -196,12 +205,11 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/policies \
+curl -X POST https://api.example.com/api/v1/guardrails \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Agent Guardrails",
-    "kind": "action_classes",
+    "name": "Budget Guardrails",
     "document": {
       "default_class": "C",
       "rules": [
@@ -217,15 +225,15 @@ curl -X POST https://api.example.com/api/v1/policies \
 </TabItem>
 </Tabs>
 
-### Tighten a policy for one project (override)
+### Tighten a guardrail for one project (override)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat set-project-policy-override \
+soat set-project-guardrail-override \
   --project-id proj_ABC \
-  --policy-id pol_V1StGXR8Z5jdHi6B \
+  --guardrail-id guard_V1StGXR8Z5jdHi6B \
   --document '{ "rules": [ { "match": { "tool": "update-budget" }, "class": "C" } ] }'
 ```
 
@@ -233,8 +241,8 @@ soat set-project-policy-override \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.policies.setProjectPolicyOverride({
-  path: { project_id: 'proj_ABC', policy_id: 'pol_V1StGXR8Z5jdHi6B' },
+const { data, error } = await soat.guardrails.setProjectGuardrailOverride({
+  path: { project_id: 'proj_ABC', guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
   body: {
     document: {
       rules: [{ match: { tool: 'update-budget' }, class: 'C' }],
@@ -248,7 +256,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/policy-overrides/pol_V1StGXR8Z5jdHi6B \
+curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/guardrail-overrides/guard_V1StGXR8Z5jdHi6B \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{ "document": { "rules": [ { "match": { "tool": "update-budget" }, "class": "C" } ] } }'
@@ -257,21 +265,21 @@ curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/policy-overrides/po
 </TabItem>
 </Tabs>
 
-### Fetch an archived policy version
+### Fetch an archived version
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-policy-version --policy-id pol_V1StGXR8Z5jdHi6B --version 3
+soat get-guardrail-version --guardrail-id guard_V1StGXR8Z5jdHi6B --version 3
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.policies.getPolicyVersion({
-  path: { policy_id: 'pol_V1StGXR8Z5jdHi6B', version: 3 },
+const { data, error } = await soat.guardrails.getGuardrailVersion({
+  path: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B', version: 3 },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -280,7 +288,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X GET https://api.example.com/api/v1/policies/pol_V1StGXR8Z5jdHi6B/versions/3 \
+curl -X GET https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/versions/3 \
   -H "Authorization: Bearer <admin-token>"
 ```
 

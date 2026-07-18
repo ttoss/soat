@@ -4,6 +4,20 @@
 > Routes class-C actions into [prd-approvals.md](./prd-approvals.md); reads
 > spend/usage context from [prd-usage-metering.md](./prd-usage-metering.md).
 
+> **Placement decision (2026-07) — supersedes the "reuses the policies module
+> surface" framing below.** Guardrails ship as a **standalone `guardrails`
+> resource** (own `guard_` id, own `guardrails:*` permission namespace, own
+> `GuardrailVersion` / `ProjectGuardrailOverride`, agent opt-in via
+> `guardrail_id`) — **not** as a `kind` discriminator on the IAM `policies`
+> resource. Rationale: guardrails evaluate at the agent tool-dispatch boundary
+> (by arguments/context) rather than at request auth (by principal), attach
+> differently, and keeping them separate leaves the security-critical IAM module
+> untouched. The authoritative user-facing contract is
+> [guardrails.md](../packages/website/docs/modules/guardrails.md); read the
+> resource/permission/endpoint sections below through that lens (Policy →
+> Guardrail, `pol_` → `guard_`, `policies:*` → `guardrails:*`,
+> `ProjectPolicyOverride` → `ProjectGuardrailOverride`).
+
 ## Implementation Status
 
 | Component                                     | Status         | Notes                                                              |
