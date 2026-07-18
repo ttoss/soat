@@ -77,6 +77,12 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > action to C. Feeds Milestone 1: `action_classes` becomes the project-level
 > policy source for tool-call routing.
 
+> **Docs-first:** the final user-facing contract is written ahead of the code —
+> [guardrails.md](../packages/website/docs/modules/guardrails.md) (action
+> classes, guards + context catalog, tripwires, per-project overrides, policy
+> versioning, evaluation audit record) and the `kind` discriminator on
+> [policies.md](../packages/website/docs/modules/policies.md).
+
 | # | Task | Notes |
 |---|------|-------|
 | 2.1 | `kind: action_classes` discriminator on the policy resource | Existing `permissions` policies stay the default; versioned document of `{ match, class, guards, escalate }` rules |

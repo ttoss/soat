@@ -30,11 +30,19 @@ Policies are identified by an `id` prefixed with `pol_`.
 | `id`          | string | Public identifier prefixed with `pol_` |
 | `name`        | string | Human-readable policy name             |
 | `description` | string | Optional description                   |
-| `document`    | object | Policy document (see [IAM](./iam.md))  |
+| `kind`        | string | `permissions` (default) \| `action_classes` — selects the document schema (see [Policy Kind](#policy-kind)) |
+| `document`    | object | Policy document — an IAM document for `permissions`, an action-class document for `action_classes` |
 | `created_at`  | string | ISO 8601 creation timestamp            |
 | `updated_at`  | string | ISO 8601 last-updated timestamp        |
 
 ## Key Concepts
+
+### Policy Kind
+
+A policy's `kind` selects which document schema it carries and how it is enforced:
+
+- **`permissions`** (default) — the IAM document described below, evaluated at request time to answer _"may this caller invoke this endpoint?"_. Every existing policy is this kind.
+- **`action_classes`** — a versioned [guardrail](./guardrails.md) document that classifies each agent tool call (execute / require approval / block) at the tool-execution boundary, using deterministic guard expressions. See [Guardrails](./guardrails.md) for the full contract, including per-project overrides and policy versioning.
 
 ### Policy Document
 

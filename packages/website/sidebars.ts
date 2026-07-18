@@ -107,6 +107,7 @@ const sidebars: SidebarsConfig = {
             'modules/triggers',
             'modules/webhooks',
             'modules/approvals',
+            'modules/guardrails',
           ],
         },
         {
