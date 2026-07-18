@@ -100,7 +100,7 @@ application-side state.
 | `from`              | string[]       | Source states this transition is valid from                       |
 | `to`                | string         | The single destination state                                      |
 | `guard`             | object \| null | [JSON Logic](https://jsonlogic.com) over `{task, transition, actor}`; a false result rejects the move with `TASK_GUARD_REJECTED` |
-| `requires_approval` | boolean        | _Reserved:_ gate the transition behind an approval (Phase 3)      |
+| `requires_approval` | boolean        | _Reserved (Phase 3):_ not enforced yet — `true` is rejected at validation with `WORKFLOW_VALIDATION_FAILED` |
 
 A transition not defined here **cannot be fired by anyone** — there is no
 free-move escape hatch. Define an explicit any-state transition (listing every

@@ -200,6 +200,19 @@ const validateGuardShape = (t: WorkflowTransition): void => {
   }
 };
 
+// Phase 3 (approval-gated transitions) has not shipped: transitionTask never
+// reads requiresApproval, so accepting it here would silently produce a
+// definition whose review gate never fires. Reject until enforcement lands
+// (#591) rather than leave a safety expectation unmet.
+const validateApprovalNotEnforced = (t: WorkflowTransition): void => {
+  if (t.requiresApproval === true) {
+    fail(
+      `Transition '${t.name}' declares requires_approval, which is not enforced yet (Phase 3). Remove it until approval-gated transitions ship.`,
+      { transition: t.name }
+    );
+  }
+};
+
 const validateTransitionEntry = (args: {
   transition: WorkflowTransition;
   stateNames: Set<string>;
@@ -216,6 +229,7 @@ const validateTransitionEntry = (args: {
 
   validateTransitionStates({ transition: t, stateNames });
   validateGuardShape(t);
+  validateApprovalNotEnforced(t);
 };
 
 const validateTransitions = (args: {
@@ -243,8 +257,10 @@ const validateTransitions = (args: {
 /**
  * Statically validates a workflow definition (§5): unique state names, exactly
  * one initial state, transitions referencing existing states, well-formed
- * guards, and on_enter automation whose routing targets exist. Mirrors
- * `assertOrchestrationValid` in shape. Throws `WORKFLOW_VALIDATION_FAILED`.
+ * guards, on_enter automation whose routing targets exist, and — until Phase 3
+ * approval-gated transitions ship — no transition declaring
+ * `requires_approval: true`. Mirrors `assertOrchestrationValid` in shape.
+ * Throws `WORKFLOW_VALIDATION_FAILED`.
  */
 export const assertWorkflowValid = (args: {
   states: WorkflowState[];
