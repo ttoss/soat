@@ -31,8 +31,10 @@
 > `context.*` key, context-tool failure/timeout, or unresolvable `soat.*`
 > provider counts as a failed guard. The authoritative contract is
 > [guardrails.md — Guards and Guardrail Context](../packages/website/docs/modules/guardrails.md).
-> This also changes the audit record: the effective `context.*` object is
-> frozen as `context_snapshot` (values), with keys-only retained for `soat.*`.
+> This also changes the audit record: `context_snapshot` is a flat map of only
+> the vars the matched rule actually referenced (fully-qualified `args.*` /
+> `context.*` / `soat.*` paths → evaluation-time values) — superseding the
+> keys-only decision in § audit record below.
 
 ## Implementation Status
 

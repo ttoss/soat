@@ -157,8 +157,12 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
   "decision": "execute",
   "guard_results": [{ "index": 0, "result": true }, { "index": 1, "result": true }],
   "context_source": "merged",
-  "context_snapshot": { "max_daily_budget": 500, "cost_ceiling": 1000 },
-  "soat_snapshot_keys": ["soat.usage.cost_usd_24h"],
+  "context_snapshot": {
+    "args.amount": 450,
+    "context.max_daily_budget": 500,
+    "context.cost_ceiling": 1000,
+    "soat.usage.cost_usd_24h": 812.4
+  },
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
   "run_id": "orch_run_V1StGXR8Z5jdHi6B",
   "generation_id": "gen_V1StGXR8Z5jdHi6B"
@@ -169,7 +173,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 - `rule_index` is the first matching rule's index; `-1` means no rule matched and `default_class` applied.
 - `override_version` is `null` when no project override was layered in.
 - `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
-- `context_snapshot` freezes the **effective** `context.*` object (post merge/replace) — the exact values the guards saw, which is the only way to answer "why did this pass?" after the application's context has moved on. `args` are not repeated here; they already live on the approval item / generation record. For `soat.*`, the record stores referenced **keys only** (`soat_snapshot_keys`) — per-guard outcomes in `guard_results` keep the evaluation reconstructable against the archived version.
+- `context_snapshot` is a flat map of **only the vars the evaluation actually referenced** — every `var` in the matched rule's `match.where` and `guards`, keyed by its fully-qualified path (`args.*` / `context.*` / `soat.*`) and frozen at its evaluation-time value. The full `guardrail_context` may carry many more keys; those are not recorded. This is the only way to answer "why did this pass?" after the application's context (or platform usage counters) have moved on, while keeping the record small and free of unreferenced — possibly sensitive — context.
 
 ## Examples
 
