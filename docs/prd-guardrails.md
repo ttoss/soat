@@ -7,8 +7,8 @@
 > **Placement decision (2026-07) — supersedes the "reuses the policies module
 > surface" framing below.** Guardrails ship as a **standalone `guardrails`
 > resource** (own `guard_` id, own `guardrails:*` permission namespace, own
-> `GuardrailVersion` / `ProjectGuardrailOverride`, agent opt-in via
-> `guardrail_id`) — **not** as a `kind` discriminator on the IAM `policies`
+> `GuardrailVersion` / `ProjectGuardrailOverride`, agent/tool opt-in via
+> `guardrail_ids`) — **not** as a `kind` discriminator on the IAM `policies`
 > resource. Rationale: guardrails evaluate at the agent tool-dispatch boundary
 > (by arguments/context) rather than at request auth (by principal), attach
 > differently, and keeping them separate leaves the security-critical IAM module
@@ -39,12 +39,17 @@
 > array — read `guards`/"all guards pass" below as the singular `guard`.
 
 > **Attachment decision (2026-07):** guardrails are the **single** tool-call
-> gating mechanism — attachable via `guardrail_id` on an **agent** (its whole
-> tool surface) or on a **tool** (every agent that uses it); when both apply,
-> the stricter decision wins. `match.tool` is optional (omitted = any call in
-> scope). The per-binding `approval_policy` (prd-approvals Phase 2 / roadmap
-> task 1.1) is deprecated and will be removed; its dispatch-path machinery is
-> retained as the guardrail interceptor.
+> gating mechanism. Agents and tools each carry a `guardrail_ids` **list** —
+> a guardrail attaches on an **agent** (its whole tool surface) or on a
+> **tool** (every agent that uses it), and several composable guardrails can
+> apply to one surface. Every applying guardrail evaluates and the **strictest
+> decision wins**; where more than one classifies the call as `B`, all their
+> guards must pass. Composition is order-independent (`A` is the identity).
+> There is no `match` — the document's single `class` JSON Logic expression
+> decides the class per call (keying on `soat.tool.name` when it needs to). The
+> per-binding `approval_policy` (prd-approvals Phase 2 / roadmap task 1.1) is
+> deprecated and will be removed; its dispatch-path machinery is retained as
+> the guardrail interceptor.
 
 > **Document-shape decision (2026-07) — supersedes the `rules[]` /
 > first-match-wins shape below.** The document is

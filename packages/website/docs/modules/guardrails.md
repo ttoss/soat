@@ -13,7 +13,7 @@ Guardrails classify every tool call an agent makes into an action class — exec
 
 A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md), which it deliberately does not touch. Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers a different question at a different layer: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
 
-Guardrails are the platform's **single tool-call gating mechanism**, superseding the deprecated per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md) with the same return-pending / continuation mechanics, guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. A guardrail [attaches](#attachment) to an **agent** (governing every tool the agent can call) or to a **tool** (governing that tool for every agent that uses it); when both apply, the stricter decision wins.
+Guardrails are the platform's **single tool-call gating mechanism**, superseding the deprecated per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md) with the same return-pending / continuation mechanics, guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. Agents and tools each carry a `guardrail_ids` list, so a guardrail [attaches](#attachment) to an **agent** (governing every tool the agent can call) or to a **tool** (governing that tool for every agent that uses it), and several can apply at once; when they do, the strictest decision wins.
 
 A guardrail is a **reusable template**: defined once, it can govern agents across many projects — a central team sets the fleet's autonomy posture in one place. A single project then adapts that posture locally with a [per-project override](#per-project-overrides), which can only make the guardrail **stricter** (never looser). That is what the override earns you: one canonical guardrail, per-tenant tightening, no forking.
 
@@ -66,12 +66,12 @@ The `document`:
 
 ### Attachment
 
-A guardrail attaches through a `guardrail_id` field on either resource — it is **not** attached the way IAM policies attach to users and API keys:
+A guardrail attaches through a `guardrail_ids` array on either resource — it is **not** attached the way IAM policies attach to users and API keys. Both fields are lists, so each surface can carry several composable guardrails (a budget guardrail, a PII guardrail, a rate-limit guardrail) instead of one monolithic document:
 
-- **On an agent** — governs **every** tool call the agent makes, across all its bindings. This is the fleet-posture form: one document classifies the agent's entire tool surface, and `default_class` covers any tool nobody thought about.
-- **On a tool** — governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
+- **On an agent** — every guardrail in the agent's `guardrail_ids` governs **every** tool call the agent makes, across all its bindings. This is the fleet-posture form: one document classifies the agent's entire tool surface, and `default_class` covers any tool nobody thought about.
+- **On a tool** — every guardrail in the tool's `guardrail_ids` governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
 
-When both an agent-level and a tool-level guardrail apply to the same call, **both evaluate and the stricter decision wins** (`blocked` > `route_to_approval` > guarded execute > execute) — composition can only tighten, the same invariant as [per-project overrides](#per-project-overrides). One `guardrail_evaluation` record is written per guardrail evaluated.
+Every guardrail that applies to a call — each of the agent's, each of the tool's, and any [per-project override](#per-project-overrides) — **evaluates, and the strictest decision across all of them wins** (`blocked` > `route_to_approval` > guarded execute > execute); where several classify the same call as `B`, **all their guards must pass**. Composition can only tighten, the same invariant as overrides, and it is order-independent — `A` is the identity, so a guardrail that returns `"A"` for a call simply defers to the others. One `guardrail_evaluation` record is written per guardrail evaluated.
 
 ### Action Classes
 
@@ -282,7 +282,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
 
 ### Attach a guardrail
 
-Attach to an agent to govern its whole tool surface, or to a tool (`soat update-tool --tool-id tool_01 --guardrail-id …`) to govern that tool for every agent.
+Attach to an agent to govern its whole tool surface, or to a tool (`soat update-tool --tool-id tool_01 --guardrail-ids …`) to govern that tool for every agent. Both accept a **list**, so several guardrails compose on one surface (see [Attachment](#attachment)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -290,7 +290,7 @@ Attach to an agent to govern its whole tool surface, or to a tool (`soat update-
 ```bash
 soat update-agent \
   --agent-id agent_01 \
-  --guardrail-id guard_V1StGXR8Z5jdHi6B
+  --guardrail-ids guard_V1StGXR8Z5jdHi6B guard_9f3Kd2Lm0PqRsT4u
 ```
 
 </TabItem>
@@ -299,7 +299,7 @@ soat update-agent \
 ```ts
 const { data, error } = await soat.agents.updateAgent({
   path: { agent_id: 'agent_01' },
-  body: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
+  body: { guardrail_ids: ['guard_V1StGXR8Z5jdHi6B', 'guard_9f3Kd2Lm0PqRsT4u'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -311,7 +311,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X PATCH https://api.example.com/api/v1/agents/agent_01 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"guardrail_id": "guard_V1StGXR8Z5jdHi6B"}'
+  -d '{"guardrail_ids": ["guard_V1StGXR8Z5jdHi6B", "guard_9f3Kd2Lm0PqRsT4u"]}'
 ```
 
 </TabItem>
