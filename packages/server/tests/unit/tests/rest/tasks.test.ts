@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
 
@@ -848,6 +849,99 @@ describe('Tasks', () => {
       expect(after.body.state).toBe('parked');
       // The stale result never landed in payload.
       expect(after.body.payload.last_result).toBeUndefined();
+    });
+
+    test('a concurrent transition committing between the automation completion read and write is not clobbered (#590)', async () => {
+      // Reproduces the exact TOCTOU #590 describes: a concurrent transitionTask
+      // commits *after* the automation's post-dispatch read but *before* its
+      // write commits. A plain read-check-write can't be raced into that gap
+      // deterministically (there's no natural yield point between them), so we
+      // widen it with a force-failure-style spy (tests.md exception #2, same
+      // spirit as the dedup-race spy in approvals.test.ts) on the one `.save()`
+      // call the completion write makes.
+      let releaseGen: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseGen = resolve;
+      });
+      let signalStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        signalStarted = resolve;
+      });
+      mockCreateGeneration.mockImplementationOnce(async () => {
+        signalStarted!();
+        await gate;
+        return {
+          id: 'gen_race',
+          traceId: 'trc_race',
+          status: 'completed',
+          output: { model: 'm', content: 'ok', finishReason: 'stop' },
+        };
+      });
+
+      const wf = await dispatchWorkflow({
+        name: 'race',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+        extraStates: [{ name: 'aborted', terminal: true }],
+        extraTransitions: [{ name: 'abort', from: ['writing'], to: 'aborted' }],
+      });
+      const taskId = await startTask(wf, {});
+      await started;
+
+      const originalSave = db.Task.prototype.save;
+      let releaseSave: (() => void) | undefined;
+      const saveGate = new Promise<void>((resolve) => {
+        releaseSave = resolve;
+      });
+      let signalSaveReached: (() => void) | undefined;
+      const saveReached = new Promise<void>((resolve) => {
+        signalSaveReached = resolve;
+      });
+      const saveSpy = jest
+        .spyOn(db.Task.prototype, 'save')
+        .mockImplementationOnce(async function (
+          this: InstanceType<typeof db.Task>,
+          options?: Parameters<typeof originalSave>[0]
+        ) {
+          signalSaveReached!();
+          await saveGate;
+          return originalSave.call(this, options);
+        });
+
+      try {
+        releaseGen!();
+        // The automation's post-dispatch reload has now happened (it must, to
+        // reach the save it's about to make) — its in-memory snapshot still
+        // shows `writing`. Fire the concurrent transition now, then release
+        // the held write so it commits its stale snapshot afterward.
+        await saveReached;
+        const abortPromise = transition(taskId, 'abort');
+        // Give the concurrent transition a real head start into its own
+        // multi-step transaction before releasing the stale write — biasing
+        // towards the exact ordering #590 describes (concurrent commit, then
+        // the stale write fires anyway) without depending on it: the fix
+        // below makes the final assertions hold regardless of who wins.
+        await new Promise((resolve) => {
+          setTimeout(resolve, 50);
+        });
+        releaseSave!();
+        await Promise.all([abortPromise, flushTaskAutomations()]);
+      } finally {
+        saveSpy.mockRestore();
+      }
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskId}`
+      );
+      expect(after.body.state).toBe('aborted');
+      expect(after.body.status).toBe('closed');
+      // The concurrent transition closed the task and cleared automation
+      // provenance; the stale `writing`-state completion write must not
+      // resurrect either field.
+      expect(after.body.automation_status).toBeNull();
+      expect(after.body.active_dispatch).toBeNull();
     });
 
     test('a rejected on_enter automation is swallowed (fire-and-forget)', async () => {
