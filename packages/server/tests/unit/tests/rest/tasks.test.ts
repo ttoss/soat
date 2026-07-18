@@ -651,6 +651,58 @@ describe('Tasks', () => {
       expect(settled.status).toBe('open');
     });
 
+    test('a matched on_complete transition rejected by its guard surfaces automation_status=unrouted', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_gr',
+        traceId: 'trc_gr',
+        status: 'completed',
+        output: { model: 'm', content: 'ok', finishReason: 'stop' },
+      });
+      // The dispatch completes and the rule matches, but `advance` is guarded to
+      // accept only a `user` actor — the `automation` actor is rejected. The task
+      // must not be left parked as `completed` (the "silently stuck" state).
+      const wf = await dispatchWorkflow({
+        name: 'guard-reject',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          on_complete: [{ when: true, transition: 'advance' }],
+        },
+        extraStates: [{ name: 'approved', terminal: true }],
+        extraTransitions: [
+          {
+            name: 'advance',
+            from: ['writing'],
+            to: 'approved',
+            guard: { '==': [{ var: 'actor.kind' }, 'user'] },
+          },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'unrouted';
+        },
+      });
+      // Guard rejected the automation actor: the task stays put, but is flagged
+      // `unrouted` so board queries can find it — not silently `completed`.
+      expect(settled.state).toBe('writing');
+      expect(settled.status).toBe('open');
+
+      // The rejected transition never lands in history.
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      expect(
+        history.some((h: { transition: string }) => {
+          return h.transition === 'advance';
+        })
+      ).toBe(false);
+    });
+
     test('a failed dispatch sets automation_status and follows on_failure', async () => {
       mockCreateGeneration.mockRejectedValue(new Error('model exploded'));
       const wf = await dispatchWorkflow({

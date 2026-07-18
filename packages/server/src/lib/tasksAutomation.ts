@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 
+import { DomainError } from '../errors';
 import type { GenerationResult } from './agentGenerationHelpers';
 import { createGeneration } from './agents';
 import type { GenerationInputMessage } from './generationInputMessages';
@@ -125,6 +126,55 @@ const runDispatch = async (args: {
   };
 };
 
+// Transition failures that mean the matched rule could not be applied — the
+// automation actor was guard-rejected, or a concurrent move invalidated the
+// transition. Both must be surfaced, not swallowed, so the task is never left
+// silently parked as `completed` (PRD §6.3).
+const REJECTION_CODES: ReadonlySet<string> = new Set([
+  'TASK_GUARD_REJECTED',
+  'TASK_TRANSITION_CONFLICT',
+]);
+
+/**
+ * Surfaces a dispatch whose outcome did not route: either no `on_complete` rule
+ * matched, or the matched rule's transition was rejected. Emits an event so the
+ * task is never silently stuck. For a rejected transition it also flags the task
+ * `automation_status: 'unrouted'` (only while our completion is still current,
+ * so a concurrent transition's state is never clobbered) so board queries can
+ * find it.
+ */
+const surfaceUnrouted = async (args: {
+  taskPublicId: string;
+  projectId: number;
+  result: unknown;
+  rejected?: { transition: string; code: string };
+}): Promise<void> => {
+  const task = await loadTask(args.taskPublicId);
+  if (!task) return;
+
+  if (args.rejected && task.automationStatus === 'completed') {
+    task.automationStatus = 'unrouted';
+    await task.save();
+  }
+
+  await emitTaskEvent({
+    type: args.rejected
+      ? 'tasks.automation_rejected'
+      : 'tasks.automation_unrouted',
+    projectId: args.projectId,
+    task: mapTask(task),
+    extra: {
+      result: args.result,
+      ...(args.rejected
+        ? {
+            transition: args.rejected.transition,
+            errorCode: args.rejected.code,
+          }
+        : {}),
+    },
+  });
+};
+
 const routeOnComplete = async (args: {
   taskPublicId: string;
   onEnter: OnEnter;
@@ -147,30 +197,49 @@ const routeOnComplete = async (args: {
       args.taskPublicId,
       matched.transition
     );
-    await transitionTask({
-      id: args.taskPublicId,
-      transition: matched.transition,
-      actor: {
-        kind: 'automation',
-        id: args.generationId ?? args.runId ?? null,
-      },
-      generationId: args.generationId,
-      runId: args.runId,
-    });
+    try {
+      await transitionTask({
+        id: args.taskPublicId,
+        transition: matched.transition,
+        actor: {
+          kind: 'automation',
+          id: args.generationId ?? args.runId ?? null,
+        },
+        generationId: args.generationId,
+        runId: args.runId,
+      });
+    } catch (error) {
+      // A matched rule whose transition is guard-rejected (or invalidated by a
+      // concurrent move) would otherwise propagate up to the fire-and-forget
+      // `.catch` in dispatchOnEnter and leave the task looking `completed` with
+      // no signal. Surface it instead.
+      if (error instanceof DomainError && REJECTION_CODES.has(error.code)) {
+        log(
+          'routeOnComplete: transition=%s rejected (%s) task=%s',
+          matched.transition,
+          error.code,
+          args.taskPublicId
+        );
+        await surfaceUnrouted({
+          taskPublicId: args.taskPublicId,
+          projectId: args.projectId,
+          result: args.result,
+          rejected: { transition: matched.transition, code: error.code },
+        });
+        return;
+      }
+      throw error;
+    }
     return;
   }
 
   // No rule matched — the task stays put, automation_status stays 'completed',
   // and we surface the fact rather than leaving it silently stuck.
-  const task = await loadTask(args.taskPublicId);
-  if (task) {
-    await emitTaskEvent({
-      type: 'tasks.automation_unrouted',
-      projectId: args.projectId,
-      task: mapTask(task),
-      extra: { result: args.result },
-    });
-  }
+  await surfaceUnrouted({
+    taskPublicId: args.taskPublicId,
+    projectId: args.projectId,
+    result: args.result,
+  });
 };
 
 const handleFailure = async (args: {
