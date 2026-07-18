@@ -482,6 +482,42 @@ describe('agentToolApproval gate (resolver dispatch path)', () => {
       expect(toolRequests).toHaveLength(0);
     });
 
+    test('a continuation failure is swallowed, never thrown', async () => {
+      // The approved action executes, but the proposing agent no longer exists,
+      // so firing the continuation generation throws — runToolCallContinuation
+      // must swallow it (the decision is already persisted).
+      const item = buildToolCallItem({ agentId: 'agent_deleted00000' });
+      const decision: DecisionOutput = {
+        decision: 'approved',
+        approvalId: item.id,
+        resolvedBy: 'user_test',
+        editedArgs: null,
+        reason: null,
+        result: null,
+      };
+      await expect(
+        runToolCallContinuation({ item, decision })
+      ).resolves.toBeUndefined();
+      expect(toolRequests).toHaveLength(1);
+    });
+
+    test('the resume handler forwards a tool_call item to the continuation', async () => {
+      const item = buildToolCallItem({ agentId: 'agent_deleted00000' });
+      const decision: DecisionOutput = {
+        decision: 'approved',
+        approvalId: item.id,
+        resolvedBy: 'user_test',
+        editedArgs: null,
+        reason: null,
+        result: null,
+      };
+      // Fire-and-forget: resolves immediately; the continuation runs (and
+      // swallows the deleted-agent failure) in the background.
+      await expect(
+        resumeToolCallApproval({ item, decision })
+      ).resolves.toBeUndefined();
+    });
+
     test('the resume handler ignores non tool_call items', async () => {
       const item = { origin: 'node', projectId: projectPublicId } as never;
       const decision = { decision: 'approved' } as never;

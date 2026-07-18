@@ -127,6 +127,27 @@ describe('Approvals', () => {
       expect(excludes).toBe(false);
     });
 
+    test('a concurrent dedup-race create surfaces the unique violation', async () => {
+      // The dedup fast-path find always catches an existing pending item, so
+      // the create-time unique-violation backstop (§3 race) is only reachable
+      // by forcing the write to reject — a sanctioned force-failure spy
+      // (tests.md exception #2). No pending winner exists for this key, so the
+      // error re-propagates rather than resolving to an existing item.
+      const uniqueError = Object.assign(new Error('duplicate key'), {
+        name: 'SequelizeUniqueConstraintError',
+      });
+      const spy = jest
+        .spyOn(db.ApprovalItem, 'create')
+        .mockRejectedValueOnce(uniqueError);
+      try {
+        await expect(
+          seedApproval({ origin: 'tool_call', dedupKey: 'race-no-winner' })
+        ).rejects.toThrow('duplicate key');
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
     test('filters by status', async () => {
       const pending = await seedApproval();
       const toReject = await seedApproval();

@@ -139,8 +139,9 @@ const fireContinuation = async (args: {
 /**
  * Runs the full tool-call continuation for a resolved item: execute the approved
  * action (populating the decision `result`), then fire the continuation
- * generation. Exported so tests can await it deterministically; in production it
- * is invoked fire-and-forget from the resume handler.
+ * generation. Self-contained — it never rejects, so the resume handler can fire
+ * it and forget it without an unhandled rejection. Exported so tests can await
+ * it deterministically.
  */
 export const runToolCallContinuation = async (args: {
   item: MappedApproval;
@@ -150,30 +151,37 @@ export const runToolCallContinuation = async (args: {
   if (item.origin !== 'tool_call') return;
   if (!item.projectId) return;
 
-  const project = await db.Project.findOne({
-    where: { publicId: item.projectId },
-  });
-  if (!project) {
-    log('runToolCallContinuation: project not found id=%s', item.id);
-    return;
-  }
-  const projectInternalId = project.id as number;
+  try {
+    const project = await db.Project.findOne({
+      where: { publicId: item.projectId },
+    });
+    if (!project) {
+      log('runToolCallContinuation: project not found id=%s', item.id);
+      return;
+    }
+    const projectInternalId = project.id as number;
 
-  let result: object | null = null;
-  if (args.decision.decision === 'approved') {
-    result = await executeApprovedAction({ item, projectInternalId }).catch(
-      (error: unknown) => {
-        log('executeApprovedAction failed id=%s %o', item.id, error);
-        return { error: errorMessage(error) };
-      }
-    );
-  }
+    let result: object | null = null;
+    if (args.decision.decision === 'approved') {
+      result = await executeApprovedAction({ item, projectInternalId }).catch(
+        (error: unknown) => {
+          log('executeApprovedAction failed id=%s %o', item.id, error);
+          return { error: errorMessage(error) };
+        }
+      );
+    }
 
-  await fireContinuation({
-    item,
-    decision: { ...args.decision, result },
-    projectInternalId,
-  });
+    await fireContinuation({
+      item,
+      decision: { ...args.decision, result },
+      projectInternalId,
+    });
+  } catch (error) {
+    // The continuation is best-effort: the decision is already persisted and
+    // its webhook emitted. A failure here (e.g. the proposing agent was since
+    // deleted) is logged, never thrown — the resolve request must not fail.
+    log('runToolCallContinuation failed id=%s %o', item.id, error);
+  }
 };
 
 /**
@@ -182,16 +190,15 @@ export const runToolCallContinuation = async (args: {
  * handled. Kicks the continuation off fire-and-forget so the resolve request
  * (approve/reject) returns promptly — the decision is already persisted and its
  * lifecycle webhook already emitted, matching the manage-by-exception model
- * ("the agent proposed; you'll be notified when it executes").
+ * ("the agent proposed; you'll be notified when it executes"). Safe without a
+ * `.catch` because {@link runToolCallContinuation} never rejects.
  */
 export const resumeToolCallApproval: ApprovalResumeHandler = async ({
   item,
   decision,
 }) => {
   if (item.origin !== 'tool_call') return;
-  void runToolCallContinuation({ item, decision }).catch((error: unknown) => {
-    log('tool_call continuation failed id=%s %o', item.id, error);
-  });
+  void runToolCallContinuation({ item, decision });
 };
 
 registerApprovalResumeHandler(resumeToolCallApproval);
