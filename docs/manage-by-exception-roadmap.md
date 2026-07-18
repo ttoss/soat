@@ -76,7 +76,8 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > plus the per-project override that lets a customer downgrade any class-B
 > action to C. Supersedes Milestone 1's policy source: the guardrail becomes
 > the **single** policy source for tool-call routing, replacing the per-binding
-> `approval_policy` (task 2.7) while keeping M1's dispatch machinery.
+> `approval_policy` (deprecated task 2.7, removed task 2.8) while keeping M1's
+> dispatch machinery.
 
 > **Docs-first:** the final user-facing contract is written ahead of the code —
 > [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
@@ -112,7 +113,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > expression decides the class per call (keying on `soat.tool.name` when it
 > needs to), so a tool-attached guardrail is just `{ "class": "C" }` or an
 > `if` over its arguments. The per-binding `approval_policy` shipped in M1
-> task 1.1 is **deprecated and will be removed** (task 2.7); M1's
+> task 1.1 is **deprecated (task 2.7) and then removed entirely (task 2.8)**; M1's
 > dispatch-path machinery (gate point, return-pending, continuation, dedup,
 > justification fields) is retained as the guardrail interceptor — only the
 > policy source changes.
@@ -125,7 +126,8 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Same document shape, evaluated alongside the template; effective class = **stricter of the two**, guards AND — tighten-only by construction (no static analysis). Downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
 | 2.5 | Tripwires + `escalate` on a failing class-B guard | Default: abort the action and file an exception (a hard, non-LLM stop on a runaway loop). `escalate: true` opts into the softer path — a failing guard routes the call to the approval queue instead of aborting. Never a silent downgrade either way |
 | 2.6 | `guardrail_evaluation` audit record | Every evaluation (execute / route-to-approval / block / tripwire) writes one activity entry per guardrail evaluated and stamps the generation/run record: governing `guardrail_version` + `override_version`, resolved `class`, `decision`, `guard_result`, `context_source`, and a flat `context_snapshot` of **only the referenced vars** (fully-qualified `args.*` / `context.*` / `soat.*`), frozen at evaluation-time values |
-| 2.7 | Deprecate + remove per-binding `approval_policy` | Guardrails subsume it (a `{ "class": "C" }` guardrail on the tool is the migration path); deprecation window on the field, then removal from `tool_bindings`, OpenAPI, formations schema |
+| 2.7 | Deprecate per-binding `approval_policy` | Guardrails subsume it (a `{ "class": "C" }` guardrail on the tool is the migration path); mark the field deprecated in OpenAPI + docs, route all live tool-call gating through the guardrail interceptor, and stop honouring `approval_policy` as a routing source while leaving the field readable for one deprecation window |
+| 2.8 | Remove `approval_policy` completely (breaking) | Terminal step after the deprecation window: delete the field from `tool_bindings` (server + model), its OpenAPI schema and validation, its dispatch-path evaluation branch, the formations `AgentResourceProperties` property, and the generated SDK/CLI surface; purge the deprecated-field docs (the `agents.md#approval-policy` section and the deprecation admonitions in `tools.md` / `approvals.md`). A `BREAKING CHANGE:` release notes guardrails as the sole tool-call gating mechanism. Only M1's shared dispatch machinery (return-pending, continuation, dedup, justification fields) remains — now solely the guardrail interceptor |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
 
 ## Milestone 3 — Knowledge-version provenance (B.6 dependency)
@@ -200,7 +202,8 @@ M3 (knowledge version, B.6) ──► M4 (audit trail) ──┴─► M5 (activ
 ```
 
 M1 and M2 are independent of each other; M2 **supersedes** M1's policy source
-— the per-binding `approval_policy` is deprecated and removed (task 2.7), while
+— the per-binding `approval_policy` is deprecated (task 2.7) and then removed
+entirely (task 2.8), while
 M1's dispatch-path machinery survives as the guardrail interceptor. M3 is a small prerequisite that unblocks M4's
 audit answer; M5 needs both M2 (class A/B labels) and M4 (the audit/activity
 substrate).
