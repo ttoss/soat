@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.8](https://github.com/ttoss/soat/compare/v0.15.7...v0.15.8) (2026-07-18)
+
+### Features
+
+* **workflows,tasks:** stateful work-item module (workflows PRD, Phases 1–2) ([#583](https://github.com/ttoss/soat/issues/583)) ([4582786](https://github.com/ttoss/soat/commit/45827865bf3a5141c4401ddc638585ccfe37518a))
+
 ## [0.15.7](https://github.com/ttoss/soat/compare/v0.15.6...v0.15.7) (2026-07-18)
 
 ### Bug Fixes
