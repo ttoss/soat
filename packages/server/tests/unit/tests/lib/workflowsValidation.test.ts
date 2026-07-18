@@ -260,6 +260,29 @@ describe('assertWorkflowValid', () => {
     );
   });
 
+  test('rejects a transition declaring requires_approval: true (#591, Phase 3 not shipped)', () => {
+    expectInvalid(
+      {
+        states,
+        transitions: [
+          { name: 'go', from: ['a'], to: 'b', requiresApproval: true },
+        ],
+      },
+      /requires_approval.*not enforced yet/
+    );
+  });
+
+  test('accepts a transition with requires_approval: false', () => {
+    expect(() => {
+      return assertWorkflowValid({
+        states,
+        transitions: [
+          { name: 'go', from: ['a'], to: 'b', requiresApproval: false },
+        ],
+      });
+    }).not.toThrow();
+  });
+
   test('rejects a transitions value that is not an array', () => {
     expectInvalid(
       JSON.parse('{"states":[{"name":"a","initial":true}],"transitions":{}}'),
