@@ -45,8 +45,10 @@
 > apply to one surface. Every applying guardrail evaluates and the **strictest
 > decision wins**; where more than one classifies the call as `B`, all their
 > guards must pass. Composition is order-independent (`A` is the identity).
-> There is no `match` — the document's single `class` JSON Logic expression
-> decides the class per call (keying on `soat.tool.name` when it needs to). The
+> There is no `match` — a guardrail governs one tool surface and its single
+> `class` JSON Logic expression decides the class from the call's
+> arguments/context; to gate several tools differently, attach a guardrail to
+> each tool rather than branching on `soat.tool.name` in one document. The
 > per-binding `approval_policy` (prd-approvals Phase 2 / roadmap task 1.1) is
 > deprecated and will be removed; its dispatch-path machinery is retained as
 > the guardrail interceptor.
@@ -55,7 +57,7 @@
 > first-match-wins shape below.** The document is
 > `{ class, default_class, guard?, escalate? }` — no rule list, no `match`.
 > `class` is a literal or a single JSON Logic expression (typically an `if`
-> over `soat.tool.name` / `args.*` / `context.*`) returning the class; any
+> over the call's `args.*` / `context.*`) returning the class; any
 > invalid result resolves to `default_class` (default `C`, fail-closed).
 > `guard` is a single JSON Logic expression over the same namespaces.
 > Overrides carry the same document shape and evaluate alongside the

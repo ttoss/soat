@@ -114,10 +114,11 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 > than one classifies the call as `B`, **all their guards must pass**.
 > Composition is order-independent — `A` is the identity, so a guardrail that
 > returns `A` defers to the rest.
-> There is no per-tool `match` — the document's single `class` JSON Logic
-> expression decides the class per call (keying on `soat.tool.name` when it
-> needs to), so a tool-attached guardrail is just `{ "class": "C" }` or an
-> `if` over its arguments. The per-binding `approval_policy` shipped in M1
+> There is no per-tool `match` — a guardrail governs one tool surface and its
+> single `class` JSON Logic expression decides the class from the call's
+> arguments/context, so it is just `{ "class": "C" }` or an `if` over `args`.
+> To gate several tools differently, attach a guardrail to each tool rather
+> than branching on `soat.tool.name` inside one agent-level document. The per-binding `approval_policy` shipped in M1
 > task 1.1 is **deprecated (task 2.7) and then removed entirely (task 2.8)**; M1's
 > dispatch-path machinery (gate point, return-pending, continuation, dedup,
 > justification fields) is retained as the guardrail interceptor — only the
@@ -125,7 +126,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 
 | # | Task | Notes |
 |---|------|-------|
-| 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ class, default_class, guard?, escalate? }` — no rule list: `class` is a literal or a single JSON Logic expression (`if` over `soat.tool.name` / `args` / `context`) returning the class, `guard` a single JSON Logic expression; invalid `class` result → `default_class` (C); own `guardrails:*` permissions |
+| 2.1 | `guardrails` resource + action-class document schema/validation | Standalone resource (`guard_` id); versioned document of `{ class, default_class, guard?, escalate? }` — no rule list: `class` is a literal or a single JSON Logic expression (`if` over the call's `args` / `context`) returning the class, `guard` a single JSON Logic expression; invalid `class` result → `default_class` (C); own `guardrails:*` permissions |
 | 2.2 | Tool-boundary interceptor: classify → route | Evaluate the `class` expression; **fail-closed default class C** on any invalid result (`null`, typo, non-class); class A/B execute autonomously (B iff its guard passes), class C routes to the approval queue (reusing M1's return-pending / continuation / dedup machinery), class D is blocked at dispatch (model gets a blocked tool result and continues); attach via a `guardrail_ids` list on the agent (whole surface) and/or on the tool (every agent); all applying guardrails evaluate → strictest decision wins, and every `B` guard among them must pass |
 | 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). `soat.*` is the reserved platform-computed catalog. Fail-closed: missing keys, tool failure/timeout → guard failed |
 | 2.4 | Per-project overrides (`ProjectGuardrailOverride`) | Same document shape, evaluated alongside the template; effective class = **stricter of the two**, guards AND — tighten-only by construction (no static analysis). Downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |

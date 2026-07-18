@@ -88,32 +88,19 @@ Class-C interception runs in the platform's tool-dispatch path with the return-p
 
 ### Classification
 
-`class` is either a literal — a tool-attached guardrail that always requires sign-off is just `{ "class": "C" }` — or a **single JSON Logic expression** that returns the class. The expression evaluates over the same three namespaces as guards (`args.*` / `context.*` / `soat.*`), so classification can depend on which tool is called (`soat.tool.name`), the arguments, or runtime context. There is no rule list and no matching order: one expression, one result.
+`class` is either a literal — a guardrail attached to a tool that always requires sign-off is just `{ "class": "C" }` — or a **single JSON Logic expression** that returns the class. The expression evaluates over the same three namespaces as guards (`args.*` / `context.*` / `soat.*`), so the class can depend on the call's arguments or runtime context. There is no rule list and no matching order: one expression, one result.
+
+A guardrail reasons about **this** call, not about which tool it is. To gate several tools differently, create a guardrail per tool and [attach](#attachment) each to its tool — they compose, rather than branching on `soat.tool.name` inside one agent-level document. The example below classifies a budget-update call **B** below a threshold and **C** at or above it — just an `if` over `args`:
 
 ```json
 {
   "default_class": "C",
-  "class": {
-    "if": [
-      { "==": [{ "var": "soat.tool.name" }, "search-docs"] }, "A",
-      { "and": [
-        { "==": [{ "var": "soat.tool.name" }, "update-budget"] },
-        { "<": [{ "var": "args.amount" }, 500] }
-      ] }, "B",
-      { "==": [{ "var": "soat.tool.name" }, "delete-account"] }, "D",
-      "C"
-    ]
-  },
-  "guard": {
-    "and": [
-      { "<=": [{ "var": "args.amount" }, { "var": "context.max_daily_budget" }] },
-      { "<": [{ "var": "soat.usage.cost_usd_24h" }, { "var": "context.cost_ceiling" }] }
-    ]
-  }
+  "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
+  "guard": { "<=": [{ "var": "args.amount" }, { "var": "context.max_daily_budget" }] }
 }
 ```
 
-The same tool can classify **B** below a threshold and **C** above it — that is just an `if` branch over `args`. Anything the expression doesn't account for falls through to `default_class` (see [Action Classes](#action-classes)).
+Anything the expression doesn't account for falls through to `default_class` (see [Action Classes](#action-classes)).
 
 ### Guards and Guardrail Context
 
@@ -153,7 +140,7 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 A `ProjectGuardrailOverride` lets one project run a tighter risk posture than the fleet. Its `document` has the same shape as the guardrail's and evaluates **alongside** the template: the effective class is the **stricter** of the two results (`D` > `C` > `B` > `A`), and when both carry a `guard`, **both must pass** — the same composition rule as [agent + tool attachment](#attachment). Tighten-only is therefore enforced by construction, not by static analysis: an override can downgrade `B → C` for its project, but can never upgrade `C → B` or weaken a guard, and other projects on the template are unchanged.
 
-Because `A` is the identity under stricter-wins, an override's `class` expression should return `"A"` for calls it doesn't care about. Its `default_class` follows the same fail-closed rule as the template's — an override whose expression returns an unknown value tightens to `C`.
+Because the guardrail governs one tool, an override is usually just a tighter literal — `{ "class": "C" }` forces sign-off on every call the template would have executed. When an override does use a `class` expression, `A` is the identity under stricter-wins, so it returns `"A"` for the argument ranges it doesn't tighten. Its `default_class` follows the same fail-closed rule as the template's — an override whose expression returns an unknown value tightens to `C`.
 
 ### Versioning
 
@@ -200,19 +187,14 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
+This guardrail governs one tool (the budget-update tool it is attached to): class **B** below 500, **C** at or above, and it executes autonomously only while 24h spend stays under 1000.
+
 ```bash
 soat create-guardrail \
-  --name "Budget Guardrails" \
+  --name "Budget Update Guardrail" \
   --document '{
     "default_class": "C",
-    "class": { "if": [
-      { "and": [
-        { "==": [{ "var": "soat.tool.name" }, "update-budget"] },
-        { "<": [{ "var": "args.amount" }, 500] }
-      ] }, "B",
-      { "==": [{ "var": "soat.tool.name" }, "delete-account"] }, "D",
-      "C"
-    ] },
+    "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
     "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] }
   }'
 ```
@@ -229,23 +211,10 @@ const soat = new SoatClient({
 
 const { data, error } = await soat.guardrails.createGuardrail({
   body: {
-    name: 'Budget Guardrails',
+    name: 'Budget Update Guardrail',
     document: {
       default_class: 'C',
-      class: {
-        if: [
-          {
-            and: [
-              { '==': [{ var: 'soat.tool.name' }, 'update-budget'] },
-              { '<': [{ var: 'args.amount' }, 500] },
-            ],
-          },
-          'B',
-          { '==': [{ var: 'soat.tool.name' }, 'delete-account'] },
-          'D',
-          'C',
-        ],
-      },
+      class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
       guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
     },
   },
@@ -261,17 +230,10 @@ curl -X POST https://api.example.com/api/v1/guardrails \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "name": "Budget Guardrails",
+    "name": "Budget Update Guardrail",
     "document": {
       "default_class": "C",
-      "class": { "if": [
-        { "and": [
-          { "==": [{ "var": "soat.tool.name" }, "update-budget"] },
-          { "<": [{ "var": "args.amount" }, 500] }
-        ] }, "B",
-        { "==": [{ "var": "soat.tool.name" }, "delete-account"] }, "D",
-        "C"
-      ] },
+      "class": { "if": [{ "<": [{ "var": "args.amount" }, 500] }, "B", "C"] },
       "guard": { "<": [{ "var": "soat.usage.cost_usd_24h" }, 1000] }
     }
   }'
@@ -282,14 +244,14 @@ curl -X POST https://api.example.com/api/v1/guardrails \
 
 ### Attach a guardrail
 
-Attach to an agent to govern its whole tool surface, or to a tool (`soat update-tool --tool-id tool_01 --guardrail-ids …`) to govern that tool for every agent. Both accept a **list**, so several guardrails compose on one surface (see [Attachment](#attachment)).
+A tool-scoped guardrail like the one above attaches to its **tool**, so it governs that tool for every agent that uses it. Attach to an **agent** instead (`soat update-agent --agent-id agent_01 --guardrail-ids …`) for a blanket posture over the agent's whole tool surface. Both fields are **lists**, so several guardrails compose on one surface (see [Attachment](#attachment)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat update-agent \
-  --agent-id agent_01 \
+soat update-tool \
+  --tool-id tool_01 \
   --guardrail-ids guard_V1StGXR8Z5jdHi6B guard_9f3Kd2Lm0PqRsT4u
 ```
 
@@ -297,8 +259,8 @@ soat update-agent \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.agents.updateAgent({
-  path: { agent_id: 'agent_01' },
+const { data, error } = await soat.tools.updateTool({
+  path: { tool_id: 'tool_01' },
   body: { guardrail_ids: ['guard_V1StGXR8Z5jdHi6B', 'guard_9f3Kd2Lm0PqRsT4u'] },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -308,7 +270,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X PATCH https://api.example.com/api/v1/agents/agent_01 \
+curl -X PATCH https://api.example.com/api/v1/tools/tool_01 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"guardrail_ids": ["guard_V1StGXR8Z5jdHi6B", "guard_9f3Kd2Lm0PqRsT4u"]}'
@@ -319,7 +281,7 @@ curl -X PATCH https://api.example.com/api/v1/agents/agent_01 \
 
 ### Tighten a guardrail for one project (override)
 
-This override downgrades `update-budget` to class **C** for `proj_ABC` only; it returns `"A"` (the identity under stricter-wins) for every other call, leaving the template's classification in effect.
+This override forces the budget guardrail to class **C** for `proj_ABC` only — every budget-update call needs sign-off there, regardless of amount. Under stricter-wins it can only tighten the template, so other projects keep the template's B-below-500 classification.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -328,10 +290,7 @@ This override downgrades `update-budget` to class **C** for `proj_ABC` only; it 
 soat set-project-guardrail-override \
   --project-id proj_ABC \
   --guardrail-id guard_V1StGXR8Z5jdHi6B \
-  --document '{ "class": { "if": [
-    { "==": [{ "var": "soat.tool.name" }, "update-budget"] }, "C",
-    "A"
-  ] } }'
+  --document '{ "class": "C" }'
 ```
 
 </TabItem>
@@ -340,13 +299,7 @@ soat set-project-guardrail-override \
 ```ts
 const { data, error } = await soat.guardrails.setProjectGuardrailOverride({
   path: { project_id: 'proj_ABC', guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
-  body: {
-    document: {
-      class: {
-        if: [{ '==': [{ var: 'soat.tool.name' }, 'update-budget'] }, 'C', 'A'],
-      },
-    },
-  },
+  body: { document: { class: 'C' } },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -358,10 +311,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/guardrail-overrides/guard_V1StGXR8Z5jdHi6B \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
-  -d '{ "document": { "class": { "if": [
-    { "==": [{ "var": "soat.tool.name" }, "update-budget"] }, "C",
-    "A"
-  ] } } }'
+  -d '{ "document": { "class": "C" } }'
 ```
 
 </TabItem>
