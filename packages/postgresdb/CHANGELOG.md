@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.7](https://127.0.0.1/41729/git/ttoss/compare/v0.15.6...v0.15.7) (2026-07-18)
+
+### Features
+
+* **agents,approvals:** tool-call approval interception on every surface (Milestone 1) ([#581](https://127.0.0.1/41729/git/ttoss/issues/581)) ([da69b2e](https://127.0.0.1/41729/git/ttoss/commits/da69b2e0271e441b9bd4b3d13f7fa0f7ffe1c4c9)), closes [#2](https://127.0.0.1/41729/git/ttoss/issues/2)
+* **api-keys:** support unscoped API keys (optional project_id) ([#584](https://127.0.0.1/41729/git/ttoss/issues/584)) ([00360c2](https://127.0.0.1/41729/git/ttoss/commits/00360c2725e35e2c4b00a0f2f965c04bdc234a05))
+
 ## [0.15.6](https://127.0.0.1/41729/git/ttoss/compare/v0.15.5...v0.15.6) (2026-07-17)
 
 ### Bug Fixes
