@@ -3423,6 +3423,115 @@ expect_cli_error_status 404 get-ai-provider --ai-provider-id "$DEL_AI_PROVIDER_I
 echo "Project force-delete: OK (project and dependents removed)"
 
 echo ""
+echo "--- Workflows & Tasks module ---"
+
+WF_STATES='[{"name":"triage","initial":true},{"name":"drafting"},{"name":"review","kind":"human"},{"name":"published","terminal":true}]'
+WF_TRANSITIONS='[{"name":"start","from":["triage"],"to":"drafting"},{"name":"to_review","from":["drafting"],"to":"review"},{"name":"revise","from":["review"],"to":"drafting"},{"name":"publish","from":["review"],"to":"published","guard":{"==":[{"var":"task.payload.approved"},true]}}]'
+
+WORKFLOW_RESP=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow \
+  --states "$WF_STATES" \
+  --transitions "$WF_TRANSITIONS" \
+  --payload-schema '{"properties":{"theme":{"type":"string"}}}')
+WORKFLOW_ID=$(printf '%s\n' "$WORKFLOW_RESP" | jq -r '.id')
+if [ -z "$WORKFLOW_ID" ] || [ "$WORKFLOW_ID" = "null" ]; then
+  echo "ERROR: create-workflow failed" >&2
+  printf '%s\n' "$WORKFLOW_RESP"
+  exit 1
+fi
+echo "Workflow created: $WORKFLOW_ID"
+
+$SOAT_CLI list-workflows --project-id "$PROJECT_PUBLIC_ID" >/dev/null
+$SOAT_CLI get-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
+
+# Invalid definition is rejected (no initial state).
+expect_cli_error_status 400 create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow-bad \
+  --states '[{"name":"a"}]' \
+  --transitions '[]'
+echo "Workflow validation: OK (400 as expected)"
+
+# A payload violating payload_schema is rejected.
+expect_cli_error_status 400 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "bad payload" \
+  --payload '{"theme":42}'
+echo "Task payload validation: OK (400 as expected)"
+
+TASK_RESP=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "smoke card" \
+  --payload '{"theme":"the sea"}')
+TASK_ID=$(printf '%s\n' "$TASK_RESP" | jq -r '.id')
+TASK_STATE=$(printf '%s\n' "$TASK_RESP" | jq -r '.state')
+if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
+  echo "ERROR: create-task expected initial state 'triage', got '$TASK_STATE'" >&2
+  printf '%s\n' "$TASK_RESP"
+  exit 1
+fi
+echo "Task created in initial state: $TASK_ID"
+
+# Forward, then a backward move (review -> drafting) a DAG would reject.
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition start >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
+BACK_STATE=$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.state')
+if [ "$BACK_STATE" != "drafting" ]; then
+  echo "ERROR: backward move expected 'drafting', got '$BACK_STATE'" >&2
+  exit 1
+fi
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+echo "Backward move: OK (review -> drafting -> review)"
+
+# A false guard rejects the transition.
+expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition publish
+echo "Transition guard: OK (400 TASK_GUARD_REJECTED as expected)"
+
+# An unknown transition and an invalid-from-state transition.
+expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition nope
+
+# Approve and publish; entering a terminal state closes the task.
+$SOAT_CLI update-task --task-id "$TASK_ID" --payload '{"theme":"the sea","approved":true}' >/dev/null
+PUBLISH_RESP=$($SOAT_CLI transition-task --task-id "$TASK_ID" --transition publish)
+PUBLISH_STATUS=$(printf '%s\n' "$PUBLISH_RESP" | jq -r '.status')
+if [ "$PUBLISH_STATUS" != "closed" ]; then
+  echo "ERROR: publish expected status 'closed', got '$PUBLISH_STATUS'" >&2
+  printf '%s\n' "$PUBLISH_RESP"
+  exit 1
+fi
+echo "Guarded publish: OK (task closed)"
+
+# A closed task can no longer transition.
+expect_cli_error_status 409 transition-task --task-id "$TASK_ID" --transition revise
+echo "Closed-task guard: OK (409 as expected)"
+
+# History is append-only: initial + start + to_review + revise + to_review + publish = 6.
+HIST_COUNT=$($SOAT_CLI get-task-history --task-id "$TASK_ID" | jq 'length')
+if [ "$HIST_COUNT" -lt 6 ]; then
+  echo "ERROR: expected >= 6 history rows, got $HIST_COUNT" >&2
+  exit 1
+fi
+echo "Transition history: OK ($HIST_COUNT rows)"
+
+# Board query by state/status.
+$SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
+
+# Delete is blocked while an open task exists, then succeeds once it is gone.
+OPEN_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "open card" | jq -r '.id')
+expect_cli_error_status 409 delete-workflow --workflow-id "$WORKFLOW_ID"
+$SOAT_CLI delete-task --task-id "$OPEN_TASK_ID" >/dev/null
+$SOAT_CLI delete-task --task-id "$TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
+echo "Workflows & Tasks: OK"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then

@@ -25,12 +25,14 @@ import { policiesRouter } from './policies';
 import { projectsRouter } from './projects';
 import { secretsRouter } from './secrets';
 import { sessionsRouter } from './sessions';
+import { tasksRouter } from './tasks';
 import { toolsRouter } from './tools';
 import { tracesRouter } from './traces';
 import { triggersRouter } from './triggers';
 import { usageRouter } from './usage';
 import { usersRouter } from './users';
 import { webhooksRouter } from './webhooks';
+import { workflowsRouter } from './workflows';
 
 const v1Router = new Router();
 
@@ -58,6 +60,8 @@ v1Router.use(knowledgeRouter.routes());
 v1Router.use(projectsRouter.routes());
 v1Router.use(secretsRouter.routes());
 v1Router.use(orchestrationsRouter.routes());
+v1Router.use(workflowsRouter.routes());
+v1Router.use(tasksRouter.routes());
 v1Router.use(toolsRouter.routes());
 v1Router.use(tracesRouter.routes());
 v1Router.use(triggersRouter.routes());

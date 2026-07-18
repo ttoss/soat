@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 export const ERROR_CODES = {
   RESOURCE_NOT_FOUND: {
     httpStatus: 404,
@@ -371,6 +372,47 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description:
       'The edited arguments supplied on edit-then-approve must be a JSON object.',
+  },
+  WORKFLOW_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The workflow does not exist or is not accessible.',
+  },
+  WORKFLOW_VALIDATION_FAILED: {
+    httpStatus: 400,
+    description:
+      'The workflow definition is invalid (e.g. duplicate state names, not exactly one initial state, a transition referencing an unknown state, a malformed guard, or an on_enter dispatch missing its target).',
+  },
+  WORKFLOW_HAS_OPEN_TASKS: {
+    httpStatus: 409,
+    description:
+      'The workflow has one or more open tasks and cannot be deleted.',
+  },
+  TASK_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The task does not exist or is not accessible.',
+  },
+  TASK_PAYLOAD_INVALID: {
+    httpStatus: 400,
+    description:
+      "The task payload does not satisfy the workflow's payload_schema.",
+  },
+  TASK_TRANSITION_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'The named transition does not exist in the workflow.',
+  },
+  TASK_GUARD_REJECTED: {
+    httpStatus: 400,
+    description: 'The transition guard evaluated to false for this task.',
+  },
+  TASK_TRANSITION_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
+  },
+  TASK_STATE_NOT_WRITABLE: {
+    httpStatus: 400,
+    description:
+      'A task state is never directly writable; move it with a transition.',
   },
 } as const satisfies Record<
   string,

@@ -49,7 +49,9 @@ The generation engine and its building blocks.
 
 Composing agents into workflows and reacting to events.
 
-- [Orchestrations](./orchestrations.md) — deterministic multi-agent graphs with typed state
+- [Orchestrations](./orchestrations.md) — deterministic multi-agent graphs with typed state (a pipeline that ends)
+- [Workflows](./workflows.md) — state-machine definitions: named states, transitions, guards, and per-state automation
+- [Tasks](./tasks.md) — durable, stateful work items that live in a workflow (an entity that moves between states)
 - [Discussions](./discussions.md) — structured multi-agent panel discussions
 - [Triggers](./triggers.md) — scheduled and on-demand flow execution
 - [Webhooks](./webhooks.md) — HMAC-signed event delivery to external systems

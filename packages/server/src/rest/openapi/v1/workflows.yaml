@@ -1,0 +1,298 @@
+openapi: 3.0.3
+info:
+  title: SOAT Workflows API
+  version: 1.0.0
+  description: >-
+    API for managing workflows — state-machine definitions (named states,
+    allowed transitions, guards, and per-state automation) that tasks live in.
+    An orchestration is a pipeline that ends; a workflow is a state graph a task
+    lives in.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Workflows
+    description: Manage workflow definitions
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/workflows:
+    get:
+      description: Lists workflow definitions in a project.
+      tags:
+        - Workflows
+      summary: List workflows
+      operationId: listWorkflows
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workflow'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      description: Creates a new workflow definition. The definition is statically validated.
+      tags:
+        - Workflows
+      summary: Create a workflow
+      operationId: createWorkflow
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkflowRequest'
+      responses:
+        '201':
+          description: Workflow created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+        '400':
+          description: Bad request (invalid definition)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: A workflow with this name already exists
+
+  /api/v1/workflows/{workflow_id}:
+    get:
+      description: Retrieves a workflow definition.
+      tags:
+        - Workflows
+      summary: Get a workflow
+      operationId: getWorkflow
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Workflow details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow not found
+    patch:
+      description: >-
+        Updates a workflow definition. Structural changes (states/transitions)
+        are re-validated. Existing tasks in a removed state stay put but can only
+        leave via transitions valid in the new definition.
+      tags:
+        - Workflows
+      summary: Update a workflow
+      operationId: updateWorkflow
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWorkflowRequest'
+      responses:
+        '200':
+          description: Workflow updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Workflow'
+        '400':
+          description: Bad request (invalid definition)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow not found
+    delete:
+      description: Deletes a workflow. Rejected while open tasks exist.
+      tags:
+        - Workflows
+      summary: Delete a workflow
+      operationId: deleteWorkflow
+      parameters:
+        - name: workflow_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Workflow deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow not found
+        '409':
+          description: The workflow has open tasks and cannot be deleted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    WorkflowState:
+      type: object
+      description: >-
+        A named state. Exactly one state must be `initial: true`; any number may
+        be `terminal: true`. A `kind: human` state never dispatches — the task
+        parks until a transition fires. `on_enter` (§5) dispatches one agent
+        generation or orchestration run on entry.
+      additionalProperties: true
+      required:
+        - name
+      properties:
+        name:
+          type: string
+        initial:
+          type: boolean
+        terminal:
+          type: boolean
+        kind:
+          type: string
+          description: 'Reserved: `human` for a human-in-the-loop parking state.'
+        stalled_after:
+          type: integer
+          nullable: true
+          description: 'Reserved (Phase 3): seconds parked before a `tasks.stalled` event.'
+        on_enter:
+          type: object
+          nullable: true
+          additionalProperties: true
+    WorkflowTransition:
+      type: object
+      description: >-
+        A named, directional move. `from` is a list of source states; `to` is
+        one target state. `guard` is a JSON Logic expression over
+        `{task, transition, actor}` that must be truthy for the move to apply.
+      additionalProperties: true
+      required:
+        - name
+        - from
+        - to
+      properties:
+        name:
+          type: string
+        from:
+          type: array
+          items:
+            type: string
+        to:
+          type: string
+        guard:
+          type: object
+          nullable: true
+        requires_approval:
+          type: boolean
+          description: 'Reserved (Phase 3): gate the transition behind an approval.'
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        states:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowState'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTransition'
+        payload_schema:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    CreateWorkflowRequest:
+      type: object
+      required:
+        - name
+        - states
+        - transitions
+      properties:
+        project_id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        states:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowState'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTransition'
+        payload_schema:
+          type: object
+          nullable: true
+    UpdateWorkflowRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        states:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowState'
+        transitions:
+          type: array
+          items:
+            $ref: '#/components/schemas/WorkflowTransition'
+        payload_schema:
+          type: object
+          nullable: true

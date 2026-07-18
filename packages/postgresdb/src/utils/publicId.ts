@@ -44,6 +44,9 @@ export const PUBLIC_ID_PREFIXES = {
   usageThreshold: 'uthr_',
   price: 'price_',
   approval: 'apr_',
+  workflow: 'wfl_',
+  task: 'task_',
+  taskTransition: 'task_tr_',
 } as const;
 
 /**

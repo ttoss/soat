@@ -103,6 +103,8 @@ const sidebars: SidebarsConfig = {
           label: 'Orchestration & Automation',
           items: [
             'modules/orchestrations',
+            'modules/workflows',
+            'modules/tasks',
             'modules/discussions',
             'modules/triggers',
             'modules/webhooks',
@@ -169,6 +171,7 @@ const sidebars: SidebarsConfig = {
       label: 'Orchestration & Multi-Agent',
       items: [
         'tutorials/orchestrate-a-sonnet',
+        'tutorials/orchestrate-a-sonnet-with-workflows',
         'tutorials/multi-agent-orchestration',
         'tutorials/conditional-orchestration',
         'tutorials/orchestration-control-flow',

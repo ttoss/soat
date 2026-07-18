@@ -187,6 +187,76 @@ describe('MCP tools - happy path', () => {
     expect(result.filename).toBe('mcp-token-upload.txt');
   });
 
+  // ── Workflows & Tasks ──────────────────────────────────────────────────────
+
+  test('create-workflow, create-task, transition-task, and history via MCP', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        projectId,
+        name: 'mcp-pipeline',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'doing' },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [
+          { name: 'start', from: ['todo'], to: 'doing' },
+          { name: 'finish', from: ['doing'], to: 'done' },
+        ],
+      })
+    );
+    expect(workflow.id).toMatch(/^wfl_/);
+    expect(workflow.states).toHaveLength(3);
+
+    const task = parseResult(
+      await mcpCall('create-task', {
+        projectId,
+        workflowId: workflow.id,
+        title: 'first card',
+      })
+    );
+    expect(task.id).toMatch(/^task_/);
+    expect(task.state).toBe('todo');
+    expect(task.status).toBe('open');
+
+    const moved = parseResult(
+      await mcpCall('transition-task', {
+        taskId: task.id,
+        transition: 'start',
+      })
+    );
+    expect(moved.state).toBe('doing');
+
+    const closed = parseResult(
+      await mcpCall('transition-task', {
+        taskId: task.id,
+        transition: 'finish',
+      })
+    );
+    expect(closed.state).toBe('done');
+    expect(closed.status).toBe('closed');
+
+    const listed = parseResult(
+      await mcpCall('list-tasks', { projectId, workflowId: workflow.id })
+    );
+    expect(
+      listed.some((t: { id: string }) => {
+        return t.id === task.id;
+      })
+    ).toBe(true);
+
+    const history = parseResult(
+      await mcpCall('get-task-history', { taskId: task.id })
+    );
+    // initial placement + two transitions, oldest first.
+    expect(history).toHaveLength(3);
+    expect(
+      history.map((h: { toState: string }) => {
+        return h.toState;
+      })
+    ).toEqual(['todo', 'doing', 'done']);
+  });
+
   // ── Files ────────────────────────────────────────────────────────────────
 
   describe('Files tools', () => {
