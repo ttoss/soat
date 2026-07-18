@@ -1,0 +1,30 @@
+{
+  "module": "workflows",
+  "operations": [
+    {
+      "operationId": "createWorkflow",
+      "action": "workflows:CreateWorkflow",
+      "description": "Create a workflow definition"
+    },
+    {
+      "operationId": "listWorkflows",
+      "action": "workflows:ListWorkflows",
+      "description": "List workflows in a project"
+    },
+    {
+      "operationId": "getWorkflow",
+      "action": "workflows:GetWorkflow",
+      "description": "Get a workflow by ID"
+    },
+    {
+      "operationId": "updateWorkflow",
+      "action": "workflows:UpdateWorkflow",
+      "description": "Update a workflow definition"
+    },
+    {
+      "operationId": "deleteWorkflow",
+      "action": "workflows:DeleteWorkflow",
+      "description": "Delete a workflow"
+    }
+  ]
+}

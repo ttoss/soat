@@ -29,7 +29,7 @@ paths:
       tags:
         - Orchestrations
       summary: Create an orchestration
-      description: Creates a new orchestration workflow definition in the project.
+      description: Creates a new orchestration (pipeline) definition in the project.
       operationId: createOrchestration
       requestBody:
         required: true

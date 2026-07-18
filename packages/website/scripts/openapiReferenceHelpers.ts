@@ -78,6 +78,7 @@ export interface OpenApiSpec {
  */
 const DOC_OVERRIDES: Record<string, string> = {
   memoryEntries: 'memories',
+  tasks: 'workflows',
 };
 
 export interface ModuleConfig {

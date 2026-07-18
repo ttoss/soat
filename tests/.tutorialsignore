@@ -17,3 +17,11 @@ connect-third-party-llms
 # agent; wiring the tool correctly (discussion_id) exposed the nested-run
 # failure. Ignored pending a separate fix to nested discussion-tool execution.
 review-panel-discussion
+# orchestrate-a-sonnet-with-workflows exercises on_enter agent dispatch, which
+# runs the generation asynchronously (fire-and-forget) when a task enters a state
+# and routes the outcome via on_complete. Whether the card reaches `review`
+# depends on the sandbox LLM completing in time, so the forward-progress steps
+# are non-deterministic in CI (same class as review-panel-discussion). The
+# workflows/tasks module is covered deterministically by the server unit suite
+# (rest/workflows, rest/tasks, mcp) and the smoke tests.
+orchestrate-a-sonnet-with-workflows

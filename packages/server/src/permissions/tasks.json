@@ -1,0 +1,40 @@
+{
+  "module": "tasks",
+  "operations": [
+    {
+      "operationId": "createTask",
+      "action": "tasks:CreateTask",
+      "description": "Create a task bound to a workflow"
+    },
+    {
+      "operationId": "listTasks",
+      "action": "tasks:ListTasks",
+      "description": "List tasks (board query)"
+    },
+    {
+      "operationId": "getTask",
+      "action": "tasks:GetTask",
+      "description": "Get a task by ID"
+    },
+    {
+      "operationId": "getTaskHistory",
+      "action": "tasks:GetTask",
+      "description": "Get a task's transition history"
+    },
+    {
+      "operationId": "updateTask",
+      "action": "tasks:UpdateTask",
+      "description": "Update a task's payload, title, or assignee"
+    },
+    {
+      "operationId": "transitionTask",
+      "action": "tasks:TransitionTask",
+      "description": "Fire a named transition on a task"
+    },
+    {
+      "operationId": "deleteTask",
+      "action": "tasks:DeleteTask",
+      "description": "Delete a task"
+    }
+  ]
+}
