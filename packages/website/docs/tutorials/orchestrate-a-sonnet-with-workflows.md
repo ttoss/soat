@@ -398,7 +398,9 @@ for i in $(seq 1 60); do STATE=$(curl -s "$SOAT_URL/api/v1/tasks/$TASK_ID" -H "A
 The `publish` transition's guard requires `payload.approved == true`. Firing it
 before approving is **rejected** (`TASK_GUARD_REJECTED`) with no state change.
 Approve via a payload patch, then publish — entering the `terminal` state closes
-the task.
+the task. [`PATCH /tasks/{id}`](/docs/modules/workflows) shallow-merges the
+patch, so setting `approved` alone keeps the composed sonnet in
+`payload.last_result`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -407,7 +409,7 @@ the task.
 soat transition-task --task-id "$TASK_ID" --transition publish
 # → 400
 
-soat update-task --task-id "$TASK_ID" --payload '{"theme":"the sea","approved":true}' | jq '{ approved: .payload.approved }'
+soat update-task --task-id "$TASK_ID" --payload '{"approved":true}' | jq '{ approved: .payload.approved, sonnet_kept: (.payload.last_result.content != null) }'
 
 soat transition-task --task-id "$TASK_ID" --transition publish | jq '{ state, status }'
 ```
@@ -423,7 +425,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "$SOAT_URL/api/v1/tasks/$TASK_I
 
 curl -s -X PATCH "$SOAT_URL/api/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"payload":{"theme":"the sea","approved":true}}' | jq '{ approved: .payload.approved }'
+  -d '{"payload":{"approved":true}}' | jq '{ approved: .payload.approved, sonnet_kept: (.payload.last_result.content != null) }'
 
 curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/transitions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \

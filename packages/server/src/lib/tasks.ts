@@ -301,11 +301,19 @@ export const updateTask = async (args: {
   }
 
   if (args.payload !== undefined) {
+    // PATCH semantics: shallow-merge the patch over the existing payload so a
+    // caller setting one key (e.g. `approved`) does not discard keys an
+    // on_enter automation wrote (e.g. `last_result`). The merged result is
+    // what gets validated and persisted.
+    const merged = {
+      ...((task.payload as Record<string, unknown> | null) ?? {}),
+      ...args.payload,
+    };
     validatePayload({
       payloadSchema: task.workflow?.payloadSchema,
-      payload: args.payload,
+      payload: merged,
     });
-    task.payload = args.payload;
+    task.payload = merged;
   }
   if (args.title !== undefined) task.title = args.title;
   if (args.assignee !== undefined) task.assignee = args.assignee;

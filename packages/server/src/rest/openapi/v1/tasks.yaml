@@ -132,7 +132,11 @@ paths:
     patch:
       description: >-
         Updates a task's payload, title, or assignee. `state` is never directly
-        writable — move it with a transition.
+        writable — move it with a transition. `payload` is shallow-merged over
+        the existing payload (PATCH semantics): keys the request omits are
+        preserved, so setting one field never discards values an on_enter
+        automation wrote (e.g. `last_result`). The merged payload is validated
+        against the workflow's `payload_schema`.
       tags:
         - Tasks
       summary: Update a task
@@ -366,6 +370,10 @@ components:
           type: string
         payload:
           type: object
+          description: >-
+            Partial payload, shallow-merged over the existing payload. Omitted
+            keys are preserved; provided keys overwrite. The merged result must
+            satisfy the workflow's payload_schema.
         assignee:
           type: string
           nullable: true
