@@ -11,7 +11,7 @@ import TabItem from '@theme/TabItem';
 The [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) tutorial builds
 a **pipeline that ends** — a DAG that runs forward and terminates. This tutorial
 builds the same sonnet, but as a **[workflow](/docs/modules/workflows) a
-[task](/docs/modules/tasks) lives in**: a card that moves between named states,
+[task](/docs/modules/workflows) lives in**: a card that moves between named states,
 that an agent advances on its own, that a human reviews, and that can move
 **backward** for a revision — the case a DAG rejects by design.
 
@@ -24,7 +24,7 @@ You will:
 1. Create a project, an AI provider, and a sonnet-writing [agent](/docs/modules/agents#examples).
 2. Define a [workflow](/docs/modules/workflows): `triage → drafting → review → published`.
 3. Wire the `drafting` state's `on_enter` to **dispatch the agent** and route its result onward.
-4. Create a [task](/docs/modules/tasks) and watch the card advance itself.
+4. Create a [task](/docs/modules/workflows) and watch the card advance itself.
 5. Send the card **backward** (`review → drafting`) for a revision — re-running the agent.
 6. **Guard** the publish transition, then close the task and read its full audited history.
 
@@ -410,6 +410,6 @@ curl -s "$SOAT_URL/api/v1/tasks?project_id=$PROJECT_ID&workflow_id=$WORKFLOW_ID&
 
 ## Where to go next
 
-- [Workflows](/docs/modules/workflows) and [Tasks](/docs/modules/tasks) — the full data model, guards, and automation reference.
+- [Workflows & Tasks](/docs/modules/workflows) — the full data model, guards, and automation reference.
 - [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) — the same poem as a pipeline that ends, for contrast.
-- Give an agent `tasks:TransitionTask` and it can move cards itself through the [MCP surface](/docs/modules/tasks) — the agentic kanban.
+- Give an agent `tasks:TransitionTask` and it can move cards itself through the [MCP surface](/docs/modules/workflows) — the agentic kanban.

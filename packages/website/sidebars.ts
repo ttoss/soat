@@ -104,7 +104,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/orchestrations',
             'modules/workflows',
-            'modules/tasks',
             'modules/discussions',
             'modules/triggers',
             'modules/webhooks',

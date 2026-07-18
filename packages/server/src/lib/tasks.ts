@@ -159,6 +159,23 @@ const findInitialState = (states: WorkflowState[]): WorkflowState => {
   return initial;
 };
 
+// In-flight on_enter automations. Dispatch is fire-and-forget in production
+// (nothing awaits it), but this lets callers that need determinism — tests, a
+// graceful shutdown — drain the trailing async work via `flushTaskAutomations`
+// rather than leaving DB writes in flight past teardown.
+const pendingAutomations = new Set<Promise<void>>();
+
+/**
+ * Awaits every currently-pending on_enter automation, transitively: routing an
+ * automation outcome can enter a new automated state, so it loops until the set
+ * drains. Used by tests to avoid worker-teardown leaks from detached dispatch.
+ */
+export const flushTaskAutomations = async (): Promise<void> => {
+  while (pendingAutomations.size > 0) {
+    await Promise.allSettled([...pendingAutomations]);
+  }
+};
+
 /** Kicks off a state's on_enter automation in the background, if any. */
 export const dispatchOnEnter = (args: {
   taskPublicId: string;
@@ -166,18 +183,23 @@ export const dispatchOnEnter = (args: {
   state: WorkflowState;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;
-  void runStateAutomation({
+  const promise = runStateAutomation({
     taskPublicId: args.taskPublicId,
     projectId: args.projectId,
     stateName: args.state.name,
     onEnter: args.state.onEnter,
-  }).catch((error: unknown) => {
-    log(
-      'dispatchOnEnter: automation failed task=%s %o',
-      args.taskPublicId,
-      error
-    );
-  });
+  })
+    .catch((error: unknown) => {
+      log(
+        'dispatchOnEnter: automation failed task=%s %o',
+        args.taskPublicId,
+        error
+      );
+    })
+    .finally(() => {
+      pendingAutomations.delete(promise);
+    });
+  pendingAutomations.add(promise);
 };
 
 // ── Create ────────────────────────────────────────────────────────────────────

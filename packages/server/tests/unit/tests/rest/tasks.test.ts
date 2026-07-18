@@ -1,3 +1,5 @@
+import { flushTaskAutomations } from 'src/lib/tasks';
+
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -94,6 +96,12 @@ describe('Tasks', () => {
           payload_schema: { properties: { topic: { type: 'string' } } },
         })
     ).body.id;
+  });
+
+  // Drain any detached on_enter automation before teardown so trailing DB
+  // writes never outlive the worker (jest force-exits on leaked handles).
+  afterEach(async () => {
+    await flushTaskAutomations();
   });
 
   const createTask = (payload: object = {}) => {
