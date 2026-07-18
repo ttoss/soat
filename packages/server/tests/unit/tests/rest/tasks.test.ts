@@ -1,4 +1,5 @@
 import { flushTaskAutomations } from 'src/lib/tasks';
+import * as tasksAutomationModule from 'src/lib/tasksAutomation';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -775,6 +776,37 @@ describe('Tasks', () => {
       expect(after.body.state).toBe('parked');
       // The stale result never landed in payload.
       expect(after.body.payload.last_result).toBeUndefined();
+    });
+
+    test('a rejected on_enter automation is swallowed (fire-and-forget)', async () => {
+      // Sanctioned .catch()-resilience stub: dispatchOnEnter runs the automation
+      // detached behind a `.catch`, so the swallow branch only executes when the
+      // automation itself rejects. Force one rejection and assert the task is
+      // still created — the error is caught, never surfaced to the caller.
+      const spy = jest
+        .spyOn(tasksAutomationModule, 'runStateAutomation')
+        .mockRejectedValueOnce(new Error('dispatch boom'));
+      try {
+        const wf = await dispatchWorkflow({
+          name: 'reject',
+          onEnter: {
+            dispatch: { kind: 'agent', agent_id: agentId },
+            on_complete: [{ when: true, transition: 'to_done' }],
+          },
+        });
+        const taskId = await startTask(wf, {});
+        await flushTaskAutomations();
+
+        const res = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}`
+        );
+        expect(res.status).toBe(200);
+        // The rejection was swallowed; the card stays in its initial state.
+        expect(res.body.state).toBe('writing');
+        expect(spy).toHaveBeenCalledTimes(1);
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 

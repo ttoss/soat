@@ -145,6 +145,127 @@ describe('assertWorkflowValid', () => {
       /unknown transition/
     );
   });
+
+  test('rejects an orchestration dispatch missing orchestration_id', () => {
+    expectInvalid(
+      {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            onEnter: { dispatch: { kind: 'orchestration' } },
+          },
+        ],
+        transitions: [],
+      },
+      /missing orchestration_id/
+    );
+  });
+
+  test('rejects an on_complete rule with an empty transition name', () => {
+    expectInvalid(
+      {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            onEnter: {
+              dispatch: { kind: 'agent', agentId: 'agent_x' },
+              onComplete: [{ when: true, transition: '' }],
+            },
+          },
+          { name: 'b' },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      },
+      /missing a transition/
+    );
+  });
+
+  test('rejects on_failure referencing an unknown transition', () => {
+    expectInvalid(
+      {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            onEnter: {
+              dispatch: { kind: 'agent', agentId: 'agent_x' },
+              onFailure: 'ghost',
+            },
+          },
+          { name: 'b' },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      },
+      /on_failure references unknown transition/
+    );
+  });
+
+  test('rejects a transition with an empty from list', () => {
+    expectInvalid(
+      { states, transitions: [{ name: 'go', from: [], to: 'b' }] },
+      /at least one/
+    );
+  });
+
+  test('rejects a guard that is not an object', () => {
+    expectInvalid(
+      {
+        states,
+        transitions: [{ name: 'go', from: ['a'], to: 'b', guard: 'nope' }],
+      },
+      /guard must be a JSON Logic object/
+    );
+  });
+
+  test('rejects a transition with an empty name', () => {
+    expectInvalid(
+      { states, transitions: [{ name: '', from: ['a'], to: 'b' }] },
+      /transition must have a non-empty/
+    );
+  });
+
+  test('rejects a duplicate transition name', () => {
+    expectInvalid(
+      {
+        states,
+        transitions: [
+          { name: 'go', from: ['a'], to: 'b' },
+          { name: 'go', from: ['b'], to: 'c' },
+        ],
+      },
+      /Duplicate transition/
+    );
+  });
+
+  // The API accepts arbitrary JSON for states/transitions, so these guards
+  // defend against untyped input — exercised here with parsed JSON rather than
+  // typed literals to mirror what the request body actually delivers.
+  test('rejects a non-human state whose on_enter has no dispatch', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{}}],"transitions":[]}'
+      ),
+      /missing a dispatch/
+    );
+  });
+
+  test('rejects a dispatch with an unknown kind', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"weird"}}}],"transitions":[]}'
+      ),
+      /dispatch kind must be/
+    );
+  });
+
+  test('rejects a transitions value that is not an array', () => {
+    expectInvalid(
+      JSON.parse('{"states":[{"name":"a","initial":true}],"transitions":{}}'),
+      /must be an array/
+    );
+  });
 });
 
 describe('findValidTransition', () => {
