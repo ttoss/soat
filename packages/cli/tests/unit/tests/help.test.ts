@@ -26,7 +26,10 @@ describe('command help output', () => {
     expect(output).toContain(
       'Module docs: https://soat.ttoss.dev/docs/modules/actors'
     );
-    expect(output).toContain('--project_id  <string>');
+    // Flags are displayed kebab-case (the documented canonical convention),
+    // matching the generated docs pages, not the underlying snake_case (#610).
+    expect(output).toContain('--project-id  <string>');
+    expect(output).not.toContain('--project_id');
     expect(output).toContain('--limit  <integer>');
 
     expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(0);
@@ -70,9 +73,10 @@ describe('command help output', () => {
       'Module docs: https://soat.ttoss.dev/docs/modules/formations'
     );
     // project_id is optional: it defaults to the project bound to a
-    // project-scoped API key (see issue #267).
-    expect(output).toContain('--project_id  <string>');
-    expect(output).not.toContain('--project_id  <string> [required]');
+    // project-scoped API key (see issue #267). Displayed kebab-case (#610).
+    expect(output).toContain('--project-id  <string>');
+    expect(output).not.toContain('--project-id  <string> [required]');
+    expect(output).not.toContain('--project_id');
     expect(output).toContain('--name  <string> [required]');
     expect(output).toContain('--template-path  <string>');
     expect(output).toContain('--parameter  <string>');

@@ -137,8 +137,8 @@ contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
 | `to_state`      | string          | Destination state                                                 |
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
 | `actor_kind`    | string          | `user` \| `api_key` \| `automation` \| `approval`                 |
-| `actor_id`      | string \| null  | Principal or automation provenance                                |
-| `generation_id` | string \| null  | The agent generation that caused the move, when automation-driven |
+| `actor_id`      | string \| null  | Principal or automation provenance. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted; for automation it is the causing generation/run id |
+| `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
 | `run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
 | `created_at`    | string          | ISO 8601 timestamp                                                |
@@ -190,7 +190,10 @@ run when a task enters it, and routes the outcome back into a transition:
   human to resolve.
 
 Entering a state cancels any dispatch still running from the state the task is
-leaving — task state is the source of truth (an entity that lives).
+leaving — task state is the source of truth (an entity that lives). This applies
+to a genuinely in-flight orchestration run (one waiting on a `delay`/`poll` or a
+slow node), not only one parked on human input: the run id is recorded on the
+task the moment the run is created, so a transition out cancels the live run.
 
 ## Key Concepts
 
@@ -211,7 +214,9 @@ leaving — task state is the source of truth (an entity that lives).
   stay put but can only leave via transitions valid in the new definition — the
   definition is the sole authority at fire time.
 - **Delete is guarded.** A workflow with one or more **open** tasks cannot be
-  deleted (`WORKFLOW_HAS_OPEN_TASKS`).
+  deleted (`WORKFLOW_HAS_OPEN_TASKS`). Once every task is closed (terminal),
+  deleting the workflow also removes those closed tasks and their transition
+  history.
 - **Payload is working data.** `PATCH /tasks/{id}` updates `payload`, `title`, or
   `assignee`. `payload` is **shallow-merged** over the current payload (PATCH
   semantics): keys the request omits are kept, so setting `approved` never

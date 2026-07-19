@@ -409,11 +409,6 @@ export const ERROR_CODES = {
     description:
       'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
   },
-  TASK_STATE_NOT_WRITABLE: {
-    httpStatus: 400,
-    description:
-      'A task state is never directly writable; move it with a transition.',
-  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

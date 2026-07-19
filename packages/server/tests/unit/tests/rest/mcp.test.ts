@@ -1855,6 +1855,41 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
     expect(res.status).toBe(401);
   });
 
+  test('accepts an sk_ API key for authentication (#609)', async () => {
+    // A valid, working API key (confirmed against REST below) must also
+    // authenticate to the MCP endpoint — the documented headless-agent path.
+    const keyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({ name: 'mcp-sk-key' });
+    expect(keyRes.status).toBe(201);
+    const rawKey = keyRes.body.key as string;
+    expect(rawKey).toMatch(/^sk_/);
+
+    // Sanity: the key works against REST.
+    const rest = await authenticatedTestClient(rawKey).get('/api/v1/projects');
+    expect(rest.status).toBe(200);
+
+    // The same key against /mcp must succeed (previously a blanket 401).
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', `Bearer ${rawKey}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.result.tools)).toBe(true);
+    expect(res.body.result.tools.length).toBeGreaterThan(0);
+
+    // An invalid sk_ key is still rejected.
+    const bad = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', 'Bearer sk_deadbeefdeadbeefdeadbeef')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(bad.status).toBe(401);
+  });
+
   test('tools/call without a token returns 401 with WWW-Authenticate header', async () => {
     const res = await testClient
       .post('/mcp')

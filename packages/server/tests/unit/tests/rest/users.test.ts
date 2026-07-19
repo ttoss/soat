@@ -1,3 +1,5 @@
+import { db } from 'src/db';
+
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 describe('POST /api/v1/users/bootstrap', () => {
@@ -291,6 +293,34 @@ describe('Admin user operations', () => {
       );
 
       expect(response.status).toBe(403);
+    });
+
+    test('deletes a user who owns an API key (no bare 500) (#611)', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'keyowner', password: 'keyownerpass' });
+      const { id } = createRes.body;
+
+      const userRow = await db.User.findOne({ where: { publicId: id } });
+      const key = await db.ApiKey.create({
+        userId: userRow!.id as number,
+        projectId: null,
+        name: 'owned-key',
+        keyPrefix: 'sk_testk',
+        keyHash: 'not-a-real-hash',
+        policyIds: [],
+      });
+
+      const deleteRes = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/users/${id}`
+      );
+      expect(deleteRes.status).toBe(204);
+
+      // The owned key must be cascade-deleted along with the user.
+      const keyAfter = await db.ApiKey.findOne({
+        where: { publicId: key.publicId as string },
+      });
+      expect(keyAfter).toBeNull();
     });
 
     test('second admin can also delete a user', async () => {

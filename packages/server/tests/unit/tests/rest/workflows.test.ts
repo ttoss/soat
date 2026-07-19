@@ -36,6 +36,8 @@ describe('Workflows', () => {
         'workflows:DeleteWorkflow',
         'tasks:CreateTask',
         'tasks:DeleteTask',
+        'tasks:TransitionTask',
+        'tasks:GetTask',
       ],
       createNoPermUser: true,
     });
@@ -302,6 +304,49 @@ describe('Workflows', () => {
       );
       expect(res.status).toBe(409);
       expect(res.body.error.code).toBe('WORKFLOW_HAS_OPEN_TASKS');
+    });
+
+    test('deletes a workflow once its only task is closed (no bare 500) (#604)', async () => {
+      // Minimal workflow with a direct terminal transition so the task can be
+      // closed without satisfying the SIMPLE_TRANSITIONS publish guard.
+      const created = (
+        await createWorkflow(userToken, {
+          states: [
+            { name: 'a', initial: true },
+            { name: 'z', terminal: true },
+          ],
+          transitions: [{ name: 'finish', from: ['a'], to: 'z' }],
+        })
+      ).body;
+
+      const task = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({ project_id: projectId, workflow_id: created.id, title: 't' });
+      expect(task.status).toBe(201);
+
+      // Close the task by transitioning it into the terminal state.
+      const transition = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${task.body.id}/transitions`)
+        .send({ transition: 'finish' });
+      expect(transition.status).toBe(200);
+      expect(transition.body.status).toBe('closed');
+
+      // Deleting now must succeed (not a bare 500 from the FK constraint).
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/workflows/${created.id}`
+      );
+      expect(res.status).toBe(204);
+
+      // Workflow is gone, and its closed task cascaded away with it.
+      const getWf = await authenticatedTestClient(userToken).get(
+        `/api/v1/workflows/${created.id}`
+      );
+      expect(getWf.status).toBe(404);
+
+      const getTask = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${task.body.id}`
+      );
+      expect(getTask.status).toBe(404);
     });
   });
 });
