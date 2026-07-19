@@ -1230,9 +1230,13 @@ describe('Tasks', () => {
             name: `gated-${Math.random().toString(36).slice(2)}`,
             states: [
               { name: 'review', initial: true, kind: 'human' },
+              { name: 'draft', kind: 'human' },
               { name: 'published', terminal: true },
             ],
             transitions: [
+              // A non-gated escape from review so a task can reach a state where
+              // the gated transitions are invalid (exercises the from-state check).
+              { name: 'to_draft', from: ['review'], to: 'draft' },
               {
                 name: 'publish',
                 from: ['review'],
@@ -1277,7 +1281,10 @@ describe('Tasks', () => {
     test('firing a requires_approval transition parks instead of moving', async () => {
       const taskId = await startGatedTask();
 
-      const parked = await transition(taskId, 'publish');
+      // Include a note — it is carried into the approval's reasoning.
+      const parked = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${taskId}/transitions`)
+        .send({ transition: 'publish', note: 'please review the copy' });
       expect(parked.status).toBe(200);
       // The task did not move; it exposes the pending transition.
       expect(parked.body.state).toBe('review');
@@ -1453,6 +1460,34 @@ describe('Tasks', () => {
       expect(after.status).toBe('closed');
     });
 
+    test('parking a gated transition invalid from the current state is 409', async () => {
+      const taskId = await startGatedTask();
+      // Leave review via a non-gated move; `publish` is no longer valid from here.
+      await transition(taskId, 'to_draft');
+      const res = await transition(taskId, 'publish');
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+
+      // No approval was filed, and the task carries no pending gate.
+      const after = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      expect(after.pending_transition).toBeNull();
+    });
+
+    test('parking a gated transition on a closed task is 409', async () => {
+      const taskId = await startGatedTask();
+      await transition(taskId, 'publish');
+      const approval = await pendingApprovalFor(taskId);
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/approve`)
+        .send({});
+      // The task is now closed (published). A gated transition is rejected.
+      const res = await transition(taskId, 'publish');
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+    });
+
     test('403 firing a gated transition without permission', async () => {
       const taskId = await startGatedTask();
       const res = await transition(taskId, 'publish', noPermToken);
@@ -1541,7 +1576,6 @@ describe('Tasks', () => {
 
         const [first] = await waitForStallEvents({ events, taskId, count: 1 });
         expect(first.data.state).toBe('waiting');
-        expect(first.data.stalledAfter).toBe(60);
 
         // The episode is spent — the deadline is disarmed, so a second sweep at
         // the same clock cannot re-claim the task (once per episode).

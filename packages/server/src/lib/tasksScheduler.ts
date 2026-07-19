@@ -3,13 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
-import {
-  emitTaskEvent,
-  mapTask,
-  stateByName,
-  type TaskInstance,
-} from './tasks';
-import type { WorkflowState } from './workflowsValidation';
+import { emitTaskEvent, mapTask, type TaskInstance } from './tasks';
 
 const log = createDebug('soat:tasks');
 
@@ -65,16 +59,13 @@ export const sweepStalledTasks = createSweep<TaskInstance>({
     return claimed > 0;
   },
   handle: async ({ row: task }) => {
-    const states = (task.workflow?.states ?? []) as WorkflowState[];
-    const stateDef = stateByName({ states, name: task.state });
+    // The event carries the stalled state and the full task; a consumer that
+    // needs the threshold reads `stalled_after` from the workflow definition.
     await emitTaskEvent({
       type: 'tasks.stalled',
       projectId: task.projectId as number,
       task: mapTask(task),
-      extra: {
-        state: task.state,
-        stalledAfter: stateDef?.stalledAfter ?? null,
-      },
+      extra: { state: task.state },
     });
     log('sweepStalledTasks: emitted tasks.stalled task=%s', task.publicId);
   },

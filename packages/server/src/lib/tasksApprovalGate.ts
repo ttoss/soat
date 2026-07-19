@@ -243,7 +243,7 @@ const applyApprovedTransition = async (args: {
       id: item.taskId,
       transition: item.taskTransition,
       actor: { kind: 'approval', id: decision.resolvedBy },
-      note: `Approved by ${decision.resolvedBy ?? 'approval'}.`,
+      note: `Approved via approval ${item.id}.`,
     });
   } catch (error) {
     if (error instanceof DomainError && REJECTION_CODES.has(error.code)) {
