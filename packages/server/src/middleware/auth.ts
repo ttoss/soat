@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
+import { db } from '../db';
 import type { PolicyDocument } from '../lib/iam';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
 import type { IsAllowedFn } from './authProjectResolvers';
@@ -142,6 +143,7 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         publicId: keyUser.publicId as string,
         username: keyUser.username as string,
         role,
+        apiKeyPublicId: row.publicId as string,
         apiKeyProjectId,
         apiKeyProjectPublicId,
         isAllowed: apiKeyIsAllowed,
@@ -286,6 +288,39 @@ const resolveJwt = async (ctx: Context, token: string) => {
         })
       : createJwtGetPolicies({ role, userPolicyIds, db: ctx.db }),
   };
+};
+
+/**
+ * Verifies a raw `sk_` API key against the ApiKey table (prefix lookup + bcrypt
+ * compare) and returns a minimal identity payload, or null when the token is
+ * not a valid key. Used by the MCP endpoint's `verifyToken` gate so `sk_` keys
+ * are a first-class MCP credential (#609); the actual per-request authorization
+ * still runs in `resolveProjectKey` when the MCP tool handler forwards the same
+ * bearer token to the REST API, so scope/policy enforcement is unchanged.
+ */
+export const verifyApiKeyToken = async (
+  token: string
+): Promise<{ sub: string; apiKeyPublicId: string } | null> => {
+  if (!token.startsWith(API_KEY_RAW_PREFIX)) return null;
+
+  const keyPrefix = token.substring(0, 8);
+  const candidates = await db.ApiKey.findAll({
+    where: { keyPrefix },
+    include: [{ model: db.User, attributes: USER_ATTRIBUTES }],
+  });
+
+  for (const row of candidates) {
+    const match = await bcrypt.compare(token, row.keyHash as string);
+    if (match) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyUser = (row as any).user;
+      return {
+        sub: keyUser.publicId as string,
+        apiKeyPublicId: row.publicId as string,
+      };
+    }
+  }
+  return null;
 };
 
 export const authMiddleware = async (ctx: Context, next: Next) => {

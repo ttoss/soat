@@ -35,9 +35,16 @@ export class ApiKey extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare userId: number;
 
-  @BelongsTo(() => {
-    return User;
-  })
+  // CASCADE: an API key is meaningless without its owner, so deleting the user
+  // removes their keys too (consistent with the project FK below). Without this
+  // the default blocking constraint made `delete-user` 500 for any user that
+  // owned a key (#611).
+  @BelongsTo(
+    () => {
+      return User;
+    },
+    { onDelete: 'CASCADE' }
+  )
   declare user: User;
 
   /**

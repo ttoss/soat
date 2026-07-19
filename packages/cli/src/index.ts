@@ -34,6 +34,20 @@ const kebabToSnake = (s: string) => {
   return s.replace(/-/g, '_');
 };
 
+/**
+ * Convert snake_case or camelCase to kebab-case for flag *display* in --help
+ * (e.g. project_id → project-id). Kebab-case is the documented canonical CLI
+ * flag convention (see the generated docs pages and tutorials); the parser is
+ * lenient and accepts snake/kebab/camel alike via `toCanonical`, so this only
+ * affects how flags are printed (#610).
+ */
+const toKebab = (s: string) => {
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase();
+};
+
 const parseFlagValue = (value: string): unknown => {
   const trimmed = value.trim();
 
@@ -337,7 +351,7 @@ program
         for (const f of allFlags) {
           const req = f.required ? ' [required]' : '';
           const desc = f.description ? `  ${f.description}` : '';
-          console.log(`  --${f.name}  <${f.type}>${req}${desc}`);
+          console.log(`  --${toKebab(f.name)}  <${f.type}>${req}${desc}`);
         }
       }
       process.exit(0);

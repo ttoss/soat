@@ -2,14 +2,15 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import type { GenerationResult } from './agentGenerationHelpers';
-import { createGeneration } from './agents';
-import type { GenerationInputMessage } from './generationInputMessages';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
-import { startOrchestrationRun } from './orchestrationEngine';
 import type { ActiveDispatch } from './tasks';
 import { emitTaskEvent, mapTask, transitionTask } from './tasks';
-import type { OnEnter, WorkflowDispatch } from './workflowsValidation';
+import {
+  type DispatchResult,
+  failedDispatchIds,
+  runDispatch,
+} from './tasksDispatch';
+import type { OnEnter } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
 
@@ -41,23 +42,6 @@ const buildTaskContext = (task: TaskWithWorkflow) => {
   };
 };
 
-/**
- * Shapes a dispatch `input_mapping` result into agent messages: an explicit
- * `messages` array is passed through, a `prompt` string becomes a single user
- * message, and any other non-empty object is JSON-encoded as one user message.
- */
-const buildAgentMessages = (
-  inputs: Record<string, unknown>
-): GenerationInputMessage[] => {
-  if (Array.isArray(inputs.messages)) {
-    return inputs.messages as GenerationInputMessage[];
-  }
-  if (typeof inputs.prompt === 'string' && inputs.prompt.length > 0) {
-    return [{ role: 'user', content: inputs.prompt }];
-  }
-  return [{ role: 'user', content: JSON.stringify(inputs) }];
-};
-
 /** Whether the task is still parked in the state whose automation we launched. */
 const isStale = (args: {
   task: TaskWithWorkflow | null;
@@ -85,45 +69,6 @@ const setDispatchState = async (args: {
     };
   }
   await args.task.save();
-};
-
-// Runs one dispatch and returns its exposed `{result}` and provenance ids. A
-// generation exposes its output; an orchestration run exposes its final state
-// (matching sub-orchestration semantics, PRD D2).
-const runDispatch = async (args: {
-  dispatch: WorkflowDispatch;
-  projectId: number;
-  inputs: Record<string, unknown>;
-}): Promise<{
-  result: unknown;
-  generationId: string | null;
-  runId: string | null;
-}> => {
-  if (args.dispatch.kind === 'agent') {
-    const gen = (await createGeneration({
-      agentId: args.dispatch.agentId!,
-      projectIds: [args.projectId],
-      messages: buildAgentMessages(args.inputs),
-      stream: false,
-    })) as GenerationResult;
-    return {
-      result: gen.output ?? {},
-      generationId: gen.id,
-      runId: null,
-    };
-  }
-
-  const run = await startOrchestrationRun({
-    orchestrationPublicId: args.dispatch.orchestrationId!,
-    projectIds: [args.projectId],
-    input: args.inputs,
-    wait: true,
-  });
-  return {
-    result: run.state ?? {},
-    generationId: null,
-    runId: run.id,
-  };
 };
 
 // Transition failures that mean the matched rule could not be applied — the
@@ -291,6 +236,8 @@ const handleFailure = async (args: {
     args.taskPublicId,
     args.error
   );
+  const { generationId, runId } = failedDispatchIds(args.error);
+  const failedId = generationId ?? runId;
   const task = await applyLocked({
     taskPublicId: args.taskPublicId,
     guard: (t) => {
@@ -303,7 +250,7 @@ const handleFailure = async (args: {
     mutate: (t) => {
       t.activeDispatch = {
         kind: args.dispatchKind,
-        id: null,
+        id: failedId,
         status: 'failed',
       };
       t.automationStatus = 'failed';
@@ -315,9 +262,76 @@ const handleFailure = async (args: {
     await transitionTask({
       id: args.taskPublicId,
       transition: args.onEnter.onFailure,
-      actor: { kind: 'automation', id: null },
+      actor: { kind: 'automation', id: failedId },
+      generationId,
+      runId,
     });
   }
+};
+
+// Persists a dispatch id onto `active_dispatch` while it is still running — used
+// as `runDispatch`'s `onDispatchStarted` so cancellation-on-exit can reach a
+// genuinely in-flight run instead of a null id for the whole wait window (#606).
+// Guarded by the same staleness check as the completion write (#590).
+const persistRunningDispatchId = async (args: {
+  taskPublicId: string;
+  stateName: string;
+  token: number;
+  dispatchKind: ActiveDispatch['kind'];
+  generationId: string | null;
+  runId: string | null;
+}): Promise<void> => {
+  await applyLocked({
+    taskPublicId: args.taskPublicId,
+    guard: (t) => {
+      return !isStale({
+        task: t,
+        stateName: args.stateName,
+        token: args.token,
+      });
+    },
+    mutate: (t) => {
+      t.activeDispatch = {
+        kind: args.dispatchKind,
+        id: args.generationId ?? args.runId,
+        status: 'running',
+      };
+    },
+  });
+};
+
+// Atomically writes the dispatch completion (provenance, status, last_result),
+// unless the task moved or re-entered since the dispatch started — the stale
+// write is discarded rather than clobbering the new state (#590).
+const commitCompletion = async (args: {
+  taskPublicId: string;
+  stateName: string;
+  token: number;
+  dispatchKind: ActiveDispatch['kind'];
+  dispatched: DispatchResult;
+}): Promise<TaskWithWorkflow | null> => {
+  return applyLocked({
+    taskPublicId: args.taskPublicId,
+    guard: (t) => {
+      return !isStale({
+        task: t,
+        stateName: args.stateName,
+        token: args.token,
+      });
+    },
+    mutate: (t) => {
+      t.activeDispatch = {
+        kind: args.dispatchKind,
+        id: args.dispatched.generationId ?? args.dispatched.runId,
+        status: 'completed',
+      };
+      t.automationStatus = 'completed';
+      t.payload = {
+        ...(t.payload as Record<string, unknown>),
+        last_result: args.dispatched.result,
+      };
+    },
+  });
 };
 
 /**
@@ -352,16 +366,24 @@ export const runStateAutomation = async (args: {
     automationStatus: 'running',
   });
 
-  let dispatched: {
-    result: unknown;
-    generationId: string | null;
-    runId: string | null;
-  };
+  let dispatched: DispatchResult;
   try {
     dispatched = await runDispatch({
       dispatch,
       projectId: args.projectId,
       inputs,
+      // Persist the dispatch id the moment it is known — before the blocking
+      // wait — so cancellation-on-exit can reach a genuinely in-flight run (#606).
+      onDispatchStarted: ({ generationId, runId }) => {
+        return persistRunningDispatchId({
+          taskPublicId: args.taskPublicId,
+          stateName: args.stateName,
+          token,
+          dispatchKind,
+          generationId,
+          runId,
+        });
+      },
     });
   } catch (error) {
     await handleFailure({
@@ -376,27 +398,14 @@ export const runStateAutomation = async (args: {
     return;
   }
 
-  // Cancellation-on-exit, applied atomically: re-validate under a row lock that
-  // the task hasn't moved (or re-entered) since the dispatch started, and only
-  // then write the completion — closing the gap a separate check-then-write
-  // would leave for a concurrent transitionTask to commit into (#590).
-  const current = await applyLocked({
+  // Cancellation-on-exit: commit the completion only if the task hasn't moved
+  // or re-entered since the dispatch started (#590).
+  const current = await commitCompletion({
     taskPublicId: args.taskPublicId,
-    guard: (t) => {
-      return !isStale({ task: t, stateName: args.stateName, token });
-    },
-    mutate: (t) => {
-      t.activeDispatch = {
-        kind: dispatchKind,
-        id: dispatched.generationId ?? dispatched.runId,
-        status: 'completed',
-      };
-      t.automationStatus = 'completed';
-      t.payload = {
-        ...(t.payload as Record<string, unknown>),
-        last_result: dispatched.result,
-      };
-    },
+    stateName: args.stateName,
+    token,
+    dispatchKind,
+    dispatched,
   });
   if (!current) {
     log(

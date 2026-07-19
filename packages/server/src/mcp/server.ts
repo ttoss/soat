@@ -1,3 +1,4 @@
+import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import type { App } from '@ttoss/http-server';
 import {
   createMcpRouter,
@@ -8,6 +9,7 @@ import {
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
 import { soatTools } from '../lib/soatTools';
+import { verifyApiKeyToken } from '../middleware/auth';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
 import { callApi, mcpAuthorizationStore } from './callApi';
 import { toMcpText } from './toMcpText';
@@ -94,6 +96,15 @@ const mcpRouter = createMcpRouter(mcpServer, {
   },
   auth: {
     verifyToken: async (token) => {
+      // Project-scoped `sk_` API keys are a first-class MCP credential (the
+      // headless-agent path), verified against the ApiKey table. Per-request
+      // authorization is still enforced when the tool handler forwards this same
+      // bearer token to the REST API (see callApi + resolveProjectKey).
+      if (token.startsWith(API_KEY_RAW_PREFIX)) {
+        const apiKeyPayload = await verifyApiKeyToken(token);
+        if (!apiKeyPayload) throw new Error('Invalid token');
+        return apiKeyPayload;
+      }
       const payload = verifyOauthAccessToken(token);
       if (!payload) throw new Error('Invalid token');
       return payload;

@@ -1,4 +1,6 @@
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
+import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
 
@@ -166,6 +168,37 @@ describe('Tasks', () => {
         .post('/api/v1/tasks')
         .send({ project_id: projectId, workflow_id: workflowId, title: 't' });
       expect(res.status).toBe(403);
+    });
+
+    test('history actor_id is the API key id (not the owner user id) for api_key auth (#608)', async () => {
+      // The user creates an unscoped API key it owns; the key inherits the
+      // owner's permissions.
+      const keyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'task-actor-key' });
+      expect(keyRes.status).toBe(201);
+      const keyPublicId = keyRes.body.id as string;
+      const rawKey = keyRes.body.key as string;
+      expect(keyPublicId).toMatch(/^key_/);
+
+      // Create a task authenticated as the API key.
+      const created = await authenticatedTestClient(rawKey)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'via key',
+        });
+      expect(created.status).toBe(201);
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${created.body.id}/history`
+        )
+      ).body;
+      expect(history[0].actor_kind).toBe('api_key');
+      // The forensic value: the specific key, distinguishable from the owner.
+      expect(history[0].actor_id).toBe(keyPublicId);
     });
   });
 
@@ -371,6 +404,27 @@ describe('Tasks', () => {
         .send({ title: 'x' });
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('TASK_NOT_FOUND');
+    });
+
+    test('rejects a `state` field as an unknown field, leaving state unchanged (#605)', async () => {
+      const task = (await createTask()).body;
+      const stateBefore = task.state;
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tasks/${task.id}`)
+        .send({ state: 'published' });
+
+      // `state` is never directly writable — it is rejected by the strict-field
+      // request validation as an unknown property of UpdateTaskRequest.
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.meta.unknownFields).toContain('state');
+
+      // The task's state must be untouched by the rejected write.
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${task.id}`
+      );
+      expect(after.body.state).toBe(stateBefore);
     });
 
     test('403 without permission', async () => {
@@ -749,6 +803,50 @@ describe('Tasks', () => {
       expect(settled.status).toBe('closed');
     });
 
+    test('on_failure history links the failed generation (#607)', async () => {
+      // Production createGeneration wraps terminal failures in a DomainError
+      // whose meta carries the generation_id (see recordGenerationFailure).
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'invalid credentials', {
+          generation_id: 'gen_failed607',
+          trace_id: 'trc_failed607',
+        })
+      );
+      const wf = await dispatchWorkflow({
+        name: 'failing-link',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+      await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const routed = history.find((h: { transition: string }) => {
+        return h.transition === 'to_failed';
+      });
+      expect(routed.actor_kind).toBe('automation');
+      // The causing (failed) generation is linked so a reader can jump to its trace.
+      expect(routed.generation_id).toBe('gen_failed607');
+      expect(routed.actor_id).toBe('gen_failed607');
+    });
+
     test('an orchestration dispatch runs the pipeline and routes on_complete', async () => {
       const orchestrationId = (
         await authenticatedTestClient(userToken)
@@ -799,6 +897,107 @@ describe('Tasks', () => {
       });
       expect(routed.actor_kind).toBe('automation');
       expect(typeof routed.run_id).toBe('string');
+    });
+
+    test('cancellation-on-exit cancels a genuinely in-flight orchestration run (#606)', async () => {
+      // Gate the orchestration's agent-node generation so the run is genuinely
+      // in flight (not merely parked on human input) when we transition out.
+      let releaseGen: (() => void) | undefined;
+      const gate = new Promise<void>((resolve) => {
+        releaseGen = resolve;
+      });
+      let signalStarted: (() => void) | undefined;
+      const started = new Promise<void>((resolve) => {
+        signalStarted = resolve;
+      });
+      // Orchestration agent nodes call createGeneration from `agentGeneration`
+      // directly (not via the `agents` re-export the shared mock spies), so gate
+      // that module's export to hold the run genuinely in flight.
+      const genSpy = jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockImplementation(async () => {
+          signalStarted!();
+          await gate;
+          return {
+            id: 'gen_cancel606',
+            traceId: 'trc_cancel606',
+            status: 'completed',
+            output: { model: 'm', content: 'x', finishReason: 'stop' },
+          };
+        });
+
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `cancel-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'ask',
+                type: 'agent',
+                agent_id: agentId,
+                input_mapping: { prompt: { var: 'input.topic' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const wf = await dispatchWorkflow({
+        name: 'orch-cancel',
+        onEnter: {
+          dispatch: {
+            kind: 'orchestration',
+            orchestration_id: orchestrationId,
+          },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+        extraTransitions: [
+          { name: 'manual_exit', from: ['writing'], to: 'done' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+
+      // Wait until the run is inside the agent node (genuinely running).
+      await started;
+
+      try {
+        // The task must expose the real run id while the dispatch is running —
+        // the fix. Previously active_dispatch.id stayed null through the wait,
+        // so cancellation-on-exit could never reach the in-flight run.
+        const running = await pollTask({
+          token: userToken,
+          taskId,
+          predicate: (t) => {
+            const ad = t.active_dispatch as {
+              id?: unknown;
+              status?: unknown;
+            } | null;
+            return (
+              !!ad &&
+              ad.status === 'running' &&
+              typeof ad.id === 'string' &&
+              ad.id.startsWith('orch_run_')
+            );
+          },
+        });
+        const runId = (running.active_dispatch as { id: string }).id;
+
+        // Fire a manual transition out of the state before the run finishes.
+        const moved = await transition(taskId, 'manual_exit');
+        expect(moved.body.state).toBe('done');
+
+        // The still-running orchestration run must have been cancelled.
+        const runRow = await db.OrchestrationRun.findOne({
+          where: { publicId: runId },
+        });
+        expect(runRow!.status).toBe('cancelled');
+      } finally {
+        releaseGen!();
+      }
+      await flushTaskAutomations();
+      genSpy.mockRestore();
     });
 
     test('a result that arrives after the task left the state is discarded', async () => {

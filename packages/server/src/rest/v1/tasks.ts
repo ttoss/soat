@@ -19,12 +19,20 @@ import {
 
 const tasksRouter = new Router<Context>();
 
-/** Builds the transition actor from the authenticated principal. */
+/**
+ * Builds the transition actor from the authenticated principal. For API-key
+ * auth the actor id is the key's own public id (`key_...`) so history can
+ * distinguish which key acted — not just that *a* key did — falling back to the
+ * user id only if the key id is somehow absent. `apiKeyPublicId` is set for
+ * both scoped and unscoped keys, so it (not `apiKeyProjectId`) determines the
+ * `api_key` kind.
+ */
 const actorFromCtx = (ctx: Context): TaskActor => {
-  const kind: TaskActor['kind'] = ctx.authUser!.apiKeyProjectId
-    ? 'api_key'
-    : 'user';
-  return { kind, id: ctx.authUser!.publicId };
+  const apiKeyPublicId = ctx.authUser!.apiKeyPublicId;
+  if (apiKeyPublicId) {
+    return { kind: 'api_key', id: apiKeyPublicId };
+  }
+  return { kind: 'user', id: ctx.authUser!.publicId };
 };
 
 /**

@@ -63,11 +63,16 @@ export class Task extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false })
   declare workflowId: number;
 
+  // CASCADE (not RESTRICT): deleting a workflow removes its task instances too.
+  // The open-task guard in `deleteWorkflow` still blocks deletion while any task
+  // is open; once every task is closed (terminal), deleting the workflow also
+  // removes those closed task rows (and their cascaded transition history),
+  // matching the documented "only open tasks block deletion" semantics (#604).
   @BelongsTo(
     () => {
       return Workflow;
     },
-    { onDelete: 'RESTRICT' }
+    { onDelete: 'CASCADE' }
   )
   declare workflow: Workflow;
 

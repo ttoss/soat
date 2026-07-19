@@ -339,6 +339,11 @@ export const startOrchestrationRun = async (args: {
   // trigger. Persisted on the run and propagated to in-run generations' usage
   // events for in-run trigger attribution.
   triggerId?: string;
+  // Invoked with the run's public id as soon as the run row is created, before
+  // any (in `wait` mode, blocking) execution begins. Lets a caller persist the
+  // run id immediately — e.g. a workflow task recording `active_dispatch.id` so
+  // cancellation-on-exit can reach a still-running run (#606).
+  onRunCreated?: (args: { runId: string }) => Promise<void> | void;
 }): Promise<MappedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
@@ -388,6 +393,12 @@ export const startOrchestrationRun = async (args: {
     projectId: effectiveProjectId,
     run: startMapped,
   });
+
+  // Surface the run id before any (blocking, in `wait` mode) execution begins,
+  // so a caller can record it while the run is still in flight (#606).
+  if (args.onRunCreated) {
+    await args.onRunCreated({ runId: runRecord.publicId as string });
+  }
 
   // Synchronous (compatibility) mode: block until the run reaches a terminal or
   // awaiting_input state, sleeping through any delay/poll waits in-process.

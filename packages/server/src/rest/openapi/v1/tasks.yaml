@@ -132,7 +132,8 @@ paths:
     patch:
       description: >-
         Updates a task's payload, title, or assignee. `state` is never directly
-        writable — move it with a transition. `payload` is shallow-merged over
+        writable — move it with a transition; sending a `state` field is rejected
+        as an unknown field (`VALIDATION_FAILED`). `payload` is shallow-merged over
         the existing payload (PATCH semantics): keys the request omits are
         preserved, so setting one field never discards values an on_enter
         automation wrote (e.g. `last_result`). The merged payload is validated
