@@ -198,9 +198,11 @@ describe('Guardrail attachment (guardrail_ids)', () => {
   });
 
   describe('DELETE guardrail while referenced', () => {
-    test('is blocked with 409 until detached', async () => {
+    test('is blocked with 409 (listing every referencing scope) until detached', async () => {
       const doomed = await createGuardrail('Doomed Guardrail');
 
+      // Reference from a tool AND an agent, so the 409 meta enumerates both
+      // scopes.
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
@@ -211,16 +213,30 @@ describe('Guardrail attachment (guardrail_ids)', () => {
         });
       const toolId = toolRes.body.id;
 
+      const agentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'Referencing Agent',
+          guardrail_ids: [doomed],
+        });
+      const agentId = agentRes.body.id;
+
       const blocked = await authenticatedTestClient(userToken).delete(
         `/api/v1/guardrails/${doomed}`
       );
       expect(blocked.status).toBe(409);
       expect(blocked.body.error.code).toBe('GUARDRAIL_HAS_REFERENCES');
       expect(blocked.body.error.meta.references.tools).toContain(toolId);
+      expect(blocked.body.error.meta.references.agents).toContain(agentId);
 
-      // Detach, then deletion succeeds.
+      // Detach both, then deletion succeeds.
       await authenticatedTestClient(userToken)
         .patch(`/api/v1/tools/${toolId}`)
+        .send({ guardrail_ids: [] });
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${agentId}`)
         .send({ guardrail_ids: [] });
 
       const ok = await authenticatedTestClient(userToken).delete(
