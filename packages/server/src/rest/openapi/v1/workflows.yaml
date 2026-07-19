@@ -192,7 +192,12 @@ components:
         stalled_after:
           type: integer
           nullable: true
-          description: 'Reserved (Phase 3): seconds parked before a `tasks.stalled` event.'
+          description: >-
+            Seconds a task may sit in this state before the stall sweeper emits a
+            `tasks.stalled` event (once per stall episode, re-armed on the next
+            transition). Must be a positive integer when set. Omit or null to
+            never stall. The event does not move the task — route on it with a
+            webhook/trigger.
         on_enter:
           type: object
           nullable: true
@@ -223,10 +228,13 @@ components:
         requires_approval:
           type: boolean
           description: >-
-            Reserved (Phase 3): gate the transition behind an approval. Not
-            enforced yet — setting this to `true` is rejected at validation
-            with `WORKFLOW_VALIDATION_FAILED` until approval-gated transitions
-            ship.
+            Gate the transition behind a human approval. When `true`, firing the
+            transition (by anyone other than the approval resolution itself)
+            parks a pending `ApprovalItem` instead of moving the task; the task
+            exposes `pending_transition` until the item resolves. Approval fires
+            the transition as the `approval` actor (its guard re-evaluated at
+            resolution time); rejection or expiry clears the gate and appends a
+            history note.
     Workflow:
       type: object
       properties:

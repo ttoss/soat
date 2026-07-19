@@ -260,16 +260,15 @@ describe('assertWorkflowValid', () => {
     );
   });
 
-  test('rejects a transition declaring requires_approval: true (#591, Phase 3 not shipped)', () => {
-    expectInvalid(
-      {
+  test('accepts a transition declaring requires_approval: true (Phase 3)', () => {
+    expect(() => {
+      return assertWorkflowValid({
         states,
         transitions: [
           { name: 'go', from: ['a'], to: 'b', requiresApproval: true },
         ],
-      },
-      /requires_approval.*not enforced yet/
-    );
+      });
+    }).not.toThrow();
   });
 
   test('accepts a transition with requires_approval: false', () => {
@@ -279,6 +278,25 @@ describe('assertWorkflowValid', () => {
         transitions: [
           { name: 'go', from: ['a'], to: 'b', requiresApproval: false },
         ],
+      });
+    }).not.toThrow();
+  });
+
+  test('rejects a non-positive stalled_after', () => {
+    expectInvalid(
+      {
+        states: [{ name: 'a', initial: true, stalledAfter: 0 }, { name: 'b' }],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      },
+      /stalled_after must be a positive number/
+    );
+  });
+
+  test('accepts a positive stalled_after', () => {
+    expect(() => {
+      return assertWorkflowValid({
+        states: [{ name: 'a', initial: true, stalledAfter: 60 }, { name: 'b' }],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
       });
     }).not.toThrow();
   });

@@ -3545,6 +3545,63 @@ echo "Transition history: OK ($HIST_COUNT rows)"
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
 
+# ── Approval-gated transition (Phase 3) ──
+echo "--- Approval-gated transition ---"
+GATED_WF_STATES='[{"name":"review","initial":true,"kind":"human"},{"name":"published","terminal":true}]'
+GATED_WF_TRANSITIONS='[{"name":"publish","from":["review"],"to":"published","requires_approval":true}]'
+GATED_WF_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-gated-workflow \
+  --states "$GATED_WF_STATES" \
+  --transitions "$GATED_WF_TRANSITIONS" | jq -r '.id')
+if [ -z "$GATED_WF_ID" ] || [ "$GATED_WF_ID" = "null" ]; then
+  echo "ERROR: create-workflow (gated) failed" >&2
+  exit 1
+fi
+
+GATED_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$GATED_WF_ID" \
+  --title "gated card" | jq -r '.id')
+
+# Firing a requires_approval transition parks instead of moving the task.
+PARK_RESP=$($SOAT_CLI transition-task --task-id "$GATED_TASK_ID" --transition publish)
+PARK_PENDING=$(printf '%s\n' "$PARK_RESP" | jq -r '.pending_transition')
+PARK_STATE=$(printf '%s\n' "$PARK_RESP" | jq -r '.state')
+if [ "$PARK_PENDING" != "publish" ] || [ "$PARK_STATE" != "review" ]; then
+  echo "ERROR: gated transition expected park (pending=publish,state=review), got pending='$PARK_PENDING' state='$PARK_STATE'" >&2
+  printf '%s\n' "$PARK_RESP"
+  exit 1
+fi
+echo "Gated transition parked: OK (pending_transition=publish)"
+
+# The pending approval is filed with task-transition provenance.
+GATED_TR_APPROVAL_ID=$($SOAT_CLI list-approvals \
+  --project-id "$PROJECT_PUBLIC_ID" --status pending --origin task_transition \
+  | jq -r --arg t "$GATED_TASK_ID" '[.[] | select(.task_id == $t)][0].id // empty')
+if [ -z "$GATED_TR_APPROVAL_ID" ]; then
+  echo "ERROR: no pending task_transition approval filed for $GATED_TASK_ID" >&2
+  exit 1
+fi
+
+# No other transition may fire while the gate is open.
+expect_cli_error_status 409 transition-task --task-id "$GATED_TASK_ID" --transition publish
+echo "Gate blocks concurrent transitions: OK (409 as expected)"
+
+# Approving fires the gated transition; the task moves and closes.
+$SOAT_CLI approve-approval --approval-id "$GATED_TR_APPROVAL_ID" >/dev/null
+GATED_FINAL=$($SOAT_CLI get-task --task-id "$GATED_TASK_ID")
+GATED_FINAL_STATE=$(printf '%s\n' "$GATED_FINAL" | jq -r '.state')
+GATED_FINAL_PENDING=$(printf '%s\n' "$GATED_FINAL" | jq -r '.pending_transition')
+if [ "$GATED_FINAL_STATE" != "published" ] || [ "$GATED_FINAL_PENDING" != "null" ]; then
+  echo "ERROR: after approval expected state=published pending=null, got state='$GATED_FINAL_STATE' pending='$GATED_FINAL_PENDING'" >&2
+  exit 1
+fi
+echo "Approval-gated transition: OK (approved -> published, gate cleared)"
+
+$SOAT_CLI delete-task --task-id "$GATED_TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$GATED_WF_ID" >/dev/null
+
 # Delete is blocked while an open task exists, then succeeds once it is gone.
 OPEN_TASK_ID=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \

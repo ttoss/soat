@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import { evaluateLogic } from './jsonLogicMapping';
 import {
   type ActiveDispatch,
+  computeStallDeadline,
   dispatchOnEnter,
   emitTaskEvent,
   findTaskInstance,
@@ -13,6 +14,7 @@ import {
   type TaskActor,
   type TaskInstance,
 } from './tasks';
+import { parkTransitionForApproval } from './tasksApprovalGate';
 import {
   findValidTransition,
   type WorkflowState,
@@ -87,6 +89,48 @@ type TransitionArgs = {
   runId?: string | null;
 };
 
+// Validates the just-locked task against the requested transition: not closed,
+// not fenced behind a pending approval gate (unless this is the `approval`
+// resolution), the transition is valid from the committed state, and its guard
+// passes. Returns the resolved transition or throws.
+const resolveLockedTransition = (args: {
+  task: TaskInstance;
+  transitionArgs: TransitionArgs;
+  transitions: WorkflowTransition[];
+}): WorkflowTransition => {
+  const { task, transitionArgs: a, transitions } = args;
+  if (task.status === 'closed') {
+    throw new DomainError(
+      'TASK_TRANSITION_CONFLICT',
+      `Task '${a.id}' is closed and can no longer transition.`
+    );
+  }
+  // While a transition is parked awaiting approval the task is a true park: no
+  // principal may move it out from under the pending gate. Only the `approval`
+  // actor (the resolution firing the gated transition) passes.
+  if (task.pendingTransition && a.actor.kind !== 'approval') {
+    throw new DomainError(
+      'TASK_TRANSITION_CONFLICT',
+      `Task '${a.id}' has transition '${task.pendingTransition}' pending approval.`,
+      { pendingTransition: task.pendingTransition }
+    );
+  }
+  const transition = findValidTransition({
+    transitions,
+    name: a.transition,
+    fromState: task.state,
+  });
+  if (!transition) {
+    throw new DomainError(
+      'TASK_TRANSITION_CONFLICT',
+      `Transition '${a.transition}' is not valid from state '${task.state}'.`,
+      { transition: a.transition, fromState: task.state }
+    );
+  }
+  evaluateGuard({ transition, task, actor: a.actor });
+  return transition;
+};
+
 // Runs the atomic state change under a row lock: re-reads the committed state,
 // re-validates the transition against it, evaluates the guard, applies the move,
 // and appends the history record. Returns what the post-commit steps need.
@@ -107,40 +151,32 @@ const performTransitionTxn = async (args: {
       lock: t.LOCK.UPDATE,
     })) as TaskInstance;
 
-    if (task.status === 'closed') {
-      throw new DomainError(
-        'TASK_TRANSITION_CONFLICT',
-        `Task '${a.id}' is closed and can no longer transition.`
-      );
-    }
+    const transition = resolveLockedTransition({
+      task,
+      transitionArgs: a,
+      transitions,
+    });
 
     const fromState = task.state;
-    const transition = findValidTransition({
-      transitions,
-      name: a.transition,
-      fromState,
-    });
-    if (!transition) {
-      throw new DomainError(
-        'TASK_TRANSITION_CONFLICT',
-        `Transition '${a.transition}' is not valid from state '${fromState}'.`,
-        { transition: a.transition, fromState }
-      );
-    }
-
-    evaluateGuard({ transition, task, actor: a.actor });
-
     const previousDispatch = task.activeDispatch as ActiveDispatch | null;
-    const closed =
-      stateByName({ states, name: transition.to })?.terminal === true;
-
+    const toStateDef = stateByName({ states, name: transition.to });
+    const closed = toStateDef?.terminal === true;
+    const enteredStateAt = new Date();
     task.state = transition.to;
     task.status = closed ? 'closed' : 'open';
-    task.enteredStateAt = new Date();
+    task.enteredStateAt = enteredStateAt;
     // Entering a new state clears the prior dispatch provenance; the new state's
     // on_enter (if any) sets it again.
     task.activeDispatch = null;
     task.automationStatus = null;
+    // The gate (if any) is discharged by this move; clear it. Re-arm the stall
+    // sweeper for the new state.
+    task.pendingTransition = null;
+    task.pendingApprovalId = null;
+    task.stallDeadlineAt =
+      closed || !toStateDef
+        ? null
+        : computeStallDeadline({ state: toStateDef, enteredStateAt });
     await task.save({ transaction: t });
 
     await db.TaskTransition.create(
@@ -187,16 +223,28 @@ export const transitionTask = async (args: TransitionArgs) => {
   const projectId = loaded.projectId as number;
 
   // The transition must exist in the definition at all (else 400 NOT_FOUND).
-  if (
-    !transitions.some((t) => {
-      return t.name === args.transition;
-    })
-  ) {
+  const definition = transitions.find((t) => {
+    return t.name === args.transition;
+  });
+  if (!definition) {
     throw new DomainError(
       'TASK_TRANSITION_NOT_FOUND',
       `Transition '${args.transition}' does not exist in this workflow.`,
       { transition: args.transition }
     );
+  }
+
+  // Approval-gated: a `requires_approval` transition fired by anyone other than
+  // the `approval` actor (the resolution itself) parks as an ApprovalItem
+  // instead of applying. The gated move is re-fired here as the `approval` actor
+  // when the item resolves, so guards are re-evaluated against the committed
+  // state at resolution time (§6.5).
+  if (definition.requiresApproval === true && args.actor.kind !== 'approval') {
+    return parkTransitionForApproval({
+      task: loaded,
+      transition: definition,
+      note: args.note ?? null,
+    });
   }
 
   const result = await performTransitionTxn({

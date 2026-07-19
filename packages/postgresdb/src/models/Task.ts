@@ -24,8 +24,13 @@ import { Workflow } from './Workflow';
   indexes: [
     // Board queries: columns of a workflow filtered by state/status.
     { fields: ['project_id', 'workflow_id', 'state', 'status'] },
-    // Stall sweeper (Phase 3): parked tasks past their threshold.
+    // Board queries and stall-episode reasoning by how long a task has parked.
     { fields: ['project_id', 'status', 'entered_state_at'] },
+    // Stall sweeper (Phase 3): the precise due-set query. `stall_deadline_at` is
+    // the precomputed `entered_state_at + stalled_after` for the current state
+    // (null when the state defines no threshold or the stall was already
+    // emitted this episode), so the sweeper selects only genuinely-due tasks.
+    { fields: ['status', 'stall_deadline_at'] },
   ],
   hooks: {
     beforeValidate: (instance: Task) => {
@@ -109,6 +114,25 @@ export class Task extends Model {
   // Basis for `stalled_after`; reset on every state entry.
   @Column({ type: DataType.DATE, allowNull: false })
   declare enteredStateAt: Date;
+
+  // Phase 3 approval-gated transitions. While a transition declaring
+  // `requires_approval` is parked awaiting an ApprovalItem, the task exposes the
+  // pending transition name here; `pendingApprovalId` links the gating item so
+  // resolution can clear exactly the gate it resolved. Both are cleared when the
+  // task next transitions (approval approved) or the approval is rejected/expired.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare pendingTransition: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare pendingApprovalId: string | null;
+
+  // Phase 3 stall sweeper. Precomputed `entered_state_at + stalled_after` for the
+  // current state, or null when the state declares no `stalled_after` or the
+  // stall was already emitted this episode. The sweeper claims a due row by
+  // nulling this, so `tasks.stalled` fires exactly once per episode; the next
+  // transition re-arms it.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare stallDeadlineAt: Date | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

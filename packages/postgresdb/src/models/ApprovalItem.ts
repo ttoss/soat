@@ -62,11 +62,11 @@ export class ApprovalItem extends Model {
   // How the item was produced. Analytics/filtering only — the lifecycle,
   // expiry, and decision shape never branch on this.
   @Column({
-    type: DataType.ENUM('node', 'tool_call'),
+    type: DataType.ENUM('node', 'tool_call', 'task_transition'),
     allowNull: false,
     defaultValue: 'node',
   })
-  declare origin: 'node' | 'tool_call';
+  declare origin: 'node' | 'tool_call' | 'task_transition';
 
   @Column({
     type: DataType.ENUM('pending', 'approved', 'rejected', 'expired'),
@@ -77,13 +77,15 @@ export class ApprovalItem extends Model {
 
   // Frozen at emit time: `{ toolId, arguments }`. Tool-call items also freeze
   // the resolved `action` (the soat/mcp action name) so the platform can execute
-  // the exact proposed call at resolution time.
-  @Column({ type: DataType.JSONB, allowNull: false })
+  // the exact proposed call at resolution time. Null for producers whose proposal
+  // is not a tool call (a `task_transition` item gates a workflow transition,
+  // named by `taskTransition`, not a tool).
+  @Column({ type: DataType.JSONB, allowNull: true })
   declare proposedAction: {
     toolId: string;
     action?: string;
     arguments: object;
-  };
+  } | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare reasoning: string | null;
@@ -132,6 +134,15 @@ export class ApprovalItem extends Model {
   // Proposing agent's public id (informational).
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare agentId: string | null;
+
+  // Set on `task_transition` items (Phase 3): the gated task's public id and the
+  // transition name to fire on approval. Resolution re-fires it through
+  // `transitionTask` as the `approval` actor.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare taskId: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare taskTransition: string | null;
 
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare knowledgeVersion: string | null;

@@ -90,7 +90,7 @@ application-side state.
 | `terminal`      | boolean         | Entering a terminal state closes the task (`status: closed`)        |
 | `kind`          | string \| null  | `human` marks a parking state that never dispatches                 |
 | `on_enter`      | object \| null  | Automation fired when a task enters this state (see below)          |
-| `stalled_after` | integer \| null | _Reserved:_ seconds parked before a `tasks.stalled` event (Phase 3) |
+| `stalled_after` | integer \| null | Seconds a task may sit in this state before a `tasks.stalled` event fires (positive integer, or null to never stall). See [Stall detection](#stall-detection). |
 
 #### Transition
 
@@ -100,7 +100,7 @@ application-side state.
 | `from`              | string[]       | Source states this transition is valid from                       |
 | `to`                | string         | The single destination state                                      |
 | `guard`             | object \| null | [JSON Logic](https://jsonlogic.com) over `{task, transition, actor}`; a false result rejects the move with `TASK_GUARD_REJECTED` |
-| `requires_approval` | boolean        | _Reserved (Phase 3):_ not enforced yet — `true` is rejected at validation with `WORKFLOW_VALIDATION_FAILED` |
+| `requires_approval` | boolean        | Gate the move behind a human approval. Firing it parks a pending approval instead of transitioning. See [Approval-gated transitions](#approval-gated-transitions). |
 
 A transition not defined here **cannot be fired by anyone** — there is no
 free-move escape hatch. Define an explicit any-state transition (listing every
@@ -120,6 +120,7 @@ state in `from`) if a workflow needs one.
 | `assignee`          | string \| null   | Informational in v1 (user/actor public ID)                              |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any          |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
+| `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
 | `updated_at`        | string           | ISO 8601 last-updated timestamp                                         |
@@ -224,6 +225,42 @@ task the moment the run is created, so a transition out cancels the live run.
   validated against `payload_schema`. Transitions are the audited contract;
   payload writes are not versioned.
 
+### Approval-gated transitions
+
+A transition with `requires_approval: true` is a **human gate**. Firing it (by a
+user, API key, or automation outcome) does **not** move the task — it parks a
+pending [ApprovalItem](./approvals.md) (`origin: task_transition`, carrying the
+`task_id` and `task_transition`) and returns the task with `pending_transition`
+set. The task stays in its current state, and **no other transition may fire**
+while the gate is open (`TASK_TRANSITION_CONFLICT`, 409). One gate at a time per
+task.
+
+Resolve the gate through the standard [approvals](./approvals.md) endpoints:
+
+- **Approve** → the transition is fired **as the `approval` actor** through the
+  same single transition path. Its guard is **re-evaluated at resolution time**
+  against the committed state, so a gate can be filed before the payload that
+  satisfies its guard is set. If the move is no longer valid then (its guard now
+  rejects it, or a definition change invalidated it), the gate is cleared and a
+  `tasks.approval_failed` event fires carrying the `transition` and `errorCode` —
+  surfaced, never silently dropped.
+- **Reject** → the gate is cleared and a note is appended to the task's history
+  (`actor_kind: approval`, `transition: null`). The task never moved.
+- **Expire** → the approvals module's server-side expiry sweeper flips the item
+  to `expired`; the gate is cleared and an expiry note is appended to history.
+
+The gated move, when it applies, is recorded in history as the `approval` actor.
+
+### Stall detection
+
+A state may declare `stalled_after` (seconds). A background sweeper (the same
+cadence as the orchestration scheduler) emits a `tasks.stalled` webhook event
+when an **open** task has sat in that state longer than the threshold. It is an
+**event, not a transition** — the task does not move; routing on a stall stays
+the author's choice via a webhook or trigger. The event fires **once per stall
+episode** and is **re-armed on the next transition**: entering any state (with or
+without a `stalled_after`) resets the timer for the new state.
+
 ## Error Codes
 
 | Code                       | Status | When                                                            |
@@ -246,6 +283,8 @@ task the moment the run is created, so a transition out cancels the live run.
 | `tasks.closed`               | A task enters a terminal state                           |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) |
+| `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) |
+| `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) |
 
 ## Related Tutorials
 
@@ -350,6 +389,63 @@ TASK_ID=$(curl -s -X POST "$SOAT_URL/api/v1/tasks" \
 curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/transitions" \
   -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"transition":"to_review","note":"ready for review"}'
+```
+
+</TabItem>
+</Tabs>
+
+### Fire an approval-gated transition
+
+Firing a `requires_approval` transition parks a pending approval; approving it
+applies the move. See [Approvals](./approvals.md) for the resolution endpoints.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+# Parks instead of moving: the task now shows pending_transition.
+soat transition-task --task-id "$TASK_ID" --transition publish
+
+APPROVAL_ID=$(soat list-approvals --project-id "$PROJECT_ID" --status pending \
+  | jq -r --arg t "$TASK_ID" '.[] | select(.task_id == $t) | .id' | head -n1)
+
+# Approving fires the gated transition as the `approval` actor.
+soat approve-approval --approval-id "$APPROVAL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// Parks instead of moving: parked.pending_transition === 'publish'.
+const { data: parked } = await soat.tasks.transitionTask({
+  path: { task_id: TASK_ID },
+  body: { transition: 'publish' },
+});
+
+const { data: pending } = await soat.approvals.listApprovals({
+  query: { project_id: PROJECT_ID, status: 'pending' },
+});
+const gate = pending.find((a) => a.task_id === TASK_ID)!;
+
+// Approving fires the gated transition as the `approval` actor.
+await soat.approvals.approveApproval({ path: { approval_id: gate.id } });
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/transitions" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"transition":"publish"}'
+
+APPROVAL_ID=$(curl -s "$SOAT_URL/api/v1/approvals?project_id=$PROJECT_ID&status=pending" \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq -r --arg t "$TASK_ID" '.[] | select(.task_id == $t) | .id' | head -n1)
+
+curl -s -X POST "$SOAT_URL/api/v1/approvals/$APPROVAL_ID/approve" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{}'
 ```
 
 </TabItem>

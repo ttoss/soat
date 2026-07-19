@@ -11,6 +11,7 @@ import {
 } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
+import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { createFirstAdminUser } from './lib/users';
 
@@ -37,6 +38,9 @@ const startServer = async () => {
     // Start the trigger scheduler so due schedule triggers fire (including
     // occurrences whose next_fire_at elapsed while the server was down).
     startTriggerScheduler();
+    // Start the task stall sweeper so tasks parked past their `stalled_after`
+    // threshold emit `tasks.stalled` (once per episode, re-armed on transition).
+    startTasksScheduler();
   } catch (error) {
     // This is a fatal, process-terminating failure, so print to stderr
     // unconditionally rather than via the opt-in `debug` logger — otherwise the

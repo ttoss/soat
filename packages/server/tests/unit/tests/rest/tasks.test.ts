@@ -1,8 +1,11 @@
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
+import { expireDueApprovals } from 'src/lib/approvalScheduler';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
+import { sweepStalledTasks } from 'src/lib/tasksScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -44,6 +47,30 @@ const pollTask = async (args: {
   throw new Error(`pollTask: predicate never held for ${args.taskId}`);
 };
 
+type HistoryRow = {
+  actor_kind: string;
+  transition: string | null;
+  note: string | null;
+};
+
+/** Polls a task's history until `predicate` holds or the budget is exhausted. */
+const pollHistory = async (args: {
+  token: string;
+  taskId: string;
+  predicate: (rows: HistoryRow[]) => boolean;
+}): Promise<HistoryRow[]> => {
+  for (let i = 0; i < 100; i += 1) {
+    const res = await authenticatedTestClient(args.token).get(
+      `/api/v1/tasks/${args.taskId}/history`
+    );
+    if (res.status === 200 && args.predicate(res.body)) return res.body;
+    await new Promise((resolve) => {
+      setTimeout(resolve, 20);
+    });
+  }
+  throw new Error(`pollHistory: predicate never held for ${args.taskId}`);
+};
+
 describe('Tasks', () => {
   let adminToken: string;
   let userToken: string;
@@ -63,6 +90,9 @@ describe('Tasks', () => {
         'tasks:UpdateTask',
         'tasks:TransitionTask',
         'tasks:DeleteTask',
+        'approvals:ListApprovals',
+        'approvals:GetApproval',
+        'approvals:ResolveApproval',
         'ai-providers:CreateAiProvider',
         'agents:CreateAgent',
         'orchestrations:CreateOrchestration',
@@ -1184,6 +1214,406 @@ describe('Tasks', () => {
       expect(review.state).toBe('review');
       expect(review.automation_status).toBeNull();
       expect(review.active_dispatch).toBeNull();
+    });
+  });
+
+  // ── Approval-gated transitions (Phase 3) ────────────────────────────────────
+  describe('approval-gated transitions', () => {
+    let gatedWorkflowId: string;
+
+    beforeAll(async () => {
+      gatedWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `gated-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'review', initial: true, kind: 'human' },
+              { name: 'draft', kind: 'human' },
+              { name: 'published', terminal: true },
+            ],
+            transitions: [
+              // A non-gated escape from review so a task can reach a state where
+              // the gated transitions are invalid (exercises the from-state check).
+              { name: 'to_draft', from: ['review'], to: 'draft' },
+              {
+                name: 'publish',
+                from: ['review'],
+                to: 'published',
+                requires_approval: true,
+              },
+              {
+                name: 'publish_guarded',
+                from: ['review'],
+                to: 'published',
+                requires_approval: true,
+                guard: { '==': [{ var: 'task.payload.approved' }, true] },
+              },
+            ],
+          })
+      ).body.id;
+    });
+
+    const startGatedTask = async (): Promise<string> => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: gatedWorkflowId,
+          title: 'gated card',
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.state).toBe('review');
+      return res.body.id;
+    };
+
+    const pendingApprovalFor = async (taskId: string) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&status=pending`
+      );
+      expect(res.status).toBe(200);
+      return res.body.find((a: { task_id: string }) => {
+        return a.task_id === taskId;
+      });
+    };
+
+    test('firing a requires_approval transition parks instead of moving', async () => {
+      const taskId = await startGatedTask();
+
+      // Include a note — it is carried into the approval's reasoning.
+      const parked = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${taskId}/transitions`)
+        .send({ transition: 'publish', note: 'please review the copy' });
+      expect(parked.status).toBe(200);
+      // The task did not move; it exposes the pending transition.
+      expect(parked.body.state).toBe('review');
+      expect(parked.body.status).toBe('open');
+      expect(parked.body.pending_transition).toBe('publish');
+
+      // The approval item is filed with task-transition provenance.
+      const approval = await pendingApprovalFor(taskId);
+      expect(approval).toBeDefined();
+      expect(approval.origin).toBe('task_transition');
+      expect(approval.task_id).toBe(taskId);
+      expect(approval.task_transition).toBe('publish');
+      expect(approval.proposed_action).toBeNull();
+
+      // No other transition may fire while the gate is open.
+      const blocked = await transition(taskId, 'publish');
+      expect(blocked.status).toBe(409);
+      expect(blocked.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+    });
+
+    test('approving fires the gated transition as the approval actor', async () => {
+      const taskId = await startGatedTask();
+      await transition(taskId, 'publish');
+      const approval = await pendingApprovalFor(taskId);
+
+      const approved = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/approve`)
+        .send({});
+      expect(approved.status).toBe(200);
+      expect(approved.body.status).toBe('approved');
+
+      // The task moved to the terminal state and the gate cleared.
+      const after = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      expect(after.state).toBe('published');
+      expect(after.status).toBe('closed');
+      expect(after.pending_transition).toBeNull();
+
+      // The move is audited as the `approval` actor.
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const move = history.find((h: { transition: string }) => {
+        return h.transition === 'publish';
+      });
+      expect(move.actor_kind).toBe('approval');
+      expect(move.to_state).toBe('published');
+    });
+
+    test('rejecting clears the gate and appends a history note', async () => {
+      const taskId = await startGatedTask();
+      await transition(taskId, 'publish');
+      const approval = await pendingApprovalFor(taskId);
+
+      const rejected = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/reject`)
+        .send({ reason: 'not ready' });
+      expect(rejected.status).toBe(200);
+      expect(rejected.body.status).toBe('rejected');
+
+      const after = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      // The task never moved and the gate is cleared, so it can transition again.
+      expect(after.state).toBe('review');
+      expect(after.pending_transition).toBeNull();
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const note = history[history.length - 1];
+      expect(note.actor_kind).toBe('approval');
+      expect(note.transition).toBeNull();
+      expect(note.note).toMatch(/rejected/i);
+    });
+
+    test('expiry clears the gate and records an expiry note', async () => {
+      const taskId = await startGatedTask();
+      await transition(taskId, 'publish');
+      const approval = await pendingApprovalFor(taskId);
+
+      // Force the item due, then run the approvals expiry sweeper (server-side
+      // enforcement) — the task-transition resume handler clears the gate. The
+      // sweeper dispatches its handler detached, so poll for the side effect.
+      await db.ApprovalItem.update(
+        { expiresAt: new Date(Date.now() - 1000) },
+        { where: { publicId: approval.id } }
+      );
+      const claimed = await expireDueApprovals();
+      expect(claimed).toBeGreaterThanOrEqual(1);
+
+      const after = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.pending_transition === null;
+        },
+      });
+      expect(after.state).toBe('review');
+
+      const rows = await pollHistory({
+        token: userToken,
+        taskId,
+        predicate: (h) => {
+          return h.some((r) => {
+            return r.actor_kind === 'approval' && /expired/i.test(r.note ?? '');
+          });
+        },
+      });
+      expect(rows.length).toBeGreaterThan(0);
+    });
+
+    test('a guard invalid at resolution time is surfaced, not silently dropped', async () => {
+      const events: SoatEvent[] = [];
+      const handler = (e: SoatEvent) => {
+        events.push(e);
+      };
+      eventBus.on('soat:event', handler);
+      try {
+        const taskId = await startGatedTask();
+        // Park the guarded transition without satisfying its guard.
+        await transition(taskId, 'publish_guarded');
+        const approval = await pendingApprovalFor(taskId);
+
+        const approved = await authenticatedTestClient(userToken)
+          .post(`/api/v1/approvals/${approval.id}/approve`)
+          .send({});
+        expect(approved.status).toBe(200);
+
+        const after = (
+          await authenticatedTestClient(userToken).get(
+            `/api/v1/tasks/${taskId}`
+          )
+        ).body;
+        // The transition did not apply (guard false), but the gate is cleared so
+        // the task is not stuck against a resolved approval.
+        expect(after.state).toBe('review');
+        expect(after.pending_transition).toBeNull();
+
+        // The failure surfaced as an event carrying the transition and code.
+        const failed = events.find((e) => {
+          return e.type === 'tasks.approval_failed' && e.resourceId === taskId;
+        });
+        expect(failed).toBeDefined();
+        expect(failed!.data.transition).toBe('publish_guarded');
+        expect(failed!.data.errorCode).toBe('TASK_GUARD_REJECTED');
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
+    });
+
+    test('a gated guard satisfied before approval applies the move', async () => {
+      const taskId = await startGatedTask();
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tasks/${taskId}`)
+        .send({ payload: { approved: true } });
+      await transition(taskId, 'publish_guarded');
+      const approval = await pendingApprovalFor(taskId);
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/approve`)
+        .send({});
+
+      const after = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      expect(after.state).toBe('published');
+      expect(after.status).toBe('closed');
+    });
+
+    test('parking a gated transition invalid from the current state is 409', async () => {
+      const taskId = await startGatedTask();
+      // Leave review via a non-gated move; `publish` is no longer valid from here.
+      await transition(taskId, 'to_draft');
+      const res = await transition(taskId, 'publish');
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+
+      // No approval was filed, and the task carries no pending gate.
+      const after = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      expect(after.pending_transition).toBeNull();
+    });
+
+    test('parking a gated transition on a closed task is 409', async () => {
+      const taskId = await startGatedTask();
+      await transition(taskId, 'publish');
+      const approval = await pendingApprovalFor(taskId);
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/approve`)
+        .send({});
+      // The task is now closed (published). A gated transition is rejected.
+      const res = await transition(taskId, 'publish');
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+    });
+
+    test('403 firing a gated transition without permission', async () => {
+      const taskId = await startGatedTask();
+      const res = await transition(taskId, 'publish', noPermToken);
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── Stall/SLA sweeper (Phase 3) ─────────────────────────────────────────────
+  describe('stall sweeper', () => {
+    let stallWorkflowId: string;
+
+    beforeAll(async () => {
+      stallWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `stall-${Math.random().toString(36).slice(2)}`,
+            states: [
+              {
+                name: 'waiting',
+                initial: true,
+                kind: 'human',
+                stalled_after: 60,
+              },
+              { name: 'moving', kind: 'human', stalled_after: 60 },
+              { name: 'closed_state', terminal: true },
+            ],
+            transitions: [
+              { name: 'advance', from: ['waiting'], to: 'moving' },
+              { name: 'finish', from: ['moving'], to: 'closed_state' },
+            ],
+          })
+      ).body.id;
+    });
+
+    const startStallTask = async (): Promise<string> => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: stallWorkflowId,
+          title: 'stall card',
+        });
+      expect(res.status).toBe(201);
+      return res.body.id;
+    };
+
+    const stallDeadline = async (taskId: string): Promise<Date | null> => {
+      const row = await db.Task.findOne({ where: { publicId: taskId } });
+      return (row!.stallDeadlineAt as Date | null) ?? null;
+    };
+
+    // The sweeper dispatches `handle` (which emits the event) detached, so
+    // collect stall events for a task and poll until the expected count lands.
+    const waitForStallEvents = async (args: {
+      events: SoatEvent[];
+      taskId: string;
+      count: number;
+    }): Promise<SoatEvent[]> => {
+      for (let i = 0; i < 100; i += 1) {
+        const mine = args.events.filter((e) => {
+          return e.resourceId === args.taskId;
+        });
+        if (mine.length >= args.count) return mine;
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
+      throw new Error(`waitForStallEvents: never reached ${args.count}`);
+    };
+
+    test('emits tasks.stalled once per episode and re-arms on the next transition', async () => {
+      const events: SoatEvent[] = [];
+      const handler = (e: SoatEvent) => {
+        if (e.type === 'tasks.stalled') events.push(e);
+      };
+      eventBus.on('soat:event', handler);
+      try {
+        const taskId = await startStallTask();
+        // The deadline is armed on state entry.
+        expect(await stallDeadline(taskId)).not.toBeNull();
+
+        // Sweep with a clock past the threshold: the task stalls.
+        await sweepStalledTasks({ now: new Date(Date.now() + 120_000) });
+
+        const [first] = await waitForStallEvents({ events, taskId, count: 1 });
+        expect(first.data.state).toBe('waiting');
+
+        // The episode is spent — the deadline is disarmed, so a second sweep at
+        // the same clock cannot re-claim the task (once per episode).
+        expect(await stallDeadline(taskId)).toBeNull();
+        await sweepStalledTasks({ now: new Date(Date.now() + 120_000) });
+
+        // The next transition re-arms the deadline for the new state.
+        await transition(taskId, 'advance');
+        expect(await stallDeadline(taskId)).not.toBeNull();
+
+        await sweepStalledTasks({ now: new Date(Date.now() + 120_000) });
+        const both = await waitForStallEvents({ events, taskId, count: 2 });
+        expect(both).toHaveLength(2);
+        expect(both[1].data.state).toBe('moving');
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
+    });
+
+    test('a state without stalled_after never arms the sweeper', async () => {
+      const wf = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `nostall-${Math.random().toString(36).slice(2)}`,
+            states: [{ name: 'idle', initial: true, kind: 'human' }],
+            transitions: [],
+          })
+      ).body.id;
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: wf,
+          title: 'no stall',
+        })
+      ).body.id;
+      expect(await stallDeadline(taskId)).toBeNull();
     });
   });
 });
