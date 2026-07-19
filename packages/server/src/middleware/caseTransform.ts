@@ -114,6 +114,21 @@ const isWorkflowsPath = (path: string): boolean => {
   return path === '/api/v1/workflows' || path.startsWith('/api/v1/workflows/');
 };
 
+// A guardrail's `document` is a JSON Logic-bearing action-class bag: its keys
+// are the contract fields `default_class` (two-word snake), `class`, `guard`,
+// `escalate`, plus author-authored JSON Logic operators/vars. Case-transforming
+// it would rewrite `default_class` → `defaultClass`, which the validator then
+// rejects as an unknown field, and would mangle any snake_case `context.*` /
+// `args.*` var the caller wrote. So `document` rounds-trips verbatim on the
+// guardrails routes, exactly like a workflow `guard`. Scoped to this path so the
+// IAM policies module's own `document` (single-word keys, a no-op either way) is
+// untouched.
+const isGuardrailsPath = (path: string): boolean => {
+  return (
+    path === '/api/v1/guardrails' || path.startsWith('/api/v1/guardrails/')
+  );
+};
+
 // A `requires_action` generation returns the pending tool calls the caller must
 // execute, each carrying an `args` object. For a client tool those keys mirror
 // the caller-authored `parameters` JSON Schema (which is itself a `parameters`
@@ -190,6 +205,7 @@ const buildBodySkipKeys = (path: string): Set<string> => {
   if (isToolInputPassthroughPath(path)) keys.add('input');
   if (isTasksPath(path)) keys.add('payload');
   if (isWorkflowsPath(path)) keys.add('payloadSchema');
+  if (isGuardrailsPath(path)) keys.add('document');
   return keys;
 };
 
@@ -235,6 +251,7 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
   if (isToolCallArgsPassthroughPath(path)) keys.add('args');
   if (isTasksPath(path)) keys.add('payload');
   if (isWorkflowsPath(path)) keys.add('payload_schema');
+  if (isGuardrailsPath(path)) keys.add('document');
   return keys;
 };
 
