@@ -213,6 +213,7 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     activeToolIds: toOptional(
       toNullableArray<string>(properties.active_tool_ids)
     ),
+    guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
     stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
     boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
     temperature: toOptional(toNullableNumber(properties.temperature)),
@@ -288,6 +289,7 @@ export const agentsFormationModule: FormationModule = {
       toolChoice: toNullableStringOrObject(properties.tool_choice),
       stopConditions: toNullableArray<object>(properties.stop_conditions),
       activeToolIds: toNullableArray<string>(properties.active_tool_ids),
+      guardrailIds: toNullableArray<string>(properties.guardrail_ids),
       stepRules: toNullableArray<object>(properties.step_rules),
       boundaryPolicy: toNullableObject(properties.boundary_policy),
       temperature: toNullableNumber(properties.temperature),
@@ -320,6 +322,7 @@ export const agentsFormationModule: FormationModule = {
         tool_choice: agent.toolChoice,
         stop_conditions: agent.stopConditions,
         active_tool_ids: agent.activeToolIds,
+        guardrail_ids: agent.guardrailIds,
         step_rules: agent.stepRules,
         boundary_policy: agent.boundaryPolicy,
         temperature: agent.temperature,

@@ -9,6 +9,11 @@ import {
   updateProject,
 } from 'src/lib/projects';
 
+import {
+  assertGuardrailDetachAllowed,
+  parseGuardrailIds,
+} from './guardrailAttach';
+
 const projectsRouter = new Router<Context>();
 
 type ProjectPriceBody = {
@@ -119,15 +124,34 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     return;
   }
 
-  const { name } = ctx.request.body as { name?: string };
+  const body = ctx.request.body as Record<string, unknown>;
+  const name = typeof body.name === 'string' ? body.name : undefined;
+  const guardrailIds = parseGuardrailIds(body.guardrailIds);
 
-  if (!name || typeof name !== 'string') {
+  if (name === undefined && guardrailIds === undefined) {
     ctx.status = 400;
-    ctx.body = { error: 'name is required' };
+    ctx.body = { error: 'name or guardrail_ids is required' };
     return;
   }
 
-  const project = await updateProject({ id: ctx.params.project_id, name });
+  if (guardrailIds !== undefined) {
+    const current = await getProject({
+      id: ctx.params.project_id,
+      authUser: ctx.authUser,
+    });
+    await assertGuardrailDetachAllowed({
+      ctx,
+      projectPublicId: current.id,
+      current: current.guardrailIds,
+      next: guardrailIds,
+    });
+  }
+
+  const project = await updateProject({
+    id: ctx.params.project_id,
+    name,
+    guardrailIds,
+  });
 
   ctx.body = project;
 });

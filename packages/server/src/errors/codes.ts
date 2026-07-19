@@ -409,6 +409,16 @@ export const ERROR_CODES = {
     description:
       'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
   },
+  GUARDRAIL_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      'A guardrail referenced by a `guardrail_ids` attachment does not exist in the project.',
+  },
+  GUARDRAIL_HAS_REFERENCES: {
+    httpStatus: 409,
+    description:
+      'The guardrail is still attached to one or more tools, agents, or projects (`guardrail_ids`) and cannot be deleted. Detach every reference first (requires guardrails:DetachGuardrail). The error meta lists the referencing resources by scope.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

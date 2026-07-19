@@ -528,6 +528,15 @@ components:
           items:
             type: string
           description: Subset of toolIds active per step
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Guardrails attached at the agent scope, governing every tool call
+            the agent makes.
         step_rules:
           type: array
           nullable: true
@@ -740,6 +749,13 @@ components:
           type: array
           items:
             type: string
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the agent scope.
         step_rules:
           type: array
           items:
@@ -874,6 +890,13 @@ components:
           nullable: true
           items:
             type: string
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the agent scope.
         step_rules:
           type: array
           nullable: true

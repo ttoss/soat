@@ -75,6 +75,12 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare outputMapping: object | null;
 
+  // Public IDs of guardrails attached at the tool scope. A guardrail here
+  // governs this tool wherever it is used, by any agent (guardrails.md —
+  // Attachment).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare guardrailIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

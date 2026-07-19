@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertGuardrailsExist } from './guardrails';
 import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
@@ -78,6 +79,7 @@ export type MappedTool = {
   pipeline: object | null;
   discussionId: string | null;
   outputMapping: object | null;
+  guardrailIds: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -110,6 +112,7 @@ const mapTool = (
       (tool.discussion as { discussionId?: string } | null)?.discussionId ??
       null,
     outputMapping: tool.outputMapping,
+    guardrailIds: tool.guardrailIds,
     createdAt: tool.createdAt,
     updatedAt: tool.updatedAt,
   };
@@ -117,7 +120,10 @@ const mapTool = (
 
 // ── CRUD ──────────────────────────────────────────────────────────────────
 
-export type CreateToolArgs = InlineToolDefinition & { projectId: number };
+export type CreateToolArgs = InlineToolDefinition & {
+  projectId: number;
+  guardrailIds?: string[] | null;
+};
 
 const nullify = <T>(value: T | undefined): T | null => {
   return value ?? null;
@@ -135,6 +141,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     pipeline: nullify(args.pipeline),
     discussion: args.discussionId ? { discussionId: args.discussionId } : null,
     outputMapping: nullify(args.outputMapping),
+    guardrailIds: nullify(args.guardrailIds),
   };
 };
 
@@ -239,6 +246,10 @@ export const validateToolDefinition = async (args: {
 
 export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
   await validateToolDefinition({ definition: args, projectId: args.projectId });
+  await assertGuardrailsExist({
+    guardrailIds: args.guardrailIds,
+    projectId: args.projectId,
+  });
 
   const tool = await db.Tool.create(buildToolCreateAttributes(args));
 
@@ -310,6 +321,7 @@ const buildToolUpdates = (args: {
   pipeline?: object | null;
   discussionId?: string | null;
   outputMapping?: object | null;
+  guardrailIds?: string[] | null;
 }): Record<string, unknown> => {
   const updates: Record<string, unknown> = {};
   const scalarFields = [
@@ -324,6 +336,7 @@ const buildToolUpdates = (args: {
     'presetParameters',
     'pipeline',
     'outputMapping',
+    'guardrailIds',
   ] as const;
   for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
@@ -351,6 +364,7 @@ type ToolUpdateArgs = {
   pipeline?: object | null;
   discussionId?: string | null;
   outputMapping?: object | null;
+  guardrailIds?: string[] | null;
 };
 
 /** Runs the per-type validation for an update against the existing tool row. */
@@ -401,6 +415,10 @@ export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
     throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
 
   await validateToolUpdate({ args, tool });
+  await assertGuardrailsExist({
+    guardrailIds: args.guardrailIds,
+    projectId: tool.projectId,
+  });
 
   await tool.update(buildToolUpdates(args));
 

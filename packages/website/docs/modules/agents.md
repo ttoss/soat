@@ -43,6 +43,7 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
 | `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
 | `active_tool_ids`          | array         | Subset of bound tool IDs available at each step — see [Active Tools](#active-tools)                                              |
+| `guardrail_ids`            | array         | Guardrails attached at the agent scope, governing every tool call the agent makes — see [Guardrails — Attachment](./guardrails.md#attachment) |
 | `step_rules`               | array         | Per-step overrides for `tool_choice` and `active_tool_ids` — see [Step Rules](#step-rules)                                       |
 | `boundary_policy`          | object        | Boundary policy that limits which `soat` actions the agent can perform — see [SOAT Action Permissions](#soat-action-permissions) |
 | `temperature`              | number        | Sampling temperature                                                                                                             |

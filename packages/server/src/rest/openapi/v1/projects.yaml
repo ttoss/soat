@@ -114,8 +114,13 @@ paths:
     patch:
       tags:
         - Projects
-      summary: Rename a project
-      description: Updates a project's name. Requires admin role.
+      summary: Update a project
+      description: >-
+        Updates a project's name and/or its attached guardrails
+        (`guardrail_ids` — the project-scope baseline governing every tool call
+        by every agent in the project). Requires admin role. Detaching a
+        guardrail (removing an id) additionally requires
+        guardrails:DetachGuardrail.
       operationId: updateProject
       parameters:
         - name: project_id
@@ -131,12 +136,17 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - name
               properties:
                 name:
                   type: string
                   example: Renamed Project
+                guardrail_ids:
+                  x-soat-ref: guardrails
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+                  description: Guardrails attached at the project scope.
       responses:
         '200':
           description: Project updated successfully
@@ -286,6 +296,16 @@ components:
         name:
           type: string
           example: My Project
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Guardrails attached at the project scope — the baseline governing
+            every tool call by every agent in the project.
+          example: []
         created_at:
           type: string
           format: date-time

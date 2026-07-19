@@ -108,6 +108,12 @@ export class Agent extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare singleSessionPerActor: boolean;
 
+  // Public IDs of guardrails attached at the agent scope. A guardrail here
+  // governs every tool call the agent makes, across all its bindings
+  // (guardrails.md — Attachment).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare guardrailIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

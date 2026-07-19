@@ -550,6 +550,15 @@ components:
             extracts a bare scalar field instead of requiring a wrapping
             `pipeline` tool. For `pipeline` tools this runs *after* the
             pipeline's own `output` mapping, over that mapping's result.
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Guardrails attached at the tool scope, governing this tool wherever
+            it is used, by any agent.
         created_at:
           type: string
           format: date-time
@@ -644,6 +653,13 @@ components:
           description: >-
             Universal JSON Logic mapping applied to the tool's raw result. See
             the `output_mapping` field on the Tool schema for details.
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the tool scope.
 
     UpdateToolRequest:
       type: object
@@ -729,6 +745,13 @@ components:
           description: >-
             Universal JSON Logic mapping applied to the tool's raw result. See
             the `output_mapping` field on the Tool schema for details.
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the tool scope.
 
     CallToolRequest:
       type: object

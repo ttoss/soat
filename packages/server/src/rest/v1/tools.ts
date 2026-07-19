@@ -10,6 +10,11 @@ import {
   updateTool,
 } from 'src/lib/tools';
 
+import {
+  assertGuardrailDetachAllowed,
+  parseGuardrailIds,
+} from './guardrailAttach';
+
 export const toolsRouter = new Router<Context>();
 
 const parseStringOrUndefined = (v: unknown): string | undefined => {
@@ -159,6 +164,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       ? (deniedActions as string[])
       : undefined,
     discussionId,
+    guardrailIds: parseGuardrailIds(body.guardrailIds),
     ...jsonFields,
   });
 
@@ -249,7 +255,10 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline,
     discussionId,
     outputMapping,
+    guardrailIds,
   } = (ctx.request.body ?? {}) as Record<string, unknown>;
+
+  const nextGuardrailIds = parseGuardrailIds(guardrailIds);
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
@@ -268,6 +277,19 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', TOOL_JSON_FIELDS_ERROR);
   }
 
+  // Detaching a guardrail requires guardrails:DetachGuardrail on top of the
+  // tools:UpdateTool that reached this handler. Load the current attachments to
+  // detect a removal before applying the update.
+  if (nextGuardrailIds !== undefined) {
+    const current = await getTool({ projectIds, id: ctx.params.tool_id });
+    await assertGuardrailDetachAllowed({
+      ctx,
+      projectPublicId: current.projectId,
+      current: current.guardrailIds,
+      next: nextGuardrailIds,
+    });
+  }
+
   const result = await updateTool({
     projectIds,
     id: ctx.params.tool_id,
@@ -283,6 +305,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline: parsedPipeline,
     discussionId: parseNullableString(discussionId),
     outputMapping: parsedOutputMapping,
+    guardrailIds: nextGuardrailIds,
   });
 
   ctx.body = result;

@@ -198,6 +198,7 @@ export const toolsFormationModule: FormationModule = {
       pipeline: optional(toNullableObject(properties.pipeline)),
       discussionId: toOptionalString(properties.discussion_id),
       outputMapping: optional(toNullableObject(properties.output_mapping)),
+      guardrailIds: optional(toNullableArray<string>(properties.guardrail_ids)),
     });
 
     log(
@@ -232,6 +233,7 @@ export const toolsFormationModule: FormationModule = {
       pipeline: toNullableObject(properties.pipeline),
       discussionId: toNullableString(properties.discussion_id),
       outputMapping: toNullableObject(properties.output_mapping),
+      guardrailIds: toNullableArray<string>(properties.guardrail_ids),
     });
   },
 
@@ -255,6 +257,7 @@ export const toolsFormationModule: FormationModule = {
         pipeline: tool.pipeline,
         discussion_id: tool.discussionId,
         output_mapping: tool.outputMapping,
+        guardrail_ids: tool.guardrailIds,
       };
     } catch {
       return null;
