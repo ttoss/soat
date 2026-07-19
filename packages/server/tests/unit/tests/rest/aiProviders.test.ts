@@ -386,7 +386,7 @@ describe('AI Providers', () => {
       expect(response.status).toBe(404);
     });
 
-    test('returns 409 when provider has dependent chats', async () => {
+    test('returns 409 with actionable chat IDs when provider has a dependent chat', async () => {
       const providerRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/ai-providers')
         .send({
@@ -397,16 +397,125 @@ describe('AI Providers', () => {
         });
       const aiProviderId = providerRes.body.id;
 
-      await authenticatedTestClient(adminToken)
+      const chatRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const chatId = chatRes.body.id;
 
       const response = await authenticatedTestClient(userToken).delete(
         `/api/v1/ai-providers/${aiProviderId}`
       );
       expect(response.status).toBe(409);
       expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      // Hard reference: force is powerless and the block names the offenders.
       expect(response.body.error.meta.chatCount).toBe(1);
+      expect(response.body.error.meta.chatIds).toContain(chatId);
+      expect(response.body.error.meta.forcible).toBe(false);
+    });
+
+    test('hard reference (agent) blocks deletion even with force=true', async () => {
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Provider With Agent',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      const aiProviderId = providerRes.body.id;
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+      const agentId = agentRes.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .delete(`/api/v1/ai-providers/${aiProviderId}`)
+        .query({ force: 'true' });
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(response.body.error.meta.agentCount).toBe(1);
+      expect(response.body.error.meta.agentIds).toContain(agentId);
+      // force never cascades hard references.
+      expect(response.body.error.meta.forcible).toBe(false);
+
+      // The provider must still exist — the block left it intact.
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/ai-providers/${aiProviderId}`
+      );
+      expect(getRes.status).toBe(200);
+    });
+
+    test('soft dependents (price overrides) block deletion without force', async () => {
+      const providerRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Provider With Overrides',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      const aiProviderId = providerRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${aiProviderId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'gpt-4o',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: '2099-01-01T00:00:00.000Z',
+            },
+          ],
+        });
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/ai-providers/${aiProviderId}`
+      );
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('AI_PROVIDER_HAS_DEPENDENTS');
+      expect(response.body.error.meta.priceOverrideCount).toBe(1);
+      // Only soft dependents block, so force=true would resolve it.
+      expect(response.body.error.meta.forcible).toBe(true);
+    });
+
+    test('force=true deletes a provider with only soft dependents and drops its overrides', async () => {
+      const providerRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Provider Force Delete',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      const aiProviderId = providerRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/ai-providers/${aiProviderId}/prices`)
+        .send({
+          prices: [
+            {
+              model: 'gpt-4o',
+              component: 'input_tokens',
+              unit: 'token',
+              unit_price: 0.000001,
+              effective_from: '2099-01-01T00:00:00.000Z',
+            },
+          ],
+        });
+
+      const response = await authenticatedTestClient(userToken)
+        .delete(`/api/v1/ai-providers/${aiProviderId}`)
+        .query({ force: 'true' });
+      expect(response.status).toBe(204);
+
+      // Provider is gone.
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/ai-providers/${aiProviderId}`
+      );
+      expect(getRes.status).toBe(404);
     });
   });
 

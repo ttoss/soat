@@ -2430,6 +2430,52 @@ if [ "$OVERRIDE_GET_OK" != "true" ]; then
 fi
 echo "Per-provider price override: OK"
 
+# 34d-bis. AI provider deletion policy — soft dependents (price overrides) block
+# a plain delete with 409 but clear under force=true; live references (agents)
+# always block, even with force. Uses throwaway providers so the shared
+# AI_PROVIDER_ID is left intact.
+echo "--- Verifying AI provider deletion policy ---"
+DEL_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-delete-provider \
+  --provider ollama \
+  --default_model "qwen2.5:0.5b" \
+  --base_url "http://ollama:11434")
+DEL_PROVIDER_ID=$(echo "$DEL_PROVIDER_RESP" | jq -r '.id')
+
+# Soft dependent: a price override blocks a plain delete with 409...
+$SOAT_CLI update-ai-provider-prices \
+  --ai_provider_id "$DEL_PROVIDER_ID" \
+  --prices '[{"model":"qwen2.5:0.5b","component":"input_tokens","unit":"token","unit_price":0.000009,"effective_from":"2099-01-01T00:00:00.000Z"}]' \
+  > /dev/null
+expect_cli_error_status 409 delete-ai-provider --ai_provider_id "$DEL_PROVIDER_ID"
+echo "AI provider delete blocked by price override (409): OK"
+
+# ...but force=true drops the override and deletes the provider.
+$SOAT_CLI delete-ai-provider --ai_provider_id "$DEL_PROVIDER_ID" --force true
+expect_cli_error_status 404 get-ai-provider --ai_provider_id "$DEL_PROVIDER_ID"
+echo "AI provider force-delete with soft dependents (deleted + gone): OK"
+
+# Live reference: a brand-new agent blocks deletion even with force=true.
+HARD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-hardref-provider \
+  --provider ollama \
+  --default_model "qwen2.5:0.5b" \
+  --base_url "http://ollama:11434")
+HARD_PROVIDER_ID=$(echo "$HARD_PROVIDER_RESP" | jq -r '.id')
+HARD_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$HARD_PROVIDER_ID" \
+  --name smoke-hardref-agent)
+HARD_AGENT_ID=$(echo "$HARD_AGENT_RESP" | jq -r '.id')
+expect_cli_error_status 409 delete-ai-provider --ai_provider_id "$HARD_PROVIDER_ID" --force true
+echo "AI provider delete blocked by live agent even with force (409): OK"
+# Clean up: remove the agent, then the provider deletes cleanly.
+$SOAT_CLI delete-agent --agent-id "$HARD_AGENT_ID"
+$SOAT_CLI delete-ai-provider --ai_provider_id "$HARD_PROVIDER_ID"
+echo "AI provider deletion policy: OK"
+
 # 34e. Project + provider-slug price — the middle pricing tier
 echo "--- Verifying project + provider-slug price ---"
 PROJECT_PRICE_PUT=$($SOAT_CLI update-project-prices \

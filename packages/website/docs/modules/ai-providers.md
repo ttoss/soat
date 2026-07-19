@@ -98,6 +98,36 @@ A project can price its own provider instances without a global admin. A **per-p
 
 Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates — unlike the global price book, which lists defaults only. The `provider` slug is taken from the AI provider itself (an override matches only when its slug equals the provider's), so you supply just the model, rates, and `effective_from`. `effective_from` must be in the future; past prices are immutable, so ship corrections as new future-dated rows. See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
 
+### Deleting a provider
+
+`DELETE /api/v1/ai-providers/{ai_provider_id}` classifies everything that references the provider into two kinds:
+
+| Dependent | Kind | Behavior |
+|---|---|---|
+| Chats, agents, discussions | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
+| Price overrides | **Soft dependent** | Block with `409` unless `force=true`, which **deletes** the overrides (meaningless without the provider). |
+| Usage/generation records, discussion participants | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them (nulls the provider FK), preserving the row and its as-billed receipt. |
+
+A delete with no dependents (or `force=true` and only soft dependents) returns `204`. On a `409` the response carries `error.code = "AI_PROVIDER_HAS_DEPENDENTS"` and an `error.meta` describing what blocked it:
+
+```json
+{
+  "error": {
+    "code": "AI_PROVIDER_HAS_DEPENDENTS",
+    "message": "AI provider 'aip_01' is in use by 2 chat(s), 1 agent(s) ...",
+    "meta": {
+      "chatCount": 2, "chatIds": ["chat_01", "chat_02"],
+      "agentCount": 1, "agentIds": ["agent_01"],
+      "discussionCount": 0, "discussionIds": [],
+      "priceOverrideCount": 0, "usageEventCount": 0, "discussionParticipantCount": 0,
+      "forcible": false
+    }
+  }
+}
+```
+
+`forcible` is `true` only when the block comes solely from soft dependents — i.e. a `force=true` retry would succeed. The `*Ids` arrays sample up to 20 offending IDs so you can act on them directly; the `*Count` fields always report the true totals.
+
 ## Examples
 
 ### Create an AI provider
