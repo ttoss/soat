@@ -262,7 +262,19 @@ paths:
       tags:
         - AI Providers
       summary: Delete an AI provider
-      description: Deletes an AI provider configuration
+      description: >
+        Deletes an AI provider configuration.
+
+
+        Live references — chats, agents, and discussions that use this provider —
+        always block deletion with `409 AI_PROVIDER_HAS_DEPENDENTS`; `force` does
+        not override them, so delete or repoint those resources first. Soft
+        dependents — price overrides, usage/generation records, and discussion
+        participants — also block with `409` unless `force=true`, which deletes
+        the provider's price overrides and unlinks (nulls) its usage and
+        participant history, preserving those rows. The `409` body's `error.meta`
+        reports the counts, a sample of offending IDs, and a `forcible` flag that
+        is `true` when a `force=true` retry would succeed.
       operationId: deleteAiProvider
       parameters:
         - name: ai_provider_id
@@ -271,8 +283,19 @@ paths:
           description: AI Provider ID
           schema:
             type: string
+        - name: force
+          in: query
+          required: false
+          description: >
+            When `true`, delete the provider's price overrides and unlink its
+            usage/participant history so a provider with only soft dependents can
+            be removed. Has no effect on live references (chats, agents,
+            discussions), which always block deletion.
+          schema:
+            type: boolean
+            default: false
       responses:
-        '200':
+        '204':
           description: AI provider deleted successfully
         '401':
           description: Unauthorized
@@ -280,6 +303,11 @@ paths:
           description: Forbidden
         '404':
           description: AI provider not found
+        '409':
+          description: >
+            The AI provider still has dependents. Live references always block;
+            soft dependents block unless force=true. See error.meta for counts,
+            offending IDs, and the forcible flag.
   /api/v1/ai-providers/{ai_provider_id}/prices:
     get:
       tags:

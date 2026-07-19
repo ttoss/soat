@@ -330,7 +330,10 @@ aiProvidersRouter.delete(
       return;
     }
 
-    await deleteAiProvider({ id: ctx.params.ai_provider_id });
+    await deleteAiProvider({
+      id: ctx.params.ai_provider_id,
+      force: ctx.query.force === 'true',
+    });
     ctx.status = 204;
   }
 );

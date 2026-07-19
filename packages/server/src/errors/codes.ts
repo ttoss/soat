@@ -95,7 +95,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The AI provider is referenced by one or more chats and cannot be deleted. Delete the dependent chats first.',
+      'The AI provider still has dependents. Live references (chats, agents, discussions) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records, discussion participants) block only until force=true, which drops the overrides and unlinks usage/participant history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
   },
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
