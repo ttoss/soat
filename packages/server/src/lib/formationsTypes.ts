@@ -196,4 +196,5 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'session',
   'webhook',
   'trigger',
+  'workflow',
 ]);

@@ -1370,6 +1370,54 @@ components:
           additionalProperties: true
           description: Optional JSON Schema describing the run input
 
+    WorkflowResourceProperties:
+      description: >-
+        Creates a workflow — a state-machine definition (named states, allowed
+        transitions, guards, and per-state automation) that tasks live in. State
+        and transition dispatch references (`agent_id`, `orchestration_id` inside
+        an `on_enter` block) accept `{ "ref": "LogicalId" }` expressions to point
+        at agents or orchestrations declared in the same template, so a workflow
+        plus the agents that service its states can deploy as one stack. Mirrors
+        the workflows REST contract (`states`, `transitions`, `payload_schema`).
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - states
+        - transitions
+      properties:
+        name:
+          type: string
+          description: Human-readable name for the workflow, unique within the project
+        description:
+          type: string
+          nullable: true
+          description: Optional description of what the workflow models
+        states:
+          type: array
+          description: >-
+            Named states. Exactly one must be `initial: true`; any number may be
+            `terminal: true`. A `kind: human` state parks the task until a
+            transition fires; an `on_enter` block dispatches one agent generation
+            or orchestration run on entry.
+          items:
+            type: object
+            additionalProperties: true
+        transitions:
+          type: array
+          description: >-
+            Named, directional moves between states. Each has `from` (source
+            states) and `to` (one target), an optional JSON Logic `guard`, and an
+            optional `requires_approval` gate.
+          items:
+            type: object
+            additionalProperties: true
+        payload_schema:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Optional JSON Schema describing a task's payload
+
     ResourceDeclaration:
       type: object
       required:
@@ -1398,6 +1446,7 @@ components:
             - session
             - webhook
             - trigger
+            - workflow
           description: Resource type
         properties:
           oneOf:
@@ -1421,6 +1470,7 @@ components:
             - $ref: '#/components/schemas/SessionResourceProperties'
             - $ref: '#/components/schemas/WebhookResourceProperties'
             - $ref: '#/components/schemas/TriggerResourceProperties'
+            - $ref: '#/components/schemas/WorkflowResourceProperties'
           description: >
             Resource properties. Values may use `{ "ref": "logicalId" }` to
             reference physical IDs of other resources in the template,

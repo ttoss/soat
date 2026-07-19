@@ -261,6 +261,40 @@ the author's choice via a webhook or trigger. The event fires **once per stall
 episode** and is **re-armed on the next transition**: entering any state (with or
 without a `stalled_after`) resets the timer for the new state.
 
+### Deploying as a formation
+
+A workflow is a [formation](./formations.md) resource type (`workflow`), so it
+deploys declaratively alongside the agents and orchestrations its states
+dispatch. The resource `properties` mirror the REST body — `name`,
+`description`, `states`, `transitions`, `payload_schema` — and an `on_enter`
+dispatch's `agent_id` / `orchestration_id` accept `{ "ref": "LogicalId" }`
+expressions, so a workflow plus the agents that service it can deploy as one
+stack.
+
+```yaml
+resources:
+  Reviewer:
+    type: agent
+    properties:
+      ai_provider_id: { ref: Provider }
+      name: reviewer
+  ReviewFlow:
+    type: workflow
+    properties:
+      name: review-flow
+      states:
+        - { name: draft, initial: true, kind: human }
+        - name: reviewing
+          on_enter:
+            dispatch: { kind: agent, agent_id: { ref: Reviewer } }
+            on_complete:
+              - { when: { var: 'result.approved' }, transition: approve }
+        - { name: approved, terminal: true }
+      transitions:
+        - { name: submit, from: [draft], to: reviewing }
+        - { name: approve, from: [reviewing], to: approved }
+```
+
 ## Error Codes
 
 | Code                       | Status | When                                                            |

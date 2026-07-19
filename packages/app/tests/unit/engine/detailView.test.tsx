@@ -85,6 +85,50 @@ describe('DetailView', () => {
     expect(screen.getByTestId('nav-probe')).toHaveTextContent('"mode":"edit"');
   });
 
+  test('shows a Board button on a workflow and navigates to board mode', async () => {
+    const workflowsModule = parseModules(testSpec).find((x) => {
+      return x.tag === 'Workflows';
+    })!;
+    server.use(
+      http.get('*/api/v1/workflows/:workflow_id', () =>
+        HttpResponse.json({
+          id: 'wfl_1',
+          name: 'Review Flow',
+          states: [{ name: 'todo', initial: true }],
+          transitions: [],
+        })
+      )
+    );
+
+    renderWithAuth(
+      <>
+        <DetailView
+          module={workflowsModule}
+          spec={testSpec}
+          pathParams={{ workflow_id: 'wfl_1' }}
+          modules={parseModules(testSpec)}
+        />
+        <NavProbe />
+      </>
+    );
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Board' }));
+    const probe = screen.getByTestId('nav-probe');
+    expect(probe).toHaveTextContent('"mode":"board"');
+    expect(probe).toHaveTextContent('"tag":"Workflows"');
+    expect(probe).toHaveTextContent('"workflow_id":"wfl_1"');
+  });
+
+  test('does not show a Board button on a non-workflow resource', async () => {
+    server.use(itemHandler());
+    renderDetail(parseModules(testSpec));
+
+    expect(await screen.findByText('Alpha')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Board' })
+    ).not.toBeInTheDocument();
+  });
+
   test('renders item-scoped action buttons', async () => {
     server.use(itemHandler());
     renderDetail();

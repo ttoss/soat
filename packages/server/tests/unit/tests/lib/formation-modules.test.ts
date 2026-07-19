@@ -156,6 +156,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['discussion', 'Discussion `properties` must be an object'],
   ['tool', 'Tool `properties` must be an object'],
   ['document', 'Document `properties` must be an object'],
+  ['workflow', 'Workflow `properties` must be an object'],
 ];
 
 // Every module — including `document` since it now re-chunks on update —
@@ -557,6 +558,79 @@ const CASES: RoundTripCase[] = [
         },
         update: { name: `Trigger ${seed} updated`, active: false },
         expectAfterUpdate: { name: `Trigger ${seed} updated`, active: false },
+      };
+    },
+  },
+  {
+    resourceType: 'workflow',
+    build: (seed) => {
+      // A representative workflow: an initial `human` state, an automated state
+      // whose `on_enter` dispatches an agent and routes on completion, and a
+      // terminal state. Exercises the deep snake↔camel conversion of nested
+      // state/transition keys (`stalled_after`, `on_enter`, `on_complete`,
+      // `agent_id`, `requires_approval`) while a JSON-Logic `guard` body round-
+      // trips verbatim.
+      const states = [
+        { name: 'todo', initial: true, kind: 'human', stalled_after: 3600 },
+        {
+          name: 'working',
+          on_enter: {
+            dispatch: { kind: 'agent', agent_id: agentId },
+            on_complete: [
+              {
+                when: { '==': [{ var: 'result.ok' }, true] },
+                transition: 'finish',
+              },
+            ],
+          },
+        },
+        { name: 'done', terminal: true },
+      ];
+      const transitions = [
+        { name: 'start', from: ['todo'], to: 'working' },
+        {
+          name: 'finish',
+          from: ['working'],
+          to: 'done',
+          guard: { '==': [{ var: 'task.payload.approved' }, true] },
+          requires_approval: true,
+        },
+      ];
+      return {
+        create: {
+          name: `Workflow ${seed}`,
+          description: 'a workflow',
+          states,
+          transitions,
+          payload_schema: {
+            type: 'object',
+            required: ['approved'],
+            properties: { approved: { type: 'boolean' } },
+          },
+        },
+        expectRead: {
+          name: `Workflow ${seed}`,
+          description: 'a workflow',
+          states,
+          transitions,
+          payload_schema: {
+            type: 'object',
+            required: ['approved'],
+            properties: { approved: { type: 'boolean' } },
+          },
+        },
+        // Workflow templates must accept camelCase top-level keys too.
+        camel: {
+          name: `Camel Workflow ${seed}`,
+          states: [{ name: 'only', initial: true }],
+          transitions: [],
+        },
+        camelExpectRead: {
+          name: `Camel Workflow ${seed}`,
+          states: [{ name: 'only', initial: true }],
+        },
+        update: { name: `Workflow ${seed} updated` },
+        expectAfterUpdate: { name: `Workflow ${seed} updated` },
       };
     },
   },
