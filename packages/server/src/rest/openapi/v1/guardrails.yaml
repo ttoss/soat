@@ -484,7 +484,7 @@ components:
       properties:
         kind:
           type: string
-          example: guardrail_evaluation
+          description: Always `guardrail_evaluation`.
         guardrail_id:
           x-soat-ref: guardrails
           type: string
