@@ -3660,6 +3660,45 @@ $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
 echo "Workflows & Tasks: OK"
 
 echo ""
+echo "--- Guardrails module ---"
+GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-budget-guardrail \
+  --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"soat.usage.cost_usd_24h"},1000000]}}')
+GUARDRAIL_ID=$(echo "$GUARDRAIL_RESP" | jq -r '.id')
+if [ -z "$GUARDRAIL_ID" ] || [ "$GUARDRAIL_ID" = "null" ]; then
+  echo "ERROR: Failed to create guardrail" >&2
+  echo "$GUARDRAIL_RESP" >&2
+  exit 1
+fi
+GUARDRAIL_VERSION=$($SOAT_CLI get-guardrail --guardrail-id "$GUARDRAIL_ID" | jq -r '.version')
+if [ "$GUARDRAIL_VERSION" != "1" ]; then
+  echo "ERROR: expected guardrail version 1, got $GUARDRAIL_VERSION" >&2
+  exit 1
+fi
+
+# Dry-run: below the threshold classifies B and the spend guard passes → execute.
+DRYRUN_LOW=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":100}')
+if [ "$(echo "$DRYRUN_LOW" | jq -r '.class')" != "B" ] || \
+   [ "$(echo "$DRYRUN_LOW" | jq -r '.decision')" != "execute" ]; then
+  echo "ERROR: dry-run (amount 100) expected class B / execute" >&2
+  echo "$DRYRUN_LOW" >&2
+  exit 1
+fi
+
+# Dry-run: at/above the threshold classifies C → route_to_approval. Nothing runs.
+DRYRUN_HIGH=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":999}')
+if [ "$(echo "$DRYRUN_HIGH" | jq -r '.class')" != "C" ] || \
+   [ "$(echo "$DRYRUN_HIGH" | jq -r '.decision')" != "route_to_approval" ]; then
+  echo "ERROR: dry-run (amount 999) expected class C / route_to_approval" >&2
+  echo "$DRYRUN_HIGH" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
+echo "Guardrails: OK"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then

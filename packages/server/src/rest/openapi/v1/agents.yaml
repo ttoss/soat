@@ -1033,6 +1033,15 @@ components:
         action_id:
           type: string
           description: Logical action label recorded on the generation's usage meter, so spend can be rolled up per action (e.g. an A/B/C/D operating action).
+        guardrail_context:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >-
+            Caller-supplied guardrail context (the `context.*` namespace guard
+            and class expressions read at tool-dispatch time). Free-form and
+            never interpreted by the platform; a guardrail may combine it with a
+            `context_tool` per its `context_mode`. See the guardrails module.
         metadata:
           type: object
           additionalProperties: true

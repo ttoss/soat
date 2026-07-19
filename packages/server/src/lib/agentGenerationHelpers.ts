@@ -86,7 +86,8 @@ export type TypedAgent = {
   temperature: unknown;
   knowledgeConfig: unknown;
   outputSchema: unknown;
-  project: { id: unknown; publicId: string };
+  guardrailIds?: string[] | null;
+  project: { id: unknown; publicId: string; guardrailIds?: string[] | null };
   aiProvider: { publicId: string };
 };
 

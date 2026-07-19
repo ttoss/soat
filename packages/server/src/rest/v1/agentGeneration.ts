@@ -146,6 +146,7 @@ agentGenerationRouter.post(
       actionId,
       extract,
       metadata,
+      guardrailContext,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
@@ -158,6 +159,7 @@ agentGenerationRouter.post(
       actionId?: string;
       extract?: boolean;
       metadata?: unknown;
+      guardrailContext?: unknown;
     };
 
     const bodyError = validateGenerateBody({ messages, metadata });
@@ -183,6 +185,9 @@ agentGenerationRouter.post(
       knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
       actionId: typeof actionId === 'string' ? actionId : undefined,
       metadata: isRecord(metadata) ? metadata : undefined,
+      guardrailContext: isRecord(guardrailContext)
+        ? guardrailContext
+        : undefined,
     });
 
     fireExtractionForCompletedResult({

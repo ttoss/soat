@@ -18,6 +18,7 @@ import {
   deriveLegacyToolFields,
   readAgentToolBindings,
 } from './agentToolBindings';
+import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import {
   type GenerationInputMessage,
@@ -112,11 +113,23 @@ const resolveGenerationTools = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
+  guardrailContext?: Record<string, unknown> | null;
 }): Promise<Record<string, Tool>> => {
   // Canonical bindings (legacy rows normalize lazily); no branch on presence —
   // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
   const bindings = readAgentToolBindings(args.typedAgent);
   const legacyViews = deriveLegacyToolFields(bindings);
+  const guardrail = await buildResolverGuardrailContext({
+    agentId: args.agentId,
+    generationId: args.generationId,
+    projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
+    projectGuardrailIds: args.typedAgent.project.guardrailIds,
+    agentGuardrailIds: args.typedAgent.guardrailIds,
+    sessionId: args.toolContext?.sessionId ?? null,
+    authHeader: args.authHeader,
+    guardrailContext: args.guardrailContext,
+  });
   const resolvedTools = await resolveAgentTools({
     toolIds: legacyViews.toolIds ?? [],
     tools: legacyViews.tools,
@@ -136,6 +149,7 @@ const resolveGenerationTools = async (args: {
       projectId: args.typedAgent.project.id as number,
       sessionId: args.toolContext?.sessionId ?? null,
     }),
+    guardrail,
   });
 
   buildKnowledgeTools({
@@ -160,6 +174,7 @@ export const buildGenerationContext = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
   knowledgeConfig?: object;
+  guardrailContext?: Record<string, unknown> | null;
 }): Promise<GenerationContext> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
@@ -204,6 +219,7 @@ export const buildGenerationContext = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
+    guardrailContext: args.guardrailContext,
   });
 
   const allMessages = await assembleContextMessages({

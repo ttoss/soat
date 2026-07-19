@@ -116,6 +116,7 @@ const resolveContextAndRecord = async (args: {
   runId?: string;
   nodeId?: string;
   metadata?: Record<string, unknown> | null;
+  guardrailContext?: Record<string, unknown> | null;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -129,6 +130,7 @@ const resolveContextAndRecord = async (args: {
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     knowledgeConfig: args.knowledgeConfig,
+    guardrailContext: args.guardrailContext,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -213,6 +215,9 @@ export const createGeneration = async (args: {
   runId?: string;
   nodeId?: string;
   metadata?: Record<string, unknown> | null;
+  // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
+  // Context); the `context.*` namespace guards read at tool-dispatch time.
+  guardrailContext?: Record<string, unknown> | null;
 }): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
@@ -245,6 +250,7 @@ export const createGeneration = async (args: {
     runId: args.runId,
     nodeId: args.nodeId,
     metadata: args.metadata,
+    guardrailContext: args.guardrailContext,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

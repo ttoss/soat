@@ -12,6 +12,7 @@ import {
   deriveLegacyToolFields,
   readAgentToolBindings,
 } from './agentToolBindings';
+import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import { getGeneration, updateGenerationRecord } from './generations';
 import { saveTrace } from './traces';
@@ -95,6 +96,53 @@ type PendingStateDb = {
   remainingDepth: number | null;
 };
 
+// Re-resolves the agent's tool surface for a resumed generation, re-applying
+// both the M1 approval gate and the guardrail interceptor. The caller's
+// guardrail_context is not persisted across the tool-outputs round-trip, so only
+// project/agent/tool scope guardrails apply here (caller `context.*` keys fail
+// closed). Extracted so buildPendingFromState stays within its complexity budget.
+const resolveRecoveryTools = async (args: {
+  generationId: string;
+  agentId: string;
+  projectIds?: number[];
+  authHeader?: string;
+  typedAgent: TypedAgent;
+  pendingState: PendingStateDb;
+}) => {
+  const projectId = args.typedAgent.project.id as number;
+  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
+  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
+  const bindings = readAgentToolBindings(args.typedAgent);
+  const legacyViews = deriveLegacyToolFields(bindings);
+  return resolveAgentTools({
+    toolIds: legacyViews.toolIds ?? [],
+    tools: legacyViews.tools,
+    projectId,
+    projectIds: args.projectIds,
+    boundaryPolicy: args.typedAgent.boundaryPolicy,
+    authHeader: args.authHeader,
+    toolContext: args.pendingState.toolContext ?? undefined,
+    remainingDepth: args.pendingState.remainingDepth ?? undefined,
+    approval: buildResolverApprovalContext({
+      bindings,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      projectId,
+      sessionId: args.pendingState.toolContext?.sessionId ?? null,
+    }),
+    guardrail: await buildResolverGuardrailContext({
+      agentId: args.agentId,
+      generationId: args.generationId,
+      projectId,
+      projectPublicId: args.typedAgent.project.publicId,
+      projectGuardrailIds: args.typedAgent.project.guardrailIds,
+      agentGuardrailIds: args.typedAgent.guardrailIds,
+      sessionId: args.pendingState.toolContext?.sessionId ?? null,
+      authHeader: args.authHeader,
+    }),
+  });
+};
+
 const buildPendingFromState = async (args: {
   generationId: string;
   agentId: string;
@@ -117,27 +165,7 @@ const buildPendingFromState = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
-  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const bindings = readAgentToolBindings(args.typedAgent);
-  const legacyViews = deriveLegacyToolFields(bindings);
-  const resolvedTools = await resolveAgentTools({
-    toolIds: legacyViews.toolIds ?? [],
-    tools: legacyViews.tools,
-    projectId: args.typedAgent.project.id as number,
-    projectIds: args.projectIds,
-    boundaryPolicy: args.typedAgent.boundaryPolicy,
-    authHeader: args.authHeader,
-    toolContext: args.pendingState.toolContext ?? undefined,
-    remainingDepth: args.pendingState.remainingDepth ?? undefined,
-    approval: buildResolverApprovalContext({
-      bindings,
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectId: args.typedAgent.project.id as number,
-      sessionId: args.pendingState.toolContext?.sessionId ?? null,
-    }),
-  });
+  const resolvedTools = await resolveRecoveryTools(args);
 
   return {
     agentId: args.agentId,
