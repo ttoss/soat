@@ -21,14 +21,19 @@ decision output shape, so every consumer (activity feed, webhooks, UIs) treats a
 item the same regardless of where it came from.
 
 Items are **created by the platform only** — there is no public create endpoint.
-Two producers file items today:
+Three producers file items today:
 
 - the [`approval` orchestration node](./orchestrations.md) — declarative
   placement in a DAG (`origin: node`);
 - **tool-call interception** — an
   [`approval_policy` on an agent's tool binding](./agents.md#approval-policy)
   gates every call of that tool, on every execution surface: chat sessions,
-  direct generations, MCP (`origin: tool_call`).
+  direct generations, MCP (`origin: tool_call`);
+- **approval-gated task transitions** — a workflow transition declaring
+  [`requires_approval`](./workflows.md#approval-gated-transitions) parks a task
+  move behind an approval (`origin: task_transition`). The item carries no
+  `proposed_action`; it gates the transition named by `task_transition` on
+  `task_id`.
 
 The `origin` field records which producer filed an item, for analytics and
 filtering only — the lifecycle never branches on it.
@@ -45,9 +50,9 @@ filtering only — the lifecycle never branches on it.
 | -------------------- | --------------- | ------------------------------------------------------------------ |
 | `id`                 | string          | Public identifier (`apr_…`)                                        |
 | `project_id`         | string          | ID of the owning project                                           |
-| `origin`             | string          | `node` \| `tool_call` — producer origin (analytics/filtering only) |
+| `origin`             | string          | `node` \| `tool_call` \| `task_transition` — producer origin (analytics/filtering only) |
 | `status`             | string          | `pending` \| `approved` \| `rejected` \| `expired`                 |
-| `proposed_action`    | object          | Frozen `{ tool_id, action?, arguments }` the decision governs      |
+| `proposed_action`    | object \| null  | Frozen `{ tool_id, action?, arguments }` the decision governs; `null` for `task_transition` items |
 | `reasoning`          | string \| null  | The proposing agent's rationale                                    |
 | `evidence`           | object \| null  | Structured supporting data                                         |
 | `predicted_impact`   | string \| null  | Expected execution effect                                          |
@@ -58,6 +63,8 @@ filtering only — the lifecycle never branches on it.
 | `generation_id`      | string \| null  | Originating generation (tool-call producer)                        |
 | `session_id`         | string \| null  | Session the originating generation ran in (tool-call producer)     |
 | `agent_id`           | string \| null  | Proposing agent                                                    |
+| `task_id`            | string \| null  | Gated task (`task_transition` producer)                            |
+| `task_transition`    | string \| null  | Transition fired on approval (`task_transition` producer)          |
 | `knowledge_version`  | string \| null  | Knowledge package version in context at emit time                  |
 | `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
 | `resolved_by`        | string \| null  | Resolving user's public ID; `null` on expiry                       |
@@ -83,6 +90,12 @@ The two producers share the item lifecycle but suspend differently:
   emits the item and parks the run as `awaiting_input`. Resolution re-enqueues
   the run with the [decision output](#decision-output) as the node result,
   routing `approved` / `rejected` / `on_expired` edges.
+- **Task transition — the gate parks.** A `requires_approval` transition files
+  the item and sets `pending_transition` on the task; the task keeps its state
+  and no other transition may fire until the item resolves. Approval fires the
+  transition as the `approval` actor (guard re-evaluated then); rejection or
+  expiry clears the gate and appends a note to the task's history. See
+  [Workflows](./workflows.md#approval-gated-transitions).
 - **Tool-call interception — return-pending.** A synchronous generation cannot
   be held open for hours. The intercepted call files the item and returns
   `{ "status": "pending_approval", "approval_id": "apr_…", "expires_at": "…" }`

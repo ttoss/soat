@@ -196,7 +196,10 @@ paths:
       description: >-
         Fires a named transition on a task. The transition must exist in the
         workflow and be valid from the task's current state; its guard must pass.
-        This is the single path every state change routes through.
+        This is the single path every state change routes through. A transition
+        declaring `requires_approval` does not move the task — it parks a pending
+        ApprovalItem and returns the task with `pending_transition` set; the move
+        applies only when the approval is approved.
       tags:
         - Tasks
       summary: Transition a task
@@ -301,6 +304,14 @@ components:
             - completed
             - failed
             - unrouted
+        pending_transition:
+          type: string
+          nullable: true
+          description: >-
+            The name of a `requires_approval` transition parked awaiting a human
+            decision. Non-null while an ApprovalItem gates the move; the task
+            stays in its current state and no other transition may fire until the
+            approval resolves.
         entered_state_at:
           type: string
           format: date-time

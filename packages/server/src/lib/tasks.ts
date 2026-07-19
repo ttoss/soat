@@ -40,10 +40,26 @@ export const mapTask = (instance: TaskInstance) => {
     assignee: instance.assignee,
     activeDispatch: instance.activeDispatch,
     automationStatus: instance.automationStatus,
+    pendingTransition: instance.pendingTransition,
     enteredStateAt: instance.enteredStateAt,
     createdAt: instance.createdAt,
     updatedAt: instance.updatedAt,
   };
+};
+
+/**
+ * The wall-clock instant a task in `state` becomes stalled, or `null` when the
+ * state declares no positive `stalled_after`. Computed from the state-entry
+ * timestamp so the stall sweeper can select due tasks with a single indexed
+ * range query rather than scanning every open task.
+ */
+export const computeStallDeadline = (args: {
+  state: WorkflowState;
+  enteredStateAt: Date;
+}): Date | null => {
+  const seconds = args.state.stalledAfter;
+  if (typeof seconds !== 'number' || seconds <= 0) return null;
+  return new Date(args.enteredStateAt.getTime() + seconds * 1000);
 };
 
 const taskIncludes = () => {
@@ -235,6 +251,7 @@ export const createTask = async (args: {
   validatePayload({ payloadSchema: workflow.payloadSchema, payload });
 
   const closed = initial.terminal === true;
+  const enteredStateAt = new Date();
 
   const task = await db.Task.create({
     projectId: args.projectId,
@@ -246,7 +263,13 @@ export const createTask = async (args: {
     assignee: args.assignee ?? null,
     activeDispatch: null,
     automationStatus: null,
-    enteredStateAt: new Date(),
+    pendingTransition: null,
+    pendingApprovalId: null,
+    enteredStateAt,
+    // A terminal initial state never stalls; otherwise arm the sweeper.
+    stallDeadlineAt: closed
+      ? null
+      : computeStallDeadline({ state: initial, enteredStateAt }),
   });
 
   await db.TaskTransition.create({

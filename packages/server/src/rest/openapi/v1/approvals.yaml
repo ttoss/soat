@@ -49,7 +49,7 @@ paths:
           description: Filter by producer origin
           schema:
             type: string
-            enum: [node, tool_call]
+            enum: [node, tool_call, task_transition]
         - name: expires_before
           in: query
           description: Return only items expiring at or before this timestamp
@@ -199,14 +199,18 @@ components:
           type: string
         origin:
           type: string
-          enum: [node, tool_call]
+          enum: [node, tool_call, task_transition]
           description: How the item was produced (analytics/filtering only)
         status:
           type: string
           enum: [pending, approved, rejected, expired]
         proposed_action:
           type: object
-          description: The frozen proposed action
+          nullable: true
+          description: >-
+            The frozen proposed action. Null for producers whose proposal is not
+            a tool call (a `task_transition` item gates a workflow transition,
+            named by `task_transition`).
           properties:
             tool_id:
               type: string
@@ -257,6 +261,14 @@ components:
           type: string
           nullable: true
           description: Proposing agent
+        task_id:
+          type: string
+          nullable: true
+          description: Gated task (task_transition producer)
+        task_transition:
+          type: string
+          nullable: true
+          description: Transition fired on approval (task_transition producer)
         knowledge_version:
           type: string
           nullable: true
