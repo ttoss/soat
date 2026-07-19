@@ -1,5 +1,5 @@
 ---
-description: "First-class action-class policies that classify each agent tool call — execute, require approval, or block — with non-LLM guard expressions and per-project overrides."
+description: "First-class action-class policies that classify each agent tool call — execute, require approval, or block — with non-LLM guard expressions and project / agent / tool attach scopes that compose stricter-wins."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -13,9 +13,9 @@ Guardrails classify every tool call an agent makes into an action class — exec
 
 A guardrail is a **standalone, versioned resource** — separate from [IAM policies](./policies.md), which it deliberately does not touch. Where an IAM policy answers _"may this caller invoke this endpoint?"_ at request time, a guardrail answers a different question at a different layer: _"may this agent take **this specific action, with these arguments, in this context**, on its own — or must a human sign off?"_. A guardrail maps tool calls to **action classes** (A/B/C/D) and gates class-B autonomy behind guard expressions evaluated at the tool-execution boundary — after the model produces the call and before anything touches the outside world. There is no LLM in the evaluation path.
 
-Guardrails are the platform's **single tool-call gating mechanism**, superseding the deprecated per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md) with the same return-pending / continuation mechanics, guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. Agents and tools each carry a `guardrail_ids` list, so a guardrail [attaches](#attachment) to an **agent** (governing every tool the agent can call) or to a **tool** (governing that tool for every agent that uses it), and several can apply at once; when they do, the strictest decision wins.
+Guardrails are the platform's **single tool-call gating mechanism**, superseding the deprecated per-binding [`approval_policy`](./agents.md#approval-policy): a class-C action routes into the same [approvals queue](./approvals.md) with the same return-pending / continuation mechanics, guards read spend from [usage metering](./usage.md), and expressions use the shared [JSON Logic](https://jsonlogic.com) evaluator that [orchestrations](./orchestrations.md) already use. Tools, agents, and projects each carry a `guardrail_ids` list, so a guardrail [attaches](#attachment) at any of those three scopes and several can apply to one call at once; when they do, the strictest decision wins.
 
-A guardrail is a **reusable template**: defined once, it can govern agents across many projects — a central team sets the fleet's autonomy posture in one place. A single project then adapts that posture locally with a [per-project override](#per-project-overrides), which can only make the guardrail **stricter** (never looser). That is what the override earns you: one canonical guardrail, per-tenant tightening, no forking.
+A guardrail is a **reusable template**: defined once, it can govern many tools and agents. The three attach scopes are how a fleet layers posture without forking — a broad baseline attached at the **project** scope, tightened locally at the **agent** or **tool** scope. Because composition is stricter-wins, every added guardrail can only tighten the result, never loosen it: a project-scoped baseline is a floor that agent- and tool-scoped guardrails can raise but never lower.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -53,25 +53,19 @@ The `document`:
 | `document`     | object  | The exact document that governed at that version    |
 | `created_at`   | string  | ISO 8601 timestamp                                  |
 
-### ProjectGuardrailOverride
-
-| Field          | Type    | Description                                                     |
-| -------------- | ------- | -------------------------------------------------------------- |
-| `project_id`   | string  | The `proj_`-prefixed project the override applies to           |
-| `guardrail_id` | string  | The guardrail being overridden                                 |
-| `document`     | object  | Same shape as the guardrail's `document`; evaluated alongside the template — **stricter result wins** (see [Per-project Overrides](#per-project-overrides)) |
-| `version`      | integer | Incremented on every override write                            |
+A guardrail is attached by adding its `id` to the `guardrail_ids` list on a [tool](./tools.md), an [agent](./agents.md), or a [project](./projects.md) — see [Attachment](#attachment).
 
 ## Key Concepts
 
 ### Attachment
 
-A guardrail attaches through a `guardrail_ids` array on either resource — it is **not** attached the way IAM policies attach to users and API keys. Both fields are lists, so each surface can carry several composable guardrails (a budget guardrail, a PII guardrail, a rate-limit guardrail) instead of one monolithic document:
+A guardrail attaches through a `guardrail_ids` array on one of three resources — it is **not** attached the way IAM policies attach to users and API keys. Every field is a list, so each scope can carry several composable guardrails (a budget guardrail, a PII guardrail, a rate-limit guardrail) instead of one monolithic document:
 
-- **On an agent** — every guardrail in the agent's `guardrail_ids` governs **every** tool call the agent makes, across all its bindings. This is the fleet-posture form: one document classifies the agent's entire tool surface, and `default_class` covers any tool nobody thought about.
-- **On a tool** — every guardrail in the tool's `guardrail_ids` governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
+- **On a project** — every guardrail in the project's `guardrail_ids` governs **every** tool call by **every** agent in the project. This is the baseline / central-mandate scope: the floor for the whole tenant, which narrower scopes can only raise. (Detaching a project-scoped guardrail is a broader-permission operation than adding an agent- or tool-scoped one, so the floor holds.)
+- **On an agent** — governs **every** tool call the agent makes, across all its bindings. `default_class` covers any tool nobody thought about.
+- **On a tool** — governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
 
-Every guardrail that applies to a call — each of the agent's, each of the tool's, and any [per-project override](#per-project-overrides) — **evaluates, and the strictest decision across all of them wins** (`blocked` > `route_to_approval` > guarded execute > execute); where several classify the same call as `B`, **all their guards must pass**. Composition can only tighten, the same invariant as overrides, and it is order-independent — `A` is the identity, so a guardrail that returns `"A"` for a call simply defers to the others. One `guardrail_evaluation` record is written per guardrail evaluated.
+Every guardrail that applies to a call — each of the project's, the agent's, and the tool's — **evaluates, and the strictest decision across all of them wins** (`blocked` > `route_to_approval` > guarded execute > execute); where several classify the same call as `B`, **all their guards must pass**. Composition can therefore only tighten, and it is order-independent — `A` is the identity, so a guardrail that returns `"A"` for a call simply defers to the others. This is what replaces a bespoke per-project override: to run a stricter posture in one project, attach a tighter guardrail at that project's (or its agents'/tools') scope; stricter-wins guarantees it can only tighten, and other projects are untouched. One `guardrail_evaluation` record is written per guardrail evaluated.
 
 ### Action Classes
 
@@ -136,11 +130,9 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception rather than silently downgrading — a runaway loop hits a hard, non-LLM stop. A document with `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) for a human decision instead of aborting.
 
-### Per-project Overrides
+### Running a tighter posture in one project
 
-A `ProjectGuardrailOverride` lets one project run a tighter risk posture than the fleet. Its `document` has the same shape as the guardrail's and evaluates **alongside** the template: the effective class is the **stricter** of the two results (`D` > `C` > `B` > `A`), and when both carry a `guard`, **both must pass** — the same composition rule as [agent + tool attachment](#attachment). Tighten-only is therefore enforced by construction, not by static analysis: an override can downgrade `B → C` for its project, but can never upgrade `C → B` or weaken a guard, and other projects on the template are unchanged.
-
-Because the guardrail governs one tool, an override is usually just a tighter literal — `{ "class": "C" }` forces sign-off on every call the template would have executed. When an override does use a `class` expression, `A` is the identity under stricter-wins, so it returns `"A"` for the argument ranges it doesn't tighten. Its `default_class` follows the same fail-closed rule as the template's — an override whose expression returns an unknown value tightens to `C`.
+There is no separate override resource. A project runs a stricter posture than the fleet by [attaching](#attachment) a tighter guardrail at the **project** scope — `{ "class": "C" }` on the project forces sign-off on every call its agents would otherwise have executed, and stricter-wins guarantees it can only tighten what the agent- and tool-scoped guardrails already decided. To tighten just one tool, attach the stricter guardrail to that tool instead of the whole project. Either way, other projects — which don't carry that attachment — are unchanged, and because every layer composes by stricter-wins, a tenant can raise the floor but never lower it.
 
 ### Versioning
 
@@ -155,7 +147,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
   "kind": "guardrail_evaluation",
   "guardrail_id": "guard_V1StGXR8Z5jdHi6B",
   "guardrail_version": 3,
-  "override_version": 1,
+  "scope": "tool",
   "tool": "update-budget",
   "class": "B",
   "decision": "execute",
@@ -175,7 +167,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 
 - `decision` is one of `execute` \| `route_to_approval` \| `blocked` \| `tripwire`.
 - `class` is the resolved class; when the `class` expression returned an invalid value it is the applied `default_class`.
-- `override_version` is `null` when no project override was layered in.
+- `scope` records where this guardrail was attached: `project` \| `agent` \| `tool`. One record is written per applying guardrail, so a call gated at several scopes produces several records; the enacted `decision` is the strictest across them.
 - `context_source` records where the effective context came from: `caller` \| `tool` \| `merged` \| `none`.
 - `guard_result` is the guard expression's boolean outcome; `null` when the document has no guard or the call did not classify as `B`.
 - `context_snapshot` is a flat map of **only the vars the evaluation actually referenced** — every `var` in the `class` and `guard` expressions, keyed by its fully-qualified path (`args.*` / `context.*` / `soat.*`) and frozen at its evaluation-time value. The full `guardrail_context` may carry many more keys; those are not recorded. This is the only way to answer "why did this pass?" after the application's context (or platform usage counters) have moved on, while keeping the record small and free of unreferenced — possibly sensitive — context.
@@ -244,7 +236,7 @@ curl -X POST https://api.example.com/api/v1/guardrails \
 
 ### Attach a guardrail
 
-A tool-scoped guardrail like the one above attaches to its **tool**, so it governs that tool for every agent that uses it. Attach to an **agent** instead (`soat update-agent --agent-id agent_01 --guardrail-ids …`) for a blanket posture over the agent's whole tool surface. Both fields are **lists**, so several guardrails compose on one surface (see [Attachment](#attachment)).
+A tool-scoped guardrail like the one above attaches to its **tool**, so it governs that tool for every agent that uses it. Attach to an **agent** instead (`soat update-agent --agent-id agent_01 --guardrail-ids …`) for a blanket posture over the agent's whole tool surface, or to a **project** (`soat update-project --project-id proj_01 --guardrail-ids …`) for a baseline over every agent in it. All three fields are **lists**, so several guardrails compose on one surface (see [Attachment](#attachment)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -279,27 +271,26 @@ curl -X PATCH https://api.example.com/api/v1/tools/tool_01 \
 </TabItem>
 </Tabs>
 
-### Tighten a guardrail for one project (override)
+### Run a tighter posture in one project
 
-This override forces the budget guardrail to class **C** for `proj_ABC` only — every budget-update call needs sign-off there, regardless of amount. Under stricter-wins it can only tighten the template, so other projects keep the template's B-below-500 classification.
+There is no override resource — a project runs a stricter posture by attaching a tighter guardrail at its **project** scope. Here `guard_9f3Kd2Lm0PqRsT4u` is an always-`{ "class": "C" }` guardrail; attaching it to `proj_ABC` makes **every** tool call in that project require sign-off, on top of whatever the agent- and tool-scoped guardrails already decided. Stricter-wins means it can only tighten, and other projects — which don't carry the attachment — are unchanged. (To tighten just one tool, attach it to that tool instead of the project.)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat set-project-guardrail-override \
+soat update-project \
   --project-id proj_ABC \
-  --guardrail-id guard_V1StGXR8Z5jdHi6B \
-  --document '{ "class": "C" }'
+  --guardrail-ids guard_9f3Kd2Lm0PqRsT4u
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.guardrails.setProjectGuardrailOverride({
-  path: { project_id: 'proj_ABC', guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
-  body: { document: { class: 'C' } },
+const { data, error } = await soat.projects.updateProject({
+  path: { project_id: 'proj_ABC' },
+  body: { guardrail_ids: ['guard_9f3Kd2Lm0PqRsT4u'] },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -308,10 +299,10 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X PUT https://api.example.com/api/v1/projects/proj_ABC/guardrail-overrides/guard_V1StGXR8Z5jdHi6B \
+curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
   -H "Authorization: Bearer <admin-token>" \
   -H "Content-Type: application/json" \
-  -d '{ "document": { "class": "C" } }'
+  -d '{ "guardrail_ids": ["guard_9f3Kd2Lm0PqRsT4u"] }'
 ```
 
 </TabItem>

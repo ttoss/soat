@@ -7,16 +7,17 @@
 > **Placement decision (2026-07) — supersedes the "reuses the policies module
 > surface" framing below.** Guardrails ship as a **standalone `guardrails`
 > resource** (own `guard_` id, own `guardrails:*` permission namespace, own
-> `GuardrailVersion` / `ProjectGuardrailOverride`, agent/tool opt-in via
-> `guardrail_ids`) — **not** as a `kind` discriminator on the IAM `policies`
+> `GuardrailVersion`, project/agent/tool opt-in via `guardrail_ids`) — **not**
+> as a `kind` discriminator on the IAM `policies`
 > resource. Rationale: guardrails evaluate at the agent tool-dispatch boundary
 > (by arguments/context) rather than at request auth (by principal), attach
 > differently, and keeping them separate leaves the security-critical IAM module
 > untouched. The authoritative user-facing contract is
 > [guardrails.md](../packages/website/docs/modules/guardrails.md); read the
 > resource/permission/endpoint sections below through that lens (Policy →
-> Guardrail, `pol_` → `guard_`, `policies:*` → `guardrails:*`,
-> `ProjectPolicyOverride` → `ProjectGuardrailOverride`).
+> Guardrail, `pol_` → `guard_`, `policies:*` → `guardrails:*`). The
+> `ProjectPolicyOverride` / `ProjectGuardrailOverride` resource in the body is
+> **dropped** — see the Attachment decision.
 
 > **Context decision (2026-07) — supersedes the fixed provider-catalog framing
 > below (§ named context providers).** Guard context is **application-owned**.
@@ -32,24 +33,39 @@
 > provider counts as a failed guard. The authoritative contract is
 > [guardrails.md — Guards and Guardrail Context](../packages/website/docs/modules/guardrails.md).
 > This also changes the audit record: `context_snapshot` is a flat map of only
-> the vars the matched rule actually referenced (fully-qualified `args.*` /
-> `context.*` / `soat.*` paths → evaluation-time values) — superseding the
-> keys-only decision in § audit record below. A rule carries a single `guard`
-> JSON Logic expression (compose with `{"and": [...]}`) rather than a `guards`
-> array — read `guards`/"all guards pass" below as the singular `guard`.
+> the vars the `class` and `guard` expressions actually referenced
+> (fully-qualified `args.*` / `context.*` / `soat.*` paths → evaluation-time
+> values) — superseding the keys-only decision in § audit record below. The
+> document carries a single `guard` JSON Logic expression (compose with
+> `{"and": [...]}`) rather than a `guards` array — read `guards`/"all guards
+> pass" below as the singular `guard`.
 
 > **Attachment decision (2026-07):** guardrails are the **single** tool-call
-> gating mechanism. Agents and tools each carry a `guardrail_ids` **list** —
-> a guardrail attaches on an **agent** (its whole tool surface) or on a
-> **tool** (every agent that uses it), and several composable guardrails can
-> apply to one surface. Every applying guardrail evaluates and the **strictest
-> decision wins**; where more than one classifies the call as `B`, all their
-> guards must pass. Composition is order-independent (`A` is the identity).
-> There is no `match` — a guardrail governs one tool surface and its single
-> `class` JSON Logic expression decides the class from the call's
-> arguments/context; to gate several tools differently, attach a guardrail to
-> each tool rather than branching on `soat.tool.name` in one document. The
-> per-binding `approval_policy` (prd-approvals Phase 2 / roadmap task 1.1) is
+> gating mechanism. **Projects, agents, and tools** each carry a `guardrail_ids`
+> **list** — a guardrail attaches at the **project** scope (baseline / central
+> mandate for every agent in the project), the **agent** scope (its whole tool
+> surface), or the **tool** scope (every agent that uses it), and several
+> composable guardrails can apply to one call. Every applying guardrail
+> evaluates and the **strictest decision wins**; where more than one classifies
+> the call as `B`, all their guards must pass. Composition is order-independent
+> (`A` is the identity). There is no `match` — a guardrail governs one tool
+> surface and its single `class` JSON Logic expression decides the class from
+> the call's arguments/context; to gate several tools differently, attach a
+> guardrail to each tool rather than branching on `soat.tool.name` in one
+> document.
+>
+> **No override resource.** The `ProjectGuardrailOverride` in the body below is
+> dropped. Because tools/agents are project-scoped and composition is
+> stricter-wins, a per-project tighter posture is just a tighter guardrail
+> attached at that project's (or its agents'/tools') scope — it can only
+> tighten, and other projects are untouched. The project attach scope is the
+> home for a central baseline a tenant composes under but can't loosen;
+> detaching a project-scoped guardrail is gated by a broader permission than
+> adding agent-/tool-scoped ones. The audit record carries the `scope` a
+> guardrail was attached at (`project` / `agent` / `tool`) instead of an
+> `override_version`.
+>
+> The per-binding `approval_policy` (prd-approvals Phase 2 / roadmap task 1.1) is
 > deprecated and will be removed; its dispatch-path machinery is retained as
 > the guardrail interceptor.
 
@@ -60,10 +76,10 @@
 > over the call's `args.*` / `context.*`) returning the class; any
 > invalid result resolves to `default_class` (default `C`, fail-closed).
 > `guard` is a single JSON Logic expression over the same namespaces.
-> Overrides carry the same document shape and evaluate alongside the
-> template — effective class is the **stricter** result and both guards must
-> pass — making tighten-only a runtime composition property instead of a
-> static-analysis problem. Audit `rule_index` is dropped.
+> Guardrails attached to the same call (across project/agent/tool scopes)
+> evaluate alongside each other — effective class is the **stricter** result
+> and every `B` guard must pass — making tighten-only a runtime composition
+> property instead of a static-analysis problem. Audit `rule_index` is dropped.
 
 ## Implementation Status
 
