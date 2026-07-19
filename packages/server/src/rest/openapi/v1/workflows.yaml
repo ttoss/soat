@@ -188,7 +188,10 @@ components:
           type: boolean
         kind:
           type: string
-          description: 'Reserved: `human` for a human-in-the-loop parking state.'
+          description: >-
+            `human` marks a human-in-the-loop parking state: the state never
+            dispatches (declaring `on_enter` on it is rejected at validation)
+            and the task parks until a principal fires a transition.
         stalled_after:
           type: integer
           nullable: true
