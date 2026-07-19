@@ -126,11 +126,24 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails/get'
  */
 guardrailsRouter.get('/guardrails', async (ctx: Context) => {
-  const projectIds = await checkGuardrailsAccess(
-    ctx,
-    'guardrails:ListGuardrails'
-  );
-  if (projectIds === null) return;
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectPublicId = ctx.query.projectId as string | undefined;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action: 'guardrails:ListGuardrails',
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
 
   ctx.body = await listGuardrails({ projectIds });
 });

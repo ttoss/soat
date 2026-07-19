@@ -317,6 +317,12 @@ components:
       type: object
       required:
         - class
+      # Free-form: the inner keys are the contract fields plus author-authored
+      # JSON Logic operators/vars, so the request-validation middleware must not
+      # walk this object (its snake_case `default_class` would be mis-flagged
+      # against the camelCase allowlist). `additionalProperties: true` marks it
+      # open so validation is delegated entirely to `validateGuardrailDocument`.
+      additionalProperties: true
       description: >
         The action-class document. `class` maps a call to an action class;
         `guard` gates class-B autonomy. Both are single JSON Logic expressions
