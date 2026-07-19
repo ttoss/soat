@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.10](https://127.0.0.1/41729/git/ttoss/compare/v0.15.9...v0.15.10) (2026-07-19)
+
+### Bug Fixes
+
+* **workflows,tasks,users,mcp,cli:** resolve issues [#604](https://127.0.0.1/41729/git/ttoss/issues/604)–[#611](https://127.0.0.1/41729/git/ttoss/issues/611) ([#613](https://127.0.0.1/41729/git/ttoss/issues/613)) ([ab951df](https://127.0.0.1/41729/git/ttoss/commits/ab951df309525cf2e266d82e667b7418e5fc02a3)), closes [#605](https://127.0.0.1/41729/git/ttoss/issues/605) [#606](https://127.0.0.1/41729/git/ttoss/issues/606) [#607](https://127.0.0.1/41729/git/ttoss/issues/607) [#608](https://127.0.0.1/41729/git/ttoss/issues/608) [#609](https://127.0.0.1/41729/git/ttoss/issues/609) [#610](https://127.0.0.1/41729/git/ttoss/issues/610)
+
+### Features
+
+* **workflows:** Phase 3 — approval-gated transitions and stall/SLA sweeper ([#612](https://127.0.0.1/41729/git/ttoss/issues/612)) ([2265e3b](https://127.0.0.1/41729/git/ttoss/commits/2265e3bfc87bde66bb85d03a3189ce6f4d2e77cf)), closes [#591](https://127.0.0.1/41729/git/ttoss/issues/591)
+
 ## [0.15.9](https://127.0.0.1/41729/git/ttoss/compare/v0.15.8...v0.15.9) (2026-07-18)
 
 **Note:** Version bump only for package @soat/postgresdb
