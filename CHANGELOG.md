@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.9](https://github.com/ttoss/soat/compare/v0.15.8...v0.15.9) (2026-07-18)
+
+### Bug Fixes
+
+* **tasks:** make post-dispatch automation writes atomic under a row lock ([#601](https://github.com/ttoss/soat/issues/601)) ([5cc147b](https://github.com/ttoss/soat/commit/5cc147bf16e8142f74cdf11e2ce30f02aa3f3421)), closes [#589](https://github.com/ttoss/soat/issues/589) [#590](https://github.com/ttoss/soat/issues/590)
+* **tasks:** shallow-merge task payload on PATCH instead of replacing it ([#600](https://github.com/ttoss/soat/issues/600)) ([bca33bb](https://github.com/ttoss/soat/commit/bca33bb7fc21986f44a2cf138d1419222197cfee))
+* **tasks:** surface guard-rejected on_complete transitions instead of leaving tasks silently stuck ([#599](https://github.com/ttoss/soat/issues/599)) ([6a1a851](https://github.com/ttoss/soat/commit/6a1a8516d853b26f6d5741e74ff1b0e263cee0ee)), closes [#589](https://github.com/ttoss/soat/issues/589)
+* **workflows:** reject requires_approval: true at validation until Phase 3 ships ([#602](https://github.com/ttoss/soat/issues/602)) ([1e708f6](https://github.com/ttoss/soat/commit/1e708f6713e6ddd7f0f1d83ada7d55677ef3143d))
+
+## [0.15.8](https://github.com/ttoss/soat/compare/v0.15.7...v0.15.8) (2026-07-18)
+
+### Features
+
+* **workflows,tasks:** stateful work-item module (workflows PRD, Phases 1–2) ([#583](https://github.com/ttoss/soat/issues/583)) ([4582786](https://github.com/ttoss/soat/commit/45827865bf3a5141c4401ddc638585ccfe37518a))
+
+## [0.15.7](https://github.com/ttoss/soat/compare/v0.15.6...v0.15.7) (2026-07-18)
+
+### Bug Fixes
+
+* **formations:** reject substitution expressions in the static metadata field (F-16) ([#580](https://github.com/ttoss/soat/issues/580)) ([459eb80](https://github.com/ttoss/soat/commit/459eb80ccab7ec95d7e4e2004b416f340a520480))
+
+### Features
+
+* **agents,approvals:** tool-call approval interception on every surface (Milestone 1) ([#581](https://github.com/ttoss/soat/issues/581)) ([da69b2e](https://github.com/ttoss/soat/commit/da69b2e0271e441b9bd4b3d13f7fa0f7ffe1c4c9)), closes [#2](https://github.com/ttoss/soat/issues/2)
+* **api-keys:** support unscoped API keys (optional project_id) ([#584](https://github.com/ttoss/soat/issues/584)) ([00360c2](https://github.com/ttoss/soat/commit/00360c2725e35e2c4b00a0f2f965c04bdc234a05))
+
 ## [0.15.6](https://github.com/ttoss/soat/compare/v0.15.5...v0.15.6) (2026-07-17)
 
 ### Bug Fixes

@@ -1,0 +1,401 @@
+openapi: 3.0.3
+info:
+  title: SOAT Tasks API
+  version: 1.0.0
+  description: >-
+    API for managing tasks — durable, stateful work items bound to a workflow.
+    A task moves between named states over time (including backward), driven by
+    a mix of agents and humans, with a full, audited transition history.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Tasks
+    description: Manage tasks and their transitions
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/tasks:
+    get:
+      description: >-
+        Lists tasks (the board query). Filter by workflow, state, status, or
+        assignee — `GET /tasks?workflow_id=...&state=...` is one board column.
+      tags:
+        - Tasks
+      summary: List tasks
+      operationId: listTasks
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: workflow_id
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - open
+              - closed
+        - name: assignee
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '200':
+          description: A list of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+    post:
+      description: >-
+        Creates a task bound to a workflow. The task is placed in the workflow's
+        initial state and that state's `on_enter` automation fires.
+      tags:
+        - Tasks
+      summary: Create a task
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '201':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request (invalid payload)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Workflow not found
+
+  /api/v1/tasks/{task_id}:
+    get:
+      description: Retrieves a task, including its active dispatch and automation status.
+      tags:
+        - Tasks
+      summary: Get a task
+      operationId: getTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+    patch:
+      description: >-
+        Updates a task's payload, title, or assignee. `state` is never directly
+        writable — move it with a transition; sending a `state` field is rejected
+        as an unknown field (`VALIDATION_FAILED`). `payload` is shallow-merged over
+        the existing payload (PATCH semantics): keys the request omits are
+        preserved, so setting one field never discards values an on_enter
+        automation wrote (e.g. `last_result`). The merged payload is validated
+        against the workflow's `payload_schema`.
+      tags:
+        - Tasks
+      summary: Update a task
+      operationId: updateTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: Bad request (invalid payload)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+    delete:
+      description: Deletes a task. Its transition history cascades.
+      tags:
+        - Tasks
+      summary: Delete a task
+      operationId: deleteTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Task deleted
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+
+  /api/v1/tasks/{task_id}/transitions:
+    post:
+      description: >-
+        Fires a named transition on a task. The transition must exist in the
+        workflow and be valid from the task's current state; its guard must pass.
+        This is the single path every state change routes through. A transition
+        declaring `requires_approval` does not move the task — it parks a pending
+        ApprovalItem and returns the task with `pending_transition` set; the move
+        applies only when the approval is approved.
+      tags:
+        - Tasks
+      summary: Transition a task
+      operationId: transitionTask
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransitionTaskRequest'
+      responses:
+        '200':
+          description: The task after the transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Task'
+        '400':
+          description: The transition does not exist, is not valid, or its guard rejected the move
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+        '409':
+          description: A concurrent transition made this one invalid, or the task is closed
+
+  /api/v1/tasks/{task_id}/history:
+    get:
+      description: Returns the append-only transition history of a task.
+      tags:
+        - Tasks
+      summary: Get task history
+      operationId: getTaskHistory
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The task's transition history, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/TaskTransition'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Task not found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Task:
+      type: object
+      properties:
+        id:
+          type: string
+        project_id:
+          type: string
+        workflow_id:
+          type: string
+        title:
+          type: string
+        state:
+          type: string
+        status:
+          type: string
+          enum:
+            - open
+            - closed
+        payload:
+          type: object
+        assignee:
+          type: string
+          nullable: true
+        active_dispatch:
+          type: object
+          nullable: true
+          description: '{ kind, id, status } of the current state''s dispatch, if any.'
+        automation_status:
+          type: string
+          nullable: true
+          enum:
+            - running
+            - completed
+            - failed
+            - unrouted
+        pending_transition:
+          type: string
+          nullable: true
+          description: >-
+            The name of a `requires_approval` transition parked awaiting a human
+            decision. Non-null while an ApprovalItem gates the move; the task
+            stays in its current state and no other transition may fire until the
+            approval resolves.
+        entered_state_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    TaskTransition:
+      type: object
+      properties:
+        id:
+          type: string
+        task_id:
+          type: string
+        from_state:
+          type: string
+          nullable: true
+        to_state:
+          type: string
+        transition:
+          type: string
+          nullable: true
+        actor_kind:
+          type: string
+          enum:
+            - user
+            - api_key
+            - automation
+            - approval
+        actor_id:
+          type: string
+          nullable: true
+        generation_id:
+          type: string
+          nullable: true
+        run_id:
+          type: string
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    CreateTaskRequest:
+      type: object
+      required:
+        - workflow_id
+        - title
+      properties:
+        project_id:
+          type: string
+        workflow_id:
+          type: string
+        title:
+          type: string
+        payload:
+          type: object
+        assignee:
+          type: string
+          nullable: true
+    UpdateTaskRequest:
+      type: object
+      properties:
+        title:
+          type: string
+        payload:
+          type: object
+          description: >-
+            Partial payload, shallow-merged over the existing payload. Omitted
+            keys are preserved; provided keys overwrite. The merged result must
+            satisfy the workflow's payload_schema.
+        assignee:
+          type: string
+          nullable: true
+    TransitionTaskRequest:
+      type: object
+      required:
+        - transition
+      properties:
+        transition:
+          type: string
+        note:
+          type: string
+          nullable: true

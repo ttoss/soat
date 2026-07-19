@@ -3,9 +3,15 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 
 import type { Context } from '../Context';
+import { db } from '../db';
 import type { PolicyDocument } from '../lib/iam';
-import { extractProjectIdsFromPolicies } from '../lib/iam';
 import { createApiKeyIsAllowed, createJwtIsAllowed } from '../lib/permissions';
+import type { IsAllowedFn } from './authProjectResolvers';
+import {
+  createApiKeyResolveProjectIds,
+  createJwtResolveProjectIds,
+  createUnscopedApiKeyResolveProjectIds,
+} from './authProjectResolvers';
 import { resolveScopedBoundaryDocs } from './authScopedBoundary';
 
 const requireJwtSecret = () => {
@@ -43,135 +49,6 @@ const USER_ATTRIBUTES = [
   'createdAt',
   'updatedAt',
 ];
-
-type IsAllowedFn = (args: {
-  projectPublicId: string;
-  action: string;
-  resource?: string;
-}) => Promise<boolean>;
-
-const filterAccessibleProjects = async (args: {
-  projectPublicIds: string[] | null;
-  action: string;
-  isAllowed: IsAllowedFn;
-  db: Context['db'];
-}): Promise<number[]> => {
-  const projects = args.projectPublicIds
-    ? await args.db.Project.findAll({
-        where: { publicId: args.projectPublicIds },
-      })
-    : await args.db.Project.findAll();
-
-  const accessible: number[] = [];
-  for (const proj of projects) {
-    const allowed = await args.isAllowed({
-      projectPublicId: proj.publicId as string,
-      action: args.action,
-      resource: `soat:${proj.publicId as string}:*:*`,
-    });
-    if (allowed) accessible.push(proj.id as number);
-  }
-  return accessible;
-};
-
-const resolveProjectIdsByPublicIdAndPolicy = async (args: {
-  reqProjectPublicId?: string;
-  action: string;
-  isAllowed: IsAllowedFn;
-  policyIds: number[];
-  db: Context['db'];
-}): Promise<number[] | null> => {
-  if (args.reqProjectPublicId) {
-    const allowed = await args.isAllowed({
-      projectPublicId: args.reqProjectPublicId,
-      action: args.action,
-      resource: `soat:${args.reqProjectPublicId}:*:*`,
-    });
-    if (!allowed) return null;
-    const proj = await args.db.Project.findOne({
-      where: { publicId: args.reqProjectPublicId },
-    });
-    if (!proj) return null;
-    return [proj.id as number];
-  }
-
-  if (args.policyIds.length === 0) return [];
-
-  const policies = await args.db.Policy.findAll({
-    where: { id: args.policyIds },
-  });
-  const policyDocs = policies.map(
-    (p: InstanceType<(typeof args.db)['Policy']>) => {
-      return p.document as PolicyDocument;
-    }
-  );
-  const projectPublicIds = extractProjectIdsFromPolicies(policyDocs);
-
-  if (projectPublicIds != null && projectPublicIds.length === 0) return [];
-
-  return filterAccessibleProjects({
-    projectPublicIds: projectPublicIds ?? null,
-    action: args.action,
-    isAllowed: args.isAllowed,
-    db: args.db,
-  });
-};
-
-const resolveApiKeyScopedProjectIds = async (args: {
-  apiKeyProjectPublicId: string;
-  reqProjectPublicId?: string;
-  action: string;
-  apiKeyIsAllowed: (a: {
-    projectPublicId: string;
-    action: string;
-    resource?: string;
-  }) => Promise<boolean>;
-  db: Context['db'];
-}): Promise<number[] | null> => {
-  const targetId = args.reqProjectPublicId ?? args.apiKeyProjectPublicId;
-  if (
-    args.reqProjectPublicId &&
-    args.reqProjectPublicId !== args.apiKeyProjectPublicId
-  )
-    return null;
-  const allowed = await args.apiKeyIsAllowed({
-    projectPublicId: targetId,
-    action: args.action,
-    resource: `soat:${targetId}:*:*`,
-  });
-  if (!allowed) return null;
-  const proj = await args.db.Project.findOne({ where: { publicId: targetId } });
-  if (!proj) return null;
-  return [proj.id as number];
-};
-
-// Both call sites (a real API key's `resolveProjectIds`, and an OAuth
-// token's when its consented scope carries a project) only construct this
-// with a project already resolved: API keys require `project_id` at both
-// the REST layer and the DB FK (NOT NULL), and the OAuth call site is
-// itself gated on `oauthProjectPublicId` being set. So `apiKeyProjectPublicId`
-// is always defined here — there is no unscoped fallback to resolve.
-const createApiKeyResolveProjectIds = (args: {
-  apiKeyProjectPublicId: string;
-  apiKeyIsAllowed: IsAllowedFn;
-  db: Context['db'];
-}) => {
-  return async ({
-    projectPublicId: reqId,
-    action,
-  }: {
-    projectPublicId?: string;
-    action: string;
-  }): Promise<number[] | null | undefined> => {
-    return resolveApiKeyScopedProjectIds({
-      apiKeyProjectPublicId: args.apiKeyProjectPublicId,
-      reqProjectPublicId: reqId,
-      action,
-      apiKeyIsAllowed: args.apiKeyIsAllowed,
-      db: args.db,
-    });
-  };
-};
 
 const ADMIN_WILDCARD_POLICY: PolicyDocument = {
   statement: [{ effect: 'Allow', action: ['*'], resource: ['*'] }],
@@ -236,18 +113,26 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
       const keyUser = (row as any).user;
       const userPolicyIds = (keyUser.policyIds as number[]) ?? [];
       const apiKeyPolicyIds = (row.policyIds as number[]) ?? [];
+      const role = keyUser.role as 'admin' | 'user';
 
-      // An ApiKey's `projectId` FK is NOT NULL and cascades from Project, so
-      // a real key row always has a live project.
-      const apiKeyProjectId = row.projectId as number;
-      const proj = await ctx.db.Project.findOne({
-        where: { id: apiKeyProjectId },
-      });
-      const apiKeyProjectPublicId = proj!.publicId as string;
+      // `projectId` is nullable: a null value means the key is unscoped (spans
+      // projects). Only resolve the project public ID when the key is scoped.
+      const rawProjectId = row.projectId as number | null;
+      let apiKeyProjectId: number | undefined;
+      let apiKeyProjectPublicId: string | undefined;
+      if (rawProjectId != null) {
+        const proj = await ctx.db.Project.findOne({
+          where: { id: rawProjectId },
+        });
+        if (proj) {
+          apiKeyProjectId = rawProjectId;
+          apiKeyProjectPublicId = proj.publicId as string;
+        }
+      }
 
       const apiKeyIsAllowed = createApiKeyIsAllowed({
         apiKeyProjectPublicId,
-        userRole: keyUser.role as 'admin' | 'user',
+        userRole: role,
         userPolicyIds,
         apiKeyPolicyIds,
         db: ctx.db,
@@ -257,20 +142,28 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
         id: keyUser.id as number,
         publicId: keyUser.publicId as string,
         username: keyUser.username as string,
-        role: keyUser.role as 'admin' | 'user',
+        role,
+        apiKeyPublicId: row.publicId as string,
         apiKeyProjectId,
         apiKeyProjectPublicId,
         isAllowed: apiKeyIsAllowed,
-        resolveProjectIds: createApiKeyResolveProjectIds({
-          apiKeyProjectPublicId,
-          apiKeyIsAllowed,
-          db: ctx.db,
-        }),
+        resolveProjectIds: apiKeyProjectPublicId
+          ? createApiKeyResolveProjectIds({
+              apiKeyProjectPublicId,
+              apiKeyIsAllowed,
+              db: ctx.db,
+            })
+          : createUnscopedApiKeyResolveProjectIds({
+              userRole: role,
+              hasKeyBoundary: apiKeyPolicyIds.length > 0,
+              apiKeyIsAllowed,
+              db: ctx.db,
+            }),
         getPolicies: createApiKeyGetPolicies({
           apiKeyProjectPublicId,
           apiKeyPolicyIds,
           userPolicyIds,
-          role: keyUser.role as 'admin' | 'user',
+          role,
           db: ctx.db,
         }),
       };
@@ -289,31 +182,6 @@ const buildScopedIdentityFields = (args: {
       ? { oauthProjectPublicId: args.scopedProjectPublicId }
       : {}),
     ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
-  };
-};
-
-/** Builds the `resolveProjectIds` implementation for a plain (unscoped) user JWT. */
-const createJwtResolveProjectIds = (args: {
-  role: 'admin' | 'user';
-  userPolicyIds: number[];
-  jwtIsAllowed: IsAllowedFn;
-  db: Context['db'];
-}) => {
-  return async ({
-    projectPublicId,
-    action,
-  }: {
-    projectPublicId?: string;
-    action: string;
-  }) => {
-    if (args.role === 'admin' && !projectPublicId) return undefined;
-    return resolveProjectIdsByPublicIdAndPolicy({
-      reqProjectPublicId: projectPublicId,
-      action,
-      isAllowed: args.jwtIsAllowed,
-      policyIds: args.userPolicyIds,
-      db: args.db,
-    });
   };
 };
 
@@ -420,6 +288,39 @@ const resolveJwt = async (ctx: Context, token: string) => {
         })
       : createJwtGetPolicies({ role, userPolicyIds, db: ctx.db }),
   };
+};
+
+/**
+ * Verifies a raw `sk_` API key against the ApiKey table (prefix lookup + bcrypt
+ * compare) and returns a minimal identity payload, or null when the token is
+ * not a valid key. Used by the MCP endpoint's `verifyToken` gate so `sk_` keys
+ * are a first-class MCP credential (#609); the actual per-request authorization
+ * still runs in `resolveProjectKey` when the MCP tool handler forwards the same
+ * bearer token to the REST API, so scope/policy enforcement is unchanged.
+ */
+export const verifyApiKeyToken = async (
+  token: string
+): Promise<{ sub: string; apiKeyPublicId: string } | null> => {
+  if (!token.startsWith(API_KEY_RAW_PREFIX)) return null;
+
+  const keyPrefix = token.substring(0, 8);
+  const candidates = await db.ApiKey.findAll({
+    where: { keyPrefix },
+    include: [{ model: db.User, attributes: USER_ATTRIBUTES }],
+  });
+
+  for (const row of candidates) {
+    const match = await bcrypt.compare(token, row.keyHash as string);
+    if (match) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyUser = (row as any).user;
+      return {
+        sub: keyUser.publicId as string,
+        apiKeyPublicId: row.publicId as string,
+      };
+    }
+  }
+  return null;
 };
 
 export const authMiddleware = async (ctx: Context, next: Next) => {

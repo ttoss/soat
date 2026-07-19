@@ -119,6 +119,7 @@ const toTitleCase = (kebab: string): string => {
  */
 const DOC_OVERRIDES: Record<string, string> = {
   memoryEntries: 'memories',
+  tasks: 'workflows',
 };
 
 const WRAPPER_FLAG_OVERRIDES: Record<string, CommandFlag[]> = {

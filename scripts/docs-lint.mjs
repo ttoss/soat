@@ -52,6 +52,12 @@ const CHECKS = [
   { label: 'camelCase path param (use snake_case)', re: /:[a-z]+[A-Z][a-zA-Z]*/ },
   { label: 'stale action: documents:SearchDocuments', re: /documents:SearchDocuments|\bSearchDocuments\b/ },
   { label: 'stale soat-tool action: search-documents', re: /\bsearch-documents\b/ },
+  // Vocabulary reclaim (workflows PRD D1a): the two senses of "workflow" must
+  // never cross. An orchestration is a pipeline that ends; a workflow is a
+  // state graph a task lives in. So "orchestration workflow" and "workflow
+  // pipeline" are both forbidden.
+  { label: "forbidden term: 'orchestration workflow' (an orchestration is a pipeline)", re: /orchestration workflows?/i },
+  { label: "forbidden term: 'workflow pipeline' (keep the two senses separate)", re: /workflow pipelines?/i },
   {
     label: 'wrong public-ID prefix (see publicId.ts)',
     re: /\b(agt_|trc_|actr_|act_[0-9A-Za-z]|tol_|fl_[0-9A-Za-z]|af_[0-9A-Za-z]|afr_|afo_|prj_|usr_|cht_|fil_|me_[0-9A-Za-z])/,

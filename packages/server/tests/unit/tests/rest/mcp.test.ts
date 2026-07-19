@@ -187,6 +187,76 @@ describe('MCP tools - happy path', () => {
     expect(result.filename).toBe('mcp-token-upload.txt');
   });
 
+  // ── Workflows & Tasks ──────────────────────────────────────────────────────
+
+  test('create-workflow, create-task, transition-task, and history via MCP', async () => {
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        projectId,
+        name: 'mcp-pipeline',
+        states: [
+          { name: 'todo', initial: true },
+          { name: 'doing' },
+          { name: 'done', terminal: true },
+        ],
+        transitions: [
+          { name: 'start', from: ['todo'], to: 'doing' },
+          { name: 'finish', from: ['doing'], to: 'done' },
+        ],
+      })
+    );
+    expect(workflow.id).toMatch(/^wfl_/);
+    expect(workflow.states).toHaveLength(3);
+
+    const task = parseResult(
+      await mcpCall('create-task', {
+        projectId,
+        workflowId: workflow.id,
+        title: 'first card',
+      })
+    );
+    expect(task.id).toMatch(/^task_/);
+    expect(task.state).toBe('todo');
+    expect(task.status).toBe('open');
+
+    const moved = parseResult(
+      await mcpCall('transition-task', {
+        taskId: task.id,
+        transition: 'start',
+      })
+    );
+    expect(moved.state).toBe('doing');
+
+    const closed = parseResult(
+      await mcpCall('transition-task', {
+        taskId: task.id,
+        transition: 'finish',
+      })
+    );
+    expect(closed.state).toBe('done');
+    expect(closed.status).toBe('closed');
+
+    const listed = parseResult(
+      await mcpCall('list-tasks', { projectId, workflowId: workflow.id })
+    );
+    expect(
+      listed.some((t: { id: string }) => {
+        return t.id === task.id;
+      })
+    ).toBe(true);
+
+    const history = parseResult(
+      await mcpCall('get-task-history', { taskId: task.id })
+    );
+    // initial placement + two transitions, oldest first.
+    expect(history).toHaveLength(3);
+    expect(
+      history.map((h: { toState: string }) => {
+        return h.toState;
+      })
+    ).toEqual(['todo', 'doing', 'done']);
+  });
+
   // ── Files ────────────────────────────────────────────────────────────────
 
   describe('Files tools', () => {
@@ -1783,6 +1853,41 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
       .set('Accept', 'application/json, text/event-stream')
       .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
     expect(res.status).toBe(401);
+  });
+
+  test('accepts an sk_ API key for authentication (#609)', async () => {
+    // A valid, working API key (confirmed against REST below) must also
+    // authenticate to the MCP endpoint — the documented headless-agent path.
+    const keyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({ name: 'mcp-sk-key' });
+    expect(keyRes.status).toBe(201);
+    const rawKey = keyRes.body.key as string;
+    expect(rawKey).toMatch(/^sk_/);
+
+    // Sanity: the key works against REST.
+    const rest = await authenticatedTestClient(rawKey).get('/api/v1/projects');
+    expect(rest.status).toBe(200);
+
+    // The same key against /mcp must succeed (previously a blanket 401).
+    const res = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', `Bearer ${rawKey}`)
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.result.tools)).toBe(true);
+    expect(res.body.result.tools.length).toBeGreaterThan(0);
+
+    // An invalid sk_ key is still rejected.
+    const bad = await testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .set('Authorization', 'Bearer sk_deadbeefdeadbeefdeadbeef')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(bad.status).toBe(401);
   });
 
   test('tools/call without a token returns 401 with WWW-Authenticate header', async () => {

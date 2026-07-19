@@ -199,6 +199,31 @@ fi
 # DELETE api-key
 $SOAT_CLI delete-api-key --api-key-id "$API_KEY_ID"
 expect_cli_error_status 404 get-api-key --api-key-id "$API_KEY_ID"
+
+# Unscoped api-key (no project_id) — spans projects, bounded by owner permissions
+UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-unscoped-key)
+UNSCOPED_KEY_ID=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.id')
+UNSCOPED_KEY_RAW=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.key')
+if [ -z "$UNSCOPED_KEY_ID" ] || [ "$UNSCOPED_KEY_ID" = "null" ]; then
+  echo "ERROR: Failed to create unscoped api-key" >&2
+  echo "$UNSCOPED_KEY_RESP" >&2
+  exit 1
+fi
+UNSCOPED_KEY_PROJECT=$($SOAT_CLI get-api-key --api-key-id "$UNSCOPED_KEY_ID" | jq -r '.project_id')
+if [ "$UNSCOPED_KEY_PROJECT" != "null" ]; then
+  echo "ERROR: Expected unscoped api-key to report null project_id" >&2
+  exit 1
+fi
+# Verify the unscoped key authenticates
+set +e
+SOAT_TOKEN="$UNSCOPED_KEY_RAW" $SOAT_CLI list-projects >/dev/null 2>&1
+UNSCOPED_AUTH_STATUS=$?
+set -e
+if [ "$UNSCOPED_AUTH_STATUS" != "0" ]; then
+  echo "ERROR: Unscoped API key auth failed" >&2
+  exit 1
+fi
+$SOAT_CLI delete-api-key --api-key-id "$UNSCOPED_KEY_ID"
 echo "API keys coverage: OK"
 
 # Delete policies (cleanup + CRUD coverage)
@@ -3421,6 +3446,172 @@ expect_cli_error_status 404 get-project --project-id "$DEL_PROJECT_ID"
 expect_cli_error_status 404 get-agent --agent-id "$DEL_AGENT_ID"
 expect_cli_error_status 404 get-ai-provider --ai-provider-id "$DEL_AI_PROVIDER_ID"
 echo "Project force-delete: OK (project and dependents removed)"
+
+echo ""
+echo "--- Workflows & Tasks module ---"
+
+WF_STATES='[{"name":"triage","initial":true},{"name":"drafting"},{"name":"review","kind":"human"},{"name":"published","terminal":true}]'
+WF_TRANSITIONS='[{"name":"start","from":["triage"],"to":"drafting"},{"name":"to_review","from":["drafting"],"to":"review"},{"name":"revise","from":["review"],"to":"drafting"},{"name":"publish","from":["review"],"to":"published","guard":{"==":[{"var":"task.payload.approved"},true]}}]'
+
+WORKFLOW_RESP=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow \
+  --states "$WF_STATES" \
+  --transitions "$WF_TRANSITIONS" \
+  --payload-schema '{"properties":{"theme":{"type":"string"}}}')
+WORKFLOW_ID=$(printf '%s\n' "$WORKFLOW_RESP" | jq -r '.id')
+if [ -z "$WORKFLOW_ID" ] || [ "$WORKFLOW_ID" = "null" ]; then
+  echo "ERROR: create-workflow failed" >&2
+  printf '%s\n' "$WORKFLOW_RESP"
+  exit 1
+fi
+echo "Workflow created: $WORKFLOW_ID"
+
+$SOAT_CLI list-workflows --project-id "$PROJECT_PUBLIC_ID" >/dev/null
+$SOAT_CLI get-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
+
+# Invalid definition is rejected (no initial state).
+expect_cli_error_status 400 create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow-bad \
+  --states '[{"name":"a"}]' \
+  --transitions '[]'
+echo "Workflow validation: OK (400 as expected)"
+
+# A payload violating payload_schema is rejected.
+expect_cli_error_status 400 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "bad payload" \
+  --payload '{"theme":42}'
+echo "Task payload validation: OK (400 as expected)"
+
+TASK_RESP=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "smoke card" \
+  --payload '{"theme":"the sea"}')
+TASK_ID=$(printf '%s\n' "$TASK_RESP" | jq -r '.id')
+TASK_STATE=$(printf '%s\n' "$TASK_RESP" | jq -r '.state')
+if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
+  echo "ERROR: create-task expected initial state 'triage', got '$TASK_STATE'" >&2
+  printf '%s\n' "$TASK_RESP"
+  exit 1
+fi
+echo "Task created in initial state: $TASK_ID"
+
+# Forward, then a backward move (review -> drafting) a DAG would reject.
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition start >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition revise >/dev/null
+BACK_STATE=$($SOAT_CLI get-task --task-id "$TASK_ID" | jq -r '.state')
+if [ "$BACK_STATE" != "drafting" ]; then
+  echo "ERROR: backward move expected 'drafting', got '$BACK_STATE'" >&2
+  exit 1
+fi
+$SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null
+echo "Backward move: OK (review -> drafting -> review)"
+
+# A false guard rejects the transition.
+expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition publish
+echo "Transition guard: OK (400 TASK_GUARD_REJECTED as expected)"
+
+# An unknown transition and an invalid-from-state transition.
+expect_cli_error_status 400 transition-task --task-id "$TASK_ID" --transition nope
+
+# Approve and publish; entering a terminal state closes the task.
+$SOAT_CLI update-task --task-id "$TASK_ID" --payload '{"theme":"the sea","approved":true}' >/dev/null
+PUBLISH_RESP=$($SOAT_CLI transition-task --task-id "$TASK_ID" --transition publish)
+PUBLISH_STATUS=$(printf '%s\n' "$PUBLISH_RESP" | jq -r '.status')
+if [ "$PUBLISH_STATUS" != "closed" ]; then
+  echo "ERROR: publish expected status 'closed', got '$PUBLISH_STATUS'" >&2
+  printf '%s\n' "$PUBLISH_RESP"
+  exit 1
+fi
+echo "Guarded publish: OK (task closed)"
+
+# A closed task can no longer transition.
+expect_cli_error_status 409 transition-task --task-id "$TASK_ID" --transition revise
+echo "Closed-task guard: OK (409 as expected)"
+
+# History is append-only: initial + start + to_review + revise + to_review + publish = 6.
+HIST_COUNT=$($SOAT_CLI get-task-history --task-id "$TASK_ID" | jq 'length')
+if [ "$HIST_COUNT" -lt 6 ]; then
+  echo "ERROR: expected >= 6 history rows, got $HIST_COUNT" >&2
+  exit 1
+fi
+echo "Transition history: OK ($HIST_COUNT rows)"
+
+# Board query by state/status.
+$SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
+
+# ── Approval-gated transition (Phase 3) ──
+echo "--- Approval-gated transition ---"
+GATED_WF_STATES='[{"name":"review","initial":true,"kind":"human"},{"name":"published","terminal":true}]'
+GATED_WF_TRANSITIONS='[{"name":"publish","from":["review"],"to":"published","requires_approval":true}]'
+GATED_WF_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-gated-workflow \
+  --states "$GATED_WF_STATES" \
+  --transitions "$GATED_WF_TRANSITIONS" | jq -r '.id')
+if [ -z "$GATED_WF_ID" ] || [ "$GATED_WF_ID" = "null" ]; then
+  echo "ERROR: create-workflow (gated) failed" >&2
+  exit 1
+fi
+
+GATED_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$GATED_WF_ID" \
+  --title "gated card" | jq -r '.id')
+
+# Firing a requires_approval transition parks instead of moving the task.
+PARK_RESP=$($SOAT_CLI transition-task --task-id "$GATED_TASK_ID" --transition publish)
+PARK_PENDING=$(printf '%s\n' "$PARK_RESP" | jq -r '.pending_transition')
+PARK_STATE=$(printf '%s\n' "$PARK_RESP" | jq -r '.state')
+if [ "$PARK_PENDING" != "publish" ] || [ "$PARK_STATE" != "review" ]; then
+  echo "ERROR: gated transition expected park (pending=publish,state=review), got pending='$PARK_PENDING' state='$PARK_STATE'" >&2
+  printf '%s\n' "$PARK_RESP"
+  exit 1
+fi
+echo "Gated transition parked: OK (pending_transition=publish)"
+
+# The pending approval is filed with task-transition provenance.
+GATED_TR_APPROVAL_ID=$($SOAT_CLI list-approvals \
+  --project-id "$PROJECT_PUBLIC_ID" --status pending --origin task_transition \
+  | jq -r --arg t "$GATED_TASK_ID" '[.[] | select(.task_id == $t)][0].id // empty')
+if [ -z "$GATED_TR_APPROVAL_ID" ]; then
+  echo "ERROR: no pending task_transition approval filed for $GATED_TASK_ID" >&2
+  exit 1
+fi
+
+# No other transition may fire while the gate is open.
+expect_cli_error_status 409 transition-task --task-id "$GATED_TASK_ID" --transition publish
+echo "Gate blocks concurrent transitions: OK (409 as expected)"
+
+# Approving fires the gated transition; the task moves and closes.
+$SOAT_CLI approve-approval --approval-id "$GATED_TR_APPROVAL_ID" >/dev/null
+GATED_FINAL=$($SOAT_CLI get-task --task-id "$GATED_TASK_ID")
+GATED_FINAL_STATE=$(printf '%s\n' "$GATED_FINAL" | jq -r '.state')
+GATED_FINAL_PENDING=$(printf '%s\n' "$GATED_FINAL" | jq -r '.pending_transition')
+if [ "$GATED_FINAL_STATE" != "published" ] || [ "$GATED_FINAL_PENDING" != "null" ]; then
+  echo "ERROR: after approval expected state=published pending=null, got state='$GATED_FINAL_STATE' pending='$GATED_FINAL_PENDING'" >&2
+  exit 1
+fi
+echo "Approval-gated transition: OK (approved -> published, gate cleared)"
+
+$SOAT_CLI delete-task --task-id "$GATED_TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$GATED_WF_ID" >/dev/null
+
+# Delete is blocked while an open task exists, then succeeds once it is gone.
+OPEN_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "open card" | jq -r '.id')
+expect_cli_error_status 409 delete-workflow --workflow-id "$WORKFLOW_ID"
+$SOAT_CLI delete-task --task-id "$OPEN_TASK_ID" >/dev/null
+$SOAT_CLI delete-task --task-id "$TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
+echo "Workflows & Tasks: OK"
 
 echo ""
 echo "--- Smoke: GET /app returns HTML ---"

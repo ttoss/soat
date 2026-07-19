@@ -62,22 +62,23 @@ describe('API Keys', () => {
       expect(response.status).toBe(400);
     });
 
-    test('missing project_id returns 400', async () => {
+    test('omitting project_id creates an unscoped key (201)', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
         .send({ name: 'No Project Key' });
 
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/projectId/i);
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^key_/);
+      expect(response.body.key).toMatch(/^sk_/);
     });
 
-    test('null project_id returns 400', async () => {
+    test('explicit null project_id creates an unscoped key (201)', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .post('/api/v1/api-keys')
         .send({ name: 'Null Project Key', project_id: null });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(201);
+      expect(response.body.id).toMatch(/^key_/);
     });
 
     test('invalid project_id returns 400', async () => {
@@ -304,12 +305,23 @@ describe('API Keys', () => {
       expect(response.body.project_id).toBe(otherProj.body.id);
     });
 
-    test('clearing project scope with project_id null returns 400', async () => {
+    test('owner can clear project scope with project_id null', async () => {
       const response = await authenticatedTestClient(aliceToken)
         .put(`/api/v1/api-keys/${keyId}`)
         .send({ project_id: null });
 
-      expect(response.status).toBe(400);
+      expect(response.status).toBe(200);
+      expect(response.body.project_id).toBeNull();
+    });
+
+    test('owner can re-scope an unscoped key back to a project', async () => {
+      // The previous test cleared this key's scope; set it back to a project.
+      const response = await authenticatedTestClient(aliceToken)
+        .put(`/api/v1/api-keys/${keyId}`)
+        .send({ project_id: projectId });
+
+      expect(response.status).toBe(200);
+      expect(response.body.project_id).toBe(projectId);
     });
 
     test('invalid policy_ids on update returns 400', async () => {
@@ -559,6 +571,151 @@ describe('API Keys', () => {
       await authenticatedTestClient(adminToken)
         .put(`/api/v1/users/${aliceId}/policies`)
         .send({ policy_ids: [] });
+    });
+  });
+
+  describe('Unscoped API keys (no project scope)', () => {
+    let projX: string;
+    let projY: string;
+    let listAllPolicyId: string;
+
+    beforeAll(async () => {
+      const xRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Unscoped Project X' });
+      projX = xRes.body.id;
+
+      const yRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Unscoped Project Y' });
+      projY = yRes.body.id;
+
+      // A user-level policy allowing alice to list projects everywhere.
+      const listAllRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['projects:ListProjects'] }],
+          },
+        });
+      listAllPolicyId = listAllRes.body.id;
+
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${aliceId}/policies`)
+        .send({ policy_ids: [listAllPolicyId] });
+    });
+
+    afterAll(async () => {
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${aliceId}/policies`)
+        .send({ policy_ids: [] });
+    });
+
+    test('GET on an unscoped key reports project_id null', async () => {
+      const create = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped GET Key' });
+
+      const get = await authenticatedTestClient(adminToken).get(
+        `/api/v1/api-keys/${create.body.id}`
+      );
+
+      expect(get.status).toBe(200);
+      expect(get.body.project_id).toBeNull();
+    });
+
+    test('list shows unscoped keys with project_id null', async () => {
+      const create = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped List Key' });
+
+      const list =
+        await authenticatedTestClient(adminToken).get('/api/v1/api-keys');
+      const found = list.body.find((k: { id: string }) => {
+        return k.id === create.body.id;
+      });
+      expect(found).toBeDefined();
+      expect(found.project_id).toBeNull();
+    });
+
+    test('unscoped admin key can reach more than one project', async () => {
+      const create = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped Admin Span Key' });
+      const raw = create.body.key;
+
+      const res = await authenticatedTestClient(raw).get('/api/v1/projects');
+
+      expect(res.status).toBe(200);
+      const ids = res.body.map((p: { id: string }) => {
+        return p.id;
+      });
+      expect(ids).toContain(projX);
+      expect(ids).toContain(projY);
+    });
+
+    test('unscoped key owned by a regular user spans the projects the user can access', async () => {
+      const create = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped Alice Span Key' });
+      const raw = create.body.key;
+
+      const res = await authenticatedTestClient(raw).get('/api/v1/projects');
+
+      expect(res.status).toBe(200);
+      const ids = res.body.map((p: { id: string }) => {
+        return p.id;
+      });
+      expect(ids).toContain(projX);
+      expect(ids).toContain(projY);
+    });
+
+    test('a key policy narrows an unscoped key to the intersection with owner policies', async () => {
+      // Key policy allows ListProjects only on project X. Intersected with
+      // alice's allow-everywhere ListProjects, the key can see X but not Y.
+      const keyPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['projects:ListProjects'],
+                resource: [`soat:${projX}:*:*`],
+              },
+            ],
+          },
+        });
+
+      const create = await authenticatedTestClient(aliceToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'Unscoped Narrowed Key',
+          policy_ids: [keyPolicyRes.body.id],
+        });
+      const raw = create.body.key;
+
+      const res = await authenticatedTestClient(raw).get('/api/v1/projects');
+
+      expect(res.status).toBe(200);
+      const ids = res.body.map((p: { id: string }) => {
+        return p.id;
+      });
+      expect(ids).toContain(projX);
+      expect(ids).not.toContain(projY);
+    });
+
+    test('an unscoped key cannot exceed an owner who has no permissions', async () => {
+      // bob is a regular user with no attached policies.
+      const create = await authenticatedTestClient(bobToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'Unscoped Bob Key' });
+      const raw = create.body.key;
+
+      const res = await authenticatedTestClient(raw).get('/api/v1/projects');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(0);
     });
   });
 });

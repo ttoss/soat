@@ -69,6 +69,8 @@ export const mapApproval = (instance: ApprovalInstance) => {
     generationId: instance.generationId,
     sessionId: instance.sessionId,
     agentId: instance.agentId,
+    taskId: instance.taskId,
+    taskTransition: instance.taskTransition,
     knowledgeVersion: instance.knowledgeVersion,
     policyVersion: instance.policyVersion,
     resolvedBy: instance.resolvedByUser?.publicId ?? null,
@@ -196,17 +198,10 @@ const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
   return item;
 };
 
-/**
- * Creates an approval item, freezing the proposed action and its evidence at
- * emit time, and emits `approvals.created`. This is the sole way items enter
- * the queue — there is no public create endpoint (§10). Producers (the
- * `approval` node, tool-call interception) call this and then park their own
- * execution context.
- */
-export const emitApproval = async (args: {
+type EmitApprovalArgs = {
   projectId: number;
-  origin?: 'node' | 'tool_call';
-  proposedAction: { toolId: string; action?: string; arguments: object };
+  origin?: 'node' | 'tool_call' | 'task_transition';
+  proposedAction: { toolId: string; action?: string; arguments: object } | null;
   reasoning?: string | null;
   evidence?: object | null;
   predictedImpact?: string | null;
@@ -217,14 +212,73 @@ export const emitApproval = async (args: {
   generationId?: string | null;
   sessionId?: string | null;
   agentId?: string | null;
+  taskId?: string | null;
+  taskTransition?: string | null;
   knowledgeVersion?: string | null;
   policyVersion?: string | null;
-}): Promise<MappedApproval> => {
+};
+
+// Inserts the row, or — on a dedup unique-constraint race — resolves the pending
+// winner a concurrent emit created. Optional fields pass through as-is:
+// `undefined` falls back to each column's default or null (allowNull).
+const insertApprovalItem = async (
+  args: EmitApprovalArgs
+): Promise<{ instance: ApprovalInstance } | { winner: MappedApproval }> => {
+  const expiresAt = new Date(Date.now() + args.expiresInSeconds * 1000);
+  try {
+    const instance = await db.ApprovalItem.create({
+      projectId: args.projectId,
+      origin: args.origin,
+      proposedAction: args.proposedAction,
+      reasoning: args.reasoning,
+      evidence: args.evidence,
+      predictedImpact: args.predictedImpact,
+      expiresAt,
+      dedupKey: args.dedupKey,
+      orchestrationRunId: args.orchestrationRunId,
+      nodeId: args.nodeId,
+      generationId: args.generationId,
+      sessionId: args.sessionId,
+      agentId: args.agentId,
+      taskId: args.taskId,
+      taskTransition: args.taskTransition,
+      knowledgeVersion: args.knowledgeVersion,
+      policyVersion: args.policyVersion,
+    });
+    return { instance };
+  } catch (error) {
+    // A concurrent emit won the partial unique index on
+    // `dedup_key WHERE status = 'pending'`. Return that winner rather than
+    // surfacing the constraint error — the retrying agent gets the existing item.
+    if (args.dedupKey && isUniqueViolation(error)) {
+      const winner = await findPendingByDedupKey({
+        projectId: args.projectId,
+        dedupKey: args.dedupKey,
+      });
+      if (winner) {
+        log('emitApproval: dedup race resolved id=%s', winner.publicId);
+        return { winner: mapApproval(winner) };
+      }
+    }
+    throw error;
+  }
+};
+
+/**
+ * Creates an approval item, freezing the proposed action and its evidence at
+ * emit time, and emits `approvals.created`. This is the sole way items enter
+ * the queue — there is no public create endpoint (§10). Producers (the
+ * `approval` node, tool-call interception, an approval-gated task transition)
+ * call this and then park their own execution context.
+ */
+export const emitApproval = async (
+  args: EmitApprovalArgs
+): Promise<MappedApproval> => {
   log(
     'emitApproval: projectId=%d origin=%s toolId=%s expiresIn=%ds',
     args.projectId,
     args.origin ?? 'node',
-    args.proposedAction.toolId,
+    args.proposedAction?.toolId ?? '(none)',
     args.expiresInSeconds
   );
 
@@ -241,50 +295,12 @@ export const emitApproval = async (args: {
     }
   }
 
-  const expiresAt = new Date(Date.now() + args.expiresInSeconds * 1000);
-
-  // Optional fields are passed through as-is: `undefined` falls back to each
-  // column's default ('node'/'pending') or null (allowNull), so no manual
-  // coalescing is needed.
-  let created: ApprovalInstance;
-  try {
-    created = await db.ApprovalItem.create({
-      projectId: args.projectId,
-      origin: args.origin,
-      proposedAction: args.proposedAction,
-      reasoning: args.reasoning,
-      evidence: args.evidence,
-      predictedImpact: args.predictedImpact,
-      expiresAt,
-      dedupKey: args.dedupKey,
-      orchestrationRunId: args.orchestrationRunId,
-      nodeId: args.nodeId,
-      generationId: args.generationId,
-      sessionId: args.sessionId,
-      agentId: args.agentId,
-      knowledgeVersion: args.knowledgeVersion,
-      policyVersion: args.policyVersion,
-    });
-  } catch (error) {
-    // Race backstop: a concurrent emit won the partial unique index on
-    // `dedup_key WHERE status = 'pending'`. Return that winner rather than
-    // surfacing the constraint error — the retrying agent gets the existing
-    // item, exactly as the fast-path dedup look-up above would have.
-    if (args.dedupKey && isUniqueViolation(error)) {
-      const winner = await findPendingByDedupKey({
-        projectId: args.projectId,
-        dedupKey: args.dedupKey,
-      });
-      if (winner) {
-        log('emitApproval: dedup race resolved id=%s', winner.publicId);
-        return mapApproval(winner);
-      }
-    }
-    throw error;
-  }
+  const created = await insertApprovalItem(args);
+  // Dedup race backstop returned the pending winner directly (already mapped).
+  if ('winner' in created) return created.winner;
 
   const withRefs = await db.ApprovalItem.findOne({
-    where: { id: created.id },
+    where: { id: created.instance.id },
     include: buildIncludes(),
   });
   const item = mapApproval(withRefs!);

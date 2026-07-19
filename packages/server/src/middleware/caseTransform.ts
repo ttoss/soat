@@ -96,6 +96,24 @@ const isToolInputPassthroughPath = (path: string): boolean => {
   });
 };
 
+// A task's `payload` is an opaque, caller-authored bag exactly like an
+// orchestration run's `input`: its keys are read back by guards and dispatch
+// `input_mapping`s via `{ "var": "task.payload.<name>" }`, whose paths keep the
+// authored casing. Case-transforming the payload would rewrite an underscore
+// key (`approved_by_legal` → `approvedByLegal`) in storage while every guard/
+// mapping reference still reads the original casing, so the reference resolves
+// to null. So `payload` rounds-trips verbatim on the tasks routes.
+const isTasksPath = (path: string): boolean => {
+  return path === '/api/v1/tasks' || path.startsWith('/api/v1/tasks/');
+};
+
+// A workflow's `payload_schema` describes the shape of a task payload; its
+// `properties` keys must stay in lockstep with the (pass-through) payload keys,
+// so it round-trips verbatim on the workflows routes for the same reason.
+const isWorkflowsPath = (path: string): boolean => {
+  return path === '/api/v1/workflows' || path.startsWith('/api/v1/workflows/');
+};
+
 // A `requires_action` generation returns the pending tool calls the caller must
 // execute, each carrying an `args` object. For a client tool those keys mirror
 // the caller-authored `parameters` JSON Schema (which is itself a `parameters`
@@ -154,6 +172,12 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     'stateMapping',
     'expression',
     'exitCondition',
+    // A workflow transition `guard` and an `on_complete` rule's `when` are raw
+    // JSON Logic bodies, exactly like an orchestration node's `expression`:
+    // their inner keys are author-authored data, not SOAT field names, so they
+    // round-trip verbatim.
+    'guard',
+    'when',
     // A `headers` object is an HTTP header bag — its keys are header names
     // (`X-Auth`, `Content-Type`) that must round-trip verbatim, exactly like
     // the header names nested under `execute`/`mcp`. Case-transforming them
@@ -164,6 +188,8 @@ const buildBodySkipKeys = (path: string): Set<string> => {
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
+  if (isTasksPath(path)) keys.add('payload');
+  if (isWorkflowsPath(path)) keys.add('payloadSchema');
   return keys;
 };
 
@@ -191,6 +217,10 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     'state_mapping',
     'expression',
     'exit_condition',
+    // Mirror of the inbound `guard`/`when` skip — JSON Logic bodies round-trip
+    // verbatim in responses.
+    'guard',
+    'when',
     // Mirror of the inbound `headers` skip — HTTP header names round-trip
     // verbatim in responses (e.g. the orchestration webhook node's `headers`).
     'headers',
@@ -203,6 +233,8 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     keys.add('output');
   }
   if (isToolCallArgsPassthroughPath(path)) keys.add('args');
+  if (isTasksPath(path)) keys.add('payload');
+  if (isWorkflowsPath(path)) keys.add('payload_schema');
   return keys;
 };
 

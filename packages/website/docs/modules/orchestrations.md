@@ -1,5 +1,5 @@
 ---
-description: "DAG-based workflow definitions that chain agents, tools, and knowledge lookups into repeatable pipelines."
+description: "DAG-based pipeline definitions that chain agents, tools, and knowledge lookups into repeatable pipelines."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -7,7 +7,18 @@ import TabItem from '@theme/TabItem';
 
 # Orchestrations
 
-DAG-based workflow definitions for chaining agents, tools, and knowledge lookups into repeatable pipelines.
+DAG-based pipeline definitions for chaining agents, tools, and knowledge lookups into repeatable pipelines.
+
+## Orchestration or workflow?
+
+An **orchestration is a pipeline that _ends_** — a directed acyclic graph that starts, flows forward through its nodes, and terminates. A **[workflow](./workflows.md) is a state graph a task _lives_ in** — a long-lived entity that moves between named states over days or weeks, including backward.
+
+| You want… | Use |
+| --- | --- |
+| A deterministic, forward-only sequence of steps that runs and completes | **Orchestration** (this module) |
+| Statuses, transitions, guards, a kanban board, or an entity that revisits states | **[Workflows](./workflows.md)** |
+
+The two compose: when a task enters a state, it may _dispatch_ an orchestration (or an agent) to do that state's work. See [Workflows & Tasks](./workflows.md).
 
 ## Overview
 

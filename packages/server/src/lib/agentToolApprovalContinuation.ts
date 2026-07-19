@@ -71,9 +71,12 @@ const buildContinuationMessage = (args: {
   decision: DecisionOutput;
 }): string => {
   const { item, decision } = args;
-  const toolRef = item.proposedAction.action
-    ? `${item.proposedAction.toolId} (${item.proposedAction.action})`
-    : item.proposedAction.toolId;
+  // Always a tool-call item here (guarded upstream), so proposedAction is set;
+  // fall back defensively rather than asserting.
+  const proposed = item.proposedAction;
+  const toolRef = proposed?.action
+    ? `${proposed.toolId} (${proposed.action})`
+    : (proposed?.toolId ?? 'the requested tool');
   const parts = [
     `Approval ${decision.approvalId} for your proposed call to tool ${toolRef} was ${decision.decision}.`,
   ];
