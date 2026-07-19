@@ -18,6 +18,7 @@ import { sessionsFormationModule } from './formation-modules/sessionsFormationMo
 import { toolsFormationModule } from './formation-modules/toolsFormationModule';
 import { triggersFormationModule } from './formation-modules/triggersFormationModule';
 import { webhooksFormationModule } from './formation-modules/webhooksFormationModule';
+import { workflowsFormationModule } from './formation-modules/workflowsFormationModule';
 import type { FormationModule } from './formationsTypes';
 
 const registeredModules = new Map<string, FormationModule>();
@@ -53,6 +54,7 @@ registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
 registerFormationModule({ module: orchestrationsFormationModule });
 registerFormationModule({ module: triggersFormationModule });
+registerFormationModule({ module: workflowsFormationModule });
 
 export const getFormationModule = (args: {
   resourceType: string;

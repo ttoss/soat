@@ -4,6 +4,7 @@ import { apiFetch } from '@/api/client';
 import { useAuth } from '@/auth/authContext';
 import { Button } from '@/components/ui/button';
 
+import { findBoardCardsModule, isBoardShaped } from './boardUtils';
 import { DeleteConfirmModal } from './deleteConfirmModal';
 import { DetailSections } from './detailSections';
 import { SubResourceTabs } from './detailSubResources';
@@ -82,21 +83,69 @@ const DetailActions = ({
   });
 };
 
+// A "Board" entry point, shown only when the loaded record is board-shaped
+// (carries workflow states) and a companion collection (tasks) exists. Self-
+// contained so the DetailView body stays free of the availability branching.
+const BoardButton = ({
+  module,
+  item,
+  pathParams,
+  modules,
+}: {
+  module: ModuleInfo;
+  item: JsonObject;
+  pathParams: Record<string, string>;
+  modules: ModuleInfo[];
+}) => {
+  const { navigate } = useNavigation();
+  const available =
+    Boolean(module.getOp) &&
+    isBoardShaped(item) &&
+    findBoardCardsModule(module, modules) !== null;
+  if (!available) return null;
+  return (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={() => {
+        return navigate({
+          tag: module.tag,
+          operationId: module.getOp!.operation.operationId,
+          pathParams,
+          mode: 'board',
+        });
+      }}
+    >
+      {'Board'}
+    </Button>
+  );
+};
+
 type DetailToolbarProps = {
   module: ModuleInfo;
+  item: JsonObject;
   pathParams: Record<string, string>;
+  modules: ModuleInfo[];
   onEdit: () => void;
   onAskDelete: () => void;
 };
 
 const DetailToolbar = ({
   module,
+  item,
   pathParams,
+  modules,
   onEdit,
   onAskDelete,
 }: DetailToolbarProps) => {
   return (
     <div className="flex gap-2 flex-wrap justify-end">
+      <BoardButton
+        module={module}
+        item={item}
+        pathParams={pathParams}
+        modules={modules}
+      />
       {module.updateOp && (
         <Button variant="outline" size="sm" onClick={onEdit}>
           {'Edit'}
@@ -220,7 +269,9 @@ export const DetailView = ({
         </div>
         <DetailToolbar
           module={module}
+          item={item}
           pathParams={pathParams}
+          modules={modules}
           onEdit={handleEdit}
           onAskDelete={() => {
             return setConfirmDelete(true);

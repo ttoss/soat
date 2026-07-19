@@ -328,6 +328,102 @@ export const testSpec: OpenApiSpec = {
         },
       },
     },
+    '/api/v1/workflows': {
+      get: {
+        operationId: 'listWorkflows',
+        tags: ['Workflows'],
+        summary: 'List workflows',
+        parameters: [
+          {
+            name: 'project_id',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+        ],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Workflow' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/workflows/{workflow_id}': {
+      get: {
+        operationId: 'getWorkflow',
+        tags: ['Workflows'],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Workflow' },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/tasks': {
+      get: {
+        operationId: 'listTasks',
+        tags: ['Tasks'],
+        summary: 'List tasks',
+        parameters: [
+          {
+            name: 'project_id',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'workflow_id',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+          {
+            name: 'state',
+            in: 'query',
+            required: false,
+            schema: { type: 'string' },
+          },
+        ],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'array',
+                  items: { $ref: '#/components/schemas/Task' },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    '/api/v1/tasks/{task_id}': {
+      get: {
+        operationId: 'getTask',
+        tags: ['Tasks'],
+        responses: {
+          '200': {
+            content: {
+              'application/json': {
+                schema: { $ref: '#/components/schemas/Task' },
+              },
+            },
+          },
+        },
+      },
+    },
     '/api/v1/projects/{project_id}/api-keys': {
       get: {
         operationId: 'listApiKeys',
@@ -389,6 +485,33 @@ export const testSpec: OpenApiSpec = {
           model: { type: 'string', enum: ['gpt-4o', 'gpt-4o-mini'] },
           enabled: { type: 'boolean' },
           project_id: { type: 'string', 'x-soat-ref': 'projects' },
+        },
+      },
+      Workflow: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          project_id: { type: 'string', 'x-soat-ref': 'projects' },
+          states: {
+            type: 'array',
+            items: { type: 'object' },
+          },
+          transitions: {
+            type: 'array',
+            items: { type: 'object' },
+          },
+        },
+      },
+      Task: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          workflow_id: { type: 'string', 'x-soat-ref': 'workflows' },
+          title: { type: 'string' },
+          state: { type: 'string' },
+          status: { type: 'string' },
+          assignee: { type: 'string', nullable: true },
         },
       },
     },
