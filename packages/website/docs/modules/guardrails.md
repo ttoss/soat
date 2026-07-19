@@ -113,7 +113,7 @@ Both `class` and `guard` are **single JSON Logic expressions** — the same eval
 - `merge` (default) — shallow merge of top-level keys over the caller-supplied object; the tool's value wins on conflict (fresher data beats run-start data)
 - `replace` — the tool's output substitutes the caller-supplied object entirely
 
-The context-tool call is bounded — a per-call timeout and a short per-`(project, guardrail)` TTL cache — and it is invoked by the platform's dispatch path only: the model never sees it, calls it, or influences its output.
+The context tool executes **under the calling agent's credentials**, exactly like any other tool call by that agent — same project scoping, same secret resolution — so a guardrail can never read data the agent itself could not reach. The one difference is who initiates it: the platform's dispatch path invokes it, the model never sees it, calls it, or influences its output, and its result never enters the model context. If the agent cannot access the tool, the call fails and the standard fail-closed rule applies. The call is bounded — a per-call timeout and a short per-`(project, guardrail)` TTL cache.
 
 The `soat.*` catalog (windows are baked into the key name — a fixed suffix set `_1h` / `_24h` / `_7d` / `_30d`, each rolling and ending at evaluation time):
 
@@ -126,6 +126,8 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 | `soat.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
 | `soat.usage.tokens_24h` / `soat.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
 
+`soat.activity.*` resolves from the activity feed; on a deployment where the feed is not yet populated, those keys are unresolvable and the standard fail-closed rule below applies — a guard referencing them will not pass until the feed is live.
+
 **Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `soat.*` key outside the catalog — is rejected with `400`, never silently `null` at runtime. At evaluation time, an expression referencing a `context.*` key absent from the effective context, a context-tool failure or timeout, or a `soat.*` provider that cannot resolve all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture; it never loosens it.
 
 ### Tripwires and `escalate`
@@ -133,6 +135,10 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception rather than silently downgrading — a runaway loop hits a hard, non-LLM stop. A document with `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) for a human decision instead of aborting.
 
 `escalate` is **per-guardrail**: a failing guard yields that guardrail's own decision — `tripwire` without `escalate`, `route_to_approval` with it — and the strictest decision across all applying guardrails still wins. If two guardrails classify the same call `B` and both guards fail, one with `escalate: true` and one without, the tripwire prevails (`tripwire` outranks `route_to_approval` in the [decision ordering](#attachment)): opting one guardrail into escalation never softens another's hard stop.
+
+### Client Tools
+
+Guardrails classify calls to [client tools](./tools.md) like any other — unlike the deprecated `approval_policy`, which was rejected on client bindings. Because actuation happens on the client, the gate sits at the `requires_action` **handoff** rather than at server-side execution: class **A** and a passing **B** hand the call to the client as usual; class **C** files the approval item first, and the handoff happens only on approval; class **D** blocks the handoff and the model receives the blocked tool result; a tripwire aborts before anything reaches the client. The platform cannot observe what the client does after the handoff — the guardrail governs whether the call is released to the client at all.
 
 ### Running a tighter posture in one project
 

@@ -105,6 +105,23 @@
 >   guardrail, since attachments track the id and edits take effect
 >   immediately everywhere.
 
+> **Execution-identity & client-tool decision (2026-07):**
+>
+> - **Context-tool identity.** The `context_tool_id` tool executes **under
+>   the calling agent's credentials** — same project scoping and secret
+>   resolution as any tool call by that agent, so a guardrail can never read
+>   data the agent itself could not reach. It is platform-initiated (the
+>   model never sees, calls, or influences it) and its result never enters
+>   the model context; an access failure fails closed like any context-tool
+>   failure.
+> - **Client tools are classified.** Guardrails apply to client-executed
+>   tools — superseding M1's "approval_policy rejected on client bindings"
+>   for guardrails. The gate sits at the `requires_action` handoff: A /
+>   passing-B releases the call to the client, C files the approval before
+>   the handoff (handoff on approval), D blocks the handoff, a tripwire
+>   aborts before anything reaches the client. The platform governs release
+>   to the client, not what the client does afterwards.
+
 ## Implementation Status
 
 | Component                                     | Status         | Notes                                                              |
