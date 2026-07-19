@@ -12,6 +12,10 @@ import {
 } from 'src/lib/agents';
 
 import { agentGenerationRouter } from './agentGeneration';
+import {
+  assertGuardrailDetachAllowed,
+  parseGuardrailIds,
+} from './guardrailAttach';
 import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
@@ -37,6 +41,7 @@ type CreateAgentBody = {
   outputSchema?: unknown;
   maxContextMessages?: unknown;
   singleSessionPerActor?: unknown;
+  guardrailIds?: unknown;
   projectId?: string;
 };
 
@@ -152,6 +157,7 @@ const parseUpdateAgentBody = (
       typeof body.singleSessionPerActor === 'boolean'
         ? body.singleSessionPerActor
         : undefined,
+    guardrailIds: parseGuardrailIds(body.guardrailIds),
   };
 };
 
@@ -210,7 +216,38 @@ const buildCreateAgentArgs = (
       typeof body.singleSessionPerActor === 'boolean'
         ? body.singleSessionPerActor
         : undefined,
+    guardrailIds: parseGuardrailIds(body.guardrailIds),
   };
+};
+
+// Shared by the PUT and PATCH handlers: parses the body, enforces the
+// guardrail detach permission when the update drops an attached id, and applies
+// the update.
+const runAgentUpdate = async (args: {
+  ctx: Context;
+  projectIds: number[] | undefined;
+}) => {
+  const { ctx, projectIds } = args;
+  const body = ctx.request.body as Record<string, unknown>;
+
+  const tools = parseInlineTools(body.tools);
+  if (tools === 'invalid') {
+    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
+  }
+
+  const parsed = parseUpdateAgentBody(body, tools);
+
+  if (parsed.guardrailIds !== undefined) {
+    const current = await getAgent({ projectIds, id: ctx.params.agent_id });
+    await assertGuardrailDetachAllowed({
+      ctx,
+      projectPublicId: current.projectId,
+      current: current.guardrailIds,
+      next: parsed.guardrailIds,
+    });
+  }
+
+  return updateAgent({ projectIds, id: ctx.params.agent_id, ...parsed });
 };
 
 agentsRouter.post('/agents', async (ctx: Context) => {
@@ -326,20 +363,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as Record<string, unknown>;
-
-  const tools = parseInlineTools(body.tools);
-  if (tools === 'invalid') {
-    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
-  }
-
-  const result = await updateAgent({
-    projectIds,
-    id: ctx.params.agent_id,
-    ...parseUpdateAgentBody(body, tools),
-  });
-
-  ctx.body = result;
+  ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
@@ -360,20 +384,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as Record<string, unknown>;
-
-  const tools = parseInlineTools(body.tools);
-  if (tools === 'invalid') {
-    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
-  }
-
-  const result = await updateAgent({
-    projectIds,
-    id: ctx.params.agent_id,
-    ...parseUpdateAgentBody(body, tools),
-  });
-
-  ctx.body = result;
+  ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {

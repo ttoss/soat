@@ -535,6 +535,13 @@ components:
           items:
             type: string
           description: Subset of tool_ids that are active
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the agent scope.
         step_rules:
           type: array
           nullable: true
@@ -826,6 +833,13 @@ components:
             every tool type. Evaluated over `{ output: <raw result> }`, e.g.
             `{ "var": "output.text" }`. For `pipeline` tools this runs after
             the pipeline's own `output` mapping.
+        guardrail_ids:
+          x-soat-ref: guardrails
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: Guardrails attached at the tool scope.
 
     DocumentResourceProperties:
       description: >-

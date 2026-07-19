@@ -27,6 +27,7 @@ A Project is a top-level container that scopes all resources. Users access proje
 | ------------ | ------ | --------------------------------------- |
 | `id`         | string | Public identifier prefixed with `proj_` |
 | `name`       | string | Human-readable project name             |
+| `guardrail_ids` | array | Guardrails attached at the project scope — the baseline governing every tool call by every agent in the project. See [Guardrails — Attachment](./guardrails.md#attachment) |
 | `created_at` | string | ISO 8601 creation timestamp             |
 | `updated_at` | string | ISO 8601 last-updated timestamp         |
 

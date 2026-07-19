@@ -50,6 +50,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `discussion_id`     | `string \| null`                                | ID of the discussion to invoke. Required for `discussion` type. See [discussion](#discussion).                    |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
+| `guardrail_ids`     | `array \| null`                                 | Guardrails attached at the tool scope, governing this tool wherever it is used — see [Guardrails — Attachment](./guardrails.md#attachment) |
 | `created_at`        | `string`                                        | ISO 8601 creation timestamp                                                                                       |
 | `updated_at`        | `string`                                        | ISO 8601 last-updated timestamp                                                                                   |
 

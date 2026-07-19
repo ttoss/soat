@@ -26,6 +26,12 @@ export class Project extends Model {
   })
   declare name: string;
 
+  // Public IDs of guardrails attached at the project scope — the baseline /
+  // central-mandate floor governing every tool call by every agent in the
+  // project (guardrails.md — Attachment).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare guardrailIds: string[] | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

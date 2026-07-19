@@ -48,7 +48,7 @@ export const SOAT_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
   'soat.usage.tokens_30d',
 ]);
 
-const isActionClass = (value: unknown): value is ActionClass => {
+export const isActionClass = (value: unknown): value is ActionClass => {
   return (
     typeof value === 'string' &&
     (ACTION_CLASSES as readonly string[]).includes(value)

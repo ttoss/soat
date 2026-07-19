@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { assertGuardrailsExist } from './guardrails';
 
 const log = createDebug('soat:projects');
 
@@ -10,6 +11,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
     id: project.publicId,
     name: project.name,
+    guardrailIds: project.guardrailIds,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
@@ -92,12 +94,27 @@ export const createProject = async (args: { name: string }) => {
   return mapProject(project);
 };
 
-export const updateProject = async (args: { id: string; name: string }) => {
+export const updateProject = async (args: {
+  id: string;
+  name?: string;
+  guardrailIds?: string[] | null;
+}) => {
   log('updateProject: id=%s name=%s', args.id, args.name);
 
   const project = await getProjectOrThrow(args.id);
 
-  await project.update({ name: args.name });
+  if (args.guardrailIds !== undefined) {
+    await assertGuardrailsExist({
+      guardrailIds: args.guardrailIds,
+      projectId: (project as unknown as { id: number }).id,
+    });
+  }
+
+  const updates: Record<string, unknown> = {};
+  if (args.name !== undefined) updates.name = args.name;
+  if (args.guardrailIds !== undefined) updates.guardrailIds = args.guardrailIds;
+
+  await project.update(updates);
 
   return mapProject(project);
 };

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -10,6 +11,7 @@ import {
   resolveBindingsForUpdate,
 } from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { assertGuardrailsExist } from './guardrails';
 import { validateOutputSchema } from './outputSchema';
 import { type InlineToolDefinition } from './tools';
 
@@ -48,6 +50,7 @@ export type MappedAgent = {
   outputSchema: object | null;
   maxContextMessages: number | null;
   singleSessionPerActor: boolean;
+  guardrailIds: string[] | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -93,6 +96,7 @@ const mapAgent = (
     outputSchema: agent.outputSchema,
     maxContextMessages: agent.maxContextMessages,
     singleSessionPerActor: agent.singleSessionPerActor,
+    guardrailIds: agent.guardrailIds,
     createdAt: agent.createdAt,
     updatedAt: agent.updatedAt,
   };
@@ -119,6 +123,7 @@ type AgentUpdateFields = {
   outputSchema?: object | null;
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
+  guardrailIds?: string[] | null;
 };
 
 // `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
@@ -138,6 +143,7 @@ const AGENT_SCALAR_FIELDS = [
   'outputSchema',
   'maxContextMessages',
   'singleSessionPerActor',
+  'guardrailIds',
 ] as const;
 
 const buildAgentUpdates = (
@@ -179,6 +185,7 @@ export const createAgent = async (args: {
   outputSchema?: object;
   maxContextMessages?: number;
   singleSessionPerActor?: boolean;
+  guardrailIds?: string[] | null;
 }): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
 
@@ -188,6 +195,11 @@ export const createAgent = async (args: {
       'AI_PROVIDER_NOT_FOUND',
       `AI provider '${args.aiProviderId}' not found.`
     );
+
+  await assertGuardrailsExist({
+    guardrailIds: args.guardrailIds,
+    projectId: args.projectId,
+  });
 
   const toolBindings = await resolveBindingsForCreate(args);
 
@@ -287,6 +299,12 @@ export const updateAgent = async (
       'RESOURCE_NOT_FOUND',
       `Agent '${args.id}' not found.`
     );
+
+  // No-ops when guardrailIds is undefined (attachments left untouched).
+  await assertGuardrailsExist({
+    guardrailIds: args.guardrailIds,
+    projectId: (agent as unknown as { projectId: number }).projectId,
+  });
 
   const bindingsUpdate = await resolveBindingsForUpdate({
     projectId: (agent as unknown as { projectId: number }).projectId,

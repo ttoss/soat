@@ -42,6 +42,116 @@ export const mapGuardrailVersion = (
   };
 };
 
+// ── Attachment helpers (shared across tool / agent / project scopes) ─────────
+
+/**
+ * The public IDs present in `current` but absent from `next` — a **detach**.
+ * Adding an id can only tighten posture and needs just the carrying resource's
+ * update permission; removing one is the sole loosening operation and
+ * additionally requires `guardrails:DetachGuardrail` (guardrails.md —
+ * Attachment). Pure — the caller enforces the permission with this diff.
+ */
+export const computeDetachedGuardrailIds = (args: {
+  current: string[] | null | undefined;
+  next: string[] | null | undefined;
+}): string[] => {
+  const nextSet = new Set(args.next ?? []);
+  return (args.current ?? []).filter((id) => {
+    return !nextSet.has(id);
+  });
+};
+
+/**
+ * Validates that every id in `guardrailIds` names a guardrail in the given
+ * project — an attach can only reference guardrails the project owns, so a
+ * guardrail can never gate a resource in another tenant. Throws
+ * `GUARDRAIL_NOT_FOUND` (400) on the first unknown id. A null/empty list is a
+ * no-op (it clears all attachments).
+ */
+export const assertGuardrailsExist = async (args: {
+  guardrailIds: string[] | null | undefined;
+  projectId: number;
+}): Promise<void> => {
+  const ids = args.guardrailIds ?? [];
+  if (ids.length === 0) return;
+
+  const found = await db.Guardrail.findAll({
+    where: { publicId: ids, projectId: args.projectId },
+    attributes: ['publicId'],
+  });
+  const foundSet = new Set(
+    found.map((guardrail) => {
+      return guardrail.publicId;
+    })
+  );
+  const missing = ids.filter((id) => {
+    return !foundSet.has(id);
+  });
+  if (missing.length > 0) {
+    throw new DomainError(
+      'GUARDRAIL_NOT_FOUND',
+      `Guardrail(s) not found in the project: ${missing.join(', ')}.`,
+      { missing }
+    );
+  }
+};
+
+export type GuardrailReferences = {
+  tools: string[];
+  agents: string[];
+  projects: string[];
+};
+
+const idListIncludes = (list: unknown, id: string): boolean => {
+  return Array.isArray(list) && list.includes(id);
+};
+
+/**
+ * Finds every tool, agent, or project in the guardrail's project whose
+ * `guardrail_ids` still references it (by public id). References are scanned in
+ * JS rather than with a JSONB containment operator to stay storage-portable.
+ * Used to block deletion (409) while the guardrail is still attached.
+ */
+export const findGuardrailReferences = async (args: {
+  guardrailPublicId: string;
+  projectId: number;
+}): Promise<GuardrailReferences> => {
+  const [tools, agents, project] = await Promise.all([
+    db.Tool.findAll({
+      where: { projectId: args.projectId },
+      attributes: ['publicId', 'guardrailIds'],
+    }),
+    db.Agent.findAll({
+      where: { projectId: args.projectId },
+      attributes: ['publicId', 'guardrailIds'],
+    }),
+    db.Project.findByPk(args.projectId, {
+      attributes: ['publicId', 'guardrailIds'],
+    }),
+  ]);
+
+  return {
+    tools: tools
+      .filter((tool) => {
+        return idListIncludes(tool.guardrailIds, args.guardrailPublicId);
+      })
+      .map((tool) => {
+        return tool.publicId;
+      }),
+    agents: agents
+      .filter((agent) => {
+        return idListIncludes(agent.guardrailIds, args.guardrailPublicId);
+      })
+      .map((agent) => {
+        return agent.publicId;
+      }),
+    projects:
+      project && idListIncludes(project.guardrailIds, args.guardrailPublicId)
+        ? [project.publicId]
+        : [],
+  };
+};
+
 const validateContextMode = (contextMode: unknown): void => {
   if (
     contextMode !== undefined &&
@@ -225,6 +335,32 @@ export const deleteGuardrail = async (args: {
     projectIds: args.projectIds,
     id: args.id,
   });
+
+  // A guardrail cannot be deleted while still attached: deletion must never do
+  // what detach permissions forbid (guardrails.md — Deletion). Every reference
+  // must be detached first (each detach gated by guardrails:DetachGuardrail).
+  const references = await findGuardrailReferences({
+    guardrailPublicId: guardrail.publicId,
+    projectId: (guardrail as unknown as { projectId: number }).projectId,
+  });
+  const referenceCount =
+    references.tools.length +
+    references.agents.length +
+    references.projects.length;
+  if (referenceCount > 0) {
+    log(
+      'deleteGuardrail: blocked id=%s references tools=%d agents=%d projects=%d',
+      args.id,
+      references.tools.length,
+      references.agents.length,
+      references.projects.length
+    );
+    throw new DomainError(
+      'GUARDRAIL_HAS_REFERENCES',
+      `Guardrail '${args.id}' is still attached and cannot be deleted. Detach it from every tool, agent, and project first.`,
+      { references }
+    );
+  }
 
   // Archived versions are owned by the guardrail; remove them before the parent
   // so no orphan version rows are left behind.
