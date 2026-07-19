@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.10](https://127.0.0.1/41729/git/ttoss/compare/v0.15.9...v0.15.10) (2026-07-19)
+
+### Features
+
+* **workflows:** Phase 4 — formation resource + generic board view ([#593](https://127.0.0.1/41729/git/ttoss/issues/593)) ([#614](https://127.0.0.1/41729/git/ttoss/issues/614)) ([45507ff](https://127.0.0.1/41729/git/ttoss/commits/45507ff53435eae757e014278078b6d58d755e0f))
+
 ## [0.15.9](https://127.0.0.1/41729/git/ttoss/compare/v0.15.8...v0.15.9) (2026-07-18)
 
 **Note:** Version bump only for package @soat/app

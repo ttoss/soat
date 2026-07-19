@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.10](https://github.com/ttoss/soat/compare/v0.15.9...v0.15.10) (2026-07-19)
+
+### Bug Fixes
+
+* **ai-providers:** handle dependents on delete instead of surfacing 500 ([#615](https://github.com/ttoss/soat/issues/615)) ([a62019c](https://github.com/ttoss/soat/commit/a62019c17b350eae197ab1da0287bd02b9194894))
+* **workflows,tasks,users,mcp,cli:** resolve issues [#604](https://github.com/ttoss/soat/issues/604)–[#611](https://github.com/ttoss/soat/issues/611) ([#613](https://github.com/ttoss/soat/issues/613)) ([ab951df](https://github.com/ttoss/soat/commit/ab951df309525cf2e266d82e667b7418e5fc02a3)), closes [#605](https://github.com/ttoss/soat/issues/605) [#606](https://github.com/ttoss/soat/issues/606) [#607](https://github.com/ttoss/soat/issues/607) [#608](https://github.com/ttoss/soat/issues/608) [#609](https://github.com/ttoss/soat/issues/609) [#610](https://github.com/ttoss/soat/issues/610)
+
+### Features
+
+* **workflows:** Phase 3 — approval-gated transitions and stall/SLA sweeper ([#612](https://github.com/ttoss/soat/issues/612)) ([2265e3b](https://github.com/ttoss/soat/commit/2265e3bfc87bde66bb85d03a3189ce6f4d2e77cf)), closes [#591](https://github.com/ttoss/soat/issues/591)
+* **workflows:** Phase 4 — formation resource + generic board view ([#593](https://github.com/ttoss/soat/issues/593)) ([#614](https://github.com/ttoss/soat/issues/614)) ([45507ff](https://github.com/ttoss/soat/commit/45507ff53435eae757e014278078b6d58d755e0f))
+
 ## [0.15.9](https://github.com/ttoss/soat/compare/v0.15.8...v0.15.9) (2026-07-18)
 
 ### Bug Fixes
