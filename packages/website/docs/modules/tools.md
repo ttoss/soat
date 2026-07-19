@@ -17,7 +17,7 @@ Six tool types are supported: `http` (calls an external HTTP endpoint), `client`
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
-To invoke a tool automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: tool`. To require human approval before an agent's calls of a tool execute, set an [`approval_policy` on the agent's tool binding](./agents.md#approval-policy) — decisions land in the [approval queue](./approvals.md).
+To invoke a tool automatically — on a cron schedule, from an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: tool`. To classify a tool's calls and require human approval before they execute, attach a [Guardrail](./guardrails.md) — on the tool itself (governs it for every agent) or on the agent (governs the agent's whole tool surface); decisions land in the [approval queue](./approvals.md). The per-binding [`approval_policy`](./agents.md#approval-policy) is deprecated in favor of guardrails.
 
 ## Related Tutorials
 

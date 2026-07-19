@@ -8,7 +8,7 @@ Specs live in the referenced PRDs; this page only sequences the work.
 
 **Primary PRD:** [prd-approvals.md](./prd-approvals.md)
 **Related:** [prd-guardrails.md](./prd-guardrails.md) (action classes,
-downgrade, per-project overrides), [prd-audit-log.md](./prd-audit-log.md)
+downgrade, project/agent/tool attach scopes), [prd-audit-log.md](./prd-audit-log.md)
 (audit trail + activity substrate),
 [prd-knowledge-packages.md](./prd-knowledge-packages.md) (knowledge version
 in `generation.metadata` — the B.6 dependency),
@@ -73,17 +73,83 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 
 > [prd-guardrails.md Phases 1–3](./prd-guardrails.md#implementation-phases).
 > The deterministic classify→route engine that decides *what* needs a human,
-> plus the per-project override that lets a customer downgrade any class-B
-> action to C. Feeds Milestone 1: `action_classes` becomes the project-level
-> policy source for tool-call routing.
+> plus project/agent/tool attach scopes that let a customer run a stricter
+> posture (downgrade any class-B action to C) in one project without touching
+> others. Supersedes Milestone 1's policy source: the guardrail becomes
+> the **single** policy source for tool-call routing, replacing the per-binding
+> `approval_policy` (deprecated task 2.7, removed task 2.8) while keeping M1's
+> dispatch machinery.
+
+> **Docs-first:** the final user-facing contract is written ahead of the code —
+> [guardrails.md](../packages/website/docs/modules/guardrails.md) (a standalone
+> `guardrails` resource: action classes, guards + application-owned guardrail
+> context, tripwires, project/agent/tool attach scopes, versioning, evaluation audit record).
+>
+> **Placement decision (2026-07):** guardrails ship as a **first-class
+> `guardrails` resource** (own `guard_` id, own `guardrails:*` permission
+> namespace, own versioning), **not** as a `kind` discriminator on
+> the IAM `policies` resource. Guardrails evaluate on a different layer (agent
+> tool-dispatch, by arguments/context) than IAM policies (request auth, by
+> principal), attach differently (`guardrail_ids` on the project/agent/tool, not
+> user/key attachment), and keeping them separate leaves the security-critical
+> IAM module untouched. Supersedes prd-guardrails.md's "reuses the policies module surface".
+>
+> **Context decision (2026-07):** guard context is **application-owned**, not a
+> platform-computed provider catalog. Guards see three namespaces: `args.*`
+> (call arguments), `context.*` (the effective guardrail context), `soat.*`
+> (reserved platform catalog — identity, run state, usage, activity). The caller
+> passes `guardrail_context` on the generation / orchestration-run request; a
+> guardrail may name a `context_tool_id` called at evaluation time — solving the
+> stale-context problem for long-lived runs — combined per `context_mode`
+> (`merge` default, tool wins; or `replace`). Fail-closed throughout: a missing
+> `context.*` key, a context-tool failure/timeout, or an unresolvable `soat.*`
+> provider counts as a failed guard. Supersedes prd-guardrails.md's fixed
+> `project.context.*` provider catalog.
+>
+> **Attachment decision (2026-07):** guardrails are the **single** tool-call
+> gating mechanism. Projects, agents, and tools each carry a `guardrail_ids`
+> **list**: a guardrail attaches at the **project** scope (baseline / central
+> mandate — every call by every agent in the project), the **agent** scope
+> (its whole tool surface), or the **tool** scope (every agent that uses it),
+> and several composable guardrails (budget, PII, rate-limit) can apply to one
+> call. Every guardrail that applies evaluates and the **strictest decision
+> wins**; where more than one classifies the call as `B`, **all their guards
+> must pass**. Composition is order-independent — `A` is the identity, so a
+> guardrail that returns `A` defers to the rest.
+>
+> **Override decision (2026-07):** there is **no** `ProjectGuardrailOverride`
+> resource. Because tools and agents are project-scoped and composition is
+> stricter-wins, a per-project tighter posture is just a tighter guardrail
+> attached at that project's (or its agents'/tools') scope — it can only
+> tighten, and other projects are untouched. The project attach scope is the
+> home for a central baseline a tenant can compose under but not loosen;
+> adding to any `guardrail_ids` list needs only the carrying resource's
+> update permission (attach can only tighten), while removing an id at **any**
+> scope additionally requires `guardrails:DetachGuardrail`, so the floor
+> can't be silently lowered. Supersedes the earlier
+> "same document shape, evaluated alongside the template" override design.
+>
+> There is no per-tool `match` — a guardrail governs one tool surface and its
+> single `class` JSON Logic expression decides the class from the call's
+> arguments/context, so it is just `{ "class": "C" }` or an `if` over `args`.
+> To gate several tools differently, attach a guardrail to each tool rather
+> than branching on `soat.tool.name` inside one agent-level document. The per-binding `approval_policy` shipped in M1
+> task 1.1 is **deprecated (task 2.7) and then removed entirely (task 2.8)**; M1's
+> dispatch-path machinery (gate point, return-pending, continuation, dedup,
+> justification fields) is retained as the guardrail interceptor — only the
+> policy source changes.
 
 | # | Task | Notes |
 |---|------|-------|
-| 2.1 | `kind: action_classes` discriminator on the policy resource | Existing `permissions` policies stay the default; versioned document of `{ match, class, guards, escalate }` rules |
-| 2.2 | Tool-boundary interceptor: classify → route | First-match-wins; **fail-closed default class C**; class C routes to the approval queue, class A/B execute autonomously |
-| 2.3 | Guard expression evaluation + named context providers | Reuses the orchestration JSON Logic evaluator (no LLM in the path); fixed key catalog `project.context.*` / `run.*` / `activity.*` / `usage.*` |
-| 2.4 | Per-project overrides (`ProjectPolicyOverride`) | Layered over the template at evaluation time; **can tighten only** — downgrade B→C for one project leaves other projects unchanged (the acceptance criterion) |
-| 2.5 | `escalate: true` downgrade-to-approval | A tripped guard files an exception or routes to the queue rather than silently downgrading |
+| 2.1 ✅ | `guardrails` resource + action-class document schema/validation | **Shipped.** Standalone resource (`guard_` id) with `Guardrail` + `GuardrailVersion` models, project-scoped CRUD, and a `GET …/versions/{version}` archive endpoint; every `document` write bumps `version` and archives the prior document. Versioned document of `{ class, default_class, guard?, escalate? }` — no rule list: `class` is a literal or a single JSON Logic expression (`if` over the call's `args` / `context`) returning the class, `guard` a single JSON Logic expression; invalid `class` result → `default_class` (C). Write-time validation (`lib/guardrailDocument.ts`, pure): unknown top-level field, bad class/default_class/escalate types, and any `var` outside `args.*` / `context.*` / the fixed `soat.*` catalog are rejected `400`. `document` is a caseTransform pass-through so its snake_case keys round-trip verbatim. Own `guardrails:*` permissions (incl. forward-declared `DetachGuardrail`). **Deferred to 2.2:** the `DELETE`→`409`-while-referenced guard and the dangling-reference fail-closed both depend on the `guardrail_ids` attach columns, which land in 2.2/2.4 — until then `DELETE` cascades the guardrail and its versions |
+| 2.2 | Tool-boundary interceptor: classify → route | Evaluate the `class` expression; **fail-closed default class C** on any invalid result (`null`, typo, non-class); class A/B execute autonomously (B iff its guard passes), class C routes to the approval queue (reusing M1's return-pending / continuation / dedup machinery), class D is blocked at dispatch (model gets a blocked tool result and continues). Client tools are classified too — the gate sits at the `requires_action` handoff (C files the approval before the handoff, D blocks it), superseding M1's "rejected on `client` bindings". Attach via a `guardrail_ids` list on the project (baseline), agent (whole surface), and/or tool (every agent); all applying guardrails evaluate → strictest decision wins (`blocked` > `tripwire` > `route_to_approval` > `execute`), and every `B` guard among them must pass. Adding an id needs only the resource's update permission; removing one at any scope requires `guardrails:DetachGuardrail` |
+| 2.3 | Guard evaluation + guardrail context (`args.*` / `context.*` / `soat.*`) | Reuses the orchestration JSON Logic evaluator (no LLM in the path). Context is **application-owned**: the caller passes `guardrail_context` on the generation / run start; an optional `context_tool_id` on the guardrail is called at evaluation time (fresh data for long-lived runs) and combined per `context_mode` (`merge` default — tool wins; or `replace`). The context tool executes under the **calling agent's credentials** (same project scoping / secret resolution as any of its tool calls), platform-initiated — the model never sees it. `soat.*` is the reserved platform-computed catalog; `soat.activity.*` stays unresolvable (fail-closed) until task 5.4 populates it. Fail-closed: missing keys, tool failure/timeout, access denial → guard failed |
+| 2.4 | Project attach scope (`guardrail_ids` on the project) | No override resource: a per-project tighter posture is a guardrail attached at the project scope (baseline for every agent in the project), composing with agent/tool scopes by stricter-wins + guards-AND — tighten-only by construction. Downgrade B→C for one project leaves other projects unchanged (the acceptance criterion). Detach at any scope requires `guardrails:DetachGuardrail` (task 2.2), so the floor can't be silently lowered |
+| 2.5 | Tripwires + `escalate` on a failing class-B guard | Default: abort the action and file an exception (a hard, non-LLM stop on a runaway loop). `escalate: true` opts into the softer path — a failing guard routes the call to the approval queue instead of aborting. Never a silent downgrade either way. `escalate` is per-guardrail: with several failing `B` guards the strictest decision still wins (`tripwire` outranks `route_to_approval`), so one guardrail's escalation never softens another's hard stop |
+| 2.6 | `guardrail_evaluation` audit record | Every evaluation (execute / route-to-approval / block / tripwire) writes one activity entry per guardrail evaluated and stamps the generation/run record: governing `guardrail_version`, the `scope` it was attached at (`project` / `agent` / `tool`), resolved `class`, `decision`, `guard_result`, `context_source`, and a flat `context_snapshot` of **only the referenced vars** (fully-qualified `args.*` / `context.*` / `soat.*`), frozen at evaluation-time values |
+| 2.7 | Deprecate per-binding `approval_policy` | Guardrails subsume it (a `{ "class": "C" }` guardrail on the tool is the migration path); mark the field deprecated in OpenAPI + docs, route all live tool-call gating through the guardrail interceptor, and stop honouring `approval_policy` as a routing source while leaving the field readable for one deprecation window |
+| 2.8 | Remove `approval_policy` completely (breaking) | Terminal step after the deprecation window: delete the field from `tool_bindings` (server + model), its OpenAPI schema and validation, its dispatch-path evaluation branch, the formations `AgentResourceProperties` property, and the generated SDK/CLI surface; purge the deprecated-field docs (the `agents.md#approval-policy` section and the deprecation admonitions in `tools.md` / `approvals.md`). A `BREAKING CHANGE:` release notes guardrails as the sole tool-call gating mechanism. Only M1's shared dispatch machinery (return-pending, continuation, dedup, justification fields) remains — now solely the guardrail interceptor |
+| 2.9 | Dry-run evaluate endpoint (`POST /guardrails/{guardrail_id}/evaluate`) | The adoption path — ships alongside 2.1–2.3, before customers attach at scale: runs the full pipeline (class expression, guard, context tool, live `soat.*`) over caller-supplied `args` / `guardrail_context` (+ optional `tool_id`) and returns the would-be `guardrail_evaluation` record; nothing executes, no approval item is filed, no activity entry is written. Also the preview path before editing a widely-attached guardrail (attachments track the id; edits apply everywhere immediately) |
 | `[OPEN]` | Default expiry per action class | Briefing suggests 72h budget / 168h strategy — align with `action-classes.yaml`; today the `approval` node defaults to 24h |
 
 ## Milestone 3 — Knowledge-version provenance (B.6 dependency)
@@ -127,7 +193,7 @@ surface-agnostic substrate of requirement 7 — are done and tested.
 | 5.1 | `ActivityEntry` feed (`acte_` prefix) | One entry per autonomously executed action; both producers write through the same module hook — or lands as one `detail` kind of `AuditEntry` (see prd-audit-log) |
 | 5.2 | Cursor-paginated `GET /api/v1/activity` | Type / severity filters; chronological, per project |
 | 5.3 | Evidence + drill-through linkage | Feed item → run → generations, with agent / node / guardrail-policy-version links (same evidence linkage as the queue) |
-| 5.4 | Write `activity.actions_24h` guard context | The context provider Milestone 2 guards assume that nothing currently populates |
+| 5.4 | Write `soat.activity.actions_24h` guard context | The platform-computed `soat.*` key Milestone 2 guards assume that nothing currently populates |
 
 ## Backlog (unsequenced)
 
@@ -151,14 +217,15 @@ baseline (approval queue + node + expiry, shipped)
    │
    ├─► M1 (tool-call approval on every surface)
    │        ▲
-   │        │ action_classes becomes the routing source
+   │        │ guardrails replace approval_policy as the routing source
 M2 (action classes + B→C downgrade) ──────────────┐
    │                                               │
 M3 (knowledge version, B.6) ──► M4 (audit trail) ──┴─► M5 (activity feed)
 ```
 
-M1 and M2 are independent of each other; M2 later refines M1's routing (a
-per-binding `approval_policy` is the tactical form, `action_classes` the
-project-level policy form). M3 is a small prerequisite that unblocks M4's
+M1 and M2 are independent of each other; M2 **supersedes** M1's policy source
+— the per-binding `approval_policy` is deprecated (task 2.7) and then removed
+entirely (task 2.8), while
+M1's dispatch-path machinery survives as the guardrail interceptor. M3 is a small prerequisite that unblocks M4's
 audit answer; M5 needs both M2 (class A/B labels) and M4 (the audit/activity
 substrate).

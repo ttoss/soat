@@ -1,0 +1,480 @@
+openapi: 3.0.3
+info:
+  title: Guardrails API
+  version: 1.0.0
+  description: >
+    First-class, versioned action-class policies. A guardrail classifies each
+    agent tool call into an action class (A/B/C/D) with a non-LLM JSON Logic
+    guard, and is attached to projects, agents, or tools. This API manages the
+    guardrail resource and its archived document versions.
+  contact:
+    name: SOAT API Support
+
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+
+tags:
+  - name: Guardrails
+    description: Manage guardrails
+
+security:
+  - bearerAuth: []
+
+paths:
+  /api/v1/guardrails:
+    post:
+      tags:
+        - Guardrails
+      summary: Create a guardrail
+      description: >
+        Creates a new guardrail in the project. The `document` is validated on
+        write: `class` must be a literal (A/B/C/D) or a JSON Logic expression,
+        and every variable it (and `guard`) reference must resolve to the
+        `args.*` / `context.*` / `soat.*` namespaces — an out-of-catalog
+        `soat.*` key is rejected with 400.
+      operationId: createGuardrail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateGuardrailRequest'
+            examples:
+              always_approve:
+                summary: Always require human sign-off
+                value:
+                  name: Sign-off Guardrail
+                  document:
+                    class: C
+              budget_threshold:
+                summary: Class B below a threshold, C at or above, guarded by 24h spend
+                value:
+                  name: Budget Update Guardrail
+                  document:
+                    default_class: C
+                    class:
+                      if:
+                        - '<':
+                            - var: args.amount
+                            - 500
+                        - B
+                        - C
+                    guard:
+                      '<':
+                        - var: soat.usage.cost_usd_24h
+                        - 1000
+      responses:
+        '201':
+          description: Guardrail created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardrail'
+        '400':
+          description: Bad Request — invalid document or variable reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      tags:
+        - Guardrails
+      summary: List guardrails
+      description: Returns all guardrails in the project.
+      operationId: listGuardrails
+      parameters:
+        - name: project_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Project public ID to filter by
+      responses:
+        '200':
+          description: List of guardrails
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Guardrail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/guardrails/{guardrail_id}:
+    get:
+      tags:
+        - Guardrails
+      summary: Get a guardrail
+      description: Returns a single guardrail by ID.
+      operationId: getGuardrail
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Guardrail
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardrail'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      tags:
+        - Guardrails
+      summary: Update a guardrail
+      description: >
+        Updates an existing guardrail. A `document` write increments `version`
+        and archives the prior document as a GuardrailVersion; metadata-only
+        edits (name / description / context) leave the version untouched.
+      operationId: updateGuardrail
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateGuardrailRequest'
+      responses:
+        '200':
+          description: Guardrail updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardrail'
+        '400':
+          description: Bad Request — invalid document or variable reference
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      tags:
+        - Guardrails
+      summary: Delete a guardrail
+      description: Deletes a guardrail and its archived versions by ID.
+      operationId: deleteGuardrail
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/guardrails/{guardrail_id}/versions/{version}:
+    get:
+      tags:
+        - Guardrails
+      summary: Fetch an archived guardrail version
+      description: >
+        Returns the exact `document` that governed at a given version. Approval
+        items, activity entries, and exceptions record the version that
+        governed them, so the audit chain survives edits.
+      operationId: getGuardrailVersion
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Archived guardrail version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuardrailVersion'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    GuardrailDocument:
+      type: object
+      required:
+        - class
+      # Free-form: the inner keys are the contract fields plus author-authored
+      # JSON Logic operators/vars, so the request-validation middleware must not
+      # walk this object (its snake_case `default_class` would be mis-flagged
+      # against the camelCase allowlist). `additionalProperties: true` marks it
+      # open so validation is delegated entirely to `validateGuardrailDocument`.
+      additionalProperties: true
+      description: >
+        The action-class document. `class` maps a call to an action class;
+        `guard` gates class-B autonomy. Both are single JSON Logic expressions
+        over the `args.*` / `context.*` / `soat.*` namespaces.
+      properties:
+        class:
+          description: >
+            A class literal (`A` / `B` / `C` / `D`) or a JSON Logic expression
+            returning one. An invalid result resolves to `default_class`.
+          oneOf:
+            - type: string
+              enum:
+                - A
+                - B
+                - C
+                - D
+            - type: object
+        default_class:
+          type: string
+          enum:
+            - A
+            - B
+            - C
+            - D
+          description: >
+            Applied when the `class` expression returns anything other than a
+            valid class. Defaults to `C` (fail-closed).
+        guard:
+          type: object
+          description: >
+            A single JSON Logic expression; when the call classifies as `B` it
+            must evaluate truthy to execute autonomously. Compose multiple
+            conditions with `{ "and": [...] }`.
+        escalate:
+          type: boolean
+          description: >
+            When `true`, a failing guard routes to approval instead of tripping
+            fail-closed.
+    Guardrail:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Public ID of the guardrail
+          example: guard_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the owning project
+          example: proj_V1StGXR8Z5jdHi6B
+        name:
+          type: string
+          description: Human-readable name
+          example: Budget Update Guardrail
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        version:
+          type: integer
+          description: Incremented on every document write; prior versions are archived
+          example: 1
+        document:
+          $ref: '#/components/schemas/GuardrailDocument'
+        context_tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: >
+            Optional tool the platform calls at evaluation time to fetch fresh
+            guardrail context.
+        context_mode:
+          type: string
+          nullable: true
+          enum:
+            - merge
+            - replace
+          description: >
+            How tool-fetched context combines with the caller-supplied context.
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    GuardrailVersion:
+      type: object
+      properties:
+        guardrail_id:
+          x-soat-ref: guardrails
+          type: string
+          description: Public ID of the guardrail this version belongs to
+          example: guard_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: The archived version number
+          example: 1
+        document:
+          $ref: '#/components/schemas/GuardrailDocument'
+        created_at:
+          type: string
+          format: date-time
+    CreateGuardrailRequest:
+      type: object
+      required:
+        - name
+        - document
+      properties:
+        project_id:
+          x-soat-ref: projects
+          type: string
+          description: Public ID of the project
+        name:
+          type: string
+          description: Human-readable name
+          example: Budget Update Guardrail
+        description:
+          type: string
+          nullable: true
+        document:
+          $ref: '#/components/schemas/GuardrailDocument'
+        context_tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+        context_mode:
+          type: string
+          enum:
+            - merge
+            - replace
+    UpdateGuardrailRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        document:
+          $ref: '#/components/schemas/GuardrailDocument'
+        context_tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+        context_mode:
+          type: string
+          nullable: true
+          enum:
+            - merge
+            - replace
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string

@@ -47,6 +47,8 @@ export const PUBLIC_ID_PREFIXES = {
   workflow: 'wfl_',
   task: 'task_',
   taskTransition: 'task_tr_',
+  guardrail: 'guard_',
+  guardrailVersion: 'guard_ver_',
 } as const;
 
 /**

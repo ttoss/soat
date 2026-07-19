@@ -14,6 +14,7 @@ import { embeddingsRouter } from './embeddings';
 import { filesRouter } from './files';
 import { formationsRouter } from './formations';
 import { generationsRouter } from './generations';
+import { guardrailsRouter } from './guardrails';
 import { ingestionRulesRouter } from './ingestionRules';
 import { knowledgeRouter } from './knowledge';
 import { memoriesRouter } from './memories';
@@ -38,6 +39,7 @@ const v1Router = new Router();
 
 v1Router.use(formationsRouter.routes());
 v1Router.use(generationsRouter.routes());
+v1Router.use(guardrailsRouter.routes());
 v1Router.use(agentsRouter.routes());
 v1Router.use(sessionsRouter.routes());
 v1Router.use(chatsRouter.routes());

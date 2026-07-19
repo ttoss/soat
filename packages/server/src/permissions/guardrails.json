@@ -1,0 +1,40 @@
+{
+  "module": "guardrails",
+  "operations": [
+    {
+      "operationId": "createGuardrail",
+      "action": "guardrails:CreateGuardrail",
+      "description": "Create a guardrail"
+    },
+    {
+      "operationId": "listGuardrails",
+      "action": "guardrails:ListGuardrails",
+      "description": "List guardrails in a project"
+    },
+    {
+      "operationId": "getGuardrail",
+      "action": "guardrails:GetGuardrail",
+      "description": "Get a guardrail by ID"
+    },
+    {
+      "operationId": "updateGuardrail",
+      "action": "guardrails:UpdateGuardrail",
+      "description": "Update a guardrail"
+    },
+    {
+      "operationId": "deleteGuardrail",
+      "action": "guardrails:DeleteGuardrail",
+      "description": "Delete a guardrail"
+    },
+    {
+      "operationId": "getGuardrailVersion",
+      "action": "guardrails:GetGuardrailVersion",
+      "description": "Fetch an archived guardrail document version"
+    },
+    {
+      "operationId": "detachGuardrail",
+      "action": "guardrails:DetachGuardrail",
+      "description": "Remove a guardrail from a project, agent, or tool guardrail_ids list"
+    }
+  ]
+}
