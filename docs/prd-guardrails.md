@@ -59,11 +59,13 @@
 > stricter-wins, a per-project tighter posture is just a tighter guardrail
 > attached at that project's (or its agents'/tools') scope — it can only
 > tighten, and other projects are untouched. The project attach scope is the
-> home for a central baseline a tenant composes under but can't loosen;
-> detaching a project-scoped guardrail is gated by a broader permission than
-> adding agent-/tool-scoped ones. The audit record carries the `scope` a
-> guardrail was attached at (`project` / `agent` / `tool`) instead of an
-> `override_version`.
+> home for a central baseline a tenant composes under but can't loosen.
+> Adding an id to any `guardrail_ids` list needs only the carrying resource's
+> update permission (attach can only tighten); removing an id — at **any**
+> scope — additionally requires `guardrails:DetachGuardrail`, the one
+> attachment operation that can loosen posture. The audit record carries the
+> `scope` a guardrail was attached at (`project` / `agent` / `tool`) instead
+> of an `override_version`.
 >
 > The per-binding `approval_policy` (prd-approvals Phase 2 / roadmap task 1.1) is
 > deprecated and will be removed; its dispatch-path machinery is retained as
@@ -80,6 +82,28 @@
 > evaluate alongside each other — effective class is the **stricter** result
 > and every `B` guard must pass — making tighten-only a runtime composition
 > property instead of a static-analysis problem. Audit `rule_index` is dropped.
+
+> **Lifecycle & rollout decision (2026-07):**
+>
+> - **Decision ordering.** The composed decision is the strictest by
+>   `blocked` > `tripwire` > `route_to_approval` > `execute`. `escalate` is
+>   **per-guardrail**: a failing guard yields that guardrail's own decision
+>   (`tripwire`, or `route_to_approval` with `escalate: true`); across
+>   guardrails the ordering still applies, so one guardrail's escalation
+>   never softens another's hard stop.
+> - **Deletion.** `DELETE /api/v1/guardrails/{guardrail_id}` returns `409`
+>   while the id is referenced by any `guardrail_ids`, listing the
+>   referencing resources — detach (gated) must happen first, so deletion
+>   can never do what detach permissions forbid. Defense-in-depth: a dangling
+>   reference at evaluation time fails closed to class `C`.
+> - **Dry-run.** `POST /api/v1/guardrails/{guardrail_id}/evaluate` runs the
+>   full pipeline (class, guard, context tool, live `soat.*`) over
+>   caller-supplied `args` / `guardrail_context` (+ optional `tool_id`) and
+>   returns the would-be `guardrail_evaluation` record; nothing executes, no
+>   approval item is filed, no activity entry is written. This is the
+>   adoption path before first attach — and before editing a widely-attached
+>   guardrail, since attachments track the id and edits take effect
+>   immediately everywhere.
 
 ## Implementation Status
 

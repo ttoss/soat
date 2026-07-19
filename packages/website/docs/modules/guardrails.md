@@ -61,11 +61,13 @@ A guardrail is attached by adding its `id` to the `guardrail_ids` list on a [too
 
 A guardrail attaches through a `guardrail_ids` array on one of three resources — it is **not** attached the way IAM policies attach to users and API keys. Every field is a list, so each scope can carry several composable guardrails (a budget guardrail, a PII guardrail, a rate-limit guardrail) instead of one monolithic document:
 
-- **On a project** — every guardrail in the project's `guardrail_ids` governs **every** tool call by **every** agent in the project. This is the baseline / central-mandate scope: the floor for the whole tenant, which narrower scopes can only raise. (Detaching a project-scoped guardrail is a broader-permission operation than adding an agent- or tool-scoped one, so the floor holds.)
+- **On a project** — every guardrail in the project's `guardrail_ids` governs **every** tool call by **every** agent in the project. This is the baseline / central-mandate scope: the floor for the whole tenant, which narrower scopes can only raise.
 - **On an agent** — governs **every** tool call the agent makes, across all its bindings. `default_class` covers any tool nobody thought about.
 - **On a tool** — governs that tool **wherever it is used**, by any agent. A dangerous tool carries its own gate; binding it to a new agent can never silently escape classification.
 
-Every guardrail that applies to a call — each of the project's, the agent's, and the tool's — **evaluates, and the strictest decision across all of them wins** (`blocked` > `route_to_approval` > guarded execute > execute); where several classify the same call as `B`, **all their guards must pass**. Composition can therefore only tighten, and it is order-independent — `A` is the identity, so a guardrail that returns `"A"` for a call simply defers to the others. This is what replaces a bespoke per-project override: to run a stricter posture in one project, attach a tighter guardrail at that project's (or its agents'/tools') scope; stricter-wins guarantees it can only tighten, and other projects are untouched. One `guardrail_evaluation` record is written per guardrail evaluated.
+**Attach is cheap, detach is gated.** Adding an id to a `guardrail_ids` list can only tighten the outcome, so it needs only the carrying resource's update permission (`tools:UpdateTool`, `agents:UpdateAgent`, `projects:UpdateProject`). Removing an id — at **any** of the three scopes — is the one attachment operation that can loosen posture, so it additionally requires `guardrails:DetachGuardrail`. `tools:UpdateTool` alone can add a guardrail to a tool but never strip one off; the same asymmetry holds on agents and projects, so the floor can't be silently lowered from any scope.
+
+Every guardrail that applies to a call — each of the project's, the agent's, and the tool's — **evaluates, and the strictest decision across all of them wins**, ordered `blocked` > `tripwire` > `route_to_approval` > `execute`; where several classify the same call as `B`, **all their guards must pass**. Composition can therefore only tighten, and it is order-independent — `A` is the identity, so a guardrail that returns `"A"` for a call simply defers to the others. This is what replaces a bespoke per-project override: to run a stricter posture in one project, attach a tighter guardrail at that project's (or its agents'/tools') scope; stricter-wins guarantees it can only tighten, and other projects are untouched. One `guardrail_evaluation` record is written per guardrail evaluated.
 
 ### Action Classes
 
@@ -130,6 +132,8 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception rather than silently downgrading — a runaway loop hits a hard, non-LLM stop. A document with `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) for a human decision instead of aborting.
 
+`escalate` is **per-guardrail**: a failing guard yields that guardrail's own decision — `tripwire` without `escalate`, `route_to_approval` with it — and the strictest decision across all applying guardrails still wins. If two guardrails classify the same call `B` and both guards fail, one with `escalate: true` and one without, the tripwire prevails (`tripwire` outranks `route_to_approval` in the [decision ordering](#attachment)): opting one guardrail into escalation never softens another's hard stop.
+
 ### Running a tighter posture in one project
 
 There is no separate override resource. A project runs a stricter posture than the fleet by [attaching](#attachment) a tighter guardrail at the **project** scope — `{ "class": "C" }` on the project forces sign-off on every call its agents would otherwise have executed, and stricter-wins guarantees it can only tighten what the agent- and tool-scoped guardrails already decided. To tighten just one tool, attach the stricter guardrail to that tool instead of the whole project. Either way, other projects — which don't carry that attachment — are unchanged, and because every layer composes by stricter-wins, a tenant can raise the floor but never lower it.
@@ -137,6 +141,18 @@ There is no separate override resource. A project runs a stricter posture than t
 ### Versioning
 
 Every write to a guardrail's `document` increments `version` and archives the prior document as a `GuardrailVersion`. Approval items, activity entries, and exceptions record the version that governed them, so the audit chain survives edits. Fetch the exact governing document with [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](#fetch-an-archived-version).
+
+Attachments reference the guardrail's **id**, not a version: a document edit takes effect immediately on every tool, agent, and project that carries the id. [Dry-run](#dry-run-evaluation) an edited document before writing it when the guardrail is attached at scale.
+
+### Deletion
+
+A guardrail cannot be deleted while it is attached: `DELETE /api/v1/guardrails/{guardrail_id}` returns `409` listing the tools, agents, and projects whose `guardrail_ids` still reference it. Each reference must be detached first — a `guardrails:DetachGuardrail` operation (see [Attachment](#attachment)) — so deletion can never do what detach permissions forbid. As defense-in-depth, a dangling reference encountered at evaluation time fails closed: the unresolvable guardrail evaluates as class **C**.
+
+### Dry-run Evaluation
+
+`POST /api/v1/guardrails/{guardrail_id}/evaluate` runs the full evaluation pipeline — the `class` expression, the guard, the context tool per `context_mode`, live `soat.*` resolution — against caller-supplied `args` and `guardrail_context`, and returns the exact [evaluation record](#evaluation-audit-record) a real call would produce. Nothing executes, no approval item is filed, and no activity entry is written. Pass an optional `tool_id` to resolve `soat.tool.*`; any `soat.*` key that cannot resolve behaves exactly as at runtime (fail-closed).
+
+This is the adoption path: preview a document's decisions against production-shaped calls **before** attaching it — or before editing a widely-attached one — so the first attach of a `default_class: C` baseline doesn't flood the [approvals queue](./approvals.md) unrehearsed.
 
 ### Evaluation Audit Record
 
@@ -233,6 +249,58 @@ curl -X POST https://api.example.com/api/v1/guardrails \
 
 </TabItem>
 </Tabs>
+
+### Dry-run a guardrail before attaching
+
+Preview the decision the guardrail above would make for a production-shaped call — nothing executes, nothing is filed:
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat evaluate-guardrail \
+  --guardrail-id guard_V1StGXR8Z5jdHi6B \
+  --args '{"amount": 450}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.guardrails.evaluateGuardrail({
+  path: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
+  body: { args: { amount: 450 } },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/evaluate \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{ "args": { "amount": 450 } }'
+```
+
+</TabItem>
+</Tabs>
+
+The response is the would-be [evaluation record](#evaluation-audit-record) — here class **B** with a passing guard, `soat.usage.cost_usd_24h` resolved live:
+
+```json
+{
+  "class": "B",
+  "decision": "execute",
+  "guard_result": true,
+  "context_source": "none",
+  "context_snapshot": {
+    "args.amount": 450,
+    "soat.usage.cost_usd_24h": 812.4
+  }
+}
+```
 
 ### Attach a guardrail
 
