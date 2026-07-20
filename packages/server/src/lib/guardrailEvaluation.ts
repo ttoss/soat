@@ -78,8 +78,12 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 // Builds the nested object the JSON Logic evaluator reads `var` dot-paths
-// against — `{ var: 'args.amount' }` selects `args.amount`, etc. Every
-// namespace defaults to an empty object so an absent one resolves to `null`
+// against — `{ var: 'args.amount' }` selects `args.amount`, etc. The caller's
+// `args` / `guardrail_context` are opaque, application-owned bags whose keys the
+// caseTransform middleware leaves verbatim (see its guardrail pass-through), so a
+// `var` path resolves against exactly the casing the author wrote — matching how
+// tool `input`, task `payload`, and orchestration-run `input` are read back.
+// Every namespace defaults to an empty object so an absent one resolves to `null`
 // (fail-closed) rather than surfacing as an evaluator error.
 const buildLogicContext = (context: GuardrailEvaluationContext) => {
   return {

@@ -516,6 +516,47 @@ describe('Guardrails', () => {
       expect(response.body.decision).toBe('tripwire');
     });
 
+    test('a multi-word snake_case context var resolves through caseTransform', async () => {
+      // `guardrail_context` is a caseTransform pass-through bag, so a snake_case
+      // key the caller sends (`max_daily_budget`) reaches evaluation verbatim and
+      // the document's snake_case `var` (`context.max_daily_budget`) resolves.
+      // Without the pass-through the key would be camelCased in transit and the
+      // canonical budget example would hard-stop every class-B call.
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Snake-case Budget Guardrail',
+          document: {
+            default_class: 'C',
+            class: 'B',
+            guard: {
+              '<=': [
+                { var: 'args.amount' },
+                { var: 'context.max_daily_budget' },
+              ],
+            },
+          },
+        });
+      const snakeGuardrailId = res.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${snakeGuardrailId}/evaluate`)
+        .send({
+          args: { amount: 450 },
+          guardrail_context: { max_daily_budget: 500 },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.class).toBe('B');
+      expect(response.body.guard_result).toBe(true);
+      expect(response.body.decision).toBe('execute');
+      // The snapshot records the resolved value, not a spurious null.
+      expect(response.body.context_snapshot['context.max_daily_budget']).toBe(
+        500
+      );
+    });
+
     test('files no approval item and writes no audit row', async () => {
       const before = await authenticatedTestClient(userToken).get(
         '/api/v1/approvals?status=pending'

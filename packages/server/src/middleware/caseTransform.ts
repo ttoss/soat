@@ -200,12 +200,31 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     // underscore-bearing name on the way in). Covers the orchestration webhook
     // emit node's `headers`.
     'headers',
+    // A `guardrail_context` is an opaque, application-owned bag exactly like a
+    // tool's `input` or a task's `payload`: the platform never interprets it, it
+    // only evaluates a guardrail's JSON Logic `class` / `guard` over it via
+    // `{ "var": "context.<name>" }`, whose paths keep the authored casing.
+    // Case-transforming it would rewrite an underscore key (`max_daily_budget` →
+    // `maxDailyBudget`) while the document's `var` reads keep the original
+    // casing, so every underscore-bearing context key resolves to null and a
+    // class-B guard fails closed. It appears on every generation / run-start /
+    // dry-run body (agents, sessions, conversations, orchestrations, guardrails),
+    // so it round-trips verbatim globally, exactly like `parameters`/`execute`.
+    'guardrailContext',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
   if (isTasksPath(path)) keys.add('payload');
   if (isWorkflowsPath(path)) keys.add('payloadSchema');
-  if (isGuardrailsPath(path)) keys.add('document');
+  if (isGuardrailsPath(path)) {
+    keys.add('document');
+    // The dry-run `POST /guardrails/:id/evaluate` body carries `args` — the
+    // proposed call's arguments, read back by the document via
+    // `{ "var": "args.<name>" }`. At real dispatch these come from the model's
+    // tool call (never case-transformed); the dry-run must match that fidelity,
+    // so `args` round-trips verbatim on the guardrails routes too.
+    keys.add('args');
+  }
   return keys;
 };
 

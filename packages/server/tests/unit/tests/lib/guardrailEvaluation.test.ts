@@ -127,6 +127,23 @@ describe('guardrailEvaluation', () => {
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
     });
+
+    // The evaluator matches `var` paths against the caller's context verbatim —
+    // the casing is preserved end-to-end (caseTransform leaves guardrail_context
+    // as a pass-through bag), so a snake_case document reads a snake_case key.
+    test('a snake_case context var path resolves against a verbatim snake_case key', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: {
+            '<=': [{ var: 'args.amount' }, { var: 'context.max_daily_budget' }],
+          },
+        }),
+        context: { args: { amount: 100 }, context: { max_daily_budget: 500 } },
+      });
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
   });
 
   describe('evaluateGuardrail — class expressions and fail-closed default', () => {
