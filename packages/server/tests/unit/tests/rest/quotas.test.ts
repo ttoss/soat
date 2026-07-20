@@ -1,3 +1,4 @@
+import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -205,6 +206,32 @@ describe('Quotas', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test('rejects a scope_ref that names no agent in the project (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'agent',
+        scope_ref: 'agent_doesnotexist00',
+        metric: 'tokens',
+        window: 'calendar_month',
+        limit: 100,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/agent/i);
+    });
+
+    test('rejects a scope_ref on a project-scope quota (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        scope_ref: 'key_something00000000',
+        metric: 'requests',
+        window: 'rolling_1h',
+        limit: 10,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/project/i);
+    });
+
     test('rejects a duplicate quota (409)', async () => {
       const body = {
         scope: 'project',
@@ -370,10 +397,49 @@ describe('Quotas', () => {
       expect(res.body.mode).toBe('monitor');
     });
 
+    test('updates mode only, leaving limit untouched', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaId}`)
+        .send({ mode: 'enforce' });
+      expect(res.status).toBe(200);
+      expect(res.body.mode).toBe('enforce');
+      expect(res.body.limit).toBe(before.body.limit);
+    });
+
+    test('an empty patch is a no-op and returns the quota', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaId}`)
+        .send({});
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(quotaId);
+    });
+
     test('rejects an invalid mode (400)', async () => {
       const res = await authenticatedTestClient(userToken)
         .patch(`/api/v1/quotas/${quotaId}`)
         .send({ mode: 'nonsense' });
+      expect(res.status).toBe(400);
+    });
+
+    test('rejects a fractional limit on a requests quota (400)', async () => {
+      // Created in otherProjectId (no API-key traffic) so this enforce/requests
+      // quota never participates in another test's request counting.
+      const reqQuota = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          metric: 'requests',
+          window: 'calendar_month',
+          limit: 10,
+        },
+        otherProjectId
+      );
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${reqQuota.body.id}`)
+        .send({ limit: 2.5 });
       expect(res.status).toBe(400);
     });
 
@@ -633,6 +699,62 @@ describe('Quotas', () => {
           `/api/v1/quotas?project_id=${enfProjectId}`
         );
         expect(res.status).toBe(200);
+      }
+    });
+
+    test('an API key in a project with no requests quota is never blocked', async () => {
+      const { enfProjectId, rawKey } =
+        await setupEnforcementProject('quotas-no-match');
+
+      // No quota created — evaluateRequestQuotas finds nothing to match and the
+      // request proceeds.
+      for (let i = 0; i < 3; i += 1) {
+        const res = await authenticatedTestClient(rawKey).get(
+          `/api/v1/quotas?project_id=${enfProjectId}`
+        );
+        expect(res.status).toBe(200);
+      }
+    });
+
+    test('fails open when the counter write errors', async () => {
+      const { enfProjectId, keyId, rawKey } =
+        await setupEnforcementProject('quotas-fail-open');
+      await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+
+      // Enforcement is active: request 2 breaches the limit-1 quota.
+      const ok = await authenticatedTestClient(rawKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(ok.status).toBe(200);
+      const blocked = await authenticatedTestClient(rawKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(blocked.status).toBe(429);
+
+      // Sanctioned force-failure stub (see tests.md): the fail-open `.catch`
+      // branch can only be exercised by making the counter evaluation reject —
+      // no real DB write fails deterministically. The request must then proceed
+      // (200) instead of surfacing the error or the 429.
+      const spy = jest
+        .spyOn(quotaEnforcement, 'evaluateRequestQuotas')
+        .mockRejectedValueOnce(new Error('counter write failed'));
+      try {
+        const failedOpen = await authenticatedTestClient(rawKey).get(
+          `/api/v1/quotas?project_id=${enfProjectId}`
+        );
+        expect(failedOpen.status).toBe(200);
+      } finally {
+        spy.mockRestore();
       }
     });
   });

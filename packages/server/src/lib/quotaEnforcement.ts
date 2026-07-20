@@ -19,11 +19,11 @@ export type QuotaBreach = {
   retryAfter: number;
 };
 
-/** Specificity for attribution: agent > api_key > project. */
+// Specificity for attribution among quotas that can match the `requests`
+// metric: only `api_key` and `project` scopes ever match (agent scope is
+// invalid for requests), so api_key is the more specific of the two.
 const scopeRank = (scope: string): number => {
-  if (scope === 'agent') return 3;
-  if (scope === 'api_key') return 2;
-  return 1;
+  return scope === 'api_key' ? 2 : 1;
 };
 
 /**
@@ -54,8 +54,10 @@ const incrementCounter = async (args: {
     }
   );
 
+  // The upsert always returns exactly one row (the inserted or updated
+  // counter), so `rows[0]` is guaranteed present.
   const returned = rows as Array<{ count: string | number }>;
-  const count = Number(returned[0]?.count ?? 0);
+  const count = Number(returned[0].count);
 
   // On the first hit of a new window, opportunistically garbage-collect this
   // quota's expired windows — fixed windows never count a stale key again.
@@ -86,9 +88,8 @@ const incrementCounter = async (args: {
 export const evaluateRequestQuotas = async (args: {
   projectId: number;
   apiKeyPublicId: string;
-  now?: Date;
 }): Promise<QuotaBreach | null> => {
-  const now = args.now ?? new Date();
+  const now = new Date();
 
   const quotas = (await db.Quota.findAll({
     where: {

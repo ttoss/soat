@@ -36,16 +36,15 @@ export const windowKeyFor = (args: {
 }): string => {
   const iso = args.now.toISOString(); // e.g. 2026-07-07T12:31:45.123Z
   switch (args.window) {
-    case 'rolling_1m':
-      return `${iso.slice(0, 16)}Z`; // 2026-07-07T12:31Z
     case 'rolling_1h':
       return `${iso.slice(0, 13)}Z`; // 2026-07-07T12Z
     case 'rolling_24h':
       return `${iso.slice(0, 10)}Z`; // 2026-07-07Z
     case 'calendar_month':
       return iso.slice(0, 7); // 2026-07
+    case 'rolling_1m':
     default:
-      return iso;
+      return `${iso.slice(0, 16)}Z`; // 2026-07-07T12:31Z
   }
 };
 
@@ -59,10 +58,6 @@ export const windowResetsAt = (args: {
 }): Date => {
   const d = new Date(args.now.getTime());
   switch (args.window) {
-    case 'rolling_1m':
-      d.setUTCSeconds(0, 0);
-      d.setUTCMinutes(d.getUTCMinutes() + 1);
-      return d;
     case 'rolling_1h':
       d.setUTCMinutes(0, 0, 0);
       d.setUTCHours(d.getUTCHours() + 1);
@@ -75,7 +70,10 @@ export const windowResetsAt = (args: {
       return new Date(
         Date.UTC(args.now.getUTCFullYear(), args.now.getUTCMonth() + 1, 1)
       );
+    case 'rolling_1m':
     default:
+      d.setUTCSeconds(0, 0);
+      d.setUTCMinutes(d.getUTCMinutes() + 1);
       return d;
   }
 };
