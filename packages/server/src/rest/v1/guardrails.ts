@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { evaluateGuardrailDryRun } from 'src/lib/guardrailDryRun';
 import {
   createGuardrail,
   deleteGuardrail,
@@ -220,6 +221,37 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
 
   ctx.status = 204;
 });
+
+/**
+ * @openapi
+ * /api/v1/guardrails/{guardrail_id}/evaluate:
+ *   post:
+ *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}~1evaluate/post'
+ */
+guardrailsRouter.post(
+  '/guardrails/:guardrail_id/evaluate',
+  async (ctx: Context) => {
+    const projectIds = await checkGuardrailsAccess(
+      ctx,
+      'guardrails:EvaluateGuardrail'
+    );
+    if (projectIds === null) return;
+
+    const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    const args = coerceToJsonObject(body.args) ?? undefined;
+    const guardrailContext =
+      coerceToJsonObject(body.guardrailContext) ?? undefined;
+
+    ctx.body = await evaluateGuardrailDryRun({
+      projectIds,
+      guardrailId: ctx.params.guardrail_id,
+      args,
+      guardrailContext,
+      toolId: parseStringOrUndefined(body.toolId),
+      authHeader: (ctx.headers.authorization as string) ?? '',
+    });
+  }
+);
 
 /**
  * @openapi

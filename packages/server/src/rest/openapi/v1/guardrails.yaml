@@ -306,6 +306,73 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/guardrails/{guardrail_id}/evaluate:
+    post:
+      tags:
+        - Guardrails
+      summary: Dry-run evaluate a guardrail
+      description: >
+        Runs the full evaluation pipeline — the `class` expression, the guard,
+        the context tool per `context_mode`, live `soat.*` resolution — against
+        caller-supplied `args` and `guardrail_context`, and returns the exact
+        `guardrail_evaluation` record a real call would produce. Nothing
+        executes, no approval item is filed, and no activity entry is written.
+        This is the adoption path: preview a document's decisions against
+        production-shaped calls before attaching it — or before editing a
+        widely-attached one. Pass an optional `tool_id` to resolve `soat.tool.*`.
+      operationId: evaluateGuardrail
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                args:
+                  type: object
+                  additionalProperties: true
+                  description: The proposed call's arguments (the `args.*` namespace).
+                guardrail_context:
+                  type: object
+                  additionalProperties: true
+                  description: >
+                    The caller-supplied guardrail context (the `context.*`
+                    namespace), combined with the context tool per `context_mode`.
+                tool_id:
+                  type: string
+                  description: Optional tool to resolve `soat.tool.*` against.
+      responses:
+        '200':
+          description: The would-be evaluation record (nothing executed)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GuardrailEvaluation'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -408,6 +475,77 @@ components:
         updated_at:
           type: string
           format: date-time
+    GuardrailEvaluation:
+      type: object
+      description: >
+        The record produced by evaluating a guardrail against one call — written
+        to the audit trail at dispatch time (one per applying guardrail) and
+        returned verbatim by the dry-run endpoint.
+      properties:
+        kind:
+          type: string
+          description: Always `guardrail_evaluation`.
+        guardrail_id:
+          x-soat-ref: guardrails
+          type: string
+          example: guard_V1StGXR8Z5jdHi6B
+        guardrail_version:
+          type: integer
+          nullable: true
+          description: The governing version; null for a dangling reference (fail-closed C).
+        scope:
+          type: string
+          enum:
+            - project
+            - agent
+            - tool
+        tool:
+          type: string
+          nullable: true
+        action:
+          type: string
+          nullable: true
+        class:
+          type: string
+          description: The resolved class (or the applied default_class).
+          enum:
+            - A
+            - B
+            - C
+            - D
+        decision:
+          type: string
+          enum:
+            - execute
+            - route_to_approval
+            - blocked
+            - tripwire
+        guard_result:
+          type: boolean
+          nullable: true
+          description: The guard outcome; null when the call did not classify as B.
+        context_source:
+          type: string
+          enum:
+            - caller
+            - tool
+            - merged
+            - none
+        context_snapshot:
+          type: object
+          additionalProperties: true
+          description: >
+            Flat map of only the vars the class/guard expressions referenced,
+            keyed by fully-qualified path, frozen at evaluation-time values.
+        agent_id:
+          type: string
+          nullable: true
+        run_id:
+          type: string
+          nullable: true
+        generation_id:
+          type: string
+          nullable: true
     GuardrailVersion:
       type: object
       properties:

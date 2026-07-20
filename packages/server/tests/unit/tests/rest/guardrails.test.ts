@@ -8,6 +8,7 @@ const GUARDRAIL_ACTIONS = [
   'guardrails:UpdateGuardrail',
   'guardrails:DeleteGuardrail',
   'guardrails:GetGuardrailVersion',
+  'guardrails:EvaluateGuardrail',
 ];
 
 // A class-B-below-500 / C-above document with a 24h-spend guard — the canonical
@@ -449,6 +450,132 @@ describe('Guardrails', () => {
       const response = await authenticatedTestClient(rawKey).delete(
         `/api/v1/guardrails/${guardrailId}`
       );
+      expect(response.status).toBe(403);
+    });
+  });
+
+  describe('POST /api/v1/guardrails/{guardrail_id}/evaluate', () => {
+    let evalGuardrailId: string;
+
+    beforeAll(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Dry-run Guardrail',
+          document: {
+            default_class: 'C',
+            class: { if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'] },
+            guard: { '==': [{ var: 'context.tier' }, 'trusted'] },
+          },
+        });
+      evalGuardrailId = res.body.id;
+    });
+
+    test('returns the would-be record and executes nothing (class B, guard passes)', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({
+          args: { amount: 100 },
+          guardrail_context: { tier: 'trusted' },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.kind).toBe('guardrail_evaluation');
+      expect(response.body.guardrail_id).toBe(evalGuardrailId);
+      expect(response.body.class).toBe('B');
+      expect(response.body.decision).toBe('execute');
+      expect(response.body.guard_result).toBe(true);
+      expect(response.body.context_source).toBe('caller');
+      // Only the referenced vars are snapshotted, at their evaluation-time values.
+      expect(response.body.context_snapshot['args.amount']).toBe(100);
+      expect(response.body.context_snapshot['context.tier']).toBe('trusted');
+    });
+
+    test('resolves class C above the threshold → route_to_approval', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({ args: { amount: 999 } });
+
+      expect(response.status).toBe(200);
+      expect(response.body.class).toBe('C');
+      expect(response.body.decision).toBe('route_to_approval');
+    });
+
+    test('a failing class-B guard trips (tripwire) in the dry run', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({
+          args: { amount: 100 },
+          guardrail_context: { tier: 'unknown' },
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.class).toBe('B');
+      expect(response.body.guard_result).toBe(false);
+      expect(response.body.decision).toBe('tripwire');
+    });
+
+    test('files no approval item and writes no audit row', async () => {
+      const before = await authenticatedTestClient(userToken).get(
+        '/api/v1/approvals?status=pending'
+      );
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({ args: { amount: 999 } });
+      const after = await authenticatedTestClient(userToken).get(
+        '/api/v1/approvals?status=pending'
+      );
+      expect(after.body.length).toBe(before.body.length);
+    });
+
+    test('resolves live soat.usage.* and accepts an optional tool_id', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Usage Guardrail',
+          document: {
+            class: 'B',
+            guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          },
+        });
+      const usageGuardrailId = res.body.id;
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${usageGuardrailId}/evaluate`)
+        // A tool_id that need not exist — it only resolves soat.tool.*.
+        .send({ args: { amount: 1 }, tool_id: 'tool_unknown00000000' });
+
+      expect(response.status).toBe(200);
+      expect(response.body.class).toBe('B');
+      // No usage events → windowed cost is 0, under the ceiling → guard passes.
+      expect(response.body.guard_result).toBe(true);
+      expect(response.body.decision).toBe('execute');
+      expect(response.body.context_snapshot['soat.usage.cost_usd_24h']).toBe(0);
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({ args: {} });
+      expect(response.status).toBe(401);
+    });
+
+    test('non-existent guardrail returns 404', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails/guard_nonexistent00000/evaluate')
+        .send({ args: {} });
+      expect(response.status).toBe(404);
+    });
+
+    test('project-scoped API key without EvaluateGuardrail returns 403', async () => {
+      const rawKey = await createRestrictedApiKey(
+        'guardrails:EvaluateGuardrail'
+      );
+      const response = await authenticatedTestClient(rawKey)
+        .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)
+        .send({ args: {} });
       expect(response.status).toBe(403);
     });
   });

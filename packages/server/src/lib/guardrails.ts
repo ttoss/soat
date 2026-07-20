@@ -2,6 +2,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type { CollectedGuardrail } from './guardrailCollection';
+import type { GuardrailDocument } from './guardrailDocument';
 import { validateGuardrailDocument } from './guardrailDocument';
 
 const log = createDebug('soat:guardrails');
@@ -369,6 +371,35 @@ export const deleteGuardrail = async (args: {
   });
 
   await guardrail.destroy();
+};
+
+/**
+ * Loads the fields the dispatch / dry-run pipeline needs for one guardrail,
+ * resolving both the internal and public project id (the former drives usage
+ * queries and context-tool scoping). Throws `RESOURCE_NOT_FOUND` when the id is
+ * unknown or outside the caller's projects.
+ */
+export const loadGuardrailForEvaluation = async (args: {
+  projectIds?: number[];
+  id: string;
+}): Promise<{
+  guardrail: CollectedGuardrail;
+  projectId: number;
+  projectPublicId: string;
+}> => {
+  const instance = await findGuardrailInstance(args);
+  return {
+    guardrail: {
+      guardrailId: instance.publicId,
+      version: instance.version,
+      scope: 'tool',
+      document: instance.document as GuardrailDocument,
+      contextToolId: instance.contextToolId,
+      contextMode: instance.contextMode ?? 'merge',
+    },
+    projectId: instance.projectId,
+    projectPublicId: instance.project.publicId,
+  };
 };
 
 export const getGuardrailVersion = async (args: {

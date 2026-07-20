@@ -17,6 +17,7 @@ export { FormationOperation } from './FormationOperation';
 export { FormationResource } from './FormationResource';
 export { Generation } from './Generation';
 export { Guardrail } from './Guardrail';
+export { GuardrailEvaluation } from './GuardrailEvaluation';
 export { GuardrailVersion } from './GuardrailVersion';
 export { IngestionRule } from './IngestionRule';
 export { Memory } from './Memory';

@@ -98,6 +98,26 @@ const collectVarPaths = (node: unknown, out: string[]): void => {
   }
 };
 
+/**
+ * Every JSON Logic `var` path referenced by a document's `class` and `guard`
+ * expressions, de-duplicated and in first-seen order. This is the exact set the
+ * evaluation audit record snapshots (guardrails.md — Evaluation Audit Record):
+ * only the vars an expression actually read, keyed by fully-qualified path. A
+ * literal `class` (no expression) contributes nothing.
+ */
+export const collectDocumentVarPaths = (
+  document: GuardrailDocument
+): string[] => {
+  const paths: string[] = [];
+  if (isPlainObject(document.class)) {
+    collectVarPaths(document.class, paths);
+  }
+  if (isPlainObject(document.guard)) {
+    collectVarPaths(document.guard, paths);
+  }
+  return [...new Set(paths)];
+};
+
 const isAllowedVarPath = (path: string): boolean => {
   if (path === 'args' || path.startsWith('args.')) return true;
   if (path === 'context' || path.startsWith('context.')) return true;

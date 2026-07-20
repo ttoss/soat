@@ -32,6 +32,11 @@
       "description": "Fetch an archived guardrail document version"
     },
     {
+      "operationId": "evaluateGuardrail",
+      "action": "guardrails:EvaluateGuardrail",
+      "description": "Dry-run evaluate a guardrail without executing"
+    },
+    {
       "operationId": "detachGuardrail",
       "action": "guardrails:DetachGuardrail",
       "description": "Remove a guardrail from a project, agent, or tool guardrail_ids list"

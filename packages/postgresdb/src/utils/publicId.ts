@@ -49,6 +49,7 @@ export const PUBLIC_ID_PREFIXES = {
   taskTransition: 'task_tr_',
   guardrail: 'guard_',
   guardrailVersion: 'guard_ver_',
+  guardrailEvaluation: 'gev_',
 } as const;
 
 /**

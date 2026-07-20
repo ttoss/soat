@@ -16,6 +16,10 @@ import {
 } from './agentToolApproval';
 import type { ToolApprovalPolicy } from './agentToolBindings';
 import {
+  gateResolvedToolsWithGuardrails,
+  type ResolverGuardrailContext,
+} from './agentToolGuardrail';
+import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
@@ -672,6 +676,7 @@ type AgentToolRow = {
   deniedActions: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
+  guardrailIds: string[] | null;
 };
 
 /**
@@ -850,6 +855,9 @@ const ephemeralDefinitionToRow = (
     outputMapping: orNull(
       definition.outputMapping as Record<string, unknown> | undefined
     ),
+    // Inline tools are ephemeral and carry no persisted guardrail_ids; only the
+    // project/agent base guardrails apply to them.
+    guardrailIds: null,
   };
 };
 
@@ -865,6 +873,7 @@ export const resolveEphemeralAgentTool = async (args: {
   remainingDepth?: number;
   approvalPolicy?: ToolApprovalPolicy | null;
   approval?: ResolverApprovalContext;
+  guardrail?: ResolverGuardrailContext;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
 
@@ -872,18 +881,35 @@ export const resolveEphemeralAgentTool = async (args: {
 
   const tools = await resolveToolByType(typedTool, args);
   const mapped = wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+  const rawParameters =
+    typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
-  if (!args.approvalPolicy || !args.approval) return mapped;
-  return gateResolvedTools({
-    tools: mapped,
-    policy: args.approvalPolicy,
-    toolId: typedTool.publicId,
+  const approvalGated =
+    args.approvalPolicy && args.approval
+      ? gateResolvedTools({
+          tools: mapped,
+          policy: args.approvalPolicy,
+          toolId: typedTool.publicId,
+          toolType: typedTool.type,
+          toolName: typedTool.name,
+          presetParameters: typedTool.presetParameters,
+          rawParameters,
+          context: args.approval,
+        })
+      : mapped;
+
+  if (!args.guardrail) return approvalGated;
+  return gateResolvedToolsWithGuardrails({
+    tools: approvalGated,
+    // Inline tools have no persisted id to re-execute; the guardrail gate uses
+    // a synthetic marker for the proposal, so pass null here.
+    toolId: null,
     toolType: typedTool.type,
     toolName: typedTool.name,
+    toolGuardrailIds: null,
     presetParameters: typedTool.presetParameters,
-    rawParameters:
-      typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined,
-    context: args.approval,
+    rawParameters,
+    context: args.guardrail,
   });
 };
 
@@ -906,6 +932,7 @@ const resolveReferenceBinding = async (args: {
   projectIds?: number[];
   resolveArgs: ResolveToolByTypeArgs;
   approval?: ResolverApprovalContext;
+  guardrail?: ResolverGuardrailContext;
 }): Promise<Record<string, Tool>> => {
   const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
   if (args.projectIds !== undefined) {
@@ -926,16 +953,32 @@ const resolveReferenceBinding = async (args: {
       : wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
 
   const policy = args.approval?.policyByToolId[args.toolPublicId] ?? null;
-  if (!policy || !args.approval) return mapped;
-  return gateResolvedTools({
-    tools: mapped,
-    policy,
+  const approvalGated =
+    policy && args.approval
+      ? gateResolvedTools({
+          tools: mapped,
+          policy,
+          toolId: typedTool.publicId,
+          toolType: typedTool.type,
+          toolName: typedTool.name,
+          presetParameters: typedTool.presetParameters,
+          rawParameters: localInjectableSchema(typedTool),
+          context: args.approval,
+        })
+      : mapped;
+
+  // Guardrails are the single tool-call gating mechanism and wrap outermost, so
+  // they take precedence over the (deprecated) per-binding approval_policy.
+  if (!args.guardrail) return approvalGated;
+  return gateResolvedToolsWithGuardrails({
+    tools: approvalGated,
     toolId: typedTool.publicId,
     toolType: typedTool.type,
     toolName: typedTool.name,
+    toolGuardrailIds: typedTool.guardrailIds,
     presetParameters: typedTool.presetParameters,
     rawParameters: localInjectableSchema(typedTool),
-    context: args.approval,
+    context: args.guardrail,
   });
 };
 
@@ -955,6 +998,10 @@ export const resolveAgentTools = async (args: {
   // `approval_policy` (keyed by tool publicId for references, positional for
   // inline tools) gates its resolved tools in the dispatch path (Milestone 1).
   approval?: ResolverApprovalContext;
+  // Per-generation guardrail-gate context (Milestone 2). Wraps every resolved
+  // tool with the classify → route interceptor when a guardrail applies at the
+  // project / agent / tool scope.
+  guardrail?: ResolverGuardrailContext;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -966,6 +1013,7 @@ export const resolveAgentTools = async (args: {
         projectIds: args.projectIds,
         resolveArgs: args,
         approval: args.approval,
+        guardrail: args.guardrail,
       })
     );
   }
@@ -986,6 +1034,7 @@ export const resolveAgentTools = async (args: {
         remainingDepth: args.remainingDepth,
         approvalPolicy: args.approval?.inlinePolicies[inlineIndex] ?? null,
         approval: args.approval,
+        guardrail: args.guardrail,
       });
       Object.assign(resolvedTools, ephemeralTools);
     }

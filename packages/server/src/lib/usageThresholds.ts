@@ -207,7 +207,9 @@ const readTotal = (
 };
 
 // Sums the windowed cost across all meter types (nulls ignored by SUM).
-const windowedCostUsd = async (args: {
+// Exported for the guardrail `soat.usage.cost_usd_*` context providers, which
+// sum the same events over their own rolling windows.
+export const windowedCostUsd = async (args: {
   projectId: number;
   start: Date;
 }): Promise<number> => {
@@ -221,7 +223,8 @@ const windowedCostUsd = async (args: {
 // Sums the windowed billable token count (input + output + cached). Resolves the
 // window's event ids first, then sums their token components — avoids a
 // join+aggregate whose column alias is brittle across Sequelize versions.
-const windowedTokens = async (args: {
+// Exported for the guardrail `soat.usage.tokens_*` context providers.
+export const windowedTokens = async (args: {
   projectId: number;
   start: Date;
 }): Promise<number> => {
