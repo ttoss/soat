@@ -44,7 +44,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
 | Audit log | [prd-audit-log.md](./prd-audit-log.md) | ❌ Not started | substrate for G3/G4 |
-| Quotas | [prd-quotas.md](./prd-quotas.md) | ❌ Not started | umbrella (no G#) |
+| Quotas | [prd-quotas.md](./prd-quotas.md) | 🟡 Phase 1 shipped; 2–3 remain | umbrella (no G#) |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phases 1–4 shipped; 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 1,2,4 shipped; 3,5,6,7 remain | data plane |
@@ -59,10 +59,9 @@ everything else builds on.
 FOUNDATIONS (shipped)
   orchestration runtime ✅   orchestration-queue P1 ✅   usage metering P1–3c ✅
   guardrails core ✅         knowledge P1/2/4 ✅          memories P1–4 ✅
-  approvals P1 ✅            discussions ✅
+  approvals P1 ✅            discussions ✅               quotas P1 ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
-  quotas P1 ............................. (independent; can ship anytime)
   quotas P2 ◄── usage metering ✅ ....... (metering choke point exists)
   orchestration-queue P2 (concurrency limits) ◄── orchestration-queue P1 ✅
   guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
@@ -102,16 +101,15 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Quotas P1** (independent) — unblocks a fan-out and waits on nothing.
-   (**Orchestration-queue P1** shipped, unblocking evaluations P2 and
-   exactly-once metering; **P2 concurrency limits** is the next queue step.)
-2. **Quotas P2** — unblocked now that metering shipped; closes hard spend
-   enforcement.
-3. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
+1. **Quotas P2** — unblocked now that metering shipped; closes hard spend
+   enforcement. (**Quotas P1** shipped: requests quotas + CRUD + the 429
+   middleware. **Orchestration-queue P1** shipped, unblocking evaluations P2
+   and exactly-once metering; **P2 concurrency limits** is the next queue step.)
+2. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
    infra emitters (P4–P6)** — pure extensions of shipped cores.
-4. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
+3. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
    feed and agent-versions promotion gate need.
-5. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
+4. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 6. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
    last because it consumes approvals, memories, and evaluations signals.
 7. **Model-routing** and the deferred tails (SQS driver, budget-guard P7) as
@@ -228,10 +226,12 @@ with G3 before shipping the feed._
 
 ### Quotas
 
-_Not started. Hard fail-closed enforcement (429), complementing metering
-(measure) and guardrails (per-action)._
+_Hard fail-closed enforcement (429), complementing metering (measure) and
+guardrails (per-action). **Phase 1 shipped**: requests quotas (`Quota` +
+`QuotaWindowCounter` models, CRUD, the request-quota Koa middleware with an
+atomic `UPDATE … RETURNING`, and the `QUOTA_EXCEEDED` + `429` + `Retry-After`
+contract)._
 
-- [ ] **Phase 1** Requests quotas: `Quota` model + CRUD (scope/metric/window/limit/mode); `QuotaWindowCounter` table; request-quota Koa middleware (atomic `UPDATE … RETURNING`); `QUOTA_EXCEEDED` + `429` contract with `Retry-After`. **Independent — can ship first.**
 - [ ] **Phase 2** Token/cost quotas at the meter-write choke point (pre-generation check; never kills an in-flight generation) — **unblocked** (metering shipped)
 - [ ] **Phase 3** Monitor mode + audit entries; `quota.exceeded` webhook (first breach per window); `quota` formation resource type
 
