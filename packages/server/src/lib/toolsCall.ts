@@ -122,7 +122,8 @@ export const callDiscussionTool = async (
 export const callHttpTool = (
   tool: CallableToolDefinition,
   mergedInput: Record<string, unknown>,
-  projectId: number
+  projectId: number,
+  idempotencyKey?: string
 ): Promise<unknown> => {
   const executeConfig = parseHttpExecuteConfig(
     (tool.execute as
@@ -140,6 +141,10 @@ export const callHttpTool = (
     toolName: tool.name,
     execute: executeConfig,
     projectId,
+    // Forwarded verbatim as the `Idempotency-Key` request header (D7).
+    extraHeaders: idempotencyKey
+      ? { 'Idempotency-Key': idempotencyKey }
+      : undefined,
   })(mergedInput).catch((error: unknown) => {
     throw toHttpToolDomainError(error) ?? error;
   });
@@ -282,9 +287,15 @@ const dispatchDirectTool = async (args: {
   mergedInput: Record<string, unknown>;
   authHeader?: string;
   toolProjectId: number;
+  idempotencyKey?: string;
 }): Promise<unknown> => {
   if (args.type === 'http') {
-    return callHttpTool(args.tool, args.mergedInput, args.toolProjectId);
+    return callHttpTool(
+      args.tool,
+      args.mergedInput,
+      args.toolProjectId,
+      args.idempotencyKey
+    );
   }
   if (args.type === 'soat') {
     return callSoatTool(args.tool, {
@@ -318,6 +329,7 @@ export const callResolvedTool = async (args: {
   authHeader?: string;
   remainingDepth?: number;
   projectIds?: number[];
+  idempotencyKey?: string;
 }): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
 
@@ -367,6 +379,7 @@ export const callResolvedTool = async (args: {
     mergedInput,
     authHeader: args.authHeader,
     toolProjectId: args.toolProjectId,
+    idempotencyKey: args.idempotencyKey,
   });
 
   return applyToolOutputMapping(

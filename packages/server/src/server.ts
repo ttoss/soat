@@ -11,6 +11,7 @@ import {
 } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
+import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
 import { createFirstAdminUser } from './lib/users';
@@ -32,6 +33,11 @@ const startServer = async () => {
     // it can wake sleeping runs whose delay/poll waits are due (including runs
     // that were parked before a restart).
     startOrchestrationScheduler();
+    // Start the in-process orchestration queue worker so this API process is a
+    // valid single-process worker: it drains `continue`/`wake` tasks the
+    // scheduler and start-run enqueue. Disable with ORCHESTRATION_WORKER_DISABLED
+    // when running a dedicated worker fleet (see worker.ts).
+    startOrchestrationWorker();
     // Start the approvals expiry sweeper so pending approval items past their
     // expiry are flipped to `expired` and can never execute late.
     startApprovalScheduler();

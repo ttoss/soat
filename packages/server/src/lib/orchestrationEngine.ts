@@ -21,6 +21,7 @@ import {
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
+import { enqueueRunTask } from './orchestrationQueue';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
@@ -42,6 +43,7 @@ import {
   findOrchestrationForStartRun,
   resolveStartRunProjectScope,
 } from './orchestrationStartRun';
+import { kickWorker } from './orchestrationWorker';
 
 const log = createDebug('soat:orchestrations');
 
@@ -375,16 +377,19 @@ export const startOrchestrationRun = async (args: {
   const runRecord = await db.OrchestrationRun.create({
     orchestrationId: orch.id as number,
     projectId: effectiveProjectId,
-    status: 'running',
+    // Synchronous mode enters `running` immediately (it drives in-process);
+    // async mode enters `queued` — the run is enqueued and a worker picks it up.
+    status: args.wait ? 'running' : 'queued',
     state,
     activeNodes: [],
     artifacts,
     input: args.input ?? null,
     triggerId: args.triggerId ?? null,
     startedAt: new Date(),
-    // The run enters `running` immediately; acquire a lease so the reaper can
-    // reclaim it if this driver crashes before the first checkpoint refresh.
-    leaseExpiresAt: newLeaseExpiry(),
+    // In `wait` mode the run is `running` immediately, so acquire a lease so the
+    // reaper can reclaim it if this driver crashes before the first checkpoint.
+    // A `queued` run holds no lease until a worker claims and drives it.
+    leaseExpiresAt: args.wait ? newLeaseExpiry() : null,
   });
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);
@@ -416,24 +421,61 @@ export const startOrchestrationRun = async (args: {
     });
   }
 
-  // Durable async mode (default): detach execution from the request. The run is
-  // driven in the background and offloads long waits to the scheduler, so this
-  // returns immediately with status 'running'.
-  void driveRunToRest({
-    runRecord,
+  // Durable async mode (default): enqueue a `continue` task and return
+  // immediately with status 'queued'. No node executes inside this HTTP request;
+  // a worker claims the task and drives the run. `kickWorker` lets a
+  // single-process deployment (the API process is itself a valid worker) start
+  // draining right away without a separate worker process.
+  await enqueueRunTask({ runId: runRecord.id as number, kind: 'continue' });
+  kickWorker();
+
+  return startMapped;
+};
+
+/**
+ * Drives a freshly `queued` run for the first time: loads its orchestration,
+ * transitions it to `running` under a fresh lease, and drives it in background
+ * mode (long waits offloaded to the scheduler) from its start nodes. Called by
+ * the worker for a `continue` task whose run is still `queued`. A run whose
+ * orchestration has since been deleted is settled `failed`.
+ */
+export const driveQueuedRun = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<void> => {
+  const { run } = args;
+  log('driveQueuedRun %o', { runId: run.id });
+
+  const orch = await db.Orchestration.findOne({
+    where: { id: run.orchestrationId as number },
+  });
+  if (!orch) {
+    await run.update({
+      status: 'failed',
+      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
+      leaseExpiresAt: null,
+      completedAt: new Date(),
+    });
+    return;
+  }
+
+  const nodes = orch.nodes as OrchestrationNode[];
+  const edges = orch.edges as OrchestrationEdge[];
+  // Clone so mutations produce a fresh reference (see wakeRun).
+  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
+  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
+
+  await run.update({ status: 'running', leaseExpiresAt: newLeaseExpiry() });
+
+  await driveRunToRest({
+    runRecord: run,
     nodes,
     edges,
     state,
     artifacts,
-    projectIds: effectiveProjectIds,
-    traceId: runRecord.traceId ?? null,
-    authHeader: args.authHeader,
+    projectIds: [run.projectId as number],
+    traceId: run.traceId ?? null,
     inlineWaits: false,
-  }).catch((error: unknown) => {
-    log('startOrchestrationRun: background drive error %o', error);
   });
-
-  return startMapped;
 };
 
 /**

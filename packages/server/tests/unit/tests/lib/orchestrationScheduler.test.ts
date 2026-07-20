@@ -13,6 +13,7 @@ import {
   stopOrchestrationScheduler,
   wakeDueRuns,
 } from 'src/lib/orchestrationScheduler';
+import { createSweep } from 'src/lib/scheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -295,6 +296,39 @@ describe('orchestrationEvents', () => {
       });
     }).not.toThrow();
     await flush();
+  });
+});
+
+describe('createSweep', () => {
+  // The generic sweep dispatches its handler fire-and-forget behind a
+  // `.catch()` so a handler rejection is swallowed, not surfaced. The
+  // orchestration sweeps now only enqueue tasks (which don't fail in these
+  // tests), so this drives the swallow branch directly.
+  test('claims a due row and swallows a handler rejection without rejecting', async () => {
+    const sweep = createSweep<{ id: number }>({
+      log: () => {},
+      name: 'test-sweep',
+      inFlight: new Set<number>(),
+      findDue: async () => {
+        return [{ id: 1 }];
+      },
+      idOf: (row) => {
+        return row.id;
+      },
+      claim: async () => {
+        return true;
+      },
+      handle: async () => {
+        throw new Error('boom');
+      },
+    });
+
+    const count = await sweep({ now: new Date() });
+    expect(count).toBe(1);
+    // Let the detached .catch()/.finally() run; the rejection must not surface.
+    await new Promise<void>((resolve) => {
+      return setImmediate(resolve);
+    });
   });
 });
 
@@ -622,10 +656,10 @@ describe('startOrchestrationRun background error handling', () => {
     jest.restoreAllMocks();
   });
 
-  test('swallows an error thrown by the async background drive', async () => {
-    // A corrupt orchestration makes the detached background drive throw. The
-    // call still returns the initial run synchronously and the drive's catch
-    // swallows the failure — driven entirely through real records, no stubs.
+  test('enqueues the run and swallows an error thrown by the worker drive', async () => {
+    // A corrupt orchestration makes the worker's drive throw. start-run still
+    // returns the initial run synchronously as `queued`, and the kicked worker
+    // drive's failure is swallowed — driven entirely through real records.
     const badOrch = await db.Orchestration.create({
       projectId: projectPk,
       name: 'Background Drive Failure',
@@ -637,8 +671,9 @@ describe('startOrchestrationRun background error handling', () => {
       orchestrationPublicId: badOrch.publicId as string,
     });
 
-    // Returns the initial run immediately; the background failure is swallowed.
-    expect(result.status).toBe('running');
+    // Returns the initial run immediately as `queued`; the worker failure is
+    // swallowed by drainQueueOnce.
+    expect(result.status).toBe('queued');
     expect(result.id).toBeDefined();
     await new Promise<void>((resolve) => {
       return setImmediate(resolve);

@@ -2,8 +2,9 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { redriveRun, wakeRun } from './orchestrationEngine';
 import { newLeaseExpiry } from './orchestrationLease';
+import { enqueueRunTask } from './orchestrationQueue';
+import { kickWorker } from './orchestrationWorker';
 import { createScheduler, createSweep } from './scheduler';
 
 const log = createDebug('soat:orchestrations');
@@ -11,9 +12,11 @@ const log = createDebug('soat:orchestrations');
 /**
  * Finds sleeping runs whose wake is due (`status = 'sleeping'` and
  * `wakeAt <= now`), atomically claims each one (transitioning it to `running`),
- * and wakes it. Because the due set lives in the database, a run parked before a
- * restart is picked up on the next tick after the process comes back — long
- * delays survive restarts.
+ * and enqueues a `wake` task for a worker to drive. Because the due set lives in
+ * the database, a run parked before a restart is picked up on the next tick
+ * after the process comes back — long delays survive restarts. The atomic claim
+ * guarantees exactly one `wake` task per due run even across overlapping ticks
+ * or multiple workers.
  *
  * Returns the number of runs claimed for waking this tick.
  */
@@ -41,17 +44,20 @@ export const wakeDueRuns = createSweep({
     );
     return claimed > 0;
   },
-  handle: ({ row: run }) => {
-    return wakeRun({ run });
+  handle: async ({ row: run }) => {
+    await enqueueRunTask({ runId: run.id as number, kind: 'wake' });
+    kickWorker();
   },
 });
 
 /**
  * Finds orphaned runs — `running` runs whose lease has expired because their
  * driver crashed or was redeployed mid-execution and stopped refreshing it —
- * atomically claims each one (by extending the lease), and re-drives it from its
- * last checkpoint. A healthy run refreshes its lease each round, so it is never
- * reclaimed while it is making progress.
+ * atomically claims each one (by extending the lease), and enqueues a
+ * `continue` task so a worker re-drives it from its last checkpoint. A healthy
+ * run refreshes its lease each round, so it is never reclaimed while it is
+ * making progress. Extending the lease under the atomic claim guarantees exactly
+ * one `continue` task per orphan even across overlapping ticks or workers.
  *
  * Returns the number of runs claimed for re-driving this tick.
  */
@@ -84,8 +90,9 @@ export const reapOrphanedRuns = createSweep({
     );
     return claimed > 0;
   },
-  handle: ({ row: run }) => {
-    return redriveRun({ run });
+  handle: async ({ row: run }) => {
+    await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+    kickWorker();
   },
 });
 

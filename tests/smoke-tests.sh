@@ -1317,17 +1317,18 @@ ASYNC_ORCH_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI create-orchestration 
   --edges '[]')
 ASYNC_ORCH_ID=$(printf '%s\n' "$ASYNC_ORCH_RESP" | jq -r '.id')
 
-# No --wait: the run must come back immediately with status "running".
+# No --wait: the run is enqueued and comes back immediately with status
+# "queued"; a worker drives it in the background.
 ASYNC_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ASYNC_ORCH_ID" \
   --input '{}')
 ASYNC_RUN_ID=$(printf '%s\n' "$ASYNC_RUN_RESP" | jq -r '.id')
-if ! printf '%s\n' "$ASYNC_RUN_RESP" | jq -e '.status == "running"' >/dev/null 2>&1; then
-  echo "start-orchestration-run (async) did not return status running"
+if ! printf '%s\n' "$ASYNC_RUN_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
+  echo "start-orchestration-run (async) did not return status queued"
   printf '%s\n' "$ASYNC_RUN_RESP"
   exit 1
 fi
-echo "Async run returned status running: OK"
+echo "Async run returned status queued: OK"
 
 # The background worker drives it to completion shortly after.
 ASYNC_DONE=0
@@ -1362,8 +1363,8 @@ DELAY_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-ru
   --orchestration-id "$DELAY_ORCH_ID" \
   --input '{}')
 DELAY_RUN_ID=$(printf '%s\n' "$DELAY_RUN_RESP" | jq -r '.id')
-if ! printf '%s\n' "$DELAY_RUN_RESP" | jq -e '.status == "running"' >/dev/null 2>&1; then
-  echo "Delay run did not return status running"
+if ! printf '%s\n' "$DELAY_RUN_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
+  echo "Delay run did not return status queued"
   printf '%s\n' "$DELAY_RUN_RESP"
   exit 1
 fi

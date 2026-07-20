@@ -139,7 +139,7 @@ export type MappedNodeExecution = {
   nodeId: string;
   nodeType: string | null;
   attempt: number;
-  status: 'completed' | 'failed' | 'requires_action' | 'skipped';
+  status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;

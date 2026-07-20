@@ -433,6 +433,8 @@ const buildHttpRequestInit = (args: {
   resolvedHeaders?: Record<string, string>;
   remainingArgs: Record<string, unknown>;
   toolContext?: Record<string, string>;
+  // Verbatim headers merged last (e.g. `Idempotency-Key`), not context-prefixed.
+  extraHeaders?: Record<string, string>;
 }): RequestInit => {
   const isMultipart = args.hasBody && args.bodyMode === 'multipart';
   const headers: Record<string, string> = {
@@ -443,6 +445,7 @@ const buildHttpRequestInit = (args: {
       ? withoutContentType(args.resolvedHeaders)
       : args.resolvedHeaders),
     ...buildContextHeaders(args.toolContext),
+    ...(args.extraHeaders ?? {}),
   };
   const init: RequestInit = { method: args.method, headers };
   if (args.hasBody) {
@@ -453,24 +456,28 @@ const buildHttpRequestInit = (args: {
   return init;
 };
 
+const ALLOWED_METHODS = [
+  'GET',
+  'POST',
+  'PUT',
+  'PATCH',
+  'DELETE',
+  'HEAD',
+  'OPTIONS',
+];
+
 export const buildHttpToolExecute = (
   args: {
     toolName: string;
     execute: HttpExecuteConfig;
     projectId: number;
+    // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
+    // execute headers and context headers.
+    extraHeaders?: Record<string, string>;
   },
   toolContext?: Record<string, string>
 ) => {
   return async (toolArgs: unknown) => {
-    const ALLOWED_METHODS = [
-      'GET',
-      'POST',
-      'PUT',
-      'PATCH',
-      'DELETE',
-      'HEAD',
-      'OPTIONS',
-    ];
     const rawMethod = (args.execute.method ?? 'POST').toUpperCase();
     const method = ALLOWED_METHODS.includes(rawMethod) ? rawMethod : 'POST';
     const hasBody = !['GET', 'HEAD'].includes(method);
@@ -508,6 +515,7 @@ export const buildHttpToolExecute = (
           resolvedHeaders: resolved.headers,
           remainingArgs,
           toolContext,
+          extraHeaders: args.extraHeaders,
         })
       );
       if (!response.ok) {
