@@ -639,6 +639,48 @@ describe('Quotas', () => {
       expect(blocked.body.error.meta.quota_id).toBe(projQuota.body.id);
     });
 
+    test('when both a project and api-key quota breach, the api-key one is attributed', async () => {
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-enforce-both'
+      );
+
+      // Both caps are limit 1, so the second request breaches both at once —
+      // the breach list has two entries and the most specific (api_key) wins.
+      const projQuota = await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+      const keyQuota = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+
+      const ok = await authenticatedTestClient(rawKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(ok.status).toBe(200);
+
+      const blocked = await authenticatedTestClient(rawKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.meta.quota_id).toBe(keyQuota.body.id);
+      expect(blocked.body.error.meta.quota_id).not.toBe(projQuota.body.id);
+    });
+
     test('never admits more than limit under concurrency', async () => {
       const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
         'quotas-enforce-concurrency'
