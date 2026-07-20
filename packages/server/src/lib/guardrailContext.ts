@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
+import { withCaseAliases } from './guardrailEvaluation';
 import { callTool } from './tools';
 import { windowedCostUsd, windowedTokens } from './usageThresholds';
 
@@ -281,9 +282,12 @@ export const buildContextSnapshot = (args: {
   guardrail: CollectedGuardrail;
   evaluationContext: GuardrailEvaluationContext;
 }): Record<string, unknown> => {
+  // Case-alias args/context exactly as buildLogicContext does, so a snake_case
+  // var path snapshots the value it actually resolved to at evaluation time
+  // (rather than a spurious null) when the runtime key was camelCased.
   const root = {
-    args: args.evaluationContext.args ?? {},
-    context: args.evaluationContext.context ?? {},
+    args: withCaseAliases(args.evaluationContext.args ?? {}),
+    context: withCaseAliases(args.evaluationContext.context ?? {}),
     soat: args.evaluationContext.soat ?? {},
   };
   const snapshot: Record<string, unknown> = {};

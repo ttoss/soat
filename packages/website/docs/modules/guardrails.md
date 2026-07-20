@@ -130,6 +130,10 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 
 **Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `soat.*` key outside the catalog — is rejected with `400`, never silently `null` at runtime. At evaluation time, an expression referencing a `context.*` key absent from the effective context, a context-tool failure or timeout, or a `soat.*` provider that cannot resolve all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture; it never loosens it.
 
+**Variable casing.** Author `args.*` and `context.*` paths in **snake_case**, matching the rest of the REST contract and the examples on this page. The platform camelCases request-body keys in transit, so a `var` is resolved against **both** the snake_case and camelCase form of the runtime key — `{ "var": "context.max_daily_budget" }` matches a supplied `max_daily_budget` (and an already-camelCased `maxDailyBudget`) alike. `soat.*` keys are the fixed snake_case catalog above and are matched verbatim.
+
+**Missing keys and comparisons.** JSON Logic coerces an absent `var` to a falsy, zero-ish value, so a bare comparison treats a **missing** argument as `0`: `{ "<": [{ "var": "args.amount" }, 500] }` is `true` when `args.amount` is absent, and the call takes the `< 500` branch. When a missing argument must **not** reach the permissive branch, test presence explicitly — e.g. `{ "and": [{ "var": "args.amount" }, { "<": [{ "var": "args.amount" }, 500] }] }` — rather than relying on the comparison alone.
+
 ### Tripwires and `escalate`
 
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception rather than silently downgrading — a runaway loop hits a hard, non-LLM stop. A document with `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) for a human decision instead of aborting.

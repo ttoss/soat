@@ -127,6 +127,57 @@ describe('guardrailEvaluation', () => {
       expect(result.decision).toBe('execute');
       expect(result.guardResult).toBe(true);
     });
+
+    // The document is authored against the snake_case external contract (like
+    // every OpenAPI field and the soat.* catalog), but the caller's args /
+    // guardrail_context reach evaluation camelCased by the caseTransform
+    // middleware. A snake_case var path must still resolve — otherwise the
+    // canonical budget example in guardrails.md hard-stops every class-B call.
+    test('a snake_case context var path resolves against a camelCased runtime key', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: {
+            '<=': [{ var: 'args.amount' }, { var: 'context.max_daily_budget' }],
+          },
+        }),
+        // runtime keys are camelCased before reaching evaluation
+        context: { args: { amount: 100 }, context: { maxDailyBudget: 500 } },
+      });
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
+
+    test('a snake_case args var path resolves against a camelCased runtime key', () => {
+      // `>` (not `<`) so a *failure* to resolve (null → coerced 0) would take the
+      // opposite branch — the assertion only holds if the alias truly resolves.
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: {
+            if: [{ '>': [{ var: 'args.daily_amount' }, 50] }, 'B', 'C'],
+          },
+          guard: { '>': [{ var: 'args.daily_amount' }, 50] },
+        }),
+        context: { args: { dailyAmount: 100 } },
+      });
+      expect(result.class).toBe('B');
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
+
+    test('a camelCase var path still resolves against a camelCased runtime key', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: {
+            '<=': [{ var: 'args.amount' }, { var: 'context.maxDailyBudget' }],
+          },
+        }),
+        context: { args: { amount: 100 }, context: { maxDailyBudget: 500 } },
+      });
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
   });
 
   describe('evaluateGuardrail — class expressions and fail-closed default', () => {
