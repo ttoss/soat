@@ -13,7 +13,7 @@ Project-scoped caps that block traffic once an aggregate limit is exceeded.
 
 A quota compares a windowed aggregate to a limit and blocks with `429 QUOTA_EXCEEDED` when it is breached. Quotas are cost control, not authorization: [Usage metering](./usage.md) answers "what did this cost?" and [Guardrails](./guardrails.md) answer "may this one tool call execute?", while a quota answers "has this scope exceeded its aggregate cap?".
 
-Phase 1 enforces the `requests` metric: a Koa middleware mounted after authentication counts **API-key-authenticated requests only** and blocks the request that pushes the counter past the limit. JWT-user (interactive) requests are never counted or blocked. Token and cost budgets are enforced at the metering choke point in a later phase.
+The `requests` metric is enforced by a Koa middleware mounted after authentication: it counts **API-key-authenticated requests only** and blocks the request that pushes the counter past the limit. JWT-user (interactive) requests are never counted or blocked. The `tokens` and `cost_usd` metrics are enforced at the pre-generation check — before an agent generation starts, the current window's usage is aggregated from the [usage meter](./usage.md) and compared to the limit.
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -28,8 +28,8 @@ Phase 1 enforces the `requests` metric: a Koa middleware mounted after authentic
 | `metric`        | string  | `requests` \| `tokens` \| `cost_usd`                                              |
 | `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
 | `limit`         | number  | The cap (> 0)                                                                      |
-| `mode`          | string  | `enforce` (block with `429`) \| `monitor` (pass-through no-op in Phase 1)          |
-| `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas and in list responses |
+| `mode`          | string  | `enforce` (block with `429`) \| `monitor` (pass-through no-op until the webhook phase) |
+| `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time) and in list responses |
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
 
@@ -39,7 +39,18 @@ A quota is uniquely identified by `(project_id, scope, scope_ref, metric, window
 
 ### Scope × metric validity
 
-`scope: agent` combined with `metric: requests` is rejected with `400` — an agent's activity is not inbound HTTP traffic and there is no precise per-request agent attribution. `agent` scope is valid for `tokens` / `cost_usd`.
+Two scope/metric combinations are rejected with `400` because no attribution exists to enforce them:
+
+- `scope: agent` with `metric: requests` — an agent's activity is not inbound HTTP traffic, and there is no precise per-request agent attribution.
+- `scope: api_key` with `metric: tokens` / `cost_usd` — usage events carry no API-key attribution, so the meter cannot be aggregated per key.
+
+So `agent` scope is valid for `tokens` / `cost_usd`, and `api_key` scope is valid for `requests`. A precise semantic for the rejected combinations can be added later without breaking the contract.
+
+### Token and cost enforcement
+
+`tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
+
+A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent. Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
 
 ### Windows and counters
 

@@ -44,7 +44,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
 | Audit log | [prd-audit-log.md](./prd-audit-log.md) | ❌ Not started | substrate for G3/G4 |
-| Quotas | [prd-quotas.md](./prd-quotas.md) | 🟡 Phase 1 shipped; 2–3 remain | umbrella (no G#) |
+| Quotas | [prd-quotas.md](./prd-quotas.md) | 🟡 Phases 1–2 shipped; 3 remains | umbrella (no G#) |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phases 1–4 shipped; 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 1,2,4 shipped; 3,5,6,7 remain | data plane |
@@ -62,7 +62,7 @@ FOUNDATIONS (shipped)
   approvals P1 ✅            discussions ✅               quotas P1 ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
-  quotas P2 ◄── usage metering ✅ ....... (metering choke point exists)
+  quotas P2 ✅ ◄── usage metering ✅ (token/cost pre-generation check shipped)
   orchestration-queue P2 (concurrency limits) ◄── orchestration-queue P1 ✅
   guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
   usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
@@ -101,10 +101,12 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Quotas P2** — unblocked now that metering shipped; closes hard spend
-   enforcement. (**Quotas P1** shipped: requests quotas + CRUD + the 429
-   middleware. **Orchestration-queue P1** shipped, unblocking evaluations P2
-   and exactly-once metering; **P2 concurrency limits** is the next queue step.)
+1. **Quotas P3** (monitor-mode webhooks + `quota` formation resource) — the
+   last quotas phase now that **P1** (requests quotas + CRUD + 429 middleware)
+   and **P2** (token/cost pre-generation check for `project`/`agent` scopes)
+   have shipped, closing hard spend enforcement. (**Orchestration-queue P1**
+   shipped, unblocking evaluations P2 and exactly-once metering; **P2
+   concurrency limits** is the next queue step.)
 2. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
    infra emitters (P4–P6)** — pure extensions of shipped cores.
 3. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
@@ -232,7 +234,7 @@ guardrails (per-action). **Phase 1 shipped**: requests quotas (`Quota` +
 atomic `UPDATE … RETURNING`, and the `QUOTA_EXCEEDED` + `429` + `Retry-After`
 contract)._
 
-- [ ] **Phase 2** Token/cost quotas at the meter-write choke point (pre-generation check; never kills an in-flight generation) — **unblocked** (metering shipped)
+- [x] **Phase 2** ✅ Token/cost quotas at the meter-write choke point (pre-generation check over `UsageEvent`; `project`/`agent` scopes; never kills an in-flight generation; `api_key` token/cost rejected — no attribution)
 - [ ] **Phase 3** Monitor mode + audit entries; `quota.exceeded` webhook (first breach per window); `quota` formation resource type
 
 ### Model routing

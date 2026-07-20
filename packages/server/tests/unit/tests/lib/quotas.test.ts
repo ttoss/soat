@@ -4,6 +4,7 @@ import {
   validateQuotaShape,
   windowKeyFor,
   windowResetsAt,
+  windowStartsAt,
 } from '../../../../src/lib/quotas';
 
 // Pure quota helpers — window math and create/update validation. Justified as a
@@ -57,6 +58,29 @@ describe('quota window helpers', () => {
       expect(
         windowResetsAt({ window: 'calendar_month', now: NOW }).toISOString()
       ).toBe('2026-08-01T00:00:00.000Z');
+    });
+  });
+
+  describe('windowStartsAt', () => {
+    test('truncates to the current minute for rolling_1m', () => {
+      expect(
+        windowStartsAt({ window: 'rolling_1m', now: NOW }).toISOString()
+      ).toBe('2026-07-07T12:31:00.000Z');
+    });
+    test('truncates to the current hour for rolling_1h', () => {
+      expect(
+        windowStartsAt({ window: 'rolling_1h', now: NOW }).toISOString()
+      ).toBe('2026-07-07T12:00:00.000Z');
+    });
+    test('truncates to the current day for rolling_24h', () => {
+      expect(
+        windowStartsAt({ window: 'rolling_24h', now: NOW }).toISOString()
+      ).toBe('2026-07-07T00:00:00.000Z');
+    });
+    test('truncates to the first of the month for calendar_month', () => {
+      expect(
+        windowStartsAt({ window: 'calendar_month', now: NOW }).toISOString()
+      ).toBe('2026-07-01T00:00:00.000Z');
     });
   });
 
@@ -149,6 +173,46 @@ describe('validateQuotaShape', () => {
         metric: 'tokens',
         window: 'calendar_month',
       })
+    ).toBeNull();
+  });
+  test('accepts scope=agent with metric=cost_usd', () => {
+    expect(
+      validateQuotaShape({
+        ...base,
+        scope: 'agent',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 1.5,
+      })
+    ).toBeNull();
+  });
+  test('rejects scope=api_key with metric=tokens', () => {
+    // Usage events carry no API-key attribution, so a token/cost cap scoped to
+    // an api key can never be aggregated — rejected rather than stored as a
+    // silent no-op (mirrors the agent+requests rejection).
+    expect(
+      validateQuotaShape({
+        ...base,
+        scope: 'api_key',
+        metric: 'tokens',
+        window: 'calendar_month',
+      })
+    ).toMatch(/api_key/);
+  });
+  test('rejects scope=api_key with metric=cost_usd', () => {
+    expect(
+      validateQuotaShape({
+        ...base,
+        scope: 'api_key',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 1.5,
+      })
+    ).toMatch(/api_key/);
+  });
+  test('still accepts scope=api_key with metric=requests', () => {
+    expect(
+      validateQuotaShape({ ...base, scope: 'api_key', metric: 'requests' })
     ).toBeNull();
   });
 });

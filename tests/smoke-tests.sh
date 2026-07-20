@@ -3712,7 +3712,8 @@ fi
 $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
 echo "Guardrails: OK"
 
-# 3e. Quotas module coverage (Phase 1: requests quotas + 429 middleware)
+# 3e. Quotas module coverage (Phase 1: requests quotas + 429 middleware;
+#     Phase 2: token/cost quotas enforced at the pre-generation check)
 echo "--- Quotas coverage ---"
 QUOTA_CREATE_RESP=$($SOAT_CLI create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope project --metric requests \
@@ -3747,6 +3748,26 @@ expect_cli_error_status 400 create-quota \
 expect_cli_error_status 409 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope project --metric requests \
   --window rolling_1h --limit 500
+
+# Phase 2: a project cost_usd quota is a token/cost cap enforced at the
+# pre-generation check; it keeps no counter, so current_usage is null.
+COST_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric cost_usd \
+  --window calendar_month --limit 25.5 | jq -r '.id')
+if [ -z "$COST_QUOTA_ID" ] || [ "$COST_QUOTA_ID" = "null" ]; then
+  echo "ERROR: Failed to create cost_usd quota" >&2
+  exit 1
+fi
+if [ "$($SOAT_CLI get-quota --quota-id "$COST_QUOTA_ID" | jq -r '.current_usage')" != "null" ]; then
+  echo "ERROR: Expected null current_usage on a cost_usd quota" >&2
+  exit 1
+fi
+$SOAT_CLI delete-quota --quota-id "$COST_QUOTA_ID"
+
+# scope=api_key + metric=tokens/cost_usd is rejected (400) — no attribution.
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope api_key --metric tokens \
+  --window calendar_month --limit 1000
 
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"

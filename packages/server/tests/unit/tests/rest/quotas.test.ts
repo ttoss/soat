@@ -1,3 +1,6 @@
+import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
+import { db } from 'src/db';
+
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -756,6 +759,97 @@ describe('Quotas', () => {
         );
         expect(res.status).toBe(200);
       }
+    });
+
+    test('token quota blocks a generation with 429 and writes no usage', async () => {
+      const { enfProjectId } =
+        await setupEnforcementProject('quotas-token-gate');
+
+      const provRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: enfProjectId,
+          name: 'token gate provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+        });
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: enfProjectId,
+          ai_provider_id: provRes.body.id,
+          name: 'token gate agent',
+        });
+      const agentPublicId = agentRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: enfProjectId },
+      });
+      const projectInternalId = (project as unknown as { id: number }).id;
+
+      // Seed a metered event summing to 30 billable tokens in the window.
+      const event = await db.UsageEvent.create({
+        projectId: projectInternalId,
+        meterType: 'llm_tokens',
+        provider: 'ollama',
+        model: 'stub-model',
+        costUsd: null,
+        idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
+      });
+      await db.UsageComponent.bulkCreate(
+        [
+          { component: 'input_tokens', quantity: '10', billable: true },
+          { component: 'output_tokens', quantity: '20', billable: true },
+        ].map((c) => {
+          return {
+            usageEventId: (event as unknown as { id: number }).id,
+            component: c.component,
+            quantity: c.quantity,
+            unit: 'token',
+            billable: c.billable,
+            unitPrice: null,
+            costUsd: null,
+            priceId: null,
+          };
+        })
+      );
+
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'tokens',
+          window: 'calendar_month',
+          limit: 30,
+        },
+        enfProjectId
+      );
+      expect(quotaRes.status).toBe(201);
+
+      const before = await db.UsageEvent.count({
+        where: { projectId: projectInternalId },
+      });
+
+      const blocked = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/agents/${agentPublicId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'hello' }] });
+
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
+      expect(blocked.body.error.meta.quota_id).toBe(quotaRes.body.id);
+      expect(blocked.body.error.meta.metric).toBe('tokens');
+      expect(blocked.body.error.meta.limit).toBe(30);
+      expect(blocked.body.error.meta.window).toBe('calendar_month');
+      expect(blocked.body.error.meta.resets_at).toBeDefined();
+      // The 429 contract carries Retry-After even on the generation path.
+      expect(blocked.headers['retry-after']).toBeDefined();
+      expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+
+      // No usage event was written for the blocked generation.
+      const after = await db.UsageEvent.count({
+        where: { projectId: projectInternalId },
+      });
+      expect(after).toBe(before);
     });
 
     test('fails open when the counter write errors', async () => {

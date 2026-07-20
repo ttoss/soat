@@ -27,6 +27,16 @@
 > "generation-starting requests") is backward-compatible. `agent` scope is
 > valid for `tokens` / `cost_usd` (Phase 2).
 
+> **API-key token/cost decision (2026-07, Phase 2).** Symmetrically,
+> `scope: api_key` combined with `metric: tokens` / `cost_usd` is **rejected
+> with `400`**. The token/cost check aggregates `UsageEvent`, which carries
+> project and agent attribution but **no API-key column** — so an API-key
+> token/cost cap could never be aggregated and would be a silent no-op. The
+> honest choice (same as agent+requests) is to reject it rather than store a
+> cap nobody enforces; a precise semantic can be added later, backward
+> compatibly, once metering attributes spend to an API key. Phase 2 therefore
+> enforces token/cost for `project` and `agent` scopes only.
+
 > **Failure-mode decision (2026-07).** On infrastructure failure (the counter
 > `UPDATE`/upsert itself errors), the middleware **fails open**: the request
 > proceeds and the error is logged loudly. The PRD's "fail closed" wording
@@ -83,7 +93,7 @@
 | `QuotaWindowCounter` table                  | ❌ Not started | Per-window fixed counters for `requests`                      |
 | Request-quota Koa middleware                | ❌ Not started | After auth, before handlers; atomic `UPDATE ... RETURNING`    |
 | `QUOTA_EXCEEDED` error code + `429` contract | ❌ Not started | `Retry-After` header; registered in `errors/codes.ts`         |
-| Token/cost check at meter-write choke point | ❌ Not started | Pre-generation check; never kills an in-flight generation     |
+| Token/cost check at meter-write choke point | ✅ Shipped     | Pre-generation check (`project`/`agent` scopes); never kills an in-flight generation |
 | `quota.exceeded` webhook event              | ❌ Not started | First breach per window (reuses metering hysteresis pattern)  |
 | Monitor mode + audit entries                | ❌ Not started | Log/webhook without blocking, for safe rollout                |
 | `quota` formation resource type             | ❌ Not started | `QuotaResourceProperties` in `formations.yaml`                |
@@ -299,22 +309,32 @@ OpenAPI + SDK/CLI regen); the Koa middleware; `QUOTA_EXCEEDED` in
   admits more than `limit` (atomic increment proven, not assumed).
 - CRUD covered for happy path, `401`, `403`, cross-project `404`.
 
-### Phase 2 — Token/Cost Quotas at the Metering Choke Point ❌ Not started
+### Phase 2 — Token/Cost Quotas at the Metering Choke Point ✅ Shipped
 
-**Depends on [usage metering Phase 1](./prd-usage-metering.md)** — without
-`UsageMeter` rows there is nothing to aggregate; this phase does not start
-until meter writes land.
+**Depended on [usage metering Phase 1](./prd-usage-metering.md)** — now shipped,
+so there are `UsageEvent` rows to aggregate.
 
-**Deliverables:** pre-generation check in the provider-call wrapper;
-`resets_at` computed from the oldest contributing meter for rolling windows.
+**Deliverables (shipped):** `evaluateGenerationQuotas` runs at the top of
+`createGeneration` (the single provider-call wrapper), before any context
+building or provider call. It aggregates the current fixed window from
+`UsageEvent` (summing priced cost for `cost_usd`, billable token components for
+`tokens`), matches `project`- and `agent`-scoped `enforce` quotas, and throws
+`QUOTA_EXCEEDED` on a breach via the shared `quotaBreachError`. The
+`errorLogger` middleware emits the `Retry-After` header from the error's
+`resets_at` so the generation path honors the same 429 contract as the request
+middleware. Windows are fixed (consistent with the requests metric): `resets_at`
+is the start of the next fixed window, not a per-meter slide.
 
-**Acceptance criteria:**
+**Acceptance criteria (met):**
 
-- With a breached `cost_usd` quota, a new generation request returns `429
-  QUOTA_EXCEEDED` and no `UsageMeter` row is written for it.
+- With a breached `cost_usd`/`tokens` quota, a new generation returns `429
+  QUOTA_EXCEEDED` (with `Retry-After`) and no `UsageEvent` row is written for it.
 - A generation started *before* the breach completes and meters normally
-  (in-flight work is never killed).
-- `calendar_month` quota resets: a request in the next window key succeeds.
+  (the check inspects prior usage only — in-flight work is never killed).
+- `calendar_month` (and every rolling) window resets: usage outside the current
+  fixed window is not counted, so the next window admits the generation.
+- `api_key`-scoped token/cost quotas are rejected at create time (no
+  attribution to aggregate); the evaluator also skips any stray one defensively.
 
 ### Phase 3 — Monitor Mode, Webhooks, Formation Resource ❌ Not started
 
