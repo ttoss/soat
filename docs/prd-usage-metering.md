@@ -1,7 +1,7 @@
 # PRD: Usage Metering
 
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G5).
-> Work sequencing lives in the [Usage Roadmap](./usage-roadmap.md).
+> Status and sequencing live in the [SOAT Delivery Roadmap](./roadmap.md).
 > Depends on the idempotency keys from
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > exactly-once accounting under retries; feeds the `usage.*` guard context in
@@ -10,9 +10,8 @@
 
 ## Implementation Status
 
-> Cross-initiative status and sequencing live in the
-> [SOAT Delivery Roadmap](./roadmap.md); the per-run task breakdown is in the
-> [Usage Roadmap](./usage-roadmap.md). The table below is a local snapshot.
+> Status, sequencing, and the full pending backlog live in the
+> [SOAT Delivery Roadmap](./roadmap.md). The table below is a local snapshot.
 
 | Component                                  | Status                     | Notes                                                                |
 | ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
