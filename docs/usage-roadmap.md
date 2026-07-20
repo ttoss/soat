@@ -6,6 +6,9 @@ per-run receipts, a per-project aggregate, and compute/storage/request
 metering. Specs live in the referenced PRDs; this page only sequences the
 work.
 
+> Part of the cross-initiative [SOAT Delivery Roadmap](./roadmap.md), which
+> places this metering work against every other PRD's dependencies.
+
 **Primary PRD:** [prd-usage-metering.md](./prd-usage-metering.md)
 **Related:** [prd-quotas.md](./prd-quotas.md) (enforcement),
 [prd-guardrails.md](./prd-guardrails.md) (`usage.*` guard context),

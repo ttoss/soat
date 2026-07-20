@@ -10,6 +10,10 @@
 
 ## Implementation Status
 
+> Cross-initiative status and sequencing live in the
+> [SOAT Delivery Roadmap](./roadmap.md); the per-run task breakdown is in the
+> [Usage Roadmap](./usage-roadmap.md). The table below is a local snapshot.
+
 | Component                                  | Status                     | Notes                                                                |
 | ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
 | `UsageMeter` model (append-only)           | ✅ Done (#483)              | One row per completed generation; unique idempotency key on the generation |
@@ -62,10 +66,10 @@ second metering system.
 > total cost) whose measured quantities are `UsageComponent` rows (one priced
 > dimension each: `quantity × unit_price`). `PriceBook` prices one component of
 > a SKU. Tokens are not privileged — an `llm_tokens` event simply has token
-> components. See the [Usage module doc](../packages/website/docs/modules/usage.md)
-> for the authoritative field list; where the schema tables below still describe
-> `meter_type`/`quantity`/`unit` columns on a single `UsageMeter` row, the
-> event + component model supersedes them.
+> components. The [Data Model](#data-model) below and the
+> [Usage module doc](../packages/website/docs/modules/usage.md) carry the
+> authoritative, as-shipped field list; the design rationale in this section is
+> preserved for the record.
 
 **Decision:** one metering pipeline for all cost dimensions, not one table
 per dimension. The attribution chain
@@ -76,46 +80,39 @@ fork billing logic four ways.
 
 ### Meter types
 
-| `meter_type`     | What one row records                                        | `quantity` / `unit`        | Emitter (write path)                                                    |
+Every meter type is one `UsageEvent` with `meter_type`-appropriate
+`UsageComponent` rows — no type is privileged. `llm_tokens` is live; the
+infra emitters are unbuilt (Phases 4–6) but the schema and per-component
+pricing already exist, so they are emitter-only work.
+
+| `meter_type`     | What one event records                                      | Components                 | Emitter (write path)                                                    |
 | ---------------- | ----------------------------------------------------------- | -------------------------- | ------------------------------------------------------------------------ |
-| `llm_tokens`     | One completed LLM call's token usage (today's rows)         | `null` — token columns used | `recordGenerationUsage` at generation completion (exists)                |
-| `compute_execution` | One orchestration node execution's wall-clock compute time  | seconds / `compute_second`    | Node-completion hook; duration from existing `started_at`/`completed_at` |
-| `api_request`    | A batch of API requests served for a project                | requests / `request`       | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
-| `storage`        | One project's stored bytes for one day                      | GB-days / `gb_day`         | Daily snapshot job summing `File.size` + document/chunk byte counts      |
+| `llm_tokens`     | One completed LLM call's token usage (live)                 | `input_tokens`, `output_tokens`, `cached_tokens` (+ non-billable `reasoning_tokens`) | `recordGenerationUsage` at generation completion (shipped) |
+| `compute_execution` | Wall-clock compute time of a unit of work                | `compute_second`           | Node-completion hook; duration from existing `started_at`/`completed_at` |
+| `api_request`    | A batch of API requests served for a project                | `request`                  | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
+| `storage`        | One project's stored bytes for one day                      | `gb_day`                   | Daily snapshot job summing `File.size` + document/chunk byte counts      |
 
-### Schema changes
+### Schema (as shipped)
 
-**`UsageMeter`** gains:
+The generalization landed as a ground-up **event + component** rebuild, not
+additive columns on a single table (the old token-centric `UsageMeter` was
+dropped). See the [Data Model](#data-model) for the field-level shape; the
+shape-independent decisions that drove it:
 
-- `meter_type` VARCHAR NOT NULL DEFAULT `'llm_tokens'` — discriminator; all
-  existing rows backfill to `llm_tokens` via the default.
-- `quantity` DECIMAL NULL + `unit` VARCHAR NULL — the generic measure for
-  non-LLM types. For `llm_tokens` both stay `null`; the token columns remain
-  the source of truth (no double-encoding of the same number).
-- Token columns (`input_tokens`, `output_tokens`, `cached_tokens`,
-  `reasoning_tokens`) are meaningful only for `llm_tokens` and default to `0`
-  for other types.
-- `generation_id`/`agent_id` are already nullable, so non-LLM rows fit the
-  existing attribution model unchanged (`storage` rows carry only
-  `project_id`; `compute_execution` rows carry `run_id` + `node_id`).
-
-**`PriceBook`** gains:
-
-- `meter_type` VARCHAR NOT NULL DEFAULT `'llm_tokens'`.
-- `unit_price` DECIMAL NULL + `unit` VARCHAR NULL — used when
-  `meter_type != 'llm_tokens'`; the per-M token columns stay `null` for those
-  rows and vice versa.
-- The `(provider, model)` pair generalizes to a **SKU**: for platform meters
-  `provider` is `soat` and `model` names the billable unit
-  (e.g. `compute-second`, `request`, `gb-day`). This keeps the unique upsert key,
-  the three-tier resolution (per-provider override → project + provider-slug
-  → global default), the `effective_from` versioning, and the
-  past-rows-are-immutable rule working unchanged for every meter type.
-
-**Cost computation** branches on type: `llm_tokens` keeps the existing
-token-rate formula; every other type is `quantity × unit_price`. As with
-tokens today, a missing price row records the quantity with
-`cost_usd = null` — usage is never lost because pricing lagged.
+- **One occurrence = one `UsageEvent`; one priced dimension = one
+  `UsageComponent`.** Token columns are gone — an `llm_tokens` event's tokens
+  are just its components, so a new dimension adds component rows, never a
+  column.
+- **`PriceBook` prices one component of a SKU** (`meter_type`, `provider`,
+  `model`, `component`, `unit`, `unit_price`). The `(provider, model)` pair
+  generalizes to a **SKU**: for platform meters `provider` is `soat` and
+  `model` names the billable unit (e.g. `compute-second`, `request`,
+  `gb-day`). Three-tier resolution (per-provider override → project +
+  provider-slug → global default), `effective_from` versioning, and the
+  past-rows-are-immutable rule are unchanged for every meter type.
+- **Cost is uniform** `quantity × unit_price` per component; the event's
+  `cost_usd` is their sum. A missing price row records the quantity with
+  `cost_usd = null` — usage is never lost because pricing lagged.
 
 **Decision — USD is the fixed metering currency.** All price and cost
 fields are and stay USD-denominated, with the `_usd` suffix in column and
@@ -377,9 +374,9 @@ alert). Each threshold is defined by:
   - `rolling_24h` — the trailing 24 hours, evaluated at each meter write.
 - `threshold` — the numeric value the windowed aggregate must cross.
 
-Evaluation happens synchronously after each `UsageMeter` write (the write is
+Evaluation happens synchronously after each `UsageEvent` write (the write is
 already the single choke point), comparing the windowed aggregate against
-every threshold on the meter's project.
+every threshold on the event's project.
 
 **Re-fire rules (hysteresis):**
 
@@ -422,65 +419,68 @@ semantics trivial.
 
 ## Data Model
 
-### UsageMeter
+> **As shipped (Phase 3b).** Metering is an **event + component** model, not
+> the single `UsageMeter` table the original draft described. The
+> [Usage module doc](../packages/website/docs/modules/usage.md) is the
+> authoritative, live field list; the shapes below are the design-of-record
+> summary.
 
-Columns marked **(3b)** are added by the generalization phase.
+### UsageEvent (`ue_`)
 
-| Column          | Type         | Constraints                                        |
-| --------------- | ------------ | --------------------------------------------------- |
-| id              | INTEGER      | PK                                                  |
-| publicId        | VARCHAR(32)  | UNIQUE, `um_` prefix                                |
-| projectId       | INTEGER      | FK → Project, NOT NULL                              |
-| runId           | INTEGER      | FK → OrchestrationRun, NULL (populated for in-run generations, #562) |
-| nodeId          | VARCHAR      | NULL (node within the run; populated for in-run generations, #562)   |
-| agentId         | INTEGER      | FK → Agent, NULL                                    |
-| generationId    | INTEGER      | FK → Generation, NULL                               |
-| traceId         | INTEGER      | FK → Trace, NULL                                    |
-| aiProviderId    | INTEGER      | FK → AiProvider, NULL                               |
-| triggerId       | VARCHAR      | NULL; initiating trigger's public id                |
-| actionId        | VARCHAR      | NULL; caller-supplied logical action id (from `generation.metadata`) |
-| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens`; `llm_tokens` \| `compute_execution` \| `api_request` \| `storage` |
-| provider        | VARCHAR      | NOT NULL (`soat` for platform meter types)          |
-| model           | VARCHAR      | NOT NULL (the SKU for platform meter types)         |
-| inputTokens     | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
-| outputTokens    | INTEGER      | NOT NULL (`llm_tokens` only; 0 otherwise)           |
-| cachedTokens    | INTEGER      | NOT NULL DEFAULT 0                                  |
-| reasoningTokens | INTEGER      | NOT NULL DEFAULT 0                                  |
-| quantity        | DECIMAL      | **(3b)** NULL; the measure for non-LLM types        |
-| unit            | VARCHAR      | **(3b)** NULL; `compute_second` \| `request` \| `gb_day` |
-| costUsd         | DECIMAL      | NULL when no price row matched                      |
-| priceId         | INTEGER      | FK → PriceBook, NULL; the price row applied         |
-| idempotencyKey  | VARCHAR      | UNIQUE, NOT NULL                                    |
-| createdAt       | TIMESTAMP    | NOT NULL; no updatedAt — rows are immutable         |
+One metered occurrence — the attribution row. Append-only, immutable (no
+`updatedAt`), idempotent on the generation.
+
+| Column        | Notes                                                                 |
+| ------------- | --------------------------------------------------------------------- |
+| publicId      | UNIQUE, `ue_` prefix                                                   |
+| projectId     | FK → Project, NOT NULL                                                  |
+| runId / nodeId | run + node within the run; populated for in-run generations (#562)    |
+| agentId / generationId / traceId / aiProviderId | attribution FKs, NULL-able      |
+| triggerId / actionId | initiating trigger's public id / caller-supplied logical action id |
+| meterType     | NOT NULL; `llm_tokens` \| `compute_execution` \| `api_request` \| `storage` |
+| provider / model | the SKU (`soat` + billable unit for platform meter types)          |
+| costUsd       | sum of component costs, frozen at write time; NULL when nothing priced  |
+| idempotencyKey | UNIQUE, NOT NULL (`run:<run>:node:<node>` inside a run)                |
+| createdAt     | NOT NULL; no updatedAt — immutable                                     |
 
 Indexes: `(projectId, createdAt)`, `(runId)`, `(traceId)`, unique
 `(idempotencyKey)`.
 
-### PriceBook
+### UsageComponent (`uc_`)
 
-Columns marked **(3b)** are added by the generalization phase.
+One priced dimension of an event; `cost_usd = quantity × unit_price`. An
+`llm_tokens` event carries `input_tokens` / `output_tokens` / `cached_tokens`
+components (+ a non-billable `reasoning_tokens` detail); a `compute_execution`
+event carries a single `compute_second`.
 
-| Column          | Type         | Constraints                          |
-| --------------- | ------------ | ------------------------------------ |
-| id              | INTEGER      | PK                                   |
-| publicId        | VARCHAR(32)  | UNIQUE, `price_` prefix (registered in `packages/postgresdb/src/utils/publicId.ts`) |
-| aiProviderId    | INTEGER      | FK → AiProvider, NULL; set on per-provider override rows (tier 1) |
-| projectId       | INTEGER      | FK → Project, NULL; set on project + provider-slug rows (tier 2); both NULL = global default (tier 3) |
-| meterType       | VARCHAR      | **(3b)** NOT NULL DEFAULT `llm_tokens` |
-| provider        | VARCHAR      | NOT NULL (`soat` for platform SKUs)  |
-| model           | VARCHAR      | NOT NULL (the SKU for platform meter types) |
-| inputPricePerM  | DECIMAL      | USD per million input tokens; NULL on non-LLM rows |
-| outputPricePerM | DECIMAL      | USD per million output tokens; NULL on non-LLM rows |
-| cachedPricePerM | DECIMAL      | NULL → falls back to input price     |
-| unitPrice       | DECIMAL      | **(3b)** NULL; USD per `unit` on non-LLM rows |
-| unit            | VARCHAR      | **(3b)** NULL; must match the meter's unit |
-| effectiveFrom   | TIMESTAMP    | NOT NULL; latest row ≤ now() applies |
-| createdAt       | TIMESTAMP    | NOT NULL; append-only — no updatedAt |
+| Column     | Notes                                                                     |
+| ---------- | ------------------------------------------------------------------------- |
+| component  | `input_tokens` \| `output_tokens` \| `cached_tokens` \| `reasoning_tokens` \| `compute_second` \| `request` \| `gb_day` |
+| quantity   | the measured amount, in `unit`                                            |
+| unit       | `token` \| `compute_second` \| `request` \| `gb_day`                          |
+| billable   | `false` for `reasoning_tokens` (excluded from cost); `true` otherwise     |
+| unitPrice / costUsd / priceId | frozen at write time; NULL when unpriced               |
 
-Unique index: `(aiProviderId, projectId, provider, model, effectiveFrom)` —
-the upsert key (see [Price book upsert](#price-book-upsert)). Resolution is
-most-specific-first: per-provider override → project + provider-slug →
-global default.
+### PriceBook (`price_`)
+
+Prices **one component of a SKU** per row. Three tiers in one table, resolved
+most-specific-first: per-provider override (`aiProviderId` set) → project +
+provider-slug (`projectId` set) → global default (both NULL).
+
+| Column        | Notes                                                                |
+| ------------- | -------------------------------------------------------------------- |
+| publicId      | UNIQUE, `price_` prefix (registered in `packages/postgresdb/src/utils/publicId.ts`) |
+| aiProviderId / projectId | scope selectors (tier 1 / tier 2; both NULL = tier 3)     |
+| meterType     | NOT NULL                                                             |
+| provider / model | the SKU (`soat` + billable unit for platform SKUs)                |
+| component     | the component this row prices (`input_tokens`, `compute_second`, …)    |
+| unit          | denomination of `unitPrice` (`token`, `compute_second`, …)            |
+| unitPrice     | USD per `unit` (per token for token components)                      |
+| effectiveFrom | NOT NULL; latest row ≤ now() applies; past-effective rows immutable   |
+| createdAt     | NOT NULL; append-only — no updatedAt                                 |
+
+Unique index / upsert key: `(aiProviderId, projectId, provider, model,
+component, effectiveFrom)` (see [Price book upsert](#price-book-upsert)).
 
 ### UsageThreshold
 

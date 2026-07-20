@@ -6,6 +6,9 @@ model — approvals on *every* surface, action-class routing with per-project
 B→C downgrade, a queryable audit trail, and a customer-facing activity feed.
 Specs live in the referenced PRDs; this page only sequences the work.
 
+> Part of the cross-initiative [SOAT Delivery Roadmap](./roadmap.md), which
+> places this manage-by-exception work against every other PRD's dependencies.
+
 **Primary PRD:** [prd-approvals.md](./prd-approvals.md)
 **Related:** [prd-guardrails.md](./prd-guardrails.md) (action classes,
 downgrade, project/agent/tool attach scopes), [prd-audit-log.md](./prd-audit-log.md)
