@@ -6,6 +6,75 @@
 > windows; complements the per-action classification in
 > [prd-guardrails.md](./prd-guardrails.md).
 
+> **Counted-identity decision (2026-07).** The request-quota middleware counts
+> **API-key-authenticated requests only** in v1. JWT-user requests are never
+> counted or blocked — interactive users are not the runaway surface (see
+> Non-goals), and exempting them removes both the pre-handler
+> project-resolution problem (a project key binds to exactly one project, so
+> `(principal, project)` is known after `auth` with no per-route parsing) and
+> the lockout hazard (an admin with a JWT can always `PATCH` a quota back up
+> while the project's keys are being `429`'d). Implement the middleware as a
+> two-step seam — *resolve `(principal, project)` → match quotas* — so future
+> principal types (JWT users, per-user quotas) are a new resolver branch, not
+> a redesign. A `scope: project` quota therefore means "all API keys of this
+> project" for the `requests` metric.
+
+> **Scope×metric validity decision (2026-07).** `scope: agent` combined with
+> `metric: requests` is **rejected with `400`** at create/update. An agent's
+> activity is not inbound HTTP traffic, and no precise per-request agent
+> attribution exists pre-handler; shipping a vague semantic would have to be
+> honored forever, while adding a precise one later (e.g.
+> "generation-starting requests") is backward-compatible. `agent` scope is
+> valid for `tokens` / `cost_usd` (Phase 2).
+
+> **Failure-mode decision (2026-07).** On infrastructure failure (the counter
+> `UPDATE`/upsert itself errors), the middleware **fails open**: the request
+> proceeds and the error is logged loudly. The PRD's "fail closed" wording
+> refers to breach semantics (any breached `enforce` quota blocks), not DB
+> errors — quotas are cost control, not authorization, and the worst case of
+> fail-open (one window of unmetered spend) is strictly better than the worst
+> case of fail-closed (a platform-wide outage caused by the rate limiter). A
+> short-TTL circuit breaker to shed counter writes from a struggling DB is a
+> noted future hardening, not a v1 requirement.
+
+> **Increment semantics decision (2026-07).** Every request that reaches the
+> middleware increments the counter, **including requests subsequently
+> rejected** (`429`, `403`, `404`, …). The atomic
+> `UPDATE … SET count = count + 1 … RETURNING count` is simultaneously the
+> increment and the check — one statement, no read-then-write race; any
+> "don't count rejected requests" variant needs a second round-trip or a
+> compensating decrement, which is slower and racy for negligible benefit
+> under fixed windows (the counter resets at the window edge regardless).
+
+> **Uniqueness & referential-integrity decision (2026-07).** A partial unique
+> index on `(projectId, scope, scopeRef, metric, window)` prevents duplicate
+> quotas (the all-enforce precedence rule makes duplicates pure redundancy);
+> creating a duplicate returns `409`. `scope_ref` is validated to reference
+> an existing API key / agent **in the same project** at create/update time;
+> it is a soft reference (no FK). When the referenced entity is later
+> deleted, the quota **goes inert — it is not cascade-deleted**: silently
+> dropping a spend cap as a side effect of deleting a key is an invisible
+> safety regression, while a dangling quota is harmless (public ids are never
+> reused) and visible/deletable via the API.
+
+> **Self-modification decision (2026-07).** No special-case rule prevents an
+> API-key principal from mutating quotas that match its own scope —
+> enforcement stays in IAM (`quotas:*` actions), and the module docs must
+> call out the footgun: do **not** grant `quotas:UpdateQuota` /
+> `quotas:DeleteQuota` to autonomous principals whose spend the quota is
+> meant to cap. The composable long-term gate already exists in the platform:
+> quota mutations are ordinary actions, so operators can route them through a
+> class-C guardrail → approval flow (G4/G3) rather than a bespoke carve-out
+> in this module.
+
+> **Contract-detail decisions (2026-07).** `limit` must be a positive
+> **integer** when `metric: requests` (`400` otherwise); fractional limits
+> remain valid for `cost_usd` (and `tokens` limits are integers too). In
+> Phase 1, `mode: monitor` is **accepted and stored but is a pass-through
+> no-op** — the `quota.exceeded` webhook and audit entries land in Phase 3
+> with no schema migration; monitor quotas created earlier simply start
+> reporting when Phase 3 ships.
+
 ## Implementation Status
 
 | Component                                   | Status         | Notes                                                        |
