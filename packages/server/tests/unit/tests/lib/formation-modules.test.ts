@@ -1074,7 +1074,7 @@ describe('conversationsFormationModule', () => {
 // ── agent tool bindings ─────────────────────────────────────────────────────
 
 describe('agentsFormationModule tool_bindings', () => {
-  test('create with tool_bindings persists policy and read returns both views', async () => {
+  test('create with tool_bindings persists references and read returns both views', async () => {
     const agentPhysId = await applyCreateResource({
       resourceType: 'agent',
       projectId: internalProjectId,
@@ -1082,20 +1082,10 @@ describe('agentsFormationModule tool_bindings', () => {
         ai_provider_id: aiProviderId,
         name: 'FM Binding Agent',
         tool_bindings: [
-          // Full policy — exercises every optional field on the parse/read path.
-          {
-            tool_id: converterToolId,
-            approval_policy: {
-              default: 'require_approval',
-              rules: [{ when: { '==': [1, 1] }, effect: 'allow' }],
-              expires_in: 3600,
-              reasoning_prompt: 'explain the change',
-            },
-          },
-          // Minimal policy — exercises the optional-field-absent branches.
-          { tool_id: converterToolId, approval_policy: { default: 'deny' } },
-          // No policy — exercises the policy-absent branch.
           { tool_id: converterToolId },
+          // A stray removed approval_policy is ignored — guardrails are the
+          // single tool-call gating mechanism and attach via guardrail_ids.
+          { tool_id: converterToolId, approval_policy: { default: 'deny' } },
         ],
       },
     });
@@ -1103,22 +1093,14 @@ describe('agentsFormationModule tool_bindings', () => {
     const read = await readModule('agent').read?.({
       physicalResourceId: agentPhysId,
     });
-    // Canonical view carries the full policy (snake_case)...
+    // Canonical view carries only the reference (any stray policy dropped)...
     expect(read).toMatchObject({
       tool_bindings: [
-        {
-          tool_id: converterToolId,
-          approval_policy: {
-            default: 'require_approval',
-            expires_in: 3600,
-            reasoning_prompt: 'explain the change',
-          },
-        },
-        { tool_id: converterToolId, approval_policy: { default: 'deny' } },
+        { tool_id: converterToolId },
         { tool_id: converterToolId },
       ],
       // ...and the derived deprecated view lists each referenced tool.
-      tool_ids: [converterToolId, converterToolId, converterToolId],
+      tool_ids: [converterToolId, converterToolId],
     });
   });
 

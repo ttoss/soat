@@ -11,11 +11,6 @@ import {
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
-  gateResolvedTools,
-  type ResolverApprovalContext,
-} from './agentToolApproval';
-import type { ToolApprovalPolicy } from './agentToolBindings';
-import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
@@ -871,8 +866,6 @@ export const resolveEphemeralAgentTool = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  approvalPolicy?: ToolApprovalPolicy | null;
-  approval?: ResolverApprovalContext;
   guardrail?: ResolverGuardrailContext;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
@@ -884,23 +877,9 @@ export const resolveEphemeralAgentTool = async (args: {
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
-  const approvalGated =
-    args.approvalPolicy && args.approval
-      ? gateResolvedTools({
-          tools: mapped,
-          policy: args.approvalPolicy,
-          toolId: typedTool.publicId,
-          toolType: typedTool.type,
-          toolName: typedTool.name,
-          presetParameters: typedTool.presetParameters,
-          rawParameters,
-          context: args.approval,
-        })
-      : mapped;
-
-  if (!args.guardrail) return approvalGated;
+  if (!args.guardrail) return mapped;
   return gateResolvedToolsWithGuardrails({
-    tools: approvalGated,
+    tools: mapped,
     // Inline tools have no persisted id to re-execute; the guardrail gate uses
     // a synthetic marker for the proposal, so pass null here.
     toolId: null,
@@ -925,13 +904,12 @@ type ResolveToolByTypeArgs = {
 };
 
 // Resolves one persisted-tool binding into its (output-mapped, optionally
-// approval-gated) AI-SDK tools. Extracted so `resolveAgentTools` stays within
+// guardrail-gated) AI-SDK tools. Extracted so `resolveAgentTools` stays within
 // its complexity budget.
 const resolveReferenceBinding = async (args: {
   toolPublicId: string;
   projectIds?: number[];
   resolveArgs: ResolveToolByTypeArgs;
-  approval?: ResolverApprovalContext;
   guardrail?: ResolverGuardrailContext;
 }): Promise<Record<string, Tool>> => {
   const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
@@ -952,26 +930,10 @@ const resolveReferenceBinding = async (args: {
       ? tools
       : wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
 
-  const policy = args.approval?.policyByToolId[args.toolPublicId] ?? null;
-  const approvalGated =
-    policy && args.approval
-      ? gateResolvedTools({
-          tools: mapped,
-          policy,
-          toolId: typedTool.publicId,
-          toolType: typedTool.type,
-          toolName: typedTool.name,
-          presetParameters: typedTool.presetParameters,
-          rawParameters: localInjectableSchema(typedTool),
-          context: args.approval,
-        })
-      : mapped;
-
-  // Guardrails are the single tool-call gating mechanism and wrap outermost, so
-  // they take precedence over the (deprecated) per-binding approval_policy.
-  if (!args.guardrail) return approvalGated;
+  // Guardrails are the single tool-call gating mechanism.
+  if (!args.guardrail) return mapped;
   return gateResolvedToolsWithGuardrails({
-    tools: approvalGated,
+    tools: mapped,
     toolId: typedTool.publicId,
     toolType: typedTool.type,
     toolName: typedTool.name,
@@ -994,10 +956,6 @@ export const resolveAgentTools = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  // Per-generation approval-gate context. When present, each binding's
-  // `approval_policy` (keyed by tool publicId for references, positional for
-  // inline tools) gates its resolved tools in the dispatch path (Milestone 1).
-  approval?: ResolverApprovalContext;
   // Per-generation guardrail-gate context (Milestone 2). Wraps every resolved
   // tool with the classify → route interceptor when a guardrail applies at the
   // project / agent / tool scope.
@@ -1012,16 +970,13 @@ export const resolveAgentTools = async (args: {
         toolPublicId,
         projectIds: args.projectIds,
         resolveArgs: args,
-        approval: args.approval,
         guardrail: args.guardrail,
       })
     );
   }
 
   if (args.projectId !== undefined) {
-    let inlineIndex = -1;
     for (const definition of args.tools ?? []) {
-      inlineIndex += 1;
       const ephemeralTools = await resolveEphemeralAgentTool({
         definition,
         projectId: args.projectId,
@@ -1032,8 +987,6 @@ export const resolveAgentTools = async (args: {
         parentTraceId: args.parentTraceId,
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
-        approvalPolicy: args.approval?.inlinePolicies[inlineIndex] ?? null,
-        approval: args.approval,
         guardrail: args.guardrail,
       });
       Object.assign(resolvedTools, ephemeralTools);

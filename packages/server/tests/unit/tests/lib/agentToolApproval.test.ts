@@ -1,108 +1,17 @@
 import {
-  buildResolverApprovalContext,
   computeToolCallDedupKey,
-  evaluateApprovalEffect,
   injectApprovalJustificationSchema,
-  policyCanRequireApproval,
   resolvedActionName,
   stripApprovalJustification,
 } from 'src/lib/agentToolApproval';
-import type { ToolApprovalPolicy } from 'src/lib/agentToolBindings';
 
-// Pure policy/dedup/schema logic — a large input space that would be expensive
-// and low-resolution to drive through a full generation, so it is covered
-// directly (tests.md keep-list rule 1). The dispatch-path wiring is covered
-// through generation in the rest suite.
+// Pure return-pending / dedup / justification-schema machinery shared by the
+// guardrail interceptor when a class-C guardrail files a tool-call approval.
+// A large input space that would be expensive and low-resolution to drive
+// through a full generation, so it is covered directly (tests.md keep-list
+// rule 1). The dispatch-path wiring is covered through the guardrail gate.
 
 describe('agentToolApproval', () => {
-  describe('evaluateApprovalEffect', () => {
-    test('returns the default when there are no rules', () => {
-      const policy: ToolApprovalPolicy = { default: 'require_approval' };
-      expect(
-        evaluateApprovalEffect({ policy, action: 'send', arguments: {} })
-      ).toBe('require_approval');
-    });
-
-    test('first matching rule wins over the default', () => {
-      const policy: ToolApprovalPolicy = {
-        default: 'require_approval',
-        rules: [
-          {
-            when: { '<': [{ var: 'arguments.amount' }, 100] },
-            effect: 'allow',
-          },
-          { when: { '==': [{ var: 'action' }, 'send'] }, effect: 'deny' },
-        ],
-      };
-      expect(
-        evaluateApprovalEffect({
-          policy,
-          action: 'send',
-          arguments: { amount: 50 },
-        })
-      ).toBe('allow');
-      expect(
-        evaluateApprovalEffect({
-          policy,
-          action: 'send',
-          arguments: { amount: 500 },
-        })
-      ).toBe('deny');
-    });
-
-    test('matches on the resolved action name', () => {
-      const policy: ToolApprovalPolicy = {
-        default: 'allow',
-        rules: [
-          {
-            when: { '==': [{ var: 'action' }, 'delete-document'] },
-            effect: 'require_approval',
-          },
-        ],
-      };
-      expect(
-        evaluateApprovalEffect({
-          policy,
-          action: 'delete-document',
-          arguments: {},
-        })
-      ).toBe('require_approval');
-      expect(
-        evaluateApprovalEffect({
-          policy,
-          action: 'get-document',
-          arguments: {},
-        })
-      ).toBe('allow');
-    });
-  });
-
-  describe('policyCanRequireApproval', () => {
-    test('true when the default requires approval', () => {
-      expect(policyCanRequireApproval({ default: 'require_approval' })).toBe(
-        true
-      );
-    });
-
-    test('true when any rule requires approval', () => {
-      expect(
-        policyCanRequireApproval({
-          default: 'allow',
-          rules: [{ when: { var: 'x' }, effect: 'require_approval' }],
-        })
-      ).toBe(true);
-    });
-
-    test('false when the policy only allows and denies', () => {
-      expect(
-        policyCanRequireApproval({
-          default: 'allow',
-          rules: [{ when: { var: 'x' }, effect: 'deny' }],
-        })
-      ).toBe(false);
-    });
-  });
-
   describe('resolvedActionName', () => {
     test('strips the tool-name prefix for soat tools', () => {
       expect(
@@ -221,43 +130,6 @@ describe('agentToolApproval', () => {
         arguments: {},
       });
       expect(a).not.toBe(b);
-    });
-  });
-
-  describe('buildResolverApprovalContext', () => {
-    const ids = {
-      agentId: 'agent_1',
-      generationId: 'gen_1',
-      projectId: 1,
-      sessionId: 'sess_1',
-    };
-
-    test('returns undefined when no binding carries a policy', () => {
-      expect(
-        buildResolverApprovalContext({
-          bindings: [{ toolId: 'tool_1' }, { tool: { name: 'inline' } }],
-          ...ids,
-        })
-      ).toBeUndefined();
-      expect(
-        buildResolverApprovalContext({ bindings: null, ...ids })
-      ).toBeUndefined();
-    });
-
-    test('maps reference policies by tool id and inline policies positionally', () => {
-      const policy: ToolApprovalPolicy = { default: 'require_approval' };
-      const ctx = buildResolverApprovalContext({
-        bindings: [
-          { toolId: 'tool_1', approvalPolicy: policy },
-          { tool: { name: 'inline_a' } },
-          { tool: { name: 'inline_b' }, approvalPolicy: policy },
-        ],
-        ...ids,
-      });
-      expect(ctx).toBeDefined();
-      expect(ctx!.policyByToolId).toEqual({ tool_1: policy });
-      expect(ctx!.inlinePolicies).toEqual([null, policy]);
-      expect(ctx!.sessionId).toBe('sess_1');
     });
   });
 });
