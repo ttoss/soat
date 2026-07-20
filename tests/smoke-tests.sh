@@ -3712,6 +3712,46 @@ fi
 $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
 echo "Guardrails: OK"
 
+# 3e. Quotas module coverage (Phase 1: requests quotas + 429 middleware)
+echo "--- Quotas coverage ---"
+QUOTA_CREATE_RESP=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric requests \
+  --window rolling_1h --limit 500)
+QUOTA_ID=$(echo "$QUOTA_CREATE_RESP" | jq -r '.id')
+if [ -z "$QUOTA_ID" ] || [ "$QUOTA_ID" = "null" ]; then
+  echo "ERROR: Failed to create quota" >&2
+  echo "$QUOTA_CREATE_RESP" >&2
+  exit 1
+fi
+
+QUOTA_LIST_RESP=$($SOAT_CLI list-quotas --project-id "$PROJECT_PUBLIC_ID")
+if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.[] | select(.id == $id)' >/dev/null 2>&1; then
+  echo "ERROR: Created quota not found in list" >&2
+  echo "$QUOTA_LIST_RESP" >&2
+  exit 1
+fi
+
+QUOTA_GET_RESP=$($SOAT_CLI get-quota --quota-id "$QUOTA_ID")
+if [ "$(echo "$QUOTA_GET_RESP" | jq -r '.current_usage.count')" = "null" ]; then
+  echo "ERROR: Expected current_usage on a requests quota" >&2
+  echo "$QUOTA_GET_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI update-quota --quota-id "$QUOTA_ID" --limit 1000 --mode monitor
+
+# scope=agent + metric=requests is rejected (400); a duplicate is rejected (409).
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope agent --metric requests \
+  --window rolling_1m --limit 10
+expect_cli_error_status 409 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope project --metric requests \
+  --window rolling_1h --limit 500
+
+$SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
+expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"
+echo "Quotas: OK"
+
 echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")

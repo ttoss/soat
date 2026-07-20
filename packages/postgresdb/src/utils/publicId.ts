@@ -51,6 +51,7 @@ export const PUBLIC_ID_PREFIXES = {
   guardrail: 'guard_',
   guardrailVersion: 'guard_ver_',
   guardrailEvaluation: 'gev_',
+  quota: 'quota_',
 } as const;
 
 /**

@@ -34,6 +34,8 @@ export { OrchestrationRunTask } from './OrchestrationRunTask';
 export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';
 export { Project } from './Project';
+export { Quota } from './Quota';
+export { QuotaWindowCounter } from './QuotaWindowCounter';
 export { Secret } from './Secret';
 export { Session } from './Session';
 export { Task } from './Task';

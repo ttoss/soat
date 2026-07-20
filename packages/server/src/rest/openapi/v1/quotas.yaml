@@ -1,0 +1,276 @@
+openapi: 3.0.3
+info:
+  title: SOAT Quotas API
+  version: 1.0.0
+  description: API for managing quotas and rate limits (Quotas resource)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Quotas
+    description: Manage quotas and rate limits
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/quotas:
+    get:
+      tags:
+        - Quotas
+      summary: List quotas
+      description: Returns the quotas defined in a project
+      operationId: listQuotas
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: List of quotas
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Quota'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Quotas
+      summary: Create a quota
+      description: >-
+        Creates a project-scoped quota. `scope: agent` combined with
+        `metric: requests` is rejected with 400. A duplicate quota (same
+        project, scope, scope_ref, metric, window) is rejected with 409.
+      operationId: createQuota
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - scope
+                - metric
+                - window
+                - limit
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                scope:
+                  type: string
+                  enum: [project, api_key, agent]
+                  description: The scope the quota applies to
+                scope_ref:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Public id of the api key / agent the quota applies to. NULL
+                    means all entities of that scope type in the project.
+                  example: key_V1StGXR8Z5jdHi6B
+                metric:
+                  type: string
+                  enum: [requests, tokens, cost_usd]
+                  description: The metric being capped
+                  example: requests
+                window:
+                  type: string
+                  enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
+                  description: The window over which the metric is aggregated
+                limit:
+                  type: number
+                  description: >-
+                    The cap. Must be a positive integer for requests/tokens;
+                    fractional values are allowed for cost_usd.
+                  example: 600
+                mode:
+                  type: string
+                  enum: [enforce, monitor]
+                  default: enforce
+                  description: >-
+                    enforce blocks with 429; monitor is a pass-through no-op in
+                    Phase 1 (stored but not yet reported).
+                  example: enforce
+      responses:
+        '201':
+          description: Quota created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quota'
+        '400':
+          description: Bad request (invalid scope/metric/window/mode/limit)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: A matching quota already exists
+        '500':
+          description: Internal server error
+  /api/v1/quotas/{quota_id}:
+    get:
+      tags:
+        - Quotas
+      summary: Get a quota
+      description: Returns a specific quota, including current window usage
+      operationId: getQuota
+      parameters:
+        - name: quota_id
+          in: path
+          required: true
+          description: Quota ID
+          schema:
+            type: string
+            example: quota_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Quota details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quota'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Quota not found
+    patch:
+      tags:
+        - Quotas
+      summary: Update a quota
+      description: Updates a quota's limit and/or mode. Other fields are immutable.
+      operationId: updateQuota
+      parameters:
+        - name: quota_id
+          in: path
+          required: true
+          description: Quota ID
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: number
+                  description: New limit
+                  example: 1000
+                mode:
+                  type: string
+                  enum: [enforce, monitor]
+                  description: New mode
+                  example: monitor
+      responses:
+        '200':
+          description: Quota updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quota'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Quota not found
+    delete:
+      tags:
+        - Quotas
+      summary: Delete a quota
+      description: Deletes a quota and drops its window counters
+      operationId: deleteQuota
+      parameters:
+        - name: quota_id
+          in: path
+          required: true
+          description: Quota ID
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Quota deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Quota not found
+components:
+  schemas:
+    Quota:
+      type: object
+      properties:
+        id:
+          type: string
+          example: quota_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        scope:
+          type: string
+          enum: [project, api_key, agent]
+        scope_ref:
+          type: string
+          nullable: true
+        metric:
+          type: string
+          enum: [requests, tokens, cost_usd]
+        window:
+          type: string
+          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
+        limit:
+          type: number
+        mode:
+          type: string
+          enum: [enforce, monitor]
+        current_usage:
+          type: object
+          nullable: true
+          description: >-
+            Current fixed-window usage for the requests metric. Null for
+            token/cost quotas (Phase 2) and in list responses.
+          properties:
+            window_key:
+              type: string
+              example: '2026-07-07T12:31Z'
+            count:
+              type: integer
+              example: 42
+            resets_at:
+              type: string
+              format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key

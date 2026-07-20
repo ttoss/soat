@@ -10,6 +10,7 @@ import { setupMcpMiddleware } from './mcp/server';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
+import { quotaMiddleware } from './middleware/quota';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
@@ -27,6 +28,10 @@ app.use(cors());
 app.use(hookRawBodyMiddleware);
 app.use(bodyParser());
 app.use(authMiddleware);
+// Request-quota enforcement: after auth (counted identity is known), before the
+// route handlers so no handler work is wasted on a blocked request. Counts
+// API-key-authenticated /api/v1 requests only; fails open on DB error.
+app.use(quotaMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,
 // and discovery metadata. Public — the routes do their own validation. The
