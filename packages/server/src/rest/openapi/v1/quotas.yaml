@@ -78,7 +78,6 @@ paths:
                   type: string
                   enum: [project, api_key, agent]
                   description: The scope the quota applies to
-                  example: api_key
                 scope_ref:
                   type: string
                   nullable: true
@@ -95,7 +94,6 @@ paths:
                   type: string
                   enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
                   description: The window over which the metric is aggregated
-                  example: rolling_1m
                 limit:
                   type: number
                   description: >-

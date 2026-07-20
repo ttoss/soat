@@ -42,6 +42,30 @@ describe('Quotas', () => {
       .send({ project_id: project, ...body });
   };
 
+  // A project-scoped API key whose policy excludes `excludedAction`, used to
+  // exercise the `projectIds === null` (403) branch on routes that don't take a
+  // `project_id` param (unlike `noPermToken`, which resolves to an empty project
+  // list and 404s instead).
+  const createRestrictedApiKey = async (excludedAction: string) => {
+    const allowedActions = QUOTA_ACTIONS.filter((action) => {
+      return action !== excludedAction;
+    });
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: { statement: [{ effect: 'Allow', action: allowedActions }] },
+      });
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: `No ${excludedAction} Key`,
+        project_id: projectId,
+        policy_ids: [policyRes.body.id],
+      });
+    expect(keyRes.status).toBe(201);
+    return keyRes.body.key as string;
+  };
+
   /**
    * Provisions a fresh project (isolated counters) and an API key scoped to it,
    * carrying the full quotas policy so the key can drive counted GET requests.
@@ -308,8 +332,16 @@ describe('Quotas', () => {
       expect(res.status).toBe(401);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user with zero policies returns 404 (empty project list)', async () => {
       const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('project-scoped API key without GetQuota returns 403', async () => {
+      const key = await createRestrictedApiKey('quotas:GetQuota');
+      const res = await authenticatedTestClient(key).get(
         `/api/v1/quotas/${quotaId}`
       );
       expect(res.status).toBe(403);
@@ -352,8 +384,16 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user with zero policies returns 404 (empty project list)', async () => {
       const res = await authenticatedTestClient(noPermToken)
+        .patch(`/api/v1/quotas/${quotaId}`)
+        .send({ limit: 1 });
+      expect(res.status).toBe(404);
+    });
+
+    test('project-scoped API key without UpdateQuota returns 403', async () => {
+      const key = await createRestrictedApiKey('quotas:UpdateQuota');
+      const res = await authenticatedTestClient(key)
         .patch(`/api/v1/quotas/${quotaId}`)
         .send({ limit: 1 });
       expect(res.status).toBe(403);
@@ -386,7 +426,7 @@ describe('Quotas', () => {
       expect(res.status).toBe(404);
     });
 
-    test('user without permission returns 403', async () => {
+    test('user with zero policies returns 404 (empty project list)', async () => {
       const created = await createQuota(userToken, {
         scope: 'project',
         metric: 'tokens',
@@ -394,6 +434,20 @@ describe('Quotas', () => {
         limit: 9,
       });
       const res = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/quotas/${created.body.id}`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('project-scoped API key without DeleteQuota returns 403', async () => {
+      const created = await createQuota(userToken, {
+        scope: 'project',
+        metric: 'tokens',
+        window: 'rolling_24h',
+        limit: 9,
+      });
+      const key = await createRestrictedApiKey('quotas:DeleteQuota');
+      const res = await authenticatedTestClient(key).delete(
         `/api/v1/quotas/${created.body.id}`
       );
       expect(res.status).toBe(403);
