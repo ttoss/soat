@@ -3,11 +3,13 @@ import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
+import { computeNodeIdempotencyKey } from 'src/lib/orchestrationIdempotency';
 import { executeAndRecordNode } from 'src/lib/orchestrationNodeRecorder';
 import {
   ackRunTask,
   claimRunTasks,
   enqueueRunTask,
+  retryRunTask,
 } from 'src/lib/orchestrationQueue';
 import { drainQueueOnce, handleRunTask } from 'src/lib/orchestrationWorker';
 
@@ -382,6 +384,138 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(requests).toHaveLength(1);
       // The header value is the literal run:node:attempt string, unhashed (D7).
       expect(requests[0].idempotencyKey).toBe(`${run.publicId}:call:1`);
+    });
+
+    test('a leftover running key from a crash mid-side-effect is taken over and re-executed under the same key', async () => {
+      const toolId = await createEchoTool();
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Takeover Running Key',
+          nodes: [{ id: 'call', type: 'tool', tool_id: toolId }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      const key = `${run.publicId}:call:1`;
+
+      // Simulate a worker that reserved the key and crashed before completing
+      // (a `running` row left behind, no completed output yet).
+      await db.OrchestrationNodeExecution.create({
+        runId: run.id as number,
+        nodeId: 'call',
+        nodeType: 'tool',
+        attempt: 1,
+        status: 'running',
+        input: {},
+        output: null,
+        error: null,
+        startedAt: new Date(),
+        completedAt: null,
+        idempotencyKey: key,
+      });
+
+      // The redelivering worker takes over the same key (a unique-violation on
+      // insert → reuse the row) and re-executes, since the side effect never
+      // completed. This is the honest at-least-once boundary.
+      const outcome = await executeAndRecordNode({
+        nodeId: 'call',
+        runRecord: run,
+        nodes: [{ id: 'call', type: 'tool' as const, toolId }],
+        state: {},
+        projectIds: [projectPk],
+        traceId: null,
+      });
+      expect(outcome.execResult.kind).toBe('artifact');
+      expect(requests).toHaveLength(1);
+
+      // Still exactly one row for the key, now completed.
+      const execs = await db.OrchestrationNodeExecution.findAll({
+        where: { runId: run.id as number, nodeId: 'call' },
+      });
+      expect(execs).toHaveLength(1);
+      expect(execs[0].status).toBe('completed');
+      expect(execs[0].idempotencyKey).toBe(key);
+    });
+  });
+
+  describe('computeNodeIdempotencyKey', () => {
+    test('keys side-effecting node types and skips pure / unattributed ones', () => {
+      expect(
+        computeNodeIdempotencyKey({
+          runPublicId: 'orch_run_x',
+          nodeId: 'n',
+          nodeType: 'tool',
+          attempt: 2,
+        })
+      ).toBe('orch_run_x:n:2');
+      // Pure node type → not keyed.
+      expect(
+        computeNodeIdempotencyKey({
+          runPublicId: 'orch_run_x',
+          nodeId: 'n',
+          nodeType: 'transform',
+          attempt: 1,
+        })
+      ).toBeNull();
+      // Missing run id or node type → not keyed.
+      expect(
+        computeNodeIdempotencyKey({
+          runPublicId: null,
+          nodeId: 'n',
+          nodeType: 'tool',
+          attempt: 1,
+        })
+      ).toBeNull();
+      expect(
+        computeNodeIdempotencyKey({
+          runPublicId: 'orch_run_x',
+          nodeId: 'n',
+          nodeType: null,
+          attempt: 1,
+        })
+      ).toBeNull();
+    });
+  });
+
+  describe('retryRunTask', () => {
+    test('releases a claimed task and reschedules it for later re-claim', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Retry Task',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      const task = await enqueueRunTask({
+        runId: run.id as number,
+        kind: 'continue',
+      });
+
+      const [claimed] = await claimRunTasks({ limit: 5 });
+      expect(claimed?.id).toBe(task.id);
+
+      // Release it with a future availableAt — a backoff. It is no longer
+      // claimable now, but becomes claimable once availableAt passes.
+      const availableAt = new Date(Date.now() + 5 * 60_000);
+      await retryRunTask({ id: task.id as number, availableAt });
+
+      const notYet = await claimRunTasks({ limit: 5 });
+      expect(
+        notYet.some((t) => {
+          return t.id === task.id;
+        })
+      ).toBe(false);
+
+      const later = await claimRunTasks({
+        limit: 5,
+        now: new Date(availableAt.getTime() + 1000),
+      });
+      expect(
+        later.some((t) => {
+          return t.id === task.id;
+        })
+      ).toBe(true);
     });
   });
 

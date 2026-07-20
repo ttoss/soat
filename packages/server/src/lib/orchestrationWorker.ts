@@ -134,11 +134,9 @@ const scheduler = createScheduler({
   defaultIntervalMs: 5000,
   envVar: 'ORCHESTRATION_WORKER_INTERVAL_MS',
   disabledEnvVar: 'ORCHESTRATION_WORKER_DISABLED',
-  sweeps: [
-    async () => {
-      return drainQueueOnce();
-    },
-  ],
+  // The sweep is the queue drain — its `(args?: { now? })` signature is a
+  // superset of the Sweep contract, so it is used directly.
+  sweeps: [drainQueueOnce],
 });
 
 /**
