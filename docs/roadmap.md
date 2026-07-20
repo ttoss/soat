@@ -1,0 +1,303 @@
+# SOAT Delivery Roadmap
+
+The **single** roadmap for the platform: what is shipped, what is pending, and
+what depends on what across every PRD in this directory. Each PRD owns its
+design; this page owns status, sequencing, and the complete pending backlog.
+
+> **This is the only roadmap.** Status and sequencing live here, not in the
+> PRDs. A PRD's `Implementation Status` table is a local snapshot; when it
+> disagrees with this page, this page wins. The [pending backlog](#pending-backlog)
+> below is the authoritative list of every open item — it folds in the former
+> `usage-roadmap.md` and `manage-by-exception-roadmap.md`, which have been
+> removed.
+
+## Legend
+
+| Marker | Meaning |
+|--------|---------|
+| ✅ | Shipped |
+| 🟡 | Partially shipped (core landed; phases remaining) |
+| ❌ | Not started |
+| ⏭️ | Deferred (blocked on an unbuilt dependency) |
+
+## Initiatives at a glance
+
+### Agent Operations on Formations (G1–G7)
+
+The umbrella — [prd-agent-operations.md](./prd-agent-operations.md) — defines
+the gap series that turns a Formation deploy into an *operating* agent team.
+
+| G | Initiative | PRD | Status |
+|---|-----------|-----|--------|
+| G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
+| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime shipped; queue/idempotency/concurrency/SQS remain |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
+| G4 | Guardrails · action classes | [prd-guardrails.md](./prd-guardrails.md) | ✅ core shipped; client-tool + orch tool-node gates remain |
+| G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
+| G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
+| G7 | Knowledge packages · context assembly | [prd-knowledge-packages.md](./prd-knowledge-packages.md) | ❌ Not started |
+
+### Adjacent / standalone module PRDs
+
+| Initiative | PRD | Status | Tie |
+|-----------|-----|--------|-----|
+| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
+| Audit log | [prd-audit-log.md](./prd-audit-log.md) | ❌ Not started | substrate for G3/G4 |
+| Quotas | [prd-quotas.md](./prd-quotas.md) | ❌ Not started | umbrella (no G#) |
+| Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
+| Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phases 1–4 shipped; 5 partial; 6–9 remain | data plane |
+| Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 1,2,4 shipped; 3,5,6,7 remain | data plane |
+| Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phases 0–2,4,5 shipped; 3 partial | standalone |
+
+## Implementation dependency graph
+
+Arrow = "needs before it can ship". Shipped nodes (✅) are the foundations
+everything else builds on.
+
+```
+FOUNDATIONS (shipped)
+  orchestration runtime ✅   usage metering P1–3c ✅   guardrails core ✅
+  knowledge P1/2/4 ✅        memories P1–4 ✅           approvals P1 ✅   discussions ✅
+
+next, deps satisfied ──────────────────────────────────────────────────────
+  quotas P1 ............................. (independent; can ship anytime)
+  quotas P2 ◄── usage metering ✅ ....... (metering choke point exists)
+  orchestration-queue P1 (queue + run-scoped idempotency keys)
+  guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
+  usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
+
+cross-initiative ──────────────────────────────────────────────────────────
+  evaluations P2 (async) ◄── orchestration-queue P1
+  audit-log P1 ─► audit-log P2 ◄── guardrails P3
+  memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
+  knowledge P5/P6/P7 (ranking, injection, evals)
+
+feedback + governance loops ────────────────────────────────────────────────
+  learned-rules ◄── approvals ✅ (capture rejections/edits)
+               ◄── memories ✅ (reuse embedding similarity)
+  knowledge-packages G7 ◄──► learned-rules G6 (packages inject rules;
+                                               rules ride the assembler)
+  agent-versions P3 (eval-gated promotion) ◄── evaluations P1
+  approvals P4 (activity feed) ◄── audit-log (substrate) + guardrails (A/B labels)
+```
+
+### Edge reference
+
+| Depends on | … to unblock | Why |
+|-----------|--------------|-----|
+| usage metering ✅ | quotas P2 | token/cost windows read the meter-write choke point |
+| usage metering ✅ | guardrails `soat.usage.*` | budget guards read windowed usage sums |
+| orchestration-queue P1 | evaluations P2 | async eval runs ride the RunTask queue |
+| orchestration-queue P1 | usage metering exactly-once | run-scoped idempotency keys (metering already node-scopes its own) |
+| guardrails ✅ | approvals routing | class-C routes into `ApprovalItem`; replaced per-binding `approval_policy` |
+| guardrails P3 | audit-log P2 | `guardrail_evaluation` becomes one audit `detail` kind |
+| guardrails A/B + audit-log | approvals P4 (activity feed) | feed labels autonomous class-A/B actions on the audit substrate |
+| knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
+| approvals ✅ + memories ✅ | learned-rules | captures rejection/edit signals; reuses pgvector similarity |
+| knowledge-packages ◄──► learned-rules | each other | assembler injects active rules as one layer |
+| evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
+| — | model-routing | standalone; complements G2, no metering change |
+
+## Recommended build order
+
+1. **Quotas P1** (independent) and **orchestration-queue P1** (queue +
+   idempotency) — both unblock a fan-out and neither waits on anything.
+2. **Quotas P2** — unblocked now that metering shipped; closes hard spend
+   enforcement.
+3. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
+   infra emitters (P4–P6)** — pure extensions of shipped cores.
+4. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
+   feed and agent-versions promotion gate need.
+5. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
+6. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
+   last because it consumes approvals, memories, and evaluations signals.
+7. **Model-routing** and the deferred tails (SQS driver, budget-guard P7) as
+   hardening.
+
+## Pending backlog
+
+Every open item across all PRDs. Grouped by initiative; task IDs (e.g. `4.1`)
+are preserved from the former topic roadmaps. Blockers are noted inline.
+
+### G2 — Orchestration queue
+
+_Core durable runtime shipped (background execution, crash recovery, parking,
+per-node retry, sync mode, lifecycle webhooks)._
+
+- [ ] **P1** Queue abstraction + Postgres driver (`SELECT … FOR UPDATE SKIP LOCKED`); decouples execution from the API process
+- [ ] **P1** Run-scoped node idempotency keys — closes the "node side effects repeat across a retry/redrive" gap
+- [ ] **P1** Worker pool (separate-process option; the API process stays a valid single-process worker)
+- [ ] **P2** Concurrency limits (per project + global)
+- [ ] **P3** Pluggable driver interface + SQS driver (DLQ → run failed + exception per approvals)
+
+### G3 — Approvals (exceptions · activity)
+
+_Phase 1 shipped (`ApprovalItem`, `approval` node, expiry, approve/reject/edit,
+webhooks, REST). "Approvals on every surface" shipped via the **G4 guardrail
+interceptor**; the per-binding `approval_policy` was deprecated and removed._
+
+- [ ] Dedup return-existing logic (the `dedup_key` column + partial unique index exist; the return-existing behavior does not)
+- [ ] **Knowledge-version provenance** (was MbE M3 — unblocks the audit acceptance criterion):
+  - [ ] `3.1` record `knowledge_version` on `generation.metadata` at emit time
+  - [ ] `3.2` stamp `knowledgeVersion` / `policyVersion` onto `ApprovalItem` + the audit record via `emitApproval`
+  - [ ] `3.3` join helper: run → generations → `knowledge_version` → approval
+- [ ] **Phase 3** Exceptions & severity routing: `ExceptionItem` (`exc_`) auto-filed by exhausted retries, guardrail tripwires, and expired approvals; `info`/`warning`/`critical`; `open → acknowledged → resolved`; `exceptions.created` webhook
+- [ ] **Phase 4 / activity feed** (was MbE M5 — needs G4 class-A/B labels + audit substrate):
+  - [ ] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
+  - [ ] `5.2` cursor-paginated `GET /api/v1/activity` (type / severity filters, per project)
+  - [ ] `5.3` evidence + drill-through linkage (feed item → run → generations, agent/node/guardrail-version links)
+  - [ ] `5.4` write `soat.activity.actions_24h` guard context (the `soat.*` key G4 guards assume nothing populates yet)
+- [ ] **Phase 5** Approver targeting & assignment (route items to specific humans; deferred until demand)
+- [ ] In-channel approval clients (WhatsApp/Slack) over the queue
+
+### G4 — Guardrails
+
+_Core shipped: standalone `guardrails` resource + `GuardrailVersion`,
+classify→route interceptor, guard evaluation + application-owned context
+(`args.*`/`context.*`/`soat.*`), project/agent/tool attach with stricter-wins
+composition, tripwires + `escalate`, `guardrail_evaluation` audit record,
+dry-run `evaluate` endpoint; per-binding `approval_policy` removed._
+
+- [ ] `requires_action` handoff gate for **client** tools (only server-executed tools are gated today)
+- [ ] Orchestration **tool-node** dispatch path (interceptor is wired into agent tool-dispatch only)
+- [ ] File an `ExceptionItem` on a tripwire (awaits the G3 Exceptions item; today returns a structured aborted tool result)
+- [ ] `[OPEN]` Per-action-class default expiry (72h budget / 168h strategy vs today's 24h `approval`-node default; align with `action-classes.yaml`)
+
+### G5 — Usage metering
+
+_Phases 1–3c shipped (event+component model, three-tier `PriceBook`, per-run
+receipts, aggregation, thresholds + webhook)._
+
+- [ ] 🚧 **Coverage:** meter the remaining LLM paths — extraction, discussions, chats (agents / conversations / orchestration nodes done)
+- [ ] **P4** `4.1` Compute metering (`compute_execution` on node completion; duration from `started_at`/`completed_at`; `soat`/`compute-second` SKU)
+- [ ] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`)
+- [ ] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request)
+- [ ] **P7** `5.2` `usage.*` guard context + per-run ceiling — ⏭️ deferred (needs the G4 evaluator; interim: a `condition` node reads the run roll-up and routes to an abort path)
+- [ ] Token/cost quotas at the pre-generation check — `5.1`, owned by **Quotas P2** below
+- [ ] Backlog: event-driven storage byte accounting (replaces the daily-snapshot approximation)
+
+### G6 — Learned rules
+
+_Not started. Captures from G3 (rejections/edits); reuses memories embeddings;
+injects through the G7 assembler._
+
+- [ ] **Phase 1** Candidate capture: `CandidateRule` model + hooks (auto-created from rejections, edits, explicit corrections)
+- [ ] **Phase 2** Recurrence detection: embedding nearest-neighbor clustering → `promotion_suggested`
+- [ ] **Phase 3** Promotion lifecycle + `LearnedRule` (human-curated; `candidate → promoted | dismissed`)
+- [ ] **Phase 4** Scoped context injection (`global` / `project`, most-specific last) via the G7 assembler
+- [ ] REST endpoints + OpenAPI + permissions
+
+### G7 — Knowledge packages
+
+_Not started. Injects G6 rules; complements knowledge + memories._
+
+- [ ] **Phase 1** Package storage, publish (tarball + manifest, publish-scoped key), pinning; `knowledge_package` formation resource type
+- [ ] **Phase 2** Layered context assembler (pure function, per-layer token budgets; pulls active learned rules into a layer)
+- [ ] **Phase 3** Confidentiality hardening (content encrypted at rest, never in list/get APIs, logs, or run events) + fenced non-system injection + test suite
+
+### Agent versions
+
+_Not started._
+
+- [ ] **Phase 1** Version snapshots + list/get/restore: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
+- [ ] **Phase 2** Releases + deterministic canary: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
+- [ ] **Phase 3** Eval-gated promotion (`promotion_gate`) — needs **Evaluations Phase 1+**
+
+### Evaluations
+
+_Not started._
+
+- [ ] **Phase 1** Datasets + evals + sync deterministic runs: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`)
+- [ ] **Phase 2** `llm_judge` scorer; async execution on the RunTask queue (**needs Orchestration-queue P1**); baseline comparison + pass/fail gating; curate dataset items from traces/generations
+- [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
+- [ ] Webhook events (`eval_run.completed` / `.failed`)
+
+### Audit log
+
+_Not started (this is the former MbE M4). Reconcile activity-feed ownership
+with G3 before shipping the feed._
+
+- [ ] **Phase 1** `AuditEntry` (`audit_`, append-only, no UPDATE/DELETE at the model layer); post-commit write hook wrapping `isAllowed` (fire-and-forget, bounded queue); read API `GET /api/v1/audit-log` + `/{entry_id}` (filters: `action`, `actor_id`, `resource_srn`, `from`/`to`); `audit:ListAuditEntries` / `GetAuditEntry`
+- [ ] **Phase 2** Guardrails `ActivityEntry` as one `detail` kind (**needs G4 Phase 3**); retention sweep (`AUDIT_RETENTION_DAYS`, daily tick)
+- [ ] **Phase 3** Read-audit config flag (off by default) + `audit.entry_created` webhook
+- [ ] Per-project NDJSON export (paginate the list endpoint; also serves LGPD)
+
+### Quotas
+
+_Not started. Hard fail-closed enforcement (429), complementing metering
+(measure) and guardrails (per-action)._
+
+- [ ] **Phase 1** Requests quotas: `Quota` model + CRUD (scope/metric/window/limit/mode); `QuotaWindowCounter` table; request-quota Koa middleware (atomic `UPDATE … RETURNING`); `QUOTA_EXCEEDED` + `429` contract with `Retry-After`. **Independent — can ship first.**
+- [ ] **Phase 2** Token/cost quotas at the meter-write choke point (pre-generation check; never kills an in-flight generation) — **unblocked** (metering shipped)
+- [ ] **Phase 3** Monitor mode + audit entries; `quota.exceeded` webhook (first breach per window); `quota` formation resource type
+
+### Model routing
+
+_Not started. Standalone; complements G2; no metering change (metering prices
+off the served provider/model)._
+
+- [ ] **Phase 1** `ModelRoute` model + lib (`route_` prefix, ordered targets + retry/breaker config); REST CRUD + OpenAPI + permissions; shared `route`-vs-pin exclusivity validation; agent consumption (`model_route_id`); ordered fallback executor (non-streaming)
+- [ ] **Phase 2** Circuit breaker (in-process, per-target consecutive-failure skip + cooldown); streaming pre-token fallback; `routing` metadata on Generation
+- [ ] **Phase 3** Remaining consumers (discussions, extraction, chats); `model-route` formation resource type
+
+### Memories
+
+_Phases 1–4 shipped (storage + write v1, agent read/write, tags, automatic
+extraction)._
+
+- [ ] 🟡 **Phase 5** Write algorithm v2 (LLM-arbitrated, temporal) — LLM merge-consolidation shipped; manual REST writes still concatenate:
+  - [ ] `5a` top-K shortlist + LLM decision (add / update / supersede / skip)
+  - [ ] `5b` temporal invalidation (`invalidatedAt` + `supersededByEntryId`; contradictions retire old facts)
+  - [ ] `5c` entry provenance (`sourceGenerationId` / `sourceConversationId`)
+- [ ] **Phase 6** Entity graph layer: `MemoryEntity` (`mey_`) + `MemoryEntityEdge`; async entity extraction on write; `resolveEntitySearch()` (query surface ↔ **Knowledge Phase 3**)
+- [ ] **Phase 7** Extraction coverage for streaming and `requires_action` completions
+- [ ] **Phase 8** Forgetting: importance scoring, access tracking, retrieval-time recency blend, compaction
+- [ ] **Phase 9** Profile memory (always-injected bounded blocks, agent-editable)
+
+### Knowledge (retrieval surface)
+
+_Phases 1, 2, 4 shipped (unified `/knowledge/search`, document + memory
+sources, post-conversation extraction)._
+
+- [ ] **Phase 3** Entity graph queries (`entity_ids` / `entity_names` / `actor_ids` filters; graph traversal via `predicate`/`direction`) — **needs Memories Phase 6**
+- [ ] **Phase 5** Hybrid retrieval & ranking: lexical + vector (`tsvector`/BM25 + pgvector); RRF result merging (replaces the raw-score interleave — a known weakness); optional reranking; recency/importance weighting (importance from Memories Phase 8)
+- [ ] **Phase 6** Injection hardening: retrieved knowledge injected as delimited **non-system** content (currently `role: system` — a prompt-injection escalation path)
+- [ ] **Phase 7** Evaluation harness & observability: golden query set, recall@k / MRR, memory benchmarks, injected-context tracing
+
+### Discussions / reasoning engine
+
+_Phases 0–2, 4, 5 shipped (reasoning pipeline, reflect/debate normalized onto
+it, Discussions resource MVP, reasoning removed from agents)._
+
+- [ ] 🟡 **Phase 3** remainder: async pipeline generate (`?async=true` + poll) — depends on the session async mechanism; optional `reasoning.budget` guard (cap total completions per run; today a fixed `MAX_TOTAL_COMPLETIONS=24` engine cap applies)
+- [ ] Deferred Discussion-resource seams: async run, human-in-the-loop participants, `organizer_selects` turn policy, real-Agent participants, orchestration `discussion` node type, webhooks, cancellation/pause states
+
+## Cross-cutting reconciliations
+
+Open consistency items the PRDs still carry — flagged here so the roadmap
+stays the source of truth:
+
+- **Guardrails PRD body is stale.** [prd-guardrails.md](./prd-guardrails.md)'s
+  Data Model / Permissions / REST API / Key Concepts (and its Implementation
+  Status + Phases) still describe the abandoned "guardrails as a `kind` on the
+  IAM `policies` resource" design (`pol_`, `policies:*`, `PolicyVersion`,
+  `ProjectPolicyOverride`, `rules[]` first-match). Five dated (2026-07)
+  decision blockquotes at the top override it; the authoritative contract is
+  [modules/guardrails.md](../packages/website/docs/modules/guardrails.md)
+  (`guard_`, `guardrails:*`, `GuardrailVersion`, attach lists, single-`class`
+  document). Its status here reflects the shipped reality, not the stale phase
+  list. A cleanup pass should annotate the stale back-half `✅ Shipped —
+  superseded`, the way usage-metering's schema section now is.
+- **Activity-feed ownership.** Both [prd-audit-log.md](./prd-audit-log.md)
+  (`AuditEntry.detail`) and [prd-approvals.md](./prd-approvals.md)
+  (`ActivityEntry`, `acte_`) describe an activity substrate. Audit-log claims
+  to "provide the activity substrate approvals assumes" — settle which model
+  owns the feed before either ships (drives approvals Phase 4).
+- **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
+  `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
+  shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
+  End State YAML — update the example.
+- **`PolicyVersion` reference.** [prd-learned-rules.md](./prd-learned-rules.md)
+  cites the guardrails `PolicyVersion` pattern for `LearnedRuleVersion`;
+  guardrails renamed it `GuardrailVersion`. Cosmetic, but update on next touch.
