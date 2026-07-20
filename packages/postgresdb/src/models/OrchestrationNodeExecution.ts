@@ -36,11 +36,28 @@ export class OrchestrationNodeExecution extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare attempt: number;
 
+  // Run-scoped idempotency key: `{run_id}:{node_id}:{attempt}` where `attempt`
+  // is the node retry attempt (this row's `attempt`), NOT the queue delivery
+  // counter. Written `running` before a side-effecting node dispatches, then
+  // updated in place. A redelivered task that finds a `completed` row for the
+  // same key reuses its stored `output` instead of re-executing. NULL for pure
+  // nodes (condition, transform, delay, human, approval, webhook), which have no
+  // external side effect and keep record-after-execution behavior.
+  @Column({ type: DataType.STRING, allowNull: true, unique: true })
+  declare idempotencyKey: string | null;
+
   @Column({
-    type: DataType.ENUM('completed', 'failed', 'requires_action', 'skipped'),
+    type: DataType.ENUM(
+      'running',
+      'completed',
+      'failed',
+      'requires_action',
+      'skipped'
+    ),
     allowNull: false,
   })
-  declare status: 'completed' | 'failed' | 'requires_action' | 'skipped';
+  declare status:
+    'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
 
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;

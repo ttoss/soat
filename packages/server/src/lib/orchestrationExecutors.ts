@@ -86,6 +86,10 @@ type DispatchArgs = {
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
   pollAttempt?: number;
+  // Run-scoped idempotency key for this node execution. Forwarded by the HTTP
+  // tool executor as the `Idempotency-Key` request header (D7) so downstream
+  // services can dedupe a redelivered call.
+  idempotencyKey?: string;
 };
 
 const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
@@ -121,6 +125,7 @@ const dispatchNodeExecution = async (
     traceId,
     authHeader,
     pollAttempt,
+    idempotencyKey,
   } = args;
   const simple = dispatchSimpleNode(args);
   if (simple !== null) return simple;
@@ -143,7 +148,13 @@ const dispatchNodeExecution = async (
         triggerId,
       });
     case 'tool':
-      return executeToolNode({ node: nodeDefn, state, projectIds, authHeader });
+      return executeToolNode({
+        node: nodeDefn,
+        state,
+        projectIds,
+        authHeader,
+        idempotencyKey,
+      });
     case 'poll':
       return executePollNode({
         node: nodeDefn,
@@ -191,6 +202,7 @@ export const executeNodeById = async (args: {
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
+  idempotencyKey?: string;
 }): Promise<{
   nodeId: string;
   nodeDefn: OrchestrationNode;
@@ -207,6 +219,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    idempotencyKey,
   } = args;
   const nodeDefn = nodes.find((n) => {
     return n.id === nodeId;
@@ -227,6 +240,7 @@ export const executeNodeById = async (args: {
     traceId,
     authHeader,
     pollAttempt,
+    idempotencyKey,
   });
   return { nodeId, nodeDefn, execResult };
 };

@@ -458,6 +458,9 @@ export const callTool = async (args: {
   input?: Record<string, unknown>;
   authHeader?: string;
   remainingDepth?: number;
+  // Forwarded to an HTTP tool as the `Idempotency-Key` request header (D7),
+  // so a redelivered orchestration node call can be deduped downstream.
+  idempotencyKey?: string;
 }): Promise<unknown> => {
   const toolInstance = await findToolInstance({
     projectIds: args.projectIds,
@@ -475,5 +478,6 @@ export const callTool = async (args: {
     authHeader: args.authHeader,
     remainingDepth: args.remainingDepth,
     projectIds: args.projectIds,
+    idempotencyKey: args.idempotencyKey,
   });
 };

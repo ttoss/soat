@@ -21,11 +21,11 @@
 | Per-node retry with backoff                    | ✅ Implemented | `retry.max_attempts` + fixed/exponential backoff, offloaded to the scheduler                  |
 | Synchronous compatibility mode                 | ✅ Implemented | `wait: true` on `start-orchestration-run`                                                     |
 | Run lifecycle webhook events                   | ✅ Implemented | `orchestration_runs.started` / `.awaiting_input` / `.succeeded` / `.failed`                   |
-| Queue abstraction + Postgres driver            | ❌ Not started | `SELECT … FOR UPDATE SKIP LOCKED`; decouples execution from the API process                   |
-| Run-scoped node idempotency keys               | ❌ Not started | Documented gap: node side effects can repeat across a retry/redrive today                     |
-| Worker pool (separate process option)          | ❌ Not started | Thin `worker.ts` entrypoint in P1; deploy/ops tooling lands with Phase 2                      |
-| Concurrency limits (per project + global)      | ❌ Not started |                                                                                              |
-| Pluggable driver interface + SQS driver        | ❌ Not started | For deployments that standardize on a managed queue                                           |
+| Queue abstraction + Postgres driver            | ✅ Implemented | `run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`; `enqueue`/`claim`/`ack`/`retry`    |
+| Run-scoped node idempotency keys               | ✅ Implemented | `{run_id}:{node_id}:{attempt}` written `running` before side effects; completed key reused     |
+| Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint; deploy/ops tooling lands with Phase 2   |
+| Concurrency limits (per project + global)      | ❌ Not started | Phase 2                                                                                       |
+| Pluggable driver interface + SQS driver        | ❌ Not started | Phase 3 — for deployments that standardize on a managed queue                                  |
 
 ## Resolved design decisions
 
@@ -122,7 +122,17 @@ downstream services are expected to dedupe on it.
 
 ## Implementation Phases
 
-### Phase 1 — Postgres Queue Driver + Idempotency Keys ❌ Not started
+### Phase 1 — Postgres Queue Driver + Idempotency Keys ✅ Implemented
+
+> Shipped: `run_tasks` queue model + Postgres driver (`orchestrationQueue.ts`),
+> extractable worker loop + `worker.ts` entrypoint (`orchestrationWorker.ts`),
+> run-scoped idempotency keys on `OrchestrationNodeExecution`
+> (`orchestrationIdempotency.ts`), `start-orchestration-run` enqueue-only
+> (`status: "queued"`), scheduler sweeps retargeted to enqueue tasks, and the
+> HTTP tool `Idempotency-Key` header. Request-driven resumes (human input,
+> manual resume, approval resolution) continue to drive inline and return the
+> settled run — they do not round-trip the queue — so a `resume` task kind is
+> reserved but not yet produced.
 
 **Goal:** Run execution becomes a queue-consuming worker loop with
 at-least-once delivery and idempotent node execution — closing the documented

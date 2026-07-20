@@ -1114,6 +1114,37 @@ if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestratio
 fi
 echo "Completed run: OK"
 
+echo "--- Starting async run (queue-backed, status queued) ---"
+# Without --wait the run is enqueued and returns immediately as "queued"; a
+# worker drives it to completion. Poll get-orchestration-run until it settles.
+ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --input '{"theme":"async"}')
+ORCH_ASYNC_ID=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.id')
+ORCH_ASYNC_STATUS=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.status')
+if [ "$ORCH_ASYNC_STATUS" != "queued" ]; then
+  echo "async start-orchestration-run did not return status queued"
+  printf '%s\n' "$ORCH_ASYNC_RESP"
+  exit 1
+fi
+ORCH_ASYNC_FINAL=""
+i=0
+while [ "$i" -lt 30 ]; do
+  ORCH_ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
+    --run-id "$ORCH_ASYNC_ID")
+  ORCH_ASYNC_FINAL=$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.status')
+  if [ "$ORCH_ASYNC_FINAL" = "succeeded" ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$ORCH_ASYNC_FINAL" != "succeeded" ]; then
+  echo "async run did not reach succeeded (last status: $ORCH_ASYNC_FINAL)"
+  exit 1
+fi
+echo "Async queued run: OK"
+
 echo "--- Run input is visible to node logic via the input namespace ---"
 # A snake_case input key must round-trip verbatim; it resolves only through the
 # namespaced form ({"var":"input.cycle_task"}) — a flat {"var":"cycle_task"}

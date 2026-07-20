@@ -2894,7 +2894,7 @@ describe('Orchestrations', () => {
       return res.body.id as string;
     };
 
-    test('start-run returns immediately with status running (async default)', async () => {
+    test('start-run returns immediately with status queued (async default)', async () => {
       const orchId = await createOrchestration({
         name: 'Async Simple',
         nodes: [
@@ -2912,7 +2912,8 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchId, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('running');
+      // Async default: the run is enqueued, not driven inside the request.
+      expect(runRes.body.status).toBe('queued');
 
       const settled = await waitForStatus(runRes.body.id as string, [
         'succeeded',
@@ -2944,7 +2945,7 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestration-runs')
         .send({ orchestration_id: orchId, input: {} });
       expect(runRes.status).toBe(201);
-      expect(runRes.body.status).toBe('running');
+      expect(runRes.body.status).toBe('queued');
       const runId = runRes.body.id as string;
 
       // The run parks on the delay node with its wake persisted — no in-process
@@ -2995,7 +2996,7 @@ describe('Orchestrations', () => {
           .post('/api/v1/orchestration-runs')
           .send({ orchestration_id: orchId, input: {} });
         expect(runRes.status).toBe(201);
-        expect(runRes.body.status).toBe('running');
+        expect(runRes.body.status).toBe('queued');
         const runId = runRes.body.id as string;
 
         // First attempt was pending, so the run parks between attempts instead

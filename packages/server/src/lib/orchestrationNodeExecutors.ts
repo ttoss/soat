@@ -190,8 +190,11 @@ export const executeToolNode = async (args: {
   state: Record<string, unknown>;
   projectIds: number[];
   authHeader?: string;
+  // Run-scoped idempotency key, forwarded to the HTTP tool executor as the
+  // `Idempotency-Key` request header (D7).
+  idempotencyKey?: string;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader } = args;
+  const { node, state, projectIds, authHeader, idempotencyKey } = args;
   if (!node.toolId)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
@@ -205,6 +208,7 @@ export const executeToolNode = async (args: {
     action: node.operationId,
     input: inputs as Record<string, unknown>,
     authHeader,
+    idempotencyKey,
   });
 
   const artifact: Record<string, unknown> =

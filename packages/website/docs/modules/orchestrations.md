@@ -90,7 +90,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `node_id`      | string         | ID of the executed node                                  |
 | `node_type`    | string \| null | Node type (`agent`, `transform`, …)                      |
 | `attempt`      | integer        | 1-based attempt number (a retried node yields one record per attempt) |
-| `status`       | string         | `completed` \| `failed` \| `requires_action` \| `skipped` |
+| `status`       | string         | `running` \| `completed` \| `failed` \| `requires_action` \| `skipped` (`running` is the transient pre-completion state of a side-effecting node) |
 | `input`        | object \| null | Resolved `input_mapping` the node received               |
 | `output`       | object \| null | Output artifact the node produced (`null` when failed)   |
 | `error`        | object \| null | `{ code, message }` when `status` is `failed`            |
@@ -218,17 +218,30 @@ Any node can declare a `retry` policy. When the node throws a **transient** erro
 }
 ```
 
-> **Note:** node execution is not yet idempotent across a retry (or a reaper redrive) — a node with external side effects may repeat them. Run-scoped idempotency keys arrive with the queue-backed worker.
+> **Note:** node execution of side-effecting nodes is idempotent across a retry redelivery or a reaper redrive — see [Idempotency](#idempotency-of-node-execution). A **retry** (a new attempt) is deliberately not deduped; a **redelivery** of the same attempt is.
 
 ### Durable Background Execution
 
-Runs execute in a **durable background worker**, detached from the HTTP request that starts them:
+Runs execute in a **queue-backed durable worker**, detached from the HTTP request that starts them:
 
-- `start-orchestration-run` persists the run and returns immediately with `status: "running"`. Observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events.
-- `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler wakes it when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`.
+- `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — **no node executes inside the request**. A worker claims the task and drives the run; observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
+- `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler enqueues a `wake` task when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`, which drive the run inline and return the settled result.
 
-**Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round. (Node execution is not yet idempotent across a redrive; run-scoped idempotency keys arrive with the queue-backed worker.)
+**Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
+
+**Separate worker process.** The worker loop is an extractable module that runs inside the API process by default. `node dist/worker.js` (built from `src/worker.ts`) starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). Deploy/ops tooling for a worker fleet lands with concurrency limits (Phase 2).
+
+**Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round.
+
+#### Idempotency of node execution
+
+At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{run_id}:{node_id}:{attempt}`, where `attempt` is the node **retry** attempt (not the queue delivery counter). The keyed `node_executions` record is inserted `running` **before** the side effect runs and updated in place afterward:
+
+- A **redelivery** of the same task replays the same `(run, node, attempt)` → the key already exists as `completed` → the stored output is reused and the executor is **not** re-invoked. So a redeploy mid-run neither loses the run nor repeats a completed side effect.
+- A **retry** (attempt N failed; the policy schedules attempt N+1) is a *new* key → the executor runs for real, which is what a retry means.
+
+The honest boundary: a worker that crashes *between* firing the side effect and marking the key `completed` leaves a `running` key; the redelivering worker re-executes under the same key. To let downstream services dedupe that window, an `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) have no external side effect and are unkeyed.
 
 **Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
 
@@ -241,12 +254,15 @@ Runs execute in a **durable background worker**, detached from the HTTP request 
 | `orchestration_runs.succeeded`       | A run reaches `succeeded`                      |
 | `orchestration_runs.failed`          | A run reaches `failed`                        |
 
-The scheduler tick — which both wakes due `sleeping` runs and reaps orphaned `running` runs — is configurable:
+The scheduler tick (which enqueues `wake` tasks for due `sleeping` runs and `continue` tasks for orphaned `running` runs) and the queue worker loop are configurable:
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
 | `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
 | `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
+| `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`) — how often the worker drains the queue. |
+| `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). |
+| `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to stop the API process from running the in-process worker loop and its enqueue kicks, so a dedicated `worker.js` process owns draining. |
 
 ### State and Mappings
 
@@ -460,6 +476,7 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 
 **A run appears stuck in a non-terminal state:**
 
+- `queued` — the run is enqueued and waiting for a worker to claim its `continue` task; it advances to `running` on the next worker tick. Expected briefly after an async `start-orchestration-run`. If it never advances, confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`) — see [Durable Background Execution](#durable-background-execution).
 - `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once `active_nodes[].wake_at` (or the node's backoff delay) elapses. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
 - `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` (or `resume-orchestration-run`) is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
 - `running` for far longer than expected — the process driving it may have crashed or been redeployed mid-execution. The background reaper reclaims any run whose lease (`lease_expires_at`) has expired and resumes it from the last checkpoint; a healthy run refreshes its lease every round, so this self-heals within `ORCHESTRATION_RUN_LEASE_TTL_MS` without intervention — see [Durable Background Execution](#durable-background-execution).

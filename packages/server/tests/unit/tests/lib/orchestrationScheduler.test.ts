@@ -622,10 +622,10 @@ describe('startOrchestrationRun background error handling', () => {
     jest.restoreAllMocks();
   });
 
-  test('swallows an error thrown by the async background drive', async () => {
-    // A corrupt orchestration makes the detached background drive throw. The
-    // call still returns the initial run synchronously and the drive's catch
-    // swallows the failure — driven entirely through real records, no stubs.
+  test('enqueues the run and swallows an error thrown by the worker drive', async () => {
+    // A corrupt orchestration makes the worker's drive throw. start-run still
+    // returns the initial run synchronously as `queued`, and the kicked worker
+    // drive's failure is swallowed — driven entirely through real records.
     const badOrch = await db.Orchestration.create({
       projectId: projectPk,
       name: 'Background Drive Failure',
@@ -637,8 +637,9 @@ describe('startOrchestrationRun background error handling', () => {
       orchestrationPublicId: badOrch.publicId as string,
     });
 
-    // Returns the initial run immediately; the background failure is swallowed.
-    expect(result.status).toBe('running');
+    // Returns the initial run immediately as `queued`; the worker failure is
+    // swallowed by drainQueueOnce.
+    expect(result.status).toBe('queued');
     expect(result.id).toBeDefined();
     await new Promise<void>((resolve) => {
       return setImmediate(resolve);

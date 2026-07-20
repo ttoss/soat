@@ -4,6 +4,11 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { NodeExecutionResult } from './orchestrationExecutors';
 import { applyInputMapping, executeNodeById } from './orchestrationExecutors';
+import type { NodeOutcome, ReservedRow } from './orchestrationIdempotency';
+import {
+  computeNodeIdempotencyKey,
+  prepareKeyedExecution,
+} from './orchestrationIdempotency';
 import {
   backoffMs,
   isRetriableError,
@@ -46,7 +51,7 @@ const recordNodeExecution = async (args: {
   runRecord: InstanceType<typeof db.OrchestrationRun>;
   nodeId: string;
   nodeType: string | null;
-  status: 'completed' | 'failed' | 'requires_action' | 'skipped';
+  status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;
@@ -109,23 +114,34 @@ const handleNodeFailure = async (args: {
   input: Record<string, unknown> | null;
   attempt: number;
   startedAt: Date;
+  // The keyed `running` row reserved before dispatch (side-effecting nodes),
+  // updated in place to `failed` instead of writing a second record.
+  keyedRow?: ReservedRow;
 }): Promise<{
   nodeId: string;
   nodeDefn: OrchestrationNode;
   execResult: NodeExecutionResult;
 }> => {
   const { error, nodeId, nodeDefn, nodeType, runRecord, input, attempt } = args;
-  await recordNodeExecution({
-    runRecord,
-    nodeId,
-    nodeType,
-    attempt,
-    status: 'failed',
-    input,
-    output: null,
-    error: buildRunError(error),
-    startedAt: args.startedAt,
-  });
+  if (args.keyedRow) {
+    await args.keyedRow.update({
+      status: 'failed',
+      error: buildRunError(error),
+      completedAt: new Date(),
+    });
+  } else {
+    await recordNodeExecution({
+      runRecord,
+      nodeId,
+      nodeType,
+      attempt,
+      status: 'failed',
+      input,
+      output: null,
+      error: buildRunError(error),
+      startedAt: args.startedAt,
+    });
+  }
 
   if (nodeDefn) {
     const policy = resolveRetryPolicy(nodeDefn);
@@ -152,10 +168,110 @@ const handleNodeFailure = async (args: {
 };
 
 /**
+ * Records a successful (or requires_action) node result: updates the keyed
+ * `running` row in place for a side-effecting node, or writes a fresh record
+ * for a pure node.
+ */
+const recordNodeSuccess = async (args: {
+  keyedRow: ReservedRow | undefined;
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodeId: string;
+  nodeType: string | null;
+  attempt: number;
+  input: Record<string, unknown> | null;
+  startedAt: Date;
+  status: 'completed' | 'requires_action';
+  output: Record<string, unknown>;
+}): Promise<void> => {
+  if (args.keyedRow) {
+    await args.keyedRow.update({
+      status: args.status,
+      output: args.output,
+      error: null,
+      completedAt: new Date(),
+    });
+    return;
+  }
+  await recordNodeExecution({
+    runRecord: args.runRecord,
+    nodeId: args.nodeId,
+    nodeType: args.nodeType,
+    attempt: args.attempt,
+    status: args.status,
+    input: args.input,
+    output: args.output,
+    error: null,
+    startedAt: args.startedAt,
+  });
+};
+
+type ExecutionContext = {
+  nodeId: string;
+  runRecord: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+  state: Record<string, unknown>;
+  projectIds: number[];
+  traceId: string | null;
+  authHeader?: string;
+  pollAttempt?: number;
+  nodeType: string | null;
+  attempt: number;
+  input: Record<string, unknown> | null;
+  startedAt: Date;
+  idempotencyKey: string | null;
+};
+
+/**
+ * Dispatches the node and records its (non-failing) outcome: a `wait` returns
+ * without recording (the reserved keyed row, if any, is dropped); otherwise the
+ * completed/requires_action result is persisted (keyed row updated in place, or
+ * a fresh record for a pure node).
+ */
+const runNodeAndRecord = async (
+  ctx: ExecutionContext,
+  keyedRow: ReservedRow | undefined
+): Promise<NodeOutcome> => {
+  const result = await executeNodeById({
+    nodeId: ctx.nodeId,
+    nodes: ctx.nodes,
+    state: ctx.state,
+    projectIds: ctx.projectIds,
+    projectId: ctx.runRecord.projectId as number,
+    runPublicId: ctx.runRecord.publicId as string,
+    triggerId: ctx.runRecord.triggerId ?? undefined,
+    traceId: ctx.traceId,
+    authHeader: ctx.authHeader,
+    pollAttempt: ctx.pollAttempt,
+    idempotencyKey: ctx.idempotencyKey ?? undefined,
+  });
+  // A `wait` result means the node has not finished — it will be resumed by the
+  // scheduler; record nothing yet. (Keyed side-effecting nodes never `wait`.)
+  if (result.execResult.kind === 'wait') {
+    if (keyedRow) await keyedRow.destroy();
+    return result;
+  }
+  const { status, output } = summarizeNodeResult(result.execResult);
+  await recordNodeSuccess({
+    keyedRow,
+    runRecord: ctx.runRecord,
+    nodeId: ctx.nodeId,
+    nodeType: ctx.nodeType,
+    attempt: ctx.attempt,
+    input: ctx.input,
+    startedAt: ctx.startedAt,
+    status,
+    output,
+  });
+  return result;
+};
+
+/**
  * Executes a single node and persists an OrchestrationNodeExecution record
- * capturing its resolved input, output, status, and (on failure) error. The
- * record is written before re-throwing so a failing node is always traceable
- * via get-orchestration-run, even though the run itself aborts.
+ * capturing its resolved input, output, status, and (on failure) error. For a
+ * side-effecting node the record is keyed for run-scoped idempotency (D5): a
+ * `running` row is written before dispatch and a completed key short-circuits a
+ * redelivered execution. The record is written before re-throwing so a failing
+ * node is always traceable via get-orchestration-run.
  */
 export const executeAndRecordNode = async (args: {
   nodeId: string;
@@ -167,60 +283,48 @@ export const executeAndRecordNode = async (args: {
   authHeader?: string;
   pollAttempt?: number;
   retryAttempt?: number;
-}): Promise<{
-  nodeId: string;
-  nodeDefn: OrchestrationNode;
-  execResult: NodeExecutionResult;
-}> => {
-  const {
-    nodeId,
-    runRecord,
-    nodes,
-    state,
-    projectIds,
-    traceId,
-    authHeader,
-    pollAttempt,
-  } = args;
+}): Promise<NodeOutcome> => {
+  const { nodeId, runRecord, nodes, state } = args;
   const nodeDefn = nodes.find((n) => {
     return n.id === nodeId;
   });
   const nodeType = nodeDefn?.type ?? null;
-  const input = applyInputMapping(nodeDefn?.inputMapping, state);
   const attempt = Math.max(args.retryAttempt ?? 1, 1);
-  const startedAt = new Date();
-  try {
-    const result = await executeNodeById({
-      nodeId,
-      nodes,
-      state,
-      projectIds,
-      projectId: runRecord.projectId as number,
+  const ctx: ExecutionContext = {
+    nodeId,
+    runRecord,
+    nodes,
+    state,
+    projectIds: args.projectIds,
+    traceId: args.traceId,
+    authHeader: args.authHeader,
+    pollAttempt: args.pollAttempt,
+    nodeType,
+    attempt,
+    input: applyInputMapping(nodeDefn?.inputMapping, state),
+    startedAt: new Date(),
+    idempotencyKey: computeNodeIdempotencyKey({
       runPublicId: runRecord.publicId as string,
-      triggerId: runRecord.triggerId ?? undefined,
-      traceId,
-      authHeader,
-      pollAttempt,
-    });
-    // A `wait` result means the node has not finished — it will be resumed by
-    // the scheduler. Do not record a node execution yet; the completed (or
-    // failed) record is written when the wait resolves on a later attempt.
-    if (result.execResult.kind === 'wait') {
-      return result;
-    }
-    const { status, output } = summarizeNodeResult(result.execResult);
-    await recordNodeExecution({
-      runRecord,
       nodeId,
       nodeType,
       attempt,
-      status,
-      input,
-      output,
-      error: null,
-      startedAt,
-    });
-    return result;
+    }),
+  };
+
+  const prepared = await prepareKeyedExecution({
+    idempotencyKey: ctx.idempotencyKey,
+    nodeDefn,
+    nodeId,
+    nodeType,
+    attempt,
+    input: ctx.input,
+    runRecord,
+    startedAt: ctx.startedAt,
+  });
+  if (prepared.reuse) return prepared.reuse;
+
+  try {
+    return await runNodeAndRecord(ctx, prepared.keyedRow);
   } catch (error: unknown) {
     return handleNodeFailure({
       error,
@@ -228,9 +332,10 @@ export const executeAndRecordNode = async (args: {
       nodeDefn,
       nodeType,
       runRecord,
-      input,
+      input: ctx.input,
       attempt,
-      startedAt,
+      startedAt: ctx.startedAt,
+      keyedRow: prepared.keyedRow,
     });
   }
 };

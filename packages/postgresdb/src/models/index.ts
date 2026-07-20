@@ -30,6 +30,7 @@ export { Orchestration } from './Orchestration';
 export { OrchestrationCheckpoint } from './OrchestrationCheckpoint';
 export { OrchestrationNodeExecution } from './OrchestrationNodeExecution';
 export { OrchestrationRun } from './OrchestrationRun';
+export { OrchestrationRunTask } from './OrchestrationRunTask';
 export { Policy } from './Policy';
 export { PriceBook } from './PriceBook';
 export { Project } from './Project';
