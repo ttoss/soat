@@ -25,11 +25,11 @@ Three producers file items today:
 
 - the [`approval` orchestration node](./orchestrations.md) — declarative
   placement in a DAG (`origin: node`);
-- **tool-call interception** — a [guardrail](./guardrails.md) attached to an
-  agent or tool (or the deprecated per-binding
-  [`approval_policy`](./agents.md#approval-policy)) gates tool calls on every
-  execution surface: chat sessions, direct generations, MCP
-  (`origin: tool_call`);
+- **tool-call interception** — a [guardrail](./guardrails.md) attached to a
+  project, agent, or tool gates tool calls on every execution surface: chat
+  sessions, direct generations, MCP (`origin: tool_call`). (The per-binding
+  [`approval_policy`](./agents.md#approval-policy) that once did this is
+  deprecated and no longer enforced.)
 - **approval-gated task transitions** — a workflow transition declaring
   [`requires_approval`](./workflows.md#approval-gated-transitions) parks a task
   move behind an approval (`origin: task_transition`). The item carries no

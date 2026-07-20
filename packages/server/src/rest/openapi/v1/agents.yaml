@@ -638,18 +638,23 @@ components:
           # `tool_id`/`tool`. Cannot be of type `pipeline`.
           $ref: './tools.yaml#/components/schemas/CreateToolRequest'
         approval_policy:
+          # Deprecated and no longer enforced — the deprecation flag lives on the
+          # referenced ToolApprovalPolicy schema (a sibling of $ref is not allowed).
           $ref: '#/components/schemas/ToolApprovalPolicy'
 
     ToolApprovalPolicy:
       type: object
       nullable: true
+      deprecated: true
       required:
         - default
       description: >-
-        Allow / require-approval / deny gate evaluated by the platform on
-        every call of the bound tool. `require_approval` files an item in the
-        approvals queue; the call executes only if approved before expiry. Not
-        supported on `client` tool bindings. See
+        **Deprecated and no longer enforced.** Superseded by
+        [Guardrails](/docs/modules/guardrails), the platform's single tool-call
+        gating mechanism. The field is still accepted on write and echoed on
+        read for one deprecation window, but it no longer routes tool calls —
+        attach a guardrail (a `{ "class": "C" }` guardrail on the tool is the
+        migration path) instead. Will be removed in a future release. See
         [Approval Policy](/docs/modules/agents#approval-policy).
       properties:
         default:

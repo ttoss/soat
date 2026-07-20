@@ -7,7 +7,6 @@ import {
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
-import { buildResolverApprovalContext } from './agentToolApproval';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -97,7 +96,8 @@ type PendingStateDb = {
 };
 
 // Re-resolves the agent's tool surface for a resumed generation, re-applying
-// both the M1 approval gate and the guardrail interceptor. The caller's
+// the guardrail interceptor (the deprecated per-binding approval_policy is no
+// longer honoured as a routing source — task 2.7). The caller's
 // guardrail_context is not persisted across the tool-outputs round-trip, so only
 // project/agent/tool scope guardrails apply here (caller `context.*` keys fail
 // closed). Extracted so buildPendingFromState stays within its complexity budget.
@@ -123,13 +123,9 @@ const resolveRecoveryTools = async (args: {
     authHeader: args.authHeader,
     toolContext: args.pendingState.toolContext ?? undefined,
     remainingDepth: args.pendingState.remainingDepth ?? undefined,
-    approval: buildResolverApprovalContext({
-      bindings,
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectId,
-      sessionId: args.pendingState.toolContext?.sessionId ?? null,
-    }),
+    // The per-binding `approval_policy` is deprecated and no longer honoured as
+    // a routing source (task 2.7): a resumed generation gates only through the
+    // guardrail interceptor, never on approval_policy.
     guardrail: await buildResolverGuardrailContext({
       agentId: args.agentId,
       generationId: args.generationId,

@@ -13,7 +13,6 @@ import {
   mergeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
-import { buildResolverApprovalContext } from './agentToolApproval';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -142,13 +141,10 @@ const resolveGenerationTools = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
-    approval: buildResolverApprovalContext({
-      bindings,
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectId: args.typedAgent.project.id as number,
-      sessionId: args.toolContext?.sessionId ?? null,
-    }),
+    // The per-binding `approval_policy` is deprecated and no longer honoured as
+    // a routing source (task 2.7): guardrails are the single tool-call gating
+    // mechanism. The field stays readable/writable for the deprecation window
+    // but never builds an approval-gate context here.
     guardrail,
   });
 
