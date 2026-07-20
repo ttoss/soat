@@ -5,10 +5,7 @@ import {
   normalizeKnowledgeConfig,
 } from '../agentKnowledge';
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
-import type {
-  AgentToolBinding,
-  ToolApprovalPolicy,
-} from '../agentToolBindings';
+import type { AgentToolBinding } from '../agentToolBindings';
 import { bindingsFromLegacyFields } from '../agentToolBindings';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
@@ -115,9 +112,10 @@ const validateAgentProperties = (args: {
 // ── tool_bindings ↔ template shape ───────────────────────────────────────
 //
 // Binding entries are stored camelCase (internal convention) but declared and
-// read snake_case in templates. Only `tool_id` + `approval_policy` entries are
-// supported in formations (no inline `tool` — declare a tool resource
-// instead), so the conversion enumerates known keys.
+// read snake_case in templates. Only `tool_id` entries are supported in
+// formations (no inline `tool` — declare a tool resource instead), so the
+// conversion enumerates known keys. Tool-call gating is owned by guardrails,
+// which attach through `guardrail_ids`, not through the binding.
 
 const parseFormationToolBindings = (
   value: unknown
@@ -127,20 +125,6 @@ const parseFormationToolBindings = (
   return entries.map((entry): AgentToolBinding => {
     const binding: AgentToolBinding = {};
     if (typeof entry.tool_id === 'string') binding.toolId = entry.tool_id;
-    const policy = entry.approval_policy;
-    if (isObjectRecord(policy)) {
-      const approvalPolicy = {
-        default: policy.default,
-        ...(policy.rules !== undefined ? { rules: policy.rules } : {}),
-        ...(policy.expires_in !== undefined
-          ? { expiresIn: policy.expires_in }
-          : {}),
-        ...(policy.reasoning_prompt !== undefined
-          ? { reasoningPrompt: policy.reasoning_prompt }
-          : {}),
-      };
-      binding.approvalPolicy = approvalPolicy as ToolApprovalPolicy;
-    }
     return binding;
   });
 };
@@ -152,22 +136,6 @@ const readFormationToolBindings = (
   return bindings.map((binding) => {
     return {
       ...(binding.toolId !== undefined ? { tool_id: binding.toolId } : {}),
-      ...(binding.approvalPolicy
-        ? {
-            approval_policy: {
-              default: binding.approvalPolicy.default,
-              ...(binding.approvalPolicy.rules !== undefined
-                ? { rules: binding.approvalPolicy.rules }
-                : {}),
-              ...(binding.approvalPolicy.expiresIn !== undefined
-                ? { expires_in: binding.approvalPolicy.expiresIn }
-                : {}),
-              ...(binding.approvalPolicy.reasoningPrompt !== undefined
-                ? { reasoning_prompt: binding.approvalPolicy.reasoningPrompt }
-                : {}),
-            },
-          }
-        : {}),
     };
   });
 };

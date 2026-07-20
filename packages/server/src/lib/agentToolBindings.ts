@@ -1,6 +1,5 @@
 import createDebug from 'debug';
 
-import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   assertEphemeralTypeSupported,
@@ -12,36 +11,16 @@ const log = createDebug('soat:agents');
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
-export type ToolApprovalEffect = 'allow' | 'require_approval' | 'deny';
-
-const APPROVAL_EFFECTS: readonly string[] = [
-  'allow',
-  'require_approval',
-  'deny',
-];
-
-/**
- * The allow / require-approval / deny gate carried by a tool binding,
- * evaluated by the platform in the tool-dispatch path on every call of the
- * bound tool (prd-approvals.md §5).
- */
-export type ToolApprovalPolicy = {
-  default: ToolApprovalEffect;
-  rules?: { when: Record<string, unknown>; effect: ToolApprovalEffect }[];
-  expiresIn?: number;
-  reasoningPrompt?: string | null;
-};
-
 /**
  * One entry of an agent's canonical `tool_bindings` — a persisted-tool
- * reference (`toolId`) or an inline definition (`tool`), never both, plus the
- * binding-scoped `approvalPolicy`. Mirrors the pipeline `steps[]`
- * reference-or-inline pattern.
+ * reference (`toolId`) or an inline definition (`tool`), never both. Mirrors
+ * the pipeline `steps[]` reference-or-inline pattern. Tool-call gating is
+ * owned entirely by [Guardrails](../rest/openapi/v1/guardrails.yaml); a binding
+ * carries no gate of its own.
  */
 export type AgentToolBinding = {
   toolId?: string;
   tool?: InlineToolDefinition;
-  approvalPolicy?: ToolApprovalPolicy | null;
 };
 
 /** The subset of an Agent row the binding helpers read. */
@@ -100,9 +79,6 @@ export const readAgentToolBindings = (
  * to `null`, not `[]`.
  *
  * Ordering invariant: the inline `tools` array is emitted in binding order.
- * `buildResolverApprovalContext` builds its positional `inlinePolicies` from the
- * same binding order, so the two must stay in lockstep — the resolver pairs each
- * inline tool with the policy at the same index.
  */
 export const deriveLegacyToolFields = (
   bindings: AgentToolBinding[] | null
@@ -126,130 +102,6 @@ export const deriveLegacyToolFields = (
 
 // ── Validation ────────────────────────────────────────────────────────────
 
-const isApprovalEffect = (value: unknown): boolean => {
-  return typeof value === 'string' && APPROVAL_EFFECTS.includes(value);
-};
-
-const validatePolicyRules = (rules: unknown): void => {
-  if (rules === undefined) return;
-  if (!Array.isArray(rules)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy.rules must be an array.'
-    );
-  }
-  for (const rule of rules) {
-    if (!isPlainObject(rule) || !isPlainObject(rule.when)) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'Each approval_policy rule requires a JSON Logic `when` object.'
-      );
-    }
-    if (!isApprovalEffect(rule.effect)) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        "Each approval_policy rule requires an effect of 'allow', 'require_approval', or 'deny'."
-      );
-    }
-  }
-};
-
-const validatePolicyExpiresIn = (expiresIn: unknown): void => {
-  if (expiresIn === undefined) return;
-  if (
-    typeof expiresIn !== 'number' ||
-    !Number.isInteger(expiresIn) ||
-    expiresIn <= 0
-  ) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy.expires_in must be a positive integer (seconds).'
-    );
-  }
-};
-
-const validatePolicyReasoningPrompt = (reasoningPrompt: unknown): void => {
-  if (reasoningPrompt === undefined || reasoningPrompt === null) return;
-  if (typeof reasoningPrompt !== 'string') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy.reasoning_prompt must be a string.'
-    );
-  }
-};
-
-const validateApprovalPolicyShape = (policy: unknown): ToolApprovalPolicy => {
-  if (!isPlainObject(policy)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'approval_policy must be an object.'
-    );
-  }
-  if (!isApprovalEffect(policy.default)) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      "approval_policy.default is required and must be 'allow', 'require_approval', or 'deny'."
-    );
-  }
-  validatePolicyRules(policy.rules);
-  validatePolicyExpiresIn(policy.expiresIn);
-  validatePolicyReasoningPrompt(policy.reasoningPrompt);
-  return policy as ToolApprovalPolicy;
-};
-
-/**
- * The approved action is executed by the platform at resolution time, which a
- * `client` tool cannot be — it executes on the caller's machine. Enforced for
- * both binding forms (agents.md — Approval Policy, Restrictions).
- */
-const assertPolicyToolTypeSupported = (args: {
-  toolId: string | undefined;
-  type: string | undefined;
-}): void => {
-  if ((args.type ?? 'http') === 'client') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `approval_policy is not supported on client tool bindings${
-        args.toolId ? ` ('${args.toolId}')` : ''
-      } — the platform cannot execute the approved action at resolution time.`
-    );
-  }
-};
-
-const validateBindingApprovalPolicy = async (args: {
-  binding: Record<string, unknown>;
-  projectId: number;
-}): Promise<void> => {
-  const policy = args.binding.approvalPolicy;
-  if (policy === undefined || policy === null) return;
-
-  validateApprovalPolicyShape(policy);
-
-  if (typeof args.binding.toolId === 'string') {
-    // The policy needs the tool's type (client bindings are rejected), so a
-    // policy-carrying reference must resolve — unlike a bare binding, which
-    // keeps the historical lax behavior (unknown IDs are skipped at
-    // generation time).
-    const tool = await db.Tool.findOne({
-      where: { publicId: args.binding.toolId, projectId: args.projectId },
-    });
-    if (!tool) {
-      throw new DomainError(
-        'TOOL_NOT_FOUND',
-        `Tool '${args.binding.toolId}' not found in the project.`
-      );
-    }
-    assertPolicyToolTypeSupported({
-      toolId: args.binding.toolId,
-      type: (tool as unknown as { type: string | null }).type ?? undefined,
-    });
-    return;
-  }
-
-  const inline = args.binding.tool as InlineToolDefinition;
-  assertPolicyToolTypeSupported({ toolId: undefined, type: inline.type });
-};
-
 // An inline binding tool follows the same rules as the deprecated `tools`
 // field entries: a plain object, an ephemeral-supported type, and a valid
 // definition within the project.
@@ -268,9 +120,9 @@ const validateInlineBindingTool = async (args: {
   await validateToolDefinition({ definition, projectId: args.projectId });
 };
 
-// Validates a single binding entry — shape (exactly one of `tool_id`/`tool`),
-// inline definition rules, and its `approval_policy` — and returns the entry
-// with only its defined keys, ready to persist.
+// Validates a single binding entry — shape (exactly one of `tool_id`/`tool`)
+// and inline definition rules — and returns the entry with only its defined
+// keys, ready to persist.
 const validateBindingEntry = async (args: {
   entry: unknown;
   projectId: number;
@@ -296,22 +148,17 @@ const validateBindingEntry = async (args: {
     await validateInlineBindingTool({ tool: entry.tool, projectId });
   }
 
-  await validateBindingApprovalPolicy({ binding: entry, projectId });
-
   const clean: AgentToolBinding = {};
   if (hasToolId) clean.toolId = entry.toolId as string;
   if (hasInline) clean.tool = entry.tool as InlineToolDefinition;
-  if (entry.approvalPolicy !== undefined && entry.approvalPolicy !== null) {
-    clean.approvalPolicy = entry.approvalPolicy as ToolApprovalPolicy;
-  }
   return clean;
 };
 
 /**
  * Validates newly provided `tool_bindings` entries: entry shape (exactly one
- * of `tool_id` / `tool`), inline definitions (same rules as the deprecated
- * `tools` field), and each `approval_policy`. Returns the bindings with only
- * their defined keys, ready to persist.
+ * of `tool_id` / `tool`) and inline definitions (same rules as the deprecated
+ * `tools` field). Returns the bindings with only their defined keys, ready to
+ * persist.
  */
 export const validateToolBindings = async (args: {
   projectId: number;
@@ -345,8 +192,7 @@ export const validateToolBindings = async (args: {
  * Applies a deprecated `toolIds` / `tools` update on top of the current
  * bindings, preserving the shorthands' historical independence: `toolIds`
  * replaces only the reference bindings, `tools` replaces only the inline
- * bindings. Replaced entries are rewritten bare — any `approvalPolicy` they
- * carried is dropped (agents.md — Deprecated: tool_ids and tools).
+ * bindings (agents.md — Deprecated: tool_ids and tools).
  */
 export const applyLegacyToolUpdates = (args: {
   current: AgentToolBinding[] | null;
@@ -429,9 +275,8 @@ export const resolveBindingsForCreate = async (args: {
 /**
  * Resolves an update request's binding change: `tool_bindings` replaces the
  * whole list; the deprecated shorthands keep their historical independence,
- * each replacing only its own subset (with any approval_policy on replaced
- * entries dropped — agents.md). Returns `undefined` when the request touches
- * no binding field.
+ * each replacing only its own subset (agents.md). Returns `undefined` when the
+ * request touches no binding field.
  */
 export const resolveBindingsForUpdate = async (args: {
   projectId: number;

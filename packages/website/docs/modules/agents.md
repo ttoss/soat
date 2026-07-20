@@ -99,7 +99,7 @@ When `status` is `completed`, `stop_reason` indicates why:
 
 ### Tools
 
-Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool. A single persisted tool can be bound to many agents, and each binding may still carry a [deprecated](#approval-policy) `approval_policy` field, but tool-call gating has moved to [Guardrails](./guardrails.md) — the policy is no longer enforced. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
+Agents attach [Tools](./tools.md) through the `tool_bindings` array — one binding object per tool. A single persisted tool can be bound to many agents. Tool-call gating is owned by [Guardrails](./guardrails.md), attached via `guardrail_ids` on the project, agent, or tool — not by the binding. For tool types (`http`, `client`, `mcp`, `soat`), execution behavior, preset parameters, and tool name resolution, see the [Tools module](./tools.md). See it end to end in [Agent SOAT Tools and Preset Parameters — Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent), which attaches `soat` document tools (with a preset document ID) to an agent.
 
 `tool_choice` and `stop_conditions` reference tools by their **resolved name** (e.g., `github_create_issue`), not by ID. See [Tool Name Resolution](./tools.md#tool-name-resolution) in the Tools module.
 
@@ -111,23 +111,17 @@ Each entry in `tool_bindings` is an object:
 | ----------------- | -------------- | -------------------------------------------------------------------------------------------------------------------- |
 | `tool_id`         | string         | Public ID of a persisted tool. Exactly one of `tool_id` / `tool` per entry.                                           |
 | `tool`            | object         | Inline (ephemeral) tool definition — see [Inline (Ephemeral) Tool Definitions](#inline-ephemeral-tool-definitions).   |
-| `approval_policy` | object \| null | **Deprecated and no longer enforced** — superseded by [Guardrails](./guardrails.md). Still accepted and echoed for one deprecation window but never routes calls — see [Approval Policy](#approval-policy). |
 
 ```json
 {
   "tool_bindings": [
     { "tool_id": "tool_k8x2f3np" },
-    {
-      "tool_id": "tool_m3p9qw7j",
-      "approval_policy": {
-        "default": "require_approval",
-        "expires_in": 259200
-      }
-    },
     { "tool": { "name": "lookup", "type": "http", "execute": { "url": "https://api.example.com/lookup" }, "parameters": { "type": "object", "properties": { "q": { "type": "string" } } } } }
   ]
 }
 ```
+
+To require human approval before a bound tool executes, attach a [Guardrail](./guardrails.md) to the tool, agent, or project — the binding itself carries no gate.
 
 An entry must contain exactly one of `tool_id` or `tool` (`400 VALIDATION_FAILED` otherwise). On update, `tool_bindings` replaces the whole list. `active_tool_ids` and `step_rules[].active_tool_ids` reference **persisted** tools only — the `tool_id` of a binding; inline entries have no ID and cannot be targeted.
 
@@ -137,7 +131,6 @@ An entry must contain exactly one of `tool_id` or `tool` (`400 VALIDATION_FAILED
 
 - A request may use either the canonical field or the shorthands, not both: sending `tool_bindings` together with `tool_ids` or `tools` returns `400 VALIDATION_FAILED`.
 - The shorthands preserve their historical update semantics: updating `tool_ids` replaces only the reference bindings and updating `tools` replaces only the inline bindings — the two remain independent.
-- The shorthands produce **bare** bindings. Updating through `tool_ids` rewrites the reference bindings without `approval_policy` — any policy previously set on those bindings is dropped. Manage bindings that carry a policy through `tool_bindings` only.
 
 New integrations should write `tool_bindings`; the shorthands exist so pre-existing clients and templates keep working unchanged.
 
@@ -146,41 +139,6 @@ New integrations should write `tool_bindings`; the shorthands exist so pre-exist
 A binding's `tool` property accepts an inline tool definition — the same shape as the [Create Tool](./tools.md#data-model) request body, minus `project_id` (the agent's own project is always used for `{{secret:...}}` resolution). Unlike `tool_id` bindings, these are **ephemeral**: they are stored directly on the agent record and resolved fresh at generation time, without creating a separate Tool resource. They never appear in `GET /tools` and cannot be targeted by `active_tool_ids` or `step_rules`, both of which reference persisted tool IDs. An ephemeral definition cannot itself be of type `pipeline` — nest a persisted pipeline tool via a `tool_id` binding instead.
 
 Inline definitions are a convenience for a tool that only ever makes sense for one agent (skipping the separate `POST /tools` call and any tool-lifecycle bookkeeping); use `tool_id` bindings for tools that are reused across agents or need to be independently manageable.
-
-#### Approval Policy
-
-:::warning Deprecated — no longer enforced; superseded by Guardrails
-
-`approval_policy` is deprecated and **no longer honoured as a routing source**. [Guardrails](./guardrails.md) are the platform's single tool-call gating mechanism — attachable to a project (every call by every agent), an agent (its whole tool surface), or a tool (everywhere it's used), with fail-closed classification, runtime context, and versioning. A live generation never routes on `approval_policy`; the field is still accepted on write and echoed on read for one deprecation window, then removed. Migrate by attaching a guardrail — a `{ "class": "C" }` guardrail on the tool reproduces a `require_approval` binding. The dispatch-path mechanics described below (return-pending, continuation generations, dedup, `approval_*` justification fields) carry over unchanged to guardrail class-C interception.
-
-:::
-
-A binding's `approval_policy` **once** turned the tool into an approval-gated tool: every call was classified by the platform — in the server's tool-dispatch path, not by the model — as `allow`, `require_approval`, or `deny` before anything executed, and `require_approval` filed an item in the project's [approval queue](./approvals.md). That routing is now performed by [Guardrails](./guardrails.md) instead; the shape below documents the deprecated field for the migration window only.
-
-| Property           | Type           | Description                                                                                                                    |
-| ------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `default`          | string         | **Required.** `allow` \| `require_approval` \| `deny` — applied when no rule matches. Bindings guarding write tools should default to `require_approval` or `deny` (fail-closed). |
-| `rules`            | array          | Optional ordered rule list; first match wins.                                                                                   |
-| `rules[].when`     | object         | [JSON Logic](https://jsonlogic.com) over `{ "action": …, "arguments": … }` — the resolved call (see below).                     |
-| `rules[].effect`   | string         | `allow` \| `require_approval` \| `deny`.                                                                                        |
-| `expires_in`       | integer        | Seconds until a filed approval item expires (default `86400` = 24h). Expiry is a server-enforced hard gate — see [Approvals](./approvals.md#expiry-is-a-hard-gate). |
-| `reasoning_prompt` | string \| null | Optional guidance injected into the tool's model-visible description, telling the model how to justify guarded calls (see below). |
-
-**Evaluation context.** `action` is the resolved action name of the call — the MCP tool name for `mcp` tools, the platform action for `soat` tools (e.g. `update-document`), and the tool's own `name` otherwise. `arguments` are the resolved call arguments, after `preset_parameters` are merged and the `approval_*` justification fields (below) are stripped. A policy with no `rules` applies its `default` to every call.
-
-**Effects.**
-
-- `allow` — the call executes normally.
-- `deny` — the call never executes; the model receives `{ "status": "denied", "reason": "Denied by approval_policy." }` as the tool result and continues its turn.
-- `require_approval` — the platform freezes the proposed call into an [approval item](./approvals.md) (`origin: "tool_call"`) and returns `{ "status": "pending_approval", "approval_id": "apr_…", "expires_at": "…" }` as the tool result. The generation **completes its turn normally** — unlike [client tools](./tools.md#client), it does not pause in `requires_action`; the model typically closes with "queued for your approval".
-
-**Resolution and continuation.** When the item is approved, the platform executes the frozen (or [edited](./approvals.md#approve-reject-edit-then-approve)) arguments and starts a **continuation generation** — a new generation linked to the original via `initiator_generation_id` — feeding the [decision output](./approvals.md#decision-output) (including the executed tool's `result`) back into the agent's context so it can finish what it proposed. On rejection or expiry the continuation carries the decision (with the rejection `reason`) and nothing executes. When the original generation ran in a session or conversation, the continuation's messages append there.
-
-**Duplicate proposals.** While a matching item is `pending`, re-proposing the same call (same agent, tool, action, and arguments) does not file a second item — the tool result carries the existing `approval_id`. See [dedup keys](./approvals.md#data-model).
-
-**Justifying guarded calls.** When a binding's policy can yield `require_approval`, the tool's model-visible parameters schema gains three optional fields — `approval_reasoning` (string), `approval_evidence` (object), `approval_predicted_impact` (string). Values the model supplies are stripped from the executed arguments and frozen onto the item as its `reasoning` / `evidence` / `predicted_impact`, so the approver sees the agent's own justification. `reasoning_prompt` customizes the guidance the model sees for these fields; a sensible default instruction is used when it is omitted. The fields are injected for tools whose parameter schema is defined locally (`http`, `pipeline`, and inline tools); `mcp` and `soat` tools are still gated and any reasoning the agent supplies is still frozen, but their remote/per-action schemas are not augmented with the justification fields.
-
-**Restrictions.** `approval_policy` is not supported on `client` tool bindings (`400 VALIDATION_FAILED`) — a client tool executes on the caller's machine, so the platform cannot execute the approved action at resolution time. All server-executable types (`http`, `mcp`, `soat`, `pipeline`, `discussion`) support it. For `mcp` and `soat` tools the policy guards **every** action the binding exposes; use `rules[].when` on `action` to scope effects per action.
 
 ### Instructions
 
@@ -667,7 +625,7 @@ Attach a [Guardrail](./guardrails.md) to the write tool — the agent binding it
 { "id": "tool_update_budget", "guardrail_ids": ["guard_budget"] }
 ```
 
-Calls the guardrail classifies **A**/**B** execute autonomously; **C** is frozen into the [approval queue](./approvals.md) with the model's own justification and executes only if a human approves it before it expires. See [Guardrails](./guardrails.md) for classification, guards, and the project/agent/tool attach scopes. (The deprecated per-binding [`approval_policy`](#approval-policy) is no longer enforced.)
+Calls the guardrail classifies **A**/**B** execute autonomously; **C** is frozen into the [approval queue](./approvals.md) with the model's own justification and executes only if a human approves it before it expires. See [Guardrails](./guardrails.md) for classification, guards, and the project/agent/tool attach scopes.
 
 ---
 

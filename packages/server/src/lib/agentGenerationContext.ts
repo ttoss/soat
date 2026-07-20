@@ -141,10 +141,7 @@ const resolveGenerationTools = async (args: {
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
-    // The per-binding `approval_policy` is deprecated and no longer honoured as
-    // a routing source (task 2.7): guardrails are the single tool-call gating
-    // mechanism. The field stays readable/writable for the deprecation window
-    // but never builds an approval-gate context here.
+    // Guardrails are the single tool-call gating mechanism.
     guardrail,
   });
 

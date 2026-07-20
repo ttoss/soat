@@ -61,7 +61,7 @@ export class Agent extends Model {
   declare model: string | null;
 
   // Canonical agent↔tool attachment: array of binding objects
-  // `{ toolId | tool, approvalPolicy? }`. Single source of truth once written;
+  // `{ toolId | tool }`. Single source of truth once written;
   // the legacy `toolIds`/`tools` columns below remain only so rows created
   // before this column existed keep reading (normalized lazily at read time).
   @Column({ type: DataType.JSONB, allowNull: true })

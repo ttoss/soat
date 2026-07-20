@@ -1847,43 +1847,54 @@ echo "--- Deleting project-detail tool ---"
 $SOAT_CLI delete-tool --tool-id "$PROJECT_DETAIL_TOOL_ID"
 echo "Project-detail tool deleted."
 
-# 22g. Approval-gated tool binding (manage-by-exception, Milestone 1).
-# A tool bound with an approval_policy of default `require_approval` files a
-# tool-call approval item instead of executing; approving it resumes the flow.
-echo "--- Creating approval-gated tool ---"
+# 22g. Guardrail-gated tool call (manage-by-exception). A class-C guardrail
+# attached at the agent scope routes the tool call into the approvals queue
+# (origin: tool_call) instead of executing; approving it resolves the flow.
+# Guardrails are the single tool-call gating mechanism.
+echo "--- Creating guardrail-gated tool ---"
 GATED_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name gated-project-detail \
   --type http \
-  --description "Reads the smoke test project; approval-gated." \
+  --description "Reads the smoke test project; guardrail-gated." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
 GATED_TOOL_ID=$(echo "$GATED_TOOL_RESP" | jq -r '.id')
-echo "Approval-gated tool id: $GATED_TOOL_ID"
+echo "Guardrail-gated tool id: $GATED_TOOL_ID"
 
-echo "--- Creating approval-gated agent (tool_bindings + approval_policy) ---"
+echo "--- Creating class-C guardrail ---"
+GATED_GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-gated-guardrail \
+  --document '{"class":"C"}')
+GATED_GUARDRAIL_ID=$(echo "$GATED_GUARDRAIL_RESP" | jq -r '.id')
+echo "Class-C guardrail id: $GATED_GUARDRAIL_ID"
+
+echo "--- Creating guardrail-gated agent (agent-scope guardrail_ids) ---"
 GATED_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name approval-gated-agent \
   --instructions "Call the gated-project-detail tool to fetch the project." \
-  --tool_bindings "[{\"tool_id\":\"$GATED_TOOL_ID\",\"approval_policy\":{\"default\":\"require_approval\",\"expires_in\":3600}}]" \
+  --tool_ids "[\"$GATED_TOOL_ID\"]" \
+  --guardrail_ids "[\"$GATED_GUARDRAIL_ID\"]" \
   --tool_choice required \
   --max_steps 2)
 GATED_AGENT_ID=$(echo "$GATED_AGENT_RESP" | jq -r '.id')
-echo "Approval-gated agent id: $GATED_AGENT_ID"
+echo "Guardrail-gated agent id: $GATED_AGENT_ID"
 
-# The binding's approval_policy must round-trip on the agent (deterministic).
-GATED_POLICY_DEFAULT=$(echo "$GATED_AGENT_RESP" | jq -r '.tool_bindings[0].approval_policy.default // empty')
-if [ "$GATED_POLICY_DEFAULT" != "require_approval" ]; then
-  echo "ERROR: approval_policy did not round-trip on the agent binding" >&2
+# The guardrail must attach on the agent (deterministic).
+GATED_ATTACHED=$(echo "$GATED_AGENT_RESP" | jq -r '.guardrail_ids[0] // empty')
+if [ "$GATED_ATTACHED" != "$GATED_GUARDRAIL_ID" ]; then
+  echo "ERROR: guardrail did not attach to the agent" >&2
   exit 1
 fi
-echo "approval_policy round-trip: OK"
+echo "guardrail attach: OK"
 
 # Force the gated tool call; tool_choice=required makes the model call it, so the
-# gate files a pending item and the turn completes normally (return-pending).
-echo "--- Running generation against the approval-gated tool ---"
+# class-C guardrail files a pending item and the turn completes normally
+# (return-pending).
+echo "--- Running generation against the guardrail-gated tool ---"
 set +e
 $SOAT_CLI create-agent-generation --agent-id "$GATED_AGENT_ID" \
   --messages '[{"role":"user","content":"fetch the project"}]' >/dev/null 2>&1
@@ -1912,10 +1923,12 @@ else
   echo "WARNING: model did not call the gated tool (LLM response varies); skipping approve step." >&2
 fi
 
-# Cleanup — delete gated agent (force through dependent generations) and tool.
+# Cleanup — delete gated agent (force through dependent generations), tool, and
+# guardrail (must be detached first: the agent delete drops the attachment).
 $SOAT_CLI delete-agent --agent-id "$GATED_AGENT_ID" --force >/dev/null 2>&1 || true
 $SOAT_CLI delete-tool --tool-id "$GATED_TOOL_ID" >/dev/null 2>&1 || true
-echo "Approval-gated flow cleanup: OK"
+$SOAT_CLI delete-guardrail --guardrail-id "$GATED_GUARDRAIL_ID" >/dev/null 2>&1 || true
+echo "Guardrail-gated flow cleanup: OK"
 
 # 23. Generated agents are now delete-blocked by dependent generations/traces
 echo "--- Verifying agent delete-block after generation ---"

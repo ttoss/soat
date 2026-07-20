@@ -624,8 +624,9 @@ components:
       type: object
       description: >-
         One agent↔tool attachment. Exactly one of `tool_id` (persisted tool
-        reference) or `tool` (inline ephemeral definition) per entry, plus the
-        binding-scoped `approval_policy`.
+        reference) or `tool` (inline ephemeral definition) per entry. Tool-call
+        gating is owned by [Guardrails](/docs/modules/guardrails), attached via
+        `guardrail_ids` on the project, agent, or tool — not on the binding.
       properties:
         tool_id:
           x-soat-ref: tools
@@ -637,60 +638,6 @@ components:
           # time, never persisted as a Tool resource. Exactly one of
           # `tool_id`/`tool`. Cannot be of type `pipeline`.
           $ref: './tools.yaml#/components/schemas/CreateToolRequest'
-        approval_policy:
-          # Deprecated and no longer enforced — the deprecation flag lives on the
-          # referenced ToolApprovalPolicy schema (a sibling of $ref is not allowed).
-          $ref: '#/components/schemas/ToolApprovalPolicy'
-
-    ToolApprovalPolicy:
-      type: object
-      nullable: true
-      deprecated: true
-      required:
-        - default
-      description: >-
-        **Deprecated and no longer enforced.** Superseded by
-        [Guardrails](/docs/modules/guardrails), the platform's single tool-call
-        gating mechanism. The field is still accepted on write and echoed on
-        read for one deprecation window, but it no longer routes tool calls —
-        attach a guardrail (a `{ "class": "C" }` guardrail on the tool is the
-        migration path) instead. Will be removed in a future release. See
-        [Approval Policy](/docs/modules/agents#approval-policy).
-      properties:
-        default:
-          type: string
-          enum: [allow, require_approval, deny]
-          description: Effect applied when no rule matches.
-        rules:
-          type: array
-          description: Ordered rule list; first match wins.
-          items:
-            type: object
-            required:
-              - when
-              - effect
-            properties:
-              when:
-                type: object
-                additionalProperties: true
-                description: >-
-                  JSON Logic over `{ "action": …, "arguments": … }` — the
-                  resolved call.
-              effect:
-                type: string
-                enum: [allow, require_approval, deny]
-        expires_in:
-          type: integer
-          description: >-
-            Seconds until a filed approval item expires (default 86400 = 24h).
-            Expiry is a server-enforced hard gate.
-        reasoning_prompt:
-          type: string
-          nullable: true
-          description: >-
-            Guidance injected into the tool's model-visible description telling
-            the model how to justify guarded calls (via the `approval_*`
-            fields). A default instruction is used when omitted.
 
     CreateAgentRequest:
       type: object
@@ -863,8 +810,7 @@ components:
           deprecated: true
           description: >-
             Deprecated shorthand — replaces only the reference (`tool_id`)
-            bindings, rewriting them bare (any `approval_policy` on them is
-            dropped). Use `tool_bindings` instead.
+            bindings, rewriting them bare. Use `tool_bindings` instead.
         tools:
           type: array
           nullable: true
