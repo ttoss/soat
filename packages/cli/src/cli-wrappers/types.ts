@@ -7,6 +7,7 @@ export type RouteLike = {
   serviceClass: string;
   operationId: string;
   description: string;
+  httpMethod: 'get' | 'post' | 'put' | 'patch' | 'delete';
   pathParams: string[];
   queryParams: string[];
 };

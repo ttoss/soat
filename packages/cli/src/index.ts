@@ -398,6 +398,11 @@ program
         pathArgs[pathParam] = parsedValue;
       } else if (queryParam) {
         queryArgs[queryParam] = parsedValue;
+      } else if (route.httpMethod === 'get') {
+        // GET requests can never carry a body — fetch rejects it outright —
+        // so route any flag the spec didn't declare as a query param into
+        // the query string instead of silently crashing the command.
+        queryArgs[kebabToSnake(flagKey)] = parsedValue;
       } else {
         bodyArgs[kebabToSnake(flagKey)] = parsedValue;
       }
