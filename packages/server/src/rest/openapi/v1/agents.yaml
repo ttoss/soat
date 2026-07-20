@@ -638,8 +638,9 @@ components:
           # `tool_id`/`tool`. Cannot be of type `pipeline`.
           $ref: './tools.yaml#/components/schemas/CreateToolRequest'
         approval_policy:
+          # Deprecated and no longer enforced — the deprecation flag lives on the
+          # referenced ToolApprovalPolicy schema (a sibling of $ref is not allowed).
           $ref: '#/components/schemas/ToolApprovalPolicy'
-          deprecated: true
 
     ToolApprovalPolicy:
       type: object
