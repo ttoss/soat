@@ -560,4 +560,111 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(remaining).toHaveLength(0);
     });
   });
+
+  describe('handleRunTask dispatch by kind and status', () => {
+    test('a wake task drives a sleeping run from its wake context', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Wake Dispatch',
+          nodes: [
+            {
+              id: 'pause',
+              type: 'delay',
+              duration: '1s',
+              state_mapping: { 'state.waited': { var: 'output.waited' } },
+            },
+            {
+              id: 'after',
+              type: 'transform',
+              expression: 'resumed',
+              state_mapping: { 'state.after': { var: 'output.result' } },
+            },
+          ],
+          edges: [{ from: 'pause', to: 'after' }],
+        })
+      );
+      // A run parked on the delay node, its wake persisted (as wakeDueRuns
+      // leaves it after claiming), with a `wake` task enqueued.
+      const run = await db.OrchestrationRun.create({
+        orchestrationId: orchPk,
+        projectId: projectPk,
+        status: 'sleeping',
+        state: {},
+        activeNodes: ['pause'],
+        artifacts: {},
+        input: {},
+        startedAt: new Date(),
+        wakeContext: {
+          nodeId: 'pause',
+          resume: { kind: 'delay', artifact: { waited: '1s' } },
+        },
+      });
+      await enqueueRunTask({ runId: run.id as number, kind: 'wake' });
+
+      const claimed = await drainQueueOnce();
+      expect(claimed).toBeGreaterThanOrEqual(1);
+
+      const settled = await db.OrchestrationRun.findByPk(run.id as number);
+      expect(settled?.status).toBe('succeeded');
+      expect((settled?.state as Record<string, unknown>).after).toBe('resumed');
+    });
+
+    test('a continue task for an orphaned running run re-drives it from the checkpoint', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Redrive Dispatch',
+          nodes: [
+            {
+              id: 'start',
+              type: 'transform',
+              expression: 'hello',
+              state_mapping: { 'state.msg': { var: 'output.result' } },
+            },
+          ],
+          edges: [],
+        })
+      );
+      // A `running` run whose driver crashed — the reaper enqueues a `continue`.
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      await drainQueueOnce();
+
+      const settled = await db.OrchestrationRun.findByPk(run.id as number);
+      expect(settled?.status).toBe('succeeded');
+      expect((settled?.state as Record<string, unknown>).msg).toBe('hello');
+    });
+
+    test('a task whose run is already terminal is a no-op and is acked', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Terminal No-op',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await db.OrchestrationRun.create({
+        orchestrationId: orchPk,
+        projectId: projectPk,
+        status: 'cancelled',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+        startedAt: new Date(),
+        completedAt: new Date(),
+      });
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      await drainQueueOnce();
+
+      // The run is untouched (still cancelled) and the task was acked.
+      const after = await db.OrchestrationRun.findByPk(run.id as number);
+      expect(after?.status).toBe('cancelled');
+      const remaining = await db.OrchestrationRunTask.findAll({
+        where: { runId: run.id as number },
+      });
+      expect(remaining).toHaveLength(0);
+    });
+  });
 });

@@ -124,9 +124,9 @@ export const drainQueueOnce = async (args?: {
 // worker fleet and want the API tier to stay request-only.
 export const kickWorker = (): void => {
   if (process.env.ORCHESTRATION_WORKER_DISABLED === 'true') return;
-  void drainQueueOnce().catch((error: unknown) => {
-    log('kickWorker: drain error %o', error);
-  });
+  // `drainQueueOnce` catches its own claim and per-task errors and resolves to a
+  // count, so this fire-and-forget kick never rejects.
+  void drainQueueOnce();
 };
 
 const scheduler = createScheduler({
