@@ -30,7 +30,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | G | Initiative | PRD | Status |
 |---|-----------|-----|--------|
 | G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
-| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime shipped; queue/idempotency/concurrency/SQS remain |
+| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime + queue/idempotency/worker shipped (P1); concurrency (P2) + SQS (P3) remain |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
 | G4 | Guardrails · action classes | [prd-guardrails.md](./prd-guardrails.md) | ✅ core shipped; client-tool + orch tool-node gates remain |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
@@ -57,18 +57,19 @@ everything else builds on.
 
 ```
 FOUNDATIONS (shipped)
-  orchestration runtime ✅   usage metering P1–3c ✅   guardrails core ✅
-  knowledge P1/2/4 ✅        memories P1–4 ✅           approvals P1 ✅   discussions ✅
+  orchestration runtime ✅   orchestration-queue P1 ✅   usage metering P1–3c ✅
+  guardrails core ✅         knowledge P1/2/4 ✅          memories P1–4 ✅
+  approvals P1 ✅            discussions ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
   quotas P1 ............................. (independent; can ship anytime)
   quotas P2 ◄── usage metering ✅ ....... (metering choke point exists)
-  orchestration-queue P1 (queue + run-scoped idempotency keys)
+  orchestration-queue P2 (concurrency limits) ◄── orchestration-queue P1 ✅
   guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
   usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
 
 cross-initiative ──────────────────────────────────────────────────────────
-  evaluations P2 (async) ◄── orchestration-queue P1
+  evaluations P2 (async) ◄── orchestration-queue P1 ✅
   audit-log P1 ─► audit-log P2 ◄── guardrails P3
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P6/P7 (ranking, injection, evals)
@@ -88,8 +89,8 @@ feedback + governance loops ─────────────────�
 |-----------|--------------|-----|
 | usage metering ✅ | quotas P2 | token/cost windows read the meter-write choke point |
 | usage metering ✅ | guardrails `soat.usage.*` | budget guards read windowed usage sums |
-| orchestration-queue P1 | evaluations P2 | async eval runs ride the RunTask queue |
-| orchestration-queue P1 | usage metering exactly-once | run-scoped idempotency keys (metering already node-scopes its own) |
+| orchestration-queue P1 ✅ | evaluations P2 | async eval runs ride the RunTask queue |
+| orchestration-queue P1 ✅ | usage metering exactly-once | run-scoped idempotency keys (metering already node-scopes its own) |
 | guardrails ✅ | approvals routing | class-C routes into `ApprovalItem`; replaced per-binding `approval_policy` |
 | guardrails P3 | audit-log P2 | `guardrail_evaluation` becomes one audit `detail` kind |
 | guardrails A/B + audit-log | approvals P4 (activity feed) | feed labels autonomous class-A/B actions on the audit substrate |
@@ -101,8 +102,9 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Quotas P1** (independent) and **orchestration-queue P1** (queue +
-   idempotency) — both unblock a fan-out and neither waits on anything.
+1. **Quotas P1** (independent) — unblocks a fan-out and waits on nothing.
+   (**Orchestration-queue P1** shipped, unblocking evaluations P2 and
+   exactly-once metering; **P2 concurrency limits** is the next queue step.)
 2. **Quotas P2** — unblocked now that metering shipped; closes hard spend
    enforcement.
 3. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
@@ -123,11 +125,12 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 ### G2 — Orchestration queue
 
 _Core durable runtime shipped (background execution, crash recovery, parking,
-per-node retry, sync mode, lifecycle webhooks)._
+per-node retry, sync mode, lifecycle webhooks). **P1 shipped**: Postgres queue
+driver (`run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`), enqueue-only
+async start (`status: "queued"`), extractable worker loop + `worker.ts`
+entrypoint, and run-scoped node idempotency keys (`{run_id}:{node_id}:{attempt}`,
+with the `Idempotency-Key` header on HTTP tool nodes)._
 
-- [ ] **P1** Queue abstraction + Postgres driver (`SELECT … FOR UPDATE SKIP LOCKED`); decouples execution from the API process
-- [ ] **P1** Run-scoped node idempotency keys — closes the "node side effects repeat across a retry/redrive" gap
-- [ ] **P1** Worker pool (separate-process option; the API process stays a valid single-process worker)
 - [ ] **P2** Concurrency limits (per project + global)
 - [ ] **P3** Pluggable driver interface + SQS driver (DLQ → run failed + exception per approvals)
 
