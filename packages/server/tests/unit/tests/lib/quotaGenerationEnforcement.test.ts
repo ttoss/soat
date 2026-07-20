@@ -99,6 +99,9 @@ describe('evaluateGenerationQuotas', () => {
     await db.UsageComponent.bulkCreate(
       comps.map((c) => {
         return {
+          // bulkCreate does not fire the beforeValidate publicId hook, so set it
+          // explicitly (as the production write path in usageRecording does).
+          publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
           usageEventId: (event as unknown as { id: number }).id,
           component: c.component,
           quantity: String(c.quantity),

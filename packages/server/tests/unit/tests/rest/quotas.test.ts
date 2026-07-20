@@ -802,6 +802,8 @@ describe('Quotas', () => {
           { component: 'output_tokens', quantity: '20', billable: true },
         ].map((c) => {
           return {
+            // bulkCreate skips the beforeValidate publicId hook — set it here.
+            publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
             usageEventId: (event as unknown as { id: number }).id,
             component: c.component,
             quantity: c.quantity,
