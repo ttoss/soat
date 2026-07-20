@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.11](https://127.0.0.1/41729/git/ttoss/compare/v0.15.10...v0.15.11) (2026-07-20)
+
+### Features
+
+* **guardrails:** action-class evaluation engine + guardrail_ids attach layer (task 2.2) ([#620](https://127.0.0.1/41729/git/ttoss/issues/620)) ([13d50e2](https://127.0.0.1/41729/git/ttoss/commits/13d50e20f3cf19651fb796eb773fda2720996648))
+* **guardrails:** action-class guardrails — M2 contract + resource (task 2.1) ([#582](https://127.0.0.1/41729/git/ttoss/issues/582)) ([6e7b99b](https://127.0.0.1/41729/git/ttoss/commits/6e7b99b1847f0bf6739445bb20505fbac6894831))
+* **guardrails:** deprecate per-binding approval_policy as a routing source (task 2.7) ([#622](https://127.0.0.1/41729/git/ttoss/issues/622)) ([07de018](https://127.0.0.1/41729/git/ttoss/commits/07de018ba5065f3493701460e019af7e00d2a2c0))
+* **guardrails:** remove per-binding approval_policy (task 2.8, breaking) ([#623](https://127.0.0.1/41729/git/ttoss/issues/623)) ([8a3152e](https://127.0.0.1/41729/git/ttoss/commits/8a3152ea6e6de05aceb4ac8b8a96c0ea3faa893c))
+* **guardrails:** wire the evaluation engine into tool-dispatch + audit record + dry-run (tasks 2.3/2.6/2.9) ([#621](https://127.0.0.1/41729/git/ttoss/issues/621)) ([aafabcb](https://127.0.0.1/41729/git/ttoss/commits/aafabcbb522da5666bf6f25c37f140609fafb654)), closes [#620](https://127.0.0.1/41729/git/ttoss/issues/620)
+
+### BREAKING CHANGES
+
+* **guardrails:** the per-binding `approval_policy` on agent tool_bindings
+  has been removed. Attach a guardrail instead (a `{ "class": "C" }`
+  guardrail on the tool reproduces a `require_approval` binding).
+  Guardrails are the sole tool-call gating mechanism.
+
 ## [0.15.10](https://127.0.0.1/41729/git/ttoss/compare/v0.15.9...v0.15.10) (2026-07-19)
 
 ### Bug Fixes
