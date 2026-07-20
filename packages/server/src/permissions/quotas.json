@@ -1,0 +1,30 @@
+{
+  "module": "quotas",
+  "operations": [
+    {
+      "operationId": "listQuotas",
+      "action": "quotas:ListQuotas",
+      "description": "List quotas in a project"
+    },
+    {
+      "operationId": "createQuota",
+      "action": "quotas:CreateQuota",
+      "description": "Create a quota"
+    },
+    {
+      "operationId": "getQuota",
+      "action": "quotas:GetQuota",
+      "description": "Get a quota by ID, including current window usage"
+    },
+    {
+      "operationId": "updateQuota",
+      "action": "quotas:UpdateQuota",
+      "description": "Update a quota's limit or mode"
+    },
+    {
+      "operationId": "deleteQuota",
+      "action": "quotas:DeleteQuota",
+      "description": "Delete a quota and its counters"
+    }
+  ]
+}

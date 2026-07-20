@@ -122,6 +122,7 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/traces',
             'modules/usage',
+            'modules/quotas',
             'modules/secrets',
             'modules/docs',
           ],

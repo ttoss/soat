@@ -419,6 +419,16 @@ export const ERROR_CODES = {
     description:
       'The guardrail is still attached to one or more tools, agents, or projects (`guardrail_ids`) and cannot be deleted. Detach every reference first (requires guardrails:DetachGuardrail). The error meta lists the referencing resources by scope.',
   },
+  QUOTA_EXCEEDED: {
+    httpStatus: 429,
+    description:
+      'An enforced quota has been exceeded for the request scope. The response carries a `Retry-After` header (seconds until the window resets) and a `meta` block naming the breached quota, metric, limit, window, and reset time.',
+  },
+  QUOTA_CONFLICT: {
+    httpStatus: 409,
+    description:
+      'A quota with the same (project, scope, scope_ref, metric, window) already exists. The all-enforce precedence rule makes duplicates pure redundancy, so a duplicate is rejected instead of stored.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }
