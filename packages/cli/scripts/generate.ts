@@ -111,6 +111,8 @@ interface Route {
   operationId: string;
   description: string;
   moduleDocsUrl: string;
+  /** HTTP method the operation is mounted on (get, post, put, patch, delete) */
+  httpMethod: (typeof HTTP_METHODS)[number];
   pathParams: string[];
   queryParams: string[];
 }
@@ -301,6 +303,7 @@ for (const file of files) {
           .replace(/\s+/g, ' ')
           .trim(),
         moduleDocsUrl,
+        httpMethod: method,
         pathParams: params
           .filter((p) => {
             return p.in === 'path';
@@ -331,6 +334,8 @@ const lines = [
   '  description: string;',
   '  /** URL to module documentation page */',
   '  moduleDocsUrl: string;',
+  '  /** HTTP method the operation is mounted on */',
+  "  httpMethod: 'get' | 'post' | 'put' | 'patch' | 'delete';",
   '  /** snake_case path parameter names */',
   '  pathParams: string[];',
   '  /** snake_case query parameter names */',
@@ -351,7 +356,7 @@ const lines = [
   'export const routes: Record<string, Route> = {',
   ...Object.entries(routes).map(([cmd, r]) => {
     const flags = JSON.stringify(r.flags);
-    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', description: ${JSON.stringify(r.description)}, moduleDocsUrl: ${JSON.stringify(r.moduleDocsUrl)}, pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)}, flags: ${flags} },`;
+    return `  '${cmd}': { serviceClass: '${r.serviceClass}', operationId: '${r.operationId}', description: ${JSON.stringify(r.description)}, moduleDocsUrl: ${JSON.stringify(r.moduleDocsUrl)}, httpMethod: '${r.httpMethod}', pathParams: ${JSON.stringify(r.pathParams)}, queryParams: ${JSON.stringify(r.queryParams)}, flags: ${flags} },`;
   }),
   '};',
   '',
