@@ -77,63 +77,18 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
-const toCamelKey = (key: string): string => {
-  return key.replace(/_+([a-z0-9])/g, (_match, char: string) => {
-    return char.toUpperCase();
-  });
-};
-
-const toSnakeKey = (key: string): string => {
-  return key.replace(/([a-z0-9])([A-Z])/g, (_match, a: string, b: string) => {
-    return `${a}_${b.toLowerCase()}`;
-  });
-};
-
-/**
- * Recursively augments `args.*` / `context.*` so each key is reachable in both
- * snake_case and camelCase. A guardrail `document` is authored against the
- * snake_case external contract — like every OpenAPI field and the `soat.*`
- * catalog, and every example in guardrails.md — but the caller's `args` /
- * `guardrail_context` reach evaluation camelCased by the `caseTransform`
- * middleware. Without aliasing, a snake_case `var` path (`context.max_daily_budget`)
- * silently misses the camelCased runtime key (`maxDailyBudget`) and fails closed,
- * so the canonical budget example would hard-stop every class-B call. Original
- * keys stay authoritative: an alias is only added where it does not shadow a real
- * key, so a document that already uses camelCase is unaffected. `soat.*` is a
- * fixed snake_case catalog validated at write time and is left untouched.
- */
-export const withCaseAliases = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map(withCaseAliases);
-  }
-  if (!isPlainObject(value)) {
-    return value;
-  }
-  const out: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value)) {
-    out[key] = withCaseAliases(item);
-  }
-  for (const key of Object.keys(value)) {
-    for (const alias of [toSnakeKey(key), toCamelKey(key)]) {
-      if (alias !== key && !(alias in value)) {
-        out[alias] = out[key];
-      }
-    }
-  }
-  return out;
-};
-
 // Builds the nested object the JSON Logic evaluator reads `var` dot-paths
-// against — `{ var: 'args.amount' }` selects `args.amount`, etc. `args.*` /
-// `context.*` are case-aliased so a snake_case document resolves against the
-// camelCased runtime keys (and vice versa); `soat.*` is a fixed snake_case
-// catalog and passes through unchanged. Every namespace defaults to an empty
-// object so an absent one resolves to `null` (fail-closed) rather than
-// surfacing as an evaluator error.
+// against — `{ var: 'args.amount' }` selects `args.amount`, etc. The caller's
+// `args` / `guardrail_context` are opaque, application-owned bags whose keys the
+// caseTransform middleware leaves verbatim (see its guardrail pass-through), so a
+// `var` path resolves against exactly the casing the author wrote — matching how
+// tool `input`, task `payload`, and orchestration-run `input` are read back.
+// Every namespace defaults to an empty object so an absent one resolves to `null`
+// (fail-closed) rather than surfacing as an evaluator error.
 const buildLogicContext = (context: GuardrailEvaluationContext) => {
   return {
-    args: withCaseAliases(context.args ?? {}),
-    context: withCaseAliases(context.context ?? {}),
+    args: context.args ?? {},
+    context: context.context ?? {},
     soat: context.soat ?? {},
   };
 };

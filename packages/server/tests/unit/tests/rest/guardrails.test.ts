@@ -517,10 +517,11 @@ describe('Guardrails', () => {
     });
 
     test('a multi-word snake_case context var resolves through caseTransform', async () => {
-      // The doc authors the snake_case path `context.max_daily_budget`; the
-      // caller sends the same snake_case key, which caseTransform camelCases to
-      // `maxDailyBudget` in transit. The var must still resolve (guard passes),
-      // otherwise the canonical budget example would hard-stop every class-B call.
+      // `guardrail_context` is a caseTransform pass-through bag, so a snake_case
+      // key the caller sends (`max_daily_budget`) reaches evaluation verbatim and
+      // the document's snake_case `var` (`context.max_daily_budget`) resolves.
+      // Without the pass-through the key would be camelCased in transit and the
+      // canonical budget example would hard-stop every class-B call.
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/guardrails')
         .send({
