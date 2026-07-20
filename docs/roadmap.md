@@ -62,7 +62,6 @@ FOUNDATIONS (shipped)
   approvals P1 ✅            discussions ✅               quotas P1 ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
-  quotas P2 ✅ ◄── usage metering ✅ (token/cost pre-generation check shipped)
   orchestration-queue P2 (concurrency limits) ◄── orchestration-queue P1 ✅
   guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
   usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
@@ -86,7 +85,6 @@ feedback + governance loops ─────────────────�
 
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
-| usage metering ✅ | quotas P2 | token/cost windows read the meter-write choke point |
 | usage metering ✅ | guardrails `soat.usage.*` | budget guards read windowed usage sums |
 | orchestration-queue P1 ✅ | evaluations P2 | async eval runs ride the RunTask queue |
 | orchestration-queue P1 ✅ | usage metering exactly-once | run-scoped idempotency keys (metering already node-scopes its own) |
@@ -177,7 +175,6 @@ receipts, aggregation, thresholds + webhook)._
 - [ ] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`)
 - [ ] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request)
 - [ ] **P7** `5.2` `usage.*` guard context + per-run ceiling — ⏭️ deferred (needs the G4 evaluator; interim: a `condition` node reads the run roll-up and routes to an abort path)
-- [ ] Token/cost quotas at the pre-generation check — `5.1`, owned by **Quotas P2** below
 - [ ] Backlog: event-driven storage byte accounting (replaces the daily-snapshot approximation)
 
 ### G6 — Learned rules
@@ -229,12 +226,13 @@ with G3 before shipping the feed._
 ### Quotas
 
 _Hard fail-closed enforcement (429), complementing metering (measure) and
-guardrails (per-action). **Phase 1 shipped**: requests quotas (`Quota` +
+guardrails (per-action). **Phases 1–2 shipped**: requests quotas (`Quota` +
 `QuotaWindowCounter` models, CRUD, the request-quota Koa middleware with an
 atomic `UPDATE … RETURNING`, and the `QUOTA_EXCEEDED` + `429` + `Retry-After`
-contract)._
+contract); and token/cost quotas enforced at the pre-generation check over
+`UsageEvent` (`project`/`agent` scopes; never kills an in-flight generation;
+`api_key` token/cost rejected — no attribution)._
 
-- [x] **Phase 2** ✅ Token/cost quotas at the meter-write choke point (pre-generation check over `UsageEvent`; `project`/`agent` scopes; never kills an in-flight generation; `api_key` token/cost rejected — no attribution)
 - [ ] **Phase 3** Monitor mode + audit entries; `quota.exceeded` webhook (first breach per window); `quota` formation resource type
 
 ### Model routing
