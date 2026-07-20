@@ -2,92 +2,36 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  QUOTA_WINDOWS,
+  type QuotaWindow,
+  windowKeyFor,
+  windowResetsAt,
+} from './quotaWindows';
 
 const log = createDebug('soat:quotas');
 
+// Fixed-window math lives in `quotaWindows.ts`; re-exported here so the quota
+// module's public surface (consumed by the middleware, enforcement, and tests)
+// is unchanged.
+export type { QuotaWindow } from './quotaWindows';
+export {
+  QUOTA_WINDOWS,
+  retryAfterSeconds,
+  windowKeyFor,
+  windowResetsAt,
+  windowStartsAt,
+} from './quotaWindows';
+
 export const QUOTA_SCOPES = ['project', 'api_key', 'agent'] as const;
 export const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
-export const QUOTA_WINDOWS = [
-  'rolling_1m',
-  'rolling_1h',
-  'rolling_24h',
-  'calendar_month',
-] as const;
 export const QUOTA_MODES = ['enforce', 'monitor'] as const;
 
 export type QuotaScope = (typeof QUOTA_SCOPES)[number];
 export type QuotaMetric = (typeof QUOTA_METRICS)[number];
-export type QuotaWindow = (typeof QUOTA_WINDOWS)[number];
 export type QuotaMode = (typeof QUOTA_MODES)[number];
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
-
-// ── Window helpers (shared with the request-quota middleware) ────────────────
-
-/**
- * The fixed-window key a timestamp falls into for a given window. Rolling
- * windows are implemented as fixed windows keyed by the truncated timestamp
- * (`2026-07-07T12:31Z` for `rolling_1m`); `calendar_month` keys are `YYYY-MM`,
- * matching metering's convention.
- */
-export const windowKeyFor = (args: {
-  window: QuotaWindow;
-  now: Date;
-}): string => {
-  const iso = args.now.toISOString(); // e.g. 2026-07-07T12:31:45.123Z
-  switch (args.window) {
-    case 'rolling_1h':
-      return `${iso.slice(0, 13)}Z`; // 2026-07-07T12Z
-    case 'rolling_24h':
-      return `${iso.slice(0, 10)}Z`; // 2026-07-07Z
-    case 'calendar_month':
-      return iso.slice(0, 7); // 2026-07
-    case 'rolling_1m':
-    default:
-      return `${iso.slice(0, 16)}Z`; // 2026-07-07T12:31Z
-  }
-};
-
-/**
- * The instant the current window rolls over — the start of the next fixed
- * window. Used for the `resets_at` field and the `Retry-After` header.
- */
-export const windowResetsAt = (args: {
-  window: QuotaWindow;
-  now: Date;
-}): Date => {
-  const d = new Date(args.now.getTime());
-  switch (args.window) {
-    case 'rolling_1h':
-      d.setUTCMinutes(0, 0, 0);
-      d.setUTCHours(d.getUTCHours() + 1);
-      return d;
-    case 'rolling_24h':
-      d.setUTCHours(0, 0, 0, 0);
-      d.setUTCDate(d.getUTCDate() + 1);
-      return d;
-    case 'calendar_month':
-      return new Date(
-        Date.UTC(args.now.getUTCFullYear(), args.now.getUTCMonth() + 1, 1)
-      );
-    case 'rolling_1m':
-    default:
-      d.setUTCSeconds(0, 0);
-      d.setUTCMinutes(d.getUTCMinutes() + 1);
-      return d;
-  }
-};
-
-/** Seconds from `now` until `resetsAt`, floored at 0, rounded up. */
-export const retryAfterSeconds = (args: {
-  resetsAt: Date;
-  now: Date;
-}): number => {
-  return Math.max(
-    0,
-    Math.ceil((args.resetsAt.getTime() - args.now.getTime()) / 1000)
-  );
-};
 
 // ── Mapping ──────────────────────────────────────────────────────────────
 
@@ -185,6 +129,14 @@ export const validateQuotaShape = (args: {
   // inbound HTTP traffic and no precise per-request agent attribution exists.
   if (args.scope === 'agent' && args.metric === 'requests') {
     return 'scope "agent" is not valid for metric "requests".';
+  }
+  // scope: api_key + metric: tokens/cost_usd is rejected — usage events carry
+  // no API-key attribution, so such a cap could never be aggregated at the
+  // metering choke point. Rejecting it (rather than storing a silent no-op)
+  // mirrors the agent+requests rule; a precise semantic can be added later
+  // once metering attributes spend to an api key, backward-compatibly.
+  if (args.scope === 'api_key' && args.metric !== 'requests') {
+    return `scope "api_key" is not valid for metric "${args.metric}".`;
   }
   return validateQuotaLimit({ metric: args.metric, limit: args.limit });
 };

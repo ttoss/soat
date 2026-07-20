@@ -119,6 +119,18 @@ const writeErrorLog = (args: {
   );
 };
 
+// Seconds until a quota window resets, from the `resets_at` carried in a
+// QUOTA_EXCEEDED error's meta. Null when the meta has no usable timestamp.
+const quotaRetryAfterSeconds = (
+  meta: Record<string, unknown> | undefined
+): number | null => {
+  const resetsAt = meta?.resets_at;
+  if (typeof resetsAt !== 'string') return null;
+  const ms = new Date(resetsAt).getTime();
+  if (Number.isNaN(ms)) return null;
+  return Math.max(0, Math.ceil((ms - Date.now()) / 1000));
+};
+
 const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   ctx.status = status;
 
@@ -130,6 +142,13 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
         ...(error.meta !== undefined && { meta: error.meta }),
       },
     };
+    // The QUOTA_EXCEEDED contract includes a `Retry-After` header. The request
+    // middleware sets it explicitly; other enforcement points (the token/cost
+    // generation gate) rely on this fallback so every breach honors it.
+    if (error.code === 'QUOTA_EXCEEDED' && !ctx.response.get('Retry-After')) {
+      const retryAfter = quotaRetryAfterSeconds(error.meta);
+      if (retryAfter !== null) ctx.set('Retry-After', String(retryAfter));
+    }
     return;
   }
 

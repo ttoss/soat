@@ -53,9 +53,10 @@ paths:
         - Quotas
       summary: Create a quota
       description: >-
-        Creates a project-scoped quota. `scope: agent` combined with
-        `metric: requests` is rejected with 400. A duplicate quota (same
-        project, scope, scope_ref, metric, window) is rejected with 409.
+        Creates a project-scoped quota. `scope: agent` with `metric: requests`
+        and `scope: api_key` with `metric: tokens`/`cost_usd` are both rejected
+        with 400 (no attribution exists to enforce them). A duplicate quota
+        (same project, scope, scope_ref, metric, window) is rejected with 409.
       operationId: createQuota
       requestBody:
         required: true
@@ -105,8 +106,9 @@ paths:
                   enum: [enforce, monitor]
                   default: enforce
                   description: >-
-                    enforce blocks with 429; monitor is a pass-through no-op in
-                    Phase 1 (stored but not yet reported).
+                    enforce blocks with 429 (requests at the middleware,
+                    tokens/cost_usd at the pre-generation check); monitor is a
+                    pass-through no-op until the webhook phase ships.
                   example: enforce
       responses:
         '201':
@@ -252,7 +254,8 @@ components:
           nullable: true
           description: >-
             Current fixed-window usage for the requests metric. Null for
-            token/cost quotas (Phase 2) and in list responses.
+            token/cost quotas (which aggregate the usage meter at check time
+            rather than keeping a counter) and in list responses.
           properties:
             window_key:
               type: string

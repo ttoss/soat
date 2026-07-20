@@ -1,8 +1,10 @@
 import createDebug from 'debug';
 
 import type { Context } from '../Context';
-import { DomainError } from '../errors';
-import { evaluateRequestQuotas } from '../lib/quotaEnforcement';
+import {
+  evaluateRequestQuotas,
+  quotaBreachError,
+} from '../lib/quotaEnforcement';
 
 const log = createDebug('soat:quotas');
 
@@ -47,21 +49,7 @@ export const quotaMiddleware = async (ctx: Context, next: Next) => {
 
   if (breach) {
     ctx.set('Retry-After', String(breach.retryAfter));
-    throw new DomainError(
-      'QUOTA_EXCEEDED',
-      `Quota exceeded for ${breach.scope}${
-        breach.scopeRef ? ` ${breach.scopeRef}` : ''
-      }.`,
-      // Error responses bypass the caseTransform middleware, so meta keys are
-      // written in snake_case to match the external REST contract.
-      {
-        quota_id: breach.quotaId,
-        metric: breach.metric,
-        limit: breach.limit,
-        window: breach.window,
-        resets_at: breach.resetsAt.toISOString(),
-      }
-    );
+    throw quotaBreachError(breach);
   }
 
   await next();
