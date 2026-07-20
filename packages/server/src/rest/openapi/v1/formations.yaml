@@ -493,8 +493,10 @@ components:
           description: >-
             Tools to attach, one binding object per tool: `{ tool_id,
             approval_policy? }`. Canonical form — cannot be combined with the
-            deprecated `tool_ids`. Inline `tool` entries are not supported in
-            templates; declare a tool resource and reference it via `tool_id`
+            deprecated `tool_ids`. `approval_policy` is deprecated and no longer
+            enforced (superseded by guardrails); it is still accepted and echoed
+            for one deprecation window. Inline `tool` entries are not supported
+            in templates; declare a tool resource and reference it via `tool_id`
             (a `{ "ref": … }` to a tool resource in the same template
             resolves at deploy time).
         tool_ids:
