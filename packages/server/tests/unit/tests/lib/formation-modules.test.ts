@@ -1083,9 +1083,9 @@ describe('agentsFormationModule tool_bindings', () => {
         name: 'FM Binding Agent',
         tool_bindings: [
           { tool_id: converterToolId },
-          // A stray removed approval_policy is ignored — guardrails are the
-          // single tool-call gating mechanism and attach via guardrail_ids.
-          { tool_id: converterToolId, approval_policy: { default: 'deny' } },
+          // A stray unknown key on a binding is ignored — formations read only
+          // tool_id; guardrails attach via guardrail_ids, not the binding.
+          { tool_id: converterToolId, bogus_field: true },
         ],
       },
     });

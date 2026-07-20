@@ -1264,17 +1264,11 @@ describe('Agents', () => {
       expect(res.body.tools[0].name).toBe('inline-lookup');
     });
 
-    test('a removed approval_policy field on a binding is rejected as unknown', async () => {
-      // approval_policy was removed (breaking) — guardrails are the single
-      // tool-call gating mechanism. The field is gone from the ToolBinding
-      // schema, so the strict-fields validator rejects it as an unknown field.
+    test('an unknown field on a binding is rejected', async () => {
+      // A binding carries only tool_id / tool; the strict-fields validator
+      // rejects any unknown field at the binding level.
       const res = await createAgentWith({
-        tool_bindings: [
-          {
-            tool_id: httpToolId,
-            approval_policy: { default: 'require_approval' },
-          },
-        ],
+        tool_bindings: [{ tool_id: httpToolId, bogus_field: true }],
       });
 
       expect(res.status).toBe(400);

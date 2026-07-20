@@ -2,10 +2,9 @@ import crypto from 'node:crypto';
 
 // Shared tool-dispatch machinery for filing a tool-call approval item:
 // return-pending justification fields, the resolved action name, the dedup key,
-// and the default expiry. Once the per-binding `approval_policy` was removed
-// (its own classify→route gate deleted), these helpers are used **solely by the
-// guardrail interceptor** (`agentToolGuardrail.ts`) when a class-C guardrail
-// files an approval — guardrails are the single tool-call gating mechanism.
+// and the default expiry. These helpers are used solely by the guardrail
+// interceptor (`agentToolGuardrail.ts`) when a class-C guardrail files an
+// approval — guardrails are the single tool-call gating mechanism.
 
 // Absent an `expires_in` on the caller, a tool-call approval defaults to a 24h
 // window — the same default the `approval` orchestration node uses, so both
