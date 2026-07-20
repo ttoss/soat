@@ -337,3 +337,21 @@ export const evaluateGenerationQuotas = async (args: {
   );
   return breach;
 };
+
+/**
+ * Fail-open wrapper around `evaluateGenerationQuotas` for the generation path.
+ * An infrastructure error during the check is logged and swallowed so the
+ * generation proceeds — a quota is cost control, not authorization, so one
+ * window of unmetered spend beats blocking every generation on a DB blip.
+ */
+export const checkGenerationQuota = async (args: {
+  agentId: string;
+  projectIds?: number[];
+}): Promise<QuotaBreach | null> => {
+  try {
+    return await evaluateGenerationQuotas(args);
+  } catch (error) {
+    log('checkGenerationQuota: failing open %O', error);
+    return null;
+  }
+};

@@ -28,7 +28,7 @@ import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
-import { evaluateGenerationQuotas, quotaBreachError } from './quotaEnforcement';
+import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 
 const log = createDebug('soat:generation');
 
@@ -238,12 +238,9 @@ export const createGeneration = async (args: {
   // generation with `QUOTA_EXCEEDED` and no usage is metered for it. Fails open
   // on an infrastructure error — a quota is cost control, not authorization, so
   // one window of unmetered spend beats blocking all generations on a DB blip.
-  const quotaBreach = await evaluateGenerationQuotas({
+  const quotaBreach = await checkGenerationQuota({
     agentId: args.agentId,
     projectIds: args.projectIds,
-  }).catch((error: unknown) => {
-    log('createGeneration: quota check failing open %O', error);
-    return null;
   });
   if (quotaBreach) throw quotaBreachError(quotaBreach);
 

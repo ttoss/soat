@@ -1,6 +1,9 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
-import { evaluateGenerationQuotas } from 'src/lib/quotaEnforcement';
+import {
+  checkGenerationQuota,
+  evaluateGenerationQuotas,
+} from 'src/lib/quotaEnforcement';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
@@ -413,5 +416,35 @@ describe('evaluateGenerationQuotas', () => {
       agentId: 'agent_doesnotexist00',
     });
     expect(breach).toBeNull();
+  });
+
+  test('checkGenerationQuota fails open on an infrastructure error', async () => {
+    const ctx = await freshProjectAndAgent('genquota-fail-open');
+    await seedUsageEvent({
+      projectInternalId: ctx.projectInternalId,
+      costUsd: '100.00',
+    });
+    await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 1,
+    });
+
+    // Sanctioned force-failure stub (tests.md): the fail-open branch can only
+    // be exercised by making the check's DB read reject — no real query fails
+    // deterministically. It must then return null (generation proceeds) rather
+    // than surfacing the error or a breach.
+    const spy = jest
+      .spyOn(db.Agent, 'findOne')
+      .mockRejectedValueOnce(new Error('db unavailable'));
+    try {
+      const breach = await checkGenerationQuota({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
