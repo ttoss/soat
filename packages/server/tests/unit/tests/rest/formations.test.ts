@@ -76,6 +76,10 @@ describe('Formations', () => {
                 'memories:UpdateMemoryEntry',
                 'memories:DeleteMemoryEntry',
                 'documents:DeleteDocument',
+                'quotas:CreateQuota',
+                'quotas:GetQuota',
+                'quotas:UpdateQuota',
+                'quotas:DeleteQuota',
               ],
             },
           ],
@@ -3647,6 +3651,126 @@ resources:
         `/api/v1/formations/${ledgerFormationId}`
       );
       expect(res.status).toBe(200);
+    });
+  });
+
+  // ── Quota resource (Quotas Phase 3) ───────────────────────────────────────
+
+  describe('quota formation resource', () => {
+    const quotaTemplate = {
+      resources: {
+        MyQuota: {
+          type: 'quota',
+          properties: {
+            scope: 'project',
+            metric: 'cost_usd',
+            window: 'calendar_month',
+            limit: 25.5,
+            mode: 'monitor',
+          },
+        },
+      },
+    };
+
+    test('validates a quota resource template', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: quotaTemplate });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toHaveLength(0);
+    });
+
+    test('rejects an unknown quota field', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  metric: 'cost_usd',
+                  window: 'calendar_month',
+                  limit: 10,
+                  nonsense: true,
+                },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((e: { message: string }) => {
+          return /nonsense/.test(e.message);
+        })
+      ).toBe(true);
+    });
+
+    test('creates, updates, then deletes a quota through the formation lifecycle', async () => {
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `quota-formation-${Date.now()}`,
+          template: quotaTemplate,
+        });
+      expect(create.status).toBe(201);
+      expect(create.body.status).toBe('active');
+      expect(create.body.resources).toHaveLength(1);
+      const resource = create.body.resources[0];
+      expect(resource.logical_id).toBe('MyQuota');
+      expect(resource.status).toBe('created');
+      const quotaId = resource.physical_resource_id as string;
+      expect(quotaId).toMatch(/^quota_/);
+
+      // The physical quota exists and reflects the template properties.
+      const got = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(got.status).toBe(200);
+      expect(got.body.metric).toBe('cost_usd');
+      expect(got.body.mode).toBe('monitor');
+      expect(got.body.limit).toBe(25.5);
+
+      // Updating the template's mutable fields (limit, mode) diffs the live
+      // quota (module `read`) and applies the change (module `update`).
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              MyQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  metric: 'cost_usd',
+                  window: 'calendar_month',
+                  limit: 40,
+                  mode: 'enforce',
+                },
+              },
+            },
+          },
+        });
+      expect(update.status).toBe(200);
+      const afterUpdate = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(afterUpdate.body.limit).toBe(40);
+      expect(afterUpdate.body.mode).toBe('enforce');
+
+      // Deleting the formation deletes the quota it provisioned.
+      const del = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+      expect(del.status).toBe(200);
+      const gone = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(gone.status).toBe(404);
     });
   });
 });

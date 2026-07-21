@@ -3193,6 +3193,29 @@ echo "--- Deleting project_price formation ---"
 $SOAT_CLI delete-formation --formation_id "$PRICE_FORMATION_ID"
 echo "Project_price formation deleted."
 
+# Quota resource (Quotas Phase 3) — a formation declares a monitor cost quota,
+# which must be queryable via get-quota and removed when the formation is torn
+# down.
+echo "--- Creating formation with a quota resource ---"
+QUOTA_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-quota-formation" \
+  --template '{"resources":{"spendCap":{"type":"quota","properties":{"scope":"project","metric":"cost_usd","window":"calendar_month","limit":50,"mode":"monitor"}}}}')
+QUOTA_FORMATION_ID=$(printf '%s\n' "$QUOTA_FORMATION_RESP" | jq -r '.id')
+QUOTA_PHYS_ID=$(printf '%s\n' "$QUOTA_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
+if ! printf '%s\n' "$QUOTA_PHYS_ID" | grep -q '^quota_'; then
+  echo "ERROR: create-formation did not create a quota row" >&2
+  echo "$QUOTA_FORMATION_RESP" >&2
+  exit 1
+fi
+if [ "$($SOAT_CLI get-quota --quota-id "$QUOTA_PHYS_ID" | jq -r '.mode')" != "monitor" ]; then
+  echo "ERROR: formation-created quota not queryable as monitor" >&2
+  exit 1
+fi
+$SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
+expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
+echo "Formation quota resource verified."
+
 # Update
 echo "--- Updating formation ---"
 FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \

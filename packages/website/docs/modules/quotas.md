@@ -80,9 +80,17 @@ A breach returns HTTP `429` with a `Retry-After` header (seconds until the windo
 }
 ```
 
+### quota.exceeded webhook
+
+Every breach fires a `quota.exceeded` webhook event **once per window**, for both `enforce` and `monitor` quotas. Because a quota's window always has a discrete fixed key and usage only grows within it, the fire state is a single stored key — a breach re-fires only after the window rolls to a new key (no hysteresis). The event `data` carries `quota_id`, `project_id`, `scope`, `scope_ref`, `metric`, `window`, `window_key`, `limit`, `observed_value`, and `mode`. Subscribe a [webhook](./webhooks.md) to `quota.exceeded` (or a wildcard) to receive it.
+
 ### Monitor mode
 
-`mode: monitor` is accepted and stored but is a pass-through no-op in Phase 1 — a monitor quota neither counts nor blocks. The `quota.exceeded` webhook and audit entries land in a later phase with no schema migration; monitor quotas created earlier simply start reporting when that ships.
+`mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`. (A durable audit record of monitor breaches is owned by the forthcoming audit-log module; today the webhook is the signal.)
+
+### Formation resource
+
+Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. `scope`, `metric`, and `window` are immutable after creation — only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
 
 ### Self-modification footgun
 

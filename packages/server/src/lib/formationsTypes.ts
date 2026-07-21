@@ -192,6 +192,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'orchestration',
   'policy',
   'project_price',
+  'quota',
   'secret',
   'session',
   'webhook',

@@ -13,6 +13,7 @@ import { memoryEntriesFormationModule } from './formation-modules/memoryEntriesF
 import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
 import { projectPricesFormationModule } from './formation-modules/projectPricesFormationModule';
+import { quotasFormationModule } from './formation-modules/quotasFormationModule';
 import { secretsFormationModule } from './formation-modules/secretsFormationModule';
 import { sessionsFormationModule } from './formation-modules/sessionsFormationModule';
 import { toolsFormationModule } from './formation-modules/toolsFormationModule';
@@ -50,6 +51,7 @@ registerFormationModule({ module: filesFormationModule });
 registerFormationModule({ module: ingestionRulesFormationModule });
 registerFormationModule({ module: policiesFormationModule });
 registerFormationModule({ module: projectPricesFormationModule });
+registerFormationModule({ module: quotasFormationModule });
 registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
 registerFormationModule({ module: orchestrationsFormationModule });

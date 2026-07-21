@@ -1433,6 +1433,50 @@ components:
           additionalProperties: true
           description: Optional JSON Schema describing a task's payload
 
+    QuotaResourceProperties:
+      description: >-
+        Creates a quota — a project-scoped cap that blocks (`enforce`) or reports
+        (`monitor`) when a windowed aggregate is exceeded. `requests` quotas are
+        enforced by the request middleware; `tokens`/`cost_usd` quotas at the
+        pre-generation check. Mirrors the quotas REST contract; `scope`,
+        `metric`, and `window` are immutable after creation (only `limit` and
+        `mode` update).
+      type: object
+      additionalProperties: false
+      required:
+        - scope
+        - metric
+        - window
+        - limit
+      properties:
+        scope:
+          type: string
+          enum: [project, api_key, agent]
+          description: The scope the quota applies to
+        scope_ref:
+          type: string
+          nullable: true
+          description: >-
+            Public id of the api key / agent the quota applies to. NULL means all
+            entities of that scope type in the project.
+        metric:
+          type: string
+          enum: [requests, tokens, cost_usd]
+          description: The metric being capped
+        window:
+          type: string
+          enum: [rolling_1m, rolling_1h, rolling_24h, calendar_month]
+          description: The window over which the metric is aggregated
+        limit:
+          type: number
+          description: >-
+            The cap. Positive integer for requests/tokens; fractional allowed for
+            cost_usd.
+        mode:
+          type: string
+          enum: [enforce, monitor]
+          description: enforce blocks with 429; monitor fires the webhook only
+
     ResourceDeclaration:
       type: object
       required:
@@ -1457,6 +1501,7 @@ components:
             - orchestration
             - policy
             - project_price
+            - quota
             - secret
             - session
             - webhook
@@ -1481,6 +1526,7 @@ components:
             - $ref: '#/components/schemas/OrchestrationResourceProperties'
             - $ref: '#/components/schemas/PolicyResourceProperties'
             - $ref: '#/components/schemas/ProjectPriceResourceProperties'
+            - $ref: '#/components/schemas/QuotaResourceProperties'
             - $ref: '#/components/schemas/SecretResourceProperties'
             - $ref: '#/components/schemas/SessionResourceProperties'
             - $ref: '#/components/schemas/WebhookResourceProperties'
