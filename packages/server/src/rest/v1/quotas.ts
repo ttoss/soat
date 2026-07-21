@@ -31,7 +31,10 @@ const checkQuotasAccess = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'quota',
+  });
   if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -55,6 +58,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
     ctx,
     projectPublicId: parseStringOrUndefined(body.projectId),
     action: 'quotas:CreateQuota',
+    resourceType: 'quota',
   });
   if (targetProjectId === null) return;
 
@@ -90,6 +94,7 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'quotas:ListQuotas',
+    resourceType: 'quota',
   });
 
   if (projectIds === null) {

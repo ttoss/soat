@@ -168,6 +168,7 @@ const resolveAgentProjectId = async (
   const projectIds = await authUser.resolveProjectIds({
     projectPublicId,
     action: 'agents:CreateAgent',
+    resourceType: 'agent',
   });
   if (projectIds === null) return 403;
   let targetProjectId = projectIds?.[0];
@@ -308,6 +309,7 @@ agentsRouter.get('/agents', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'agents:ListAgents',
+    resourceType: 'agent',
   });
 
   if (projectIds === null) {
@@ -328,6 +330,7 @@ agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:GetAgent',
+    resourceType: 'agent',
   });
 
   /* istanbul ignore next */
@@ -354,6 +357,7 @@ agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:UpdateAgent',
+    resourceType: 'agent',
   });
 
   /* istanbul ignore next */
@@ -375,6 +379,7 @@ agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:UpdateAgent',
+    resourceType: 'agent',
   });
 
   /* istanbul ignore next */
@@ -396,6 +401,7 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:DeleteAgent',
+    resourceType: 'agent',
   });
 
   /* istanbul ignore next */

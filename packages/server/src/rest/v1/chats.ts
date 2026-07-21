@@ -94,6 +94,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     ctx,
     projectPublicId: validated.projectId,
     action: 'chats:CreateChat',
+    resourceType: 'chat',
   });
   if (targetProjectId === null) return;
 
@@ -118,6 +119,7 @@ chatsRouter.get('/chats', async (ctx: Context) => {
     ctx,
     projectPublicId,
     action: 'chats:ListChats',
+    resourceType: 'chat',
   });
 
   if (projectIds === null) return;

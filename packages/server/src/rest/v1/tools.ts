@@ -89,6 +89,7 @@ const resolveToolProjectId = async (
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
+    resourceType: 'tool',
   });
   if (projectIds === null) {
     ctx.status = 403;
@@ -113,7 +114,10 @@ const checkToolsAccess = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'tool',
+  });
   if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -190,6 +194,7 @@ toolsRouter.get('/tools', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'tools:ListTools',
+    resourceType: 'tool',
   });
 
   if (projectIds === null) {
@@ -216,6 +221,7 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'tools:GetTool',
+    resourceType: 'tool',
   });
 
   if (projectIds === null) {
@@ -326,6 +332,7 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'tools:DeleteTool',
+    resourceType: 'tool',
   });
 
   if (projectIds === null) {
@@ -374,6 +381,7 @@ toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'tools:CallTool',
+    resourceType: 'tool',
   });
 
   if (projectIds === null) {

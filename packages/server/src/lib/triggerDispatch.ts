@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agents';
 import type { GenerationInputMessage } from './generationInputMessages';
+import { buildSrn } from './iam';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { createJwtIsAllowed } from './permissions';
 import { callTool } from './tools';
@@ -222,7 +223,11 @@ const resolveRunAsAuthHeader = async (args: {
   const canStart = await creatorIsAllowed({
     projectPublicId,
     action: targetStartAction(trigger.targetType as string),
-    resource: `soat:${projectPublicId}:*:*`,
+    resource: buildSrn({
+      projectPublicId,
+      resourceType: trigger.targetType as string,
+      resourceId: trigger.targetId as string,
+    }),
   });
   if (!canStart) {
     throw new DomainError(

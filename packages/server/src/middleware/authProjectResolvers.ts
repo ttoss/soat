@@ -8,9 +8,23 @@ export type IsAllowedFn = (args: {
   resource?: string;
 }) => Promise<boolean>;
 
+/**
+ * SRN used to probe project accessibility for a list/scoping check. When a
+ * `resourceType` is known the probe is scoped to the type
+ * (`soat:{project}:{type}:*`) so resource-scoped policies are enforced; without
+ * one it falls back to the project-wildcard (`soat:{project}:*:*`), used only
+ * where the project itself is the target.
+ */
+const scopingSrn = (projectPublicId: string, resourceType?: string): string => {
+  return resourceType
+    ? `soat:${projectPublicId}:${resourceType}:*`
+    : `soat:${projectPublicId}:*:*`;
+};
+
 const filterAccessibleProjects = async (args: {
   projectPublicIds: string[] | null;
   action: string;
+  resourceType?: string;
   isAllowed: IsAllowedFn;
   db: Context['db'];
 }): Promise<number[]> => {
@@ -25,7 +39,7 @@ const filterAccessibleProjects = async (args: {
     const allowed = await args.isAllowed({
       projectPublicId: proj.publicId as string,
       action: args.action,
-      resource: `soat:${proj.publicId as string}:*:*`,
+      resource: scopingSrn(proj.publicId as string, args.resourceType),
     });
     if (allowed) accessible.push(proj.id as number);
   }
@@ -35,6 +49,7 @@ const filterAccessibleProjects = async (args: {
 const resolveProjectIdsByPublicIdAndPolicy = async (args: {
   reqProjectPublicId?: string;
   action: string;
+  resourceType?: string;
   isAllowed: IsAllowedFn;
   policyIds: number[];
   db: Context['db'];
@@ -43,7 +58,7 @@ const resolveProjectIdsByPublicIdAndPolicy = async (args: {
     const allowed = await args.isAllowed({
       projectPublicId: args.reqProjectPublicId,
       action: args.action,
-      resource: `soat:${args.reqProjectPublicId}:*:*`,
+      resource: scopingSrn(args.reqProjectPublicId, args.resourceType),
     });
     if (!allowed) return null;
     const proj = await args.db.Project.findOne({
@@ -70,6 +85,7 @@ const resolveProjectIdsByPublicIdAndPolicy = async (args: {
   return filterAccessibleProjects({
     projectPublicIds: projectPublicIds ?? null,
     action: args.action,
+    resourceType: args.resourceType,
     isAllowed: args.isAllowed,
     db: args.db,
   });
@@ -79,6 +95,7 @@ const resolveApiKeyScopedProjectIds = async (args: {
   apiKeyProjectPublicId: string;
   reqProjectPublicId?: string;
   action: string;
+  resourceType?: string;
   apiKeyIsAllowed: IsAllowedFn;
   db: Context['db'];
 }): Promise<number[] | null> => {
@@ -91,7 +108,7 @@ const resolveApiKeyScopedProjectIds = async (args: {
   const allowed = await args.apiKeyIsAllowed({
     projectPublicId: targetId,
     action: args.action,
-    resource: `soat:${targetId}:*:*`,
+    resource: scopingSrn(targetId, args.resourceType),
   });
   if (!allowed) return null;
   const proj = await args.db.Project.findOne({ where: { publicId: targetId } });
@@ -113,14 +130,17 @@ export const createApiKeyResolveProjectIds = (args: {
   return async ({
     projectPublicId: reqId,
     action,
+    resourceType,
   }: {
     projectPublicId?: string;
     action: string;
+    resourceType?: string;
   }): Promise<number[] | null | undefined> => {
     return resolveApiKeyScopedProjectIds({
       apiKeyProjectPublicId: args.apiKeyProjectPublicId,
       reqProjectPublicId: reqId,
       action,
+      resourceType,
       apiKeyIsAllowed: args.apiKeyIsAllowed,
       db: args.db,
     });
@@ -146,15 +166,17 @@ export const createUnscopedApiKeyResolveProjectIds = (args: {
   return async ({
     projectPublicId: reqId,
     action,
+    resourceType,
   }: {
     projectPublicId?: string;
     action: string;
+    resourceType?: string;
   }): Promise<number[] | null | undefined> => {
     if (reqId) {
       const allowed = await args.apiKeyIsAllowed({
         projectPublicId: reqId,
         action,
-        resource: `soat:${reqId}:*:*`,
+        resource: scopingSrn(reqId, resourceType),
       });
       if (!allowed) return null;
       const proj = await args.db.Project.findOne({
@@ -169,6 +191,7 @@ export const createUnscopedApiKeyResolveProjectIds = (args: {
     return filterAccessibleProjects({
       projectPublicIds: null,
       action,
+      resourceType,
       isAllowed: args.apiKeyIsAllowed,
       db: args.db,
     });
@@ -185,14 +208,17 @@ export const createJwtResolveProjectIds = (args: {
   return async ({
     projectPublicId,
     action,
+    resourceType,
   }: {
     projectPublicId?: string;
     action: string;
+    resourceType?: string;
   }) => {
     if (args.role === 'admin' && !projectPublicId) return undefined;
     return resolveProjectIdsByPublicIdAndPolicy({
       reqProjectPublicId: projectPublicId,
       action,
+      resourceType,
       isAllowed: args.jwtIsAllowed,
       policyIds: args.userPolicyIds,
       db: args.db,

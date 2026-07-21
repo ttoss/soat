@@ -22,12 +22,14 @@ export const resolveProjectIdsWithAction = async (args: {
   ctx: Context;
   projectPublicId?: string;
   action: string;
+  resourceType?: string;
 }): Promise<number[] | null | undefined> => {
   // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
   // always defined here.
   const projectIds = await args.ctx.authUser!.resolveProjectIds({
     projectPublicId: args.projectPublicId,
     action: args.action,
+    resourceType: args.resourceType,
   });
 
   if (projectIds === null) {
@@ -58,6 +60,7 @@ export const resolveWriteProjectId = async (args: {
   ctx: Context;
   projectPublicId?: string;
   action: string;
+  resourceType?: string;
 }): Promise<number | null> => {
   const { ctx, action } = args;
   // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
@@ -84,6 +87,7 @@ export const resolveWriteProjectId = async (args: {
   const projectIds = await authUser.resolveProjectIds({
     projectPublicId,
     action,
+    resourceType: args.resourceType,
   });
 
   if (projectIds === null) {

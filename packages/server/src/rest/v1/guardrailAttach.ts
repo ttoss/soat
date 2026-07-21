@@ -1,6 +1,7 @@
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { computeDetachedGuardrailIds } from 'src/lib/guardrails';
+import { buildSrn } from 'src/lib/iam';
 
 /**
  * Parses a request-body `guardrail_ids` value into the shape the lib update
@@ -47,9 +48,13 @@ export const assertGuardrailDetachAllowed = async (args: {
   const allowed = await args.ctx.authUser.isAllowed({
     projectPublicId: args.projectPublicId,
     action: 'guardrails:DetachGuardrail',
-    // Probe with the project's SRN so project-scoped policies grant the detach,
-    // consistent with the resolveProjectIds / getProject SRN convention.
-    resource: `soat:${args.projectPublicId}:*:*`,
+    // Probe with the guardrail type-level SRN so project- or type-scoped
+    // policies grant the detach, consistent with the buildSrn convention.
+    resource: buildSrn({
+      projectPublicId: args.projectPublicId,
+      resourceType: 'guardrail',
+      resourceId: '*',
+    }),
   });
   if (!allowed) {
     throw new DomainError(

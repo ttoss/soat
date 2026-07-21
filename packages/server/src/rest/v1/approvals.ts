@@ -38,6 +38,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'approvals:ListApprovals',
+    resourceType: 'approval',
   });
 
   if (projectIds === null) {

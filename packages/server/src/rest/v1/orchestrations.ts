@@ -35,6 +35,7 @@ const resolveAuth = async (
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
+    resourceType: 'orchestration',
   });
 
   if (projectIds === null) {
@@ -49,6 +50,26 @@ const resolveAuth = async (
     return null;
   }
   return { projectIds: projectIds ?? [primaryId], primaryId };
+};
+const resolveOrchestrationAccess = async (
+  ctx: Context,
+  action: string
+): Promise<number[] | undefined | null> => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return null;
+  }
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'orchestration',
+  });
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return null;
+  }
+  return projectIds ?? undefined;
 };
 type RawCreateBody = {
   projectId?: string;
@@ -194,6 +215,7 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'orchestrations:ListOrchestrations',
+    resourceType: 'orchestration',
   });
 
   if (projectIds === null) {
@@ -219,22 +241,13 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    const projectIds = await resolveOrchestrationAccess(
+      ctx,
+      'orchestrations:GetOrchestration'
+    );
+    if (projectIds === null) return;
 
     const orchestrationId = ctx.params['orchestration_id'] as string;
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:GetOrchestration',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const result = await findOrchestration({
       id: orchestrationId,
@@ -259,23 +272,13 @@ orchestrationsRouter.get(
 orchestrationsRouter.patch(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    const projectIds = await resolveOrchestrationAccess(
+      ctx,
+      'orchestrations:UpdateOrchestration'
+    );
+    if (projectIds === null) return;
 
     const orchestrationId = ctx.params['orchestration_id'] as string;
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:UpdateOrchestration',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
-
     const body = (ctx.request.body ?? {}) as RawUpdateBody;
 
     const result = await updateOrchestration({
@@ -296,22 +299,13 @@ orchestrationsRouter.patch(
 orchestrationsRouter.delete(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    const projectIds = await resolveOrchestrationAccess(
+      ctx,
+      'orchestrations:DeleteOrchestration'
+    );
+    if (projectIds === null) return;
 
     const orchestrationId = ctx.params['orchestration_id'] as string;
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:DeleteOrchestration',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     await deleteOrchestration({
       id: orchestrationId,
@@ -382,6 +376,7 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'orchestrations:ListRuns',
+    resourceType: 'orchestration',
   });
 
   if (
@@ -409,23 +404,13 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestration-runs/:run_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    const projectIds = await resolveOrchestrationAccess(
+      ctx,
+      'orchestrations:GetRun'
+    );
+    if (projectIds === null) return;
 
     const runId = ctx.params['run_id'] as string;
-
-    const projectIds = await ctx.authUser.resolveProjectIds({
-      action: 'orchestrations:GetRun',
-    });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const result = await findOrchestrationRun({
       id: runId,

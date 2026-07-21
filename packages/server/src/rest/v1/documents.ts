@@ -111,6 +111,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
   const projectIds = await ctx.authUser!.resolveProjectIds({
     projectPublicId,
     action: 'documents:ListDocuments',
+    resourceType: 'document',
   });
 
   if (projectIds === null) {
@@ -185,6 +186,7 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'documents:CreateDocument',
+    resourceType: 'document',
   });
   if (targetProjectId === null) return;
 
@@ -392,6 +394,7 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'documents:IngestDocument',
+    resourceType: 'document',
   });
   if (targetProjectId === null) return;
 

@@ -51,6 +51,7 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'ai-providers:ListAiProviders',
+    resourceType: 'aiProvider',
   });
 
   if (projectIds === null) {
@@ -199,6 +200,7 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'ai-providers:CreateAiProvider',
+    resourceType: 'aiProvider',
   });
   if (targetProjectId === null) return;
 

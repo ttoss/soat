@@ -31,6 +31,7 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'memories:ListMemories',
+    resourceType: 'memory',
   });
 
   if (projectIds === null) {
@@ -89,6 +90,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'memories:CreateMemory',
+    resourceType: 'memory',
   });
   if (targetProjectId === null) return;
 

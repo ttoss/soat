@@ -27,6 +27,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'generations:ListGenerations',
+    resourceType: 'generation',
   });
 
   if (
@@ -76,6 +77,7 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'generations:GetGeneration',
+    resourceType: 'generation',
   });
 
   if (
@@ -124,6 +126,7 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'generations:UpdateGeneration',
+    resourceType: 'generation',
   });
 
   if (

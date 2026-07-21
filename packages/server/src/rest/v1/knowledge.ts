@@ -78,6 +78,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId: body.projectId,
     action: 'knowledge:SearchKnowledge',
+    resourceType: 'document',
   });
 
   if (projectIds === null) {

@@ -51,6 +51,7 @@ ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
     ctx,
     projectPublicId,
     action: 'ingestion-rules:ListIngestionRules',
+    resourceType: 'ingestionRule',
   });
   if (projectIds === null) return;
 
@@ -65,6 +66,7 @@ ingestionRulesRouter.get(
     const projectIds = await resolveProjectIdsWithAction({
       ctx,
       action: 'ingestion-rules:GetIngestionRule',
+      resourceType: 'ingestionRule',
     });
     if (projectIds === null) return;
 
@@ -88,6 +90,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'ingestion-rules:CreateIngestionRule',
+    resourceType: 'ingestionRule',
   });
   if (targetProjectId === null) return;
 
@@ -124,6 +127,7 @@ ingestionRulesRouter.patch(
     const projectIds = await resolveProjectIdsWithAction({
       ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
+      resourceType: 'ingestionRule',
     });
     if (projectIds === null) return;
 
@@ -161,6 +165,7 @@ ingestionRulesRouter.delete(
     const projectIds = await resolveProjectIdsWithAction({
       ctx,
       action: 'ingestion-rules:DeleteIngestionRule',
+      resourceType: 'ingestionRule',
     });
     if (projectIds === null) return;
 

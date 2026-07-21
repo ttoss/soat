@@ -79,6 +79,7 @@ discussionsRouter.get('/discussions', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'discussions:ListDiscussions',
+    resourceType: 'discussion',
   });
   if (projectIds === null) {
     ctx.status = 403;
@@ -119,6 +120,7 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'discussions:CreateDiscussion',
+    resourceType: 'discussion',
   });
   if (targetProjectId === null) return;
 

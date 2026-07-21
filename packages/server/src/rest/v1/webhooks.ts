@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { buildSrn } from 'src/lib/iam';
 import {
   createWebhook,
   deleteWebhook,
@@ -46,6 +47,7 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'webhooks:ListWebhooks',
+    resourceType: 'webhook',
   });
 
   if (projectIds === null) {
@@ -73,6 +75,7 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'webhooks:CreateWebhook',
+    resourceType: 'webhook',
   });
   if (targetProjectId === null) return;
 
@@ -116,7 +119,11 @@ webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:GetWebhook',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -144,7 +151,11 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:UpdateWebhook',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -196,7 +207,11 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:DeleteWebhook',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -235,7 +250,11 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:ListWebhookDeliveries',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -283,7 +302,11 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:GetWebhookDelivery',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -307,7 +330,11 @@ webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: webhook.projectId!,
     action: 'webhooks:GetWebhookSecret',
-    resource: `soat:${webhook.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: webhook.projectId!,
+      resourceType: 'webhook',
+      resourceId: webhook.id,
+    }),
   });
   if (!allowed) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
@@ -339,7 +366,11 @@ webhooksRouter.post(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: webhook.projectId!,
       action: 'webhooks:RotateWebhookSecret',
-      resource: `soat:${webhook.projectId}:*:*`,
+      resource: buildSrn({
+        projectPublicId: webhook.projectId!,
+        resourceType: 'webhook',
+        resourceId: webhook.id,
+      }),
     });
     if (!allowed) {
       ctx.status = 403;
