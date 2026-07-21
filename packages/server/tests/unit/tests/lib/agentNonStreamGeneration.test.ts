@@ -278,7 +278,7 @@ describe('agentNonStreamGeneration', () => {
       nonSystemMessages: pending.messages,
     });
 
-    const result = resolveToolOutputsResult({
+    const result = await resolveToolOutputsResult({
       generationId: pending.generationId,
       agentId: pending.agentId,
       pending,
@@ -328,7 +328,7 @@ describe('agentNonStreamGeneration', () => {
       nonSystemMessages: pending.messages,
     });
 
-    const result = resolveToolOutputsResult({
+    const result = await resolveToolOutputsResult({
       generationId: pending.generationId,
       agentId: pending.agentId,
       pending,

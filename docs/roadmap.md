@@ -159,7 +159,14 @@ classify→route interceptor, guard evaluation + application-owned context
 composition, tripwires + `escalate`, `guardrail_evaluation` audit record,
 dry-run `evaluate` endpoint; per-binding `approval_policy` removed._
 
-- [ ] `requires_action` handoff gate for **client** tools (only server-executed tools are gated today)
+- [x] `requires_action` handoff gate for **client** tools — the gate runs at the
+  `requires_action` handoff (client tools have no server `execute` to wrap): class
+  A / passing B release to the client; class D blocks; a tripwire aborts the action
+  and the model continues (parity with a blocked server tool, per the 2026-07
+  tripwire decision — *not* a run abort); class C files the approval and, on
+  approval, re-hands the frozen/edited call off to the client via a fresh linked
+  `requires_action` generation. Both the agent-generation and session surfaces are
+  covered.
 - [ ] Orchestration **tool-node** dispatch path (interceptor is wired into agent tool-dispatch only)
 - [ ] File an `ExceptionItem` on a tripwire (awaits the G3 Exceptions item; today returns a structured aborted tool result)
 - [ ] `[OPEN]` Per-action-class default expiry (72h budget / 168h strategy vs today's 24h `approval`-node default; align with `action-classes.yaml`)

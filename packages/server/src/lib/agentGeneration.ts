@@ -18,6 +18,7 @@ import {
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
 import {
+  buildSyntheticToolResultMessages,
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
   loadOutputMappingsByToolName,
   resolveToolOutputsResult,
@@ -320,7 +321,17 @@ export const submitToolOutputs = async (args: {
     pendingToolCalls: pending.pendingToolCalls,
     outputMappingsByToolName: await loadOutputMappingsByToolName(pending),
   });
-  const allMessages = [...pending.messages, ...toolResultMessages];
+  // Merge the results the guardrail gate synthesized for client calls it did not
+  // release (class D / tripwire / pending_approval). They belong to the same
+  // assistant turn, so the provider needs them alongside the client's outputs.
+  const syntheticMessages = buildSyntheticToolResultMessages(
+    pending.syntheticToolResults ?? []
+  );
+  const allMessages = [
+    ...pending.messages,
+    ...toolResultMessages,
+    ...syntheticMessages,
+  ];
   const system = (
     pending.messages as Array<{ role: string; content: string }>
   ).find((m) => {

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type {
   LanguageModel,
   LanguageModelUsage,
@@ -30,6 +31,17 @@ export type PendingGeneration = {
     toolCallId: string;
     toolName: string;
     args: unknown;
+  }>;
+  // Tool results the guardrail gate synthesized for client calls it did NOT
+  // release (class D / tripwire / pending_approval). They belong to the same
+  // assistant turn as `pendingToolCalls`, so they must be injected alongside the
+  // client-submitted outputs when the loop resumes — otherwise the provider sees
+  // a tool call with no result. Absent/empty for a generation with no gated
+  // client calls.
+  syntheticToolResults?: Array<{
+    toolCallId: string;
+    toolName: string;
+    output: unknown;
   }>;
   messages: Array<unknown>;
   steps: unknown[];
@@ -232,6 +244,12 @@ export const findPendingClientTools = (
     });
 };
 
+type SyntheticToolResult = {
+  toolCallId: string;
+  toolName: string;
+  output: unknown;
+};
+
 const storePendingGenerationState = (args: {
   generationId: string;
   traceId: string;
@@ -244,6 +262,7 @@ const storePendingGenerationState = (args: {
     toolName: string;
     input: unknown;
   }>;
+  syntheticToolResults?: SyntheticToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;
@@ -251,6 +270,7 @@ const storePendingGenerationState = (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): void => {
+  const syntheticToolResults = args.syntheticToolResults ?? [];
   pendingGenerations.set(args.generationId, {
     agentId: args.agentId,
     projectId: args.typedAgent.project.id as number,
@@ -265,6 +285,7 @@ const storePendingGenerationState = (args: {
         args: tc.input,
       };
     }),
+    syntheticToolResults,
     messages: [...args.allMessages, ...args.result.response.messages],
     steps: serializeSteps(args.result.steps),
     resolvedModel: args.model,
@@ -292,6 +313,7 @@ const storePendingGenerationState = (args: {
         args: tc.input,
       };
     }),
+    syntheticToolResults,
     messages: [...args.allMessages, ...args.result.response.messages],
     steps: serializeSteps(args.result.steps),
     parentTraceId: args.parentTraceId ?? null,
@@ -315,6 +337,7 @@ export const savePendingGeneration = (args: {
     toolName: string;
     input: unknown;
   }>;
+  syntheticToolResults?: SyntheticToolResult[];
   allMessages: Array<{ role: string; content: unknown }>;
   result: { steps: unknown[]; response: { messages: unknown[] } };
   model: LanguageModel;

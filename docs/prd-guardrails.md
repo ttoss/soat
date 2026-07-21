@@ -196,6 +196,13 @@ everything else.
 - **Tripwire semantics:** a failing guard **aborts the run** and files an
   `ExceptionItem` — it does not silently downgrade. A rule with
   `escalate: true` opts into downgrade-to-approval instead
+
+  > **Superseded (2026-07):** the authoritative tripwire semantics abort the
+  > **action**, not the run — the model receives the aborted tool result and
+  > continues its turn (parity across server and client tools). See
+  > [modules/guardrails.md — Tripwires](../packages/website/docs/modules/guardrails.md).
+  > `ExceptionItem` filing awaits the G3 Exceptions phase; until then the aborted
+  > result is the durable signal.
 - New providers are code, reviewed like code — the expression language itself
   stays capped at JSON Logic operators
 

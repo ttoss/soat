@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { emitClientToolReHandoff } from './agentClientToolReHandoff';
 import { createGeneration } from './agentGeneration';
 import {
   type ApprovalResumeHandler,
@@ -170,6 +171,19 @@ export const runToolCallContinuation = async (args: {
 
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
+      // A client tool cannot be executed server-side; approving one re-hands the
+      // frozen/edited call off to the client via a fresh linked generation. When
+      // that path fires, there is no server-side result and no NL continuation —
+      // the client will execute and resume the loop itself.
+      const reHandedOff = await emitClientToolReHandoff({
+        item,
+        projectInternalId,
+      }).catch((error: unknown) => {
+        log('emitClientToolReHandoff failed id=%s %o', item.id, error);
+        return false;
+      });
+      if (reHandedOff) return;
+
       result = await executeApprovedAction({ item, projectInternalId }).catch(
         (error: unknown) => {
           log('executeApprovedAction failed id=%s %o', item.id, error);

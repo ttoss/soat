@@ -708,7 +708,14 @@ const wrapExecuteWithOutputMapping = (
 const localInjectableSchema = (
   typedTool: AgentToolRow
 ): Record<string, unknown> | undefined => {
-  if (typedTool.type === 'http' || typedTool.type === 'pipeline') {
+  // `http` / `pipeline` carry a local JSON Schema the justification fields can
+  // be injected into; `client` tools do too, so a class-C client call can carry
+  // model justification onto the approval item at the requires_action handoff.
+  if (
+    typedTool.type === 'http' ||
+    typedTool.type === 'pipeline' ||
+    typedTool.type === 'client'
+  ) {
     return typedTool.parameters ?? {};
   }
   return undefined;
