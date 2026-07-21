@@ -1,6 +1,11 @@
 import { db } from 'src/db';
 import * as auditLog from 'src/lib/auditLog';
-import { flushAuditQueue, resetAuditQueue } from 'src/lib/auditQueue';
+import {
+  flushAuditQueue,
+  getDroppedAuditCount,
+  resetAuditQueue,
+} from 'src/lib/auditQueue';
+import { runRetentionSweep } from 'src/lib/auditScheduler';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -232,6 +237,24 @@ describe('Audit Log — read API filters', () => {
       ).toBe(true);
     }
   });
+
+  test('?from=/?to= bound results by createdAt, and an invalid date is ignored', async () => {
+    // A wide window (valid ISO dates) returns entries.
+    const within = await listEntries({
+      from: '2000-01-01T00:00:00.000Z',
+      to: '2999-01-01T00:00:00.000Z',
+    });
+    expect(within.length).toBeGreaterThan(0);
+
+    // A future-only lower bound excludes every existing entry.
+    const future = await listEntries({ from: '2999-01-01T00:00:00.000Z' });
+    expect(future).toHaveLength(0);
+
+    // A malformed date parses to undefined (ignored, not applied as a filter),
+    // so results are unaffected rather than erroring.
+    const ignored = await listEntries({ from: 'not-a-real-date' });
+    expect(ignored.length).toBeGreaterThan(0);
+  });
 });
 
 describe('Audit Log — read API authorization', () => {
@@ -274,6 +297,36 @@ describe('Audit Log — read API authorization', () => {
 
     const unauth = await testClient.get(`/api/v1/audit-log/${entryId}`);
     expect(unauth.status).toBe(401);
+  });
+
+  test('a project-scoped credential lacking audit permission gets 403 fetching one entry', async () => {
+    const all = await listEntries();
+    const entryId = all[0].id as string;
+
+    // A project-scoped API key whose boundary policy grants only secrets access
+    // (no audit:*): its resolveProjectIds probes the bound project, the check
+    // fails, and the get-one handler returns 403 (the null branch a plain JWT —
+    // which returns [] and 404s — never reaches).
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['secrets:GetSecret'] }],
+        },
+      });
+    const keyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: 'audit-no-perm-key',
+        project_id: projectId,
+        policy_ids: [policyRes.body.id],
+      });
+    const rawKey = keyRes.body.key as string;
+
+    const res = await authenticatedTestClient(rawKey).get(
+      `/api/v1/audit-log/${entryId}`
+    );
+    expect(res.status).toBe(403);
   });
 });
 
@@ -338,5 +391,31 @@ describe('Audit Log — retention sweep', () => {
       where: { resourcePublicId: survivorId },
     });
     expect(survivor).not.toBeNull();
+  });
+
+  test('runRetentionSweep swallows into a count (scheduler tick body)', async () => {
+    // Default 365-day window prunes nothing fresh; the wrapper returns a count
+    // rather than throwing, matching the scheduler's fire-and-forget contract.
+    const removed = await runRetentionSweep();
+    expect(typeof removed).toBe('number');
+    expect(removed).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('Audit Log — pagination and queue metrics', () => {
+  test('limit/offset are applied to the list response', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ limit: '1', offset: '0' });
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(1);
+    expect(res.body.offset).toBe(0);
+    expect(res.body.data.length).toBeLessThanOrEqual(1);
+    expect(typeof res.body.total).toBe('number');
+  });
+
+  test('the dropped-entry counter is exposed as a number', async () => {
+    expect(typeof getDroppedAuditCount()).toBe('number');
+    expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
   });
 });

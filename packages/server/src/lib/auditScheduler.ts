@@ -11,9 +11,10 @@ const DAILY_MS = 24 * 60 * 60 * 1000;
  * Scheduler-facing wrapper: the retention delete may reject (e.g. the DB is
  * briefly unreachable), but the scheduler dispatches sweeps fire-and-forget, so
  * a rejection would surface as an unhandled promise. Swallow it here and let the
- * next daily tick retry — a missed prune is harmless.
+ * next daily tick retry — a missed prune is harmless. Exported for direct
+ * testing (it has no HTTP entry point — the scheduler tick is its only caller).
  */
-const runRetentionSweep = async (): Promise<number> => {
+export const runRetentionSweep = async (): Promise<number> => {
   try {
     return await sweepExpiredAuditEntries();
   } catch (error) {
