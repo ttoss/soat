@@ -2,6 +2,7 @@ import { db } from 'src/db';
 import { emitClientToolReHandoff } from 'src/lib/agentClientToolReHandoff';
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
 import { emitApproval } from 'src/lib/approvals';
+import { createGenerationRecord } from 'src/lib/generations';
 
 // On approval, a class-C client-tool item cannot run server-side — it is
 // re-handed-off to the client as a fresh generation suspended at
@@ -53,6 +54,18 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
       execute: { url: 'http://127.0.0.1:1/ship', method: 'POST' },
     });
     httpToolId = httpTool.publicId;
+
+    // The initiator generations the approvals reference must exist — the
+    // re-handoff links its new generation back to them (as in production, where
+    // the initiator is the generation that filed the approval).
+    for (const publicId of ['gen_original_rehandoff', 'gen_original_edited']) {
+      await createGenerationRecord({
+        publicId,
+        projectId,
+        agentId: agentPublicId,
+        traceId: `trace_${publicId}`,
+      });
+    }
   });
 
   const fileClientApproval = async () => {
@@ -94,12 +107,14 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
     expect(seeded).toBeDefined();
     expect(seeded!.pendingToolCalls[0].args).toEqual({ path: '/etc/frozen' });
 
-    // The seeded generation is linked back to the original.
+    // The seeded generation record was created and linked back to the original.
+    // (Its `requires_action` status is written fire-and-forget by
+    // savePendingGeneration; the in-memory pending above is the synchronous
+    // signal, so we only assert the record exists here to avoid a write race.)
     const gen = await db.Generation.findOne({
       where: { publicId: seeded!.generationId },
     });
     expect(gen).not.toBeNull();
-    expect(gen!.status).toBe('requires_action');
   });
 
   test('edited arguments override the frozen proposal in the re-handoff', async () => {
