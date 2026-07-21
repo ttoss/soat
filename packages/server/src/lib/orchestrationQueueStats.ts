@@ -44,39 +44,20 @@ type PerProjectRow = {
  * When `projectIds` is provided, `perProject` is restricted to those projects
  * (a project-scoped caller sees only their own rows); `undefined` includes all.
  */
-export const getQueueStats = async (args?: {
+/**
+ * Per-project queued/claimed task counts, one row per project with any such
+ * task. `projectIds` restricts the breakdown to those projects; `undefined`
+ * includes all. An empty allow-list returns `[]` without emitting an invalid
+ * `IN ()`.
+ */
+const loadPerProject = async (args: {
   projectIds?: number[];
-  now?: Date;
-}): Promise<QueueStats> => {
-  const now = args?.now ?? new Date();
-  log('getQueueStats: projectIds=%o', args?.projectIds);
+  now: Date;
+}): Promise<QueueStats['perProject']> => {
+  const restrictProjects = args.projectIds !== undefined;
+  if (restrictProjects && args.projectIds?.length === 0) return [];
 
-  const [queueDepth, claimedTasks, oldest] = await Promise.all([
-    db.OrchestrationRunTask.count({
-      where: { claimedAt: null, availableAt: { [Op.lte]: now } },
-    }),
-    db.OrchestrationRunTask.count({
-      where: {
-        claimedAt: { [Op.ne]: null },
-        leaseExpiresAt: { [Op.gt]: now },
-      },
-    }),
-    db.OrchestrationRunTask.findOne({
-      where: { claimedAt: null, availableAt: { [Op.lte]: now } },
-      order: [['availableAt', 'ASC']],
-      attributes: ['availableAt'],
-    }),
-  ]);
-
-  const oldestQueuedAgeSeconds = oldest
-    ? Math.max(
-        0,
-        (now.getTime() - new Date(oldest.availableAt).getTime()) / 1000
-      )
-    : null;
-
-  const restrictProjects = args?.projectIds !== undefined;
-  const [perProjectRows] = await db.sequelize.query(
+  const [rows] = await db.sequelize.query(
     `SELECT p."public_id" AS project_id,
             SUM(CASE WHEN t."claimed_at" IS NULL
                       AND t."available_at" <= :now THEN 1 ELSE 0 END) AS queued,
@@ -94,18 +75,51 @@ export const getQueueStats = async (args?: {
       ORDER BY p."public_id" ASC`,
     {
       replacements: restrictProjects
-        ? { now, projectIds: args?.projectIds }
-        : { now },
+        ? { now: args.now, projectIds: args.projectIds }
+        : { now: args.now },
     }
   );
 
-  const perProject = (perProjectRows as PerProjectRow[]).map((row) => {
+  return (rows as PerProjectRow[]).map((row) => {
     return {
       projectId: row.project_id,
       queued: Number(row.queued),
       claimed: Number(row.claimed),
     };
   });
+};
+
+export const getQueueStats = async (args?: {
+  projectIds?: number[];
+  now?: Date;
+}): Promise<QueueStats> => {
+  const now = args?.now ?? new Date();
+  log('getQueueStats: projectIds=%o', args?.projectIds);
+
+  const [queueDepth, claimedTasks, oldest, perProject] = await Promise.all([
+    db.OrchestrationRunTask.count({
+      where: { claimedAt: null, availableAt: { [Op.lte]: now } },
+    }),
+    db.OrchestrationRunTask.count({
+      where: {
+        claimedAt: { [Op.ne]: null },
+        leaseExpiresAt: { [Op.gt]: now },
+      },
+    }),
+    db.OrchestrationRunTask.findOne({
+      where: { claimedAt: null, availableAt: { [Op.lte]: now } },
+      order: [['availableAt', 'ASC']],
+      attributes: ['availableAt'],
+    }),
+    loadPerProject({ projectIds: args?.projectIds, now }),
+  ]);
+
+  const oldestQueuedAgeSeconds = oldest
+    ? Math.max(
+        0,
+        (now.getTime() - new Date(oldest.availableAt).getTime()) / 1000
+      )
+    : null;
 
   return {
     driver: 'postgres',

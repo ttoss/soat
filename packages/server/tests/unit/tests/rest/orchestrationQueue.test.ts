@@ -18,6 +18,7 @@ import {
   drainQueueOnce,
   effectiveClaimLimit,
   handleRunTask,
+  inFlightTaskCount,
 } from 'src/lib/orchestrationWorker';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -858,6 +859,11 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       expect(
         effectiveClaimLimit({ batch: 3, concurrency: 10, inFlight: 0 })
       ).toBe(3);
+    });
+
+    test('inFlightTaskCount is 0 between awaited drains', () => {
+      // Each drainQueueOnce awaits its tasks, so no task is in flight afterward.
+      expect(inFlightTaskCount()).toBe(0);
     });
 
     test('a drain with CONCURRENCY=2 claims at most 2 tasks from a larger backlog', async () => {

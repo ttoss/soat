@@ -137,16 +137,13 @@ export const drainQueueOnce = async (args?: {
   const batch = args?.limit ?? workerBatchLimit();
 
   // Cross-tick concurrency cap (D10): never let claimed-and-unacked tasks exceed
-  // CONCURRENCY. The effective claim size this tick is `min(batch, remaining)`.
-  const concurrency = workerConcurrencyLimit();
-  const limit = effectiveClaimLimit({ batch, concurrency, inFlight });
-  if (limit <= 0) {
-    log(
-      'drainQueueOnce: at concurrency cap (%d), claiming nothing',
-      concurrency
-    );
-    return 0;
-  }
+  // CONCURRENCY. The effective claim size this tick is `min(batch, remaining)`;
+  // when the process is already at the cap this is 0 and the claim returns none.
+  const limit = effectiveClaimLimit({
+    batch,
+    concurrency: workerConcurrencyLimit(),
+    inFlight,
+  });
 
   let tasks: RunTaskInstance[];
   try {
@@ -207,33 +204,3 @@ export const startOrchestrationWorker = scheduler.start;
 
 /** Stops the background worker loop (graceful shutdown / test teardown). */
 export const stopOrchestrationWorker = scheduler.stop;
-
-/**
- * Graceful shutdown for the standalone worker (D4 ops hardening): stops the tick
- * so no new tasks are claimed, then waits for tasks already claimed by this
- * process to finish (be acked) before resolving — up to `timeoutMs`. Tasks not
- * finished in time are simply left un-acked; their lease expires and another
- * worker (or this one on restart) redelivers them, so no work is lost. Returns
- * the number of tasks still in flight when it returned (0 on a clean drain).
- */
-export const shutdownOrchestrationWorker = async (args?: {
-  timeoutMs?: number;
-  pollMs?: number;
-}): Promise<number> => {
-  const timeoutMs = args?.timeoutMs ?? 30_000;
-  const pollMs = args?.pollMs ?? 50;
-  stopOrchestrationWorker();
-  const deadline = Date.now() + timeoutMs;
-  while (inFlight > 0 && Date.now() < deadline) {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, pollMs);
-    });
-  }
-  if (inFlight > 0) {
-    log(
-      'shutdownOrchestrationWorker: %d task(s) still in flight at timeout',
-      inFlight
-    );
-  }
-  return inFlight;
-};

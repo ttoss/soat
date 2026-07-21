@@ -26,12 +26,17 @@ orchestrationQueueRouter.get(
       action: 'orchestrations:GetQueueStats',
       resourceType: 'orchestration',
     });
-    if (projectIds === null) {
+    // `null` = forbidden; an empty array = the action is granted on no project,
+    // which for this operator endpoint is also forbidden. `undefined` (admin /
+    // unscoped) means all projects; a non-empty array means those projects.
+    if (
+      projectIds === null ||
+      (Array.isArray(projectIds) && projectIds.length === 0)
+    ) {
       ctx.status = 403;
       ctx.body = { error: 'Forbidden' };
       return;
     }
-    // `undefined` (admin / unscoped) → all projects; an array → those projects.
     ctx.body = await getQueueStats({ projectIds: projectIds ?? undefined });
   }
 );
