@@ -145,6 +145,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['file', 'File `properties` must be an object'],
   ['policy', 'Policy `properties` must be an object'],
   ['project_price', 'Project price `properties` must be an object'],
+  ['quota', 'Quota `properties` must be an object'],
   ['secret', 'Secret `properties` must be an object'],
   ['session', 'Session `properties` must be an object'],
   ['ingestion_rule', 'Ingestion rule `properties` must be an object'],
@@ -831,6 +832,101 @@ describe('documentsFormationModule chunking', () => {
 
     // Switching to `whole` collapses the document back to a single chunk.
     expect(await countChunks(physicalId)).toBe(1);
+  });
+});
+
+// ── quota (Quotas Phase 3) ──────────────────────────────────────────────────
+//
+// A quota has no free-form field and is unique per
+// (project, scope, scope_ref, metric, window), so it can't ride the shared
+// round-trip table (which re-creates each resource several times in one
+// project). This drives one resource through its full lifecycle instead.
+
+describe('quotasFormationModule', () => {
+  test('create → read → update → delete lifecycle (project scope)', async () => {
+    const quotaId = await applyCreateResource({
+      resourceType: 'quota',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 25.5,
+        mode: 'monitor',
+      },
+    });
+    expect(quotaId).toMatch(/^quota_/);
+
+    const read = await readModule('quota').read?.({
+      physicalResourceId: quotaId,
+    });
+    expect(read).toMatchObject({
+      scope: 'project',
+      scope_ref: null,
+      metric: 'cost_usd',
+      window: 'calendar_month',
+      limit: 25.5,
+      mode: 'monitor',
+    });
+
+    // Only limit/mode are mutable; the immutable fields are re-sent verbatim.
+    await applyUpdateResource({
+      resourceType: 'quota',
+      physicalResourceId: quotaId,
+      resolvedProperties: {
+        scope: 'project',
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 40,
+        mode: 'enforce',
+      },
+    });
+    const afterUpdate = await readModule('quota').read?.({
+      physicalResourceId: quotaId,
+    });
+    expect(afterUpdate).toMatchObject({ limit: 40, mode: 'enforce' });
+
+    await applyDeleteResource({
+      resourceType: 'quota',
+      physicalResourceId: quotaId,
+    });
+    expect(
+      await readModule('quota').read?.({ physicalResourceId: quotaId })
+    ).toBeNull();
+  });
+
+  test('create resolves an agent scope_ref', async () => {
+    const quotaId = await applyCreateResource({
+      resourceType: 'quota',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        scope: 'agent',
+        scope_ref: agentId,
+        metric: 'tokens',
+        window: 'rolling_1h',
+        limit: 1000,
+      },
+    });
+    const read = await readModule('quota').read?.({
+      physicalResourceId: quotaId,
+    });
+    expect(read).toMatchObject({
+      scope: 'agent',
+      scope_ref: agentId,
+      metric: 'tokens',
+    });
+    await applyDeleteResource({
+      resourceType: 'quota',
+      physicalResourceId: quotaId,
+    });
+  });
+
+  test('read returns null for a missing quota', async () => {
+    expect(
+      await readModule('quota').read?.({
+        physicalResourceId: 'quota_missing_zzz',
+      })
+    ).toBeNull();
   });
 });
 
