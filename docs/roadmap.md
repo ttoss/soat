@@ -30,7 +30,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | G | Initiative | PRD | Status |
 |---|-----------|-----|--------|
 | G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
-| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime + queue/idempotency/worker shipped (P1); concurrency (P2) + SQS (P3) remain |
+| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime + queue/idempotency/worker shipped (P1); concurrency (P2) remains |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
 | G4 | Guardrails · action classes | [prd-guardrails.md](./prd-guardrails.md) | ✅ core shipped; client-tool + orch tool-node gates remain |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
@@ -112,7 +112,7 @@ feedback + governance loops ─────────────────�
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 4. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
    last because it consumes approvals, memories, and evaluations signals.
-5. **Model-routing** and the deferred tails (SQS driver, budget-guard P7) as
+5. **Model-routing** and the deferred tail (budget-guard P7) as
    hardening.
 
 ## Pending backlog
@@ -130,7 +130,6 @@ entrypoint, and run-scoped node idempotency keys (`{run_id}:{node_id}:{attempt}`
 with the `Idempotency-Key` header on HTTP tool nodes)._
 
 - [ ] **P2** Concurrency limits (per project + global)
-- [ ] **P3** Pluggable driver interface + SQS driver (DLQ → run failed + exception per approvals)
 
 ### G3 — Approvals (exceptions · activity)
 
