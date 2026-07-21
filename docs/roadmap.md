@@ -30,7 +30,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | G | Initiative | PRD | Status |
 |---|-----------|-----|--------|
 | G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
-| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 durable runtime + queue/idempotency/worker shipped (P1); concurrency (P2) remains |
+| G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 P1 (queue/idempotency/worker) + P2 (concurrency limits) shipped; worker-fleet ops hardening + P3 (SQS driver) remain |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
 | G4 | Guardrails · action classes | [prd-guardrails.md](./prd-guardrails.md) | ✅ core shipped; client-tool + orch tool-node gates remain |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
@@ -57,12 +57,13 @@ everything else builds on.
 
 ```
 FOUNDATIONS (shipped)
-  orchestration runtime ✅   orchestration-queue P1 ✅   usage metering P1–3c ✅
-  guardrails core ✅         knowledge P1/2/4 ✅          memories P1–4 ✅
-  approvals P1 ✅            discussions ✅               quotas P1 ✅
+  orchestration runtime ✅   orchestration-queue P1 ✅   orchestration-queue P2 ✅
+  usage metering P1–3c ✅    guardrails core ✅           knowledge P1/2/4 ✅
+  memories P1–4 ✅           approvals P1 ✅              discussions ✅          quotas P1 ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
-  orchestration-queue P2 (concurrency limits) ◄── orchestration-queue P1 ✅
+  orchestration-queue P2 ops hardening (worker fleet) ◄── orchestration-queue P2 ✅
+  orchestration-queue P3 (pluggable driver + SQS) ◄── orchestration-queue P1 ✅
   guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
   usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
 
@@ -104,8 +105,11 @@ feedback + governance loops ─────────────────�
    done through P3: requests + token/cost enforcement, the `quota.exceeded`
    webhook, monitor mode, and the `quota` formation resource all shipped; only
    the monitor-breach *audit entry* remains, deferred to audit-log.
-   **Orchestration-queue P1** shipped, unblocking evaluations P2 and
-   exactly-once metering; **P2 concurrency limits** is the next queue step.)
+   **Orchestration-queue P1 and P2** shipped — P1 unblocked evaluations P2 and
+   exactly-once metering; P2 added per-project + global concurrency limits, the
+   queue-stats endpoint, and graceful worker shutdown. The worker-fleet **ops
+   hardening** (compose service, healthcheck, fleet smoke) and the optional
+   **P3 SQS driver** are the remaining queue steps.)
 2. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
    feed and agent-versions promotion gate need (audit-log also absorbs the
    deferred quota monitor-breach audit entry).
@@ -127,9 +131,15 @@ per-node retry, sync mode, lifecycle webhooks). **P1 shipped**: Postgres queue
 driver (`run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`), enqueue-only
 async start (`status: "queued"`), extractable worker loop + `worker.ts`
 entrypoint, and run-scoped node idempotency keys (`{run_id}:{node_id}:{attempt}`,
-with the `Idempotency-Key` header on HTTP tool nodes)._
+with the `Idempotency-Key` header on HTTP tool nodes). **P2 shipped**:
+`max_concurrent_runs` per project (claim-time enforcement — excess runs stay
+queued; only actively-driven runs hold a slot; advisory-locked so the cap holds
+across a worker fleet), the `ORCHESTRATION_WORKER_CONCURRENCY` per-worker
+cross-tick cap, graceful worker shutdown (SIGTERM/SIGINT), and
+`GET /api/v1/orchestrations/queue/stats` (behind `orchestrations:GetQueueStats`)._
 
-- [ ] **P2** Concurrency limits (per project + global)
+- [ ] **P2 ops hardening** — dedicated compose worker service, worker healthcheck, and worker-fleet smoke coverage (graceful shutdown already shipped)
+- [ ] **P3** Pluggable driver + SQS: env-selected driver (`ORCHESTRATION_QUEUE_DRIVER=postgres|sqs`), SQS driver (visibility-timeout→lease, DLQ→`failed`), a shared driver-conformance suite, and a load/soak test
 
 ### G3 — Approvals (exceptions · activity)
 
