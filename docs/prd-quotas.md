@@ -89,10 +89,10 @@
 
 | Component                                   | Status         | Notes                                                        |
 | ------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `Quota` model + CRUD                        | ❌ Not started | Project-scoped; scope/metric/window/limit/mode                |
-| `QuotaWindowCounter` table                  | ❌ Not started | Per-window fixed counters for `requests`                      |
-| Request-quota Koa middleware                | ❌ Not started | After auth, before handlers; atomic `UPDATE ... RETURNING`    |
-| `QUOTA_EXCEEDED` error code + `429` contract | ❌ Not started | `Retry-After` header; registered in `errors/codes.ts`         |
+| `Quota` model + CRUD                        | ✅ Shipped     | Project-scoped; scope/metric/window/limit/mode                |
+| `QuotaWindowCounter` table                  | ✅ Shipped     | Per-window fixed counters for `requests`                      |
+| Request-quota Koa middleware                | ✅ Shipped     | After auth, before handlers; atomic `UPDATE ... RETURNING`    |
+| `QUOTA_EXCEEDED` error code + `429` contract | ✅ Shipped     | `Retry-After` header; registered in `errors/codes.ts`         |
 | Token/cost check at meter-write choke point | ✅ Shipped     | Pre-generation check (`project`/`agent` scopes); never kills an in-flight generation |
 | `quota.exceeded` webhook event              | ✅ Shipped     | First breach per fixed window; fires for enforce + monitor    |
 | Monitor mode (fire, don't block)            | ✅ Shipped     | Breach fires the webhook without blocking; flip to enforce via PATCH |
@@ -293,7 +293,7 @@ Actions defined in `packages/server/src/permissions/quotas.json`.
 
 ## Implementation Phases
 
-### Phase 1 — Requests Quotas + Middleware + 429 Contract ❌ Not started
+### Phase 1 — Requests Quotas + Middleware + 429 Contract ✅ Shipped
 
 **Deliverables:** `Quota` + `QuotaWindowCounter` models; quota CRUD (REST +
 OpenAPI + SDK/CLI regen); the Koa middleware; `QUOTA_EXCEEDED` in
