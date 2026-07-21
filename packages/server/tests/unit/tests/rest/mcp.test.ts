@@ -2,6 +2,7 @@ import type http from 'node:http';
 
 import { app } from 'src/app';
 import { db } from 'src/db';
+import { flushAuditQueue } from 'src/lib/auditQueue';
 import * as discussionCompletion from 'src/lib/discussionCompletion';
 import { createGenerationRecord } from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
@@ -185,6 +186,38 @@ describe('MCP tools - happy path', () => {
     const result = parseResult(res);
     expect(result.id).toBeDefined();
     expect(result.filename).toBe('mcp-token-upload.txt');
+  });
+
+  // ── Audit Log ──────────────────────────────────────────────────────────────
+
+  test('list-audit-entries and get-audit-entry expose the audit trail', async () => {
+    // A mutating REST call the admin just made produces an audit entry; drain
+    // the async writer before querying it back through the MCP surface.
+    const secretRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'MCP_AUDIT', value: 'v' });
+    const secretId = secretRes.body.id;
+    await flushAuditQueue();
+
+    const listed = parseResult(
+      await mcpCall('list-audit-entries', {
+        projectId,
+        resourcePublicId: secretId,
+      })
+    );
+    // MCP responses are camelCase.
+    expect(Array.isArray(listed.data)).toBe(true);
+    const entry = listed.data.find((e: { action: string }) => {
+      return e.action === 'secrets:CreateSecret';
+    });
+    expect(entry).toBeDefined();
+    expect(entry.resourcePublicId).toBe(secretId);
+
+    const fetched = parseResult(
+      await mcpCall('get-audit-entry', { entryId: entry.id })
+    );
+    expect(fetched.id).toBe(entry.id);
+    expect(fetched.action).toBe('secrets:CreateSecret');
   });
 
   // ── Workflows & Tasks ──────────────────────────────────────────────────────

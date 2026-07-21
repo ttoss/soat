@@ -121,6 +121,7 @@ const sidebars: SidebarsConfig = {
           label: 'Operations',
           items: [
             'modules/traces',
+            'modules/audit-log',
             'modules/usage',
             'modules/quotas',
             'modules/secrets',

@@ -10,6 +10,7 @@ import {
   syncSchemaWithAdvisoryLock,
 } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
+import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
@@ -47,6 +48,9 @@ const startServer = async () => {
     // Start the task stall sweeper so tasks parked past their `stalled_after`
     // threshold emit `tasks.stalled` (once per episode, re-armed on transition).
     startTasksScheduler();
+    // Start the audit-log retention sweep so entries older than
+    // AUDIT_RETENTION_DAYS are pruned on a daily tick.
+    startAuditRetentionScheduler();
   } catch (error) {
     // This is a fatal, process-terminating failure, so print to stderr
     // unconditionally rather than via the opt-in `debug` logger — otherwise the
