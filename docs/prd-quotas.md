@@ -94,9 +94,10 @@
 | Request-quota Koa middleware                | ❌ Not started | After auth, before handlers; atomic `UPDATE ... RETURNING`    |
 | `QUOTA_EXCEEDED` error code + `429` contract | ❌ Not started | `Retry-After` header; registered in `errors/codes.ts`         |
 | Token/cost check at meter-write choke point | ✅ Shipped     | Pre-generation check (`project`/`agent` scopes); never kills an in-flight generation |
-| `quota.exceeded` webhook event              | ❌ Not started | First breach per window (reuses metering hysteresis pattern)  |
-| Monitor mode + audit entries                | ❌ Not started | Log/webhook without blocking, for safe rollout                |
-| `quota` formation resource type             | ❌ Not started | `QuotaResourceProperties` in `formations.yaml`                |
+| `quota.exceeded` webhook event              | ✅ Shipped     | First breach per fixed window; fires for enforce + monitor    |
+| Monitor mode (fire, don't block)            | ✅ Shipped     | Breach fires the webhook without blocking; flip to enforce via PATCH |
+| Monitor-mode audit entries                  | ⏭️ Deferred    | Owned by the (unbuilt) audit-log module; webhook is the interim signal |
+| `quota` formation resource type             | ✅ Shipped     | `QuotaResourceProperties` + `quotasFormationModule`           |
 
 ## Problem
 
@@ -336,20 +337,35 @@ is the start of the next fixed window, not a per-meter slide.
 - `api_key`-scoped token/cost quotas are rejected at create time (no
   attribution to aggregate); the evaluator also skips any stray one defensively.
 
-### Phase 3 — Monitor Mode, Webhooks, Formation Resource ❌ Not started
+### Phase 3 — Monitor Mode, Webhooks, Formation Resource ✅ Shipped
 
-**Deliverables:** `quota.exceeded` webhook with once-per-window fire state;
-monitor-mode audit entries; `QuotaResourceProperties` in `formations.yaml` +
-`quotasFormationModule.ts`; module docs page.
+**Deliverables (shipped):** `quota.exceeded` webhook (`quotaEvents.ts`) with
+once-per-window fire state on the `Quota.firedWindowKey` column, fired from both
+enforcement points for `enforce` and `monitor` quotas; monitor mode evaluated
+alongside enforce (fires the webhook, never blocks); `QuotaResourceProperties`
+in `formations.yaml` + `quotasFormationModule.ts` (registered); module docs.
 
-**Acceptance criteria:**
+**Fire-state note:** a quota's window always has a discrete fixed key (rolling
+windows are fixed-keyed) and usage only grows within a key, so the fire state is
+a single stored key — no sliding-window hysteresis is needed (unlike usage
+thresholds).
 
-- A `monitor` quota breach returns `200`, emits exactly one `quota.exceeded`
-  delivery per window (second breach in the same window fires nothing), and
-  writes an audit entry.
+**Audit entries — deferred.** The original criterion "writes an audit entry" is
+owned by the **audit-log module** (a separate, not-yet-started initiative — no
+`AuditEntry` model exists). The `quota.exceeded` webhook is the interim durable
+signal for a monitor breach; a persisted audit record lands when audit-log ships
+(tracked as the roadmap's activity-feed / audit ownership reconciliation).
+
+**Acceptance criteria (met):**
+
+- A `monitor` quota breach returns `200` (request) / proceeds (generation) and
+  emits exactly one `quota.exceeded` delivery per window (a second breach in the
+  same window fires nothing).
+- An `enforce` breach fires the same webhook once per window in addition to the
+  `429`.
 - Flipping `mode` to `enforce` via `PATCH` blocks the next breaching request.
-- A formation template declaring a `quota` resource creates/updates/deletes
-  it through the formation lifecycle; unknown fields are rejected with `400`.
+- A formation template declaring a `quota` resource creates/updates/deletes it
+  through the formation lifecycle; unknown fields are rejected with `400`.
 
 ## Risks
 

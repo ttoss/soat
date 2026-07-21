@@ -1,5 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -894,6 +895,125 @@ describe('Quotas', () => {
       } finally {
         spy.mockRestore();
       }
+    });
+  });
+
+  // ── quota.exceeded webhook + monitor mode (Phase 3) ────────────────────────
+
+  describe('quota.exceeded webhook and monitor mode', () => {
+    // The webhook fires synchronously inside evaluateRequestQuotas (awaited by
+    // the middleware before the response), so events are captured without any
+    // polling.
+    const withCapture = async (
+      action: () => Promise<void>
+    ): Promise<SoatEvent[]> => {
+      const captured: SoatEvent[] = [];
+      const handler = (event: SoatEvent) => {
+        if (event.type === 'quota.exceeded') captured.push(event);
+      };
+      eventBus.on('soat:event', handler);
+      try {
+        await action();
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
+      return captured;
+    };
+
+    const get = (rawKey: string, projectPublicId: string) => {
+      return authenticatedTestClient(rawKey).get(
+        `/api/v1/quotas?project_id=${projectPublicId}`
+      );
+    };
+
+    test('a monitor request quota fires the webhook once per window without blocking', async () => {
+      const { enfProjectId, keyId, rawKey } =
+        await setupEnforcementProject('quotas-monitor-req');
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+          mode: 'monitor',
+        },
+        enfProjectId
+      );
+
+      const captured = await withCapture(async () => {
+        // Request 1 is within limit; 2 and 3 breach — none are blocked.
+        for (let i = 0; i < 3; i += 1) {
+          const res = await get(rawKey, enfProjectId);
+          expect(res.status).toBe(200);
+        }
+      });
+
+      expect(captured).toHaveLength(1);
+      expect(captured[0].data.quota_id).toBe(quotaRes.body.id);
+      expect(captured[0].data.mode).toBe('monitor');
+      expect(captured[0].data.metric).toBe('requests');
+      expect(captured[0].resourceType).toBe('quota');
+    });
+
+    test('an enforce request quota fires the webhook and still blocks', async () => {
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-enforce-fire'
+      );
+      await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+
+      const captured = await withCapture(async () => {
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+        expect((await get(rawKey, enfProjectId)).status).toBe(429);
+        expect((await get(rawKey, enfProjectId)).status).toBe(429);
+      });
+
+      // Fired exactly once despite two breaching requests.
+      expect(captured).toHaveLength(1);
+      expect(captured[0].data.mode).toBe('enforce');
+    });
+
+    test('flipping mode monitor->enforce blocks the next breaching request', async () => {
+      const { enfProjectId, keyId, rawKey } =
+        await setupEnforcementProject('quotas-flip-mode');
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+          mode: 'monitor',
+        },
+        enfProjectId
+      );
+
+      // Under monitor, a breaching request is not blocked.
+      expect((await get(rawKey, enfProjectId)).status).toBe(200);
+      expect((await get(rawKey, enfProjectId)).status).toBe(200);
+
+      const patch = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaRes.body.id}`)
+        .send({ mode: 'enforce' });
+      expect(patch.status).toBe(200);
+      expect(patch.body.mode).toBe('enforce');
+
+      // Now enforced: the next breaching request is blocked.
+      const blocked = await get(rawKey, enfProjectId);
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
     });
   });
 });

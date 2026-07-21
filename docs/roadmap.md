@@ -44,7 +44,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
 | Audit log | [prd-audit-log.md](./prd-audit-log.md) | ❌ Not started | substrate for G3/G4 |
-| Quotas | [prd-quotas.md](./prd-quotas.md) | 🟡 Phases 1–2 shipped; 3 remains | umbrella (no G#) |
+| Quotas | [prd-quotas.md](./prd-quotas.md) | ✅ Phases 1–3 shipped (monitor-breach audit entry deferred to audit-log) | umbrella (no G#) |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phases 1–4 shipped; 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 1,2,4 shipped; 3,5,6,7 remain | data plane |
@@ -99,20 +99,20 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Quotas P3** (monitor-mode webhooks + `quota` formation resource) — the
-   last quotas phase now that **P1** (requests quotas + CRUD + 429 middleware)
-   and **P2** (token/cost pre-generation check for `project`/`agent` scopes)
-   have shipped, closing hard spend enforcement. (**Orchestration-queue P1**
-   shipped, unblocking evaluations P2 and exactly-once metering; **P2
-   concurrency limits** is the next queue step.)
-2. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
-   infra emitters (P4–P6)** — pure extensions of shipped cores.
-3. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
-   feed and agent-versions promotion gate need.
-4. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
-6. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
+1. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
+   infra emitters (P4–P6)** — pure extensions of shipped cores. (**Quotas** is
+   done through P3: requests + token/cost enforcement, the `quota.exceeded`
+   webhook, monitor mode, and the `quota` formation resource all shipped; only
+   the monitor-breach *audit entry* remains, deferred to audit-log.
+   **Orchestration-queue P1** shipped, unblocking evaluations P2 and
+   exactly-once metering; **P2 concurrency limits** is the next queue step.)
+2. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
+   feed and agent-versions promotion gate need (audit-log also absorbs the
+   deferred quota monitor-breach audit entry).
+3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
+4. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
    last because it consumes approvals, memories, and evaluations signals.
-7. **Model-routing** and the deferred tails (SQS driver, budget-guard P7) as
+5. **Model-routing** and the deferred tails (SQS driver, budget-guard P7) as
    hardening.
 
 ## Pending backlog
@@ -226,14 +226,18 @@ with G3 before shipping the feed._
 ### Quotas
 
 _Hard fail-closed enforcement (429), complementing metering (measure) and
-guardrails (per-action). **Phases 1–2 shipped**: requests quotas (`Quota` +
+guardrails (per-action). **Phases 1–3 shipped**: requests quotas (`Quota` +
 `QuotaWindowCounter` models, CRUD, the request-quota Koa middleware with an
 atomic `UPDATE … RETURNING`, and the `QUOTA_EXCEEDED` + `429` + `Retry-After`
-contract); and token/cost quotas enforced at the pre-generation check over
+contract); token/cost quotas enforced at the pre-generation check over
 `UsageEvent` (`project`/`agent` scopes; never kills an in-flight generation;
-`api_key` token/cost rejected — no attribution)._
+`api_key` token/cost rejected — no attribution); and the `quota.exceeded`
+webhook (once per fixed window, enforce + monitor), monitor mode (fire without
+blocking), and the `quota` formation resource._
 
-- [ ] **Phase 3** Monitor mode + audit entries; `quota.exceeded` webhook (first breach per window); `quota` formation resource type
+- [ ] Monitor-breach **audit entry** — ⏭️ deferred to the audit-log module (no
+  `AuditEntry` model exists yet); the `quota.exceeded` webhook is the interim
+  durable signal.
 
 ### Model routing
 

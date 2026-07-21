@@ -1,5 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import {
   checkGenerationQuota,
   evaluateGenerationQuotas,
@@ -416,6 +417,81 @@ describe('evaluateGenerationQuotas', () => {
       agentId: 'agent_doesnotexist00',
     });
     expect(breach).toBeNull();
+  });
+
+  // Collects `quota.exceeded` events emitted while `action` runs, tearing the
+  // listener down afterward so it never leaks into later tests. The firing is
+  // awaited inside evaluateGenerationQuotas, so no polling is needed.
+  const withCapture = async (
+    action: () => Promise<void>
+  ): Promise<SoatEvent[]> => {
+    const captured: SoatEvent[] = [];
+    const handler = (event: SoatEvent) => {
+      if (event.type === 'quota.exceeded') captured.push(event);
+    };
+    eventBus.on('soat:event', handler);
+    try {
+      await action();
+    } finally {
+      eventBus.off('soat:event', handler);
+    }
+    return captured;
+  };
+
+  test('a monitor token/cost quota fires quota.exceeded without blocking', async () => {
+    const ctx = await freshProjectAndAgent('genquota-monitor-fire');
+    await seedUsageEvent({
+      projectInternalId: ctx.projectInternalId,
+      costUsd: '100.00',
+    });
+    const quota = await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 1,
+      mode: 'monitor',
+    });
+
+    let breach: Awaited<ReturnType<typeof evaluateGenerationQuotas>> = null;
+    const captured = await withCapture(async () => {
+      breach = await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+    });
+
+    expect(breach).toBeNull(); // monitor never blocks
+    expect(captured).toHaveLength(1);
+    expect(captured[0].data.quota_id).toBe(quota.publicId);
+    expect(captured[0].data.mode).toBe('monitor');
+    expect(captured[0].data.metric).toBe('cost_usd');
+    expect(captured[0].resourceType).toBe('quota');
+  });
+
+  test('an enforce token/cost breach fires quota.exceeded once per window', async () => {
+    const ctx = await freshProjectAndAgent('genquota-enforce-fire');
+    await seedUsageEvent({
+      projectInternalId: ctx.projectInternalId,
+      costUsd: '5.00',
+    });
+    await createQuotaRow({
+      projectInternalId: ctx.projectInternalId,
+      scope: 'project',
+      metric: 'cost_usd',
+      limit: 5,
+    });
+
+    const captured = await withCapture(async () => {
+      const first = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(first).not.toBeNull();
+      // A second breach in the same window still blocks but does not re-fire.
+      const second = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(second).not.toBeNull();
+    });
+
+    expect(captured).toHaveLength(1);
+    expect(captured[0].data.mode).toBe('enforce');
   });
 
   test('checkGenerationQuota fails open on an infrastructure error', async () => {

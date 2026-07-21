@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { fireQuotaExceeded } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
   retryAfterSeconds,
@@ -106,16 +107,58 @@ const incrementCounter = async (args: {
   return count;
 };
 
+// Builds the QuotaBreach attribution record for a breached quota.
+const buildBreach = (args: {
+  quota: QuotaInstance;
+  window: QuotaWindow;
+  now: Date;
+}): QuotaBreach => {
+  const resetsAt = windowResetsAt({ window: args.window, now: args.now });
+  return {
+    quotaId: args.quota.publicId,
+    scope: args.quota.scope,
+    scopeRef: args.quota.scopeRef,
+    metric: args.quota.metric,
+    window: args.quota.window,
+    limit: Number(args.quota.limit),
+    resetsAt,
+    retryAfter: retryAfterSeconds({ resetsAt, now: args.now }),
+  };
+};
+
+// Increments one request quota's window counter, fires `quota.exceeded` on the
+// first breach per window (both modes), and returns the breach only when it is
+// an `enforce` quota (so a `monitor` breach fires the webhook but never blocks).
+const evaluateRequestQuota = async (args: {
+  quota: QuotaInstance;
+  now: Date;
+}): Promise<QuotaBreach | null> => {
+  const { quota, now } = args;
+  const window = quota.window as QuotaWindow;
+  const windowKey = windowKeyFor({ window, now });
+  const count = await incrementCounter({
+    quotaId: (quota as unknown as { id: number }).id,
+    windowKey,
+    now,
+  });
+
+  if (count <= Number(quota.limit)) return null;
+
+  await fireQuotaExceeded({ quota, windowKey, observedValue: count, now });
+  return quota.mode === 'enforce' ? buildBreach({ quota, window, now }) : null;
+};
+
 /**
  * Every request that reaches the middleware increments the counter of every
- * matching `enforce` quota — including requests that will be rejected. Returns
- * the most specific breached quota for attribution, or `null` when nothing
- * breached.
+ * matching quota — including requests that will be rejected. Both `enforce` and
+ * `monitor` quotas are evaluated: a breach fires the `quota.exceeded` webhook
+ * once per window regardless of mode, but only `enforce` breaches are returned
+ * (and thus block with 429); `monitor` breaches fire and let the request
+ * through. Returns the most specific `enforce` breach, or `null`.
  *
  * Matching (`requests` metric): a `project`-scope quota applies to every key in
  * the project; an `api_key`-scope quota applies to all keys (null ref) or the
- * one named key. `monitor` quotas are a pass-through no-op in Phase 1, so only
- * `enforce` quotas are counted here.
+ * one named key.
  */
 export const evaluateRequestQuotas = async (args: {
   projectId: number;
@@ -124,11 +167,7 @@ export const evaluateRequestQuotas = async (args: {
   const now = new Date();
 
   const quotas = (await db.Quota.findAll({
-    where: {
-      projectId: args.projectId,
-      metric: 'requests',
-      mode: 'enforce',
-    },
+    where: { projectId: args.projectId, metric: 'requests' },
   })) as QuotaInstance[];
 
   const matching = quotas.filter((quota) => {
@@ -139,33 +178,10 @@ export const evaluateRequestQuotas = async (args: {
     return false; // agent scope never matches the requests metric
   });
 
-  if (matching.length === 0) return null;
-
   const breaches: QuotaBreach[] = [];
-
   for (const quota of matching) {
-    const window = quota.window as QuotaWindow;
-    const windowKey = windowKeyFor({ window, now });
-    const count = await incrementCounter({
-      quotaId: (quota as unknown as { id: number }).id,
-      windowKey,
-      now,
-    });
-
-    const limit = Number(quota.limit);
-    if (count > limit) {
-      const resetsAt = windowResetsAt({ window, now });
-      breaches.push({
-        quotaId: quota.publicId,
-        scope: quota.scope,
-        scopeRef: quota.scopeRef,
-        metric: quota.metric,
-        window: quota.window,
-        limit,
-        resetsAt,
-        retryAfter: retryAfterSeconds({ resetsAt, now }),
-      });
-    }
+    const breach = await evaluateRequestQuota({ quota, now });
+    if (breach) breaches.push(breach);
   }
 
   if (breaches.length === 0) return null;
@@ -173,15 +189,7 @@ export const evaluateRequestQuotas = async (args: {
   breaches.sort((a, b) => {
     return scopeRank(b.scope) - scopeRank(a.scope);
   });
-
-  const breach = breaches[0];
-  log(
-    'evaluateRequestQuotas: breach quota=%s scope=%s limit=%d',
-    breach.quotaId,
-    breach.scope,
-    breach.limit
-  );
-  return breach;
+  return breaches[0];
 };
 
 // ── Token / cost pre-generation check (Phase 2) ──────────────────────────────
@@ -242,14 +250,46 @@ const aggregateGenerationMetric = async (args: {
   }, 0);
 };
 
+// Aggregates one token/cost quota's current window and, on a breach (at or over
+// the limit), fires `quota.exceeded` once per window (both modes). Returns the
+// breach only when the quota is `enforce` (so a `monitor` breach fires the
+// webhook but never blocks the generation).
+const evaluateGenerationQuota = async (args: {
+  quota: QuotaInstance;
+  agentInternalId: number;
+  projectId: number;
+  now: Date;
+}): Promise<QuotaBreach | null> => {
+  const { quota, now } = args;
+  const window = quota.window as QuotaWindow;
+  const scopeToAgent = quota.scope === 'agent' && quota.scopeRef != null;
+  const total = await aggregateGenerationMetric({
+    metric: quota.metric as 'tokens' | 'cost_usd',
+    projectId: args.projectId,
+    agentId: scopeToAgent ? args.agentInternalId : null,
+    windowStart: windowStartsAt({ window, now }),
+  });
+
+  if (total < Number(quota.limit)) return null;
+
+  await fireQuotaExceeded({
+    quota,
+    windowKey: windowKeyFor({ window, now }),
+    observedValue: total,
+    now,
+  });
+  return quota.mode === 'enforce' ? buildBreach({ quota, window, now }) : null;
+};
+
 /**
  * The pre-generation token/cost check. Before a generation starts, the current
- * window aggregate for every matching `enforce` `tokens`/`cost_usd` quota is
- * compared to its limit; a breach (aggregate at or over the limit) returns the
- * most specific breached quota so the caller can block the *new* generation
- * with `QUOTA_EXCEEDED`. In-flight generations are never inspected — their
- * tokens are already spent — so a budget may overshoot by at most one
- * generation.
+ * window aggregate for every matching `tokens`/`cost_usd` quota is compared to
+ * its limit. A breach (aggregate at or over the limit) fires the
+ * `quota.exceeded` webhook once per window regardless of mode, but only
+ * `enforce` breaches are returned (blocking the *new* generation with
+ * `QUOTA_EXCEEDED`); `monitor` breaches fire and let it proceed. In-flight
+ * generations are never inspected — their tokens are already spent — so a
+ * budget may overshoot by at most one generation.
  *
  * Matching: a `project`-scope quota (null ref) aggregates the whole project; an
  * `agent`-scope quota with this agent's ref aggregates only that agent, and
@@ -271,16 +311,10 @@ export const evaluateGenerationQuotas = async (args: {
   });
   if (!agent) return null;
 
-  const agentInternalId = agent.id;
-  const projectId = agent.projectId;
   const agentPublicId = agent.publicId;
 
   const quotas = (await db.Quota.findAll({
-    where: {
-      projectId,
-      metric: ['tokens', 'cost_usd'],
-      mode: 'enforce',
-    },
+    where: { projectId: agent.projectId, metric: ['tokens', 'cost_usd'] },
   })) as QuotaInstance[];
 
   const matching = quotas.filter((quota) => {
@@ -291,34 +325,15 @@ export const evaluateGenerationQuotas = async (args: {
     return false; // api_key token/cost is never aggregatable
   });
 
-  if (matching.length === 0) return null;
-
   const breaches: QuotaBreach[] = [];
-
   for (const quota of matching) {
-    const window = quota.window as QuotaWindow;
-    const scopeToAgent = quota.scope === 'agent' && quota.scopeRef != null;
-    const total = await aggregateGenerationMetric({
-      metric: quota.metric as 'tokens' | 'cost_usd',
-      projectId,
-      agentId: scopeToAgent ? agentInternalId : null,
-      windowStart: windowStartsAt({ window, now }),
+    const breach = await evaluateGenerationQuota({
+      quota,
+      agentInternalId: agent.id,
+      projectId: agent.projectId,
+      now,
     });
-
-    const limit = Number(quota.limit);
-    if (total >= limit) {
-      const resetsAt = windowResetsAt({ window, now });
-      breaches.push({
-        quotaId: quota.publicId,
-        scope: quota.scope,
-        scopeRef: quota.scopeRef,
-        metric: quota.metric,
-        window: quota.window,
-        limit,
-        resetsAt,
-        retryAfter: retryAfterSeconds({ resetsAt, now }),
-      });
-    }
+    if (breach) breaches.push(breach);
   }
 
   if (breaches.length === 0) return null;
@@ -326,16 +341,7 @@ export const evaluateGenerationQuotas = async (args: {
   breaches.sort((a, b) => {
     return scopeRank(b.scope) - scopeRank(a.scope);
   });
-
-  const breach = breaches[0];
-  log(
-    'evaluateGenerationQuotas: breach quota=%s scope=%s metric=%s limit=%d',
-    breach.quotaId,
-    breach.scope,
-    breach.metric,
-    breach.limit
-  );
-  return breach;
+  return breaches[0];
 };
 
 /**
