@@ -803,6 +803,35 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const claimed = await claimRunTasks({ limit: 10 });
       expect(claimed).toHaveLength(2);
     });
+
+    test('claims across two limited projects each keep their own slot', async () => {
+      await setLimit(1);
+      // A second limited project. The claim gate keys on the run's project, so
+      // the run can reuse the existing orchestration. Two distinct limited
+      // projects exercise the ascending advisory-lock ordering.
+      const otherProject = await db.Project.create({
+        name: `concurrency-other-${Math.floor(performance.now())}`,
+        maxConcurrentRuns: 1,
+      });
+      await seedQueuedRun();
+      const otherRun = await db.OrchestrationRun.create({
+        orchestrationId: simpleOrchPk,
+        projectId: otherProject.id as number,
+        status: 'queued',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+      });
+      await enqueueRunTask({
+        runId: otherRun.id as number,
+        kind: 'continue',
+      });
+
+      // One slot per project → one run from each is claimed (two total).
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(2);
+    });
   });
 
   // Claim-latency ring buffer feeding the queue-stats endpoint.
@@ -958,6 +987,37 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         return r.projectId === projectId;
       });
       expect(afterRow?.claimed).toBeGreaterThanOrEqual(1);
+    });
+
+    test('a scoped project list restricts the per_project breakdown', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Stats Scoped',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      const stats = await getQueueStats({ projectIds: [projectPk] });
+      expect(
+        stats.perProject.every((r) => {
+          return r.projectId === projectId;
+        })
+      ).toBe(true);
+      expect(
+        stats.perProject.find((r) => {
+          return r.projectId === projectId;
+        })?.queued
+      ).toBeGreaterThanOrEqual(1);
+    });
+
+    test('an empty project list yields an empty per_project breakdown', async () => {
+      const stats = await getQueueStats({ projectIds: [] });
+      expect(stats.perProject).toEqual([]);
+      // Global counts are still reported regardless of the (empty) scope.
+      expect(typeof stats.queueDepth).toBe('number');
     });
   });
 });
