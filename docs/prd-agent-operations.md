@@ -234,7 +234,6 @@ side-effect risk while the pipeline hardens):
 | 3    | G4 action-class evaluator + G5 metering                            | Autonomous class-B actions with fail-closed guards; cost visibility from day 1 |
 | 4    | G7 knowledge packages + context assembler                          | Knowledge rollout without redeploys; full audit chain          |
 | 5    | G6 feedback loop                                                   | A promoted rule changes the next run                           |
-| 6    | Alternate queue driver (e.g. SQS) + load hardening                 | Deployments on managed-queue infrastructure                    |
 
 ## Acceptance Criteria (cross-PRD)
 

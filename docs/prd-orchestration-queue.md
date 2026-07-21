@@ -29,7 +29,6 @@
 | Run-scoped node idempotency keys               | ✅ Implemented | `{run_id}:{node_id}:{attempt}` written `running` before side effects; completed key reused     |
 | Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint; deploy/ops tooling lands with Phase 2   |
 | Concurrency limits (per project + global)      | ❌ Not started | Phase 2 — design forks resolved 2026-07-21 (D8–D10)                                           |
-| Pluggable driver interface + SQS driver        | ❌ Not started | Phase 3 — for deployments that standardize on a managed queue                                  |
 
 ## Resolved design decisions
 
@@ -325,44 +324,6 @@ noisy-neighbor fairness and LLM provider rate limits.
 
 **Unlocks:** Many projects running cycles in parallel without starving each
 other or tripping provider rate limits.
-
-### Phase 3 — Pluggable Driver + SQS ❌ Not started
-
-**Goal:** Deployments that standardize on a managed queue can ride it instead
-of Postgres, behind the same abstraction.
-
-**Deliverables:**
-
-- Driver selection via environment (`ORCHESTRATION_QUEUE_DRIVER=postgres|sqs`)
-- SQS driver (visibility timeout maps to the claim lease; DLQ maps to
-  exhausted retries → run `failed` + exception per
-  [prd-approvals.md](./prd-approvals.md))
-- Load hardening: soak test with 10+ projects running concurrent scheduled
-  cycles
-
-**Acceptance criteria:**
-
-- A shared driver-conformance contract suite (`enqueue` / `claim` / `ack` /
-  `retry`, lease expiry → redelivery, `available_at` ordering) passes against
-  **both** the Postgres and SQS drivers
-- `ORCHESTRATION_QUEUE_DRIVER` unset defaults to `postgres` — existing
-  deployments see no behavior change; an unknown value fails startup with a
-  clear error
-- On SQS, exhausted retries land the run in `failed` with an exception
-  recorded, matching the Postgres driver's behavior
-- Soak test passes with explicit thresholds — 10 projects running concurrent
-  scheduled cycles for 30 minutes:
-  - ≥ 500 runs reach a terminal state during the window
-  - non-injected run failure rate < 1%
-  - p95 claim latency < 2,000 ms while queue depth ≤ 100
-  - **zero** double executions: no idempotency key has more than one
-    side-effect execution across the entire soak
-  - **zero** stuck runs: every started run is terminal
-    (`succeeded`/`failed`/`canceled`) or legitimately parked
-    (`sleeping`/`awaiting_input`) at the end of the window
-
-**Unlocks:** Production deployments on managed-queue infrastructure without
-forking the runner.
 
 ## Key Concepts
 
