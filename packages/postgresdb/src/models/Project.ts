@@ -32,6 +32,15 @@ export class Project extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare guardrailIds: string[] | null;
 
+  // Maximum number of orchestration runs of this project that may be actively
+  // driven at once. `null` (the default) means unlimited. Enforced at queue
+  // claim time: while the project has this many runs holding a claimed,
+  // lease-valid task, further tasks stay queued until a slot frees. Only
+  // actively-driven runs occupy a slot — parked (`sleeping`/`awaiting_input`)
+  // runs hold none (orchestration-queue PRD, D8/D9).
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare maxConcurrentRuns: number | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

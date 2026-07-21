@@ -20,6 +20,47 @@ const workerBatchLimit = (): number => {
     : DEFAULT_WORKER_BATCH;
 };
 
+/**
+ * The global per-worker-process concurrency cap (`ORCHESTRATION_WORKER_CONCURRENCY`,
+ * D10): the maximum number of simultaneously claimed, unacked tasks this process
+ * may hold at any instant, across ticks. Unset (or invalid) means no cross-tick
+ * cap — today's behavior, bounded only by the per-tick batch size. A fleet of P
+ * workers bounds global concurrency at `P × CONCURRENCY`.
+ */
+const workerConcurrencyLimit = (): number | undefined => {
+  const configured = Number(process.env.ORCHESTRATION_WORKER_CONCURRENCY);
+  return Number.isFinite(configured) && configured > 0 ? configured : undefined;
+};
+
+// Number of tasks this process has claimed but not yet acked. Tracked across
+// ticks so the concurrency cap holds even when a slow task spans several ticks:
+// each tick may claim at most `CONCURRENCY − inFlight`. Module-level (per
+// process), matching the per-worker semantics of D10.
+let inFlight = 0;
+
+/** The tasks currently claimed-and-unacked by this worker process. */
+export const inFlightTaskCount = (): number => {
+  return inFlight;
+};
+
+/**
+ * The number of tasks this tick may claim: the per-tick `batch` size, further
+ * bounded by the cross-tick concurrency headroom (`concurrency − inFlight`)
+ * when a global cap is set (D10). `undefined` concurrency means no cross-tick
+ * cap — just the batch. Never negative. Pure; the single source of truth for
+ * the claim size shared by `drainQueueOnce` and its tests.
+ */
+export const effectiveClaimLimit = (args: {
+  batch: number;
+  concurrency: number | undefined;
+  inFlight: number;
+}): number => {
+  if (args.concurrency === undefined) return args.batch;
+  const remaining = args.concurrency - args.inFlight;
+  if (remaining <= 0) return 0;
+  return Math.min(args.batch, remaining);
+};
+
 // A run in one of these states has nothing to drive: the task is a no-op left
 // over from a cancel or a completed drive, so the worker just acks it.
 const TERMINAL_STATUSES = new Set([
@@ -93,7 +134,17 @@ export const drainQueueOnce = async (args?: {
   limit?: number;
   now?: Date;
 }): Promise<number> => {
-  const limit = args?.limit ?? workerBatchLimit();
+  const batch = args?.limit ?? workerBatchLimit();
+
+  // Cross-tick concurrency cap (D10): never let claimed-and-unacked tasks exceed
+  // CONCURRENCY. The effective claim size this tick is `min(batch, remaining)`;
+  // when the process is already at the cap this is 0 and the claim returns none.
+  const limit = effectiveClaimLimit({
+    batch,
+    concurrency: workerConcurrencyLimit(),
+    inFlight,
+  });
+
   let tasks: RunTaskInstance[];
   try {
     tasks = await claimRunTasks({ limit, now: args?.now });
@@ -101,6 +152,8 @@ export const drainQueueOnce = async (args?: {
     log('drainQueueOnce: claim failed %o', error);
     return 0;
   }
+
+  inFlight += tasks.length;
 
   await Promise.all(
     tasks.map(async (task) => {
@@ -110,6 +163,8 @@ export const drainQueueOnce = async (args?: {
       } catch (error) {
         // Leave the task un-acked so its lease expires and it is redelivered.
         log('drainQueueOnce: handle failed task=%d %o', task.id, error);
+      } finally {
+        inFlight -= 1;
       }
     })
   );

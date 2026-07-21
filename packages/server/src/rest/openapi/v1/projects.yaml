@@ -147,6 +147,16 @@ paths:
                   items:
                     type: string
                   description: Guardrails attached at the project scope.
+                max_concurrent_runs:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  example: 5
+                  description: >-
+                    Maximum orchestration runs of this project driven at once.
+                    `null` clears the limit (unlimited); otherwise an integer
+                    >= 1. Enforced at queue claim time — excess runs stay
+                    queued until a slot frees.
       responses:
         '200':
           description: Project updated successfully
@@ -306,6 +316,14 @@ components:
             Guardrails attached at the project scope — the baseline governing
             every tool call by every agent in the project.
           example: []
+        max_concurrent_runs:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Maximum orchestration runs of this project driven at once. `null`
+            means unlimited (the default). Enforced at queue claim time.
+          example: null
         created_at:
           type: string
           format: date-time

@@ -109,6 +109,34 @@ paths:
         '401':
           description: Unauthorized
 
+  /api/v1/orchestrations/queue/stats:
+    get:
+      tags:
+        - Orchestrations
+      summary: Get orchestration queue stats
+      description: >
+        Returns a point-in-time snapshot of the orchestration run queue: how
+        many tasks are waiting to be claimed (`queue_depth`), how many are
+        currently claimed with a valid lease (`claimed_tasks`), the age of the
+        oldest waiting task, recent claim-latency percentiles over a rolling
+        in-process window, and a per-project breakdown. Intended for
+        admin/operator policies; guarded by `orchestrations:GetQueueStats`. A
+        project-scoped caller sees only their own projects under `per_project`.
+      operationId: getQueueStats
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Queue stats snapshot
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStats'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+
   /api/v1/orchestrations/{orchestration_id}:
     get:
       tags:
@@ -375,6 +403,65 @@ components:
       description: Public ID of the run (run_...)
 
   schemas:
+    QueueStats:
+      type: object
+      description: A point-in-time snapshot of the orchestration run queue.
+      properties:
+        driver:
+          type: string
+          description: The active queue driver.
+          example: postgres
+        queue_depth:
+          type: integer
+          description: >-
+            Tasks waiting to be claimed now (unclaimed and past their
+            `available_at`). Backoff-delayed tasks are excluded.
+          example: 12
+        claimed_tasks:
+          type: integer
+          description: Tasks currently claimed with a valid (unexpired) lease.
+          example: 3
+        oldest_queued_age_seconds:
+          type: number
+          nullable: true
+          description: >-
+            Age in seconds of the oldest claimable-now task, or `null` when
+            none are waiting.
+          example: 4.2
+        claim_latency_ms:
+          type: object
+          description: >-
+            Claim-latency percentiles (time from a task becoming available to
+            being claimed) over a rolling in-process window. `p50`/`p95` are
+            `null` when no claim happened in the window.
+          properties:
+            p50:
+              type: number
+              nullable: true
+              example: 18
+            p95:
+              type: number
+              nullable: true
+              example: 240
+            window_seconds:
+              type: integer
+              example: 300
+        per_project:
+          type: array
+          description: One row per project with any queued or claimed task.
+          items:
+            type: object
+            properties:
+              project_id:
+                type: string
+                description: Public project ID (proj_ prefix).
+                example: proj_V1StGXR8Z5jdHi6B
+              queued:
+                type: integer
+                example: 5
+              claimed:
+                type: integer
+                example: 1
     OrchestrationNode:
       type: object
       description: A single execution unit in the orchestration graph.

@@ -89,6 +89,26 @@ if [ "$(echo "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-ren
 fi
 echo "Project rename: OK"
 
+# 3a-ii. Set the per-project orchestration concurrency limit
+echo "--- Project concurrency limit ---"
+PROJECT_LIMIT_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max-concurrent-runs 5)
+if [ "$(echo "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != "5" ]; then
+  echo "ERROR: update-project did not set max_concurrent_runs" >&2
+  echo "$PROJECT_LIMIT_RESP" >&2
+  exit 1
+fi
+echo "Project concurrency limit: OK"
+
+# 3a-iii. Orchestration queue stats endpoint
+echo "--- Orchestration queue stats ---"
+QUEUE_STATS_RESP=$($SOAT_CLI get-queue-stats)
+if [ "$(echo "$QUEUE_STATS_RESP" | jq -r '.driver')" != "postgres" ]; then
+  echo "ERROR: get-queue-stats did not return driver=postgres" >&2
+  echo "$QUEUE_STATS_RESP" >&2
+  exit 1
+fi
+echo "Queue stats: OK"
+
 # 3b. Policies module coverage
 echo "--- Policies coverage ---"
 POLICY_READ_RESP=$($SOAT_CLI create-policy \

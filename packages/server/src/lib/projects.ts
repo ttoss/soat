@@ -12,9 +12,23 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     id: project.publicId,
     name: project.name,
     guardrailIds: project.guardrailIds,
+    maxConcurrentRuns: project.maxConcurrentRuns,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
+};
+
+/**
+ * Validates a `maxConcurrentRuns` value. `null` clears the limit (unlimited);
+ * otherwise it must be an integer ≥ 1. Returns an error message, or `null` when
+ * valid. Pure — the single source of truth shared by every write path.
+ */
+export const validateMaxConcurrentRuns = (value: unknown): string | null => {
+  if (value === null) return null;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
+    return 'max_concurrent_runs must be an integer >= 1, or null to clear it.';
+  }
+  return null;
 };
 
 const getProjectOrThrow = async (id: string) => {
@@ -98,6 +112,7 @@ export const updateProject = async (args: {
   id: string;
   name?: string;
   guardrailIds?: string[] | null;
+  maxConcurrentRuns?: number | null;
 }) => {
   log('updateProject: id=%s name=%s', args.id, args.name);
 
@@ -110,9 +125,19 @@ export const updateProject = async (args: {
     });
   }
 
+  if (args.maxConcurrentRuns !== undefined) {
+    const error = validateMaxConcurrentRuns(args.maxConcurrentRuns);
+    if (error) {
+      throw new DomainError('VALIDATION_FAILED', error);
+    }
+  }
+
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates.name = args.name;
   if (args.guardrailIds !== undefined) updates.guardrailIds = args.guardrailIds;
+  if (args.maxConcurrentRuns !== undefined) {
+    updates.maxConcurrentRuns = args.maxConcurrentRuns;
+  }
 
   await project.update(updates);
 

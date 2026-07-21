@@ -454,6 +454,68 @@ describe('Projects', () => {
 
       expect(response.status).toBe(404);
     });
+
+    test('defaults to null (unlimited) max_concurrent_runs', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.max_concurrent_runs).toBeNull();
+    });
+
+    test('admin can set max_concurrent_runs', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: 5 });
+
+      expect(response.status).toBe(200);
+      expect(response.body.max_concurrent_runs).toBe(5);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(getRes.body.max_concurrent_runs).toBe(5);
+    });
+
+    test('admin can clear max_concurrent_runs with null', async () => {
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: 3 });
+
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: null });
+
+      expect(response.status).toBe(200);
+      expect(response.body.max_concurrent_runs).toBeNull();
+    });
+
+    test('rejects 0 with 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: 0 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a negative value with 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: -1 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('rejects a non-integer value with 400', async () => {
+      const response = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ max_concurrent_runs: 2.5 });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
   });
 
   describe('DELETE /api/v1/projects/:id', () => {

@@ -7,14 +7,22 @@ import { computeNodeIdempotencyKey } from 'src/lib/orchestrationIdempotency';
 import { executeAndRecordNode } from 'src/lib/orchestrationNodeRecorder';
 import {
   ackRunTask,
+  claimLatencySnapshot,
   claimRunTasks,
   enqueueRunTask,
+  resetClaimLatencyRing,
   retryRunTask,
 } from 'src/lib/orchestrationQueue';
-import { drainQueueOnce, handleRunTask } from 'src/lib/orchestrationWorker';
+import { getQueueStats } from 'src/lib/orchestrationQueueStats';
+import {
+  drainQueueOnce,
+  effectiveClaimLimit,
+  handleRunTask,
+  inFlightTaskCount,
+} from 'src/lib/orchestrationWorker';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient } from '../../testClient';
+import { authenticatedTestClient, testClient } from '../../testClient';
 
 // The Postgres queue driver + run-scoped idempotency keys (orchestration-queue
 // P1). The in-process worker kick is disabled here so tasks are claimed/driven
@@ -665,6 +673,351 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         where: { runId: run.id as number },
       });
       expect(remaining).toHaveLength(0);
+    });
+  });
+
+  // Per-project concurrency limit (D8/D9): a project's `max_concurrent_runs`
+  // caps how many of its runs may hold a claimed, lease-valid task at once. It
+  // is enforced at claim time — excess tasks stay queued (never failed / never
+  // re-enqueued with a bumped attempt count).
+  describe('per-project concurrency limit at claim time', () => {
+    let simpleOrchPk: number;
+
+    const seedQueuedRun = async (): Promise<{
+      runId: number;
+      taskId: number;
+    }> => {
+      const run = await db.OrchestrationRun.create({
+        orchestrationId: simpleOrchPk,
+        projectId: projectPk,
+        status: 'queued',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+      });
+      const task = await enqueueRunTask({
+        runId: run.id as number,
+        kind: 'continue',
+      });
+      return { runId: run.id as number, taskId: task.id as number };
+    };
+
+    beforeAll(async () => {
+      simpleOrchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Concurrency Limit',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+    });
+
+    afterEach(async () => {
+      // Reset the project limit so unrelated tests see the default (unlimited).
+      await db.Project.update(
+        { maxConcurrentRuns: null },
+        { where: { id: projectPk } }
+      );
+    });
+
+    const setLimit = async (limit: number | null): Promise<void> => {
+      await db.Project.update(
+        { maxConcurrentRuns: limit },
+        { where: { id: projectPk } }
+      );
+    };
+
+    test('max=1: only one of three queued runs is claimed; the rest stay queued', async () => {
+      await setLimit(1);
+      await seedQueuedRun();
+      await seedQueuedRun();
+      await seedQueuedRun();
+
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(1);
+
+      // The two unclaimed tasks are still queued (unclaimed, attempts unbumped).
+      const unclaimed = await db.OrchestrationRunTask.findAll({
+        where: { claimedAt: null },
+      });
+      expect(unclaimed).toHaveLength(2);
+      for (const t of unclaimed) {
+        expect(t.attempts).toBe(0);
+      }
+    });
+
+    test('self-exclusion: two tasks of the same run are both claimable under max=1', async () => {
+      await setLimit(1);
+      const run = await db.OrchestrationRun.create({
+        orchestrationId: simpleOrchPk,
+        projectId: projectPk,
+        status: 'queued',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+      });
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      // One run takes one slot; its own second task is not blocked by itself.
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(2);
+    });
+
+    test('null limit is unlimited: all queued runs are claimed', async () => {
+      await setLimit(null);
+      await seedQueuedRun();
+      await seedQueuedRun();
+      await seedQueuedRun();
+
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(3);
+    });
+
+    test('a run already holding a claimed lease-valid task occupies the only slot', async () => {
+      await setLimit(1);
+      // Run A's task is claimed and its lease is valid → it holds the slot.
+      await seedQueuedRun();
+      const firstClaim = await claimRunTasks({ limit: 10 });
+      expect(firstClaim).toHaveLength(1);
+
+      // Run B is queued but the single slot is taken.
+      await seedQueuedRun();
+      const secondClaim = await claimRunTasks({ limit: 10 });
+      expect(secondClaim).toHaveLength(0);
+
+      // Once A's task is acked, the slot frees and B is claimable.
+      await ackRunTask({ id: firstClaim[0].id as number });
+      const thirdClaim = await claimRunTasks({ limit: 10 });
+      expect(thirdClaim).toHaveLength(1);
+    });
+
+    test('max=2: two runs claimed, the third stays queued', async () => {
+      await setLimit(2);
+      await seedQueuedRun();
+      await seedQueuedRun();
+      await seedQueuedRun();
+
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(2);
+    });
+
+    test('claims across two limited projects each keep their own slot', async () => {
+      await setLimit(1);
+      // A second limited project. The claim gate keys on the run's project, so
+      // the run can reuse the existing orchestration. Two distinct limited
+      // projects exercise the ascending advisory-lock ordering.
+      const otherProject = await db.Project.create({
+        name: `concurrency-other-${Math.floor(performance.now())}`,
+        maxConcurrentRuns: 1,
+      });
+      await seedQueuedRun();
+      const otherRun = await db.OrchestrationRun.create({
+        orchestrationId: simpleOrchPk,
+        projectId: otherProject.id as number,
+        status: 'queued',
+        state: {},
+        activeNodes: [],
+        artifacts: {},
+        input: {},
+      });
+      await enqueueRunTask({
+        runId: otherRun.id as number,
+        kind: 'continue',
+      });
+
+      // One slot per project → one run from each is claimed (two total).
+      const claimed = await claimRunTasks({ limit: 10 });
+      expect(claimed).toHaveLength(2);
+    });
+  });
+
+  // Claim-latency ring buffer feeding the queue-stats endpoint.
+  describe('claim-latency snapshot', () => {
+    beforeEach(() => {
+      resetClaimLatencyRing();
+    });
+
+    test('is null with no recent claims and populated after a claim', async () => {
+      expect(claimLatencySnapshot().p50).toBeNull();
+      expect(claimLatencySnapshot().p95).toBeNull();
+      expect(claimLatencySnapshot().windowSeconds).toBe(300);
+
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Latency',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      await claimRunTasks({ limit: 5 });
+
+      const snapshot = claimLatencySnapshot();
+      expect(snapshot.p50).not.toBeNull();
+      expect(snapshot.p95).not.toBeNull();
+      expect(snapshot.p50 as number).toBeGreaterThanOrEqual(0);
+    });
+  });
+
+  // Global per-worker concurrency cap (D10): ORCHESTRATION_WORKER_CONCURRENCY
+  // bounds simultaneously-claimed tasks across ticks; ORCHESTRATION_WORKER_BATCH
+  // is the per-tick size beneath it.
+  describe('global worker concurrency cap', () => {
+    afterEach(() => {
+      delete process.env.ORCHESTRATION_WORKER_CONCURRENCY;
+    });
+
+    test('effectiveClaimLimit: min(batch, concurrency - inFlight); unset = batch', () => {
+      expect(
+        effectiveClaimLimit({ batch: 10, concurrency: undefined, inFlight: 4 })
+      ).toBe(10);
+      expect(
+        effectiveClaimLimit({ batch: 10, concurrency: 2, inFlight: 0 })
+      ).toBe(2);
+      expect(
+        effectiveClaimLimit({ batch: 10, concurrency: 5, inFlight: 4 })
+      ).toBe(1);
+      expect(
+        effectiveClaimLimit({ batch: 10, concurrency: 2, inFlight: 2 })
+      ).toBe(0);
+      expect(
+        effectiveClaimLimit({ batch: 3, concurrency: 10, inFlight: 0 })
+      ).toBe(3);
+    });
+
+    test('inFlightTaskCount is 0 between awaited drains', () => {
+      // Each drainQueueOnce awaits its tasks, so no task is in flight afterward.
+      expect(inFlightTaskCount()).toBe(0);
+    });
+
+    test('a drain with CONCURRENCY=2 claims at most 2 tasks from a larger backlog', async () => {
+      process.env.ORCHESTRATION_WORKER_CONCURRENCY = '2';
+      const orchId = await createOrchestration({
+        name: 'Concurrency Drain',
+        nodes: [{ id: 'start', type: 'transform', expression: 'ok' }],
+        edges: [],
+      });
+      // Seed a 5-task backlog of independent queued runs.
+      for (let i = 0; i < 5; i += 1) {
+        await startOrchestrationRun({
+          orchestrationPublicId: orchId,
+          projectId: projectPk,
+          projectIds: [projectPk],
+          input: {},
+        });
+      }
+
+      const firstDrain = await drainQueueOnce();
+      expect(firstDrain).toBeLessThanOrEqual(2);
+      expect(firstDrain).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // GET /api/v1/orchestrations/queue/stats
+  describe('GET /api/v1/orchestrations/queue/stats', () => {
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get('/api/v1/orchestrations/queue/stats');
+      expect(res.status).toBe(401);
+    });
+
+    test('a user without orchestrations:GetQueueStats gets 403', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/orchestrations/queue/stats'
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('admin gets the documented snake_case shape', async () => {
+      // Seed a queued task so per_project has at least one row.
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Stats',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/orchestrations/queue/stats'
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.driver).toBe('postgres');
+      expect(typeof res.body.queue_depth).toBe('number');
+      expect(typeof res.body.claimed_tasks).toBe('number');
+      expect(res.body).toHaveProperty('oldest_queued_age_seconds');
+      expect(res.body.claim_latency_ms).toHaveProperty('p50');
+      expect(res.body.claim_latency_ms).toHaveProperty('p95');
+      expect(res.body.claim_latency_ms.window_seconds).toBe(300);
+      expect(Array.isArray(res.body.per_project)).toBe(true);
+      const row = res.body.per_project.find((r: { project_id: string }) => {
+        return r.project_id === projectId;
+      });
+      expect(row).toBeDefined();
+      expect(row.queued).toBeGreaterThanOrEqual(1);
+    });
+
+    test('getQueueStats reports queued and claimed counts for a project', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Stats Counts',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      const before = await getQueueStats();
+      const beforeRow = before.perProject.find((r) => {
+        return r.projectId === projectId;
+      });
+      expect(beforeRow?.queued).toBeGreaterThanOrEqual(1);
+
+      await claimRunTasks({ limit: 10 });
+
+      const after = await getQueueStats();
+      const afterRow = after.perProject.find((r) => {
+        return r.projectId === projectId;
+      });
+      expect(afterRow?.claimed).toBeGreaterThanOrEqual(1);
+    });
+
+    test('a scoped project list restricts the per_project breakdown', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Stats Scoped',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      const stats = await getQueueStats({ projectIds: [projectPk] });
+      expect(
+        stats.perProject.every((r) => {
+          return r.projectId === projectId;
+        })
+      ).toBe(true);
+      expect(
+        stats.perProject.find((r) => {
+          return r.projectId === projectId;
+        })?.queued
+      ).toBeGreaterThanOrEqual(1);
+    });
+
+    test('an empty project list yields an empty per_project breakdown', async () => {
+      const stats = await getQueueStats({ projectIds: [] });
+      expect(stats.perProject).toEqual([]);
+      // Global counts are still reported regardless of the (empty) scope.
+      expect(typeof stats.queueDepth).toBe('number');
     });
   });
 });
