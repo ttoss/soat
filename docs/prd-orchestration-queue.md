@@ -11,6 +11,10 @@
 > phase deliverables below. Where an older revision of this document was
 > ambiguous, the decisions section wins.
 
+> **Decision (2026-07-21):** the three design forks for Phase 2 — limit
+> storage, slot semantics, and global-cap semantics — were likewise resolved
+> ahead of implementation and recorded as **D8–D10** in the same section.
+
 ## Implementation Status
 
 | Component                                      | Status         | Notes                                                                                       |
@@ -24,15 +28,18 @@
 | Queue abstraction + Postgres driver            | ✅ Implemented | `run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`; `enqueue`/`claim`/`ack`/`retry`    |
 | Run-scoped node idempotency keys               | ✅ Implemented | `{run_id}:{node_id}:{attempt}` written `running` before side effects; completed key reused     |
 | Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint; deploy/ops tooling lands with Phase 2   |
-| Concurrency limits (per project + global)      | ❌ Not started | Phase 2                                                                                       |
+| Concurrency limits (per project + global)      | ❌ Not started | Phase 2 — design forks resolved 2026-07-21 (D8–D10)                                           |
 | Pluggable driver interface + SQS driver        | ❌ Not started | Phase 3 — for deployments that standardize on a managed queue                                  |
 
 ## Resolved design decisions
 
-All dated 2026-07-20. Each was evaluated on correctness, spec compliance,
-implementation effort, long-run maintainability, and migration risk; six of
+D1–D7 (Phase 1) are dated 2026-07-20; D8–D10 (Phase 2) are dated 2026-07-21.
+Each was evaluated on correctness, spec compliance, implementation effort,
+long-run maintainability, and migration risk. Of the Phase 1 forks, six of
 the seven had a dominant option, and the seventh (worker packaging) was
-resolved by scoping choice.
+resolved by scoping choice. Of the Phase 2 forks, two (D9, D10) had a
+dominant option and the third (D8) was resolved as the lowest-regret choice
+with an additive upgrade path.
 
 ### D1 — Claim mechanism: `SELECT … FOR UPDATE SKIP LOCKED`
 
@@ -119,6 +126,70 @@ The HTTP tool executor forwards the literal `run:node:attempt` string as the
 redeliveries by construction, and matches the internal key so a downstream
 incident can be correlated end-to-end. This format is a semi-public contract:
 downstream services are expected to dedupe on it.
+
+### D8 — `max_concurrent_runs` is a nullable column on `Project`, not a quota
+
+The per-project limit is stored as a **nullable `maxConcurrentRuns` integer
+column on the `Project` model** (`null` = unlimited, the default), exposed as
+`max_concurrent_runs` on the project REST resource (`get-project` /
+`update-project`) — not as a new `Quota` metric and not as a standalone
+limits table.
+
+It is deliberately **not** a `Quota`: quotas are monotonic **counters over a
+time window** (`requests`/`tokens`/`cost_usd` × `rolling_1m`…`calendar_month`)
+whose breach behavior is **rejection** (`429` + `Retry-After`) at a request
+boundary. Concurrency is an instantaneous **gauge** with no window dimension,
+enforced at queue **claim time** where there is no request to reject, and its
+breach behavior is **deferral** — the task stays queued and runs later.
+Folding it into `Quota` would reuse only the CRUD shell while special-casing
+the window model, the counter table, both enforcement paths, and the breach
+semantics. A standalone limits table was rejected as premature surface (a
+full module — REST/OpenAPI/SDK/CLI/MCP/permissions/formation/docs — for one
+integer the PRD defines as project-scoped).
+
+The upgrade path is additive: if scoped concurrency limits (`scope: agent`,
+`monitor` mode, breach webhooks) show demand later, a quota-style scoped
+table can land **on top**, with the project column remaining the
+project-wide default — exactly how `scope: project` quotas layer under
+`scope: agent` ones. Nothing about the column is a dead end.
+
+### D9 — Only actively-running runs occupy a concurrency slot
+
+A project's slot is held by a run that is **actively being driven** — one
+with a claimed, lease-valid task (equivalently, `status: running`). Parked
+runs (`sleeping` / `awaiting_input`) hold **no task and no slot**: a run
+sleeping on a 1-hour `delay` node consumes zero runtime resources, and the
+limit's purpose (noisy-neighbor fairness, provider rate limits) is not
+served by letting it starve the project's other runs.
+
+This is both the better behavior **and** the simpler implementation: the
+limit is enforced at claim time, and parked runs hold no task, so counting
+only actively-driven runs is the natural query — counting parked runs would
+require extra logic. There is no overshoot loophole: `wake` / `resume` tasks
+pass through the same claim gate, so a waking run against a full cap simply
+stays queued until a slot frees.
+
+**Self-exclusion:** a run's own pending task never counts the run against
+itself — otherwise a multi-round run under `max_concurrent_runs = 1` would
+block its own `continue` task and deadlock. The claim gate counts *other*
+runs of the project.
+
+### D10 — `ORCHESTRATION_WORKER_CONCURRENCY` is a true cross-tick in-flight cap
+
+The global setting caps the number of **simultaneously claimed, unacked
+tasks** held by a worker process at any instant — not merely the per-tick
+claim size. Each tick claims at most
+`CONCURRENCY − currentlyClaimed`; the existing
+`ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size beneath it
+(effective claim limit = `min(BATCH, CONCURRENCY − inFlight)`).
+
+Aliasing `BATCH` was rejected because it cannot satisfy the acceptance
+criterion — "claimed, lease-valid tasks never exceed N **at any point**": a
+slow task spanning ticks would let real in-flight work exceed N while each
+individual tick stayed within bounds. Unset, the variable preserves today's
+behavior (batch-bounded per tick, no cross-tick cap). The cap is
+**per worker process** — a fleet of P workers bounds global concurrency at
+`P × CONCURRENCY`, which is the standard worker-pool contract.
 
 ## Implementation Phases
 
@@ -209,8 +280,15 @@ noisy-neighbor fairness and LLM provider rate limits.
 
 - `max_concurrent_runs` per project (default unlimited; enforced at claim
   time — excess tasks stay queued, which is what a queued scheduled
-  [trigger](../packages/website/docs/modules/triggers.md) leans on)
-- Global worker concurrency setting (`ORCHESTRATION_WORKER_CONCURRENCY`)
+  [trigger](../packages/website/docs/modules/triggers.md) leans on). Stored
+  as a nullable column on `Project` and exposed via `get-project` /
+  `update-project` (**D8**). Only actively-driven runs occupy a slot —
+  parked (`sleeping` / `awaiting_input`) runs release theirs, and a run's
+  own task never blocks on the run itself (**D9**)
+- Global worker concurrency setting (`ORCHESTRATION_WORKER_CONCURRENCY`) — a
+  cross-tick cap on simultaneously claimed, unacked tasks per worker
+  process; `ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size
+  beneath it (**D10**)
 - Deploy/ops hardening for the separate-process worker deferred from Phase 1
   (**D4**): compose service, healthcheck, graceful shutdown (finish claimed
   tasks, stop claiming), smoke coverage
@@ -226,9 +304,19 @@ noisy-neighbor fairness and LLM provider rate limits.
   one run is `in_progress` at any poll, and all three eventually reach
   `succeeded` (no run is dropped or failed by the limit)
 - With `ORCHESTRATION_WORKER_CONCURRENCY=2` and a 20-task backlog, the number
-  of claimed, lease-valid tasks never exceeds 2 at any point
+  of claimed, lease-valid tasks never exceeds 2 at any point (cross-tick, per
+  **D10** — not merely per claim batch)
 - Tasks held back by a project limit stay queued and are claimed (not
   re-enqueued with incremented `attempts`, not failed) once a slot frees
+- A parked run holds no slot (**D9**): with `max_concurrent_runs = 1`, a run
+  sleeping on a `delay` node does not prevent another run of the same
+  project from being claimed and driven
+- No self-deadlock (**D9**): with `max_concurrent_runs = 1`, a multi-round
+  run's own `continue` tasks are claimed normally and the run reaches
+  `succeeded`
+- `max_concurrent_runs` is settable and clearable via `update-project`
+  (integer ≥ 1 or `null`; `0` and negatives rejected with `400`) and returned
+  by `get-project`
 - `GET /api/v1/orchestrations/queue/stats` returns the documented snake_case
   shape with every key present; returns `401` unauthenticated and `403`
   without `orchestrations:GetQueueStats`
@@ -365,6 +453,12 @@ anything more waits for demonstrated demand.
 > follows the repo rule that every model carries a `publicId` with a
 > registered prefix — `orch_task_`, consistent with `orch_` / `orch_run_` —
 > so queue stats and future admin tooling can reference tasks safely.
+
+### Project (existing — new column, Phase 2)
+
+| Column            | Type    | Description                                                        |
+| ----------------- | ------- | ------------------------------------------------------------------ |
+| maxConcurrentRuns | INTEGER | Nullable; `null` = unlimited (default). Exposed as `max_concurrent_runs` on the project resource (D8); integer ≥ 1. Enforced at task claim time per D9. |
 
 ## REST API
 
