@@ -189,4 +189,47 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
     });
     expect(handled).toBe(false);
   });
+
+  test('an approval with no agent is not re-handed-off', async () => {
+    const approval = await fileClientApproval();
+    const handled = await emitClientToolReHandoff({
+      item: { ...approval, agentId: null },
+      projectInternalId: projectId,
+    });
+    expect(handled).toBe(false);
+  });
+
+  test('a proposal referencing a missing tool is not re-handed-off', async () => {
+    const approval = await fileClientApproval();
+    const handled = await emitClientToolReHandoff({
+      item: {
+        ...approval,
+        proposedAction: {
+          toolId: 'tool_missing000000',
+          action: 'x',
+          arguments: {},
+        },
+      },
+      projectInternalId: projectId,
+    });
+    expect(handled).toBe(false);
+  });
+
+  test('a session-backed client approval seeds a session-scoped re-handoff', async () => {
+    const approval = await fileClientApproval();
+    const handled = await emitClientToolReHandoff({
+      // sessionId is read from the in-memory item (provenance / toolContext); it
+      // need not be a persisted session for the re-handoff to be seeded.
+      item: { ...approval, sessionId: 'sess_rehandoff' },
+      projectInternalId: projectId,
+    });
+    expect(handled).toBe(true);
+
+    const seeded = [...pendingGenerations.values()].find((pending) => {
+      return pending.pendingToolCalls.some((call) => {
+        return call.toolName === 'write_local_file';
+      });
+    });
+    expect(seeded).toBeDefined();
+  });
 });

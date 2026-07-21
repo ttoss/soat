@@ -123,6 +123,10 @@ export const emitClientToolReHandoff = async (args: {
   });
 
   const traceId = generatePublicId(PUBLIC_ID_PREFIXES.trace);
+  // Not wrapped in `.catch`: the initiator, agent, and project all exist in the
+  // real flow (this runs off an approval those rows produced). A genuine failure
+  // propagates to runToolCallContinuation's catch, which is the right place to
+  // fall back — swallowing here would seed a pending generation with no DB row.
   await createGenerationRecord({
     publicId: ctx.generationId,
     projectId: args.projectInternalId,
@@ -131,12 +135,6 @@ export const emitClientToolReHandoff = async (args: {
     initiatorGenerationId: args.item.generationId ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
-  }).catch((error) => {
-    log(
-      'emitClientToolReHandoff: createGenerationRecord failed id=%s error=%s',
-      args.item.id,
-      error instanceof Error ? error.message : String(error)
-    );
   });
 
   seedReHandoffPending({
