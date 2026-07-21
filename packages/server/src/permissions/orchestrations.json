@@ -60,6 +60,11 @@
       "operationId": "resumeRun",
       "action": "orchestrations:ResumeRun",
       "description": "Resume a paused orchestration run from its last checkpoint"
+    },
+    {
+      "operationId": "getQueueStats",
+      "action": "orchestrations:GetQueueStats",
+      "description": "Read orchestration queue depth and claim-latency metrics"
     }
   ]
 }

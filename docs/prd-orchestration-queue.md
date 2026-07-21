@@ -28,7 +28,7 @@
 | Queue abstraction + Postgres driver            | ✅ Implemented | `run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`; `enqueue`/`claim`/`ack`/`retry`    |
 | Run-scoped node idempotency keys               | ✅ Implemented | `{run_id}:{node_id}:{attempt}` written `running` before side effects; completed key reused     |
 | Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint; deploy/ops tooling lands with Phase 2   |
-| Concurrency limits (per project + global)      | ❌ Not started | Phase 2 — design forks resolved 2026-07-21 (D8–D10)                                           |
+| Concurrency limits (per project + global)      | ✅ Implemented | Phase 2 — `max_concurrent_runs` per project + `ORCHESTRATION_WORKER_CONCURRENCY` per worker; queue-stats endpoint; graceful worker shutdown (D8–D10) |
 
 ## Resolved design decisions
 
@@ -270,28 +270,42 @@ for idempotent [usage metering](./prd-usage-metering.md), and the `RunTask`
 substrate async [evaluations](./prd-evaluations.md) Phase 2 rides
 (`kind: eval_item`).
 
-### Phase 2 — Concurrency Limits ❌ Not started
+### Phase 2 — Concurrency Limits ✅ Implemented
+
+> Shipped: `max_concurrent_runs` nullable column on `Project`
+> (`get-project` / `update-project`), per-project enforcement at queue claim
+> time (`selectClaimableUnderLimit` + a per-project advisory lock so the cap
+> holds across a worker fleet), the `ORCHESTRATION_WORKER_CONCURRENCY`
+> cross-tick cap (`effectiveClaimLimit`), the
+> `GET /api/v1/orchestrations/queue/stats` endpoint
+> (`orchestrationQueueStats.ts`) behind `orchestrations:GetQueueStats`, and
+> graceful worker shutdown (`shutdownOrchestrationWorker`, wired to
+> `SIGTERM`/`SIGINT` in `worker.ts`). The remaining Phase-1-deferred ops
+> tooling — a dedicated compose service, worker healthcheck, and CI wiring for
+> a standalone worker fleet — is left for a follow-up; single-process and
+> `node dist/worker.js` deployments both run the limits and stats today.
 
 **Goal:** Parallelism is bounded per tenant and globally, protecting both
 noisy-neighbor fairness and LLM provider rate limits.
 
 **Deliverables:**
 
-- `max_concurrent_runs` per project (default unlimited; enforced at claim
+- ✅ `max_concurrent_runs` per project (default unlimited; enforced at claim
   time — excess tasks stay queued, which is what a queued scheduled
   [trigger](../packages/website/docs/modules/triggers.md) leans on). Stored
   as a nullable column on `Project` and exposed via `get-project` /
   `update-project` (**D8**). Only actively-driven runs occupy a slot —
   parked (`sleeping` / `awaiting_input`) runs release theirs, and a run's
   own task never blocks on the run itself (**D9**)
-- Global worker concurrency setting (`ORCHESTRATION_WORKER_CONCURRENCY`) — a
+- ✅ Global worker concurrency setting (`ORCHESTRATION_WORKER_CONCURRENCY`) — a
   cross-tick cap on simultaneously claimed, unacked tasks per worker
   process; `ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size
   beneath it (**D10**)
-- Deploy/ops hardening for the separate-process worker deferred from Phase 1
-  (**D4**): compose service, healthcheck, graceful shutdown (finish claimed
-  tasks, stop claiming), smoke coverage
-- Queue depth and claim latency exposed via
+- ⚠️ Deploy/ops hardening for the separate-process worker deferred from Phase 1
+  (**D4**): graceful shutdown (finish claimed tasks, stop claiming) **shipped**
+  via `SIGTERM`/`SIGINT` handlers in `worker.ts`; the compose service,
+  dedicated healthcheck, and fleet smoke coverage remain a follow-up
+- ✅ Queue depth and claim latency exposed via
   `GET /api/v1/orchestrations/queue/stats` (see
   [Queue metrics endpoint](#queue-metrics-endpoint)), guarded by a new
   `orchestrations:GetQueueStats` action in

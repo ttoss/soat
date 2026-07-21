@@ -230,7 +230,7 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 
 **Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
 
-**Separate worker process.** The worker loop is an extractable module that runs inside the API process by default. `node dist/worker.js` (built from `src/worker.ts`) starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). Deploy/ops tooling for a worker fleet lands with concurrency limits (Phase 2).
+**Separate worker process.** The worker loop is an extractable module that runs inside the API process by default. `node dist/worker.js` (built from `src/worker.ts`) starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). On `SIGTERM`/`SIGINT` the worker shuts down gracefully: it stops claiming new tasks and waits for tasks it has already claimed to finish before exiting (tasks not finished before the timeout are left un-acked and redelivered, so no work is lost).
 
 **Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round.
 
@@ -263,6 +263,22 @@ The scheduler tick (which enqueues `wake` tasks for due `sleeping` runs and `con
 | `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`) — how often the worker drains the queue. |
 | `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). |
 | `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to stop the API process from running the in-process worker loop and its enqueue kicks, so a dedicated `worker.js` process owns draining. |
+| `ORCHESTRATION_WORKER_BATCH` | No | Maximum tasks a worker claims per tick (default `10`). |
+| `ORCHESTRATION_WORKER_CONCURRENCY` | No | Global cap on simultaneously claimed, unacked tasks **per worker process** (unset = no cap, bounded only by the batch size). Each tick claims at most `CONCURRENCY − in-flight`. A fleet of P workers bounds global parallelism at `P × CONCURRENCY`. See [Concurrency limits](#concurrency-limits). |
+
+### Concurrency limits
+
+Parallelism is bounded on two axes so a busy tenant can't starve others and the fleet can't outrun a provider's rate limits.
+
+- **Per project.** A project's [`max_concurrent_runs`](./projects.md) caps how many of its runs may be **actively driven at once**. It is enforced at queue **claim time**: while the project already has that many runs holding a claimed, lease-valid task, its further tasks stay **queued** (they are never failed and never re-enqueued with a bumped delivery count) until a slot frees. `null` (the default) means unlimited.
+
+  Only actively-driven runs occupy a slot — a run parked on a `delay`/`poll` wait (`sleeping`) or a `human` node (`awaiting_input`) holds **no** task and therefore **no** slot. A run never blocks on itself, so a multi-round run under `max_concurrent_runs: 1` continues normally.
+
+- **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps the tasks a single worker process holds claimed-and-unacked at any instant, across ticks (not merely per claim batch). `ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size beneath it, so the effective claim each tick is `min(BATCH, CONCURRENCY − in-flight)`.
+
+### Queue metrics
+
+`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window, no external metrics stack), and a per-project breakdown. It is guarded by the `orchestrations:GetQueueStats` action (intended for admin/operator policies); a project-scoped caller sees only their own projects under `per_project`. This is distinct from the unauthenticated `GET /health` liveness probe, which stays a bare `{"status":"ok"}`.
 
 ### State and Mappings
 

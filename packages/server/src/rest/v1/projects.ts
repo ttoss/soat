@@ -127,10 +127,25 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const name = typeof body.name === 'string' ? body.name : undefined;
   const guardrailIds = parseGuardrailIds(body.guardrailIds);
+  // Distinguish "absent" (leave as-is) from an explicit `null` (clear the
+  // limit). Any non-null, non-integer value is forwarded so the lib rejects it
+  // with a 400 rather than being silently dropped here.
+  const maxConcurrentRuns = Object.prototype.hasOwnProperty.call(
+    body,
+    'maxConcurrentRuns'
+  )
+    ? (body.maxConcurrentRuns as number | null)
+    : undefined;
 
-  if (name === undefined && guardrailIds === undefined) {
+  if (
+    name === undefined &&
+    guardrailIds === undefined &&
+    maxConcurrentRuns === undefined
+  ) {
     ctx.status = 400;
-    ctx.body = { error: 'name or guardrail_ids is required' };
+    ctx.body = {
+      error: 'name, guardrail_ids, or max_concurrent_runs is required',
+    };
     return;
   }
 
@@ -151,6 +166,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     id: ctx.params.project_id,
     name,
     guardrailIds,
+    maxConcurrentRuns,
   });
 
   ctx.body = project;
