@@ -158,6 +158,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['tool', 'Tool `properties` must be an object'],
   ['document', 'Document `properties` must be an object'],
   ['workflow', 'Workflow `properties` must be an object'],
+  ['guardrail', 'Guardrail `properties` must be an object'],
 ];
 
 // Every module — including `document` since it now re-chunks on update —
@@ -632,6 +633,55 @@ const CASES: RoundTripCase[] = [
         },
         update: { name: `Workflow ${seed} updated` },
         expectAfterUpdate: { name: `Workflow ${seed} updated` },
+      };
+    },
+  },
+  {
+    resourceType: 'guardrail',
+    build: (seed) => {
+      return {
+        create: {
+          name: `Guardrail ${seed}`,
+          class: 'B',
+          default_class: 'C',
+          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          escalate: true,
+          context_tool_id: converterToolId,
+          context_mode: 'merge',
+        },
+        expectRead: {
+          name: `Guardrail ${seed}`,
+          class: 'B',
+          default_class: 'C',
+          guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+          escalate: true,
+          context_tool_id: converterToolId,
+          context_mode: 'merge',
+        },
+        camel: {
+          name: `Guardrail Camel ${seed}`,
+          class: 'A',
+          defaultClass: 'C',
+          contextToolId: converterToolId,
+        },
+        camelExpectRead: {
+          name: `Guardrail Camel ${seed}`,
+          class: 'A',
+          default_class: 'C',
+          context_tool_id: converterToolId,
+        },
+        // Only `class` is re-sent on update — the document is a single atomic
+        // write, so previously set default_class/guard/escalate are dropped
+        // rather than merged (matches `updateGuardrail`'s full-replace
+        // contract for `document`).
+        update: { name: `Guardrail ${seed} Updated`, class: 'C' },
+        expectAfterUpdate: {
+          name: `Guardrail ${seed} Updated`,
+          class: 'C',
+          default_class: null,
+          guard: null,
+          escalate: null,
+        },
       };
     },
   },
@@ -1338,6 +1388,60 @@ describe('policiesFormationModule', () => {
         resourceType: 'policy',
         projectId: internalProjectId,
         resolvedProperties: { document: {}, someUnknownKey: 'y' },
+      })
+    ).rejects.toThrow(/some_unknown_key/);
+  });
+});
+
+// ── guardrail action-class document semantics ───────────────────────────────
+
+describe('guardrailsFormationModule', () => {
+  test('create rejects an invalid class literal', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'guardrail',
+        projectId: internalProjectId,
+        resolvedProperties: { name: 'Bad Class', class: 'Z' },
+      })
+    ).rejects.toThrow(/class.*literal/i);
+  });
+
+  test('create rejects an escalate that is not a boolean', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'guardrail',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'Bad Escalate',
+          class: 'A',
+          escalate: 'yes',
+        },
+      })
+    ).rejects.toThrow(/escalate/i);
+  });
+
+  test('update rejects an invalid class literal', async () => {
+    const guardrailId = await applyCreateResource({
+      resourceType: 'guardrail',
+      projectId: internalProjectId,
+      resolvedProperties: { name: 'Valid Guardrail', class: 'A' },
+    });
+
+    await expect(
+      applyUpdateResource({
+        resourceType: 'guardrail',
+        physicalResourceId: guardrailId,
+        resolvedProperties: { class: 'Z' },
+      })
+    ).rejects.toThrow(/class.*literal/i);
+  });
+
+  test('rejects an unknown camelCase property key after normalization', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'guardrail',
+        projectId: internalProjectId,
+        resolvedProperties: { name: 'X', class: 'A', someUnknownKey: 'y' },
       })
     ).rejects.toThrow(/some_unknown_key/);
   });

@@ -3241,6 +3241,29 @@ $SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
 echo "Formation quota resource verified."
 
+# Guardrail resource — a formation declares an action-class guardrail (F-17),
+# which must be queryable via get-guardrail and removed when the formation is
+# torn down.
+echo "--- Creating formation with a guardrail resource ---"
+GUARDRAIL_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-guardrail-formation" \
+  --template '{"resources":{"budgetGuardrail":{"type":"guardrail","properties":{"name":"smoke-formation-guardrail","class":"B","default_class":"C","guard":{"<":[{"var":"soat.usage.cost_usd_24h"},1000]}}}}}')
+GUARDRAIL_FORMATION_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.id')
+GUARDRAIL_PHYS_ID=$(printf '%s\n' "$GUARDRAIL_FORMATION_RESP" | jq -r '.resources[0].physical_resource_id')
+if ! printf '%s\n' "$GUARDRAIL_PHYS_ID" | grep -q '^guard_'; then
+  echo "ERROR: create-formation did not create a guardrail row" >&2
+  echo "$GUARDRAIL_FORMATION_RESP" >&2
+  exit 1
+fi
+if [ "$($SOAT_CLI get-guardrail --guardrail-id "$GUARDRAIL_PHYS_ID" | jq -r '.document.class')" != "B" ]; then
+  echo "ERROR: formation-created guardrail not queryable with class B" >&2
+  exit 1
+fi
+$SOAT_CLI delete-formation --formation_id "$GUARDRAIL_FORMATION_ID"
+expect_cli_error_status 404 get-guardrail --guardrail-id "$GUARDRAIL_PHYS_ID"
+echo "Formation guardrail resource verified."
+
 # Update
 echo "--- Updating formation ---"
 FORMATION_UPDATE_RESP=$($SOAT_CLI update-formation \
