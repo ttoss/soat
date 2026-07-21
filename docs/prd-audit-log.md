@@ -1,23 +1,23 @@
 # PRD: Audit Log
 
 > Generalizes the `ActivityEntry` audit record introduced in
-> [prd-guardrails.md](./prd-guardrails.md) (guardrail evaluation records
-> become one `detail` kind of the entries defined here) and provides the
-> activity substrate [prd-approvals.md](./prd-approvals.md) assumes.
+> [prd-guardrails.md](./prd-guardrails.md) — guardrail evaluation records
+> become one `detail` kind of the entries defined here; this PRD defines the
+> `detail->>'kind'` convention, the kind's schema is owned by the guardrails
+> PRD — and provides the activity substrate
+> [prd-approvals.md](./prd-approvals.md) assumes.
 
 ## Implementation Status
 
 | Component                                          | Status         | Notes                                                            |
 | -------------------------------------------------- | -------------- | ---------------------------------------------------------------- |
+| IAM SRN precision at `isAllowed` call sites        | ❌ Not started | Phase 0 prerequisite — ~80 call sites move from `soat:{project}:*:*` to `buildSrn` SRNs |
 | Request-id middleware (`X-Request-Id`)             | ❌ Not started | Prerequisite — nothing in the server generates a request id today |
 | `AuditEntry` model (append-only, `audit_` prefix)  | ❌ Not started | No UPDATE/DELETE path, enforced at the model layer               |
 | Post-commit write hook at the authorization choke point | ❌ Not started | Wraps `ctx.authUser.isAllowed`; fire-and-forget, bounded queue |
-| Read API (`GET /api/v1/audit-log`, `/{entry_id}`)  | ❌ Not started | Filters: `action`, `actor_id`, `resource_public_id`, `resource_srn`, `from`/`to` |
+| Read API (`GET /api/v1/audit-log`, `/{entry_id}`)  | ❌ Not started | Filters: `action`, `actor_id`, `project_id`, `resource_public_id`, `resource_srn`, `from`/`to` |
 | `audit` permission actions + policy wiring         | ❌ Not started | `audit:ListAuditEntries`, `audit:GetAuditEntry`                  |
-| Guardrails `ActivityEntry` as a `detail` kind      | ❌ Not started | Depends on [prd-guardrails.md](./prd-guardrails.md) Phase 3      |
-| Retention sweep (`AUDIT_RETENTION_DAYS`)           | ❌ Not started | Daily tick, `orchestrationScheduler` interval pattern            |
-| Read-audit config flag                             | ❌ Not started | Future phase; off by default                                     |
-| `audit.entry_created` webhook event                | ❌ Not started | Optional future phase                                            |
+| Retention sweep (`AUDIT_RETENTION_DAYS`)           | ❌ Not started | Ships in Phase 1; daily tick, `orchestrationScheduler` interval pattern |
 
 ## Problem
 
@@ -51,11 +51,11 @@ context) that nothing currently writes.
   | What did the agent do inside a run?        | Traces    |
   | What did a principal do to the platform?   | Audit log |
 
-- **Read auditing in v1** — reads are high-volume and low-value; a config
-  flag in Phase 3, off by default.
+- **Read auditing in v1** — reads are high-volume and low-value; a possible
+  future config flag, off by default.
 - **SIEM integrations / dedicated export job** — NDJSON export works through
   the list endpoint's pagination; an `audit.entry_created` webhook event is a
-  Phase 3 sketch, push-to-SIEM stays out of scope.
+  future-work sketch, push-to-SIEM stays out of scope.
 - **Tamper evidence** — hash-chaining entries is a one-line future sketch,
   not v1.
 
@@ -79,15 +79,17 @@ call site in the codebase passes the project-wildcard SRN
 against `soat:${secret.projectId}:*:*`). The choke point therefore reliably
 knows *action + project*, not the individual resource.
 
-**v1 resolution:** keep the wildcard `resourceSrn` as-recorded (it is the
-fact of what authorization evaluated), and have the audit middleware
-denormalize the actual target into `resourcePublicId` from the request
-itself — any `*_id` route param, or the response body `id` on creates.
-Upgrading call sites to pass precise SRNs is deferred to a separate
-IAM-granularity effort (it has independent value: today, policy statements
-scoped finer than a project are effectively unenforceable because checks
-always use wildcards — but it is a cross-cutting change to ~80 call sites
-and must not gate this module).
+**Decision: IAM precision ships first (Phase 0).** Before any audit code,
+the call sites are upgraded to pass precise SRNs built with `buildSrn`. This
+is a cross-cutting change to ~80 call sites with value independent of
+auditing: today, policy statements scoped finer than a project are
+effectively unenforceable because every check evaluates against the
+wildcard. With precise SRNs at the choke point, the audit entry records the
+real target from day one — `resourceSrn` is exact and `resourcePublicId` is
+derived from its last segment. The one structural exception is **creates**:
+the check runs before the resource exists, so create call sites target the
+type (`soat:{project}:secret:*`) and the middleware captures
+`resourcePublicId` from the response body `id` instead.
 
 The write hook wraps `ctx.authUser.isAllowed` **after** `authMiddleware`
 attaches it, recording each authorized `(action, resource)` pair on the
@@ -102,9 +104,11 @@ Two wrapping details matter:
 
 - **Multiple `isAllowed` calls per request.** Several routes check more than
   one action per request (`packages/server/src/rest/v1/triggers.ts` makes up
-  to 10 calls). Rule: the **first recorded call is the primary** — it is the
-  route's own permission check, made before any mutation — and produces the
-  entry's `action`/`resourceSrn`; subsequent pairs are appended to
+  to 10 calls). Rule: on a `403` response the **denied pair is primary** —
+  it is the check that actually blocked the request, and labeling the entry
+  with an earlier *allowed* action would misattribute the denial; otherwise
+  the **first recorded call is primary** (it is the route's own permission
+  check, made before any mutation). The remaining pairs are appended to
   `detail.additional_checks` so no decision is lost.
 - **Resolver-internal checks are excluded by construction.** The
   `resolveProjectIds` helpers (`authProjectResolvers.ts`) call `isAllowed`
@@ -136,8 +140,8 @@ prefixes).
 | `actorType`        | string    | `user` \| `api_key`                                                |
 | `actorId`          | string    | Public id of the principal (`user_…` / `key_…`)                    |
 | `action`           | string    | The permission-action string that authorized the request           |
-| `resourceSrn`      | string    | SRN as evaluated by `isAllowed` — in v1 this is the project-wildcard `soat:{project}:*:*` at nearly all call sites |
-| `resourcePublicId` | string    | Denormalized target id, captured by the middleware from `*_id` route params or the response body `id` on creates |
+| `resourceSrn`      | string    | SRN the action targeted (`soat:{project}:{type}:{id}`; type-level `soat:{project}:{type}:*` on creates) — precise after Phase 0 |
+| `resourcePublicId` | string    | Denormalized from the SRN's last segment; on creates, captured from the response body `id` |
 | `status`           | integer   | HTTP status of the response (post-commit)                          |
 | `requestId`        | string    | Per-request correlation id                                         |
 | `ip`               | string    | Client IP                                                          |
@@ -146,9 +150,9 @@ prefixes).
 | `createdAt`        | timestamp | Only timestamp — rows are immutable                                |
 
 Indexes: `(projectId, createdAt)`, `(actorId, createdAt)`,
-`(action, createdAt)`, `(resourcePublicId, createdAt)` — the last one because
-`resourcePublicId`, not the wildcard `resourceSrn`, is the per-resource
-lookup key in v1.
+`(action, createdAt)`, `(resourcePublicId, createdAt)` — the last one is the
+per-resource lookup key (an exact-id lookup, cheaper than a `resourceSrn`
+prefix scan).
 
 **Append-only:** no update/delete lib functions, no REST mutation routes, and
 model-layer hooks reject `UPDATE`/`DELETE`.
@@ -160,7 +164,7 @@ automatically from `packages/server/src/rest/openapi/v1/audit-log.yaml`.
 
 | Method | Path                              | Description                                                                                     |
 | ------ | --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| GET    | `/api/v1/audit-log`               | List entries. Filters: `action`, `actor_id`, `resource_public_id` (exact), `resource_srn` (prefix match — project-level resolution in v1), `from`, `to`; cursor pagination |
+| GET    | `/api/v1/audit-log`               | List entries. Filters: `action`, `actor_id`, `project_id`, `resource_public_id` (exact), `resource_srn` (prefix match, e.g. `soat:{project}:secret:` for all secret actions), `from`, `to`; cursor pagination |
 | GET    | `/api/v1/audit-log/{entry_id}`    | Fetch one entry, including `detail`                                                             |
 
 ## Permissions
@@ -181,11 +185,29 @@ into NDJSON; no dedicated export job in v1.
 
 ## Implementation Phases
 
-### Phase 1 — Request Id + Table + Write Hook + Read API ❌ Not started
+### Phase 0 — IAM SRN Precision (prerequisite) ❌ Not started
+
+Upgrade the ~80 `isAllowed` call sites from `soat:{project}:*:*` to precise
+SRNs built with `buildSrn`: `soat:{project}:{type}:{id}` for operations on
+an existing resource, `soat:{project}:{type}:*` for creates and lists. No
+audit code in this phase — it stands alone and makes resource-level policy
+statements enforceable, which is why it ships regardless of the audit log.
+
+**Acceptance criteria:**
+
+- A policy allowing `secrets:GetSecret` on `soat:{project}:secret:{sec_a}`
+  permits reading `sec_a` and denies reading `sec_b` (today both would be
+  allowed or both denied).
+- No call site passes `soat:{project}:*:*` except where the project itself
+  is the target (e.g. `projects:*` actions).
+- Existing project-wildcard policy documents keep working unchanged
+  (`soat:{project}:*:*` patterns still match precise SRNs).
+
+### Phase 1 — Request Id + Table + Write Hook + Read API + Retention ❌ Not started
 
 Request-id middleware (prerequisite), model, `audit_` prefix, `isAllowed`
-wrapper + post-commit middleware, bounded queue, read routes, OpenAPI spec,
-permission JSON, SDK/CLI regeneration.
+wrapper + post-commit middleware, bounded queue, read routes, retention
+sweep, OpenAPI spec, permission JSON, SDK/CLI regeneration.
 
 **Acceptance criteria:**
 
@@ -193,14 +215,15 @@ permission JSON, SDK/CLI regeneration.
   entries record the same id.
 - Creating then deleting a secret yields exactly two entries with actions
   `secrets:CreateSecret` / `secrets:DeleteSecret`, statuses `201` / `200`,
-  `resource_srn` matching what authorization evaluated
-  (`soat:{project}:*:*` in v1), and `resource_public_id` set to the
-  secret's `sec_…` id — from the response body on the create, from the
-  route param on the delete.
+  SRNs `soat:{project}:secret:*` (create — type-level) and
+  `soat:{project}:secret:{sec_…}` (delete), and `resource_public_id` set to
+  the secret's `sec_…` id on both — from the response body on the create,
+  from the SRN on the delete.
 - A user without `secrets:DeleteSecret` attempting the delete yields one
   entry with `status: 403` and the same action string.
-- A route that makes multiple `isAllowed` calls produces one entry whose
-  `action` is the first (route-level) check, with the remaining pairs in
+- A route that makes multiple `isAllowed` calls produces one entry: on
+  success the primary `action` is the first (route-level) check; on `403`
+  the primary is the denied pair; the remaining pairs land in
   `detail.additional_checks`.
 - `GET /api/v1/audit-log?action=secrets:DeleteSecret` returns both delete
   entries and nothing else; `?resource_public_id=sec_…` returns only that
@@ -208,39 +231,26 @@ permission JSON, SDK/CLI regeneration.
 - GET requests write no entries — including the `isAllowed` calls made
   internally by `resolveProjectIds` for list scoping. Killing the DB
   connection inside the audit writer does not change any request's response.
-
-### Phase 2 — Guardrails Detail Kind + Retention ❌ Not started
-
-Guardrail evaluations write entries with
-`detail.kind = "guardrail_evaluation"` per the schema in
-[prd-guardrails.md](./prd-guardrails.md) (dependency: its Phase 3);
-retention sweep ships.
-
-**Acceptance criteria:**
-
-- A guarded tool call produces an entry whose `detail` round-trips the
-  guardrails one-query audit (`policy_id`, `policy_version`, `decision`).
 - With `AUDIT_RETENTION_DAYS=1`, a backdated row is gone after one sweep
   tick; a fresh row survives.
 
-### Phase 3 — Read Auditing Flag + Webhook ❌ Not started
+### Future work (not planned)
 
-Per-project read-audit config flag (default off); `audit.entry_created`
-webhook event through the existing webhooks module.
-
-**Acceptance criteria:**
-
-- Flag off: GETs write nothing. Flag on: a `secrets:GetSecret` read writes
-  one entry.
-- A subscribed webhook receives one delivery per new entry.
+- **Guardrail evaluations as `detail.kind = "guardrail_evaluation"`** —
+  owned by [prd-guardrails.md](./prd-guardrails.md); this PRD only defines
+  the `detail->>'kind'` convention such entries must follow.
+- **Read auditing** — per-project config flag, off by default.
+- **`audit.entry_created` webhook event** — through the existing webhooks
+  module.
+- **Tamper evidence** — hash-chaining entries.
 
 ## Decisions
 
 | Decision | Rationale |
 | --- | --- |
 | Action vocabulary = permission registry | Zero new vocabulary to maintain; the IAM layer already knows the exact action string at the choke point |
-| Wildcard `resourceSrn` + denormalized `resourcePublicId` in v1 | Call sites pass `soat:{project}:*:*`, not specific SRNs; recording what was actually evaluated keeps the entry honest, while the route param / response id gives per-resource lookup. Precise SRNs are a separate IAM-granularity effort |
-| First `isAllowed` call is the primary; rest go to `detail.additional_checks` | The first call is the route's own permission check, made before any mutation; multi-check routes (e.g. triggers) lose no decisions |
+| IAM SRN precision ships first (Phase 0) | Wildcard checks make sub-project policy statements unenforceable and would force the audit log to record `soat:{project}:*:*` for every entry; fixing the ~80 call sites first means the log records real targets from day one |
+| Primary pair: denied check on `403`, first check otherwise; rest go to `detail.additional_checks` | The denied check is what actually blocked the request — labeling the entry with an earlier allowed action would misattribute the denial; on success the first call is the route's own permission check. Multi-check routes (e.g. triggers) lose no decisions |
 | Ship request-id middleware as part of Phase 1 | The `requestId` column has no existing source — nothing in the server generates a correlation id today |
 | Write post-commit, with response status | Prevents false success records; the status is part of the fact being audited |
 | Fire-and-forget bounded queue | Auditing must never block or fail the request it describes |
@@ -250,6 +260,13 @@ webhook event through the existing webhooks module.
 
 ## Risks
 
+- **Phase 0 gates everything** — the audit log now waits on a cross-cutting
+  change to ~80 call sites; scope creep there delays the log indefinitely.
+  Mitigation: Phase 0 is mechanical per call site (swap the wildcard for
+  `buildSrn` with ids the route already has in scope), can land
+  module-by-module, and existing wildcard policies keep matching — but
+  Phase 1 must not start until it is complete, or early entries would mix
+  wildcard and precise SRNs.
 - **Write amplification** — every mutation adds one INSERT; mitigated by the
   async queue and the four narrow indexes.
 - **Silent drop under overflow** — bounded queue can lose entries at extreme
