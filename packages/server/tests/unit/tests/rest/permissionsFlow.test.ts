@@ -1,5 +1,87 @@
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
+// ─── Group 15: Resource-level SRN precision (audit-log Phase 0) ────────────
+//
+// A policy that grants an action on ONE specific resource
+// (`soat:{project}:secret:{sec_a}`) must permit that resource and deny a
+// sibling in the same project (`sec_b`). Before Phase 0 the by-id route
+// handlers probed `isAllowed` with the project-wildcard SRN
+// (`soat:{project}:*:*`), so a policy scoped to a single resource could never
+// match — resource-level policy statements were effectively unenforceable.
+
+describe('Group 15: JWT — policy scoped to a single resource SRN is enforced per-resource', () => {
+  let adminToken: string;
+  let projectId: string;
+  let userToken: string;
+  let secretAId: string;
+  let secretBId: string;
+
+  beforeAll(async () => {
+    await testClient
+      .post('/api/v1/users/bootstrap')
+      .send({ username: 'admin', password: 'supersecret' });
+
+    adminToken = await loginAs('admin', 'supersecret');
+
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'Resource SRN Precision Project' });
+    projectId = projectRes.body.id;
+
+    const secretARes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'SECRET_A', value: 'value-a' });
+    secretAId = secretARes.body.id;
+
+    const secretBRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'SECRET_B', value: 'value-b' });
+    secretBId = secretBRes.body.id;
+
+    const userRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'sirius', password: 'siriuspass' });
+    userToken = await loginAs('sirius', 'siriuspass');
+
+    // Policy grants GetSecret ONLY on secret A.
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['secrets:GetSecret'],
+              resource: [`soat:${projectId}:secret:${secretAId}`],
+            },
+          ],
+        },
+      });
+
+    await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${userRes.body.id}/policies`)
+      .send({ policy_ids: [policyRes.body.id] });
+  });
+
+  test('user can read the secret named in the policy SRN', async () => {
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/secrets/${secretAId}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(secretAId);
+  });
+
+  test('user cannot read a sibling secret not covered by the policy SRN', async () => {
+    const response = await authenticatedTestClient(userToken).get(
+      `/api/v1/secrets/${secretBId}`
+    );
+
+    expect(response.status).toBe(403);
+    expect(response.body.error).toBe('Forbidden');
+  });
+});
+
 /**
  * Integration test for the full IAM permissions flow:
  *

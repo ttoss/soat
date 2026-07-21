@@ -16,6 +16,7 @@ tracesRouter.get('/traces', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'traces:ListTraces',
+    resourceType: 'trace',
   });
 
   if (projectIds === null) {
@@ -39,6 +40,7 @@ tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'traces:GetTrace',
+    resourceType: 'trace',
   });
 
   if (projectIds === null) {
@@ -64,6 +66,7 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'traces:GetTraceTree',
+    resourceType: 'trace',
   });
 
   if (projectIds === null) {

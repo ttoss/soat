@@ -40,6 +40,7 @@ const resolveGuardrailProjectId = async (
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
+    resourceType: 'guardrail',
   });
   if (projectIds === null) {
     ctx.status = 403;
@@ -64,7 +65,10 @@ const checkGuardrailsAccess = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'guardrail',
+  });
   if (projectIds === null) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
@@ -138,6 +142,7 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'guardrails:ListGuardrails',
+    resourceType: 'guardrail',
   });
 
   if (projectIds === null) {

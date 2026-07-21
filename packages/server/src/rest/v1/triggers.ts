@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { buildSrn } from 'src/lib/iam';
 import { fireTriggerNow } from 'src/lib/triggerDispatch';
 import { getTriggerFiring, listTriggerFirings } from 'src/lib/triggerFirings';
 import {
@@ -49,6 +50,7 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'triggers:ListTriggers',
+    resourceType: 'trigger',
   });
   if (projectIds === null) {
     ctx.status = 403;
@@ -75,7 +77,11 @@ triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:GetTrigger',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -107,6 +113,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'triggers:CreateTrigger',
+    resourceType: 'trigger',
   });
   if (targetProjectId === null) return;
 
@@ -115,7 +122,11 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   const canStartTarget = await ctx.authUser!.isAllowed({
     projectPublicId: projectPublicId!,
     action: targetStartAction(body.targetType),
-    resource: `soat:${projectPublicId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: projectPublicId!,
+      resourceType: body.targetType,
+      resourceId: body.targetId,
+    }),
   });
   if (!canStartTarget) {
     ctx.status = 403;
@@ -156,7 +167,11 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:UpdateTrigger',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -181,7 +196,11 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     const canStartTarget = await ctx.authUser.isAllowed({
       projectPublicId: trigger.projectId!,
       action: targetStartAction(body.targetType),
-      resource: `soat:${trigger.projectId}:*:*`,
+      resource: buildSrn({
+        projectPublicId: trigger.projectId!,
+        resourceType: body.targetType,
+        resourceId: body.targetId ?? (trigger.targetId as string),
+      }),
     });
     if (!canStartTarget) {
       ctx.status = 403;
@@ -223,7 +242,11 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:DeleteTrigger',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -255,7 +278,11 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:FireTrigger',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -296,7 +323,11 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:ListTriggerFirings',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -326,7 +357,11 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: firing.projectId!,
     action: 'triggers:GetTriggerFiring',
-    resource: `soat:${firing.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: firing.projectId!,
+      resourceType: 'triggerFiring',
+      resourceId: firing.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -349,7 +384,11 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: trigger.projectId!,
     action: 'triggers:GetTriggerSecret',
-    resource: `soat:${trigger.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: trigger.projectId!,
+      resourceType: 'trigger',
+      resourceId: trigger.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -374,7 +413,11 @@ triggersRouter.post(
     const allowed = await ctx.authUser.isAllowed({
       projectPublicId: trigger.projectId!,
       action: 'triggers:RotateTriggerSecret',
-      resource: `soat:${trigger.projectId}:*:*`,
+      resource: buildSrn({
+        projectPublicId: trigger.projectId!,
+        resourceType: 'trigger',
+        resourceId: trigger.id,
+      }),
     });
     if (!allowed) {
       ctx.status = 403;

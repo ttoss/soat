@@ -4,6 +4,7 @@ import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { createFile, listFiles, uploadFile } from 'src/lib/files';
+import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
@@ -54,6 +55,7 @@ filesRouter.get('/files', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'files:GetFile',
+    resourceType: 'file',
   });
 
   if (projectIds === null) {
@@ -101,6 +103,7 @@ filesRouter.post('/files', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'files:CreateFile',
+    resourceType: 'file',
   });
   if (targetProjectId === null) return;
 
@@ -145,6 +148,7 @@ filesRouter.post(
       ctx,
       projectPublicId: projectId,
       action: 'files:UploadFile',
+      resourceType: 'file',
     });
     if (targetProjectId === null) return;
 
@@ -179,6 +183,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'files:UploadFile',
+    resourceType: 'file',
   });
   if (targetProjectId === null) return;
 
@@ -214,7 +219,11 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: body.projectId,
     action: 'files:UploadFile',
-    resource: `soat:${body.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: body.projectId,
+      resourceType: 'file',
+      resourceId: '*',
+    }),
   });
   if (!allowed) {
     ctx.status = 403;

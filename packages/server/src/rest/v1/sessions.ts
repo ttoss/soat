@@ -32,7 +32,10 @@ export const checkSessionAccess = async (
   if (!ctx.authUser) {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'session',
+  });
   if (
     projectIds === null ||
     (Array.isArray(projectIds) && projectIds.length === 0)
@@ -68,6 +71,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:CreateSession',
+    resourceType: 'session',
   });
 
   if (
@@ -111,6 +115,7 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'agents:ListSessions',
+    resourceType: 'session',
   });
 
   if (

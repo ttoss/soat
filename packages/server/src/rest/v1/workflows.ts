@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import {
   createWorkflow,
   deleteWorkflow,
@@ -30,6 +31,7 @@ workflowsRouter.get('/workflows', async (ctx: Context) => {
     ctx,
     projectPublicId,
     action: 'workflows:ListWorkflows',
+    resourceType: 'workflow',
   });
   if (projectIds === null) return;
 
@@ -44,7 +46,11 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: workflow.projectId!,
     action: 'workflows:GetWorkflow',
-    resource: `soat:${workflow.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: workflow.projectId!,
+      resourceType: 'workflow',
+      resourceId: workflow.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -71,6 +77,7 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'workflows:CreateWorkflow',
+    resourceType: 'workflow',
   });
   if (projectId === null) return;
 
@@ -95,7 +102,11 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: workflow.projectId!,
     action: 'workflows:UpdateWorkflow',
-    resource: `soat:${workflow.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: workflow.projectId!,
+      resourceType: 'workflow',
+      resourceId: workflow.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -129,7 +140,11 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: workflow.projectId!,
     action: 'workflows:DeleteWorkflow',
-    resource: `soat:${workflow.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: workflow.projectId!,
+      resourceType: 'workflow',
+      resourceId: workflow.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;

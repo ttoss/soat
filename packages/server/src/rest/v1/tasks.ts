@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import {
   createTask,
   deleteTask,
@@ -47,6 +48,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     ctx,
     projectPublicId,
     action: 'tasks:ListTasks',
+    resourceType: 'task',
   });
   if (projectIds === null) return;
 
@@ -67,7 +69,11 @@ tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: task.projectId!,
     action: 'tasks:GetTask',
-    resource: `soat:${task.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: task.projectId!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -86,7 +92,11 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: task.projectId!,
     action: 'tasks:GetTask',
-    resource: `soat:${task.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: task.projectId!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -112,6 +122,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'tasks:CreateTask',
+    resourceType: 'task',
   });
   if (projectId === null) return;
 
@@ -136,7 +147,11 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: task.projectId!,
     action: 'tasks:UpdateTask',
-    resource: `soat:${task.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: task.projectId!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -166,7 +181,11 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: task.projectId!,
     action: 'tasks:TransitionTask',
-    resource: `soat:${task.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: task.projectId!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -195,7 +214,11 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: task.projectId!,
     action: 'tasks:DeleteTask',
-    resource: `soat:${task.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: task.projectId!,
+      resourceType: 'task',
+      resourceId: task.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;

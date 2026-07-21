@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import {
   createSecret,
   deleteSecret,
@@ -24,6 +25,7 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'secrets:ListSecrets',
+    resourceType: 'secret',
   });
 
   if (projectIds === null) {
@@ -47,7 +49,11 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:GetSecret',
-    resource: `soat:${secret.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: secret.projectId!,
+      resourceType: 'secret',
+      resourceId: secret.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -73,6 +79,7 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'secrets:CreateSecret',
+    resourceType: 'secret',
   });
   if (targetProjectId === null) return;
 
@@ -98,7 +105,11 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:UpdateSecret',
-    resource: `soat:${secret.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: secret.projectId!,
+      resourceType: 'secret',
+      resourceId: secret.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;
@@ -129,7 +140,11 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   const allowed = await ctx.authUser.isAllowed({
     projectPublicId: secret.projectId!,
     action: 'secrets:DeleteSecret',
-    resource: `soat:${secret.projectId}:*:*`,
+    resource: buildSrn({
+      projectPublicId: secret.projectId!,
+      resourceType: 'secret',
+      resourceId: secret.id,
+    }),
   });
   if (!allowed) {
     ctx.status = 403;

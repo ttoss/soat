@@ -15,7 +15,10 @@ export const resolveRunAuth = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({ action });
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    action,
+    resourceType: 'orchestration',
+  });
 
   if (projectIds === null) {
     ctx.status = 403;
@@ -44,6 +47,7 @@ export const resolveStartRunScope = async (
 ): Promise<{ projectIds?: number[]; primaryId?: number } | null> => {
   const projectIds = await ctx.authUser!.resolveProjectIds({
     action: 'orchestrations:StartRun',
+    resourceType: 'orchestration',
   });
 
   if (projectIds === null) {

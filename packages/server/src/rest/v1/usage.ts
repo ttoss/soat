@@ -46,6 +46,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'usage:ListUsageMeters',
+    resourceType: 'usage',
   });
 
   if (
@@ -116,6 +117,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'usage:GetUsage',
+    resourceType: 'usage',
   });
 
   if (
@@ -151,6 +153,7 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'usage:ListThresholds',
+    resourceType: 'usage',
   });
 
   if (
@@ -192,6 +195,7 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'usage:ManageThresholds',
+    resourceType: 'usage',
   });
   if (targetProjectId === null) return;
 
@@ -229,6 +233,7 @@ usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'usage:ManageThresholds',
+    resourceType: 'usage',
   });
 
   if (
@@ -312,6 +317,7 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'usage:GetReceipt',
+    resourceType: 'usage',
   });
 
   if (

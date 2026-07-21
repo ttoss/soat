@@ -126,6 +126,7 @@ agentGenerationRouter.post(
 
     const projectIds = await ctx.authUser.resolveProjectIds({
       action: 'agents:CreateAgentGeneration',
+      resourceType: 'agent',
     });
 
     if (projectIds === null) {
@@ -213,6 +214,7 @@ agentGenerationRouter.post(
 
     const projectIds = await ctx.authUser.resolveProjectIds({
       action: 'agents:CreateAgentGeneration',
+      resourceType: 'agent',
     });
 
     if (projectIds === null) {

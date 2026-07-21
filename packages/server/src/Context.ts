@@ -24,6 +24,15 @@ export type AuthUser = {
   resolveProjectIds: (args: {
     projectPublicId?: string;
     action: string;
+    /**
+     * Resource type the action targets (e.g. `secret`, `file`). When provided,
+     * the internal permission probe is scoped to the type-level SRN
+     * `soat:{project}:{resourceType}:*` so resource-scoped policy statements are
+     * enforced; when omitted the probe falls back to the project-wildcard
+     * `soat:{project}:*:*` (used only where the project itself is the target,
+     * e.g. `projects:*` actions).
+     */
+    resourceType?: string;
   }) => Promise<number[] | undefined | null>;
   /**
    * Returns the effective PolicyDocuments for the caller scoped to the given

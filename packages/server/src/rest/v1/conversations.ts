@@ -35,6 +35,7 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'conversations:ListConversations',
+    resourceType: 'conversation',
   });
 
   if (projectIds === null) {
@@ -121,6 +122,7 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'conversations:CreateConversation',
+    resourceType: 'conversation',
   });
   if (targetProjectId === null) return;
 

@@ -51,6 +51,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'actors:ListActors',
+    resourceType: 'actor',
   });
 
   if (projectIds === null) {
@@ -187,6 +188,7 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'actors:CreateActor',
+    resourceType: 'actor',
   });
   if (targetProjectId === null) return;
 

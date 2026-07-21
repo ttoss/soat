@@ -108,6 +108,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'formations:PlanFormation',
+    resourceType: 'formation',
   });
   if (targetProjectId === null) return;
 
@@ -142,6 +143,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     ctx,
     projectPublicId: body.projectId,
     action: 'formations:CreateFormation',
+    resourceType: 'formation',
   });
   if (targetProjectId === null) return;
 
@@ -180,6 +182,7 @@ formationsRouter.get('/formations', async (ctx: Context) => {
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action: 'formations:ListFormations',
+    resourceType: 'formation',
   });
 
   if (projectIds === null) {
