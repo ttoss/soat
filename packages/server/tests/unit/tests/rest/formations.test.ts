@@ -80,6 +80,7 @@ describe('Formations', () => {
                 'quotas:GetQuota',
                 'quotas:UpdateQuota',
                 'quotas:DeleteQuota',
+                'guardrails:GetGuardrail',
               ],
             },
           ],
@@ -3043,6 +3044,139 @@ resources:
     test('deleted api_key formation no longer found', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${apiKeyFormationId}`
+      );
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── guardrail resource type ──────────────────────────────────────────────
+
+  describe('Formation with guardrail resources', () => {
+    let guardrailFormationId: string;
+
+    const guardrailTemplate = {
+      resources: {
+        ContextTool: {
+          type: 'tool',
+          properties: {
+            name: 'guardrail-context-tool',
+            type: 'soat',
+            actions: ['list-tools'],
+          },
+        },
+        BudgetGuardrail: {
+          type: 'guardrail',
+          properties: {
+            name: 'formation-guardrail',
+            class: 'B',
+            default_class: 'C',
+            guard: { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+            context_tool_id: { ref: 'ContextTool' },
+            context_mode: 'merge',
+          },
+        },
+      },
+    };
+
+    test('validates a template declaring a guardrail resource', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({ template: guardrailTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    test('rejects a guardrail with an invalid class literal', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadGuardrail: {
+                type: 'guardrail',
+                properties: { name: 'bad-guardrail', class: 'Z' },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(res.body.errors.length).toBeGreaterThan(0);
+    });
+
+    test('creates a formation with a guardrail resource, resolving the context_tool_id ref', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `guardrail-formation-${Date.now()}`,
+          template: guardrailTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('active');
+
+      const tool = res.body.resources.find((r: { logical_id: string }) => {
+        return r.logical_id === 'ContextTool';
+      });
+      const guardrail = res.body.resources.find((r: { logical_id: string }) => {
+        return r.logical_id === 'BudgetGuardrail';
+      });
+      expect(tool.status).toBe('created');
+      expect(tool.physical_resource_id).toMatch(/^tool_/);
+      expect(guardrail.status).toBe('created');
+      expect(guardrail.physical_resource_id).toMatch(/^guard_/);
+
+      const guardrailRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/guardrails/${guardrail.physical_resource_id}`
+      );
+      expect(guardrailRes.status).toBe(200);
+      expect(guardrailRes.body.context_tool_id).toBe(tool.physical_resource_id);
+
+      guardrailFormationId = res.body.id;
+    });
+
+    test('updates the guardrail class in the formation', async () => {
+      const updatedTemplate = {
+        resources: {
+          ...guardrailTemplate.resources,
+          BudgetGuardrail: {
+            type: 'guardrail',
+            properties: {
+              name: 'formation-guardrail',
+              class: 'C',
+            },
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${guardrailFormationId}`)
+        .send({ template: updatedTemplate });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('active');
+      const guardrailResource = res.body.resources.find(
+        (r: { logical_id: string }) => {
+          return r.logical_id === 'BudgetGuardrail';
+        }
+      );
+      expect(guardrailResource.status).toBe('updated');
+    });
+
+    test('deletes formation and cleans up guardrail resource', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${guardrailFormationId}`
+      );
+      expect(res.status).toBe(200);
+    });
+
+    test('deleted guardrail formation no longer found', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${guardrailFormationId}`
       );
       expect(res.status).toBe(404);
     });

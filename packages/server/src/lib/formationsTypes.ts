@@ -186,6 +186,7 @@ export const SUPPORTED_RESOURCE_TYPES = new Set([
   'discussion',
   'document',
   'file',
+  'guardrail',
   'ingestion_rule',
   'memory',
   'memory_entry',

@@ -198,6 +198,10 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 - `guard_result` is the guard expression's boolean outcome; `null` when the document has no guard or the call did not classify as `B`.
 - `context_snapshot` is a flat map of **only the vars the evaluation actually referenced** — every `var` in the `class` and `guard` expressions, keyed by its fully-qualified path (`args.*` / `context.*` / `soat.*`) and frozen at its evaluation-time value. The full `guardrail_context` may carry many more keys; those are not recorded. This is the only way to answer "why did this pass?" after the application's context (or platform usage counters) have moved on, while keeping the record small and free of unreferenced — possibly sensitive — context.
 
+### Formation resource
+
+Guardrails can be declared as a `guardrail` [formation](./formations.md) resource (`GuardrailResourceProperties`): `name`, `description`, `class`, `default_class`, `guard`, `escalate`, `context_tool_id`, `context_mode` — the same fields as [Create a guardrail](#create-a-guardrail), with the REST API's single `document` object flattened to top-level properties. `context_tool_id` may be a `{ "ref": "ResourceName" }` to a `tool` resource declared in the same template, resolved to its physical id at deploy time. A tool or agent resource in the same template can then attach it via `guardrail_ids: [{ "ref": "ResourceName" }]`, so a full gate — guardrail plus the tools/agents it governs — deploys from one template. `class`/`default_class`/`guard`/`escalate` are recombined into a single `document` write on every create/update, so an update that omits one of them drops it rather than merging (matching `PATCH /api/v1/guardrails/{guardrail_id}`'s full-replace semantics for `document`).
+
 ## Examples
 
 ### Create a guardrail

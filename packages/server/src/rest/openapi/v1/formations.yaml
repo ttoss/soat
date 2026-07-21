@@ -1477,6 +1477,66 @@ components:
           enum: [enforce, monitor]
           description: enforce blocks with 429; monitor fires the webhook only
 
+    GuardrailResourceProperties:
+      description: >-
+        Creates a guardrail — an action-class document (`class`/`guard`) that
+        gates tool-call autonomy. Attach it to a tool or agent via that
+        resource's `guardrail_ids` (a `{ "ref": … }` to this resource in the
+        same template resolves to its physical id at deploy time). Mirrors the
+        guardrails REST contract; `class`/`default_class`/`guard`/`escalate`
+        are flattened here from the REST API's single `document` object.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - class
+      properties:
+        name:
+          type: string
+          description: Human-readable name
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+        class:
+          description: >-
+            A class literal (`A` / `B` / `C` / `D`) or a JSON Logic expression
+            returning one. An invalid result resolves to `default_class`.
+          oneOf:
+            - type: string
+              enum: [A, B, C, D]
+            - type: object
+        default_class:
+          type: string
+          nullable: true
+          enum: [A, B, C, D]
+          description: >-
+            Applied when the `class` expression returns anything other than a
+            valid class. Defaults to `C` (fail-closed).
+        guard:
+          type: object
+          nullable: true
+          description: >-
+            A single JSON Logic expression; when the call classifies as `B` it
+            executes only if this evaluates truthy.
+        escalate:
+          type: boolean
+          nullable: true
+          description: When true, a passing guard still files an approval item.
+        context_tool_id:
+          x-soat-ref: tools
+          type: string
+          nullable: true
+          description: >-
+            Optional tool the platform calls at evaluation time to fetch fresh
+            guardrail context.
+        context_mode:
+          type: string
+          nullable: true
+          enum: [merge, replace]
+          description: >-
+            How tool-fetched context combines with the caller-supplied context.
+
     ResourceDeclaration:
       type: object
       required:
@@ -1495,6 +1555,7 @@ components:
             - conversation
             - document
             - file
+            - guardrail
             - ingestion_rule
             - memory
             - memory_entry
@@ -1520,6 +1581,7 @@ components:
             - $ref: '#/components/schemas/DiscussionResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'
             - $ref: '#/components/schemas/FileResourceProperties'
+            - $ref: '#/components/schemas/GuardrailResourceProperties'
             - $ref: '#/components/schemas/IngestionRuleResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'

@@ -7,6 +7,7 @@ import { conversationsFormationModule } from './formation-modules/conversationsF
 import { discussionsFormationModule } from './formation-modules/discussionsFormationModule';
 import { documentsFormationModule } from './formation-modules/documentsFormationModule';
 import { filesFormationModule } from './formation-modules/filesFormationModule';
+import { guardrailsFormationModule } from './formation-modules/guardrailsFormationModule';
 import { ingestionRulesFormationModule } from './formation-modules/ingestionRulesFormationModule';
 import { memoriesFormationModule } from './formation-modules/memoriesFormationModule';
 import { memoryEntriesFormationModule } from './formation-modules/memoryEntriesFormationModule';
@@ -48,6 +49,7 @@ registerFormationModule({ module: chatsFormationModule });
 registerFormationModule({ module: conversationsFormationModule });
 registerFormationModule({ module: discussionsFormationModule });
 registerFormationModule({ module: filesFormationModule });
+registerFormationModule({ module: guardrailsFormationModule });
 registerFormationModule({ module: ingestionRulesFormationModule });
 registerFormationModule({ module: policiesFormationModule });
 registerFormationModule({ module: projectPricesFormationModule });

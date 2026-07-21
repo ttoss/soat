@@ -318,7 +318,7 @@ Rules:
 }
 ```
 
-- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `document`, `file`, `ingestion_rule`, `memory`, `memory_entry`, `orchestration`, `policy`, `project_price`, `secret`, `session`, `webhook`, `trigger`, `workflow`. See [Formations Types](/docs/formations-types) for the full properties reference.
+- **`type`** — one of: `ai_provider`, `tool`, `agent`, `actor`, `api_key`, `chat`, `conversation`, `document`, `file`, `guardrail`, `ingestion_rule`, `memory`, `memory_entry`, `orchestration`, `policy`, `project_price`, `secret`, `session`, `webhook`, `trigger`, `workflow`. See [Formations Types](/docs/formations-types) for the full properties reference.
 - **`properties`** — resource-specific properties (snake_case, matching the REST API body fields)
 - **`depends_on`** — explicit dependency list in addition to implicit `ref` dependencies
 - **`deletion_policy`** — controls what happens to the physical resource when it is removed from the stack. `delete` (default) deletes the physical resource. `retain` keeps the physical resource alive and only removes the formation record.
