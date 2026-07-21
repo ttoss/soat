@@ -1,0 +1,15 @@
+{
+  "module": "audit",
+  "operations": [
+    {
+      "operationId": "listAuditEntries",
+      "action": "audit:ListAuditEntries",
+      "description": "List audit-log entries in a project"
+    },
+    {
+      "operationId": "getAuditEntry",
+      "action": "audit:GetAuditEntry",
+      "description": "Get a single audit-log entry by ID"
+    }
+  ]
+}

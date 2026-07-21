@@ -7,10 +7,12 @@ import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 import type { Context } from './Context';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
+import { auditMiddleware } from './middleware/audit';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
 import { quotaMiddleware } from './middleware/quota';
+import { requestIdMiddleware } from './middleware/requestId';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
@@ -23,6 +25,10 @@ initializeDispatcher();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());
+// Assign a per-request correlation id and echo it as X-Request-Id before any
+// downstream middleware runs, so every response (including errors) carries it
+// and the audit log can record it.
+app.use(requestIdMiddleware);
 // Capture the raw body for public inbound hook paths before the JSON body
 // parser runs, so signatures can be verified over the exact bytes.
 app.use(hookRawBodyMiddleware);
@@ -32,6 +38,10 @@ app.use(authMiddleware);
 // route handlers so no handler work is wasted on a blocked request. Counts
 // API-key-authenticated /api/v1 requests only; fails open on DB error.
 app.use(quotaMiddleware);
+// Audit-log write hook: after auth (wraps the attached isAllowed) and wrapping
+// the route handlers, it records one entry per mutating /api/v1 request
+// post-commit through a fire-and-forget queue.
+app.use(auditMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,
 // and discovery metadata. Public — the routes do their own validation. The

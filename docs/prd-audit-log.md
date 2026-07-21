@@ -11,13 +11,13 @@
 
 | Component                                          | Status         | Notes                                                            |
 | -------------------------------------------------- | -------------- | ---------------------------------------------------------------- |
-| IAM SRN precision at `isAllowed` call sites        | ❌ Not started | Phase 0 prerequisite — ~80 call sites move from `soat:{project}:*:*` to `buildSrn` SRNs |
-| Request-id middleware (`X-Request-Id`)             | ❌ Not started | Prerequisite — nothing in the server generates a request id today |
-| `AuditEntry` model (append-only, `audit_` prefix)  | ❌ Not started | No UPDATE/DELETE path, enforced at the model layer               |
-| Post-commit write hook at the authorization choke point | ❌ Not started | Wraps `ctx.authUser.isAllowed`; fire-and-forget, bounded queue |
-| Read API (`GET /api/v1/audit-log`, `/{entry_id}`)  | ❌ Not started | Filters: `action`, `actor_id`, `project_id`, `resource_public_id`, `resource_srn`, `from`/`to` |
-| `audit` permission actions + policy wiring         | ❌ Not started | `audit:ListAuditEntries`, `audit:GetAuditEntry`                  |
-| Retention sweep (`AUDIT_RETENTION_DAYS`)           | ❌ Not started | Ships in Phase 1; daily tick, `orchestrationScheduler` interval pattern |
+| IAM SRN precision at `isAllowed` call sites        | ✅ Done        | Phase 0 — call sites pass `buildSrn` SRNs instead of `soat:{project}:*:*` |
+| Request-id middleware (`X-Request-Id`)             | ✅ Done        | `middleware/requestId.ts` — `ctx.state.requestId` + `X-Request-Id` header |
+| `AuditEntry` model (append-only, `audit_` prefix)  | ✅ Done        | `postgresdb/models/AuditEntry.ts` — model hooks reject UPDATE and single-row DELETE |
+| Post-commit write hook at the authorization choke point | ✅ Done   | `middleware/audit.ts` wraps `isAllowed`/`resolveProjectIds`; fire-and-forget bounded queue (`lib/auditQueue.ts`) |
+| Read API (`GET /api/v1/audit-log`, `/{entry_id}`)  | ✅ Done        | Filters: `action`, `actor_id`, `project_id`, `resource_public_id`, `resource_srn`, `from`/`to` |
+| `audit` permission actions + policy wiring         | ✅ Done        | `permissions/audit.json` — `audit:ListAuditEntries`, `audit:GetAuditEntry` |
+| Retention sweep (`AUDIT_RETENTION_DAYS`)           | ✅ Done        | `lib/auditScheduler.ts` — daily tick via the shared `createScheduler` pattern |
 
 ## Problem
 
@@ -185,7 +185,7 @@ into NDJSON; no dedicated export job in v1.
 
 ## Implementation Phases
 
-### Phase 0 — IAM SRN Precision (prerequisite) ❌ Not started
+### Phase 0 — IAM SRN Precision (prerequisite) ✅ Done
 
 Upgrade the ~80 `isAllowed` call sites from `soat:{project}:*:*` to precise
 SRNs built with `buildSrn`: `soat:{project}:{type}:{id}` for operations on
@@ -203,7 +203,7 @@ statements enforceable, which is why it ships regardless of the audit log.
 - Existing project-wildcard policy documents keep working unchanged
   (`soat:{project}:*:*` patterns still match precise SRNs).
 
-### Phase 1 — Request Id + Table + Write Hook + Read API + Retention ❌ Not started
+### Phase 1 — Request Id + Table + Write Hook + Read API + Retention ✅ Done
 
 Request-id middleware (prerequisite), model, `audit_` prefix, `isAllowed`
 wrapper + post-commit middleware, bounded queue, read routes, retention
