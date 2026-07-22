@@ -152,8 +152,10 @@ const dispatchNodeExecution = async (
         node: nodeDefn,
         state,
         projectIds,
+        projectId,
         authHeader,
         idempotencyKey,
+        runId: runPublicId,
       });
     case 'poll':
       return executePollNode({
@@ -256,12 +258,17 @@ const advanceSuccessors = (args: {
   edges: OrchestrationEdge[];
   activatedNodes: Set<string>;
   nextRound: string[];
+  // Nodes whose branch is decided by a label (a guardrail-`blocked` tool node):
+  // an unlabeled edge leaving one follows only on the `approved` semantic, i.e.
+  // never for a block — so the happy path does not auto-follow a blocked action.
+  decisionNodeIds?: Set<string>;
 }): void => {
   const resolved = resolveNextNodes({
     completedNodeId: args.nodeId,
     completedNodes: args.completedNodes,
     conditionLabels: args.conditionLabels,
     edges: args.edges,
+    decisionNodeIds: args.decisionNodeIds,
   });
   for (const n of resolved) {
     if (!args.activatedNodes.has(n)) {
@@ -291,7 +298,10 @@ const findFirstTraceId = (
 const recordCompletedNode = (args: {
   nodeId: string;
   nodeDefn: OrchestrationNode;
-  execResult: Extract<NodeExecutionResult, { kind: 'artifact' | 'condition' }>;
+  execResult: Extract<
+    NodeExecutionResult,
+    { kind: 'artifact' | 'condition' | 'blocked' }
+  >;
   artifacts: Record<string, unknown>;
   conditionLabels: Map<string, string>;
   state: Record<string, unknown>;
@@ -301,11 +311,64 @@ const recordCompletedNode = (args: {
   if (execResult.kind === 'condition') {
     conditionLabels.set(nodeId, execResult.label);
     writeNodeArtifact({ nodeId, artifact: { label: execResult.label }, state });
-  } else {
+    return;
+  }
+  if (execResult.kind === 'blocked') {
+    // A guardrail-blocked tool node records its refusal artifact AND seeds a
+    // branch label so `condition: 'blocked'`/'tripwire' edges route. It is
+    // treated as a decision node at advance time (see processNodeResultBatch)
+    // so unlabeled happy-path edges do not follow.
+    conditionLabels.set(nodeId, execResult.label);
     artifacts[nodeId] = execResult.artifact;
     writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
     applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
+    return;
   }
+  artifacts[nodeId] = execResult.artifact;
+  writeNodeArtifact({ nodeId, artifact: execResult.artifact, state });
+  applyStateMapping(nodeDefn.stateMapping, execResult.artifact, state);
+};
+
+// Records a just-completed node's result and, when the run is still advancing,
+// activates its successors. A guardrail-`blocked` tool node advances as a
+// decision node (label-only branching), so its unlabeled happy-path edge never
+// auto-follows.
+const settleCompletedNode = (args: {
+  nodeId: string;
+  nodeDefn: OrchestrationNode;
+  execResult: Extract<
+    NodeExecutionResult,
+    { kind: 'artifact' | 'condition' | 'blocked' }
+  >;
+  artifacts: Record<string, unknown>;
+  conditionLabels: Map<string, string>;
+  completedNodes: Set<string>;
+  activatedNodes: Set<string>;
+  state: Record<string, unknown>;
+  edges: OrchestrationEdge[];
+  nextRound: string[];
+  advance: boolean;
+}): void => {
+  recordCompletedNode({
+    nodeId: args.nodeId,
+    nodeDefn: args.nodeDefn,
+    execResult: args.execResult,
+    artifacts: args.artifacts,
+    conditionLabels: args.conditionLabels,
+    state: args.state,
+  });
+  args.completedNodes.add(args.nodeId);
+  if (!args.advance) return;
+  advanceSuccessors({
+    nodeId: args.nodeId,
+    completedNodes: args.completedNodes,
+    conditionLabels: args.conditionLabels,
+    edges: args.edges,
+    activatedNodes: args.activatedNodes,
+    nextRound: args.nextRound,
+    decisionNodeIds:
+      args.execResult.kind === 'blocked' ? new Set([args.nodeId]) : undefined,
+  });
 };
 
 export const processNodeResultBatch = (args: {
@@ -373,27 +436,19 @@ export const processNodeResultBatch = (args: {
       continue;
     }
 
-    recordCompletedNode({
+    settleCompletedNode({
       nodeId,
       nodeDefn,
       execResult,
       artifacts,
       conditionLabels,
+      completedNodes,
+      activatedNodes,
       state,
+      edges,
+      nextRound,
+      advance: isRunning && !requiredAction && !scheduledWait,
     });
-
-    completedNodes.add(nodeId);
-
-    if (isRunning && !requiredAction && !scheduledWait) {
-      advanceSuccessors({
-        nodeId,
-        completedNodes,
-        conditionLabels,
-        edges,
-        activatedNodes,
-        nextRound,
-      });
-    }
   }
 
   return { nextRound, requiredAction, scheduledWait, traceId };

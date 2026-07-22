@@ -53,8 +53,11 @@ const toIso = (value: unknown): string => {
  * context, never assembled inside the resolver.
  */
 export type ResolverGuardrailContext = {
-  agentId: string;
-  generationId: string;
+  // Null on the orchestration tool-node path: a tool node has no agent or
+  // generation in scope (it is gated at project + tool scope only). The agent
+  // path always sets both.
+  agentId: string | null;
+  generationId: string | null;
   projectId: number;
   projectPublicId: string;
   sessionId?: string | null;
@@ -120,7 +123,7 @@ const canRouteToApproval = (guardrails: CollectedGuardrail[]): boolean => {
   });
 };
 
-type EvaluatedGuardrail = {
+export type EvaluatedGuardrail = {
   result: GuardrailEvaluationResult;
   record: GuardrailEvaluationRecord;
 };
@@ -215,7 +218,7 @@ const governingResult = (
  */
 // Justification the model may attach to a proposed call, split off the executed
 // arguments and frozen onto the approval item.
-type Justification = {
+export type Justification = {
   reasoning: string | null;
   evidence: object | null;
   predictedImpact: string | null;
@@ -257,7 +260,9 @@ const routeToApproval = async (args: {
     expiresInSeconds: DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS,
     dedupKey: computeToolCallDedupKey({
       projectId: gate.context.projectId,
-      agentId: gate.context.agentId,
+      // Non-null on the agent path (the only caller of routeToApproval); the
+      // coercion keeps the dedup key identical for real agent calls.
+      agentId: gate.context.agentId ?? '',
       toolId: proposalToolId,
       action: gate.action,
       arguments: args.effectiveArgs,
@@ -308,15 +313,32 @@ export type GuardrailGateOutcome = {
 };
 
 /**
- * The shared classify → route core: strip the justification, compose every
- * applying guardrail's decision over the live context, and enact the strictest.
- * Both the server-side `execute` wrapper ({@link buildGuardedExecute}) and the
- * client-tool gate ({@link buildClientToolGate}) run through this — the only
- * difference is what they do with an `execute` decision (run the tool vs. release
- * the call to the client). Every evaluation is written to the audit trail
- * fire-and-forget, never blocking dispatch.
+ * The composed outcome of evaluating every applying guardrail over one proposed
+ * call, WITHOUT enacting any side effect. This is the pure classify half of the
+ * classify → route core: the strictest `decision`, the stripped `cleanArgs`,
+ * the `effectiveArgs` that would execute (presets + clean), the split-off
+ * `justification`, and the per-guardrail audit records (not yet persisted).
+ * `evaluateAndRoute` (agent path) and the orchestration tool-node gate both
+ * start here, then diverge on how they enact a non-`execute` decision (emit an
+ * inline approval vs. park the run).
  */
-export const evaluateAndRoute = async (args: {
+export type GuardrailClassification = {
+  decision: GuardrailDecision;
+  cleanArgs: Record<string, unknown>;
+  effectiveArgs: Record<string, unknown>;
+  justification: Justification;
+  evaluated: EvaluatedGuardrail[];
+  records: GuardrailEvaluationRecord[];
+};
+
+/**
+ * The pure classify step: strip the justification, compose every applying
+ * guardrail's decision over the live context, and return the strictest decision
+ * plus everything a caller needs to enact it. No side effects — the caller
+ * decides whether/how to persist audit records and route a non-`execute`
+ * decision.
+ */
+export const classifyGuardrailCall = async (args: {
   modelArgs: unknown;
   guardrails: CollectedGuardrail[];
   toolId: string | null;
@@ -324,7 +346,7 @@ export const evaluateAndRoute = async (args: {
   action: string;
   presetParameters?: Record<string, unknown> | null;
   context: ResolverGuardrailContext;
-}): Promise<GuardrailGateOutcome> => {
+}): Promise<GuardrailClassification> => {
   const modelArgs = isPlainObject(args.modelArgs) ? args.modelArgs : {};
   const { cleanArgs, reasoning, evidence, predictedImpact } =
     stripApprovalJustification(modelArgs);
@@ -358,6 +380,43 @@ export const evaluateAndRoute = async (args: {
     return entry.record;
   });
 
+  return {
+    decision,
+    cleanArgs,
+    effectiveArgs,
+    justification: { reasoning, evidence, predictedImpact },
+    evaluated,
+    records,
+  };
+};
+
+/**
+ * The shared classify → route core: strip the justification, compose every
+ * applying guardrail's decision over the live context, and enact the strictest.
+ * Both the server-side `execute` wrapper ({@link buildGuardedExecute}) and the
+ * client-tool gate ({@link buildClientToolGate}) run through this — the only
+ * difference is what they do with an `execute` decision (run the tool vs. release
+ * the call to the client). Every evaluation is written to the audit trail
+ * fire-and-forget, never blocking dispatch.
+ */
+export const evaluateAndRoute = async (args: {
+  modelArgs: unknown;
+  guardrails: CollectedGuardrail[];
+  toolId: string | null;
+  toolName: string;
+  action: string;
+  presetParameters?: Record<string, unknown> | null;
+  context: ResolverGuardrailContext;
+}): Promise<GuardrailGateOutcome> => {
+  const {
+    decision,
+    cleanArgs,
+    effectiveArgs,
+    justification,
+    evaluated,
+    records,
+  } = await classifyGuardrailCall(args);
+
   if (decision === 'route_to_approval') {
     const result = await routeToApproval({
       gate: {
@@ -367,7 +426,7 @@ export const evaluateAndRoute = async (args: {
         context: args.context,
       },
       effectiveArgs,
-      justification: { reasoning, evidence, predictedImpact },
+      justification,
       evaluated,
       records,
     });

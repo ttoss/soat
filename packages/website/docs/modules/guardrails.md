@@ -144,6 +144,14 @@ A failing class-B guard is a **tripwire**: by default it aborts the action and f
 
 Guardrails classify calls to [client tools](./tools.md) like any other. Because actuation happens on the client, the gate sits at the `requires_action` **handoff** rather than at server-side execution: class **A** and a passing **B** hand the call to the client as usual; class **C** files the approval item first, and the handoff happens only on approval; class **D** blocks the handoff and the model receives the blocked tool result; a tripwire aborts before anything reaches the client. The platform cannot observe what the client does after the handoff — the guardrail governs whether the call is released to the client at all.
 
+### Orchestration tool nodes
+
+An [orchestration](./orchestrations.md) `tool` node is gated at dispatch just like an agent tool call, but with no agent in scope it composes only the **project + tool** scopes (`agentId`/`generationId` are `null` on the evaluation identity and audit record). The strictest decision is enacted in orchestration terms:
+
+- **A / passing B** — the tool executes with the (cleaned) node inputs.
+- **C** — the run **parks** on the node with a `requires_action` of `type: "approval"`, filing an [`ApprovalItem`](./approvals.md) (`origin: node`) carrying the frozen arguments. On approval the node re-dispatches the tool with the frozen (or edited) arguments — the guardrail is **not** re-evaluated — and the run continues down its success edge; on rejection or expiry the tool never runs and only a matching decision edge (`condition: "rejected"` / `"expired"`) follows.
+- **D / tripwire** — a **routable `blocked` outcome**, not a run failure: the node records a `{ status, reason }` artifact and branches by label, so an edge conditioned on `blocked` (or `tripwire`) routes to a fallback path. An unlabeled success edge does **not** auto-follow a blocked node.
+
 ### Running a tighter posture in one project
 
 There is no separate override resource. A project runs a stricter posture than the fleet by [attaching](#attachment) a tighter guardrail at the **project** scope — `{ "class": "C" }` on the project forces sign-off on every call its agents would otherwise have executed, and stricter-wins guarantees it can only tighten what the agent- and tool-scoped guardrails already decided. To tighten just one tool, attach the stricter guardrail to that tool instead of the whole project. Either way, other projects — which don't carry that attachment — are unchanged, and because every layer composes by stricter-wins, a tenant can raise the floor but never lower it.

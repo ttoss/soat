@@ -105,7 +105,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | Type           | Description                                                                                                                         |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agent_id` and `prompt`.                                                    |
-| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`.                                                                 |
+| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`. Gated by [Guardrails](./guardrails.md) at dispatch — see [Guardrail interception](#guardrail-interception-on-tool-nodes).                     |
 | `transform`    | Evaluates a [JSON Logic](https://jsonlogic.com) rule against the current state. Uses `expression`.                                  |
 | `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memory_ids`. |
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memory_id` and `input_mapping` with `content`.                                        |
@@ -118,6 +118,16 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. Any [Webhook](./webhooks.md) subscribed to that event type in the run's project delivers it — signed, retried, and tracked by the Webhooks module. The graph holds no URL or secret. Fire-and-forget: the run does not block on or fail from delivery. See [Emitting events](#emitting-events). |
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
+
+### Guardrail interception on tool nodes
+
+A `tool` node's call is classified by [Guardrails](./guardrails.md) at dispatch, the same single gating mechanism agent tool calls use. With no agent in scope the node composes the **project + tool** scopes only; the strictest [action class](./guardrails.md#action-classes) is enacted in graph terms:
+
+- **A / passing B** — the tool runs with the (cleaned) `input_mapping` result.
+- **C (human sign-off)** — the run parks on the node (`required_action.type: "approval"`) and files an [ApprovalItem](./approvals.md) with the frozen arguments, exactly like an [approval node](#approval-nodes). On approval the node re-dispatches the tool with the frozen (or edited) arguments and continues down its success edge; on rejection/expiry the tool never runs and only a matching `condition: "rejected"` / `"expired"` edge follows.
+- **D / tripwire** — a routable **`blocked`** outcome: the node records a `{ status, reason }` artifact and emits a `blocked` (or `tripwire`) branch label, so an edge with `condition: "blocked"` routes to a fallback. An **unlabeled** success edge does not follow a blocked node, so the happy path never runs on a blocked call.
+
+Guardrails attach to the referenced [tool](./tools.md) (or the run's project) via `guardrail_ids`; there is no per-node guardrail field.
 
 ### Loops (collection iteration)
 

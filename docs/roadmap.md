@@ -174,7 +174,7 @@ continues; C files the approval and, on approval, re-hands the frozen/edited cal
 off to the client via a fresh linked `requires_action` generation) across the
 agent-generation and session surfaces._
 
-- [ ] Orchestration **tool-node** dispatch path (interceptor is wired into agent tool-dispatch only)
+- [x] Orchestration **tool-node** dispatch path — `tool` nodes are gated at project + tool scope: A/B execute, D/tripwire produce a routable `blocked` node outcome, C parks the run and re-dispatches the tool with the frozen/edited args on approval (gate not re-evaluated)
 - [ ] File an `ExceptionItem` on a tripwire (awaits the G3 Exceptions item; today returns a structured aborted tool result)
 - [ ] `[OPEN]` Per-action-class default expiry (72h budget / 168h strategy vs today's 24h `approval`-node default; align with `action-classes.yaml`)
 

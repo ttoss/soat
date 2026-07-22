@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
@@ -9,6 +10,8 @@ import { parseDuration } from './orchestrationDuration';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
 import type { OrchestrationNode } from './orchestrations';
+import type { ToolNodeGateResult } from './orchestrationToolGuardrail';
+import { runToolNodeGate } from './orchestrationToolGuardrail';
 import { callTool } from './tools';
 
 /**
@@ -25,6 +28,17 @@ export type WaitResume =
 export type NodeExecutionResult =
   | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
   | { kind: 'condition'; label: string }
+  | {
+      // A guardrail blocked (class D) or tripwired (failed class B) a tool
+      // node's call before it dispatched. Routable outcome (not a run failure):
+      // the engine records `artifact`, seeds `label` so edges conditioned on
+      // `blocked`/`tripwire` follow, and treats the node like a decision node so
+      // an unlabeled happy-path edge does NOT auto-follow a blocked action.
+      kind: 'blocked';
+      nodeId: string;
+      label: 'blocked' | 'tripwire';
+      artifact: Record<string, unknown>;
+    }
   | {
       kind: 'requires_action';
       type: 'human_input' | 'webhook_receive' | 'approval';
@@ -189,10 +203,22 @@ export const executeToolNode = async (args: {
   node: OrchestrationNode;
   state: Record<string, unknown>;
   projectIds: number[];
+  // The run's own project id — used to scope guardrail collection to the run's
+  // project. Falls back to `projectIds[0]` when absent (direct-call callers).
+  projectId?: number;
   authHeader?: string;
   // Run-scoped idempotency key, forwarded to the HTTP tool executor as the
   // `Idempotency-Key` request header (D7).
   idempotencyKey?: string;
+  // The run's public id — threaded into the guardrail evaluation identity so a
+  // guard can read `soat.run.*`.
+  runId?: string | null;
+  // Set when re-dispatching after a class-C approval: the frozen (or edited)
+  // arguments the human approved. Their presence bypasses the guardrail gate
+  // entirely (the call was already adjudicated) and skips input mapping — the
+  // approved args ARE the tool input. Re-evaluating here would re-route to
+  // approval and loop forever (Q4: skip re-eval on resume).
+  approvedArguments?: Record<string, unknown> | null;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, idempotencyKey } = args;
   if (!node.toolId)
@@ -201,12 +227,31 @@ export const executeToolNode = async (args: {
       `Tool node '${node.id}' missing toolId.`
     );
 
-  const inputs = applyInputMapping(node.inputMapping, state);
+  const inputs =
+    args.approvedArguments ?? applyInputMapping(node.inputMapping, state);
+
+  // Guardrail interception (G4): classify the call at project + tool scope and
+  // enact the strictest decision before dispatch (a zero-overhead passthrough
+  // when no guardrail applies). Skipped entirely on an approved re-dispatch —
+  // the call was already adjudicated at approval time (Q4).
+  const scopeProjectId = args.projectId ?? projectIds[0];
+  const gated: ToolNodeGateResult =
+    args.approvedArguments != null || scopeProjectId === undefined
+      ? { kind: 'execute', input: inputs }
+      : await runToolNodeGate({
+          node,
+          inputs,
+          projectId: scopeProjectId,
+          authHeader,
+          runId: args.runId,
+        });
+  if (gated.kind === 'result') return gated.result;
+
   const result = await callTool({
     projectIds,
     id: node.toolId,
     action: node.operationId,
-    input: inputs as Record<string, unknown>,
+    input: gated.input,
     authHeader,
     idempotencyKey,
   });
