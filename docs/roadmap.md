@@ -32,7 +32,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 P1 (queue/idempotency/worker) + P2 (concurrency limits) shipped; worker-fleet ops hardening + P3 (SQS driver) remain |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
-| G4 | Guardrails · action classes | [prd-guardrails.md](./prd-guardrails.md) | ✅ core shipped; client-tool + orch tool-node gates remain |
+| G4 | Guardrails · action classes | [modules/guardrails.md](../packages/website/docs/modules/guardrails.md) | ✅ shipped |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
 | G7 | Knowledge packages · context assembly | [prd-knowledge-packages.md](./prd-knowledge-packages.md) | ❌ Not started |
@@ -64,7 +64,6 @@ FOUNDATIONS (shipped)
 next, deps satisfied ──────────────────────────────────────────────────────
   orchestration-queue P2 ops hardening (worker fleet) ◄── orchestration-queue P2 ✅
   orchestration-queue P3 (pluggable driver + SQS) ◄── orchestration-queue P1 ✅
-  guardrails: client-tool gate, orch tool-node dispatch ◄── guardrails core ✅
   usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
 
 cross-initiative ──────────────────────────────────────────────────────────
@@ -100,8 +99,8 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Guardrails remaining gates** (client-tool, orch tool-node) and **usage
-   infra emitters (P4–P6)** — pure extensions of shipped cores. (**Quotas** is
+1. **Usage infra emitters (P4–P6)** — pure extensions of shipped cores.
+   (**Guardrails (G4)** is fully shipped. **Quotas** is
    done through P3: requests + token/cost enforcement, the `quota.exceeded`
    webhook, monitor mode, and the `quota` formation resource all shipped; only
    the monitor-breach *audit entry* remains, deferred to audit-log.
@@ -174,9 +173,13 @@ continues; C files the approval and, on approval, re-hands the frozen/edited cal
 off to the client via a fresh linked `requires_action` generation) across the
 agent-generation and session surfaces._
 
-- [x] Orchestration **tool-node** dispatch path — `tool` nodes are gated at project + tool scope: A/B execute, D/tripwire produce a routable `blocked` node outcome, C parks the run and re-dispatches the tool with the frozen/edited args on approval (gate not re-evaluated)
-- [ ] File an `ExceptionItem` on a tripwire (awaits the G3 Exceptions item; today returns a structured aborted tool result)
-- [ ] `[OPEN]` Per-action-class default expiry (72h budget / 168h strategy vs today's 24h `approval`-node default; align with `action-classes.yaml`)
+**Fully shipped — no open items.** The remaining backlog closed:
+
+- Orchestration **tool-node** dispatch gate — `tool` nodes are gated at project + tool scope: A/B execute, D/tripwire produce a routable `blocked` node outcome, C parks the run and re-dispatches the tool with the frozen/edited args on approval (gate not re-evaluated).
+- **Tripwire → exception** — a tripwire emits a `guardrail.tripwire` event that the [exceptions](../packages/website/docs/modules/exceptions.md) module files as a `guardrail_tripwire` exception (G3 Phase 3 shipped).
+- **Per-guardrail approval expiry** — a guardrail document carries an optional `expires_in` (the governing guardrail's value sets the class-C approval window); no per-action-class taxonomy was introduced.
+
+The authoritative contract is [modules/guardrails.md](../packages/website/docs/modules/guardrails.md).
 
 ### G5 — Usage metering
 
@@ -298,17 +301,6 @@ it, Discussions resource MVP, reasoning removed from agents)._
 Open consistency items the PRDs still carry — flagged here so the roadmap
 stays the source of truth:
 
-- **Guardrails PRD body is stale.** [prd-guardrails.md](./prd-guardrails.md)'s
-  Data Model / Permissions / REST API / Key Concepts (and its Implementation
-  Status + Phases) still describe the abandoned "guardrails as a `kind` on the
-  IAM `policies` resource" design (`pol_`, `policies:*`, `PolicyVersion`,
-  `ProjectPolicyOverride`, `rules[]` first-match). Five dated (2026-07)
-  decision blockquotes at the top override it; the authoritative contract is
-  [modules/guardrails.md](../packages/website/docs/modules/guardrails.md)
-  (`guard_`, `guardrails:*`, `GuardrailVersion`, attach lists, single-`class`
-  document). Its status here reflects the shipped reality, not the stale phase
-  list. A cleanup pass should annotate the stale back-half `✅ Shipped —
-  superseded`, the way usage-metering's schema section now is.
 - **Activity-feed ownership.** Both [prd-audit-log.md](./prd-audit-log.md)
   (`AuditEntry.detail`) and [prd-approvals.md](./prd-approvals.md)
   (`ActivityEntry`, `acte_`) describe an activity substrate. Audit-log claims

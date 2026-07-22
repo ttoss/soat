@@ -2,7 +2,7 @@
 
 > Closes the biggest verification gap in the platform: SOAT records what agents
 > *did* (traces, generations) and will constrain what they *may do*
-> ([prd-guardrails.md](./prd-guardrails.md),
+> ([guardrails](../packages/website/docs/modules/guardrails.md),
 > [prd-approvals.md](./prd-approvals.md)) — but nothing verifies agent behavior
 > **before** a change rolls out. Cross-references
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) (async execution),

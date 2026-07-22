@@ -2,7 +2,7 @@
 
 > Part of [Agent Operations on Formations](./prd-agent-operations.md).
 > Mirrors the version-archival pattern of `PolicyVersion`
-> ([prd-guardrails.md](./prd-guardrails.md)) and `LearnedRuleVersion`
+> ([guardrails](../packages/website/docs/modules/guardrails.md)) and `LearnedRuleVersion`
 > ([prd-learned-rules.md](./prd-learned-rules.md)). Eval-gated promotion
 > integrates with [prd-evaluations.md](./prd-evaluations.md).
 

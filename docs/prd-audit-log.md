@@ -1,7 +1,7 @@
 # PRD: Audit Log
 
 > Generalizes the `ActivityEntry` audit record introduced in
-> [prd-guardrails.md](./prd-guardrails.md) — guardrail evaluation records
+> [guardrails](../packages/website/docs/modules/guardrails.md) — guardrail evaluation records
 > become one `detail` kind of the entries defined here; this PRD defines the
 > `detail->>'kind'` convention, the kind's schema is owned by the guardrails
 > PRD — and provides the activity substrate
@@ -237,7 +237,7 @@ sweep, OpenAPI spec, permission JSON, SDK/CLI regeneration.
 ### Future work (not planned)
 
 - **Guardrail evaluations as `detail.kind = "guardrail_evaluation"`** —
-  owned by [prd-guardrails.md](./prd-guardrails.md); this PRD only defines
+  owned by [guardrails](../packages/website/docs/modules/guardrails.md); this PRD only defines
   the `detail->>'kind'` convention such entries must follow.
 - **Read auditing** — per-project config flag, off by default.
 - **`audit.entry_created` webhook event** — through the existing webhooks
