@@ -368,6 +368,15 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'A reason is required when rejecting an approval item.',
   },
+  EXCEPTION_NOT_FOUND: {
+    httpStatus: 404,
+    description: 'The exception item does not exist or is not accessible.',
+  },
+  EXCEPTION_ALREADY_RESOLVED: {
+    httpStatus: 409,
+    description:
+      'The exception item has already been resolved and cannot be acknowledged or resolved again.',
+  },
   APPROVAL_INVALID_EDIT: {
     httpStatus: 400,
     description:

@@ -11,6 +11,7 @@ import {
   stripApprovalJustification,
 } from './agentToolApproval';
 import { emitApproval } from './approvals';
+import { emitGuardrailTripwireEvent } from './exceptions';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import {
@@ -205,6 +206,16 @@ const governingResult = (
   return evaluated.find((entry) => {
     return entry.result.decision === decision;
   })?.result;
+};
+
+/** `${guardrailId}@${version}` of the guardrail that produced the composed
+ * decision, or null. Stamps tripwire-exception provenance for both paths. */
+export const governingGuardrailVersion = (args: {
+  evaluated: EvaluatedGuardrail[];
+  decision: GuardrailDecision;
+}): string | null => {
+  const governing = governingResult(args.evaluated, args.decision);
+  return governing ? `${governing.guardrailId}@${governing.version}` : null;
 };
 
 /**
@@ -475,6 +486,19 @@ export const evaluateAndRoute = async (args: {
 
   if (decision === 'execute') {
     return { decision, cleanArgs };
+  }
+  if (decision === 'tripwire') {
+    emitGuardrailTripwireEvent({
+      projectId: args.context.projectId,
+      projectPublicId: args.context.projectPublicId,
+      toolId: args.toolId,
+      toolName: args.toolName,
+      action: args.action,
+      guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
+      runId: args.context.runId,
+      agentId: args.context.agentId,
+      generationId: args.context.generationId,
+    });
   }
   return { decision, cleanArgs, result: BLOCK_RESULTS[decision] };
 };

@@ -1,0 +1,242 @@
+openapi: 3.0.3
+info:
+  title: SOAT Exceptions API
+  version: 1.0.0
+  description: >-
+    API for the exceptions queue — failures and anomalies surfaced as
+    first-class, triageable items rather than log lines. Items are auto-filed by
+    the platform (exhausted node retries, guardrail tripwires, expired
+    approvals) or filed explicitly (`manual`); there is no public create
+    endpoint. Repeated identical failures fold into one open item with an
+    incrementing occurrence count. Each item moves through
+    `open → acknowledged → resolved`.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Exceptions
+    description: Triage the failure/anomaly exception queue
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/exceptions:
+    get:
+      tags:
+        - Exceptions
+      summary: List exception items
+      description: Returns exception items for a project, filterable by status, severity, and kind.
+      operationId: listExceptions
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: status
+          in: query
+          description: Filter by triage status
+          schema:
+            type: string
+            enum: [open, acknowledged, resolved]
+        - name: severity
+          in: query
+          description: Filter by severity
+          schema:
+            type: string
+            enum: [info, warning, critical]
+        - name: kind
+          in: query
+          description: Filter by how the exception was filed
+          schema:
+            type: string
+            enum: [run_failed, guardrail_tripwire, approval_expired, manual]
+      responses:
+        '200':
+          description: List of exception items
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ExceptionItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+  /api/v1/exceptions/{exception_id}:
+    get:
+      tags:
+        - Exceptions
+      summary: Get an exception item
+      description: Returns a single exception item with its full detail.
+      operationId: getException
+      parameters:
+        - $ref: '#/components/parameters/exception_id'
+      responses:
+        '200':
+          description: Exception item
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Exception item not found
+  /api/v1/exceptions/{exception_id}/acknowledge:
+    post:
+      tags:
+        - Exceptions
+      summary: Acknowledge an exception item
+      description: >-
+        Moves the item to `acknowledged` ("someone is on it"), recording who.
+        A no-op that returns the item unchanged when already acknowledged;
+        rejected when already resolved.
+      operationId: acknowledgeException
+      parameters:
+        - $ref: '#/components/parameters/exception_id'
+      responses:
+        '200':
+          description: Exception item acknowledged
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Exception item not found
+        '409':
+          description: Item already resolved
+  /api/v1/exceptions/{exception_id}/resolve:
+    post:
+      tags:
+        - Exceptions
+      summary: Resolve an exception item
+      description: Moves the item to `resolved` ("fixed"), recording who and an optional note.
+      operationId: resolveException
+      parameters:
+        - $ref: '#/components/parameters/exception_id'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  description: Optional resolution note
+                  example: Root cause fixed; retried the run successfully.
+      responses:
+        '200':
+          description: Exception item resolved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ExceptionItem'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Exception item not found
+        '409':
+          description: Item already resolved
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  parameters:
+    exception_id:
+      name: exception_id
+      in: path
+      required: true
+      description: Exception item ID
+      schema:
+        type: string
+        example: exc_V1StGXR8Z5jdHi6B
+  schemas:
+    ExceptionItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: exc_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        status:
+          type: string
+          enum: [open, acknowledged, resolved]
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        kind:
+          type: string
+          enum: [run_failed, guardrail_tripwire, approval_expired, manual]
+          description: How the exception was filed
+        title:
+          type: string
+          description: Human-readable one-line summary
+        detail:
+          type: object
+          nullable: true
+          description: Structured context (tool, args digest, error message, guardrail version)
+        occurrence_count:
+          type: integer
+          description: How many times this exact failure has been observed while open
+        last_seen_at:
+          type: string
+          format: date-time
+          description: Timestamp of the most recent occurrence
+        run_id:
+          type: string
+          nullable: true
+          description: Originating orchestration run
+        node_id:
+          type: string
+          nullable: true
+          description: Originating node id within the run's graph
+        agent_id:
+          type: string
+          nullable: true
+          description: Associated agent
+        guardrail_version:
+          type: string
+          nullable: true
+          description: '`<guardrailId>@<version>` for a guardrail_tripwire exception'
+        acknowledged_by:
+          type: string
+          nullable: true
+          description: Acknowledging user's public ID
+        resolved_by:
+          type: string
+          nullable: true
+          description: Resolving user's public ID
+        resolution_note:
+          type: string
+          nullable: true
+          description: Optional note recorded at resolution
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time

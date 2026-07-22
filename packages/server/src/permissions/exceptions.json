@@ -1,0 +1,25 @@
+{
+  "module": "exceptions",
+  "operations": [
+    {
+      "operationId": "listExceptions",
+      "action": "exceptions:ListExceptions",
+      "description": "List exception items in a project"
+    },
+    {
+      "operationId": "getException",
+      "action": "exceptions:GetException",
+      "description": "Get an exception item by ID with its full detail"
+    },
+    {
+      "operationId": "acknowledgeException",
+      "action": "exceptions:AcknowledgeException",
+      "description": "Acknowledge an exception item (someone is on it)"
+    },
+    {
+      "operationId": "resolveException",
+      "action": "exceptions:ResolveException",
+      "description": "Resolve an exception item with an optional note"
+    }
+  ]
+}

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 
 import type { Context } from './Context';
+import { initializeExceptionsListener } from './lib/exceptions';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
 import { auditMiddleware } from './middleware/audit';
@@ -22,6 +23,7 @@ const app = new App();
 addHealthCheck({ app });
 
 initializeDispatcher();
+initializeExceptionsListener();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());
