@@ -1,7 +1,6 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS } from './agentToolApproval';
 import type { ResolverGuardrailContext } from './agentToolGuardrail';
 import { classifyGuardrailCall } from './agentToolGuardrail';
 import type { CollectedGuardrail } from './guardrailCollection';
@@ -88,6 +87,7 @@ const approvalResult = (args: {
   reasoning: string | null;
   evidence: object | null;
   predictedImpact: string | null;
+  expiresInSeconds: number;
 }): NodeExecutionResult => {
   const approvalSpec: ApprovalNodeSpec = {
     toolId: args.toolId,
@@ -95,7 +95,7 @@ const approvalResult = (args: {
     reasoning: args.reasoning,
     evidence: args.evidence,
     predictedImpact: args.predictedImpact,
-    expiresInSeconds: DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS,
+    expiresInSeconds: args.expiresInSeconds,
   };
   return {
     kind: 'requires_action',
@@ -147,16 +147,22 @@ export const runToolNodeGate = async (args: {
     baseGuardrails: [],
   };
 
-  const { decision, cleanArgs, effectiveArgs, justification, records } =
-    await classifyGuardrailCall({
-      modelArgs: args.inputs,
-      guardrails,
-      toolId,
-      toolName,
-      action: args.node.operationId ?? toolName,
-      presetParameters: null,
-      context,
-    });
+  const {
+    decision,
+    cleanArgs,
+    effectiveArgs,
+    justification,
+    approvalExpiresInSeconds,
+    records,
+  } = await classifyGuardrailCall({
+    modelArgs: args.inputs,
+    guardrails,
+    toolId,
+    toolName,
+    action: args.node.operationId ?? toolName,
+    presetParameters: null,
+    context,
+  });
 
   void persistGuardrailEvaluations({
     projectId: args.projectId,
@@ -180,6 +186,7 @@ export const runToolNodeGate = async (args: {
         reasoning: justification.reasoning,
         evidence: justification.evidence,
         predictedImpact: justification.predictedImpact,
+        expiresInSeconds: approvalExpiresInSeconds,
       }),
     };
   }

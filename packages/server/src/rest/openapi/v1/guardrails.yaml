@@ -428,6 +428,14 @@ components:
           description: >
             When `true`, a failing guard routes to approval instead of tripping
             fail-closed.
+        expires_in:
+          type: integer
+          minimum: 1
+          description: >
+            Default approval window in seconds for a class-C approval this
+            guardrail files. Omitted → the platform's 24h default. When several
+            guardrails apply, the governing (strictest-matching) one's value is
+            used.
     Guardrail:
       type: object
       properties:

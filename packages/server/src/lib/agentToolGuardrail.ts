@@ -229,6 +229,28 @@ export type Justification = {
  * writes the audit records linked to it, and returns the `pending_approval` tool
  * result. Split out so the wrapped execute stays within its complexity budget.
  */
+// The default approval window (seconds) the governing guardrail sets via its
+// document `expires_in`, or the platform default when it sets none. The
+// governing guardrail is the one whose decision matched the composed
+// `route_to_approval` — its version already stamps the item's provenance.
+export const governingApprovalExpiresIn = (args: {
+  guardrails: CollectedGuardrail[];
+  evaluated: EvaluatedGuardrail[];
+  decision: GuardrailDecision;
+}): number => {
+  if (args.decision !== 'route_to_approval') {
+    return DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS;
+  }
+  const governing = governingResult(args.evaluated, 'route_to_approval');
+  const guardrail = args.guardrails.find((collected) => {
+    return collected.guardrailId === governing?.guardrailId;
+  });
+  const expiresIn = guardrail?.document.expires_in;
+  return typeof expiresIn === 'number'
+    ? expiresIn
+    : DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS;
+};
+
 const routeToApproval = async (args: {
   gate: {
     toolId: string | null;
@@ -238,6 +260,7 @@ const routeToApproval = async (args: {
   };
   effectiveArgs: Record<string, unknown>;
   justification: Justification;
+  expiresInSeconds: number;
   evaluated: EvaluatedGuardrail[];
   records: GuardrailEvaluationRecord[];
 }): Promise<Record<string, unknown>> => {
@@ -257,7 +280,7 @@ const routeToApproval = async (args: {
     reasoning: args.justification.reasoning,
     evidence: args.justification.evidence,
     predictedImpact: args.justification.predictedImpact,
-    expiresInSeconds: DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS,
+    expiresInSeconds: args.expiresInSeconds,
     dedupKey: computeToolCallDedupKey({
       projectId: gate.context.projectId,
       // Non-null on the agent path (the only caller of routeToApproval); the
@@ -327,6 +350,10 @@ export type GuardrailClassification = {
   cleanArgs: Record<string, unknown>;
   effectiveArgs: Record<string, unknown>;
   justification: Justification;
+  // The approval window (seconds) to use if this routes to approval: the
+  // governing guardrail's `expires_in`, or the platform default. Always a valid
+  // number so callers need no fallback of their own.
+  approvalExpiresInSeconds: number;
   evaluated: EvaluatedGuardrail[];
   records: GuardrailEvaluationRecord[];
 };
@@ -385,6 +412,11 @@ export const classifyGuardrailCall = async (args: {
     cleanArgs,
     effectiveArgs,
     justification: { reasoning, evidence, predictedImpact },
+    approvalExpiresInSeconds: governingApprovalExpiresIn({
+      guardrails: args.guardrails,
+      evaluated,
+      decision,
+    }),
     evaluated,
     records,
   };
@@ -413,6 +445,7 @@ export const evaluateAndRoute = async (args: {
     cleanArgs,
     effectiveArgs,
     justification,
+    approvalExpiresInSeconds,
     evaluated,
     records,
   } = await classifyGuardrailCall(args);
@@ -427,6 +460,7 @@ export const evaluateAndRoute = async (args: {
       },
       effectiveArgs,
       justification,
+      expiresInSeconds: approvalExpiresInSeconds,
       evaluated,
       records,
     });

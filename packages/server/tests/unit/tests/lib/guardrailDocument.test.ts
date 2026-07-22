@@ -154,5 +154,35 @@ describe('validateGuardrailDocument', () => {
         });
       }).not.toThrow();
     });
+
+    test('accepts a positive-integer expires_in (default approval window)', () => {
+      expect(() => {
+        return validateGuardrailDocument({ class: 'C', expires_in: 259200 });
+      }).not.toThrow();
+    });
+  });
+
+  describe('expires_in', () => {
+    test('rejects a non-positive expires_in', () => {
+      expectValidationError(
+        { class: 'C', expires_in: 0 },
+        /expires_in.*positive integer/i
+      );
+      expectValidationError(
+        { class: 'C', expires_in: -60 },
+        /expires_in.*positive integer/i
+      );
+    });
+
+    test('rejects a non-integer expires_in', () => {
+      expectValidationError(
+        { class: 'C', expires_in: 1.5 },
+        /expires_in.*positive integer/i
+      );
+      expectValidationError(
+        { class: 'C', expires_in: '3600' },
+        /expires_in.*positive integer/i
+      );
+    });
   });
 });

@@ -82,6 +82,8 @@ A `class` expression that returns anything other than `"A"` / `"B"` / `"C"` / `"
 
 Class-C interception runs in the platform's tool-dispatch path with the return-pending mechanics the approval queue already defines: the call returns `{ "status": "pending_approval", "approval_id": …, "expires_at": … }` as the tool result, the turn completes normally, and resolution starts a continuation generation that executes the frozen (or edited) arguments — including [duplicate-proposal dedup](./approvals.md#data-model) and the model-visible `approval_*` justification fields.
 
+A guardrail may carry an optional **`expires_in`** (seconds) in its document — the default sign-off window for a class-C approval it files (e.g. `86400` for 24h, `259200` for 72h). Omitted, the platform's 24h default applies. When several guardrails apply to one call, the governing (strictest-matching) guardrail's `expires_in` wins. It applies uniformly wherever a guardrail files an approval — agent tool-dispatch and the [orchestration tool node](#orchestration-tool-nodes) alike.
+
 ### Classification
 
 `class` is either a literal — a guardrail attached to a tool that always requires sign-off is just `{ "class": "C" }` — or a **single JSON Logic expression** that returns the class. The expression evaluates over the same three namespaces as guards (`args.*` / `context.*` / `soat.*`), so the class can depend on the call's arguments or runtime context. There is no rule list and no matching order: one expression, one result.
