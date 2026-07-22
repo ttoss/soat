@@ -87,6 +87,11 @@ type PendingStateDb = {
     toolName: string;
     args: unknown;
   }>;
+  syntheticToolResults?: Array<{
+    toolCallId: string;
+    toolName: string;
+    output: unknown;
+  }>;
   messages: Array<{ role: string; content: string }>;
   steps?: unknown[];
   parentTraceId: string | null;
@@ -174,6 +179,7 @@ const buildPendingFromState = async (args: {
         args: tc.args,
       };
     }),
+    syntheticToolResults: args.pendingState.syntheticToolResults ?? [],
     messages: args.pendingState.messages,
     steps: args.pendingState.steps ?? [],
     resolvedModel: model,

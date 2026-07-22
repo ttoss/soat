@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import type { Tool } from 'ai';
 import { jsonSchema } from 'ai';
 import createDebug from 'debug';
@@ -292,6 +293,99 @@ const BLOCK_RESULTS: Record<'blocked' | 'tripwire', Record<string, string>> = {
   },
 };
 
+/**
+ * The outcome of composing every applying guardrail over one proposed call and
+ * enacting the strictest decision. `cleanArgs` is the model args with the
+ * approval-justification fields stripped — what actually executes (or is
+ * released to a client). `result` is the tool result to surface for a
+ * non-`execute` decision (`route_to_approval` → `pending_approval`; `blocked` /
+ * `tripwire` → the refusal object); it is absent when `decision === 'execute'`.
+ */
+export type GuardrailGateOutcome = {
+  decision: GuardrailDecision;
+  cleanArgs: Record<string, unknown>;
+  result?: Record<string, unknown>;
+};
+
+/**
+ * The shared classify → route core: strip the justification, compose every
+ * applying guardrail's decision over the live context, and enact the strictest.
+ * Both the server-side `execute` wrapper ({@link buildGuardedExecute}) and the
+ * client-tool gate ({@link buildClientToolGate}) run through this — the only
+ * difference is what they do with an `execute` decision (run the tool vs. release
+ * the call to the client). Every evaluation is written to the audit trail
+ * fire-and-forget, never blocking dispatch.
+ */
+export const evaluateAndRoute = async (args: {
+  modelArgs: unknown;
+  guardrails: CollectedGuardrail[];
+  toolId: string | null;
+  toolName: string;
+  action: string;
+  presetParameters?: Record<string, unknown> | null;
+  context: ResolverGuardrailContext;
+}): Promise<GuardrailGateOutcome> => {
+  const modelArgs = isPlainObject(args.modelArgs) ? args.modelArgs : {};
+  const { cleanArgs, reasoning, evidence, predictedImpact } =
+    stripApprovalJustification(modelArgs);
+  const effectiveArgs = { ...(args.presetParameters ?? {}), ...cleanArgs };
+
+  const identity: GuardrailCallIdentity = {
+    projectId: args.context.projectId,
+    projectPublicId: args.context.projectPublicId,
+    agentId: args.context.agentId,
+    toolId: args.toolId,
+    toolName: args.toolName,
+    action: args.action,
+    runId: args.context.runId,
+    run: args.context.run,
+  };
+
+  const { composed, evaluated } = await evaluateAll({
+    guardrails: args.guardrails,
+    effectiveArgs,
+    identity,
+    context: args.context,
+  });
+  const { decision } = composed;
+  log(
+    'guardrail gate: action=%s decision=%s guardrails=%d',
+    args.action,
+    decision,
+    args.guardrails.length
+  );
+  const records = evaluated.map((entry) => {
+    return entry.record;
+  });
+
+  if (decision === 'route_to_approval') {
+    const result = await routeToApproval({
+      gate: {
+        toolId: args.toolId,
+        toolName: args.toolName,
+        action: args.action,
+        context: args.context,
+      },
+      effectiveArgs,
+      justification: { reasoning, evidence, predictedImpact },
+      evaluated,
+      records,
+    });
+    return { decision, cleanArgs, result };
+  }
+
+  void persistGuardrailEvaluations({
+    projectId: args.context.projectId,
+    toolId: args.toolId,
+    records,
+  });
+
+  if (decision === 'execute') {
+    return { decision, cleanArgs };
+  }
+  return { decision, cleanArgs, result: BLOCK_RESULTS[decision] };
+};
+
 const buildGuardedExecute = (args: {
   originalExecute: NonNullable<Tool['execute']>;
   guardrails: CollectedGuardrail[];
@@ -302,65 +396,61 @@ const buildGuardedExecute = (args: {
   context: ResolverGuardrailContext;
 }): NonNullable<Tool['execute']> => {
   return async (...executeArgs) => {
-    const modelArgs = isPlainObject(executeArgs[0]) ? executeArgs[0] : {};
-    const { cleanArgs, reasoning, evidence, predictedImpact } =
-      stripApprovalJustification(modelArgs);
-    const effectiveArgs = { ...(args.presetParameters ?? {}), ...cleanArgs };
-
-    const identity: GuardrailCallIdentity = {
-      projectId: args.context.projectId,
-      projectPublicId: args.context.projectPublicId,
-      agentId: args.context.agentId,
+    const outcome = await evaluateAndRoute({
+      modelArgs: executeArgs[0],
+      guardrails: args.guardrails,
       toolId: args.toolId,
       toolName: args.toolName,
       action: args.action,
-      runId: args.context.runId,
-      run: args.context.run,
-    };
-
-    const { composed, evaluated } = await evaluateAll({
-      guardrails: args.guardrails,
-      effectiveArgs,
-      identity,
+      presetParameters: args.presetParameters,
       context: args.context,
     });
-    const { decision } = composed;
-    log(
-      'guardrail gate: action=%s decision=%s guardrails=%d',
-      args.action,
-      decision,
-      args.guardrails.length
-    );
-    const records = evaluated.map((entry) => {
-      return entry.record;
-    });
 
-    if (decision === 'route_to_approval') {
-      return routeToApproval({
-        gate: {
-          toolId: args.toolId,
-          toolName: args.toolName,
-          action: args.action,
-          context: args.context,
-        },
-        effectiveArgs,
-        justification: { reasoning, evidence, predictedImpact },
-        evaluated,
-        records,
-      });
-    }
-
-    void persistGuardrailEvaluations({
-      projectId: args.context.projectId,
-      toolId: args.toolId,
-      records,
-    });
-
-    if (decision === 'execute') {
+    if (outcome.decision === 'execute') {
       const [, ...rest] = executeArgs;
-      return args.originalExecute(cleanArgs, ...rest);
+      return args.originalExecute(outcome.cleanArgs, ...rest);
     }
-    return BLOCK_RESULTS[decision];
+    // `result` is always set for non-`execute` decisions.
+    return outcome.result ?? BLOCK_RESULTS.blocked;
+  };
+};
+
+/**
+ * The gate a client tool carries to the `requires_action` handoff. Client tools
+ * have no server-side `execute`, so they can't be gated by wrapping one; instead
+ * the resolver attaches this closure under {@link CLIENT_TOOL_GATE}, and the
+ * handoff runs it over each proposed call to decide whether the call is released
+ * to the client (`execute`) or held back with a synthesized tool result
+ * (`route_to_approval` / `blocked` / `tripwire`). See
+ * [guardrails.md — Client Tools].
+ */
+export type ClientToolGate = (call: {
+  input: unknown;
+}) => Promise<GuardrailGateOutcome>;
+
+/** Symbol key under which a resolved client tool carries its guardrail gate. */
+export const CLIENT_TOOL_GATE: unique symbol = Symbol('soat.clientToolGate');
+
+export type GatedClientTool = Tool & { [CLIENT_TOOL_GATE]?: ClientToolGate };
+
+const buildClientToolGate = (args: {
+  guardrails: CollectedGuardrail[];
+  toolId: string | null;
+  toolName: string;
+  action: string;
+  presetParameters?: Record<string, unknown> | null;
+  context: ResolverGuardrailContext;
+}): ClientToolGate => {
+  return (call) => {
+    return evaluateAndRoute({
+      modelArgs: call.input,
+      guardrails: args.guardrails,
+      toolId: args.toolId,
+      toolName: args.toolName,
+      action: args.action,
+      presetParameters: args.presetParameters,
+      context: args.context,
+    });
   };
 };
 
@@ -369,8 +459,10 @@ const buildGuardedExecute = (args: {
  * binding (one for most types; many for `mcp` / `soat`). A tool is gated only
  * when at least one guardrail applies to it (project/agent base ∪ its own tool
  * scope) — otherwise it passes through untouched, so guardrail interception is
- * zero-overhead for tools nothing gates. Tools with no `execute` (client tools)
- * are handled at the `requires_action` handoff, not here.
+ * zero-overhead for tools nothing gates. Server tools are gated by wrapping
+ * their `execute`; client tools (no `execute`) instead carry a
+ * {@link CLIENT_TOOL_GATE} closure the `requires_action` handoff runs — they
+ * stay execute-less, so they remain client tools downstream.
  */
 export const gateResolvedToolsWithGuardrails = async (args: {
   tools: Record<string, Tool>;
@@ -396,33 +488,53 @@ export const gateResolvedToolsWithGuardrails = async (args: {
   const gated: Record<string, Tool> = {};
 
   for (const [key, resolvedTool] of Object.entries(args.tools)) {
-    if (!resolvedTool.execute) {
-      gated[key] = resolvedTool;
-      continue;
-    }
     const action = resolvedActionName({
       type: args.toolType,
       toolName: args.toolName,
       key,
     });
-    const guardedExecute = buildGuardedExecute({
-      originalExecute: resolvedTool.execute,
-      guardrails: applicable,
-      toolId: args.toolId,
-      toolName: args.toolName,
-      action,
-      presetParameters: args.presetParameters,
-      context: args.context,
-    });
-    gated[key] = injectSchema
+    // The (optionally justification-injected) base tool, shared by both the
+    // server-execute and client-handoff paths.
+    const base: Tool = injectSchema
       ? {
           ...resolvedTool,
           inputSchema: jsonSchema(
             injectApprovalJustificationSchema(args.rawParameters)
           ),
-          execute: guardedExecute,
         }
-      : { ...resolvedTool, execute: guardedExecute };
+      : resolvedTool;
+
+    // Client tool (no server-side `execute`): it can't be gated by wrapping
+    // `execute`, so attach the gate the requires_action handoff runs instead.
+    // The tool still has no `execute`, so it stays a client tool downstream.
+    if (!resolvedTool.execute) {
+      const clientTool: GatedClientTool = {
+        ...base,
+        [CLIENT_TOOL_GATE]: buildClientToolGate({
+          guardrails: applicable,
+          toolId: args.toolId,
+          toolName: args.toolName,
+          action,
+          presetParameters: args.presetParameters,
+          context: args.context,
+        }),
+      };
+      gated[key] = clientTool;
+      continue;
+    }
+
+    gated[key] = {
+      ...base,
+      execute: buildGuardedExecute({
+        originalExecute: resolvedTool.execute,
+        guardrails: applicable,
+        toolId: args.toolId,
+        toolName: args.toolName,
+        action,
+        presetParameters: args.presetParameters,
+        context: args.context,
+      }),
+    };
   }
 
   return gated;

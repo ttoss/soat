@@ -278,7 +278,7 @@ describe('agentNonStreamGeneration', () => {
       nonSystemMessages: pending.messages,
     });
 
-    const result = resolveToolOutputsResult({
+    const result = await resolveToolOutputsResult({
       generationId: pending.generationId,
       agentId: pending.agentId,
       pending,
@@ -328,7 +328,7 @@ describe('agentNonStreamGeneration', () => {
       nonSystemMessages: pending.messages,
     });
 
-    const result = resolveToolOutputsResult({
+    const result = await resolveToolOutputsResult({
       generationId: pending.generationId,
       agentId: pending.agentId,
       pending,
@@ -346,6 +346,143 @@ describe('agentNonStreamGeneration', () => {
         finishReason: 'stop',
       },
     });
+  });
+
+  // ── Client-tool guardrail gate wiring ────────────────────────────────────
+  // Drives runNonStreamGeneration with a client tool carrying a CLIENT_TOOL_GATE
+  // closure, mocking `ai.generateText` so the gate decision is deterministic.
+  // CLIENT_TOOL_GATE is imported from the SAME freshly-loaded module graph as
+  // runNonStreamGeneration (post doMock + resetModules) so the symbol matches.
+
+  const gateTypedAgent = () => {
+    return {
+      instructions: null,
+      model: 'mock-model',
+      toolIds: null,
+      maxSteps: 5,
+      toolChoice: 'auto',
+      stopConditions: null,
+      activeToolIds: null,
+      stepRules: null,
+      boundaryPolicy: null,
+      temperature: null,
+      outputSchema: null,
+      project: { id: realProjectId, publicId: realProjectPublicId },
+      aiProvider: { publicId: 'aip_test' },
+    } as never;
+  };
+
+  const clientCallResult = (toolCallId: string) => {
+    return {
+      text: '',
+      finishReason: 'tool-calls',
+      steps: [
+        {
+          toolCalls: [{ toolCallId, toolName: 'client-tool', input: { x: 1 } }],
+        },
+      ],
+      response: {
+        modelId: 'mock-model',
+        messages: [
+          {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool-call',
+                toolCallId,
+                toolName: 'client-tool',
+                input: { x: 1 },
+              },
+            ],
+          },
+        ],
+      },
+    };
+  };
+
+  test('a gated (blocked) client call is not released — the model resumes and completes', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      const generateText = jest
+        .fn()
+        .mockResolvedValueOnce(clientCallResult('tc_blocked'))
+        .mockResolvedValueOnce({
+          text: 'I could not do that.',
+          finishReason: 'stop',
+          steps: [],
+          response: { modelId: 'mock-model', messages: [] },
+        });
+      return { ...actual, generateText };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+    const { CLIENT_TOOL_GATE } = await import('src/lib/agentToolGuardrail');
+
+    const resolvedTools = {
+      'client-tool': {
+        description: 'c',
+        inputSchema: jsonSchema({ type: 'object', properties: {} }),
+        [CLIENT_TOOL_GATE]: async () => {
+          return {
+            decision: 'blocked',
+            cleanArgs: {},
+            result: { status: 'blocked' },
+          };
+        },
+      } as never,
+    };
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'go' }],
+      resolvedTools,
+      typedAgent: gateTypedAgent(),
+      generationId: 'gen_gate_blocked',
+      traceId: 'trc_gate_blocked',
+      agentId: realAgentPublicId,
+    });
+
+    expect(result.status).toBe('completed');
+    expect(result.output?.content).toBe('I could not do that.');
+  });
+
+  test('a released (execute) client call suspends at requires_action', async () => {
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        generateText: jest
+          .fn()
+          .mockResolvedValue(clientCallResult('tc_release')),
+      };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+    const { CLIENT_TOOL_GATE } = await import('src/lib/agentToolGuardrail');
+
+    const resolvedTools = {
+      'client-tool': {
+        description: 'c',
+        inputSchema: jsonSchema({ type: 'object', properties: {} }),
+        [CLIENT_TOOL_GATE]: async () => {
+          return { decision: 'execute', cleanArgs: { x: 1 } };
+        },
+      } as never,
+    };
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'go' }],
+      resolvedTools,
+      typedAgent: gateTypedAgent(),
+      generationId: 'gen_gate_release',
+      traceId: 'trc_gate_release',
+      agentId: realAgentPublicId,
+    });
+
+    expect(result.status).toBe('requires_action');
+    expect(result.requiredAction?.toolCalls[0].toolName).toBe('client-tool');
+    expect(result.requiredAction?.toolCalls[0].args).toEqual({ x: 1 });
   });
 });
 
