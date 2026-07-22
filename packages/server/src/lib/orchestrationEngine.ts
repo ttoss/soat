@@ -16,6 +16,7 @@ import {
   resolveNextNodes,
 } from './orchestrationExecutors';
 import { newLeaseExpiry } from './orchestrationLease';
+import { executeToolNode } from './orchestrationNodeExecutors';
 import {
   recordDelayResumption,
   recordHumanInputResumption,
@@ -61,6 +62,22 @@ const sleep = (ms: number): Promise<void> => {
   return new Promise<void>((resolve) => {
     return setTimeout(resolve, Math.max(ms, 0));
   });
+};
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+// The args to re-dispatch an approved tool call with: the human's edit if
+// present, otherwise the frozen proposal. Ignored unless the parked node is a
+// guardrail-gated tool node approved via class-C.
+const resolveApprovedArguments = (args: {
+  item: MappedApproval;
+  decision: DecisionOutput;
+}): Record<string, unknown> | null => {
+  if (isPlainRecord(args.decision.editedArgs)) return args.decision.editedArgs;
+  const proposedArgs = args.item.proposedAction?.arguments;
+  return isPlainRecord(proposedArgs) ? proposedArgs : null;
 };
 
 /** Ids of the graph's `approval` nodes — the decision-routed nodes whose
@@ -541,6 +558,127 @@ export const wakeRun = async (args: {
   });
 };
 
+/**
+ * Applies a resumed node's outcome to run state. For a class-C-approved `tool`
+ * node it re-dispatches the tool with the frozen/edited args (gate skipped, Q4)
+ * and records the tool result as the node artifact so downstream nodes read the
+ * tool output; every other resume (human input, or an approval decision on an
+ * `approval`/rejected/expired node) records the submitted output as-is.
+ */
+const applyResumeNodeOutcome = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+  resumedNode?: OrchestrationNode;
+  humanNodeId?: string;
+  humanOutput?: Record<string, unknown>;
+  decisionLabel?: string;
+  approvedArguments?: Record<string, unknown> | null;
+  nodes: OrchestrationNode[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Promise<void> => {
+  const { run, resumedNode, humanNodeId, humanOutput, decisionLabel } = args;
+
+  if (resumedNode?.type === 'tool' && decisionLabel === 'approved') {
+    const execResult = await executeToolNode({
+      node: resumedNode,
+      state: args.state,
+      projectIds: [run.projectId as number],
+      projectId: run.projectId as number,
+      runId: run.publicId as string,
+      approvedArguments: args.approvedArguments ?? {},
+    });
+    const toolArtifact =
+      execResult.kind === 'artifact' ? execResult.artifact : {};
+    writeNodeArtifact({
+      nodeId: resumedNode.id,
+      artifact: toolArtifact,
+      state: args.state,
+    });
+    applyStateMapping(resumedNode.stateMapping, toolArtifact, args.state);
+    args.artifacts[resumedNode.id] = toolArtifact;
+    await recordHumanInputResumption({
+      runRecord: run,
+      humanNodeId: resumedNode.id,
+      humanOutput: toolArtifact,
+    });
+    return;
+  }
+
+  if (humanNodeId && humanOutput) {
+    applyHumanInputToState({
+      humanNodeId,
+      humanOutput,
+      nodes: args.nodes,
+      state: args.state,
+      artifacts: args.artifacts,
+    });
+    await recordHumanInputResumption({
+      runRecord: run,
+      humanNodeId,
+      humanOutput,
+    });
+  }
+};
+
+// Decision-routed node ids for a resume: the graph's `approval` nodes, plus a
+// gated `tool` node that parked for approval — its unlabeled success edge
+// follows only on `approved`, so a rejected/expired decision never falls
+// through to the happy path.
+const buildResumeDecisionNodeIds = (args: {
+  nodes: OrchestrationNode[];
+  resumedNode?: OrchestrationNode;
+  humanNodeId?: string;
+}): Set<string> => {
+  const ids = collectApprovalNodeIds(args.nodes);
+  if (args.resumedNode?.type === 'tool' && args.humanNodeId) {
+    ids.add(args.humanNodeId);
+  }
+  return ids;
+};
+
+// Builds the resume activation set: which nodes are already complete, the
+// resumed node's branch label, and the successor node ids to activate next.
+const resolveResumeActivation = (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  artifacts: Record<string, unknown>;
+  resumedNode?: OrchestrationNode;
+  humanNodeId?: string;
+  decisionLabel?: string;
+}): {
+  completedNodes: Set<string>;
+  conditionLabels: Map<string, string>;
+  startNodeIds: string[];
+} => {
+  const activeNodes = args.run.activeNodes as string[];
+  const completedNodes = new Set<string>(
+    Object.keys(args.artifacts).concat(
+      args.humanNodeId ? [args.humanNodeId] : []
+    )
+  );
+  const conditionLabels = new Map<string, string>();
+  // An approval resume routes by its decision: seed the resumed node's branch
+  // label so `resolveNextNodes` matches `on_expired`/`approved`/`rejected` edges
+  // and gates unlabeled edges to the approval case only.
+  if (args.humanNodeId && args.decisionLabel) {
+    conditionLabels.set(args.humanNodeId, args.decisionLabel);
+  }
+  const startNodeIds = resolveResumeStartNodes({
+    humanNodeId: args.humanNodeId,
+    activeNodes,
+    completedNodes,
+    conditionLabels,
+    edges: args.edges,
+    decisionNodeIds: buildResumeDecisionNodeIds({
+      nodes: args.nodes,
+      resumedNode: args.resumedNode,
+      humanNodeId: args.humanNodeId,
+    }),
+  });
+  return { completedNodes, conditionLabels, startNodeIds };
+};
+
 export const resumeOrchestrationRunExecution = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
   humanNodeId?: string;
@@ -549,6 +687,9 @@ export const resumeOrchestrationRunExecution = async (args: {
   // | 'expired') becomes the node's branch label so `on_expired`/`approved`/…
   // edges route, and unlabeled edges follow only on approval.
   decisionLabel?: string;
+  // Set when resuming a guardrail-gated `tool` node approved via class-C: the
+  // frozen (or edited) arguments to re-dispatch the tool with, gate skipped.
+  approvedArguments?: Record<string, unknown> | null;
 }): Promise<MappedOrchestrationRun> => {
   const { run, humanNodeId, humanOutput, decisionLabel } = args;
   log('resumeOrchestrationRunExecution %o', {
@@ -574,40 +715,34 @@ export const resumeOrchestrationRunExecution = async (args: {
 
   await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
 
-  if (humanNodeId && humanOutput) {
-    applyHumanInputToState({
-      humanNodeId,
-      humanOutput,
-      nodes,
-      state,
-      artifacts,
-    });
-    await recordHumanInputResumption({
-      runRecord: run,
-      humanNodeId,
-      humanOutput,
-    });
-  }
+  const resumedNode = humanNodeId
+    ? nodes.find((n) => {
+        return n.id === humanNodeId;
+      })
+    : undefined;
 
-  const activeNodes = run.activeNodes as string[];
-  const completedNodes = new Set<string>(
-    Object.keys(artifacts).concat(humanNodeId ? [humanNodeId] : [])
-  );
-  const conditionLabels = new Map<string, string>();
-  // An approval resume routes by its decision: seed the resumed node's branch
-  // label so `resolveNextNodes` matches `on_expired`/`approved`/`rejected` edges
-  // and gates unlabeled edges to the approval case only.
-  if (humanNodeId && decisionLabel) {
-    conditionLabels.set(humanNodeId, decisionLabel);
-  }
-  const startNodeIds = resolveResumeStartNodes({
+  await applyResumeNodeOutcome({
+    run,
+    resumedNode,
     humanNodeId,
-    activeNodes,
-    completedNodes,
-    conditionLabels,
-    edges,
-    decisionNodeIds: collectApprovalNodeIds(nodes),
+    humanOutput,
+    decisionLabel,
+    approvedArguments: args.approvedArguments,
+    nodes,
+    state,
+    artifacts,
   });
+
+  const { completedNodes, conditionLabels, startNodeIds } =
+    resolveResumeActivation({
+      run,
+      nodes,
+      edges,
+      artifacts,
+      resumedNode,
+      humanNodeId,
+      decisionLabel,
+    });
 
   await run.update({
     status: 'running',
@@ -761,11 +896,13 @@ const resumeRunForApproval = async (args: {
     nodeId: item.nodeId,
     decision: decision.decision,
   });
+
   await resumeOrchestrationRunExecution({
     run,
     humanNodeId: item.nodeId,
     humanOutput: { ...decision },
     decisionLabel: decision.decision,
+    approvedArguments: resolveApprovedArguments({ item, decision }),
   });
 };
 
