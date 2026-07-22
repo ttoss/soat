@@ -335,6 +335,44 @@ describe('Orchestration tool-node guardrails', () => {
       expect(getRes.body.state.after).toBe('continued');
     });
 
+    test("a guardrail's expires_in sets the approval window (not the 24h default)", async () => {
+      const EXPIRES_IN = 259200; // 72h — deliberately not the 24h default
+      const guardrailId = await createGuardrail({
+        name: 'Approval With Window',
+        document: { class: 'C', expires_in: EXPIRES_IN },
+      });
+      const toolId = await createTool({
+        name: 'Windowed Tool',
+        guardrailIds: [guardrailId],
+      });
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Windowed Approval Pipeline',
+          project_id: projectId,
+          nodes: [
+            { id: 'act', type: 'tool', tool_id: toolId, input_mapping: {} },
+          ],
+          edges: [],
+        });
+      expect(createRes.status).toBe(201);
+
+      jest.spyOn(toolsModule, 'callTool').mockResolvedValue({ ok: 'yes' });
+
+      const runRes = await startApprovalRun(createRes.body.id);
+      const approvalId = runRes.body.required_action.approval_id;
+
+      const item = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/${approvalId}`
+      );
+      const windowSeconds =
+        (new Date(item.body.expires_at).getTime() -
+          new Date(item.body.created_at).getTime()) /
+        1000;
+      // The governing guardrail's expires_in wins over the 24h default.
+      expect(Math.abs(windowSeconds - EXPIRES_IN)).toBeLessThan(120);
+    });
+
     test('rejecting does not execute the tool', async () => {
       const orchestrationId = await buildApprovalPipeline();
       const callToolSpy = jest

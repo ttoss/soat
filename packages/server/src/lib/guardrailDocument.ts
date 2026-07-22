@@ -20,9 +20,20 @@ export type GuardrailDocument = {
   default_class?: ActionClass;
   guard?: Record<string, unknown>;
   escalate?: boolean;
+  // Default approval window (seconds) for a class-C approval this guardrail
+  // files. Absent → the platform's 24h default. Lets a guardrail carry its own
+  // sign-off deadline (e.g. 72h for a budget change) without a separate
+  // taxonomy; the governing guardrail's value wins when several apply.
+  expires_in?: number;
 };
 
-const DOCUMENT_KEYS = ['class', 'default_class', 'guard', 'escalate'];
+const DOCUMENT_KEYS = [
+  'class',
+  'default_class',
+  'guard',
+  'escalate',
+  'expires_in',
+];
 
 /**
  * The fixed `soat.*` catalog. A `soat.*` variable outside this set is rejected
@@ -197,6 +208,17 @@ const validateOptionalFields = (document: Record<string, unknown>): void => {
     throw new DomainError(
       'VALIDATION_FAILED',
       "Guardrail 'escalate' must be a boolean."
+    );
+  }
+  if (
+    'expires_in' in document &&
+    (typeof document.expires_in !== 'number' ||
+      !Number.isInteger(document.expires_in) ||
+      document.expires_in <= 0)
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      "Guardrail 'expires_in' must be a positive integer (seconds)."
     );
   }
 };
