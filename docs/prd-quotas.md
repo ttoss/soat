@@ -4,7 +4,7 @@
 > Depends on the meter-write choke point from
 > [prd-usage-metering.md](./prd-usage-metering.md) (Phase 1) for token/cost
 > windows; complements the per-action classification in
-> [prd-guardrails.md](./prd-guardrails.md).
+> [guardrails](../packages/website/docs/modules/guardrails.md).
 
 > **Counted-identity decision (2026-07).** The request-quota middleware counts
 > **API-key-authenticated requests only** in v1. JWT-user requests are never
@@ -104,7 +104,7 @@
 The platform can now *measure* spend
 ([usage metering](./prd-usage-metering.md) meters every LLM call and alerts
 via `usage.threshold_crossed`) and *classify* individual actions
-([guardrails](./prd-guardrails.md) route a single tool call to
+([guardrails](../packages/website/docs/modules/guardrails.md) route a single tool call to
 execute/approve/block). Neither **enforces an aggregate hard cap**: a
 threshold webhook that nobody consumes does not stop a runaway agent loop,
 and a guardrail evaluates one action at a time, not "this API key made 4,000
@@ -121,7 +121,7 @@ budgets.
 | Layer                                        | Question it answers                          | Blocking? |
 | -------------------------------------------- | -------------------------------------------- | --------- |
 | [Usage metering](./prd-usage-metering.md)    | "What did this cost?" (measure + alert)      | No        |
-| [Guardrails](./prd-guardrails.md)            | "May this *one* tool call execute?"          | Per action |
+| [Guardrails](../packages/website/docs/modules/guardrails.md)            | "May this *one* tool call execute?"          | Per action |
 | **Quotas (this PRD)**                        | "Has this scope exceeded its aggregate cap?" | Yes — 429 |
 
 No overlap: quotas never inspect action arguments (guardrails' job) and never

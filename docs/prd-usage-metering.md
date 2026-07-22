@@ -5,7 +5,7 @@
 > Depends on the idempotency keys from
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > exactly-once accounting under retries; feeds the `usage.*` guard context in
-> [prd-guardrails.md](./prd-guardrails.md) and the token/cost windows in
+> [guardrails](../packages/website/docs/modules/guardrails.md) and the token/cost windows in
 > [prd-quotas.md](./prd-quotas.md).
 
 ## Implementation Status
@@ -33,7 +33,7 @@
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
 | `usage.threshold_crossed` webhook event    | ✅ Done (#565)              | Fired after each usage-event write when a windowed metric crosses a threshold; once-per-window / 10% re-arm hysteresis |
 | Threshold config (`UsageThreshold` table)  | ✅ Done (#565)              | Per-project thresholds + fire state (`UsageThreshold`) + CRUD driving `usage.threshold_crossed` |
-| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([prd-guardrails.md](./prd-guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read |
+| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([guardrails](../packages/website/docs/modules/guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read |
 
 ## Overview
 
@@ -333,7 +333,7 @@ this phase only prices.
 ### Phase 7 — Budget Guard Integration ⏭️ Deferred
 
 > Blocked on the guardrail evaluator and `usage.*` guard context
-> ([prd-guardrails.md](./prd-guardrails.md)), which are unbuilt. The per-run
+> ([guardrails](../packages/website/docs/modules/guardrails.md)), which are unbuilt. The per-run
 > token-ceiling issue (#486) was deferred for the same reason. Interim: now that
 > Phase 3a has landed, an orchestration `condition` node can read the run's
 > cumulative usage (via the run roll-up) and route to an abort path —
@@ -344,7 +344,7 @@ this phase only prices.
 **Deliverables:**
 
 - `usage.*` context provider for the
-  [guardrail evaluator](./prd-guardrails.md):
+  [guardrail evaluator](../packages/website/docs/modules/guardrails.md):
   `usage.cost_usd(window)`, `usage.tokens(window)`, per project
 - Documented pattern: a class-B rule guarded by
   `{'<': [{var: 'usage.cost_usd_24h'}, {var: 'project.context.cost_ceiling'}]}`
