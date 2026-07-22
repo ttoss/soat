@@ -27,8 +27,10 @@
 | Run lifecycle webhook events                   | ✅ Implemented | `orchestration_runs.started` / `.awaiting_input` / `.succeeded` / `.failed`                   |
 | Queue abstraction + Postgres driver            | ✅ Implemented | `run_tasks` claimed with `SELECT … FOR UPDATE SKIP LOCKED`; `enqueue`/`claim`/`ack`/`retry`    |
 | Run-scoped node idempotency keys               | ✅ Implemented | `{run_id}:{node_id}:{attempt}` written `running` before side effects; completed key reused     |
-| Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint; deploy/ops tooling lands with Phase 2   |
+| Worker pool (separate process option)          | ✅ Implemented | Extractable worker loop + thin `worker.ts` entrypoint + graceful shutdown (SIGTERM/SIGINT)      |
 | Concurrency limits (per project + global)      | ✅ Implemented | Phase 2 — `max_concurrent_runs` per project + `ORCHESTRATION_WORKER_CONCURRENCY` per worker; queue-stats endpoint; graceful worker shutdown (D8–D10) |
+| Worker-fleet ops hardening                     | 🚧 Partial     | Phase 2 tail — graceful shutdown shipped; dedicated compose worker service, worker healthcheck, and fleet smoke coverage remain |
+| Pluggable driver interface + SQS driver        | ❌ Not started | Phase 3 — for deployments that standardize on a managed queue                                  |
 
 ## Resolved design decisions
 
