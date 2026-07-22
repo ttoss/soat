@@ -1159,6 +1159,46 @@ if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestratio
 fi
 echo "Completed run: OK"
 
+# Exceptions module coverage: a run that fails (nonexistent tool) auto-files a
+# run_failed exception, which we then acknowledge and resolve. The exception is
+# filed fire-and-forget off the failed event, so poll for it.
+echo "--- Exceptions: a failed run files a run_failed exception ---"
+ORCH_FAIL_RESP=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-exception-fail" \
+  --nodes '[{"id":"boom","type":"tool","tool_id":"tool_doesnotexist","input_mapping":{}}]' \
+  --edges '[]')
+ORCH_FAIL_ID=$(printf '%s\n' "$ORCH_FAIL_RESP" | jq -r '.id')
+FAIL_RUN_RESP=$($SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_FAIL_ID" --input '{}' --wait true)
+FAIL_RUN_ID=$(printf '%s\n' "$FAIL_RUN_RESP" | jq -r '.id')
+
+EXC_ID=""
+i=0
+while [ $i -lt 30 ]; do
+  EXC_LIST=$($SOAT_CLI list-exceptions --project_id "$PROJECT_PUBLIC_ID" --kind run_failed)
+  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" 'map(select(.run_id == $run)) | .[0].id // empty')
+  [ -n "$EXC_ID" ] && break
+  i=$((i + 1))
+  sleep 1
+done
+if [ -z "$EXC_ID" ]; then
+  echo "ERROR: no run_failed exception filed for run $FAIL_RUN_ID" >&2
+  printf '%s\n' "$EXC_LIST" >&2
+  exit 1
+fi
+echo "Exception filed: $EXC_ID"
+
+$SOAT_CLI get-exception --exception-id "$EXC_ID" >/dev/null
+$SOAT_CLI acknowledge-exception --exception-id "$EXC_ID" >/dev/null
+EXC_RESOLVED=$($SOAT_CLI resolve-exception --exception-id "$EXC_ID" --note "smoke resolved")
+if ! printf '%s\n' "$EXC_RESOLVED" | jq -e '.status == "resolved"' >/dev/null 2>&1; then
+  echo "ERROR: resolve-exception did not resolve $EXC_ID" >&2
+  printf '%s\n' "$EXC_RESOLVED" >&2
+  exit 1
+fi
+echo "Exceptions coverage: OK"
+
 echo "--- Run input is visible to node logic via the input namespace ---"
 # A snake_case input key must round-trip verbatim; it resolves only through the
 # namespaced form ({"var":"input.cycle_task"}) — a flat {"var":"cycle_task"}

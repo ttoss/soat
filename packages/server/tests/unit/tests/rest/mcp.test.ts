@@ -4,6 +4,7 @@ import { app } from 'src/app';
 import { db } from 'src/db';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import * as discussionCompletion from 'src/lib/discussionCompletion';
+import { fileException } from 'src/lib/exceptions';
 import { createGenerationRecord } from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
@@ -218,6 +219,43 @@ describe('MCP tools - happy path', () => {
     );
     expect(fetched.id).toBe(entry.id);
     expect(fetched.action).toBe('secrets:CreateSecret');
+  });
+
+  // ── Exceptions ───────────────────────────────────────────────────────────
+
+  test('list-exceptions, get-exception, and resolve-exception expose the queue', async () => {
+    // No public create endpoint — file one through the lib, the way a producer
+    // would, then triage it through the MCP surface.
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const filed = await fileException({
+      projectId: project!.id as number,
+      kind: 'manual',
+      title: 'MCP exception',
+    });
+
+    const listed = parseResult(await mcpCall('list-exceptions', { projectId }));
+    expect(Array.isArray(listed)).toBe(true);
+    expect(
+      listed.some((e: { id: string }) => {
+        return e.id === filed.id;
+      })
+    ).toBe(true);
+
+    const fetched = parseResult(
+      await mcpCall('get-exception', { exceptionId: filed.id })
+    );
+    expect(fetched.id).toBe(filed.id);
+    expect(fetched.kind).toBe('manual');
+
+    const resolved = parseResult(
+      await mcpCall('resolve-exception', {
+        exceptionId: filed.id,
+        note: 'Handled via MCP.',
+      })
+    );
+    expect(resolved.status).toBe('resolved');
   });
 
   // ── Workflows & Tasks ──────────────────────────────────────────────────────

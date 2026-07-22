@@ -1,8 +1,15 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import type { ResolverGuardrailContext } from './agentToolGuardrail';
-import { classifyGuardrailCall } from './agentToolGuardrail';
+import type {
+  GuardrailClassification,
+  ResolverGuardrailContext,
+} from './agentToolGuardrail';
+import {
+  classifyGuardrailCall,
+  governingGuardrailVersion,
+} from './agentToolGuardrail';
+import { emitGuardrailTripwireEvent } from './exceptions';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
@@ -107,6 +114,58 @@ const approvalResult = (args: {
   };
 };
 
+// Maps a classified decision to a node result: park for approval (C), a
+// routable blocked outcome (D / tripwire — a tripwire also emits the event the
+// exceptions module turns into a guardrail_tripwire exception), or proceed.
+const enactToolNodeDecision = (args: {
+  classification: GuardrailClassification;
+  node: OrchestrationNode;
+  toolId: string;
+  toolName: string;
+  projectId: number;
+  projectPublicId: string;
+  runId: string | null;
+}): ToolNodeGateResult => {
+  const { decision, cleanArgs, effectiveArgs, justification, evaluated } =
+    args.classification;
+
+  if (decision === 'route_to_approval') {
+    return {
+      kind: 'result',
+      result: approvalResult({
+        node: args.node,
+        toolId: args.toolId,
+        effectiveArgs,
+        reasoning: justification.reasoning,
+        evidence: justification.evidence,
+        predictedImpact: justification.predictedImpact,
+        expiresInSeconds: args.classification.approvalExpiresInSeconds,
+      }),
+    };
+  }
+
+  if (decision === 'blocked' || decision === 'tripwire') {
+    if (decision === 'tripwire') {
+      emitGuardrailTripwireEvent({
+        projectId: args.projectId,
+        projectPublicId: args.projectPublicId,
+        toolId: args.toolId,
+        toolName: args.toolName,
+        action: args.node.operationId ?? args.toolName,
+        guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
+        runId: args.runId,
+        nodeId: args.node.id,
+      });
+    }
+    return {
+      kind: 'result',
+      result: blockedResult({ node: args.node, label: decision }),
+    };
+  }
+
+  return { kind: 'execute', input: cleanArgs };
+};
+
 /**
  * Gates one orchestration `tool` node call through the shared guardrail
  * classify core and maps the decision to a node result. A zero-overhead
@@ -147,14 +206,7 @@ export const runToolNodeGate = async (args: {
     baseGuardrails: [],
   };
 
-  const {
-    decision,
-    cleanArgs,
-    effectiveArgs,
-    justification,
-    approvalExpiresInSeconds,
-    records,
-  } = await classifyGuardrailCall({
+  const classification = await classifyGuardrailCall({
     modelArgs: args.inputs,
     guardrails,
     toolId,
@@ -167,34 +219,22 @@ export const runToolNodeGate = async (args: {
   void persistGuardrailEvaluations({
     projectId: args.projectId,
     toolId,
-    records,
+    records: classification.records,
   });
   log(
     'runToolNodeGate: node=%s tool=%s decision=%s',
     args.node.id,
     toolId,
-    decision
+    classification.decision
   );
 
-  if (decision === 'route_to_approval') {
-    return {
-      kind: 'result',
-      result: approvalResult({
-        node: args.node,
-        toolId,
-        effectiveArgs,
-        reasoning: justification.reasoning,
-        evidence: justification.evidence,
-        predictedImpact: justification.predictedImpact,
-        expiresInSeconds: approvalExpiresInSeconds,
-      }),
-    };
-  }
-  if (decision === 'blocked' || decision === 'tripwire') {
-    return {
-      kind: 'result',
-      result: blockedResult({ node: args.node, label: decision }),
-    };
-  }
-  return { kind: 'execute', input: cleanArgs };
+  return enactToolNodeDecision({
+    classification,
+    node: args.node,
+    toolId,
+    toolName,
+    projectId: args.projectId,
+    projectPublicId,
+    runId: args.runId ?? null,
+  });
 };

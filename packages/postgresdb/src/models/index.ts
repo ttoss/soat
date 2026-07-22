@@ -12,6 +12,7 @@ export { DiscussionParticipant } from './DiscussionParticipant';
 export { DiscussionRun } from './DiscussionRun';
 export { Document } from './Document';
 export { DocumentChunk } from './DocumentChunk';
+export { ExceptionItem } from './ExceptionItem';
 export { File } from './File';
 export { Formation } from './Formation';
 export { FormationOperation } from './FormationOperation';
