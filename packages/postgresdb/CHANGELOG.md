@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.12](https://127.0.0.1/41729/git/ttoss/compare/v0.15.11...v0.15.12) (2026-07-22)
+
+### Features
+
+* **audit-log:** Phase 1 — request id, append-only table, write hook, read API, retention ([#641](https://127.0.0.1/41729/git/ttoss/issues/641)) ([4a16724](https://127.0.0.1/41729/git/ttoss/commits/4a16724f8be66998d618760eea484882d2eb3746))
+* **exceptions:** G3 Phase 3 — first-class exception queue ([#648](https://127.0.0.1/41729/git/ttoss/issues/648)) ([5b5871c](https://127.0.0.1/41729/git/ttoss/commits/5b5871c38dabf8b15dba9199df6b1164a20cbc58))
+* **orchestrations:** concurrency limits (per project + global) ([#642](https://127.0.0.1/41729/git/ttoss/issues/642)) ([e8c0b88](https://127.0.0.1/41729/git/ttoss/commits/e8c0b88425c6f1b9401fa18dc0293c7b120bf23a))
+* **orchestrations:** queue-backed durable execution + idempotency keys (P1) ([#628](https://127.0.0.1/41729/git/ttoss/issues/628)) ([4b265ea](https://127.0.0.1/41729/git/ttoss/commits/4b265ea9da9df39c309e0130428fddff4bceff5e))
+* **quotas:** Phase 1 — requests quotas, CRUD, and 429 middleware ([#631](https://127.0.0.1/41729/git/ttoss/issues/631)) ([6c66445](https://127.0.0.1/41729/git/ttoss/commits/6c664457bd3d49bbb7407f70738370fd0c0e0856))
+
 ## [0.15.11](https://127.0.0.1/41729/git/ttoss/compare/v0.15.10...v0.15.11) (2026-07-20)
 
 ### Features

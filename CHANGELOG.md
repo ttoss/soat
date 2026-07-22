@@ -3,6 +3,27 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.12](https://github.com/ttoss/soat/compare/v0.15.11...v0.15.12) (2026-07-22)
+
+### Bug Fixes
+
+* **guardrails:** resolve snake_case var paths against camelCased runtime keys ([#634](https://github.com/ttoss/soat/issues/634)) ([2aa0b6b](https://github.com/ttoss/soat/commit/2aa0b6bacbb3561b670e28532f99991b670971f2)), closes [#633](https://github.com/ttoss/soat/issues/633)
+
+### Features
+
+* **audit-log:** Phase 1 — request id, append-only table, write hook, read API, retention ([#641](https://github.com/ttoss/soat/issues/641)) ([4a16724](https://github.com/ttoss/soat/commit/4a16724f8be66998d618760eea484882d2eb3746))
+* **exceptions:** G3 Phase 3 — first-class exception queue ([#648](https://github.com/ttoss/soat/issues/648)) ([5b5871c](https://github.com/ttoss/soat/commit/5b5871c38dabf8b15dba9199df6b1164a20cbc58))
+* **formations:** add guardrail as a declarable Formation resource (F-17) ([#643](https://github.com/ttoss/soat/issues/643)) ([6802722](https://github.com/ttoss/soat/commit/68027222264bef9049d15fe4b32030ba4f382a4f))
+* **guardrails:** gate client tools at the requires_action handoff ([#645](https://github.com/ttoss/soat/issues/645)) ([c1f6928](https://github.com/ttoss/soat/commit/c1f6928437df400225b76c0e2e59ce0d02f24d43))
+* **guardrails:** gate orchestration tool nodes at dispatch ([#646](https://github.com/ttoss/soat/issues/646)) ([1f46da2](https://github.com/ttoss/soat/commit/1f46da28d542b434179a12f18a2a90bd29bffe58))
+* **guardrails:** per-guardrail approval expiry via document expires_in ([#647](https://github.com/ttoss/soat/issues/647)) ([a0f373d](https://github.com/ttoss/soat/commit/a0f373d15540afdd4672f77b8de968d3751c708c))
+* **iam:** Phase 0 — precise resource SRNs at isAllowed choke points ([#638](https://github.com/ttoss/soat/issues/638)) ([6f723d9](https://github.com/ttoss/soat/commit/6f723d909ac27650563d9eb65b029e8396e62abb))
+* **orchestrations:** concurrency limits (per project + global) ([#642](https://github.com/ttoss/soat/issues/642)) ([e8c0b88](https://github.com/ttoss/soat/commit/e8c0b88425c6f1b9401fa18dc0293c7b120bf23a))
+* **orchestrations:** queue-backed durable execution + idempotency keys (P1) ([#628](https://github.com/ttoss/soat/issues/628)) ([4b265ea](https://github.com/ttoss/soat/commit/4b265ea9da9df39c309e0130428fddff4bceff5e))
+* **quotas:** Phase 1 — requests quotas, CRUD, and 429 middleware ([#631](https://github.com/ttoss/soat/issues/631)) ([6c66445](https://github.com/ttoss/soat/commit/6c664457bd3d49bbb7407f70738370fd0c0e0856))
+* **quotas:** Phase 2 — token/cost quotas at the pre-generation check ([#635](https://github.com/ttoss/soat/issues/635)) ([c9a50cc](https://github.com/ttoss/soat/commit/c9a50cc881fefb87b5eea727f20133494bf68f06))
+* **quotas:** Phase 3 — quota.exceeded webhook, monitor mode, formation resource ([#636](https://github.com/ttoss/soat/issues/636)) ([a4f8602](https://github.com/ttoss/soat/commit/a4f860244914fe67521069b971d3780e439b2cbd))
+
 ## [0.15.11](https://github.com/ttoss/soat/compare/v0.15.10...v0.15.11) (2026-07-20)
 
 ### Bug Fixes
