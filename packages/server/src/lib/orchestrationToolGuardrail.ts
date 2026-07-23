@@ -12,6 +12,7 @@ import {
 import { emitGuardrailTripwireEvent } from './exceptions';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
+import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
 import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
 import type { NodeExecutionResult } from './orchestrationNodeExecutors';
@@ -95,6 +96,8 @@ const approvalResult = (args: {
   evidence: object | null;
   predictedImpact: string | null;
   expiresInSeconds: number;
+  policyVersion: string | null;
+  guardrailEvaluationRecords: GuardrailEvaluationRecord[];
 }): NodeExecutionResult => {
   const approvalSpec: ApprovalNodeSpec = {
     toolId: args.toolId,
@@ -103,6 +106,8 @@ const approvalResult = (args: {
     evidence: args.evidence,
     predictedImpact: args.predictedImpact,
     expiresInSeconds: args.expiresInSeconds,
+    policyVersion: args.policyVersion,
+    guardrailEvaluationRecords: args.guardrailEvaluationRecords,
   };
   return {
     kind: 'requires_action',
@@ -140,6 +145,8 @@ const enactToolNodeDecision = (args: {
         evidence: justification.evidence,
         predictedImpact: justification.predictedImpact,
         expiresInSeconds: args.classification.approvalExpiresInSeconds,
+        policyVersion: governingGuardrailVersion({ evaluated, decision }),
+        guardrailEvaluationRecords: args.classification.records,
       }),
     };
   }
@@ -216,11 +223,17 @@ export const runToolNodeGate = async (args: {
     context,
   });
 
-  void persistGuardrailEvaluations({
-    projectId: args.projectId,
-    toolId,
-    records: classification.records,
-  });
+  // A `route_to_approval` decision doesn't persist here: the ApprovalItem
+  // doesn't exist yet (the engine emits it once the run settles), so the
+  // records are carried on the approval spec and persisted with `approvalId`
+  // once the item is created (see `startOrchestrationRun`'s settle path).
+  if (classification.decision !== 'route_to_approval') {
+    void persistGuardrailEvaluations({
+      projectId: args.projectId,
+      toolId,
+      records: classification.records,
+    });
+  }
   log(
     'runToolNodeGate: node=%s tool=%s decision=%s',
     args.node.id,
