@@ -31,7 +31,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 |---|-----------|-----|--------|
 | G1 | Schedules / triggers | Triggers module | 🟡 triggers exist; schedule wiring per umbrella |
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 P1 (queue/idempotency/worker) + P2 (concurrency limits) shipped; worker-fleet ops hardening + P3 (SQS driver) remain |
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 shipped |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 + Phase 3 (exceptions queue) shipped; activity feed remains |
 | G4 | Guardrails · action classes | [modules/guardrails.md](../packages/website/docs/modules/guardrails.md) | ✅ shipped |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
@@ -43,7 +43,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 |-----------|-----|--------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
-| Audit log | [prd-audit-log.md](./prd-audit-log.md) | ❌ Not started | substrate for G3/G4 |
+| Audit log | [prd-audit-log.md](./prd-audit-log.md) | 🟡 Phase 1 shipped (table, write hook, read API, retention) | substrate for G3/G4 |
 | Quotas | [prd-quotas.md](./prd-quotas.md) | ✅ Phases 1–3 shipped (monitor-breach audit entry deferred to audit-log) | umbrella (no G#) |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phases 1–4 shipped; 5 partial; 6–9 remain | data plane |
@@ -60,6 +60,7 @@ FOUNDATIONS (shipped)
   orchestration runtime ✅   orchestration-queue P1 ✅   orchestration-queue P2 ✅
   usage metering P1–3c ✅    guardrails core ✅           knowledge P1/2/4 ✅
   memories P1–4 ✅           approvals P1 ✅              discussions ✅          quotas P1 ✅
+  audit-log P1 ✅            exceptions (G3 P3) ✅
 
 next, deps satisfied ──────────────────────────────────────────────────────
   orchestration-queue P2 ops hardening (worker fleet) ◄── orchestration-queue P2 ✅
@@ -68,7 +69,7 @@ next, deps satisfied ───────────────────�
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✅
-  audit-log P1 ─► audit-log P2 ◄── guardrails P3
+  audit-log P2 (guardrail ActivityEntry detail kind) ◄── audit-log P1 ✅
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P6/P7 (ranking, injection, evals)
 
@@ -109,9 +110,9 @@ feedback + governance loops ─────────────────�
    queue-stats endpoint, and graceful worker shutdown. The worker-fleet **ops
    hardening** (compose service, healthcheck, fleet smoke) and the optional
    **P3 SQS driver** are the remaining queue steps.)
-2. **Audit-log P1→P2** and **evaluations P1–P2** — the substrate the activity
-   feed and agent-versions promotion gate need (audit-log also absorbs the
-   deferred quota monitor-breach audit entry).
+2. **Audit-log P2** (Phase 1 shipped) and **evaluations P1–P2** — the substrate
+   the activity feed and agent-versions promotion gate need (audit-log also
+   absorbs the deferred quota monitor-breach audit entry).
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 4. **G6 learned-rules ↔ G7 knowledge-packages** — the feedback + doctrine loop,
    last because it consumes approvals, memories, and evaluations signals.
@@ -143,15 +144,19 @@ cross-tick cap, graceful worker shutdown (SIGTERM/SIGINT), and
 ### G3 — Approvals (exceptions · activity)
 
 _Phase 1 shipped (`ApprovalItem`, `approval` node, expiry, approve/reject/edit,
-webhooks, REST). "Approvals on every surface" shipped via the **G4 guardrail
-interceptor**; the per-binding `approval_policy` was deprecated and removed._
+webhooks, REST). Phase 3 shipped: the
+[exceptions](../packages/website/docs/modules/exceptions.md) queue
+(`ExceptionItem`/`exc_`, auto-filed by exhausted retries, guardrail tripwires,
+and expired approvals; `info`/`warning`/`critical` severity routing, occurrence
+dedup, `open → acknowledged → resolved`, `exceptions.created` webhook).
+"Approvals on every surface" shipped via the **G4 guardrail interceptor**; the
+per-binding `approval_policy` was deprecated and removed._
 
 - [ ] Dedup return-existing logic (the `dedup_key` column + partial unique index exist; the return-existing behavior does not)
 - [ ] **Knowledge-version provenance** (was MbE M3 — unblocks the audit acceptance criterion):
   - [ ] `3.1` record `knowledge_version` on `generation.metadata` at emit time
   - [ ] `3.2` stamp `knowledgeVersion` / `policyVersion` onto `ApprovalItem` + the audit record via `emitApproval`
   - [ ] `3.3` join helper: run → generations → `knowledge_version` → approval
-- [ ] **Phase 3** Exceptions & severity routing: `ExceptionItem` (`exc_`) auto-filed by exhausted retries, guardrail tripwires, and expired approvals; `info`/`warning`/`critical`; `open → acknowledged → resolved`; `exceptions.created` webhook
 - [ ] **Phase 4 / activity feed** (was MbE M5 — needs G4 class-A/B labels + audit substrate):
   - [ ] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
   - [ ] `5.2` cursor-paginated `GET /api/v1/activity` (type / severity filters, per project)
@@ -231,11 +236,15 @@ _Not started._
 
 ### Audit log
 
-_Not started (this is the former MbE M4). Reconcile activity-feed ownership
-with G3 before shipping the feed._
+_Phase 1 shipped (this is the former MbE M4): `AuditEntry` (`audit_`,
+append-only, no UPDATE/DELETE at the model layer), the `X-Request-Id`
+middleware, the post-commit write hook wrapping `isAllowed` (fire-and-forget,
+bounded queue), the read API (`GET /api/v1/audit-log` + `/{entry_id}`), the
+`audit:ListAuditEntries` / `GetAuditEntry` actions, and the `AUDIT_RETENTION_DAYS`
+retention sweep. Reconcile activity-feed ownership with G3 before shipping the
+feed._
 
-- [ ] **Phase 1** `AuditEntry` (`audit_`, append-only, no UPDATE/DELETE at the model layer); post-commit write hook wrapping `isAllowed` (fire-and-forget, bounded queue); read API `GET /api/v1/audit-log` + `/{entry_id}` (filters: `action`, `actor_id`, `resource_srn`, `from`/`to`); `audit:ListAuditEntries` / `GetAuditEntry`
-- [ ] **Phase 2** Guardrails `ActivityEntry` as one `detail` kind (**needs G4 Phase 3**); retention sweep (`AUDIT_RETENTION_DAYS`, daily tick)
+- [ ] **Phase 2** Guardrails `ActivityEntry` as one `detail` kind (**needs G4 Phase 3**)
 - [ ] **Phase 3** Read-audit config flag (off by default) + `audit.entry_created` webhook
 - [ ] Per-project NDJSON export (paginate the list endpoint; also serves LGPD)
 
@@ -251,9 +260,10 @@ contract); token/cost quotas enforced at the pre-generation check over
 webhook (once per fixed window, enforce + monitor), monitor mode (fire without
 blocking), and the `quota` formation resource._
 
-- [ ] Monitor-breach **audit entry** — ⏭️ deferred to the audit-log module (no
-  `AuditEntry` model exists yet); the `quota.exceeded` webhook is the interim
-  durable signal.
+- [ ] Monitor-breach **audit entry** — deferred to the audit-log module. The
+  `AuditEntry` model now exists (audit-log Phase 1 shipped), so this is
+  unblocked wiring rather than a blocked dependency; the `quota.exceeded`
+  webhook remains the interim durable signal.
 
 ### Model routing
 
