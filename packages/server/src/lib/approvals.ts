@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { assertValidApprovalFilters } from './approvalFilters';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const log = createDebug('soat:approvals');
@@ -319,6 +320,8 @@ export const listApprovals = async (args: {
   origin?: string;
   expiresBefore?: Date;
 }): Promise<MappedApproval[]> => {
+  assertValidApprovalFilters(args);
+
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.status) where.status = args.status;
   if (args.origin) where.origin = args.origin;

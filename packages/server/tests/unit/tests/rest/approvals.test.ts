@@ -167,6 +167,24 @@ describe('Approvals', () => {
       expect(ids).not.toContain(toReject.id);
     });
 
+    test('an unknown status filter returns 400 instead of 500', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&status=open`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an unknown origin filter returns 400 instead of 500', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&origin=carrier_pigeon`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const res = await testClient.get('/api/v1/approvals');
       expect(res.status).toBe(401);
