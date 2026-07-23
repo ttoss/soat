@@ -46,6 +46,7 @@ describe('executeApprovalNode', () => {
       evidence: { orderId: 'ord_1' },
       predictedImpact: 'issues a refund',
       expiresInSeconds: 60,
+      policyVersion: null,
     });
   });
 
@@ -59,6 +60,7 @@ describe('executeApprovalNode', () => {
       evidence: null,
       predictedImpact: null,
       expiresInSeconds: 24 * 60 * 60,
+      policyVersion: null,
     });
   });
 
