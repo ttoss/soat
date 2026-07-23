@@ -1999,7 +1999,7 @@ set -e
 echo "--- Listing pending tool-call approvals ---"
 GATED_APPROVAL_ID=$($SOAT_CLI list-approvals \
   --project-id "$PROJECT_PUBLIC_ID" --status pending --origin tool_call \
-  | sanitize_json | jq -r '[.[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
+  | sanitize_json | jq -r '[.data[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
 
 if [ -n "$GATED_APPROVAL_ID" ]; then
   echo "Filed tool-call approval id: $GATED_APPROVAL_ID"
@@ -3779,7 +3779,7 @@ echo "Gated transition parked: OK (pending_transition=publish)"
 # The pending approval is filed with task-transition provenance.
 GATED_TR_APPROVAL_ID=$($SOAT_CLI list-approvals \
   --project-id "$PROJECT_PUBLIC_ID" --status pending --origin task_transition \
-  | jq -r --arg t "$GATED_TASK_ID" '[.[] | select(.task_id == $t)][0].id // empty')
+  | jq -r --arg t "$GATED_TASK_ID" '[.data[] | select(.task_id == $t)][0].id // empty')
 if [ -z "$GATED_TR_APPROVAL_ID" ]; then
   echo "ERROR: no pending task_transition approval filed for $GATED_TASK_ID" >&2
   exit 1
