@@ -128,6 +128,59 @@ describe('guardrailEvaluation', () => {
       expect(result.guardResult).toBe(true);
     });
 
+    // json-logic-engine coerces a `null` var to 0 for numeric comparisons, so
+    // `{ var: 'soat.activity.actions_24h' }` on the *left* of `<` would
+    // otherwise evaluate `null < 100` as `true` and pass the guard — the
+    // opposite of the documented fail-closed invariant (issue #666).
+    test('a guard referencing an unresolvable soat.* var fails closed for <', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+        }),
+        // soat.activity.* is not yet populated (activity feed task 5.4).
+        context: { soat: {} },
+      });
+      expect(result.decision).toBe('tripwire');
+      expect(result.guardResult).toBe(false);
+    });
+
+    test('a guard referencing an unresolvable soat.* var fails closed for <=', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: { '<=': [{ var: 'soat.activity.actions_24h' }, 100] },
+        }),
+        context: { soat: {} },
+      });
+      expect(result.decision).toBe('tripwire');
+      expect(result.guardResult).toBe(false);
+    });
+
+    test('a guard referencing an unresolvable context.* var on the left of < fails closed', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: { '<': [{ var: 'context.actions_today' }, 100] },
+        }),
+        context: {},
+      });
+      expect(result.decision).toBe('tripwire');
+      expect(result.guardResult).toBe(false);
+    });
+
+    test('a guard still passes when the referenced soat.* var actually resolves', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          class: 'B',
+          guard: { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+        }),
+        context: { soat: { activity: { actions_24h: 5 } } },
+      });
+      expect(result.decision).toBe('execute');
+      expect(result.guardResult).toBe(true);
+    });
+
     // The evaluator matches `var` paths against the caller's context verbatim —
     // the casing is preserved end-to-end (caseTransform leaves guardrail_context
     // as a pass-through bag), so a snake_case document reads a snake_case key.
@@ -185,6 +238,28 @@ describe('guardrailEvaluation', () => {
       const result = evaluateGuardrail({
         guardrail: attach({ class: { var: 'args.nope' } }),
         context: {},
+      });
+      expect(result.class).toBe('C');
+      expect(result.decision).toBe('route_to_approval');
+    });
+
+    // Same null → 0 coercion bug as the guard case, but here it would let a `<`
+    // comparison over an unresolvable soat.* var pick the "A" branch of an
+    // `if`, which is itself a valid class — so the existing "invalid result"
+    // check alone can't catch it (issue #666).
+    test('a class expression using an unresolvable soat.* var falls back to default_class', () => {
+      const result = evaluateGuardrail({
+        guardrail: attach({
+          default_class: 'C',
+          class: {
+            if: [
+              { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
+              'A',
+              'C',
+            ],
+          },
+        }),
+        context: { soat: {} },
       });
       expect(result.class).toBe('C');
       expect(result.decision).toBe('route_to_approval');

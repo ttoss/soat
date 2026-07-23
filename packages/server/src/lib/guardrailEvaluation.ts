@@ -93,23 +93,133 @@ const buildLogicContext = (context: GuardrailEvaluationContext) => {
   };
 };
 
+// Reads a dotted path (`soat.activity.actions_24h`) off the logic context,
+// returning `undefined` when any segment is missing.
+const getByPath = (root: unknown, path: string): unknown => {
+  let node: unknown = root;
+  for (const segment of path.split('.')) {
+    if (!isPlainObject(node)) return undefined;
+    node = node[segment];
+  }
+  return node;
+};
+
+// The path a JSON Logic `var` argument selects: a bare string, or the first
+// element of a `[path, default]` array — mirrors guardrailDocument.ts's
+// internal helper of the same name.
+const varArgPath = (arg: unknown): string | undefined => {
+  if (typeof arg === 'string') return arg;
+  if (Array.isArray(arg) && typeof arg[0] === 'string') return arg[0];
+  return undefined;
+};
+
+const isFailClosedNamespacePath = (path: string): boolean => {
+  return (
+    path === 'soat' ||
+    path.startsWith('soat.') ||
+    path === 'context' ||
+    path.startsWith('context.')
+  );
+};
+
+// json-logic-engine coerces a `null` var operand to a zero-ish value for these
+// comparisons, so an unresolvable reference can silently flip a comparison the
+// wrong way (`null < 100` → `true`). `==`/`!=` are not in this set: `null`
+// compares as itself there, so an absent key legitimately (and safely) takes
+// the "not equal" branch — that's ordinary conditional design, not a coercion
+// bug, and documents intentionally rely on it (e.g. `{ if: [{ "==": [{ "var":
+// "context.tier" }, "high"] }, "C", "A"] }` defaulting to "A" when the tier is
+// unconfirmed).
+const UNSAFE_COMPARISON_OPS: ReadonlySet<string> = new Set([
+  '<',
+  '<=',
+  '>',
+  '>=',
+]);
+
+// Whether `node` is a bare `{ var: path }` (or `{ var: [path, default] }`)
+// referencing an unresolved `soat.*`/`context.*` path. `args.*` is deliberately
+// excluded — its `null`-coercion behavior is documented as an existing caveat
+// callers are told to guard against explicitly, not a fail-closed invariant to
+// enforce here.
+const isUnresolvedFailClosedVarNode = (
+  node: unknown,
+  logicContext: Record<string, unknown>
+): boolean => {
+  if (!isPlainObject(node)) return false;
+  const keys = Object.keys(node);
+  if (keys.length !== 1 || keys[0] !== 'var') return false;
+  const path = varArgPath(node.var);
+  if (path === undefined || !isFailClosedNamespacePath(path)) return false;
+  const value = getByPath(logicContext, path);
+  return value === null || value === undefined;
+};
+
+/**
+ * Whether `expression` contains a `<` / `<=` / `>` / `>=` comparison with a
+ * direct operand that is an unresolved `soat.*`/`context.*` var — the exact
+ * shape whose `null → 0` coercion silently turns an unresolvable reference
+ * into a passing comparison (issue #666). Scoped to just these operators (not
+ * every `var` reference anywhere in the expression) so an `==`-based
+ * conditional that intentionally treats "unconfirmed" as its own branch —
+ * a normal, safe use of `null`'s own equality — is left alone.
+ */
+const hasUnsafeComparisonWithUnresolvedVar = (
+  node: unknown,
+  logicContext: Record<string, unknown>
+): boolean => {
+  if (Array.isArray(node)) {
+    return node.some((item) => {
+      return hasUnsafeComparisonWithUnresolvedVar(item, logicContext);
+    });
+  }
+  if (!isPlainObject(node)) return false;
+
+  const keys = Object.keys(node);
+  if (keys.length === 1 && UNSAFE_COMPARISON_OPS.has(keys[0])) {
+    const operands = Array.isArray(node[keys[0]])
+      ? (node[keys[0]] as unknown[])
+      : [node[keys[0]]];
+    if (
+      operands.some((operand) => {
+        return isUnresolvedFailClosedVarNode(operand, logicContext);
+      })
+    ) {
+      return true;
+    }
+  }
+
+  return Object.values(node).some((value) => {
+    return hasUnsafeComparisonWithUnresolvedVar(value, logicContext);
+  });
+};
+
 /**
  * Resolves the action class for a call. A literal `class` is returned directly;
  * a JSON Logic `class` expression is evaluated and its result kept only if it is
- * a valid class. Anything else — a missing key (`null`), a typo, a number, or an
- * evaluator error — resolves to `default_class`, itself defaulting to `C`
- * (fail-closed): a misconfigured classification never grants autonomy.
+ * a valid class. Anything else — a missing key (`null`), a typo, a number, an
+ * evaluator error, or an unsafe `<`/`<=`/`>`/`>=` comparison over an
+ * unresolvable `soat.*`/`context.*` var — resolves to `default_class`, itself
+ * defaulting to `C` (fail-closed): a misconfigured or under-resolved
+ * classification never grants autonomy.
  */
 const resolveClass = (
   document: GuardrailDocument,
-  logicContext: unknown
+  logicContext: Record<string, unknown>
 ): ActionClass => {
   if (isActionClass(document.class)) {
     return document.class;
   }
   let result: unknown = null;
   try {
-    result = evaluateLogic(document.class, logicContext);
+    if (
+      isPlainObject(document.class) &&
+      hasUnsafeComparisonWithUnresolvedVar(document.class, logicContext)
+    ) {
+      result = null;
+    } else {
+      result = evaluateLogic(document.class, logicContext);
+    }
   } catch {
     result = null;
   }
@@ -123,15 +233,24 @@ const resolveClass = (
 
 /**
  * Whether a class-B call's guard passes. A B with no guard expression fails
- * closed (nothing to pass), and an evaluator error counts as a failed guard —
- * forgetting to supply context tightens the posture, never loosens it. Plain JS
- * truthiness matches the JSON Logic convention used elsewhere in the server.
+ * closed (nothing to pass); an evaluator error, or an unsafe `<`/`<=`/`>`/`>=`
+ * comparison over an unresolvable `soat.*`/`context.*` var, counts as a failed
+ * guard — forgetting to supply context tightens the posture, never loosens
+ * it. The unresolved-var check runs *before* evaluation so a comparison
+ * operator's `null → 0` coercion (`{ "<": [{ "var":
+ * "soat.activity.actions_24h" }, 100] }` passing while the activity feed is
+ * dark) can never flip an unresolvable reference into a passing guard. Plain
+ * JS truthiness matches the JSON Logic convention used elsewhere in the
+ * server.
  */
 const guardPasses = (
   document: GuardrailDocument,
-  logicContext: unknown
+  logicContext: Record<string, unknown>
 ): boolean => {
   if (!isPlainObject(document.guard)) {
+    return false;
+  }
+  if (hasUnsafeComparisonWithUnresolvedVar(document.guard, logicContext)) {
     return false;
   }
   try {
