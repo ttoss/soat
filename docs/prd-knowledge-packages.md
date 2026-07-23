@@ -7,17 +7,6 @@
 > the RAG layer. Injects [learned rules](./prd-learned-rules.md) as one of its
 > layers.
 
-## Implementation Status
-
-| Component                                   | Status         | Notes                                                                |
-| ------------------------------------------- | -------------- | --------------------------------------------------------------------|
-| `KnowledgePackage` / `KnowledgeItem` models | ❌ Not started | Immutable per version; content encrypted at rest                     |
-| Publish API (tarball + manifest)            | ❌ Not started | Publish-scoped key; called from the knowledge repo's CI              |
-| `knowledge_package` formation resource type | ❌ Not started | Pins a package version per stack; parameter = rollout                |
-| Layered context assembler                   | ❌ Not started | Pure function with per-layer token budgets                           |
-| Fenced (non-system) injection               | ❌ Not started | Aligned with prd-knowledge.md Phase 6 injection hardening            |
-| Confidentiality hardening + test suite      | ❌ Not started | Content never in list/get APIs, logs, or run events                  |
-
 ## Implementation Phases
 
 ### Phase 1 — Package Storage, Publish, Pinning ❌ Not started

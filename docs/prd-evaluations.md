@@ -10,22 +10,6 @@
 > the [Triggers module](../packages/website/docs/modules/triggers.md) (scheduled evals), and
 > `docs/prd-agent-versions.md` (eval-gated promotion; written in parallel).
 
-## Implementation Status
-
-| Component                                        | Status         | Notes                                                              |
-| ------------------------------------------------ | -------------- | ------------------------------------------------------------------ |
-| `Dataset` + `DatasetItem` models + CRUD          | ❌ Not started | `dset_` / `dsit_` prefixes                                          |
-| `Eval` config model + CRUD                       | ❌ Not started | `eval_` prefix; target agent + dataset + scorer list                |
-| `EvalRun` / `EvalResult` execution models        | ❌ Not started | `evrun_` / `evres_` prefixes                                        |
-| Deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`) | ❌ Not started | `json_logic` reuses `src/lib/jsonLogicMapping.ts` |
-| Sync small-run execution                         | ❌ Not started | `wait: true`, capped item count                                     |
-| `llm_judge` scorer                               | ❌ Not started | Judge via ai-providers + `completionModel.ts` resolution            |
-| Async execution on the RunTask queue             | ❌ Not started | Per-item tasks; [prd-orchestration-queue.md](./prd-orchestration-queue.md) Phase 1 |
-| Baseline comparison + pass/fail gating           | ❌ Not started | `baseline_run_id`, per-scorer deltas, `pass_threshold`              |
-| Webhook events (`eval_run.completed` / `.failed`)| ❌ Not started | Existing webhooks module                                            |
-| Curate dataset items from traces/generations     | ❌ Not started | `POST /datasets/{dataset_id}/items/from-generation`                 |
-| Scheduled evals + `eval` formation resource type | ❌ Not started | Cron [triggers](../packages/website/docs/modules/triggers.md); `formations.yaml` sync |
-
 ## Problem
 
 An agent author who changes an instruction, swaps a model, or adds a tool has

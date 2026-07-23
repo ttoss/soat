@@ -6,21 +6,6 @@
 > survive a provider outage. Pricing is unaffected — see
 > [prd-usage-metering.md](./prd-usage-metering.md).
 
-## Implementation Status
-
-| Component                                        | Status         | Notes                                                            |
-| ------------------------------------------------ | -------------- | ---------------------------------------------------------------- |
-| `ModelRoute` model + lib                         | ❌ Not started | `route_` prefix, ordered targets + retry/breaker config          |
-| REST CRUD + OpenAPI + permissions                | ❌ Not started | MCP tools derive automatically from the OpenAPI spec             |
-| Shared exclusivity validation (`route` vs pin)   | ❌ Not started | Exported from `src/lib/modelRoutes.ts`, reused by REST + formations |
-| Agent consumption (`model_route_id`)             | ❌ Not started | Alternative to `ai_provider_id` + `model`                        |
-| Ordered fallback executor (non-streaming)        | ❌ Not started | Wraps `resolveCompletionModel` / `buildModel`                    |
-| Circuit breaker (in-process)                     | ❌ Not started | Per-target consecutive-failure skip with cooldown                |
-| Streaming pre-token fallback                     | ❌ Not started | Fallback only before the first token                             |
-| `routing` metadata on Generation                 | ❌ Not started | Route id, target index served, attempts, fallbacks               |
-| Remaining consumers (discussions, extraction, chats) | ❌ Not started | Everywhere `resolveCompletionModel` is called today          |
-| `model-route` formation resource type            | ❌ Not started | `modelRoutesFormationModule.ts` + `ModelRouteResourceProperties` |
-
 ## Problem
 
 Today a completion model is resolved through a strictly single-provider path.

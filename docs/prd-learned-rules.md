@@ -7,16 +7,6 @@
 > embedding nearest-neighbor machinery from
 > [prd-memories.md](./prd-memories.md).
 
-## Implementation Status
-
-| Component                                | Status         | Notes                                                            |
-| ---------------------------------------- | -------------- | ------------------------------------------------------------------|
-| `CandidateRule` model + capture hooks    | ❌ Not started | Auto-created from rejections, edits, and explicit corrections      |
-| Recurrence detection (clustering)        | ❌ Not started | Embedding NN pass; repeated corrections flag `promotion_suggested` |
-| Promotion lifecycle + `LearnedRule`      | ❌ Not started | Human-curated; `candidate → promoted \| dismissed`                 |
-| Scoped injection into context assembly   | ❌ Not started | `global \| project`; most specific last                            |
-| REST endpoints + OpenAPI + permissions   | ❌ Not started | Curation UI/flow is a consumer, not part of this module            |
-
 ## Implementation Phases
 
 ### Phase 1 — Candidate Capture ❌ Not started
