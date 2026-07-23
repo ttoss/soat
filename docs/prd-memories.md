@@ -2,18 +2,13 @@
 
 ## Implementation Status
 
+Only outstanding work is tracked here. Shipped functionality (Phases 1–4, the
+container/entry CRUD, tags, agent read/write, and automatic extraction) is documented in
+the [Memory module docs](../packages/website/docs/modules/memories.md).
+
 | Component                      | Status         | Notes                                                                                                                            |
 | ------------------------------ | -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Memory model (container CRUD)  | ✅ Implemented | Model, lib, REST, OpenAPI, permissions, tests, docs                                                                              |
-| Memory tags field              | ✅ Implemented | `tags` string-array column on Memory model; glob filter on `GET /memories`; `resolveMemoryIdsByGlobTags()` in knowledge search   |
-| MemoryEntry model              | ✅ Implemented | Model with `me_` prefix, embedding column, lib, REST, OpenAPI, permissions, tests                                                |
-| Entry write (dedup algorithm)  | ✅ Implemented | Two-threshold dedup/merge/skip in `writeMemoryEntry`; manual writes still concatenate on merge                                    |
 | Merge consolidation (LLM)      | 🟡 Partial    | Agent-tool + extraction merges consolidate into a single fact via the LLM (`memoryConsolidationCompletion.ts`), concat fallback; manual REST writes still concatenate (Phase 5) |
-| Entry REST endpoints           | ✅ Implemented | `POST/GET/PUT/DELETE /api/v1/memories/{memory_id}/entries`; POST returns `action` field                                            |
-| Entry permissions              | ✅ Implemented | `WriteMemoryEntry`, `ReadMemoryEntry`, `ListMemoryEntries`, `UpdateMemoryEntry`, `DeleteMemoryEntry`                             |
-| `knowledgeConfig` on Agent     | ✅ Implemented | JSONB field on Agent model; merged with per-generation config; drives automatic context injection                                |
-| Extraction (post-conversation) | ✅ Implemented | `runMemoryExtraction()` in `memoryExtraction.ts`; opt-in via `knowledge_config.extraction: true` + `write_memory_id`; summary on generation `metadata.extraction` |
-| Knowledge integration          | ✅ Implemented | `resolveMemorySearch()` in `knowledgeMemory.ts`; `memoryIds`/`memoryTags` in `searchKnowledge()`                                 |
 | Write algorithm v2 (arbitrated)| ❌ Not started | Top-K shortlist + LLM decision (add/update/supersede/skip); real merge replaces the v1 concatenation shortcut (Phase 5)          |
 | Temporal invalidation          | ❌ Not started | `invalidatedAt` + `supersededByEntryId` on MemoryEntry; contradictions retire old facts instead of rewriting them (Phase 5)      |
 | Entry provenance               | ❌ Not started | `sourceGenerationId` / `sourceConversationId` on MemoryEntry; every fact auditable back to its source turn (Phase 5)             |
@@ -27,75 +22,6 @@
 
 ## Implementation Phases
 
-### Phase 1 — Memory Storage & Write Algorithm ✅ Complete
-
-**Goal:** Give developers a REST API to create memories, write entries with automatic deduplication, and manage the full entry lifecycle.
-
-**Deliverables:**
-
-- `Memory` and `MemoryEntry` DB models with pgvector embedding column
-- `writeMemoryEntry()` lib function with two-threshold dedup/merge/skip algorithm
-- `mergeEntryContent()` concatenating existing and incoming content
-- `POST/GET/PUT/DELETE /api/v1/memories` — memory CRUD
-- `POST/GET/PUT/DELETE /api/v1/memories/{memory_id}/entries` — entry CRUD; POST returns `action` field
-- OpenAPI spec, permissions (`WriteMemoryEntry`, `ReadMemoryEntry`, etc.), tests
-
-**Unlocks:** Manual memory management via REST. Developers can build their own write workflows.
-
----
-
-### Phase 2 — Agent Read & Write ✅ Complete
-
-**Goal:** Make agents memory-aware. Agents can recall facts before generating and write new facts during generation. This is the minimum needed for a compelling AI app tutorial.
-
-**Deliverables:**
-
-- ✅ **Memory source in `searchKnowledge()`** — `memoryIds` and `memoryTags` parameters added; `resolveMemorySearch()` queries MemoryEntry embeddings; results interleaved by score; `source_type: "memory"` in `KnowledgeResult`
-- ✅ **`document_paths` and `document_ids` parameters** — flat fields in OpenAPI spec and lib (replacing nested `document_filters`)
-- ✅ **`knowledge_config` on Agent** — JSONB field on `agents` table; merged with per-generation `knowledge_config` using append semantics; drives automatic context injection via `buildKnowledgeMessages()` in `agentKnowledge.ts`
-- ✅ **Automatic context injection** — `buildKnowledgeMessages()` called in `agentGeneration.ts` before each generation; results injected as system messages
-- ✅ **`write_memory` tool via `write_memory_id`** — setting `knowledge_config.write_memory_id` on an agent auto-injects a `write_memory` tool (takes `{ content }`); the tool resolves the target memory and calls `writeMemoryEntry()` with `source: 'agent'`; same deduplication semantics as manual writes
-- ✅ OpenAPI spec updated, SDK/CLI regenerated, tests added
-
-**Unlocks:** Agents that remember and recall. First tutorial: "Build an agent with persistent memory."
-
----
-
-### Phase 3 — Memory Tags & Filtering ✅ Complete
-
-**Goal:** Enable memory organisation at scale — multiple memories per project, filtered by tag patterns.
-
-**Deliverables:**
-
-- ✅ `tags` column (string array) on the `Memory` model
-- ✅ Tag filter on `GET /api/v1/memories` — supports exact match and glob patterns (`*`, `?`); multiple patterns are ORed
-- ✅ `memory_tags` glob matching in `searchKnowledge()` — two-step resolution via `resolveMemoryIdsByGlobTags()` using `ILIKE` on `unnest(tags)`, then entry search on matched memory IDs
-- ✅ OpenAPI spec updated (`tags` query param with array schema), SDK/CLI regenerated, tests added, module docs updated
-
-**Unlocks:** Multi-memory projects. Agents scoped to tag-matched memories without knowing IDs upfront.
-
----
-
-### Phase 4 — Automatic Extraction ✅ Complete
-
-**Goal:** Agents learn passively. Facts are extracted from conversations automatically — no explicit `write_memory` call needed.
-
-**Deliverables:**
-
-- ✅ Post-generation extraction pipeline (fire-and-forget, non-blocking) — `fireMemoryExtraction()` in `src/lib/memoryExtraction.ts`, triggered after completed conversation/session generations (`conversationGeneration.ts`) and direct `POST /agents/{agent_id}/generate` calls
-- ✅ LLM prompt to extract atomic facts from the completed turn — runs as a plain completion against the agent's own provider/model (`memoryExtractionCompletion.ts`), with no tools and no knowledge injection, so extraction cannot trigger agent side effects
-- ✅ Each candidate (max 20 per turn) runs through the standard `writeMemoryEntry()` write algorithm with `source: 'extraction'`
-- ✅ Extraction trigger: **opt-in** via `knowledge_config.extraction` + `write_memory_id` — the designated write target, reusing the `write_memory` tool's semantics. *(Design deviation: the original plan keyed extraction off `memory_ids`, but those define the read scope and can be plural; the single write target is unambiguous.)*
-- ✅ Extraction overrides: `extraction` accepts `true` (defaults) or an object `{ enabled?, ai_provider_id?, model?, prompt? }` — run extraction on a cheaper provider/model and/or with custom task instructions. Provider overrides are validated against the agent's project; the JSON response contract and transcript are always engine-appended.
-- ✅ Summary `{ candidates, created, updated, skipped }` recorded on the generation record's `metadata.extraction`
-- ✅ Tests covering trigger conditions, candidate extraction, dedup during extraction, malformed LLM output, and completion failure (`tests/unit/tests/rest/memoryExtraction.test.ts`, `tests/unit/tests/lib/memoryExtraction.test.ts`)
-
-**Not triggered for:** streaming generations and `requires_action` (client-tool) turns — the turn must complete in the same request. This is a significant coverage gap in practice (streaming is the default transport in production chat UIs); extending coverage to these turn types is Phase 7.
-
-**Unlocks:** Zero-effort conversational memory — agents accumulate knowledge just by talking.
-
----
-
 ### Phase 5 — Write Algorithm v2 (LLM-Arbitrated, Temporal) 🟡 In progress
 
 **Goal:** Replace the v1 threshold-decided, concatenation-merge write path with an LLM-arbitrated
@@ -103,13 +29,13 @@ decision over a shortlist of similar entries; add temporal invalidation (superse
 contradictions retire old facts instead of rewriting them; and record provenance so every entry is
 auditable back to the conversation that produced it.
 
-> **Delivered so far:** the **merge consolidation** step. When a write with an agent context (the
-> `write_memory` tool and automatic extraction) merges into an existing entry, an LLM consolidates
-> both facts into a single atomic entry — contradictions resolve in favour of the new fact —
-> instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a concat
-> fallback). Still pending: the top-K shortlist + full add/update/supersede/skip arbitration,
-> temporal invalidation, provenance, and consolidation for the manual REST write path (which has no
-> agent context to resolve a provider — see the [merge provider decision](#5a--llm-arbitrated-write-decision) below).
+> **Delivered so far:** the **merge consolidation** step for writes with an agent context (the
+> `write_memory` tool and automatic extraction) — an LLM consolidates both facts into a single
+> atomic entry instead of concatenating (`memoryConsolidationCompletion.ts`, best-effort with a
+> concat fallback). **Still pending:** the top-K shortlist + full add/update/supersede/skip
+> arbitration, temporal invalidation, provenance, and consolidation for the manual REST write path
+> (which has no agent context to resolve a provider — see the
+> [merge provider decision](#5a--llm-arbitrated-write-decision) below).
 
 **Motivation:** v1 has three structural problems (see
 [Known v1 Limitations](#known-v1-limitations-addressed-by-phase-5)): the concatenation merge
@@ -430,77 +356,9 @@ criteria are defined when it is expanded into concrete requirements.
 
 ---
 
-## Overview
+## Key Concepts (Pending Work)
 
-The Memory module provides a project-scoped mechanism for storing and retrieving knowledge. A **memory** is a named container that accumulates atomic facts (entries) via a deduplication and merge algorithm.
-
-A project can have **many memories**, each representing a different knowledge domain (e.g., "Customer Preferences", "Project Context", "Technical Decisions"). Entries written to a memory are automatically deduplicated within that memory's scope.
-
-Searching across memories and documents is handled by the **knowledge module** (`POST /api/v1/knowledge/search`). The memory module owns storage and write logic only — it does not expose its own search endpoint.
-
-This module resolves two roadmap items:
-
-- **Agent Memory (P2)** — persistent, project-scoped knowledge for agents
-- **Conversational Memory** — auto-extract facts from conversations
-
-Memory quality is evaluated through the knowledge module's evaluation harness (write correctness,
-contradiction handling, long-horizon recall) — see
-[prd-knowledge.md Phase 7](./prd-knowledge.md#phase-7--evaluation-harness-and-observability--future).
-
-## Key Concepts
-
-### Memory (Container)
-
-A memory is a named, project-scoped knowledge container. It groups related entries and defines the dedup scope.
-
-| Field         | Type             | Required | Description                                                                |
-| ------------- | ---------------- | -------- | -------------------------------------------------------------------------- |
-| `id`          | string           | auto     | Public ID with `mem_` prefix                                               |
-| `project_id`  | string           | yes      | The project this memory belongs to                                         |
-| `name`        | string           | yes      | Human-readable name (e.g., "Customer Preferences")                         |
-| `description` | string           | no       | Description of what this memory stores                                     |
-| `tags`        | array of strings | no       | Tags for categorizing and filtering memories (e.g., `["projectA", "crm"]`) |
-| `created_at`  | datetime         | auto     |                                                                            |
-| `updated_at`  | datetime         | auto     |                                                                            |
-
-Tags are free-form strings used to group and filter memories. The knowledge search endpoint supports glob-pattern matching on tags (e.g., `user*` matches `user`, `user-prefs`, `user-history`).
-
-### Memory Entry
-
-A memory entry is an atomic piece of knowledge stored inside a memory. Entries are the units of knowledge.
-
-| Field        | Type     | Required | Description                                                                 |
-| ------------ | -------- | -------- | --------------------------------------------------------------------------- |
-| `id`         | string   | auto     | Public ID with `me_` prefix                                                 |
-| `memory_id`  | string   | auto     | The memory this entry belongs to                                            |
-| `content`    | string   | yes      | The knowledge content (a single fact, observation, or piece of information) |
-| `source`     | string   | auto     | How the entry was created: `manual`, `agent`, `extraction`                  |
-| `embedding`  | vector   | auto     | Embedding vector for semantic search (generated on create/update)           |
-| `created_at` | datetime | auto     |                                                                             |
-| `updated_at` | datetime | auto     |                                                                             |
-| `source_generation_id`   | string   | auto | Generation that produced this entry (agent/extraction writes) — *Phase 5*  |
-| `source_conversation_id` | string   | auto | Conversation the entry was extracted from — *Phase 5*                      |
-| `invalidated_at`         | datetime | auto | When this entry was superseded; `null` = currently valid — *Phase 5*       |
-| `superseded_by_entry_id` | string   | auto | The entry that replaced this one — *Phase 5*                               |
-| `importance`             | number   | auto | Write-time durability score used in retrieval ranking — *Phase 8*          |
-
-**Source types:**
-
-- `manual` — created by a user via the REST API
-- `agent` — created by an agent via the `write_memory` soat-tool during a generation
-- `extraction` — created by the automatic extraction system after a conversation turn
-
-**Design principles:**
-
-- Entries are **atomic** — one fact per entry (e.g., "Customer prefers email communication", not a paragraph mixing multiple facts).
-- Entries are **memory-scoped** — deduplication runs within a single memory's entries. Different memories can hold related facts independently.
-- Entries are **automatically deduplicated** — the write algorithm prevents duplicate and near-duplicate entries within a memory.
-- Entries are **mutable** — they can be merged with new information or manually updated.
-- Entries are **embedded (best-effort)** — each entry gets an embedding vector computed from its content for semantic search. Embedding is non-fatal: if the embedding provider is unavailable, the entry is still stored with a `null` embedding (and dedup is skipped for that write). The column is nullable, mirroring `DocumentChunk.embedding`. A null-embedding entry is not returned by semantic search until it is re-embedded (e.g. via a content update).
-- Entries are **temporal** *(Phase 5)* — a contradicted entry is superseded (`invalidated_at` set, `superseded_by_entry_id` pointing at its replacement), not silently rewritten or destroyed; search only sees currently-valid entries by default.
-- Entries are **auditable** *(Phase 5)* — agent- and extraction-written entries link back to the generation and conversation that produced them.
-
-### Memory Entity
+### Memory Entity (Phase 6)
 
 A memory entity is a noun, object, or concept extracted from memory entries. Entities are **project-scoped** — they live at the project level, not inside a specific memory. This enables cross-memory graph traversal: the same entity can be linked to entries in different memories.
 
@@ -523,7 +381,7 @@ A memory entity is a noun, object, or concept extracted from memory entries. Ent
 - Entities can be **linked to actors** — if an entity corresponds to a known actor in the project, setting `actor_id` provides canonical identity. Any future entity with the same `actor_id` is definitionally the same entity.
 - Entities have **properties** — free-form JSONB for structured attributes that don't fit the name/type fields. Properties are enriched on merge (similarity 0.75–0.95).
 
-### Entity Graph (Edges)
+### Entity Graph (Edges) (Phase 6)
 
 Relationships are modeled as first-class **entity → entity edges**. An edge is a directed triple —
 subject entity, canonical predicate, object entity — with the memory entry that asserted it as
@@ -558,69 +416,11 @@ This enables queries like:
 - "All entries involving actor `act_01`" → entity with that `actor_id` → its edges → entries
 - Multi-hop path traversal ("how are Pedro and Company X related?") is a **future extension** — the initial query surface is single-hop (see prd-knowledge.md Phase 3)
 
-### Relationship to Documents and Knowledge
+## Known v1 Limitations (addressed by Phase 5)
 
-Memories and documents are independent storage systems. The **knowledge module** provides a unified search layer across both.
-
-| Concern            | Memories                           | Documents                         | Knowledge                            |
-| ------------------ | ---------------------------------- | --------------------------------- | ------------------------------------ |
-| What it stores     | Atomic facts (1–2 sentences)       | Full content (files, pages, etc.) | Nothing — query orchestrator only    |
-| How content enters | Write algorithm (dedup/merge/skip) | Upload or create                  | —                                    |
-| Search endpoint    | —                                  | —                                 | `POST /api/v1/knowledge/search`      |
-| Managed by         | System (automatic dedup)           | User (manual upload)              | System (unified retrieval + ranking) |
-
-See the [Knowledge Module PRD](./prd-knowledge.md) for details.
-
-## Write Algorithm (v1 — implemented)
-
-Every write to a memory — manual, agent, or extraction — goes through the same algorithm. The caller provides `content` and the system determines the outcome. Dedup is scoped to the target memory.
-
-> **v1 status.** The algorithm below describes the **implemented** behavior, including its known
-> shortcut: the merge step **concatenates** contents instead of consolidating them with an LLM.
-> [Phase 5](#phase-5--write-algorithm-v2-llm-arbitrated-temporal--not-started) replaces the
-> decision and merge steps with an LLM-arbitrated operation (add / update / supersede / skip).
-
-```
-Input: content (string), memory_id
-
-STEP 1 — EMBED (best-effort)
-  Generate embedding for the content.
-  If embedding fails, continue with a null embedding: skip STEP 2/3 dedup
-  and create the entry directly (non-fatal, mirrors document chunk ingestion).
-
-STEP 2 — SEARCH
-  Search existing entries in this memory by cosine similarity.
-  Let topMatch = highest-similarity existing entry.
-
-STEP 3 — DECIDE
-
-  CASE 1: topMatch.score ≥ DUPLICATE_THRESHOLD (default 0.95)
-    → SKIP. The fact is already known.
-    Return { action: "skipped", entry: topMatch }
-
-  CASE 2: topMatch.score ≥ UPDATE_THRESHOLD (default 0.75)
-    → MERGE. The fact overlaps with existing knowledge.
-    v1 (implemented): merged = existing + "\n" + incoming   (concatenation)
-    v2 (Phase 5):     an LLM produces a single consolidated atomic fact and
-                      can supersede on contradiction
-    Update topMatch: content = merged, re-generate embedding, update updated_at.
-    Return { action: "updated", entry: topMatch }
-
-  CASE 3: topMatch.score < UPDATE_THRESHOLD (or no existing entries)
-    → CREATE. This is genuinely new knowledge.
-    Create a new entry with the provided content and embedding.
-    Return { action: "created", entry: newEntry }
-```
-
-### Why Two Thresholds
-
-The two-threshold approach handles three scenarios cleanly:
-
-- **High similarity (≥ 0.95):** "The user likes Python" vs "User prefers Python" → same fact, skip.
-- **Medium similarity (0.75–0.95):** "The user likes Python" vs "The user likes Python 3.12 specifically" → related, merge into a richer fact.
-- **Low similarity (< 0.75):** "The user likes Python" vs "The project deadline is Friday" → unrelated, create new entry.
-
-### Known v1 Limitations (addressed by Phase 5)
+The shipped v1 write algorithm (see the [Memory module docs](../packages/website/docs/modules/memories.md))
+decides create/update/skip from two fixed cosine thresholds and **concatenates** contents on
+merge. Phase 5 replaces the decision and merge steps for the reasons below:
 
 - **Concatenation merge breaks atomicity.** Repeated merges turn a one-fact entry into a
   multi-fact paragraph, its embedding drifts away from any single fact it contains, and the
@@ -636,194 +436,17 @@ The two-threshold approach handles three scenarios cleanly:
   models. v2 keeps thresholds only to shortlist candidates and short-circuit exact duplicates —
   the operation decision moves to an LLM.
 
-### Threshold Configuration
+In write algorithm v2 (Phase 5) `duplicate_threshold` (default 0.95) still short-circuits
+near-exact duplicates, a new `shortlist_threshold` (default 0.60) bounds the arbitration candidate
+set, and the create/update/supersede decision moves to an LLM.
 
-Thresholds can be overridden per request via optional fields in the write endpoint body:
+## Data Model (Pending Work)
 
-| Field                 | Type   | Default | Description                               |
-| --------------------- | ------ | ------- | ----------------------------------------- |
-| `duplicate_threshold` | number | 0.95    | Similarity above which content is skipped |
-| `update_threshold`    | number | 0.75    | Similarity above which content merges     |
+The `Memory` and `MemoryEntry` base tables are shipped. Phase 5 adds columns to `MemoryEntry`
+(`sourceGenerationId`, `sourceConversationId`, `invalidatedAt`, `supersededByEntryId`) and Phase 8
+adds `importance`, `lastAccessedAt`, `accessCount`. The tables below are new in Phase 6.
 
-In write algorithm v2 (Phase 5) these thresholds stop deciding the outcome: `duplicate_threshold`
-still short-circuits near-exact duplicates, a new `shortlist_threshold` (default 0.60) bounds the
-arbitration candidate set, and the create/update/supersede decision moves to an LLM.
-
-### Examples
-
-**First write — no existing entries:**
-
-```json
-POST /api/v1/memories/mem_abc/entries
-{ "content": "Customer prefers email over phone calls" }
-
-→ { "action": "created", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls", ... } }
-```
-
-**Duplicate write — same fact rephrased:**
-
-```json
-POST /api/v1/memories/mem_abc/entries
-{ "content": "The customer likes email more than phone" }
-
-→ { "action": "skipped", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls", ... } }
-```
-
-**Merge write — related fact with new detail:**
-
-```json
-POST /api/v1/memories/mem_abc/entries
-{ "content": "Customer prefers email, especially for billing inquiries" }
-
-→ { "action": "updated", "entry": { "id": "me_001", "content": "Customer prefers email over phone calls\nCustomer prefers email, especially for billing inquiries", ... } }
-```
-
-> v1 concatenates on merge (shown above). With write algorithm v2 (Phase 5) the LLM consolidates
-> instead: `"Customer prefers email over phone calls, especially for billing inquiries"`.
-
-**Unrelated write — new fact:**
-
-```json
-POST /api/v1/memories/mem_abc/entries
-{ "content": "Customer fiscal year ends in March" }
-
-→ { "action": "created", "entry": { "id": "me_002", "content": "Customer fiscal year ends in March", ... } }
-```
-
-## Write Paths
-
-### 1. Manual Write (REST API)
-
-The user calls `POST /api/v1/memories/{memory_id}/entries` with `{ "content": "..." }`. The write algorithm runs within that memory and returns the action taken plus the entry.
-
-### 2. Agent Write (soat-tool)
-
-During a generation, an agent can call the `write_memory` tool with `{ "content": "..." }`. The tool takes **content only** — the target memory is bound from the agent's `knowledge_config.write_memory_id` when the tool is built, so the agent cannot write to arbitrary memories. The write algorithm runs identically.
-
-### 3. Automatic Extraction (post-conversation)
-
-Runs **after a conversation turn completes** (fire-and-forget, does not block the response). This is the only path that extracts multiple facts from a single input.
-
-```
-Input: conversation messages[], target memory_id
-
-STEP 1 — EXTRACT CANDIDATE FACTS
-  Prompt an LLM with the conversation context:
-    "Extract discrete, atomic facts from this conversation.
-     Return a JSON array of { content: string } objects.
-     Only extract facts that are worth remembering long-term.
-     Skip transient information (greetings, acknowledgments, etc.)."
-
-  → candidates: { content: string }[]
-
-  If candidates is empty → STOP (nothing to remember)
-
-STEP 2 — WRITE EACH CANDIDATE
-  For each candidate, run the write algorithm against the target memory.
-  Each candidate independently results in create, merge, or skip.
-
-STEP 3 — RETURN
-  Return a summary: { created: number, updated: number, skipped: number }
-```
-
-Extraction is triggered when an agent whose `knowledge_config` has `extraction: true` and a `write_memory_id` completes a non-streaming generation (conversation, session, or direct generate). Facts are written to the `write_memory_id` memory.
-
-## Agent Integration
-
-### Knowledge Config
-
-The Agent model stores a `knowledgeConfig` JSONB field that drives both knowledge retrieval and the
-memory write target — no separate join table or attachment endpoints. **Its full schema, the three
-retrieval paths (agent config / per-generation / self-retrieval), and the agent-config +
-per-generation merge semantics are defined once in the knowledge PRD** — see
-[prd-knowledge.md → Knowledge Config](./prd-knowledge.md#knowledge-config) and
-[Three Knowledge Retrieval Paths](./prd-knowledge.md#three-knowledge-retrieval-paths). Do not
-re-document the shape here; only the memory-owned fields are described below.
-
-**Memory-owned fields on `knowledge_config`:**
-
-- `write_memory_id` — the memory the `write_memory` tool and automatic extraction write to. Binding
-  the target here (rather than as a tool argument) is what lets the `write_memory` tool take
-  `{ content }` only.
-- `extraction` — enables post-turn fact extraction into `write_memory_id` (see Phase 4). `true` uses
-  defaults; the object form `{ enabled?, ai_provider_id?, model?, prompt? }` customizes the
-  extraction provider/model/prompt.
-
-`memory_ids` / `memory_tags` scope which memories an agent **reads** from; `write_memory_id` scopes
-where it **writes**.
-
-### Generation Flow
-
-1. **Merge configs** — combine agent's stored `knowledgeConfig` with per-generation `knowledgeConfig` (if provided) using append semantics.
-2. **Search** — call `searchKnowledge()` with the merged config filters and the conversation context as the query.
-3. **Inject** — prepend results as system messages, tagged by source.
-4. **Generate** — send to LLM with instructions + knowledge + conversation.
-5. **Post-generate (async)** — if the config has `extraction: true` and a `write_memory_id`, the extraction algorithm runs on the completed turn, writing new facts to the write memory.
-
-### Agent Memory Tools (soat-tools)
-
-When an agent has a `knowledgeConfig` with memory IDs, it gains access to these tools:
-
-| Tool               | Description                                                          |
-| ------------------ | -------------------------------------------------------------------- |
-| `write_memory`     | Write content to a memory (system decides: create, merge, or skip)   |
-| `search-knowledge` | Search across memories and documents (delegated to knowledge module) |
-
-These tools are gated by the agent's boundary policy.
-
-### Context Injection
-
-Relevant memory entries are injected as system messages before the conversation:
-
-```
-[Memory: Customer Preferences] Customer prefers email over phone calls, especially for billing inquiries
-[Memory: Customer Preferences] Customer fiscal year ends in March
-[Memory: Project Context] The deadline is June 15
-```
-
-The system embeds the latest user message and calls `searchKnowledge()` with the agent's `knowledgeConfig` filters to retrieve the top matches.
-
-Injected knowledge is currently added as a `system` message. Because extraction-sourced entries
-are user-derived text, this grants them system-level authority in later turns — moving injection
-to delimited, non-system content is owned by
-[prd-knowledge.md Phase 6](./prd-knowledge.md#phase-6--injection-hardening-memory-as-untrusted-input--future).
-
-## Data Model
-
-### Memory Table
-
-| Column      | Type          | Constraints                      |
-| ----------- | ------------- | -------------------------------- |
-| id          | INTEGER       | PK, auto-increment               |
-| publicId    | VARCHAR(32)   | UNIQUE, NOT NULL, `mem_` prefix  |
-| projectId   | INTEGER       | FK → Project, NOT NULL           |
-| name        | VARCHAR       | NOT NULL                         |
-| description | TEXT          | NULL                             |
-| tags        | VARCHAR ARRAY | NULL, for categorizing/filtering |
-| createdAt   | TIMESTAMP     | NOT NULL                         |
-| updatedAt   | TIMESTAMP     | NOT NULL                         |
-
-### MemoryEntry Table
-
-| Column    | Type         | Constraints                    |
-| --------- | ------------ | ------------------------------ |
-| id        | INTEGER      | PK, auto-increment             |
-| publicId  | VARCHAR(32)  | UNIQUE, NOT NULL, `me_` prefix |
-| memoryId  | INTEGER      | FK → Memory, NOT NULL          |
-| content   | TEXT         | NOT NULL                       |
-| source    | VARCHAR(20)  | NOT NULL, enum                 |
-| embedding | VECTOR(EMBEDDING_DIMENSIONS) | NULL              |
-| createdAt | TIMESTAMP    | NOT NULL                       |
-| updatedAt | TIMESTAMP    | NOT NULL                       |
-| sourceGenerationId   | INTEGER   | FK → Generation, NULL — *Phase 5*   |
-| sourceConversationId | INTEGER   | FK → Conversation, NULL — *Phase 5* |
-| invalidatedAt        | TIMESTAMP | NULL — *Phase 5*                    |
-| supersededByEntryId  | INTEGER   | FK → MemoryEntry, NULL — *Phase 5*  |
-| importance           | REAL      | NULL — *Phase 8*                    |
-| lastAccessedAt       | TIMESTAMP | NULL — *Phase 8*                    |
-| accessCount          | INTEGER   | NOT NULL DEFAULT 0 — *Phase 8*      |
-
-### MemoryEntity Table
+### MemoryEntity Table (Phase 6)
 
 | Column     | Type         | Constraints                     |
 | ---------- | ------------ | ------------------------------- |
@@ -838,7 +461,7 @@ to delimited, non-system content is owned by
 | createdAt  | TIMESTAMP    | NOT NULL                        |
 | updatedAt  | TIMESTAMP    | NOT NULL                        |
 
-### MemoryEntityEdge Table
+### MemoryEntityEdge Table (Phase 6)
 
 | Column          | Type      | Constraints                             |
 | --------------- | --------- | --------------------------------------- |
@@ -850,49 +473,20 @@ to delimited, non-system content is owned by
 | invalidatedAt   | TIMESTAMP | NULL                                    |
 | createdAt       | TIMESTAMP | NOT NULL                                |
 
-**Indexes:**
+**Indexes (new in Phase 6):**
 
-- `UNIQUE (publicId)` on Memory, MemoryEntry, MemoryEntity tables
-- `(memoryId)` on MemoryEntry — for listing entries within a memory
+- `UNIQUE (publicId)` on MemoryEntity
 - `(projectId)` on MemoryEntity — for listing entities within a project
 - `(actorId)` on MemoryEntity — for actor-scoped entity lookups (unique constraint)
 - `(subjectEntityId, predicate)` on MemoryEntityEdge — forward traversal ("what does Pedro own?")
 - `(objectEntityId, predicate)` on MemoryEntityEdge — reverse traversal ("who owns Company X?")
 - `(entryId)` on MemoryEntityEdge — edges asserted by an entry (invalidation on supersede/delete)
 - `UNIQUE (subjectEntityId, predicate, objectEntityId, entryId)` on MemoryEntityEdge — prevent duplicate edges per assertion
-- `HNSW (embedding)` on MemoryEntry and MemoryEntity — for cosine similarity search
+- `HNSW (embedding)` on MemoryEntity — for cosine similarity search
 
-### Agent `knowledgeConfig` Field
+## Permissions (Pending Work)
 
-Stored as JSONB on the `agents` table; no join table needed — the agent stores its knowledge
-retrieval config inline. The **canonical `KnowledgeConfig` schema** (all read-scope and write-side
-fields) lives in the knowledge PRD — see
-[prd-knowledge.md → Knowledge Config](./prd-knowledge.md#knowledge-config). The memory-owned fields
-(`write_memory_id`, `extraction`) are described under [Agent Integration](#knowledge-config) above.
-
-## Permissions
-
-### Memory CRUD
-
-| Permission              | Endpoint                            |
-| ----------------------- | ----------------------------------- |
-| `memories:CreateMemory` | `POST /api/v1/memories`             |
-| `memories:ListMemories` | `GET /api/v1/memories`              |
-| `memories:GetMemory`    | `GET /api/v1/memories/{memory_id}`    |
-| `memories:UpdateMemory` | `PUT /api/v1/memories/{memory_id}`    |
-| `memories:DeleteMemory` | `DELETE /api/v1/memories/{memory_id}` |
-
-### Entry Operations
-
-| Permission                   | Endpoint                                             |
-| ---------------------------- | ---------------------------------------------------- |
-| `memories:WriteMemoryEntry`  | `POST /api/v1/memories/{memory_id}/entries`            |
-| `memories:ListMemoryEntries` | `GET /api/v1/memories/{memory_id}/entries`             |
-| `memories:GetMemoryEntry`    | `GET /api/v1/memories/{memory_id}/entries/{entry_id}`    |
-| `memories:UpdateMemoryEntry` | `PUT /api/v1/memories/{memory_id}/entries/{entry_id}`    |
-| `memories:DeleteMemoryEntry` | `DELETE /api/v1/memories/{memory_id}/entries/{entry_id}` |
-
-### Entity Operations
+### Entity Operations (Phase 6)
 
 | Permission                    | Endpoint                            |
 | ----------------------------- | ----------------------------------- |
@@ -905,39 +499,14 @@ fields) lives in the knowledge PRD — see
 
 Entity and edge creation is automatic (via async extraction during `writeMemoryEntry`). No `CreateMemoryEntity` permission needed — it piggybacks on `WriteMemoryEntry`.
 
-### Knowledge Config Permissions
+## REST API (Pending Work)
 
-Updating an agent's `knowledgeConfig` uses `agents:UpdateAgent` (standard agent update).
-
-## REST API
-
-All body fields use `snake_case` per project convention.
-
-### Memory CRUD
-
-| Method | Path                         | Description                          |
-| ------ | ---------------------------- | ------------------------------------ |
-| POST   | `/api/v1/memories`           | Create a memory                      |
-| GET    | `/api/v1/memories`           | List memories in accessible projects |
-| GET    | `/api/v1/memories/{memory_id}` | Get a memory by ID                   |
-| PUT    | `/api/v1/memories/{memory_id}` | Update a memory                      |
-| DELETE | `/api/v1/memories/{memory_id}` | Delete a memory and all its entries  |
-
-### Entry Operations
-
-| Method | Path                                          | Description                                            |
-| ------ | --------------------------------------------- | ------------------------------------------------------ |
-| POST   | `/api/v1/memories/{memory_id}/entries`          | Write content (system decides: create, merge, or skip) |
-| GET    | `/api/v1/memories/{memory_id}/entries`          | List entries in a memory                               |
-| GET    | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Get an entry by ID                                     |
-| PUT    | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Manually update an entry (bypasses dedup)              |
-| DELETE | `/api/v1/memories/{memory_id}/entries/{entry_id}` | Delete an entry                                        |
-
-Phase 5 adds `superseded` to the `action` values returned by the write endpoint and an
+All body fields use `snake_case` per project convention. Phase 5 adds `superseded` to the `action`
+values returned by the write endpoint (`POST /api/v1/memories/{memory_id}/entries`) and an
 `include_invalidated` query parameter on entry listing (invalidated entries are excluded by
 default).
 
-### Entity Operations
+### Entity Operations (Phase 6)
 
 | Method | Path                                 | Description                                     |
 | ------ | ------------------------------------ | ----------------------------------------------- |
@@ -949,11 +518,3 @@ default).
 | GET    | `/api/v1/entities/{entity_id}/edges`   | List edges (subject → predicate → object) touching an entity |
 
 Entities and edges are created automatically during `writeMemoryEntry()` (async, best-effort) — no `POST` endpoint. Users can update or delete extracted entities via `PUT`/`DELETE`. Entities are project-scoped; filter by `project_id` query parameter on `GET /api/v1/entities`.
-
-### Agent Knowledge Config
-
-No separate endpoints — use the standard agent update endpoint:
-
-| Method | Path                      | Description                               |
-| ------ | ------------------------- | ----------------------------------------- |
-| PUT    | `/api/v1/agents/{agent_id}` | Update agent including `knowledge_config` |
