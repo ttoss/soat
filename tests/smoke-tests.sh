@@ -1605,7 +1605,7 @@ BARE_OUTPUT_PIPELINE_RESP=$($SOAT_CLI create-tool \
   --name list-projects-first-id \
   --type pipeline \
   --description "Returns a bare scalar extracted from a step output" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.0.id\"}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.data.0.id\"}}")
 BARE_OUTPUT_PIPELINE_ID=$(echo "$BARE_OUTPUT_PIPELINE_RESP" | jq -r '.id')
 if [ -z "$BARE_OUTPUT_PIPELINE_ID" ] || [ "$BARE_OUTPUT_PIPELINE_ID" = "null" ]; then
   echo "FAIL: could not create bare-scalar-output pipeline tool"
@@ -1635,7 +1635,7 @@ OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Lists projects and extracts the first project's id via output_mapping" \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
-  --output-mapping '{"var":"output.0.id"}')
+  --output-mapping '{"var":"output.data.0.id"}')
 OUTPUT_MAPPING_TOOL_ID=$(echo "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
 if [ -z "$OUTPUT_MAPPING_TOOL_ID" ] || [ "$OUTPUT_MAPPING_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create http tool with output_mapping"
