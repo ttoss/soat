@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { emitEvent } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -161,19 +162,25 @@ describe('Exceptions', () => {
         ).status
       ).toBe(401);
       expect(
-        (await testClient.post(`/api/v1/exceptions/${targetId}/resolve`).send({}))
-          .status
+        (
+          await testClient
+            .post(`/api/v1/exceptions/${targetId}/resolve`)
+            .send({})
+        ).status
       ).toBe(401);
     });
 
     test('requests without permission are 403', async () => {
       const client = authenticatedTestClient(noPermToken);
+      expect((await client.get(`/api/v1/exceptions/${targetId}`)).status).toBe(
+        403
+      );
       expect(
-        (await client.get(`/api/v1/exceptions/${targetId}`)).status
-      ).toBe(403);
-      expect(
-        (await client.post(`/api/v1/exceptions/${targetId}/acknowledge`).send({}))
-          .status
+        (
+          await client
+            .post(`/api/v1/exceptions/${targetId}/acknowledge`)
+            .send({})
+        ).status
       ).toBe(403);
       expect(
         (await client.post(`/api/v1/exceptions/${targetId}/resolve`).send({}))
@@ -304,6 +311,139 @@ describe('Exceptions', () => {
         return e.kind === 'guardrail_tripwire' && e.run_id === runRes.body.id;
       });
       expect(match).not.toBeNull();
+    });
+  });
+
+  // The producers are fire-and-forget off the event bus, so their branches were
+  // only ever covered incidentally by other tests' async handlers landing in
+  // time — which made src/lib/exceptions.ts coverage flaky and intermittently
+  // failed the CI coverage gate. Drive each producer (and the dedup-race path)
+  // deterministically here: emit the event directly and poll the filed row, so
+  // every branch is exercised regardless of async timing. No production change.
+  describe('producer branch coverage (deterministic)', () => {
+    const pollException = async (
+      predicate: (e: Record<string, unknown>) => boolean
+    ): Promise<Record<string, unknown> | null> => {
+      for (let i = 0; i < 100; i += 1) {
+        const res = await listExceptions('');
+        const match = (res.body as Record<string, unknown>[]).find(predicate);
+        if (match) return match;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 20);
+        });
+      }
+      return null;
+    };
+
+    const emit = (
+      type: string,
+      resourceId: string,
+      data: Record<string, unknown>
+    ) => {
+      emitEvent({
+        type,
+        projectId: projectInternalId,
+        projectPublicId: projectId,
+        resourceType: 'test',
+        resourceId,
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    };
+
+    test('approvals.expired with full data files an approval_expired exception', async () => {
+      emit('approvals.expired', 'apr_full_1', {
+        approval: {
+          id: 'apr_full_1',
+          proposedAction: { toolId: 'tool_x' },
+          runId: 'run_exp_1',
+          agentId: 'agent_exp_1',
+        },
+      });
+      const match = await pollException((e) => {
+        return e.kind === 'approval_expired' && e.run_id === 'run_exp_1';
+      });
+      expect(match).not.toBeNull();
+      expect(match!.severity).toBe('warning');
+      expect(match!.agent_id).toBe('agent_exp_1');
+    });
+
+    test('approvals.expired with an empty approval falls back to (unknown) with no dedup key', async () => {
+      emit('approvals.expired', 'apr_empty_1', { approval: {} });
+      const match = await pollException((e) => {
+        return (
+          e.kind === 'approval_expired' &&
+          typeof e.title === 'string' &&
+          e.title.includes('(unknown)')
+        );
+      });
+      expect(match).not.toBeNull();
+      expect(match!.run_id).toBeNull();
+      expect(match!.agent_id).toBeNull();
+    });
+
+    test('orchestration_runs.failed with no error detail files a run_failed exception', async () => {
+      emit('orchestration_runs.failed', 'run_noerr_1', {});
+      const match = await pollException((e) => {
+        return e.kind === 'run_failed' && e.run_id === 'run_noerr_1';
+      });
+      expect(match).not.toBeNull();
+      expect(match!.detail).toBeNull();
+    });
+
+    test('guardrail.tripwire with a generation (no run) scopes by generation id and falls back to the resource id for the tool name', async () => {
+      emit('guardrail.tripwire', 'tool_gen_1', {
+        generationId: 'gen_trip_1',
+        agentId: 'agent_trip_1',
+      });
+      const match = await pollException((e) => {
+        return (
+          e.kind === 'guardrail_tripwire' &&
+          typeof e.title === 'string' &&
+          e.title.includes('tool_gen_1')
+        );
+      });
+      expect(match).not.toBeNull();
+      // No runId on the event → the generation path; toolName fell back to the
+      // event resourceId (there was no toolName in the data).
+      expect(match!.run_id).toBeNull();
+      expect(match!.agent_id).toBe('agent_trip_1');
+    });
+
+    test('an unmatched event type files no exception (handleEvent early return)', async () => {
+      emit('noop.unmatched', 'noop_1', { whatever: true });
+      // handleEvent runs synchronously on emit; give any (non-existent) filer a
+      // tick, then confirm nothing referencing this event was filed.
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 50);
+      });
+      const res = await listExceptions('');
+      const noop = (res.body as Record<string, unknown>[]).find((e) => {
+        return typeof e.title === 'string' && e.title.includes('noop');
+      });
+      expect(noop).toBeUndefined();
+    });
+
+    test('concurrent files with the same fresh dedup key fold via the unique-violation path', async () => {
+      const dedupKey = 'excrace:concurrent:1';
+      const [a, b] = await Promise.all([
+        fileException({
+          projectId: projectInternalId,
+          kind: 'manual',
+          title: 'Race',
+          dedupKey,
+        }),
+        fileException({
+          projectId: projectInternalId,
+          kind: 'manual',
+          title: 'Race',
+          dedupKey,
+        }),
+      ]);
+      // The partial unique index on (dedup_key WHERE status = 'open') guarantees
+      // one insert wins and the other folds into it — same item, occurrence 2.
+      expect(a.id).toBe(b.id);
+      expect([a.occurrenceCount, b.occurrenceCount].sort()).toEqual([1, 2]);
     });
   });
 });
