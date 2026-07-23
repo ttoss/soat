@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { DecisionOutput, MappedApproval } from './approvals';
 import { emitApproval, registerApprovalResumeHandler } from './approvals';
+import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
 import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
@@ -218,12 +219,23 @@ const settleRun = async (args: {
       expiresInSeconds: spec.expiresInSeconds,
       orchestrationRunId: runRecord.id as number,
       nodeId: requiredAction.nodeId,
+      policyVersion: spec.policyVersion,
     });
     requiredAction.approvalId = item.id;
     requiredAction.expiresAt =
       item.expiresAt instanceof Date
         ? item.expiresAt.toISOString()
         : String(item.expiresAt);
+    // Cross-links the guardrail_evaluation audit rows to the item they filed —
+    // deferred from `runToolNodeGate` because the item didn't exist yet then.
+    if (spec.guardrailEvaluationRecords?.length) {
+      void persistGuardrailEvaluations({
+        projectId: runRecord.projectId as number,
+        toolId: spec.toolId,
+        records: spec.guardrailEvaluationRecords,
+        approvalId: item.id,
+      });
+    }
     requiredAction.approvalSpec = undefined;
   }
 
