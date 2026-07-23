@@ -326,7 +326,7 @@ describe('Exceptions', () => {
     ): Promise<Record<string, unknown> | null> => {
       for (let i = 0; i < 100; i += 1) {
         const res = await listExceptions('');
-        const match = (res.body as Record<string, unknown>[]).find(predicate);
+        const match = (res.body.data as Record<string, unknown>[]).find(predicate);
         if (match) return match;
         await new Promise((resolve) => {
           return setTimeout(resolve, 20);
@@ -418,7 +418,7 @@ describe('Exceptions', () => {
         return setTimeout(resolve, 50);
       });
       const res = await listExceptions('');
-      const noop = (res.body as Record<string, unknown>[]).find((e) => {
+      const noop = (res.body.data as Record<string, unknown>[]).find((e) => {
         return typeof e.title === 'string' && e.title.includes('noop');
       });
       expect(noop).toBeUndefined();

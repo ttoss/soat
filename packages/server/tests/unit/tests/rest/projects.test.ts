@@ -101,8 +101,8 @@ describe('Projects', () => {
       // like operationId stay camelCase.
       expect(get.operationId).toBe('listProjects');
       const itemsRef =
-        get.responses?.['200']?.content?.['application/json']?.schema?.items
-          ?.$ref;
+        get.responses?.['200']?.content?.['application/json']?.schema
+          ?.properties?.data?.items?.$ref;
       expect(itemsRef).toBe('#/components/schemas/ProjectRecord');
     });
 
