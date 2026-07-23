@@ -1,3 +1,4 @@
+import { DomainError } from 'src/errors';
 import * as toolsModule from 'src/lib/tools';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -371,6 +372,41 @@ describe('Orchestration tool-node guardrails', () => {
         1000;
       // The governing guardrail's expires_in wins over the 24h default.
       expect(Math.abs(windowSeconds - EXPIRES_IN)).toBeLessThan(120);
+    });
+
+    // Regression: a class-C-approved tool node whose re-dispatch THROWS (e.g. the
+    // tool target returns a non-2xx) must fail the run — not leave it hung in
+    // `awaiting_input`. The re-dispatch runs inside the approvals resume callback,
+    // which swallows handler errors, so before the resume-path guard the run
+    // stayed `awaiting_input` forever with the error lost. Found in live E2E QA.
+    test('a failing tool re-dispatch on approval fails the run instead of hanging', async () => {
+      const orchestrationId = await buildApprovalPipeline();
+      // Force the approved re-dispatch to throw, exactly as a real HTTP 4xx/5xx
+      // from the tool target does inside callTool.
+      const callToolSpy = jest
+        .spyOn(toolsModule, 'callTool')
+        .mockRejectedValue(
+          new DomainError('TOOL_HTTP_ERROR', 'Tool target returned HTTP 405')
+        );
+
+      const runRes = await startApprovalRun(orchestrationId);
+      expect(runRes.body.status).toBe('awaiting_input');
+      const approvalId = runRes.body.required_action.approval_id;
+
+      const approveRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approvalId}/approve`)
+        .send({});
+      // Approval itself succeeds; the failure is enacted on the resumed run.
+      expect(approveRes.status).toBe(200);
+      expect(callToolSpy).toHaveBeenCalledTimes(1);
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runRes.body.id}`
+      );
+      // The run is failed with the error recorded — not stuck awaiting_input.
+      expect(getRes.body.status).toBe('failed');
+      expect(getRes.body.error).toBeTruthy();
+      expect(getRes.body.error.message).toMatch(/405/);
     });
 
     test('rejecting does not execute the tool', async () => {

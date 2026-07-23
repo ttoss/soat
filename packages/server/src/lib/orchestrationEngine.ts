@@ -18,6 +18,7 @@ import {
 import { newLeaseExpiry } from './orchestrationLease';
 import { executeToolNode } from './orchestrationNodeExecutors';
 import {
+  buildRunError,
   recordDelayResumption,
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
@@ -620,6 +621,48 @@ const applyResumeNodeOutcome = async (args: {
   }
 };
 
+/**
+ * Applies a resumed node's outcome, returning a settled `failed` run when the
+ * application throws. A class-C-approved `tool` node re-dispatches its tool here
+ * (e.g. an HTTP call that can return a non-2xx); on the normal run path such a
+ * throw is caught by the run loop and fails the run, but this code runs inside
+ * the approvals resume callback (`resumeRunForApproval` → `notifyResume`), which
+ * swallows handler errors — so an unguarded throw would leave the run hung in
+ * `awaiting_input` forever with the error lost. Settling as `failed` mirrors the
+ * loop's failure handling and surfaces the error on the run record. Returns
+ * `null` on success (the caller drives the run forward).
+ */
+const applyResumeOutcomeOrSettleFailure = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+  resumedNode?: OrchestrationNode;
+  humanNodeId?: string;
+  humanOutput?: Record<string, unknown>;
+  decisionLabel?: string;
+  approvedArguments?: Record<string, unknown> | null;
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+}): Promise<MappedOrchestrationRun | null> => {
+  try {
+    await applyResumeNodeOutcome(args);
+    return null;
+  } catch (error: unknown) {
+    log('resumeOrchestrationRunExecution: resume application failed %o', error);
+    return settleRun({
+      runRecord: args.run,
+      runStatus: 'failed',
+      requiredAction: null,
+      runError: buildRunError(error),
+      state: args.state,
+      artifacts: args.artifacts,
+      nodes: args.nodes,
+      edges: args.edges,
+      traceId: args.run.traceId ?? null,
+    });
+  }
+};
+
 // Decision-routed node ids for a resume: the graph's `approval` nodes, plus a
 // gated `tool` node that parked for approval — its unlabeled success edge
 // follows only on `approved`, so a rejected/expired decision never falls
@@ -721,7 +764,7 @@ export const resumeOrchestrationRunExecution = async (args: {
       })
     : undefined;
 
-  await applyResumeNodeOutcome({
+  const settledOnFailure = await applyResumeOutcomeOrSettleFailure({
     run,
     resumedNode,
     humanNodeId,
@@ -729,9 +772,11 @@ export const resumeOrchestrationRunExecution = async (args: {
     decisionLabel,
     approvedArguments: args.approvedArguments,
     nodes,
+    edges,
     state,
     artifacts,
   });
+  if (settledOnFailure) return settledOnFailure;
 
   const { completedNodes, conditionLabels, startNodeIds } =
     resolveResumeActivation({
