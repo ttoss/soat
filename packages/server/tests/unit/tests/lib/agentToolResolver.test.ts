@@ -380,6 +380,45 @@ describe('resolveAgentTools', () => {
     fetchMock.mockRestore();
   });
 
+  test('http tool execute returns raw text for a 2xx response with a non-JSON body instead of throwing', async () => {
+    const fetchMock = jest.spyOn(global, 'fetch').mockResolvedValueOnce(
+      new Response('<html><body>hello</body></html>', {
+        status: 200,
+        headers: { 'Content-Type': 'text/html' },
+      })
+    );
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    let result: unknown;
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      result = await httpTool.execute({}, {} as never);
+    }
+
+    expect(result).toBe('<html><body>hello</body></html>');
+
+    fetchMock.mockRestore();
+  });
+
+  test('http tool execute returns empty string for a 2xx response with an empty body (e.g. 204 No Content)', async () => {
+    const fetchMock = jest
+      .spyOn(global, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    const tools = await resolveAgentTools({ toolIds: [httpToolId] });
+    const httpTool = tools.myHttpTool;
+
+    let result: unknown;
+    if ('execute' in httpTool && typeof httpTool.execute === 'function') {
+      result = await httpTool.execute({}, {} as never);
+    }
+
+    expect(result).toBe('');
+
+    fetchMock.mockRestore();
+  });
+
   test('http tool execute supports legacy execute config stored as JSON string', async () => {
     const legacyToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')

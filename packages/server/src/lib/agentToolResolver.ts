@@ -528,7 +528,16 @@ export const buildHttpToolExecute = (
           method
         );
       }
-      return response.json();
+      // The target may return a 2xx with a non-JSON body (HTML, plain text,
+      // an empty 204) — fall back to the raw text instead of letting
+      // `SyntaxError` from a strict `response.json()` escape as an unmapped
+      // (and thus opaque 500) error.
+      const responseText = await response.text();
+      try {
+        return JSON.parse(responseText);
+      } catch {
+        return responseText;
+      }
     } catch (error) {
       logToolCallingError({
         toolName: args.toolName,
