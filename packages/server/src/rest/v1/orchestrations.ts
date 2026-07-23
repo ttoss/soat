@@ -19,6 +19,7 @@ import {
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 
+import { parsePagination } from './helpers';
 import { resolveRunAuth, resolveStartRunScope } from './orchestrationAuth';
 
 export const orchestrationsRouter = new Router<Context>();
@@ -230,7 +231,7 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listOrchestrations({ projectIds });
+  ctx.body = await listOrchestrations({ projectIds, ...parsePagination(ctx) });
 });
 /**
  * @openapi
@@ -391,6 +392,7 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
     projectIds: projectIds ?? undefined,
+    ...parsePagination(ctx),
   });
 
   ctx.body = result;

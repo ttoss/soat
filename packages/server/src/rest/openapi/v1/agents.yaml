@@ -98,15 +98,43 @@ paths:
           schema:
             type: string
           description: Project public ID to filter by
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
       responses:
         '200':
           description: List of agents
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Agent'
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Agent'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
         '401':
           description: Unauthorized
           content:
@@ -1109,38 +1137,86 @@ components:
 
     AgentGenerationResponse:
       type: object
+      description: >
+        Result of an agent generation. Mirrors the server's `GenerationResult`.
+        When `status` is `completed` the model output is under `output`; when it
+        is `requires_action` the pending client tool calls are under
+        `required_action`.
+      required:
+        - id
+        - trace_id
+        - status
       properties:
         id:
           type: string
           description: Public ID of the generation
           example: gen_V1StGXR8Z5jdHi6B
+        trace_id:
+          type: string
+          description: Public ID of the trace for this generation
+          example: trace_V1StGXR8Z5jdHi6B
         status:
           type: string
           enum:
             - completed
             - requires_action
           description: Generation status
-        text:
-          type: string
-          nullable: true
-          description: Final text output (when completed)
-        object:
+        output:
           type: object
           nullable: true
-          description: Structured object matching the agent's `output_schema` (when completed and `output_schema` is set)
-        tool_calls:
-          type: array
-          nullable: true
-          items:
-            type: object
-            properties:
-              tool_call_id:
-                type: string
-              tool_name:
-                type: string
-              args:
+          description: Model output (present when `status` is `completed`).
+          required:
+            - model
+            - content
+            - finish_reason
+          properties:
+            model:
+              type: string
+              description: Model that produced the output
+            content:
+              type: string
+              description: Final text output
+            finish_reason:
+              type: string
+              description: Reason the model stopped generating
+            response_messages:
+              type: array
+              nullable: true
+              description: Full AI SDK response messages (tool calls, tool results, final text)
+              items:
                 type: object
-          description: Pending tool calls (when requires_action)
+            object:
+              type: object
+              nullable: true
+              description: Structured object matching the agent's `output_schema` (when `output_schema` is set)
+        required_action:
+          type: object
+          nullable: true
+          description: Pending action the caller must satisfy (present when `status` is `requires_action`).
+          required:
+            - type
+            - tool_calls
+          properties:
+            type:
+              type: string
+              enum:
+                - submit_tool_outputs
+              description: The kind of action required
+            tool_calls:
+              type: array
+              description: Pending tool calls to execute and submit outputs for
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: Tool call ID
+                  tool_name:
+                    type: string
+                    description: Name of the tool to invoke
+                  args:
+                    type: object
+                    description: Arguments for the tool call
 
     ErrorResponse:
       type: object

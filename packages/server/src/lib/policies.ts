@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
+import { paginatedList, resolvePagination } from './pagination';
 
 const validatePolicy = (
   document: PolicyDocument
@@ -24,24 +25,34 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
   };
 };
 
-export const listPolicies = async (args?: { userId?: string }) => {
+export const listPolicies = async (args?: {
+  userId?: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  let where: Record<string, unknown> | undefined;
+
   // Optional user filter: return only the policies attached to that user.
   // An unknown user (or one with no policies) yields an empty list.
   if (args?.userId !== undefined) {
     const user = await db.User.findOne({ where: { publicId: args.userId } });
     const policyIds = (user?.policyIds as number[] | undefined) ?? [];
     if (policyIds.length === 0) {
-      return [];
+      const { limit, offset } = resolvePagination(args);
+      return { data: [], total: 0, limit, offset };
     }
-    const userPolicies = await db.Policy.findAll({ where: { id: policyIds } });
-    return userPolicies.map((p: InstanceType<(typeof db)['Policy']>) => {
-      return mapPolicy(p);
-    });
+    where = { id: policyIds };
   }
 
-  const policies = await db.Policy.findAll();
-  return policies.map((p: InstanceType<(typeof db)['Policy']>) => {
-    return mapPolicy(p);
+  return paginatedList({
+    limit: args?.limit,
+    offset: args?.offset,
+    query: ({ limit, offset }) => {
+      return db.Policy.findAndCountAll({ where, limit, offset });
+    },
+    map: (p: InstanceType<(typeof db)['Policy']>) => {
+      return mapPolicy(p);
+    },
   });
 };
 

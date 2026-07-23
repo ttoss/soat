@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
 import {
@@ -98,6 +99,8 @@ export const listTriggers = async (args: {
   projectIds: number[];
   type?: string;
   targetType?: string;
+  limit?: number;
+  offset?: number;
 }) => {
   log(
     'listTriggers: projectIds=%o type=%s targetType=%s',
@@ -109,13 +112,22 @@ export const listTriggers = async (args: {
   if (args.type) where.type = args.type;
   if (args.targetType) where.targetType = args.targetType;
 
-  const triggers = await db.Trigger.findAll({
-    where,
-    include: triggerIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-  return triggers.map((t) => {
-    return mapTrigger(t);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Trigger.findAndCountAll({
+        where,
+        include: triggerIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (t) => {
+      return mapTrigger(t);
+    },
   });
 };
 

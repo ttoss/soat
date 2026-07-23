@@ -133,7 +133,7 @@ fi
 
 # List policies
 POLICY_LIST_RESP=$($SOAT_CLI list-policies)
-if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST policies did not return an array" >&2
   echo "$POLICY_LIST_RESP" >&2
   exit 1
@@ -162,7 +162,7 @@ $SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLI
 
 # List the policies attached to the user (replaces removed get-user-policies)
 USER_POLICIES_RESP=$($SOAT_CLI list-policies --user-id "$ADMIN_USER_ID")
-if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-policies --user-id did not return an array" >&2
   echo "$USER_POLICIES_RESP" >&2
   exit 1
@@ -689,7 +689,7 @@ fi
 
 echo "--- Listing ingestion rules ---"
 INGESTION_RULE_LIST_RESP=$($SOAT_CLI list-ingestion-rules --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$INGESTION_RULE_LIST_RESP" | jq -e --arg id "$INGESTION_RULE_ID" 'map(.id) | index($id) != null' > /dev/null; then
+if ! printf '%s\n' "$INGESTION_RULE_LIST_RESP" | jq -e --arg id "$INGESTION_RULE_ID" '.data | map(.id) | index($id) != null' > /dev/null; then
   echo "ERROR: list-ingestion-rules did not include the created rule" >&2
   echo "$INGESTION_RULE_LIST_RESP" >&2
   exit 1
@@ -869,7 +869,7 @@ echo "Memory retrieved."
 # List memories
 echo "--- Listing memories ---"
 MEM_LIST_RESP=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST memories did not return an array" >&2
   echo "$MEM_LIST_RESP" >&2
   exit 1
@@ -960,7 +960,7 @@ echo "Tagged entry created with tags/metadata."
 
 echo "--- List memory entries ---"
 ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
-ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq 'length')
+ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq '.data | length')
 if [ "$ME_LIST_COUNT" -ne 3 ]; then
   echo "ERROR: Expected 3 entries after dedup writes, got $ME_LIST_COUNT" >&2
   echo "$ME_LIST_RESP" >&2
@@ -1117,7 +1117,7 @@ echo "Orchestration id: $ORCH_ID"
 
 echo "--- Listing orchestrations ---"
 ORCH_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestrations --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$ORCH_LIST_RESP" | jq -e --arg id "$ORCH_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_LIST_RESP" | jq -e --arg id "$ORCH_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestrations did not include created orchestration"
   printf '%s\n' "$ORCH_LIST_RESP"
   exit 1
@@ -1177,7 +1177,7 @@ EXC_ID=""
 i=0
 while [ $i -lt 30 ]; do
   EXC_LIST=$($SOAT_CLI list-exceptions --project_id "$PROJECT_PUBLIC_ID" --kind run_failed)
-  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" 'map(select(.run_id == $run)) | .[0].id // empty')
+  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" '.data | map(select(.run_id == $run)) | .[0].id // empty')
   [ -n "$EXC_ID" ] && break
   i=$((i + 1))
   sleep 1
@@ -1274,7 +1274,7 @@ echo "Compute metering (P4): OK"
 
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
-if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestration-runs did not include completed run"
   printf '%s\n' "$ORCH_RUN_LIST_RESP"
   exit 1
@@ -1605,7 +1605,7 @@ BARE_OUTPUT_PIPELINE_RESP=$($SOAT_CLI create-tool \
   --name list-projects-first-id \
   --type pipeline \
   --description "Returns a bare scalar extracted from a step output" \
-  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.0.id\"}}")
+  --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.data.0.id\"}}")
 BARE_OUTPUT_PIPELINE_ID=$(echo "$BARE_OUTPUT_PIPELINE_RESP" | jq -r '.id')
 if [ -z "$BARE_OUTPUT_PIPELINE_ID" ] || [ "$BARE_OUTPUT_PIPELINE_ID" = "null" ]; then
   echo "FAIL: could not create bare-scalar-output pipeline tool"
@@ -1635,7 +1635,7 @@ OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Lists projects and extracts the first project's id via output_mapping" \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
-  --output-mapping '{"var":"output.0.id"}')
+  --output-mapping '{"var":"output.data.0.id"}')
 OUTPUT_MAPPING_TOOL_ID=$(echo "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
 if [ -z "$OUTPUT_MAPPING_TOOL_ID" ] || [ "$OUTPUT_MAPPING_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create http tool with output_mapping"
@@ -1999,7 +1999,7 @@ set -e
 echo "--- Listing pending tool-call approvals ---"
 GATED_APPROVAL_ID=$($SOAT_CLI list-approvals \
   --project-id "$PROJECT_PUBLIC_ID" --status pending --origin tool_call \
-  | sanitize_json | jq -r '[.[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
+  | sanitize_json | jq -r '[.data[] | select(.proposed_action.tool_id == "'"$GATED_TOOL_ID"'")][0].id // empty')
 
 if [ -n "$GATED_APPROVAL_ID" ]; then
   echo "Filed tool-call approval id: $GATED_APPROVAL_ID"
@@ -2936,7 +2936,7 @@ echo "Webhook created: $WEBHOOK_ID"
 # List webhooks
 echo "--- Listing webhooks ---"
 WEBHOOK_LIST_RESP=$($SOAT_CLI list-webhooks --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST webhooks did not return an array" >&2
   echo "$WEBHOOK_LIST_RESP" >&2
   exit 1
@@ -3026,7 +3026,7 @@ echo "Trigger created: $TRIGGER_ID"
 # List triggers
 echo "--- Listing triggers ---"
 TRIGGER_LIST_RESP=$($SOAT_CLI list-triggers --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "ERROR: list-triggers did not include the created trigger" >&2
   printf '%s\n' "$TRIGGER_LIST_RESP" >&2
   exit 1
@@ -3231,7 +3231,7 @@ echo "Formation metadata substitution resolved."
 # List
 echo "--- Listing formations ---"
 FORMATION_LIST_RESP=$($SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-formations did not return an array" >&2
   echo "$FORMATION_LIST_RESP" >&2
   exit 1
@@ -3251,7 +3251,7 @@ echo "Formation retrieved."
 # List events
 echo "--- Listing formation events ---"
 FORMATION_EVENTS_RESP=$($SOAT_CLI list-formation-events --formation_id "$FORMATION_ID")
-if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-formation-events did not return an array" >&2
   echo "$FORMATION_EVENTS_RESP" >&2
   exit 1
@@ -3779,7 +3779,7 @@ echo "Gated transition parked: OK (pending_transition=publish)"
 # The pending approval is filed with task-transition provenance.
 GATED_TR_APPROVAL_ID=$($SOAT_CLI list-approvals \
   --project-id "$PROJECT_PUBLIC_ID" --status pending --origin task_transition \
-  | jq -r --arg t "$GATED_TASK_ID" '[.[] | select(.task_id == $t)][0].id // empty')
+  | jq -r --arg t "$GATED_TASK_ID" '[.data[] | select(.task_id == $t)][0].id // empty')
 if [ -z "$GATED_TR_APPROVAL_ID" ]; then
   echo "ERROR: no pending task_transition approval filed for $GATED_TASK_ID" >&2
   exit 1
@@ -3867,7 +3867,7 @@ if [ -z "$QUOTA_ID" ] || [ "$QUOTA_ID" = "null" ]; then
 fi
 
 QUOTA_LIST_RESP=$($SOAT_CLI list-quotas --project-id "$PROJECT_PUBLIC_ID")
-if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.[] | select(.id == $id)' >/dev/null 2>&1; then
+if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.data[] | select(.id == $id)' >/dev/null 2>&1; then
   echo "ERROR: Created quota not found in list" >&2
   echo "$QUOTA_LIST_RESP" >&2
   exit 1

@@ -86,7 +86,7 @@ describe('Projects', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/projects');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('the list operation is documented in the OpenAPI spec', async () => {
@@ -101,8 +101,8 @@ describe('Projects', () => {
       // like operationId stay camelCase.
       expect(get.operationId).toBe('listProjects');
       const itemsRef =
-        get.responses?.['200']?.content?.['application/json']?.schema?.items
-          ?.$ref;
+        get.responses?.['200']?.content?.['application/json']?.schema
+          ?.properties?.data?.items?.$ref;
       expect(itemsRef).toBe('#/components/schemas/ProjectRecord');
     });
 
@@ -121,8 +121,8 @@ describe('Projects', () => {
         await authenticatedTestClient(userToken).get('/api/v1/projects');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBe(0);
     });
 
     describe('api key scoped to project sees only that project', () => {
@@ -166,9 +166,9 @@ describe('Projects', () => {
           await authenticatedTestClient(rawApiKey).get('/api/v1/projects');
 
         expect(response.status).toBe(200);
-        expect(Array.isArray(response.body)).toBe(true);
-        expect(response.body.length).toBe(1);
-        expect(response.body[0].id).toBe(projectAId);
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.data.length).toBe(1);
+        expect(response.body.data[0].id).toBe(projectAId);
       });
 
       afterAll(async () => {
@@ -208,8 +208,8 @@ describe('Projects', () => {
           );
 
         expect(response.status).toBe(200);
-        expect(Array.isArray(response.body)).toBe(true);
-        expect(response.body.length).toBe(0);
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.data.length).toBe(0);
       });
     });
 
@@ -258,9 +258,9 @@ describe('Projects', () => {
           );
 
         expect(response.status).toBe(200);
-        expect(Array.isArray(response.body)).toBe(true);
-        expect(response.body.length).toBe(1);
-        expect(response.body[0].id).toBe(oauthScopedProjectId);
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.data.length).toBe(1);
+        expect(response.body.data[0].id).toBe(oauthScopedProjectId);
       });
 
       test('OAuth token cannot access a project outside its scope', async () => {
@@ -308,9 +308,9 @@ describe('Projects', () => {
           await authenticatedTestClient(adminRawApiKey).get('/api/v1/projects');
 
         expect(response.status).toBe(200);
-        expect(Array.isArray(response.body)).toBe(true);
-        expect(response.body.length).toBe(1);
-        expect(response.body[0].id).toBe(adminScopedProjectId);
+        expect(Array.isArray(response.body.data)).toBe(true);
+        expect(response.body.data.length).toBe(1);
+        expect(response.body.data[0].id).toBe(adminScopedProjectId);
       });
     });
   });

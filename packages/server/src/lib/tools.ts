@@ -1,8 +1,10 @@
+/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
+import { paginatedList, type PaginatedResult } from './pagination';
 import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
@@ -263,20 +265,30 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
 
 export const listTools = async (args: {
   projectIds?: number[];
-}): Promise<MappedTool[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedTool>> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  const tools = await db.Tool.findAll({
-    where,
-    include: getToolIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-
-  return tools.map((t) => {
-    return mapTool(t as unknown as Parameters<typeof mapTool>[0]);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Tool.findAndCountAll({
+        where,
+        include: getToolIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (t) => {
+      return mapTool(t as unknown as Parameters<typeof mapTool>[0]);
+    },
   });
 };
 

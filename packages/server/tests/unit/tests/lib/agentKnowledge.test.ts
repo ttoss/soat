@@ -83,7 +83,7 @@ describe('buildWriteMemoryTool', () => {
     const before = await authenticatedTestClient(adminToken).get(
       `/api/v1/memory-entries?memory_id=${memoryId}`
     );
-    const beforeCount = before.body.length;
+    const beforeCount = before.body.data.length;
 
     const result = await writeMemoryTool.execute!(
       { content: 'Client name is Acme.' },
@@ -98,7 +98,7 @@ describe('buildWriteMemoryTool', () => {
     const after = await authenticatedTestClient(adminToken).get(
       `/api/v1/memory-entries?memory_id=${memoryId}`
     );
-    expect(after.body.length).toBe(beforeCount);
+    expect(after.body.data.length).toBe(beforeCount);
   });
 
   test('a targeted deny on the memory-write action blocks the write (F-11)', async () => {

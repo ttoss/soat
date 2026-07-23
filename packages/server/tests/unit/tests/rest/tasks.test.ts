@@ -328,12 +328,12 @@ describe('Tasks', () => {
       );
       expect(res.status).toBe(200);
       expect(
-        res.body.every((t: { state: string }) => {
+        res.body.data.every((t: { state: string }) => {
           return t.state === 'review';
         })
       ).toBe(true);
       expect(
-        res.body.some((t: { id: string }) => {
+        res.body.data.some((t: { id: string }) => {
           return t.id === task.id;
         })
       ).toBe(true);
@@ -1273,7 +1273,7 @@ describe('Tasks', () => {
         `/api/v1/approvals?project_id=${projectId}&status=pending`
       );
       expect(res.status).toBe(200);
-      return res.body.find((a: { task_id: string }) => {
+      return res.body.data.find((a: { task_id: string }) => {
         return a.task_id === taskId;
       });
     };

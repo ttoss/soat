@@ -62,7 +62,7 @@ describe('Triggers', () => {
       .send({ username: 'triggerslimited', password: 'limitedpass' });
     const limitedUserId = (
       await authenticatedTestClient(adminToken).get('/api/v1/users')
-    ).body.find((u: { username: string; id: string }) => {
+    ).body.data.find((u: { username: string; id: string }) => {
       return u.username === 'triggerslimited';
     }).id;
     const limitedPolicy = await authenticatedTestClient(adminToken)
@@ -428,7 +428,7 @@ describe('Triggers', () => {
       const res =
         await authenticatedTestClient(adminToken).get('/api/v1/triggers');
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body.data).toEqual([]);
     });
 
     test('lists triggers in the project', async () => {
@@ -436,10 +436,10 @@ describe('Triggers', () => {
         `/api/v1/triggers?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
       // secrets never leak in list responses
-      for (const t of res.body) {
+      for (const t of res.body.data) {
         expect(t.secret).toBeUndefined();
       }
     });
@@ -450,7 +450,7 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(200);
       expect(
-        res.body.every((t: { type: string }) => {
+        res.body.data.every((t: { type: string }) => {
           return t.type === 'webhook';
         })
       ).toBe(true);
@@ -462,7 +462,7 @@ describe('Triggers', () => {
       );
       expect(res.status).toBe(200);
       expect(
-        res.body.every((t: { target_type: string }) => {
+        res.body.data.every((t: { target_type: string }) => {
           return t.target_type === 'tool';
         })
       ).toBe(true);
@@ -1018,7 +1018,7 @@ describe('Triggers', () => {
       // populates authUser and marks it as a trigger token.
       const users = (
         await authenticatedTestClient(adminToken).get('/api/v1/users')
-      ).body;
+      ).body.data;
       const myPublicId = users.find((u: { username: string; id: string }) => {
         return u.username === 'triggersuser';
       }).id;
@@ -1059,7 +1059,7 @@ describe('Triggers', () => {
 
       const users = (
         await authenticatedTestClient(adminToken).get('/api/v1/users')
-      ).body;
+      ).body.data;
       const myPublicId = users.find((u: { username: string; id: string }) => {
         return u.username === 'triggersuser';
       }).id;
@@ -1097,7 +1097,7 @@ describe('Triggers', () => {
         .send({ username: 'triggersephemeral', password: 'ephemeralpass' });
       const ephemeralUsers = (
         await authenticatedTestClient(adminToken).get('/api/v1/users')
-      ).body;
+      ).body.data;
       const ephemeralId = ephemeralUsers.find(
         (u: { username: string; id: string }) => {
           return u.username === 'triggersephemeral';

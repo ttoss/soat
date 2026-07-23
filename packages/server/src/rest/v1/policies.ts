@@ -9,6 +9,8 @@ import {
   updatePolicy,
 } from 'src/lib/policies';
 
+import { parsePagination } from './helpers';
+
 const policiesRouter = new Router<Context>();
 
 policiesRouter.get('/policies', async (ctx: Context) => {
@@ -25,7 +27,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
   }
 
   const userId = ctx.query.userId as string | undefined;
-  ctx.body = await listPolicies({ userId });
+  ctx.body = await listPolicies({ userId, ...parsePagination(ctx) });
 });
 
 policiesRouter.post('/policies', async (ctx: Context) => {

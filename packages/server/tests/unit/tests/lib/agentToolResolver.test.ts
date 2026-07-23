@@ -771,7 +771,7 @@ describe('resolveAgentTools - ephemeral tools', () => {
       `/api/v1/tools?project_id=${projectId}`
     );
     expect(
-      (listRes.body as Array<{ name: string }>).some((t) => {
+      (listRes.body.data as Array<{ name: string }>).some((t) => {
         return t.name === 'ephemeralHttpTool';
       })
     ).toBe(false);

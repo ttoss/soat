@@ -12,7 +12,7 @@ import {
   listUsageEvents,
 } from 'src/lib/usage';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 export const usageRouter = new Router<Context>();
 
@@ -165,12 +165,11 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
 
   const { projectId } = ctx.query as Record<string, string | undefined>;
 
-  ctx.body = {
-    data: await listThresholds({
-      projectIds: projectIds ?? undefined,
-      projectId,
-    }),
-  };
+  ctx.body = await listThresholds({
+    projectIds: projectIds ?? undefined,
+    projectId,
+    ...parsePagination(ctx),
+  });
 });
 
 /**

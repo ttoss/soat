@@ -8,6 +8,7 @@ import {
 } from './ingestionRuleMatching';
 import { resolveConverterToolType } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
+import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:ingestionRules');
 
@@ -225,38 +226,34 @@ export const createIngestionRule = async (args: {
   return mapIngestionRule(created as Parameters<typeof mapIngestionRule>[0]);
 };
 
-const LIST_DEFAULT_LIMIT = 25;
-const LIST_DEFAULT_OFFSET = 0;
-
 export const listIngestionRules = async (args: {
   projectIds?: number[];
   limit?: number;
   offset?: number;
-}): Promise<MappedIngestionRule[]> => {
-  const limit = args.limit ?? LIST_DEFAULT_LIMIT;
-  const offset = args.offset ?? LIST_DEFAULT_OFFSET;
-  log(
-    'listIngestionRules: projectIds=%o limit=%d offset=%d',
-    args.projectIds,
-    limit,
-    offset
-  );
+}): Promise<PaginatedResult<MappedIngestionRule>> => {
+  log('listIngestionRules: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
     where.projectId = args.projectIds;
   }
 
-  const rules = await db.IngestionRule.findAll({
-    where,
-    include: ingestionRuleIncludes(),
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
-  });
-
-  return rules.map((rule) => {
-    return mapIngestionRule(rule as Parameters<typeof mapIngestionRule>[0]);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.IngestionRule.findAndCountAll({
+        where,
+        include: ingestionRuleIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (rule) => {
+      return mapIngestionRule(rule as Parameters<typeof mapIngestionRule>[0]);
+    },
   });
 };
 

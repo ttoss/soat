@@ -2,7 +2,8 @@ import * as React from 'react';
 
 import { apiFetch } from '@/api/client';
 
-import type { JsonObject, OpenApiSchema } from './types';
+import { extractItems } from './specUtils';
+import type { OpenApiSchema } from './types';
 
 export type RefOption = { value: string; label: string };
 
@@ -41,19 +42,15 @@ export const useRefFieldOptions = ({
           token,
         });
         if (!result.ok) return [name, []] as const;
-        const list = Array.isArray(result.data) ? result.data : [];
-        const options: RefOption[] = list
-          .filter((item): item is JsonObject => {
-            return (
-              typeof item === 'object' && item !== null && !Array.isArray(item)
-            );
-          })
-          .map((item) => {
-            return {
-              value: String(item.id ?? ''),
-              label: String(item.name ?? item.id ?? ''),
-            };
-          });
+        // List endpoints return the paginated envelope `{ data, total, … }`;
+        // `extractItems` unwraps it (and still handles a bare array).
+        const list = extractItems(result.data);
+        const options: RefOption[] = list.map((item) => {
+          return {
+            value: String(item.id ?? ''),
+            label: String(item.name ?? item.id ?? ''),
+          };
+        });
         return [name, options] as const;
       })
     ).then((entries) => {

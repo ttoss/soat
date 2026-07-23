@@ -8,7 +8,7 @@ import {
   updateQuota,
 } from 'src/lib/quotas';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const quotasRouter = new Router<Context>();
 
@@ -103,7 +103,7 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listQuotas({ projectIds });
+  ctx.body = await listQuotas({ projectIds, ...parsePagination(ctx) });
 });
 
 /**

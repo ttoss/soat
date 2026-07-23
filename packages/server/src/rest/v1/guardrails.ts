@@ -11,6 +11,7 @@ import {
   updateGuardrail,
 } from 'src/lib/guardrails';
 
+import { parsePagination } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const guardrailsRouter = new Router<Context>();
@@ -151,7 +152,7 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listGuardrails({ projectIds });
+  ctx.body = await listGuardrails({ projectIds, ...parsePagination(ctx) });
 });
 
 /**

@@ -17,7 +17,7 @@ import {
 } from 'src/lib/formations';
 import { buildSrn } from 'src/lib/iam';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 export const formationsRouter = new Router<Context>();
 
@@ -191,7 +191,10 @@ formationsRouter.get('/formations', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listFormations({ projectIds: projectIds ?? [] });
+  ctx.body = await listFormations({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
@@ -337,6 +340,7 @@ formationsRouter.get(
 
     ctx.body = await listFormationEvents({
       formationId: ctx.params.formation_id,
+      ...parsePagination(ctx),
     });
   }
 );

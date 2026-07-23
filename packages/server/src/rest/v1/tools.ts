@@ -14,6 +14,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
+import { parsePagination } from './helpers';
 
 export const toolsRouter = new Router<Context>();
 
@@ -203,7 +204,7 @@ toolsRouter.get('/tools', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listTools({ projectIds });
+  ctx.body = await listTools({ projectIds, ...parsePagination(ctx) });
 });
 
 /**

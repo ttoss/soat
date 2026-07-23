@@ -44,6 +44,8 @@
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.16.0",
     "@testcontainers/postgresql": "^12.0.4",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "@ttoss/config": "^1.37.17",
     "@ttoss/test-utils": "^4.2.18",
     "@types/debug": "^4.1.13",

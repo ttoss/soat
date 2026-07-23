@@ -16,6 +16,7 @@ import { buildSrn } from 'src/lib/iam';
 
 import {
   checkAuth,
+  parsePagination,
   resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
@@ -124,7 +125,10 @@ chatsRouter.get('/chats', async (ctx: Context) => {
 
   if (projectIds === null) return;
 
-  ctx.body = await listChats({ projectIds: projectIds ?? [] });
+  ctx.body = await listChats({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {

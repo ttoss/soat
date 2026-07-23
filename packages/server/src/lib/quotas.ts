@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { paginatedList, type PaginatedResult } from './pagination';
 import {
   QUOTA_WINDOWS,
   type QuotaWindow,
@@ -330,7 +331,9 @@ export const createQuota = async (args: {
 
 export const listQuotas = async (args: {
   projectIds?: number[];
-}): Promise<ReturnType<typeof mapQuota>[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<ReturnType<typeof mapQuota>>> => {
   log('listQuotas: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -338,14 +341,22 @@ export const listQuotas = async (args: {
     where.projectId = args.projectIds;
   }
 
-  const quotas = await db.Quota.findAll({
-    where,
-    include: getQuotaIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-
-  return quotas.map((quota) => {
-    return mapQuota(quota as QuotaInstance, null);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Quota.findAndCountAll({
+        where,
+        include: getQuotaIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (quota) => {
+      return mapQuota(quota as QuotaInstance, null);
+    },
   });
 };
 

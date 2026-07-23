@@ -164,7 +164,7 @@ describe('Chats', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('admin without project scoping gets an empty list', async () => {
@@ -172,7 +172,7 @@ describe('Chats', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/chats');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual([]);
+      expect(response.body.data).toEqual([]);
     });
   });
 

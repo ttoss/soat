@@ -13,6 +13,7 @@ import {
 
 import {
   checkAuth,
+  parsePagination,
   resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
@@ -35,7 +36,10 @@ workflowsRouter.get('/workflows', async (ctx: Context) => {
   });
   if (projectIds === null) return;
 
-  ctx.body = await listWorkflows({ projectIds: projectIds ?? [] });
+  ctx.body = await listWorkflows({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {

@@ -104,7 +104,7 @@ describe('Memories', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -125,7 +125,7 @@ describe('Memories', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/memories');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual([]);
+      expect(response.body.data).toEqual([]);
     });
   });
 
@@ -487,7 +487,7 @@ describe('Memories', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(Array.isArray(response.body)).toBe(true);
+        expect(Array.isArray(response.body.data)).toBe(true);
       });
 
       test('unauthenticated request returns 401', async () => {
@@ -734,7 +734,7 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: 'crm' });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => {
+      const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).toContain(taggedMemoryId);
@@ -748,7 +748,7 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: 'customer*' });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => {
+      const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).toContain(taggedMemoryId);
@@ -762,7 +762,7 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: ['crm', 'customer-prefs'] });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => {
+      const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).toContain(taggedMemoryId);
@@ -776,8 +776,8 @@ describe('Memories', () => {
         .query({ project_id: projectId, tags: 'nonexistent-tag-xyz*' });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((m: { id: string }) => {
+      expect(Array.isArray(response.body.data)).toBe(true);
+      const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).not.toContain(taggedMemoryId);
@@ -791,7 +791,7 @@ describe('Memories', () => {
         .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
-      const ids = response.body.map((m: { id: string }) => {
+      const ids = response.body.data.map((m: { id: string }) => {
         return m.id;
       });
       expect(ids).toContain(taggedMemoryId);

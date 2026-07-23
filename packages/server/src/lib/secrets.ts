@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
 
@@ -67,12 +68,25 @@ const mapSecret = (
   };
 };
 
-export const listSecrets = async (args: { projectIds: number[] }) => {
-  const secrets = await db.Secret.findAll({
-    where: { projectId: args.projectIds },
-    include: [{ model: db.Project, as: 'project' }],
+export const listSecrets = async (args: {
+  projectIds: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Secret.findAndCountAll({
+        where: { projectId: args.projectIds },
+        include: [{ model: db.Project, as: 'project' }],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapSecret,
   });
-  return secrets.map(mapSecret);
 };
 
 export const getSecret = async (args: { id: string }) => {

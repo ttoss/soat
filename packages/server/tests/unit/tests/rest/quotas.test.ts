@@ -279,18 +279,20 @@ describe('Quotas', () => {
         `/api/v1/quotas?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0].id).toMatch(/^quota_/);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0].id).toMatch(/^quota_/);
     });
 
     test('does not leak quotas across projects', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/quotas?project_id=${projectId}`
       );
-      const projectIds: string[] = res.body.map((q: { project_id: string }) => {
-        return q.project_id;
-      });
+      const projectIds: string[] = res.body.data.map(
+        (q: { project_id: string }) => {
+          return q.project_id;
+        }
+      );
       expect(
         projectIds.every((p) => {
           return p === projectId;

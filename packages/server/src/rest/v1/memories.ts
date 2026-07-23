@@ -9,7 +9,7 @@ import {
   updateMemory,
 } from 'src/lib/memories';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const memoriesRouter = new Router<Context>();
 
@@ -40,7 +40,11 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listMemories({ projectIds: projectIds ?? [], tags });
+  ctx.body = await listMemories({
+    projectIds: projectIds ?? [],
+    tags,
+    ...parsePagination(ctx),
+  });
 });
 
 memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {

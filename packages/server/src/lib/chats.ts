@@ -7,6 +7,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import { resolveMessageContent } from './messageContent';
+import { paginatedList, type PaginatedResult } from './pagination';
 
 const resolveModel = async (args: {
   aiProviderId: string;
@@ -141,15 +142,25 @@ export const getChat = async (args: { id: string }): Promise<MappedChat> => {
 
 export const listChats = async (args: {
   projectIds: number[];
-}): Promise<MappedChat[]> => {
-  const chats = await db.Chat.findAll({
-    where: { projectId: args.projectIds },
-    include: getChatIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-
-  return chats.map((chat) => {
-    return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedChat>> => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Chat.findAndCountAll({
+        where: { projectId: args.projectIds },
+        include: getChatIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (chat) => {
+      return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+    },
   });
 };
 

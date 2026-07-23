@@ -359,7 +359,7 @@ The item is now in the [Approvals](/docs/modules/approvals#data-model) queue wit
 
 ```bash
 soat list-approvals --project-id "$PROJECT_ID" --status pending \
-  | jq '.[] | {id, status, origin, run_id, node_id, proposed_action}'
+  | jq '.data[] | {id, status, origin, run_id, node_id, proposed_action}'
 ```
 
 Look for `origin: "node"`, `run_id` matching your run, and `proposed_action.arguments` equal to `{ "amount": 500 }`.
@@ -380,7 +380,7 @@ console.log(pending);
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/approvals?project_id=$PROJECT_ID&status=pending" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '.[] | {id, status, origin, run_id, node_id, proposed_action}'
+  | jq '.data[] | {id, status, origin, run_id, node_id, proposed_action}'
 ```
 
 </TabItem>

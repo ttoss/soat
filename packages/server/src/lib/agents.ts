@@ -13,6 +13,7 @@ import {
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
 import { validateOutputSchema } from './outputSchema';
+import { paginatedList, type PaginatedResult } from './pagination';
 import { type InlineToolDefinition } from './tools';
 
 const log = createDebug('soat:agents');
@@ -250,18 +251,28 @@ export const createAgent = async (args: {
 
 export const listAgents = async (args: {
   projectIds?: number[];
-}): Promise<MappedAgent[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedAgent>> => {
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
-  const agents = await db.Agent.findAll({
-    where,
-    include: getAgentIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-
-  return agents.map((a) => {
-    return mapAgent(a as unknown as Parameters<typeof mapAgent>[0]);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Agent.findAndCountAll({
+        where,
+        include: getAgentIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (a) => {
+      return mapAgent(a as unknown as Parameters<typeof mapAgent>[0]);
+    },
   });
 };
 

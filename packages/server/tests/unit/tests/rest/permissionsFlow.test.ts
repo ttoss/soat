@@ -1516,7 +1516,7 @@ describe('Group 14: API key with project-scoped SRN policy — formations', () =
       .get(`/api/v1/formations/${formationId}/events`)
       .set('Authorization', `Bearer ${apiKey}`);
     expect(eventsRes.status).toBe(200);
-    expect(Array.isArray(eventsRes.body)).toBe(true);
+    expect(Array.isArray(eventsRes.body.data)).toBe(true);
   });
 
   test('API key can delete a formation when the key policy SRN matches the project', async () => {

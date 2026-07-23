@@ -5,6 +5,7 @@ import {
   hashPassword,
   signUserToken,
 } from '../middleware/auth';
+import { paginatedList } from './pagination';
 
 const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   return {
@@ -16,9 +17,15 @@ const mapUser = (user: InstanceType<(typeof db)['User']>) => {
   };
 };
 
-export const listUsers = async () => {
-  const allUsers = await db.User.findAll();
-  return allUsers.map(mapUser);
+export const listUsers = async (args?: { limit?: number; offset?: number }) => {
+  return paginatedList({
+    limit: args?.limit,
+    offset: args?.offset,
+    query: ({ limit, offset }) => {
+      return db.User.findAndCountAll({ limit, offset });
+    },
+    map: mapUser,
+  });
 };
 
 export const getUser = async (args: { id: string }) => {

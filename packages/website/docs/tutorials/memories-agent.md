@@ -440,7 +440,7 @@ After the four writes, the memory holds exactly **two entries** — the skipped 
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.[] | .content]'
+soat list-memory-entries --memory-id "$MEMORY_ID" | jq '[.data[] | .content]'
 # [
 #   "Alice prefers email, especially for billing inquiries; she checks it twice a day",
 #   "Alice's fiscal year ends in March; she starts renewal discussions in January"

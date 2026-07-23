@@ -1,6 +1,11 @@
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
+import {
+  paginatedList,
+  type PaginatedResult,
+  resolvePagination,
+} from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
 import {
@@ -246,14 +251,25 @@ export const createFormation = async (args: {
 
 export const listFormations = async (args: {
   projectIds: number[];
-}): Promise<MappedFormation[]> => {
-  const formations = await db.Formation.findAll({
-    where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
-    include: getFormationIncludes(),
-    order: [['createdAt', 'ASC']],
-  });
-  return formations.map((f) => {
-    return mapFormation(f as unknown as Parameters<typeof mapFormation>[0]);
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedFormation>> => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Formation.findAndCountAll({
+        where: { projectId: args.projectIds, status: { [Op.ne]: 'deleted' } },
+        include: getFormationIncludes(),
+        order: [['createdAt', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (f) => {
+      return mapFormation(f as unknown as Parameters<typeof mapFormation>[0]);
+    },
   });
 };
 
@@ -389,27 +405,38 @@ export const deleteFormation = async (args: {
 
 export const listFormationEvents = async (args: {
   formationId: string;
-}): Promise<MappedFormationOperation[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedFormationOperation>> => {
+  const { limit, offset } = resolvePagination(args);
+
   const formation = await db.Formation.findOne({
     where: { publicId: args.formationId },
   });
-  if (!formation) return [];
+  if (!formation) return { data: [], total: 0, limit, offset };
 
-  const operations = await db.FormationOperation.findAll({
-    where: { formationId: (formation as unknown as { id: number }).id },
-    order: [['createdAt', 'ASC']],
-  });
-
-  return operations.map((op) => {
-    return {
-      id: op.publicId,
-      operationType: op.operationType,
-      status: op.status,
-      events: op.events as FormationEvent[] | null,
-      plan: op.plan as PlanResult | null,
-      error: op.error,
-      createdAt: op.createdAt,
-      updatedAt: op.updatedAt,
-    };
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: (pagination) => {
+      return db.FormationOperation.findAndCountAll({
+        where: { formationId: (formation as unknown as { id: number }).id },
+        order: [['createdAt', 'ASC']],
+        limit: pagination.limit,
+        offset: pagination.offset,
+      });
+    },
+    map: (op) => {
+      return {
+        id: op.publicId,
+        operationType: op.operationType,
+        status: op.status,
+        events: op.events as FormationEvent[] | null,
+        plan: op.plan as PlanResult | null,
+        error: op.error,
+        createdAt: op.createdAt,
+        updatedAt: op.updatedAt,
+      };
+    },
   });
 };

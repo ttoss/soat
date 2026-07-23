@@ -8,6 +8,8 @@ import {
 } from 'src/lib/approvals';
 import { buildSrn } from 'src/lib/iam';
 
+import { parsePagination } from './helpers';
+
 const approvalsRouter = new Router<Context>();
 
 /**
@@ -54,6 +56,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     status: ctx.query.status as string | undefined,
     origin: ctx.query.origin as string | undefined,
     expiresBefore: expiresBeforeRaw ? new Date(expiresBeforeRaw) : undefined,
+    ...parsePagination(ctx),
   });
 });
 

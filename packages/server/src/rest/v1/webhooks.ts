@@ -15,7 +15,7 @@ import {
   updateWebhook,
 } from 'src/lib/webhooks';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const resolvePolicyId = async (
   policyPublicId: string | undefined
@@ -56,7 +56,10 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listWebhooks({ projectIds: projectIds ?? [] });
+  ctx.body = await listWebhooks({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 webhooksRouter.post('/webhooks', async (ctx: Context) => {

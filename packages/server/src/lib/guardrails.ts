@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { CollectedGuardrail } from './guardrailCollection';
 import type { GuardrailDocument } from './guardrailDocument';
 import { validateGuardrailDocument } from './guardrailDocument';
+import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:guardrails');
 
@@ -219,7 +220,9 @@ export const createGuardrail = async (args: {
 
 export const listGuardrails = async (args: {
   projectIds?: number[];
-}): Promise<ReturnType<typeof mapGuardrail>[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<ReturnType<typeof mapGuardrail>>> => {
   log('listGuardrails: projectIds=%o', args.projectIds);
 
   const where: Record<string, unknown> = {};
@@ -227,14 +230,22 @@ export const listGuardrails = async (args: {
     where.projectId = args.projectIds;
   }
 
-  const guardrails = await db.Guardrail.findAll({
-    where,
-    include: getGuardrailIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-
-  return guardrails.map((guardrail) => {
-    return mapGuardrail(guardrail as GuardrailInstance);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Guardrail.findAndCountAll({
+        where,
+        include: getGuardrailIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (guardrail) => {
+      return mapGuardrail(guardrail as GuardrailInstance);
+    },
   });
 };
 

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 
 import { db } from 'src/db';
+import { paginatedList } from 'src/lib/pagination';
 
 const generateSecret = () => {
   return crypto.randomBytes(32).toString('hex');
@@ -35,13 +36,26 @@ const webhookIncludes = () => {
   ];
 };
 
-export const listWebhooks = async (args: { projectIds: number[] }) => {
-  const webhooks = await db.Webhook.findAll({
-    where: { projectId: args.projectIds },
-    include: webhookIncludes(),
-  });
-  return webhooks.map((w) => {
-    return mapWebhook(w);
+export const listWebhooks = async (args: {
+  projectIds: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Webhook.findAndCountAll({
+        where: { projectId: args.projectIds },
+        include: webhookIncludes(),
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (w) => {
+      return mapWebhook(w);
+    },
   });
 };
 

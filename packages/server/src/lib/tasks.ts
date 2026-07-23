@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { paginatedList } from './pagination';
 import { runStateAutomation } from './tasksAutomation';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
@@ -97,6 +98,8 @@ export const listTasks = async (args: {
   state?: string;
   status?: string;
   assignee?: string;
+  limit?: number;
+  offset?: number;
 }) => {
   log(
     'listTasks: projectIds=%o workflowId=%s state=%s status=%s',
@@ -118,13 +121,22 @@ export const listTasks = async (args: {
     where.workflowId = workflow ? (workflow.id as number) : -1;
   }
 
-  const tasks = await db.Task.findAll({
-    where,
-    include: taskIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-  return tasks.map((t) => {
-    return mapTask(t);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Task.findAndCountAll({
+        where,
+        include: taskIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (t) => {
+      return mapTask(t);
+    },
   });
 };
 
