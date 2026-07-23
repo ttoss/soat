@@ -28,7 +28,7 @@
 | Run roll-up (per-run token/cost sum)       | ✅ Done (#562)              | `GET /api/v1/usage/receipt?run_id=…` per-run receipt + a `usage` object on the orchestration-run response |
 | Aggregation endpoint                       | ✅ Done (#564)              | `GET /api/v1/usage` grouped rollups by `model`/`agent`/`run`/`day`/`meter_type` over an optional `[from, to]` window |
 | Meter-type generalization                  | ✅ Done                     | Rebuilt as `UsageEvent` (one metered occurrence) + `UsageComponent` (one priced dimension); `PriceBook` prices a SKU component. See [Meter-Type Generalization](#meter-type-generalization) |
-| Compute (`compute_execution`) metering        | ❌ Not started              | Duration from existing node timestamps; blocked on run attribution + generalization |
+| Compute (`compute_execution`) metering        | ✅ Done (P4)                | One event per orchestration node execution (all node types) via the node-completion recorder; single `compute_second` component from the node's `started_at`/`completed_at`; run/node attribution; priced off a `soat`/`compute-second` SKU; idempotent on `compute:{run}:node:{node}:attempt:{n}` |
 | Storage metering                           | ❌ Not started              | Daily per-project snapshot job                                        |
 | API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence                           |
 | `usage.threshold_crossed` webhook event    | ✅ Done (#565)              | Fired after each usage-event write when a windowed metric crosses a threshold; once-per-window / 10% re-arm hysteresis |
@@ -294,14 +294,18 @@ monthly cost figure without scanning every meter row client-side.
 budget alerts without polling; the monthly per-project figure billing
 reconciles against.
 
-### Phase 4 — Compute Metering (`compute_execution`) ❌ Not started
+### Phase 4 — Compute Metering (`compute_execution`) ✅ Done
 
-**Depends on Phases 3a + 3b.** Rides on the same run/node wiring: the
-node-completion hook that stamps `completed_at` writes one `compute_execution`
-meter row (`quantity` = wall-clock seconds from the execution's own
-timestamps, `run_id`/`node_id` attribution, idempotency key from the node
-execution). Priced via a `soat`/`compute-second` SKU when the operator defines
-one; `cost_usd = null` otherwise.
+**Depended on Phases 3a + 3b.** Rides on the same run/node wiring: the
+node-completion recorder (`orchestrationNodeRecorder.ts`) writes one
+`compute_execution` meter row per node execution that actively ran — every node
+type, pure and side-effecting alike — with `quantity` = wall-clock seconds from
+the execution's own `started_at`/`completed_at`, `run_id`/`node_id` attribution,
+and a `compute:{run}:node:{node}:attempt:{n}` idempotency key (distinct from the
+`llm_tokens` key namespace, so an agent node's token and compute events never
+collide). Priced via a `soat`/`compute-second` SKU when the operator defines one
+(`recordComputeUsage` in `usageRecording.ts`); `cost_usd = null` otherwise. A
+skipped node (which never ran) is not metered.
 
 **Unlocks:** The compute half of "tokens + infra"; per-run receipts that
 include execution time.
