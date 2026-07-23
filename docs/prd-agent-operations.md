@@ -9,10 +9,8 @@
 
 | Capability                                | PRD                                                    |
 | ----------------------------------------- | ------------------------------------------------------ |
-| Cron-triggered orchestration runs         | [Triggers module](../packages/website/docs/modules/triggers.md) (`type: schedule`) |
 | Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
-| Guardrail policies (action classes)       | [guardrails](../packages/website/docs/modules/guardrails.md)               |
 | Usage metering                            | [prd-usage-metering.md](./prd-usage-metering.md)       |
 | Feedback loop → learned rules             | [prd-learned-rules.md](./prd-learned-rules.md)         |
 | Knowledge packages & context assembly     | [prd-knowledge-packages.md](./prd-knowledge-packages.md) |
@@ -66,24 +64,26 @@ What SOAT already covers (and these PRDs do **not** re-specify): agents, tools
 with human/delay/poll/loop/condition nodes, **durable background run execution
 with checkpoint-based crash recovery and per-node retry/backoff** (see
 [orchestrations.md → Durable Background Execution](../packages/website/docs/modules/orchestrations.md#durable-background-execution)),
-project tenancy, caller ∩ agent permission intersection, webhooks with signed
-deliveries, and Formations as the declarative deploy layer.
+**cron-shaped [schedule triggers](../packages/website/docs/modules/triggers.md)**
+that start runs without a caller, **[guardrail policies](../packages/website/docs/modules/guardrails.md)**
+with deterministic action-class evaluation, project tenancy, caller ∩ agent
+permission intersection, webhooks with signed deliveries, and Formations as the
+declarative deploy layer.
 
 | #  | Gap                                    | Requirement                                                        | SOAT today                                                                                                      |
 | -- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| G1 | Scheduler / triggers                    | Recurring cycles (cron-shaped) started without a caller             | Orchestration runs start only via `start-orchestration-run`                                                       |
 | G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | Durable background execution, lease/reaper recovery, and retries **exist**; no queue abstraction, no idempotency keys, no concurrency limits |
 | G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
-| G4 | Guardrail policy evaluator              | Action classes A/B/C/D, deterministic guards, fail-closed           | `policy` resource is permission-shaped only                                                                        |
 | G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | Per-**generation** and per-**run** metering + versioned price book **exist** (`UsageEvent`/`UsageComponent`/`PriceBook`, per-generation + per-run receipt, run roll-up, #562); grouped aggregation and non-LLM meter types (compute/storage/requests) do not — see [prd-usage-metering.md](./prd-usage-metering.md) |
 | G6 | Feedback loop → learned rules           | Candidate rule → curation → promotion, scoped                       | Memory dedup/merge stores facts; no rule lifecycle                                                                 |
 | G7 | Knowledge packages / layered assembly   | Versioned immutable packages; token-budgeted layered context        | Memories/documents/RAG exist; no package artifact, no layering                                                     |
 
 ## End State: One Template, One Operating Stack
 
-With all seven PRDs shipped, a single template expresses an operating stack.
-Canonical end-state example (node and resource properties follow the child
-PRDs: the `approval` node schema from
+With the remaining PRDs shipped (on top of the already-shipped schedule
+triggers and guardrail modules), a single template expresses an operating
+stack. Canonical end-state example (node and resource properties follow the
+child PRDs: the `approval` node schema from
 [prd-approvals.md](./prd-approvals.md#the-approval-node--template-schema), the
 `schedule` trigger from the [Triggers module](../packages/website/docs/modules/triggers.md), the
 `action_classes` policy from [guardrails](../packages/website/docs/modules/guardrails.md), and the
@@ -229,25 +229,25 @@ side-effect risk while the pipeline hardens):
 
 | Step | Scope                                                            | Unblocks                                                     |
 | ---- | ----------------------------------------------------------------- | ------------------------------------------------------------ |
-| 1    | G2 queue driver (Postgres) + idempotency keys, then G1 schedules   | A daily read-only cycle end to end, surviving restarts        |
+| 1    | G2 queue driver (Postgres) + idempotency keys (schedule triggers already start runs) | A daily read-only cycle end to end, surviving restarts        |
 | 2    | G3 approval/exception queues + webhook events + activity feed      | Manage-by-exception surface; class C flow                     |
-| 3    | G4 action-class evaluator + G5 metering                            | Autonomous class-B actions with fail-closed guards; cost visibility from day 1 |
+| 3    | G5 metering (guardrail action-class evaluation already ships)      | Autonomous class-B actions with cost visibility from day 1     |
 | 4    | G7 knowledge packages + context assembler                          | Knowledge rollout without redeploys; full audit chain          |
 | 5    | G6 feedback loop                                                   | A promoted rule changes the next run                           |
 
 ## Acceptance Criteria (cross-PRD)
 
-1. A formation deploy plus a schedule fires a run with no human action; the
-   run survives a worker restart mid-flight and completes (G1+G2).
+1. A scheduled run enqueues with no human action; the run survives a worker
+   restart mid-flight and completes (G2).
 2. Many projects run cycles in parallel with zero cross-tenant reads —
    existing tenancy tests extended over every new table.
 3. 100% of class-C tool calls are blocked without an approval record; expired
    approvals never execute; guard-failing class-B calls abort and file
-   exceptions — all proven fail-closed by test (G3+G4).
+   exceptions — all proven fail-closed by test (G3).
 4. Rejecting an approval with a reason creates a candidate rule; promoting it
    changes the assembled context of the next matching run (G6+G7).
 5. For any executed mutation, one query returns: agent, run, evidence,
-   knowledge package version, policy version, approver (G3+G4+G7).
+   knowledge package version, policy version, approver (G3+G7).
 6. Replayed/retried nodes produce exactly one `UsageMeter` row per LLM call
    (idempotency under at-least-once delivery) (G2+G5).
 
@@ -257,10 +257,6 @@ side-effect risk while the pipeline hardens):
   existing module APIs are not broken by any of these PRDs.
 - **Scope creep toward a workflow engine:** durable execution stays scoped to
   checkpoint-resume of DAG runs. Anything more waits for real demand.
-- **Guard expression language becomes a DSL swamp:** guards are capped at
-  JSON Logic (the evaluator orchestrations already use) plus named context
-  providers; anything else must be a code-side context provider, reviewed like
-  code.
 - **Knowledge confidentiality regression:** package content is encrypted at
   rest, readable by the runtime at assembly time only, and covered by a
   dedicated "knowledge never in logs/API/events" test suite (G7).
@@ -275,15 +271,6 @@ side-effect risk while the pipeline hardens):
   runs enqueue behind a feature flag, and only after the last pre-cutover run
   terminates is in-process driving removed. Rollback = flip the flag; the
   table is inert when unused.
-- **Scheduler load as schedule count grows (G1):** a naive tick that scans and
-  fires every due schedule inline can blow the tick budget and delay
-  sleeping-run wakes. Mitigation: the due-scan is a single indexed query
-  (`next_fire_at <= now() AND enabled`), fires are claimed in batches with a
-  per-tick cap (overflow is picked up next tick — safe because due-ness is
-  re-evaluated, not remembered), and firing enqueues the run rather than
-  executing it, so tick time stays O(claims), not O(run work). Queue depth and
-  fire latency are exposed on the metrics endpoint so saturation is visible
-  before it hurts.
 - **Webhook fan-out amplification from metering events (G5):** metering is
   per-LLM-call; naively emitting a webhook per meter row would multiply every
   agent step into deliveries and melt receivers. Mitigation: raw `UsageMeter`

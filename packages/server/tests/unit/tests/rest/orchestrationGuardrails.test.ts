@@ -409,6 +409,42 @@ describe('Orchestration tool-node guardrails', () => {
       expect(getRes.body.error.message).toMatch(/405/);
     });
 
+    // Regression (#655): the node-origin approval must record the governing
+    // guardrail's version, matching the agent tool-call path and the exception
+    // path. Previously `policyVersion` was always null for orchestration
+    // tool-node approvals.
+    test('the filed approval records the governing guardrail version', async () => {
+      const guardrailId = await createGuardrail({
+        name: 'Versioned Approval',
+        document: { class: 'C' },
+      });
+      const toolId = await createTool({
+        name: 'Versioned Tool',
+        guardrailIds: [guardrailId],
+      });
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: 'Versioned Approval Pipeline',
+          project_id: projectId,
+          nodes: [
+            { id: 'act', type: 'tool', tool_id: toolId, input_mapping: {} },
+          ],
+          edges: [],
+        });
+      expect(createRes.status).toBe(201);
+      jest.spyOn(toolsModule, 'callTool').mockResolvedValue({ ok: 'yes' });
+
+      const runRes = await startApprovalRun(createRes.body.id);
+      expect(runRes.body.status).toBe('awaiting_input');
+      const approvalId = runRes.body.required_action.approval_id;
+
+      const item = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/${approvalId}`
+      );
+      expect(item.body.policy_version).toBe(`${guardrailId}@1`);
+    });
+
     test('rejecting does not execute the tool', async () => {
       const orchestrationId = await buildApprovalPipeline();
       const callToolSpy = jest

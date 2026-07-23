@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import type { NodeExecutionResult } from './orchestrationNodeExecutors';
 import type { OrchestrationNode } from './orchestrations';
@@ -14,6 +15,13 @@ export type ApprovalNodeSpec = {
   evidence: object | null;
   predictedImpact: string | null;
   expiresInSeconds: number;
+  // `${guardrailId}@${version}` of the guardrail that routed this proposal to
+  // approval, or null for an explicit (non-guardrail) `approval` node.
+  policyVersion: string | null;
+  // The guardrail_evaluation records for this proposal, persisted by the
+  // engine once the ApprovalItem exists so they can be cross-linked via
+  // `approvalId`. Absent for an explicit `approval` node (no evaluations ran).
+  guardrailEvaluationRecords?: GuardrailEvaluationRecord[];
 };
 
 // Absent `expires_in`, an approval defaults to a 24h window — long enough for a
@@ -70,6 +78,7 @@ export const executeApprovalNode = (args: {
         ? null
         : asStringOrNull(evaluateLogic(node.predictedImpact, state)),
     expiresInSeconds: resolveExpiresIn(node.expiresIn),
+    policyVersion: null,
   };
 
   return {
