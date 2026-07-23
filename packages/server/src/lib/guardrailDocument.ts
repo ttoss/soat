@@ -129,19 +129,6 @@ export const collectDocumentVarPaths = (
   return [...new Set(paths)];
 };
 
-/**
- * Every JSON Logic `var` path referenced within a single expression (`class` or
- * `guard` in isolation), de-duplicated. Unlike {@link collectDocumentVarPaths},
- * which merges both fields for the audit snapshot, this scopes to just the
- * expression being evaluated so a caller can reason about one field's fail-
- * closed vars independently of the other's.
- */
-export const collectExpressionVarPaths = (expression: unknown): string[] => {
-  const paths: string[] = [];
-  collectVarPaths(expression, paths);
-  return [...new Set(paths)];
-};
-
 const isAllowedVarPath = (path: string): boolean => {
   if (path === 'args' || path.startsWith('args.')) return true;
   if (path === 'context' || path.startsWith('context.')) return true;
