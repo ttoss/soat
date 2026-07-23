@@ -19,7 +19,11 @@ export type {
 } from './usageReceipt';
 export { getReceipt, getRunReceipt, getRunUsageTotals } from './usageReceipt';
 export type { UsageTokens } from './usageRecording';
-export { extractUsageTokens, recordGenerationUsage } from './usageRecording';
+export {
+  extractUsageTokens,
+  recordComputeUsage,
+  recordGenerationUsage,
+} from './usageRecording';
 export type { PersistedUsageThreshold } from './usageThresholds';
 export {
   createThreshold,

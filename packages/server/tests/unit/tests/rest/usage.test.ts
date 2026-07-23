@@ -1451,12 +1451,15 @@ describe('Usage', () => {
         '/api/v1/usage/meters'
       );
       expect(res.status).toBe(200);
-      const runEvents = res.body.data.filter((e: { run_id: string | null }) => {
-        return e.run_id === runId;
-      });
-      expect(runEvents).toHaveLength(1);
-      expect(runEvents[0].node_id).toBe(nodeId);
-      expect(runEvents[0].meter_type).toBe('llm_tokens');
+      // The agent node now emits two events: the llm_tokens meter and a
+      // compute_execution meter (P4). This assertion is about the token meter.
+      const llmEvents = res.body.data.filter(
+        (e: { run_id: string | null; meter_type: string }) => {
+          return e.run_id === runId && e.meter_type === 'llm_tokens';
+        }
+      );
+      expect(llmEvents).toHaveLength(1);
+      expect(llmEvents[0].node_id).toBe(nodeId);
     });
 
     test('GET /usage/receipt?run_id returns a receipt summed across the run', async () => {
@@ -1473,7 +1476,14 @@ describe('Usage', () => {
       expect(res.body.total_output_tokens).toBe(20);
       expect(res.body.total_cached_tokens).toBe(4);
       expect(res.body.total_reasoning_tokens).toBe(7);
-      expect(res.body.by_meter_type[0].meter_type).toBe('llm_tokens');
+      // The run also carries a compute_execution meter (P4), so assert the
+      // llm_tokens roll-up by lookup rather than by position.
+      const llmRollup = res.body.by_meter_type.find(
+        (m: { meter_type: string }) => {
+          return m.meter_type === 'llm_tokens';
+        }
+      );
+      expect(llmRollup).toBeDefined();
     });
 
     test('GET /usage/receipt?run_id for an unknown run returns 404', async () => {
@@ -1562,6 +1572,166 @@ describe('Usage', () => {
       expect(res.body.data[0].run_id).toBe(run.id);
       expect(res.body.data[0].node_id).toBe('triggered-agent');
       expect(res.body.data[0].trigger_id).toBe(triggerPublicId);
+    });
+  });
+
+  // Compute metering (usage-metering P4): every orchestration node execution
+  // that actively ran writes one `compute_execution` event carrying a single
+  // `compute_second` component (wall-clock seconds from the node's own
+  // timestamps), attributed to run + node, priced via a `soat`/`compute-second`
+  // SKU when one is defined. This is independent of any LLM token meter, so a
+  // non-LLM node (transform) still meters compute.
+  describe('compute metering (P4)', () => {
+    let unpricedRunId: string;
+    let pricedTransformRunId: string;
+    let computeAgentRunId: string;
+    const computeUnitPrice = '0.0001';
+
+    // Creates and synchronously runs a one-node orchestration, returning the
+    // finished run's public id.
+    const runOneNode = async (
+      node: Record<string, unknown>
+    ): Promise<string> => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Compute Metered ${String(node.id)} ${Date.now()}`,
+          nodes: [node],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('succeeded');
+      return runRes.body.id as string;
+    };
+
+    const computeEventsFor = async (
+      runIdValue: string
+    ): Promise<Array<Record<string, unknown>>> => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage/meters?meter_type=compute_execution`
+      );
+      expect(res.status).toBe(200);
+      return res.body.data.filter((e: { run_id: string | null }) => {
+        return e.run_id === runIdValue;
+      });
+    };
+
+    beforeAll(async () => {
+      // A pure (non-side-effecting) transform node run BEFORE any compute SKU
+      // exists — its compute event is captured but unpriced (cost null).
+      unpricedRunId = await runOneNode({
+        id: 'xf',
+        type: 'transform',
+        expression: { '+': [1, 1] },
+      });
+
+      // Seed a past-dated global compute-second SKU so later runs are priced.
+      await db.PriceBook.create({
+        meterType: 'compute_execution',
+        provider: 'soat',
+        model: 'compute-second',
+        component: 'compute_second',
+        unit: 'compute_second',
+        unitPrice: computeUnitPrice,
+        effectiveFrom: new Date('2016-01-01T00:00:00.000Z'),
+      });
+
+      pricedTransformRunId = await runOneNode({
+        id: 'xf',
+        type: 'transform',
+        expression: { '+': [1, 1] },
+      });
+      computeAgentRunId = await runOneNode({
+        id: 'ag',
+        type: 'agent',
+        agent_id: agentId,
+      });
+    }, 60000);
+
+    test('a pure transform node meters exactly one compute_execution event', async () => {
+      const compute = await computeEventsFor(pricedTransformRunId);
+      expect(compute).toHaveLength(1);
+
+      const event = compute[0];
+      expect(event.id).toMatch(/^ue_/);
+      expect(event.meter_type).toBe('compute_execution');
+      expect(event.provider).toBe('soat');
+      expect(event.model).toBe('compute-second');
+      expect(event.node_id).toBe('xf');
+      expect(event.run_id).toBe(pricedTransformRunId);
+      // Compute is attributed at run/node level, not to a generation/agent.
+      expect(event.generation_id).toBeNull();
+
+      const components = event.components as Array<Record<string, unknown>>;
+      expect(components).toHaveLength(1);
+      const component = components[0];
+      expect(component.component).toBe('compute_second');
+      expect(component.unit).toBe('compute_second');
+      expect(component.billable).toBe(true);
+      expect(typeof component.quantity).toBe('number');
+      expect(component.quantity as number).toBeGreaterThanOrEqual(0);
+    });
+
+    test('a transform node writes no llm_tokens event', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/usage/meters?meter_type=llm_tokens'
+      );
+      expect(res.status).toBe(200);
+      const llm = res.body.data.filter((e: { run_id: string | null }) => {
+        return e.run_id === pricedTransformRunId;
+      });
+      expect(llm).toHaveLength(0);
+    });
+
+    test('a compute event is priced from a compute-second SKU', async () => {
+      const compute = await computeEventsFor(pricedTransformRunId);
+      const component = (
+        compute[0].components as Array<Record<string, unknown>>
+      )[0];
+      expect(component.unit_price).toBe(Number(computeUnitPrice));
+      expect(component.price_id).toMatch(/^price_/);
+      // cost = quantity (seconds) × unit price; a number (>= 0), never null.
+      expect(typeof component.cost_usd).toBe('number');
+      expect(typeof compute[0].cost_usd).toBe('number');
+    });
+
+    test('a compute event written before any SKU is unpriced (cost null)', async () => {
+      const compute = await computeEventsFor(unpricedRunId);
+      expect(compute).toHaveLength(1);
+      expect(compute[0].cost_usd).toBeNull();
+      const component = (
+        compute[0].components as Array<Record<string, unknown>>
+      )[0];
+      expect(component.unit_price).toBeNull();
+      expect(component.cost_usd).toBeNull();
+      expect(component.price_id).toBeNull();
+      // The quantity is still captured even though pricing lagged.
+      expect(typeof component.quantity).toBe('number');
+    });
+
+    test('an agent node meters both llm_tokens and compute_execution', async () => {
+      const res = await authenticatedTestClient(adminToken).get(
+        '/api/v1/usage/meters'
+      );
+      expect(res.status).toBe(200);
+      const forRun = res.body.data.filter((e: { run_id: string | null }) => {
+        return e.run_id === computeAgentRunId;
+      });
+      const byType = (t: string) => {
+        return forRun.filter((e: { meter_type: string }) => {
+          return e.meter_type === t;
+        });
+      };
+      expect(byType('llm_tokens')).toHaveLength(1);
+      // Exactly one compute event per node execution (idempotent, not doubled).
+      expect(byType('compute_execution')).toHaveLength(1);
+      expect(byType('compute_execution')[0].node_id).toBe('ag');
     });
   });
 });

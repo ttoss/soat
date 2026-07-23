@@ -1243,7 +1243,7 @@ echo "Get run: OK"
 
 # Run usage roll-up: the single-run read surfaces a usage object with numeric
 # token totals. This orchestration has only transform nodes (no metered
-# generation), so the totals are a deterministic zero.
+# generation), so the token totals are a deterministic zero.
 if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.usage | type) == "object" and (.usage.total_input_tokens | type) == "number"' >/dev/null 2>&1; then
   echo "get-orchestration-run did not include a usage roll-up"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
@@ -1261,6 +1261,16 @@ if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.run_id
   exit 1
 fi
 echo "Per-run receipt: OK"
+
+# Compute metering (P4): every orchestration node execution meters wall-clock
+# compute, so even this transform-only run has a compute_execution meter in its
+# receipt (independent of any LLM token metering).
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e '(.by_meter_type | map(.meter_type) | index("compute_execution")) != null' >/dev/null 2>&1; then
+  echo "run receipt did not include a compute_execution meter (P4)"
+  printf '%s\n' "$ORCH_RUN_RECEIPT"
+  exit 1
+fi
+echo "Compute metering (P4): OK"
 
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")

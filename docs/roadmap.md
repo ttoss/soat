@@ -33,7 +33,7 @@ the gap series that turns a Formation deploy into an *operating* agent team.
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 P1 (queue/idempotency/worker) + P2 (concurrency limits) shipped; worker-fleet ops hardening + P3 (SQS driver) remain |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 Phase 1 + Phase 3 (exceptions queue) shipped; activity feed remains |
 | G4 | Guardrails · action classes | [modules/guardrails.md](../packages/website/docs/modules/guardrails.md) | ✅ shipped |
-| G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c shipped; infra emitters + guard integ. remain |
+| G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 Phases 1–3c + P4 (compute) shipped; storage/request emitters + guard integ. remain |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
 | G7 | Knowledge packages · context assembly | [prd-knowledge-packages.md](./prd-knowledge-packages.md) | ❌ Not started |
 
@@ -65,7 +65,7 @@ FOUNDATIONS (shipped)
 next, deps satisfied ──────────────────────────────────────────────────────
   orchestration-queue P2 ops hardening (worker fleet) ◄── orchestration-queue P2 ✅
   orchestration-queue P3 (pluggable driver + SQS) ◄── orchestration-queue P1 ✅
-  usage metering P4/P5/P6 (compute/storage/request emitters) ◄── P3b schema ✅
+  usage metering P5/P6 (storage/request emitters) ◄── P3b schema ✅   [P4 compute ✅]
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✅
@@ -100,7 +100,9 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Usage infra emitters (P4–P6)** — pure extensions of shipped cores.
+1. **Usage infra emitters (P5–P6)** — pure extensions of shipped cores (**P4
+   compute metering shipped**: one `compute_execution` event per orchestration
+   node execution, priced off a `soat`/`compute-second` SKU).
    (**Guardrails (G4)** is fully shipped. **Quotas** is
    done through P3: requests + token/cost enforcement, the `quota.exceeded`
    webhook, monitor mode, and the `quota` formation resource all shipped; only
@@ -189,10 +191,13 @@ The authoritative contract is [modules/guardrails.md](../packages/website/docs/m
 ### G5 — Usage metering
 
 _Phases 1–3c shipped (event+component model, three-tier `PriceBook`, per-run
-receipts, aggregation, thresholds + webhook)._
+receipts, aggregation, thresholds + webhook). **P4 shipped**: `compute_execution`
+metering — one event per orchestration node execution (all node types), a single
+`compute_second` component measured from the node's own `started_at`/`completed_at`,
+run/node attribution, priced off a `soat`/`compute-second` SKU, idempotent on
+`compute:{run}:node:{node}:attempt:{n}`._
 
 - [ ] 🚧 **Coverage:** meter the remaining LLM paths — extraction, discussions, chats (agents / conversations / orchestration nodes done)
-- [ ] **P4** `4.1` Compute metering (`compute_execution` on node completion; duration from `started_at`/`completed_at`; `soat`/`compute-second` SKU)
 - [ ] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`)
 - [ ] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request)
 - [ ] **P7** `5.2` `usage.*` guard context + per-run ceiling — ⏭️ deferred (needs the G4 evaluator; interim: a `condition` node reads the run roll-up and routes to an abort path)

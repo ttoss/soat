@@ -1,5 +1,5 @@
 ---
-description: "Usage events record the cost of every metered occurrence — a completed LLM call, and (as emitters land) compute, requests, and storage — attributed to a project, agent, and generation."
+description: "Usage events record the cost of every metered occurrence — a completed LLM call or an orchestration node's compute, and (as emitters land) requests and storage — attributed to a project, agent, and generation."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and future dimensions (compute, requests, storage) are the same shape with different components. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
+Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` is metered today (one event per orchestration node execution), with `api_request` and `storage` following as their emitters land. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
 
 Events and components are **append-only and immutable** — no update or delete path, no `updated_at` — so historical usage never changes after the fact. Writes are **idempotent** on the generation's public ID: a replayed completion is a no-op instead of double counting.
 
@@ -102,7 +102,7 @@ Every event carries a `meter_type`, and its measured quantities live in componen
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored bytes for one day              | `gb_day`                                          |
 
-For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`). Emitters for the non-LLM types land in later milestones; the schema and per-component pricing exist now, so those become emitter-only work.
+For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`). The `compute_execution` emitter is live (see [Coverage](#coverage)); the `api_request` and `storage` emitters land in later milestones, and because the schema and per-component pricing already exist, those remain emitter-only work.
 
 ### Token components
 
@@ -111,6 +111,10 @@ An LLM event's tokens are split into disjoint, additive components. `input_token
 ### Coverage
 
 Usage is metered for agent generations — including [conversations](./conversations.md) and [orchestration](./orchestrations.md) agent nodes, which run through the same agent-completion path. When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+
+### Compute metering
+
+Every [orchestration](./orchestrations.md) node execution that actively ran writes one `compute_execution` event alongside any token metering, carrying a single `compute_second` component whose `quantity` is the node's wall-clock seconds (`completed_at − started_at`). This is independent of LLM tokens, so a non-agent node (a `transform`, `condition`, or `tool` node) still meters compute, and an agent node produces both an `llm_tokens` event and a `compute_execution` event. Compute is attributed at the run/node level (`run_id` + `node_id`); `generation_id`, `agent_id`, and `trace_id` are `null`. It is priced from a `soat`/`compute-second` price-book SKU when one is effective (`cost_usd = null` otherwise), and the event is idempotent on the node execution (`compute:<run_id>:node:<node_id>:attempt:<n>`) so a redelivered node is never double-counted. A skipped node (which never ran) is not metered.
 
 ### Trigger and action attribution
 
