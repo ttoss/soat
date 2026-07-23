@@ -65,6 +65,8 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/ApprovalItem'
+        '400':
+          description: Invalid `status` or `origin` filter value
         '401':
           description: Unauthorized
         '403':
