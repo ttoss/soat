@@ -1,7 +1,11 @@
 import createDebug from 'debug';
 
 import type { ActionClass, GuardrailDocument } from './guardrailDocument';
-import { DEFAULT_ACTION_CLASS, isActionClass } from './guardrailDocument';
+import {
+  collectExpressionVarPaths,
+  DEFAULT_ACTION_CLASS,
+  isActionClass,
+} from './guardrailDocument';
 import { evaluateLogic } from './jsonLogicMapping';
 
 const log = createDebug('soat:guardrails');
@@ -93,23 +97,69 @@ const buildLogicContext = (context: GuardrailEvaluationContext) => {
   };
 };
 
+// Reads a dotted path (`soat.activity.actions_24h`) off the logic context,
+// returning `undefined` when any segment is missing.
+const getByPath = (root: unknown, path: string): unknown => {
+  let node: unknown = root;
+  for (const segment of path.split('.')) {
+    if (!isPlainObject(node)) return undefined;
+    node = node[segment];
+  }
+  return node;
+};
+
+/**
+ * Whether `expression` references a `soat.*` or `context.*` var path that is
+ * currently unresolvable (missing or explicitly `null`). This is the fail-
+ * closed check the docs promise for those two namespaces: an unresolvable
+ * catalog key or context-tool output must not silently pass a `class`/`guard`
+ * expression just because JSON Logic coerces `null` to a zero-ish value for
+ * numeric comparisons (`null < 100` → `true`). `args.*` is deliberately
+ * excluded — its `null`-coercion behavior is documented as expected, existing
+ * behavior the caller is told to guard against explicitly, not a fail-closed
+ * invariant to enforce here.
+ */
+const hasUnresolvedFailClosedVar = (
+  expression: unknown,
+  logicContext: Record<string, unknown>
+): boolean => {
+  return collectExpressionVarPaths(expression).some((path) => {
+    const isFailClosedNamespace =
+      path === 'soat' ||
+      path.startsWith('soat.') ||
+      path === 'context' ||
+      path.startsWith('context.');
+    if (!isFailClosedNamespace) return false;
+    const value = getByPath(logicContext, path);
+    return value === null || value === undefined;
+  });
+};
+
 /**
  * Resolves the action class for a call. A literal `class` is returned directly;
  * a JSON Logic `class` expression is evaluated and its result kept only if it is
- * a valid class. Anything else — a missing key (`null`), a typo, a number, or an
- * evaluator error — resolves to `default_class`, itself defaulting to `C`
- * (fail-closed): a misconfigured classification never grants autonomy.
+ * a valid class. Anything else — a missing key (`null`), a typo, a number, an
+ * evaluator error, or a reference to an unresolvable `soat.*`/`context.*` var —
+ * resolves to `default_class`, itself defaulting to `C` (fail-closed): a
+ * misconfigured or under-resolved classification never grants autonomy.
  */
 const resolveClass = (
   document: GuardrailDocument,
-  logicContext: unknown
+  logicContext: Record<string, unknown>
 ): ActionClass => {
   if (isActionClass(document.class)) {
     return document.class;
   }
   let result: unknown = null;
   try {
-    result = evaluateLogic(document.class, logicContext);
+    if (
+      isPlainObject(document.class) &&
+      hasUnresolvedFailClosedVar(document.class, logicContext)
+    ) {
+      result = null;
+    } else {
+      result = evaluateLogic(document.class, logicContext);
+    }
   } catch {
     result = null;
   }
@@ -123,15 +173,23 @@ const resolveClass = (
 
 /**
  * Whether a class-B call's guard passes. A B with no guard expression fails
- * closed (nothing to pass), and an evaluator error counts as a failed guard —
- * forgetting to supply context tightens the posture, never loosens it. Plain JS
- * truthiness matches the JSON Logic convention used elsewhere in the server.
+ * closed (nothing to pass); an evaluator error, or a reference to an
+ * unresolvable `soat.*`/`context.*` var, counts as a failed guard — forgetting
+ * to supply context tightens the posture, never loosens it. The unresolved-var
+ * check runs *before* evaluation so a comparison operator's `null → 0`
+ * coercion (`{ "<": [{ "var": "soat.activity.actions_24h" }, 100] }` passing
+ * while the activity feed is dark) can never flip an unresolvable reference
+ * into a passing guard. Plain JS truthiness matches the JSON Logic convention
+ * used elsewhere in the server.
  */
 const guardPasses = (
   document: GuardrailDocument,
-  logicContext: unknown
+  logicContext: Record<string, unknown>
 ): boolean => {
   if (!isPlainObject(document.guard)) {
+    return false;
+  }
+  if (hasUnresolvedFailClosedVar(document.guard, logicContext)) {
     return false;
   }
   try {
