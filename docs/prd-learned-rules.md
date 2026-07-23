@@ -74,8 +74,8 @@ queryable fact.
 - Scopes: `global` (all projects) and `project` (one project). Rules are
   versioned per scope; updating a rule creates a new version, never mutates
   history — the prior document is archived to `LearnedRuleVersion`
-  (see [Data Model](#learnedruleversion)), the same pattern the guardrails
-  PRD uses for `PolicyVersion`
+  (see [Data Model](#learnedruleversion)), the same pattern guardrails ships
+  as `GuardrailVersion`
 - Candidate lifecycle: `open → promotion_suggested → promoted | dismissed`
   (dismissal takes a reason)
 - **Cross-project isolation:** candidates and project-scoped rules never
@@ -117,6 +117,55 @@ corrections into standing instructions is an unforced error class; SOAT
 provides the queue, the clustering signal, and the injection — a human owns
 the judgment.
 
+### Why a module, not a memory kind
+
+A skeptic's cut: couldn't this be `kind: correction` on memory entries? No —
+the *lifecycle* is what justifies the module, not the storage shape. Memories
+are agent-written facts with an automatic write path; learned rules are
+human-gated behavioral doctrine with promotion, dismissal-with-reason,
+append-only versioning, `global` scope crossing project boundaries, and audit
+provenance from rule back to the originating approval. None of that fits the
+memories write path, and forcing it in would blur the platform's context
+boundary: **memories = facts the agents learn about the world; learned rules
+= corrections humans make to agent behavior**. Docs and API surfaces must
+keep that sentence sharp — it is the answer to "where does this piece of
+guidance belong?" across instructions, knowledge, memories, packages, and
+rules.
+
+### Soft rules and the guardrail graduation path
+
+A learned rule is **soft**: injected context the model is expected — but not
+forced — to follow. Enforcement is not this module's job. The graduation path
+for a constraint that must *never* be violated is **hard**: encode it as a
+guardrail `deny` ([guardrails](../packages/website/docs/modules/guardrails.md)),
+so the action is refused upstream and never reaches the approval queue again.
+
+Two signals feed that graduation decision:
+
+- **Recurring rejected re-proposals** from approvals (admitted with
+  `previous_item_id` per [prd-approvals.md](./prd-approvals.md) decision 2) —
+  recurrence detection happens here (Phase 2 clustering), not in approvals
+  dedup.
+- **Candidates auto-linking to an already-promoted rule** (Phase 2) — the
+  built-in "this rule may not be working" signal.
+
+The promotion flow should present the choice explicitly: promote as a
+context rule (soft, this module) or graduate to a guardrail policy (hard,
+G4). Graduation itself stays human-curated for the same reason promotion
+does.
+
+### Efficacy is eval-gated
+
+Phase 4's acceptance test proves *plumbing* (the rule appears in the next
+run's assembled context), not *behavior change*. Because rules are soft,
+whether injection actually corrects behavior is an empirical question — and
+it is exactly what the [evaluations module](./prd-evaluations.md) measures:
+run a regression set with and without the rule injected and compare. The
+roadmap already sequences learned-rules after evaluations Phase 1; once both
+exist, rule-efficacy evals should back the promotion/graduation judgment
+(e.g. a rule that shows no behavioral delta is a graduation candidate or a
+dismissal, not a keeper).
+
 ## Data Model
 
 ### CandidateRule
@@ -153,7 +202,7 @@ the judgment.
 
 ### LearnedRuleVersion
 
-Archival table mirroring the guardrails `PolicyVersion` pattern: every write
+Archival table mirroring the guardrails `GuardrailVersion` pattern: every write
 to a `LearnedRule` (any `PUT` that changes `text`, `scope`, or `status`, and
 the archive operation) increments `version` on the live row and first copies
 the **prior** document into `LearnedRuleVersion`. The current version always
