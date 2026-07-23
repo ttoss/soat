@@ -1154,7 +1154,7 @@ components:
         trace_id:
           type: string
           description: Public ID of the trace for this generation
-          example: trc_V1StGXR8Z5jdHi6B
+          example: trace_V1StGXR8Z5jdHi6B
         status:
           type: string
           enum:

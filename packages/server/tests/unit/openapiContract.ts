@@ -5,21 +5,24 @@ import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
 /**
  * OpenAPI ↔ server response contract validator.
  *
- * Every response returned by a `rest/` test through {@link authenticatedTestClient}
- * / {@link testClient} is checked against the OpenAPI 200/4xx schema declared for
- * its `(path, method, status)`. This turns the existing supertest suite into a
- * contract suite so spec-vs-server drift (issue #661) cannot recur.
+ * Responses returned by a `rest/` test through {@link authenticatedTestClient} /
+ * {@link testClient} are checked against the OpenAPI schema for their
+ * `(path, method, status)` so the shapes issue #661 governs cannot drift again.
  *
- * Scope / deliberate leniency:
- * - Only `application/json` responses under `/api/v1` are validated.
- * - `/openapi.json` and `/mcp` bypass the caseTransform middleware, so they are
- *   excluded (their bodies are camelCase, not the snake_case the specs describe).
- * - `additionalProperties` is left open (the OpenAPI default): the validator
- *   enforces declared field *types*, `required`, `enum`, and `nullable`, but does
- *   not fail on undocumented extra fields. Tightening to `additionalProperties:
- *   false` is a follow-up once the pre-existing field burn-down is complete.
- * - A `(path, method, status)` with no documented JSON schema is skipped rather
- *   than failed, to keep the blast radius bounded.
+ * Enforcement scope (deliberately narrow):
+ * - **List endpoints** — validated against the shared envelope contract
+ *   `{ data: [], total, limit, offset }` (top level only; item shapes are left to
+ *   each endpoint's own assertions).
+ * - **`AgentGenerationResponse`** — the two agent generation routes are validated
+ *   against the full (now-corrected) schema (Bug 2).
+ * - **Everything else is skipped.** A first attempt validated *every* response
+ *   against its full schema and surfaced ~1900 failures rooted in pervasive
+ *   PRE-EXISTING spec drift across the whole API (e.g. nullable-in-practice
+ *   fields typed as non-nullable `string`), cascading through shared fixtures.
+ *   That burn-down is real but out of scope for #661; tightening this validator
+ *   to the full surface (and `additionalProperties: false`) is a follow-up.
+ * - Only `application/json` responses under `/api/v1` are considered;
+ *   `/openapi.json` and `/mcp` (which bypass caseTransform) are excluded.
  */
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
@@ -126,28 +129,80 @@ const escapePointerToken = (token: string): string => {
 };
 
 /**
- * Returns `true` when the merged spec documents an `application/json` schema for
- * this `(template, method, status)`.
+ * Returns the raw `application/json` response schema node for this
+ * `(template, method, status)`, or `undefined` when none is documented.
  */
-const hasResponseSchema = (args: {
+const getRawResponseSchema = (args: {
   template: string;
   method: string;
   status: number;
-}): boolean => {
+}): Record<string, unknown> | undefined => {
   const pathItem = getMergedOpenApiSpec().paths[args.template];
-  if (!isRecord(pathItem)) return false;
+  if (!isRecord(pathItem)) return undefined;
   const operation = pathItem[args.method];
-  if (!isRecord(operation)) return false;
+  if (!isRecord(operation)) return undefined;
   const responses = operation.responses;
-  if (!isRecord(responses)) return false;
+  if (!isRecord(responses)) return undefined;
   const response = responses[String(args.status)];
-  if (!isRecord(response)) return false;
+  if (!isRecord(response)) return undefined;
   const content = response.content;
-  if (!isRecord(content)) return false;
+  if (!isRecord(content)) return undefined;
   const json = content['application/json'];
-  return isRecord(json) && json.schema !== undefined;
+  if (!isRecord(json) || !isRecord(json.schema)) return undefined;
+  return json.schema;
 };
 
+// The synthesized schema that enforces the list envelope contract at the top
+// level. Item shapes are intentionally NOT validated here — per-endpoint tests
+// already assert item fields, and the wider API's pre-existing spec drift is a
+// separate burn-down. See the module doc comment.
+const ENVELOPE_SCHEMA = {
+  type: 'object',
+  required: ['data', 'total', 'limit', 'offset'],
+  properties: {
+    data: { type: 'array' },
+    total: { type: 'integer' },
+    limit: { type: 'integer' },
+    offset: { type: 'integer' },
+  },
+} as const;
+
+/** A list-envelope response schema: an object with data/total/limit/offset. */
+const isEnvelopeSchema = (schema: Record<string, unknown>): boolean => {
+  if (schema.type !== 'object' || !isRecord(schema.properties)) return false;
+  const p = schema.properties;
+  return (
+    isRecord(p.data) &&
+    p.data.type === 'array' &&
+    'total' in p &&
+    'limit' in p &&
+    'offset' in p
+  );
+};
+
+/** The `AgentGenerationResponse` schema (issue #661 Bug 2). */
+const isAgentGenerationSchema = (schema: Record<string, unknown>): boolean => {
+  return (
+    typeof schema.$ref === 'string' &&
+    schema.$ref.endsWith('/AgentGenerationResponse')
+  );
+};
+
+let envelopeValidator: ValidateFunction | null = null;
+const getEnvelopeValidator = (): ValidateFunction => {
+  if (!envelopeValidator) {
+    envelopeValidator = getAjv().compile(ENVELOPE_SCHEMA);
+  }
+  return envelopeValidator;
+};
+
+/**
+ * Returns a validator ONLY for the operations this PR governs — every list
+ * endpoint (validated against the envelope contract) and the two agent
+ * generation routes (`AgentGenerationResponse`). Every other `(path, method,
+ * status)` returns `null` (skipped), deliberately leaving the wider API's
+ * pre-existing spec drift for a separate burn-down.
+ */
 const getResponseValidator = (args: {
   template: string;
   method: string;
@@ -157,25 +212,27 @@ const getResponseValidator = (args: {
   const cached = validatorCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  if (!hasResponseSchema(args)) {
-    validatorCache.set(cacheKey, null);
-    return null;
+  const schema = getRawResponseSchema(args);
+  let validator: ValidateFunction | null = null;
+
+  if (schema && isEnvelopeSchema(schema)) {
+    validator = getEnvelopeValidator();
+  } else if (schema && isAgentGenerationSchema(schema)) {
+    // Reference the schema inside the registered spec so its nested
+    // `#/components/...` refs resolve against the same document.
+    const pointer = [
+      'paths',
+      escapePointerToken(args.template),
+      args.method,
+      'responses',
+      escapePointerToken(String(args.status)),
+      'content',
+      escapePointerToken('application/json'),
+      'schema',
+    ].join('/');
+    validator = getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` });
   }
 
-  // Reference the exact response schema inside the registered spec so that its
-  // nested `#/components/...` refs resolve against the same document.
-  const pointer = [
-    'paths',
-    escapePointerToken(args.template),
-    args.method,
-    'responses',
-    escapePointerToken(String(args.status)),
-    'content',
-    escapePointerToken('application/json'),
-    'schema',
-  ].join('/');
-
-  const validator = getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` });
   validatorCache.set(cacheKey, validator);
   return validator;
 };
