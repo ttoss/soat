@@ -77,20 +77,22 @@ else — lifecycle, expiry, permissions, API, events — is shared.
 
 ## 2. Implementation status
 
-Phase 1 shipped (approvals queue core + `approval` orchestration node);
-Phases 2–4 not started:
+Phase 1 shipped (approvals queue core + `approval` orchestration node) and
+Phase 3 shipped (the exceptions queue). Phase 2's per-binding `approval_policy`
+was superseded by the guardrail interceptor (G4) and removed; Phase 4 (activity
+feed) is not started:
 
 - [x] `ApprovalItem` model with lifecycle (`apr_` prefix) — `src/lib/approvals.ts`
 - [x] Approvals module core: emit/resolve _(dedup key column exists; dedup logic
       and edit-time re-classification are deferred to Phase 2 / guardrails)_
 - [x] `approval` orchestration node type (producer #1)
-- [ ] Tool-call interception via `approval_policy` on tool bindings (producer #2)
+- [x] Approval interception on every surface — delivered via the [guardrail](../packages/website/docs/modules/guardrails.md) interceptor (G4); the per-binding `approval_policy` design (producer #2) was deprecated and removed
 - [x] Server-side expiry enforcement via scheduler sweeper + execution-path re-check
 - [x] Approve / reject / edit-then-approve workflows
-- [ ] `ExceptionItem` model with severity routing (`exc_` prefix)
+- [x] `ExceptionItem` model with severity routing (`exc_` prefix) — `src/lib/exceptions.ts`
 - [ ] `ActivityEntry` feed (`acte_` prefix)
 - [x] Webhook events for approvals (`approvals.created` / `.approved` / `.rejected`
-      / `.expired`) _(exception events deferred to Phase 3)_
+      / `.expired`) and exceptions (`exceptions.created`)
 - [x] REST endpoints, OpenAPI specs, permissions
 
 ---
@@ -120,7 +122,15 @@ after their supporting evidence goes stale.
 **Unlock:** manage-by-exception operation — agents propose, humans decide from a
 queue — for orchestrated (scheduled/DAG) execution.
 
-### Phase 2 — Tool-call approval (`approval_policy` on tool bindings) — Not started
+### Phase 2 — Tool-call approval — Superseded by guardrails (G4)
+
+> **Superseded.** The per-binding `approval_policy` mechanism described below was
+> not built as specified. Its goal — allow/ask/deny enforcement on every
+> execution surface — shipped instead through the
+> [guardrail](../packages/website/docs/modules/guardrails.md) interceptor (G4):
+> a class-C guardrail routes the intercepted call into an `ApprovalItem`, and the
+> `approval_policy` field was deprecated and removed. The design below is retained
+> for historical context.
 
 Extend the same queue to *every* execution surface: chat sessions, direct
 generations, MCP.
@@ -144,9 +154,11 @@ generations, MCP.
 **Unlock:** allow/ask/deny as platform-level enforcement; guardrails hold on
 conversational surfaces where no orchestration runs.
 
-### Phase 3 — Exceptions and severity routing — Not started
+### Phase 3 — Exceptions and severity routing ✅ Done
 
-Failures and anomalies become first-class items, not log lines.
+Shipped as the [exceptions](../packages/website/docs/modules/exceptions.md)
+module (`ExceptionItem` / `exc_`). Failures and anomalies become first-class
+items, not log lines.
 
 **Deliverables:**
 
