@@ -689,7 +689,7 @@ fi
 
 echo "--- Listing ingestion rules ---"
 INGESTION_RULE_LIST_RESP=$($SOAT_CLI list-ingestion-rules --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$INGESTION_RULE_LIST_RESP" | jq -e --arg id "$INGESTION_RULE_ID" 'map(.id) | index($id) != null' > /dev/null; then
+if ! printf '%s\n' "$INGESTION_RULE_LIST_RESP" | jq -e --arg id "$INGESTION_RULE_ID" '.data | map(.id) | index($id) != null' > /dev/null; then
   echo "ERROR: list-ingestion-rules did not include the created rule" >&2
   echo "$INGESTION_RULE_LIST_RESP" >&2
   exit 1
@@ -960,7 +960,7 @@ echo "Tagged entry created with tags/metadata."
 
 echo "--- List memory entries ---"
 ME_LIST_RESP=$($SOAT_CLI list-memory-entries --memory-id "$MEM_ID")
-ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq 'length')
+ME_LIST_COUNT=$(printf '%s\n' "$ME_LIST_RESP" | jq '.data | length')
 if [ "$ME_LIST_COUNT" -ne 3 ]; then
   echo "ERROR: Expected 3 entries after dedup writes, got $ME_LIST_COUNT" >&2
   echo "$ME_LIST_RESP" >&2
@@ -1117,7 +1117,7 @@ echo "Orchestration id: $ORCH_ID"
 
 echo "--- Listing orchestrations ---"
 ORCH_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestrations --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$ORCH_LIST_RESP" | jq -e --arg id "$ORCH_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_LIST_RESP" | jq -e --arg id "$ORCH_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestrations did not include created orchestration"
   printf '%s\n' "$ORCH_LIST_RESP"
   exit 1
@@ -1274,7 +1274,7 @@ echo "Compute metering (P4): OK"
 
 echo "--- Listing runs ---"
 ORCH_RUN_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-runs --orchestration-id "$ORCH_ID")
-if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$ORCH_RUN_LIST_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "list-orchestration-runs did not include completed run"
   printf '%s\n' "$ORCH_RUN_LIST_RESP"
   exit 1
@@ -3026,7 +3026,7 @@ echo "Trigger created: $TRIGGER_ID"
 # List triggers
 echo "--- Listing triggers ---"
 TRIGGER_LIST_RESP=$($SOAT_CLI list-triggers --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" 'map(.id) | index($id) != null' >/dev/null 2>&1; then
+if ! printf '%s\n' "$TRIGGER_LIST_RESP" | jq -e --arg id "$TRIGGER_ID" '.data | map(.id) | index($id) != null' >/dev/null 2>&1; then
   echo "ERROR: list-triggers did not include the created trigger" >&2
   printf '%s\n' "$TRIGGER_LIST_RESP" >&2
   exit 1
@@ -3867,7 +3867,7 @@ if [ -z "$QUOTA_ID" ] || [ "$QUOTA_ID" = "null" ]; then
 fi
 
 QUOTA_LIST_RESP=$($SOAT_CLI list-quotas --project-id "$PROJECT_PUBLIC_ID")
-if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.[] | select(.id == $id)' >/dev/null 2>&1; then
+if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.data[] | select(.id == $id)' >/dev/null 2>&1; then
   echo "ERROR: Created quota not found in list" >&2
   echo "$QUOTA_LIST_RESP" >&2
   exit 1
