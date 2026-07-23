@@ -1849,6 +1849,99 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
     });
   });
+
+  // ── Guardrails ─────────────────────────────────────────────────────────────
+  // Regression: https://github.com/ttoss/soat/issues/651
+  // A guardrail's `document` and an evaluation's `context_snapshot` are
+  // free-form, JSON-Logic-bearing bags whose snake_case keys are contract
+  // fields (`default_class`, `expires_in`) and fully-qualified var paths
+  // (`soat.usage.cost_usd_24h`, `context.max_daily_budget`). The MCP surface
+  // must preserve them verbatim, exactly as the REST caseTransform middleware
+  // does — the earlier `snakeToCamelDeep` mangled them (`defaultClass`,
+  // `costUsd_24h`), breaking read→write round-trips and the audit-key contract.
+  describe('Guardrails', () => {
+    let guardrailId: string;
+
+    beforeAll(async () => {
+      const res = await mcpCall('create-guardrail', {
+        projectId,
+        name: 'MCP Guardrail',
+        document: {
+          class: {
+            if: [{ '<': [{ var: 'args.amount' }, 500] }, 'B', 'C'],
+          },
+          default_class: 'C',
+          guard: {
+            and: [
+              {
+                '<=': [
+                  { var: 'args.amount' },
+                  { var: 'context.max_daily_budget' },
+                ],
+              },
+              { '<': [{ var: 'soat.usage.cost_usd_24h' }, 1000] },
+            ],
+          },
+          expires_in: 259200,
+        },
+      });
+      expect(res.status).toBe(200);
+      guardrailId = parseResult(res).id;
+    });
+
+    test('get-guardrail preserves document contract keys verbatim (snake_case)', async () => {
+      const res = await mcpCall('get-guardrail', { guardrailId });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      // Contract fields stay snake_case — not camelCased to defaultClass/expiresIn.
+      expect(result.document.default_class).toBe('C');
+      expect(result.document.expires_in).toBe(259200);
+      expect(result.document.defaultClass).toBeUndefined();
+      expect(result.document.expiresIn).toBeUndefined();
+      // The guardrail's own SOAT fields still camelCase normally.
+      expect(result.contextMode).toBe('merge');
+    });
+
+    test('a document read via MCP can be written back without a 400', async () => {
+      const getRes = await mcpCall('get-guardrail', { guardrailId });
+      const document = parseResult(getRes).document;
+      // Echo the exact document back — with the bug this carried `defaultClass`
+      // and was rejected as an unknown field.
+      const updRes = await mcpCall('update-guardrail', {
+        guardrailId,
+        document,
+      });
+      expect(updRes.status).toBe(200);
+      expect(updRes.body.result?.isError).toBeFalsy();
+      const updated = parseResult(updRes);
+      expect(updated.document.default_class).toBe('C');
+    });
+
+    test('evaluate-guardrail keeps context_snapshot var-path keys verbatim', async () => {
+      const res = await mcpCall('evaluate-guardrail', {
+        guardrailId,
+        args: { amount: 100 },
+        guardrailContext: { max_daily_budget: 500 },
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.class).toBe('B');
+      expect(result.decision).toBe('execute');
+      const keys = Object.keys(result.contextSnapshot);
+      // Var paths are a fixed contract — snake_case, matching the soat.* catalog.
+      expect(keys).toContain('args.amount');
+      expect(keys).toContain('context.max_daily_budget');
+      expect(keys).toContain('soat.usage.cost_usd_24h');
+      // Not camel-mangled to non-catalog names.
+      expect(keys).not.toContain('context.maxDailyBudget');
+      expect(keys).not.toContain('soat.usage.costUsd_24h');
+    });
+
+    test('delete-guardrail removes the guardrail', async () => {
+      const res = await mcpCall('delete-guardrail', { guardrailId });
+      expect(res.status).toBe(200);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {
