@@ -272,28 +272,28 @@ describe('IngestionRules', () => {
         `/api/v1/ingestion-rules?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
     });
 
     test('list honors limit and offset', async () => {
       const full = await authenticatedTestClient(adminToken).get(
         `/api/v1/ingestion-rules?project_id=${projectId}`
       );
-      expect(full.body.length).toBeGreaterThan(1);
+      expect(full.body.data.length).toBeGreaterThan(1);
 
       const limited = await authenticatedTestClient(adminToken).get(
         `/api/v1/ingestion-rules?project_id=${projectId}&limit=1`
       );
       expect(limited.status).toBe(200);
-      expect(limited.body.length).toBe(1);
+      expect(limited.body.data.length).toBe(1);
 
       const paged = await authenticatedTestClient(adminToken).get(
         `/api/v1/ingestion-rules?project_id=${projectId}&limit=1&offset=1`
       );
       expect(paged.status).toBe(200);
-      expect(paged.body.length).toBe(1);
-      expect(paged.body[0].id).not.toBe(limited.body[0].id);
+      expect(paged.body.data.length).toBe(1);
+      expect(paged.body.data[0].id).not.toBe(limited.body.data[0].id);
     });
 
     test('list is unauthorized without a token (401)', async () => {

@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { getEmbedding } from 'src/lib/embedding';
 import { pickMergedContent } from 'src/lib/memoryConsolidation';
 import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
+import { paginatedList } from 'src/lib/pagination';
 
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
@@ -276,13 +277,26 @@ export const createMemoryEntry = async (args: {
   return mapMemoryEntry(withMemory!);
 };
 
-export const listMemoryEntries = async (args: { memoryId: number }) => {
-  const entries = await db.MemoryEntry.findAll({
-    where: { memoryId: args.memoryId },
-    include: [{ model: db.Memory, as: 'memory' }],
-    order: [['createdAt', 'ASC']],
+export const listMemoryEntries = async (args: {
+  memoryId: number;
+  limit?: number;
+  offset?: number;
+}) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.MemoryEntry.findAndCountAll({
+        where: { memoryId: args.memoryId },
+        include: [{ model: db.Memory, as: 'memory' }],
+        order: [['createdAt', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapMemoryEntry,
   });
-  return entries.map(mapMemoryEntry);
 };
 
 export const getMemoryEntry = async (args: { id: string }) => {

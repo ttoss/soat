@@ -8,6 +8,8 @@ import {
 } from 'src/lib/exceptions';
 import { buildSrn } from 'src/lib/iam';
 
+import { parsePagination } from './helpers';
+
 const exceptionsRouter = new Router<Context>();
 
 // Item-level SRN so a project-scoped principal (whose policy grants an SRN
@@ -50,6 +52,7 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
     status: ctx.query.status as string | undefined,
     severity: ctx.query.severity as string | undefined,
     kind: ctx.query.kind as string | undefined,
+    ...parsePagination(ctx),
   });
 });
 

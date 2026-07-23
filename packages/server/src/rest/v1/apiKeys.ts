@@ -9,6 +9,8 @@ import {
   updateApiKey,
 } from 'src/lib/apiKeys';
 
+import { parsePagination } from './helpers';
+
 const apiKeysRouter = new Router<Context>();
 
 /**
@@ -78,18 +80,22 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
   if (ctx.authUser.apiKeyProjectId !== undefined) {
     ctx.body = await listApiKeys({
       projectId: ctx.authUser.apiKeyProjectId,
+      ...parsePagination(ctx),
     });
     return;
   }
 
   // JWT admin sees all API keys
   if (ctx.authUser.role === 'admin') {
-    ctx.body = await listApiKeys({});
+    ctx.body = await listApiKeys({ ...parsePagination(ctx) });
     return;
   }
 
   // JWT regular user sees only their own API keys
-  ctx.body = await listApiKeys({ userId: ctx.authUser.id });
+  ctx.body = await listApiKeys({
+    userId: ctx.authUser.id,
+    ...parsePagination(ctx),
+  });
 });
 
 apiKeysRouter.post('/api-keys', async (ctx: Context) => {

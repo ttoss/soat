@@ -114,8 +114,8 @@ describe('Webhooks', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -131,7 +131,7 @@ describe('Webhooks', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/webhooks');
 
       expect(response.status).toBe(200);
-      expect(response.body).toEqual([]);
+      expect(response.body.data).toEqual([]);
     });
   });
 

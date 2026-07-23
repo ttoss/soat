@@ -14,6 +14,7 @@ import {
 
 import {
   checkAuth,
+  parsePagination,
   resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
@@ -58,6 +59,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
     state: ctx.query.state as string | undefined,
     status: ctx.query.status as string | undefined,
     assignee: ctx.query.assignee as string | undefined,
+    ...parsePagination(ctx),
   });
 });
 

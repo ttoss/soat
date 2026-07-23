@@ -459,9 +459,9 @@ describe('Orchestrations', () => {
         .get('/api/v1/orchestrations')
         .query({ project_id: projectId });
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.some((o: { id: string }) => {
+        response.body.data.some((o: { id: string }) => {
           return o.id === orchestrationId;
         })
       ).toBe(true);
@@ -1677,9 +1677,9 @@ describe('Orchestrations', () => {
         `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       // At least the run started in POST /runs tests
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     test('admin can list runs without project scoping', async () => {
@@ -1687,8 +1687,8 @@ describe('Orchestrations', () => {
         `/api/v1/orchestration-runs?orchestration_id=${orchestrationId}`
       );
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     test('unauthenticated request returns 401', async () => {

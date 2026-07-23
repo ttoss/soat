@@ -361,9 +361,9 @@ describe('IngestionRule CRUD', () => {
       });
 
       const rules = await listIngestionRules({ projectIds: [projectId] });
-      expect(rules.length).toBeGreaterThan(0);
+      expect(rules.data.length).toBeGreaterThan(0);
       expect(
-        rules.every((r) => {
+        rules.data.every((r) => {
           return r.projectId;
         })
       ).toBe(true);

@@ -642,10 +642,10 @@ resources:
         .query({ project_id: projectId });
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0].id).toBeDefined();
-      expect(res.body[0].resources).toBeUndefined();
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0].id).toBeDefined();
+      expect(res.body.data[0].resources).toBeUndefined();
     });
 
     test('unauthenticated returns 401', async () => {
@@ -669,7 +669,7 @@ resources:
         await authenticatedTestClient(adminToken).get('/api/v1/formations');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
+      expect(res.body.data).toEqual([]);
     });
   });
 
@@ -834,10 +834,10 @@ resources:
       );
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      expect(res.body.length).toBeGreaterThan(0);
-      expect(res.body[0].id).toBeDefined();
-      expect(res.body[0].operation_type).toBeDefined();
+      expect(Array.isArray(res.body.data)).toBe(true);
+      expect(res.body.data.length).toBeGreaterThan(0);
+      expect(res.body.data[0].id).toBeDefined();
+      expect(res.body.data[0].operation_type).toBeDefined();
     });
 
     test('unknown formation returns 404', async () => {
@@ -913,7 +913,7 @@ resources:
         `/api/v1/formations?project_id=${projectId}`
       );
       expect(res.status).toBe(200);
-      const ids = res.body.map((f: { id: string }) => {
+      const ids = res.body.data.map((f: { id: string }) => {
         return f.id;
       });
       expect(ids).not.toContain(formationId);
@@ -1751,9 +1751,11 @@ resources:
         `/api/v1/formations/${secretFormationId}/events`
       );
       expect(eventsRes.status).toBe(200);
-      const updateOp = eventsRes.body.find((op: { operation_type: string }) => {
-        return op.operation_type === 'update';
-      });
+      const updateOp = eventsRes.body.data.find(
+        (op: { operation_type: string }) => {
+          return op.operation_type === 'update';
+        }
+      );
       expect(updateOp).toBeDefined();
       const secretEvent = updateOp.events.find((e: { logical_id: string }) => {
         return e.logical_id === 'XaiKey';
@@ -1779,7 +1781,7 @@ resources:
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${secretFormationId}/events`
       );
-      const updateOps = eventsRes.body.filter(
+      const updateOps = eventsRes.body.data.filter(
         (op: { operation_type: string }) => {
           return op.operation_type === 'update';
         }
@@ -3736,7 +3738,7 @@ resources:
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${ledgerFormationId}/events`
       );
-      const updateOp = eventsRes.body[eventsRes.body.length - 1];
+      const updateOp = eventsRes.body.data[eventsRes.body.data.length - 1];
       const removeEvent = updateOp.events.find((e: { logical_id: string }) => {
         return e.logical_id === 'RemoveMemory';
       });
@@ -3771,7 +3773,8 @@ resources:
       const eventsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${ledgerFormationId}/events`
       );
-      const latestUpdateOp = eventsRes.body[eventsRes.body.length - 1];
+      const latestUpdateOp =
+        eventsRes.body.data[eventsRes.body.data.length - 1];
       const removeEvent = latestUpdateOp.events.find(
         (e: { logical_id: string }) => {
           return e.logical_id === 'RemoveMemory';

@@ -4,6 +4,11 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import {
+  paginatedList,
+  type PaginatedResult,
+  resolvePagination,
+} from './pagination';
 
 const log = createDebug('soat:usage:thresholds');
 
@@ -71,10 +76,17 @@ const isWindow = (value: string): value is UsageThresholdWindow => {
 export const listThresholds = async (args: {
   projectIds?: number[];
   projectId?: string;
-}): Promise<PersistedUsageThreshold[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<PersistedUsageThreshold>> => {
+  const emptyPage = () => {
+    const { limit, offset } = resolvePagination(args);
+    return { data: [], total: 0, limit, offset };
+  };
+
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return [];
+    if (args.projectIds.length === 0) return emptyPage();
     where.projectId = args.projectIds;
   }
 
@@ -82,23 +94,32 @@ export const listThresholds = async (args: {
     const project = await db.Project.findOne({
       where: { publicId: args.projectId },
     });
-    if (!project) return [];
+    if (!project) return emptyPage();
     const internalId = project.id as number;
     if (
       args.projectIds !== undefined &&
       !args.projectIds.includes(internalId)
     ) {
-      return [];
+      return emptyPage();
     }
     where.projectId = internalId;
   }
 
-  const rows = await db.UsageThreshold.findAll({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.UsageThreshold.findAndCountAll({
+        where,
+        include: [{ model: db.Project, as: 'project' }],
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapThreshold,
   });
-  return rows.map(mapThreshold);
 };
 
 /**

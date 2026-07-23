@@ -67,7 +67,7 @@ describe('Memory Extraction', () => {
       `/api/v1/memory-entries?memory_id=${memoryId}`
     );
     expect(res.status).toBe(200);
-    return res.body as Array<{
+    return res.body.data as Array<{
       id: string;
       content: string;
       source_type: string;

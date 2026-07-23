@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
 import {
@@ -64,15 +65,28 @@ const findWorkflowInstance = async (args: { id: string }) => {
   });
 };
 
-export const listWorkflows = async (args: { projectIds: number[] }) => {
+export const listWorkflows = async (args: {
+  projectIds: number[];
+  limit?: number;
+  offset?: number;
+}) => {
   log('listWorkflows: projectIds=%o', args.projectIds);
-  const workflows = await db.Workflow.findAll({
-    where: { projectId: args.projectIds },
-    include: workflowIncludes(),
-    order: [['createdAt', 'DESC']],
-  });
-  return workflows.map((w) => {
-    return mapWorkflow(w);
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Workflow.findAndCountAll({
+        where: { projectId: args.projectIds },
+        include: workflowIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (w) => {
+      return mapWorkflow(w);
+    },
   });
 };
 

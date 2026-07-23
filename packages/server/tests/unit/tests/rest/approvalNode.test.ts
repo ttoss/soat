@@ -128,7 +128,7 @@ describe('Approval node (orchestration producer)', () => {
       `/api/v1/approvals?project_id=${projectId}&status=pending`
     );
     expect(listRes.status).toBe(200);
-    const item = listRes.body.find((a: { id: string }) => {
+    const item = listRes.body.data.find((a: { id: string }) => {
       return a.id === approvalId;
     });
     expect(item).toBeDefined();

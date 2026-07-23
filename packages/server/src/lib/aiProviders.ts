@@ -1,6 +1,7 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { paginatedList } from 'src/lib/pagination';
 import { decryptValue } from 'src/lib/secrets';
 
 const getAiProviderIncludes = () => {
@@ -30,12 +31,25 @@ const mapAiProvider = (
   };
 };
 
-export const listAiProviders = async (args: { projectIds: number[] }) => {
-  const providers = await db.AiProvider.findAll({
-    where: { projectId: args.projectIds },
-    include: getAiProviderIncludes(),
+export const listAiProviders = async (args: {
+  projectIds: number[];
+  limit?: number;
+  offset?: number;
+}) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.AiProvider.findAndCountAll({
+        where: { projectId: args.projectIds },
+        include: getAiProviderIncludes(),
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapAiProvider,
   });
-  return providers.map(mapAiProvider);
 };
 
 export const getAiProvider = async (args: { id: string }) => {

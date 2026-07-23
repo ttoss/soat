@@ -4,6 +4,26 @@
 import type { Context } from 'src/Context';
 
 /**
+ * Parses `limit` / `offset` list pagination params from the query string.
+ * Returns `undefined` for a param that is absent or not a valid integer, so the
+ * lib layer applies its own defaults/bounds (see `lib/pagination.ts`).
+ */
+export const parsePagination = (
+  ctx: Context
+): { limit?: number; offset?: number } => {
+  const toInt = (value: unknown): number | undefined => {
+    if (typeof value !== 'string' || value.trim() === '') return undefined;
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+
+  return {
+    limit: toInt(ctx.query.limit),
+    offset: toInt(ctx.query.offset),
+  };
+};
+
+/**
  * Checks if user is authenticated and returns error response if not
  */
 export const checkAuth = (ctx: Context): boolean => {

@@ -476,7 +476,7 @@ One query renders a column, with no application-side state:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-tasks --project-id "$PROJECT_ID" --workflow-id "$WORKFLOW_ID" --status closed | jq -r '.[] | "\(.title): \(.state)"'
+soat list-tasks --project-id "$PROJECT_ID" --workflow-id "$WORKFLOW_ID" --status closed | jq -r '.data[] | "\(.title): \(.state)"'
 ```
 
 </TabItem>

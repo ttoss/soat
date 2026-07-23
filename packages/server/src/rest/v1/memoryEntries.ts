@@ -13,6 +13,8 @@ import {
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
 
+import { parsePagination } from './helpers';
+
 export const memoryEntriesRouter = new Router<Context>();
 
 const normalizeSourceType = (value: unknown): MemoryEntrySource | undefined => {
@@ -160,7 +162,10 @@ memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
   );
   if (memoryRowId === null) return;
 
-  ctx.body = await listMemoryEntries({ memoryId: memoryRowId });
+  ctx.body = await listMemoryEntries({
+    memoryId: memoryRowId,
+    ...parsePagination(ctx),
+  });
 });
 
 memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {

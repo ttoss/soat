@@ -16,6 +16,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
+import { parsePagination } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
@@ -318,7 +319,7 @@ agentsRouter.get('/agents', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listAgents({ projectIds });
+  ctx.body = await listAgents({ projectIds, ...parsePagination(ctx) });
 });
 
 agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {

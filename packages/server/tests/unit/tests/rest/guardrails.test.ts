@@ -230,9 +230,9 @@ describe('Guardrails', () => {
         .get('/api/v1/guardrails')
         .query({ project_id: projectId });
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
-      expect(response.body[0].id).toMatch(/^guard_/);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(response.body.data[0].id).toMatch(/^guard_/);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -567,7 +567,7 @@ describe('Guardrails', () => {
       const after = await authenticatedTestClient(userToken).get(
         '/api/v1/approvals?status=pending'
       );
-      expect(after.body.length).toBe(before.body.length);
+      expect(after.body.data.length).toBe(before.body.data.length);
     });
 
     test('resolves live soat.usage.* and accepts an optional tool_id', async () => {

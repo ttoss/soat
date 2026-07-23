@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { emitEvent, onEvent, resolveProjectPublicId } from './eventBus';
+import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:exceptions');
 
@@ -254,18 +255,29 @@ export const listExceptions = async (args: {
   status?: string;
   severity?: string;
   kind?: string;
-}): Promise<MappedException[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedException>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.status) where.status = args.status;
   if (args.severity) where.severity = args.severity;
   if (args.kind) where.kind = args.kind;
 
-  const items = await db.ExceptionItem.findAll({
-    where,
-    include: buildIncludes(),
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.ExceptionItem.findAndCountAll({
+        where,
+        include: buildIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapException,
   });
-  return items.map(mapException);
 };
 
 export const getException = async (args: {

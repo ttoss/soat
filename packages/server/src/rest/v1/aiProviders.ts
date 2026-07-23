@@ -13,7 +13,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const aiProvidersRouter = new Router<Context>();
 
@@ -60,7 +60,10 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listAiProviders({ projectIds: projectIds ?? [] });
+  ctx.body = await listAiProviders({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {

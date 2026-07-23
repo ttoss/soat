@@ -210,9 +210,9 @@ describe('Agents', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].id).toMatch(/^tool_/);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(response.body.data[0].id).toMatch(/^tool_/);
     });
   });
 
@@ -513,7 +513,7 @@ describe('Agents', () => {
         `/api/v1/tools?project_id=${projectId}`
       );
       expect(
-        (toolsRes.body as Array<{ name: string }>).some((t) => {
+        (toolsRes.body.data as Array<{ name: string }>).some((t) => {
           return t.name === 'inline-weather-tool';
         })
       ).toBe(false);
@@ -630,9 +630,9 @@ describe('Agents', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
-      expect(response.body[0].id).toMatch(/^agent_/);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
+      expect(response.body.data[0].id).toMatch(/^agent_/);
     });
 
     test('admin can list agents across all projects without a project_id filter', async () => {
@@ -640,8 +640,8 @@ describe('Agents', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/agents');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThanOrEqual(1);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(1);
     });
   });
 

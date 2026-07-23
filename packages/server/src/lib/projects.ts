@@ -4,6 +4,7 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
+import { paginatedList, resolvePagination } from './pagination';
 
 const log = createDebug('soat:projects');
 
@@ -41,33 +42,50 @@ const getProjectOrThrow = async (id: string) => {
   return project;
 };
 
-export const listProjects = async (args: { authUser: AuthUser }) => {
-  // Admin fast-path: skip when the request uses a project-scoped API key or a
-  // project-scoped OAuth token so the restriction is enforced even for admins.
-  if (
-    args.authUser.role === 'admin' &&
-    !args.authUser.apiKeyProjectPublicId &&
-    !args.authUser.oauthProjectPublicId
-  ) {
-    const projects = await db.Project.findAll();
-    return projects.map(mapProject);
-  }
+export const listProjects = async (args: {
+  authUser: AuthUser;
+  limit?: number;
+  offset?: number;
+}) => {
+  const emptyPage = () => {
+    const { limit, offset } = resolvePagination(args);
+    return { data: [], total: 0, limit, offset };
+  };
 
-  const projectIds = await args.authUser.resolveProjectIds({
-    action: 'projects:ListProjects',
+  const listWhere = async (): Promise<
+    Record<string, unknown> | undefined | null
+  > => {
+    // Admin fast-path: skip when the request uses a project-scoped API key or a
+    // project-scoped OAuth token so the restriction is enforced even for admins.
+    if (
+      args.authUser.role === 'admin' &&
+      !args.authUser.apiKeyProjectPublicId &&
+      !args.authUser.oauthProjectPublicId
+    ) {
+      return undefined;
+    }
+
+    const projectIds = await args.authUser.resolveProjectIds({
+      action: 'projects:ListProjects',
+    });
+
+    if (projectIds === null) return null;
+    if (projectIds === undefined) return undefined;
+    if (projectIds.length === 0) return null;
+    return { id: projectIds };
+  };
+
+  const where = await listWhere();
+  if (where === null) return emptyPage();
+
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Project.findAndCountAll({ where, limit, offset });
+    },
+    map: mapProject,
   });
-
-  if (projectIds === null) return [];
-
-  if (projectIds === undefined) {
-    const projects = await db.Project.findAll();
-    return projects.map(mapProject);
-  }
-
-  if (projectIds.length === 0) return [];
-
-  const projects = await db.Project.findAll({ where: { id: projectIds } });
-  return projects.map(mapProject);
 };
 
 export const getProject = async (args: { id: string; authUser: AuthUser }) => {

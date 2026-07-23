@@ -1,5 +1,6 @@
 import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
+import { paginatedList } from 'src/lib/pagination';
 
 const buildTagsGlobLiteral = (args: { tags: string[] }) => {
   const sequelize = db.Memory.sequelize!;
@@ -56,18 +57,29 @@ export const createMemory = async (args: {
 export const listMemories = async (args: {
   projectIds: number[];
   tags?: string[];
+  limit?: number;
+  offset?: number;
 }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: any = { projectId: args.projectIds };
   if (args.tags && args.tags.length > 0) {
     where[Op.and] = buildTagsGlobLiteral({ tags: args.tags });
   }
-  const memories = await db.Memory.findAll({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
-    order: [['createdAt', 'ASC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Memory.findAndCountAll({
+        where,
+        include: [{ model: db.Project, as: 'project' }],
+        order: [['createdAt', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapMemory,
   });
-  return memories.map(mapMemory);
 };
 
 export const getMemory = async (args: { id: string }) => {

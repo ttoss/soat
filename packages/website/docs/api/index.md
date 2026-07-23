@@ -93,22 +93,32 @@ Common status codes:
 
 ### Pagination
 
-Only endpoints that return a history/log of records — for example
-`GET /api/v1/trigger-firings`, `GET /api/v1/webhook-deliveries`,
-`GET /api/v1/traces`, `GET /api/v1/generations`, `GET /api/v1/sessions`,
-`GET /api/v1/files`, `GET /api/v1/secrets`, `GET /api/v1/actors`, and
-`GET /api/v1/ai-providers` — accept `limit`/`offset` query parameters:
+**Every** `GET` list endpoint returns the same paginated envelope and accepts
+`limit`/`offset` query parameters:
+
+```jsonc
+{
+  "data": [ /* the page of resources */ ],
+  "total": 128,   // total rows matching the query, across all pages
+  "limit": 50,    // the effective page size applied
+  "offset": 0     // the offset this page started at
+}
+```
 
 ```bash
-curl 'https://your-soat-server.com/api/v1/trigger-firings?trigger_id=trg_abc&limit=25&offset=0' \
+curl 'https://your-soat-server.com/api/v1/agents?project_id=proj_abc&limit=25&offset=0' \
   -H "Authorization: Bearer <token>"
 ```
 
-- `limit` — Number of results per page. The default varies by endpoint (`25` or `50` — see that endpoint's OpenAPI spec). There is currently **no enforced maximum**: passing a very large `limit` returns that many rows.
+- `limit` — Number of results per page. Defaults to `50` and is clamped to a maximum of `100`; a larger requested `limit` is capped, not rejected.
 - `offset` — Number of results to skip (default `0`).
 - There is no `cursor`, `page`, or `sort`/`order` query parameter on any endpoint. Sort order (when defined) is fixed per endpoint — check that resource's module doc — and is not client-configurable.
 
-Primary resource-list endpoints that are **not** paginated (`GET /api/v1/projects`, `GET /api/v1/triggers`, `GET /api/v1/orchestrations`, `GET /api/v1/orchestration-runs`, `GET /api/v1/webhooks`, `GET /api/v1/agents`, and others) return the full array of matching resources in one response — do not send `limit`/`offset` to these.
+> **Breaking change (v1 list envelope).** Every list endpoint now returns
+> `{ data, total, limit, offset }`. Endpoints that previously returned a bare
+> JSON array (e.g. `GET /api/v1/agents`, `/projects`, `/tools`, `/triggers`,
+> `/webhooks`, `/secrets`, and others) now return the envelope — read the items
+> from `response.data`, not the top-level body.
 
 There are currently no per-project or per-API-key request-rate limits, quotas, or throttling enforced by the server — every authenticated request is processed immediately, bounded only by the resource limits described above and the [1 MiB inbound webhook body cap](../modules/triggers.md#inbound-webhook-endpoint).
 
@@ -179,9 +189,11 @@ const soat = createSoatClient({
   token: 'your-bearer-token',
 });
 
-const { data: files } = await soat.GET('/api/v1/files', {
+const { data: page } = await soat.GET('/api/v1/files', {
   params: { query: { projectPublicId: 'proj_123' } },
 });
+// List endpoints return the paginated envelope:
+const files = page?.data;
 ```
 
 Every endpoint, parameter, and response schema is fully typed.

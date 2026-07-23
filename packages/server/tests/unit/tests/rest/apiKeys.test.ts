@@ -446,8 +446,8 @@ describe('API Keys', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/api-keys');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((k: { id: string }) => {
+      expect(Array.isArray(response.body.data)).toBe(true);
+      const ids = response.body.data.map((k: { id: string }) => {
         return k.id;
       });
       expect(ids).toContain(aliceKeyId);
@@ -460,8 +460,8 @@ describe('API Keys', () => {
         await authenticatedTestClient(aliceToken).get('/api/v1/api-keys');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((k: { id: string }) => {
+      expect(Array.isArray(response.body.data)).toBe(true);
+      const ids = response.body.data.map((k: { id: string }) => {
         return k.id;
       });
       expect(ids).toContain(aliceKeyId);
@@ -474,8 +474,8 @@ describe('API Keys', () => {
         await authenticatedTestClient(rawScopedKey).get('/api/v1/api-keys');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      const ids = response.body.map((k: { id: string }) => {
+      expect(Array.isArray(response.body.data)).toBe(true);
+      const ids = response.body.data.map((k: { id: string }) => {
         return k.id;
       });
       expect(ids).toContain(scopedKeyId);
@@ -488,7 +488,7 @@ describe('API Keys', () => {
         await authenticatedTestClient(aliceToken).get('/api/v1/api-keys');
 
       expect(response.status).toBe(200);
-      const key = response.body.find((k: { id: string }) => {
+      const key = response.body.data.find((k: { id: string }) => {
         return k.id === scopedKeyId;
       });
       expect(key).toBeDefined();
@@ -549,9 +549,9 @@ describe('API Keys', () => {
         await authenticatedTestClient(rawKey).get('/api/v1/projects');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBe(1);
-      expect(response.body[0].id).toBe(projectAId);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBe(1);
+      expect(response.body.data[0].id).toBe(projectAId);
     });
 
     test('a policy-less key falls back to the owning user policies for getPolicies', async () => {
@@ -631,7 +631,7 @@ describe('API Keys', () => {
 
       const list =
         await authenticatedTestClient(adminToken).get('/api/v1/api-keys');
-      const found = list.body.find((k: { id: string }) => {
+      const found = list.body.data.find((k: { id: string }) => {
         return k.id === create.body.id;
       });
       expect(found).toBeDefined();
@@ -647,7 +647,7 @@ describe('API Keys', () => {
       const res = await authenticatedTestClient(raw).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
-      const ids = res.body.map((p: { id: string }) => {
+      const ids = res.body.data.map((p: { id: string }) => {
         return p.id;
       });
       expect(ids).toContain(projX);
@@ -663,7 +663,7 @@ describe('API Keys', () => {
       const res = await authenticatedTestClient(raw).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
-      const ids = res.body.map((p: { id: string }) => {
+      const ids = res.body.data.map((p: { id: string }) => {
         return p.id;
       });
       expect(ids).toContain(projX);
@@ -698,7 +698,7 @@ describe('API Keys', () => {
       const res = await authenticatedTestClient(raw).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
-      const ids = res.body.map((p: { id: string }) => {
+      const ids = res.body.data.map((p: { id: string }) => {
         return p.id;
       });
       expect(ids).toContain(projX);
@@ -715,7 +715,7 @@ describe('API Keys', () => {
       const res = await authenticatedTestClient(raw).get('/api/v1/projects');
 
       expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(0);
+      expect(res.body.data).toHaveLength(0);
     });
   });
 });

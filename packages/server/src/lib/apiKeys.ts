@@ -4,6 +4,7 @@ import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
+import { paginatedList } from './pagination';
 
 type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
   user: InstanceType<(typeof db)['User']> | null;
@@ -129,6 +130,8 @@ export const updateApiKey = async (args: {
 export const listApiKeys = async (args: {
   userId?: number;
   projectId?: number;
+  limit?: number;
+  offset?: number;
 }) => {
   const where: Record<string, unknown> = {};
 
@@ -140,18 +143,26 @@ export const listApiKeys = async (args: {
     where.projectId = args.projectId;
   }
 
-  const apiKeys = await db.ApiKey.findAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.User, as: 'user' },
-      { model: db.Project, as: 'project' },
-    ],
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.ApiKey.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.User, as: 'user' },
+          { model: db.Project, as: 'project' },
+        ],
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (apiKey) => {
+      return mapApiKeyWithAssociations(apiKey as ApiKeyWithAssociations);
+    },
   });
-
-  return Promise.all(
-    (apiKeys as ApiKeyWithAssociations[]).map(mapApiKeyWithAssociations)
-  );
 };
 
 export const deleteApiKey = async (args: { id: string }) => {

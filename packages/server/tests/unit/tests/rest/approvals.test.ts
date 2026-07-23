@@ -73,8 +73,8 @@ describe('Approvals', () => {
       );
 
       expect(res.status).toBe(200);
-      expect(Array.isArray(res.body)).toBe(true);
-      const found = res.body.find((a: { id: string }) => {
+      expect(Array.isArray(res.body.data)).toBe(true);
+      const found = res.body.data.find((a: { id: string }) => {
         return a.id === seeded.id;
       });
       expect(found).toBeDefined();
@@ -110,7 +110,7 @@ describe('Approvals', () => {
       );
 
       expect(res.status).toBe(200);
-      const found = res.body.find((a: { id: string }) => {
+      const found = res.body.data.find((a: { id: string }) => {
         return a.id === toolCall.id;
       });
       expect(found).toBeDefined();
@@ -121,7 +121,7 @@ describe('Approvals', () => {
       expect(found.dedup_key).toBe('dedup-abc');
       // A node-origin item must be excluded by the origin filter.
       const nodeItem = await seedApproval();
-      const excludes = res.body.some((a: { id: string }) => {
+      const excludes = res.body.data.some((a: { id: string }) => {
         return a.id === nodeItem.id;
       });
       expect(excludes).toBe(false);
@@ -160,7 +160,7 @@ describe('Approvals', () => {
       );
 
       expect(res.status).toBe(200);
-      const ids = res.body.map((a: { id: string }) => {
+      const ids = res.body.data.map((a: { id: string }) => {
         return a.id;
       });
       expect(ids).toContain(pending.id);
@@ -372,7 +372,7 @@ describe('Approvals', () => {
         projectIds: [projectInternalId],
         origin: 'tool_call',
       });
-      const found = items.find((a) => {
+      const found = items.data.find((a) => {
         return a.id === seeded.id;
       });
       expect(found).toBeDefined();
@@ -411,7 +411,7 @@ describe('Approvals', () => {
       );
       expect(res.status).toBe(200);
       expect(
-        res.body.some((a: { id: string }) => {
+        res.body.data.some((a: { id: string }) => {
           return a.id === seeded.id;
         })
       ).toBe(true);

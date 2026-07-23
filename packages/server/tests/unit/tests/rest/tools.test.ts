@@ -180,8 +180,8 @@ describe('Tools', () => {
         .get('/api/v1/tools')
         .query({ project_id: projectId });
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
-      expect(response.body.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -624,7 +624,7 @@ describe('Tools', () => {
         `/api/v1/tools?project_id=${projectId}`
       );
       expect(
-        (listRes.body as Array<{ name: string }>).some((t) => {
+        (listRes.body.data as Array<{ name: string }>).some((t) => {
           return t.name === 'inline-step-tool';
         })
       ).toBe(false);

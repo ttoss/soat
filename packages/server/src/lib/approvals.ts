@@ -1,9 +1,11 @@
+/* eslint-disable max-lines */
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:approvals');
 
@@ -318,18 +320,29 @@ export const listApprovals = async (args: {
   status?: string;
   origin?: string;
   expiresBefore?: Date;
-}): Promise<MappedApproval[]> => {
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<MappedApproval>> => {
   const where: Record<string, unknown> = { projectId: args.projectIds };
   if (args.status) where.status = args.status;
   if (args.origin) where.origin = args.origin;
   if (args.expiresBefore) where.expiresAt = { [Op.lte]: args.expiresBefore };
 
-  const items = await db.ApprovalItem.findAll({
-    where,
-    include: buildIncludes(),
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.ApprovalItem.findAndCountAll({
+        where,
+        include: buildIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapApproval,
   });
-  return items.map(mapApproval);
 };
 
 export const getApproval = async (args: {

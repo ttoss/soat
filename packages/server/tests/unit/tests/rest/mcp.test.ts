@@ -236,9 +236,9 @@ describe('MCP tools - happy path', () => {
     });
 
     const listed = parseResult(await mcpCall('list-exceptions', { projectId }));
-    expect(Array.isArray(listed)).toBe(true);
+    expect(Array.isArray(listed.data)).toBe(true);
     expect(
-      listed.some((e: { id: string }) => {
+      listed.data.some((e: { id: string }) => {
         return e.id === filed.id;
       })
     ).toBe(true);
@@ -311,7 +311,7 @@ describe('MCP tools - happy path', () => {
       await mcpCall('list-tasks', { projectId, workflowId: workflow.id })
     );
     expect(
-      listed.some((t: { id: string }) => {
+      listed.data.some((t: { id: string }) => {
         return t.id === task.id;
       })
     ).toBe(true);
@@ -715,7 +715,7 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('list-secrets');
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(Array.isArray(result)).toBe(true);
+      expect(Array.isArray(result.data)).toBe(true);
     });
 
     test('get-secret returns the secret', async () => {
@@ -1024,8 +1024,8 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('list-webhooks', { projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
     });
 
     test('get-webhook returns the webhook', async () => {
@@ -1133,8 +1133,8 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('list-triggers', { projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(Array.isArray(result)).toBe(true);
-      expect(result.length).toBeGreaterThan(0);
+      expect(Array.isArray(result.data)).toBe(true);
+      expect(result.data.length).toBeGreaterThan(0);
     });
 
     test('get-trigger returns the trigger', async () => {
@@ -1343,9 +1343,9 @@ describe('MCP tools - happy path', () => {
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(Array.isArray(result)).toBe(true);
+      expect(Array.isArray(result.data)).toBe(true);
       expect(
-        result.some((p: { id: string }) => {
+        result.data.some((p: { id: string }) => {
           return p.id === mcpPolicyId;
         })
       ).toBe(true);
@@ -1727,9 +1727,9 @@ describe('MCP tools - happy path', () => {
       const res = await mcpCall('list-ingestion-rules', { projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(Array.isArray(result)).toBe(true);
+      expect(Array.isArray(result.data)).toBe(true);
       expect(
-        result.some((r: { id: string }) => {
+        result.data.some((r: { id: string }) => {
           return r.id === ruleId;
         })
       ).toBe(true);

@@ -74,7 +74,7 @@ oauthRouter.get('/oauth/consent-info', async (ctx: Context) => {
 
   ctx.status = 200;
   ctx.body = {
-    projects: projects.map((p) => {
+    projects: projects.data.map((p) => {
       return { id: p.id, name: p.name };
     }),
     modules: catalog.modules,

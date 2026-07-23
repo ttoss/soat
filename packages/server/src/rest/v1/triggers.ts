@@ -16,7 +16,7 @@ import {
   updateTrigger,
 } from 'src/lib/triggers';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const triggersRouter = new Router<Context>();
 
@@ -62,6 +62,7 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
     projectIds: projectIds ?? [],
     type,
     targetType,
+    ...parsePagination(ctx),
   });
 });
 

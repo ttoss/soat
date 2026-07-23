@@ -15,13 +15,13 @@ describe('caseTransform middleware', () => {
     const response =
       await authenticatedTestClient(adminToken).get('/api/v1/users');
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-    expect(response.body.length).toBeGreaterThan(0);
-    const keys = Object.keys(response.body[0]);
+    expect(Array.isArray(response.body.data)).toBe(true);
+    expect(response.body.data.length).toBeGreaterThan(0);
+    const keys = Object.keys(response.body.data[0]);
     for (const key of keys) {
       expect(key).not.toMatch(/[A-Z]/);
     }
-    expect(response.body[0].created_at).toBeDefined();
+    expect(response.body.data[0].created_at).toBeDefined();
   });
 
   test('request body accepts snake_case and converts to camelCase internally', async () => {
@@ -57,7 +57,7 @@ describe('caseTransform middleware', () => {
       await authenticatedTestClient(adminToken).get('/api/v1/projects');
     expect(listRes.status).toBe(200);
 
-    const project = listRes.body.find((p: Record<string, unknown>) => {
+    const project = listRes.body.data.find((p: Record<string, unknown>) => {
       return p.id === projectId;
     });
     expect(project).toBeDefined();
@@ -74,9 +74,9 @@ describe('caseTransform middleware', () => {
     const response =
       await authenticatedTestClient(adminToken).get('/api/v1/users');
     expect(response.status).toBe(200);
-    expect(Array.isArray(response.body)).toBe(true);
-    if (response.body.length > 0) {
-      const keys = Object.keys(response.body[0]);
+    expect(Array.isArray(response.body.data)).toBe(true);
+    if (response.body.data.length > 0) {
+      const keys = Object.keys(response.body.data[0]);
       for (const key of keys) {
         expect(key).not.toMatch(/[A-Z]/);
       }

@@ -38,7 +38,7 @@ describe('Secrets', () => {
         .query({ projectId });
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
 
     test('unauthenticated request returns 401', async () => {

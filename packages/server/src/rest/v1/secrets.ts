@@ -9,7 +9,7 @@ import {
   updateSecret,
 } from 'src/lib/secrets';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
 const secretsRouter = new Router<Context>();
 
@@ -34,7 +34,10 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listSecrets({ projectIds: projectIds ?? [] });
+  ctx.body = await listSecrets({
+    projectIds: projectIds ?? [],
+    ...parsePagination(ctx),
+  });
 });
 
 secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {

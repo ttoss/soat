@@ -140,9 +140,9 @@ describe('Admin user operations', () => {
         await authenticatedTestClient(adminToken).get('/api/v1/users');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
       expect(
-        response.body.some((u: { username: string }) => {
+        response.body.data.some((u: { username: string }) => {
           return u.username === 'admin';
         })
       ).toBe(true);
@@ -168,7 +168,7 @@ describe('Admin user operations', () => {
         await authenticatedTestClient(admin2Token).get('/api/v1/users');
 
       expect(response.status).toBe(200);
-      expect(Array.isArray(response.body)).toBe(true);
+      expect(Array.isArray(response.body.data)).toBe(true);
     });
   });
 
@@ -176,7 +176,7 @@ describe('Admin user operations', () => {
     test('admin can get a user by id', async () => {
       const listRes =
         await authenticatedTestClient(adminToken).get('/api/v1/users');
-      const alice = listRes.body.find((u: { username: string }) => {
+      const alice = listRes.body.data.find((u: { username: string }) => {
         return u.username === 'alice';
       });
 
@@ -199,7 +199,7 @@ describe('Admin user operations', () => {
     test('unauthenticated request cannot get a user', async () => {
       const listRes =
         await authenticatedTestClient(adminToken).get('/api/v1/users');
-      const alice = listRes.body.find((u: { username: string }) => {
+      const alice = listRes.body.data.find((u: { username: string }) => {
         return u.username === 'alice';
       });
 
@@ -212,7 +212,7 @@ describe('Admin user operations', () => {
       const aliceToken = await loginAs('alice', 'alicepass');
       const listRes =
         await authenticatedTestClient(adminToken).get('/api/v1/users');
-      const admin = listRes.body.find((u: { username: string }) => {
+      const admin = listRes.body.data.find((u: { username: string }) => {
         return u.username === 'admin';
       });
 
@@ -245,7 +245,7 @@ describe('Admin user operations', () => {
     test('unauthenticated request cannot delete a user', async () => {
       const listRes =
         await authenticatedTestClient(adminToken).get('/api/v1/users');
-      const alice = listRes.body.find((u: { username: string }) => {
+      const alice = listRes.body.data.find((u: { username: string }) => {
         return u.username === 'alice';
       });
 
@@ -284,7 +284,7 @@ describe('Admin user operations', () => {
       const aliceToken = await loginAs('alice', 'alicepass');
       const listRes =
         await authenticatedTestClient(adminToken).get('/api/v1/users');
-      const admin = listRes.body.find((u: { username: string }) => {
+      const admin = listRes.body.data.find((u: { username: string }) => {
         return u.username === 'admin';
       });
 

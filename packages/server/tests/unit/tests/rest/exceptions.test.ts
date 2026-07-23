@@ -31,7 +31,7 @@ describe('Exceptions', () => {
   ) => {
     for (let i = 0; i < 100; i += 1) {
       const res = await listExceptions('');
-      const match = res.body.find(predicate);
+      const match = res.body.data.find(predicate);
       if (match) return match;
       await new Promise((resolve) => {
         return setTimeout(resolve, 20);
@@ -80,7 +80,7 @@ describe('Exceptions', () => {
       const list = await listExceptions('');
       expect(list.status).toBe(200);
       expect(
-        list.body.some((e: { id: string }) => {
+        list.body.data.some((e: { id: string }) => {
           return e.id === filed.id;
         })
       ).toBe(true);
@@ -208,7 +208,7 @@ describe('Exceptions', () => {
       expect(second.occurrenceCount).toBe(2);
 
       const list = await listExceptions('&kind=guardrail_tripwire');
-      const matches = list.body.filter((e: { id: string }) => {
+      const matches = list.body.data.filter((e: { id: string }) => {
         return e.id === first.id;
       });
       expect(matches).toHaveLength(1);

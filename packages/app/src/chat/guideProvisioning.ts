@@ -24,6 +24,20 @@ export type ProvisionResult =
 const GUIDE_UNAVAILABLE =
   'The guide is unavailable for you. Ask an admin to grant agent and tool permissions in this project.';
 
+// List endpoints return the paginated envelope `{ data, total, limit, offset }`;
+// unwrap it to the item array (still tolerating a bare array).
+const unwrapList = (data: unknown): unknown[] => {
+  if (Array.isArray(data)) return data;
+  if (
+    typeof data === 'object' &&
+    data !== null &&
+    Array.isArray((data as { data?: unknown }).data)
+  ) {
+    return (data as { data: unknown[] }).data;
+  }
+  return [];
+};
+
 export const listAiProviders = async (args: {
   token: string;
   projectId: string;
@@ -32,8 +46,8 @@ export const listAiProviders = async (args: {
     url: `/api/v1/ai-providers?project_id=${encodeURIComponent(args.projectId)}`,
     token: args.token,
   });
-  if (!result.ok || !Array.isArray(result.data)) return [];
-  return result.data.filter((item): item is AiProvider => {
+  if (!result.ok) return [];
+  return unwrapList(result.data).filter((item): item is AiProvider => {
     return (
       typeof item === 'object' &&
       item !== null &&
@@ -66,7 +80,10 @@ const ensureRenderPageTool = async (args: {
     token: args.token,
   });
   if (!existing.ok) return null;
-  const found = findByName<NamedRecord>(existing.data, RENDER_PAGE_TOOL_NAME);
+  const found = findByName<NamedRecord>(
+    unwrapList(existing.data),
+    RENDER_PAGE_TOOL_NAME
+  );
   if (found) return found.id;
 
   const created = await apiFetch<NamedRecord>({
@@ -109,7 +126,10 @@ export const provisionGuide = async (args: {
   });
   if (!list.ok) return { ok: false, error: GUIDE_UNAVAILABLE };
 
-  const existing = findByName<AgentRecord>(list.data, GUIDE_AGENT_NAME);
+  const existing = findByName<AgentRecord>(
+    unwrapList(list.data),
+    GUIDE_AGENT_NAME
+  );
 
   if (!existing) {
     const created = await apiFetch<AgentRecord>({

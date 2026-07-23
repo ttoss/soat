@@ -10,6 +10,8 @@ import {
   loginUser,
 } from 'src/lib/users';
 
+import { parsePagination } from './helpers';
+
 const usersRouter = new Router<Context>();
 
 usersRouter.get('/users/me', async (ctx: Context) => {
@@ -39,7 +41,7 @@ usersRouter.get('/users', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await listUsers();
+  ctx.body = await listUsers(parsePagination(ctx));
 });
 
 usersRouter.get('/users/:user_id', async (ctx: Context) => {

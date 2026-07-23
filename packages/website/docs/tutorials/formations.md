@@ -1273,7 +1273,7 @@ Each formation deployment and update appends events to the formation's event log
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat list-formation-events --formation_id "$FORMATION_ID" | jq '.[] | {operation_type, status}'
+soat list-formation-events --formation_id "$FORMATION_ID" | jq '.data[] | {operation_type, status}'
 ```
 
 Expected output — one entry per deployment operation:

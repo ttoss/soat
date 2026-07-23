@@ -133,7 +133,7 @@ fi
 
 # List policies
 POLICY_LIST_RESP=$($SOAT_CLI list-policies)
-if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$POLICY_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST policies did not return an array" >&2
   echo "$POLICY_LIST_RESP" >&2
   exit 1
@@ -162,7 +162,7 @@ $SOAT_CLI attach-user-policies --user-id "$ADMIN_USER_ID" --policy_ids "[\"$POLI
 
 # List the policies attached to the user (replaces removed get-user-policies)
 USER_POLICIES_RESP=$($SOAT_CLI list-policies --user-id "$ADMIN_USER_ID")
-if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$USER_POLICIES_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-policies --user-id did not return an array" >&2
   echo "$USER_POLICIES_RESP" >&2
   exit 1
@@ -869,7 +869,7 @@ echo "Memory retrieved."
 # List memories
 echo "--- Listing memories ---"
 MEM_LIST_RESP=$($SOAT_CLI list-memories --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$MEM_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST memories did not return an array" >&2
   echo "$MEM_LIST_RESP" >&2
   exit 1
@@ -1177,7 +1177,7 @@ EXC_ID=""
 i=0
 while [ $i -lt 30 ]; do
   EXC_LIST=$($SOAT_CLI list-exceptions --project_id "$PROJECT_PUBLIC_ID" --kind run_failed)
-  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" 'map(select(.run_id == $run)) | .[0].id // empty')
+  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" '.data | map(select(.run_id == $run)) | .[0].id // empty')
   [ -n "$EXC_ID" ] && break
   i=$((i + 1))
   sleep 1
@@ -2936,7 +2936,7 @@ echo "Webhook created: $WEBHOOK_ID"
 # List webhooks
 echo "--- Listing webhooks ---"
 WEBHOOK_LIST_RESP=$($SOAT_CLI list-webhooks --project-id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$WEBHOOK_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: LIST webhooks did not return an array" >&2
   echo "$WEBHOOK_LIST_RESP" >&2
   exit 1
@@ -3231,7 +3231,7 @@ echo "Formation metadata substitution resolved."
 # List
 echo "--- Listing formations ---"
 FORMATION_LIST_RESP=$($SOAT_CLI list-formations --project_id "$PROJECT_PUBLIC_ID")
-if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$FORMATION_LIST_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-formations did not return an array" >&2
   echo "$FORMATION_LIST_RESP" >&2
   exit 1
@@ -3251,7 +3251,7 @@ echo "Formation retrieved."
 # List events
 echo "--- Listing formation events ---"
 FORMATION_EVENTS_RESP=$($SOAT_CLI list-formation-events --formation_id "$FORMATION_ID")
-if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e 'type == "array"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$FORMATION_EVENTS_RESP" | jq -e '.data | type == "array"' >/dev/null 2>&1; then
   echo "ERROR: list-formation-events did not return an array" >&2
   echo "$FORMATION_EVENTS_RESP" >&2
   exit 1
