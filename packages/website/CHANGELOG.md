@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.13](https://127.0.0.1/41729/git/ttoss/compare/v0.15.12...v0.15.13) (2026-07-23)
+
+### Features
+
+* **usage:** P4 compute metering on orchestration node completion ([#659](https://127.0.0.1/41729/git/ttoss/issues/659)) ([3e8fe27](https://127.0.0.1/41729/git/ttoss/commits/3e8fe270168d3539e831802f0f913207684b3b08))
+
 ## [0.15.12](https://127.0.0.1/41729/git/ttoss/compare/v0.15.11...v0.15.12) (2026-07-22)
 
 ### Bug Fixes
