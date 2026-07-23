@@ -413,6 +413,8 @@ Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}
 
 If an `http` tool's target responds with a non-2xx status, the call fails with `502 TOOL_HTTP_ERROR` instead of the target's own status code. The error `meta` carries the real upstream response: `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
 
+If an `http` tool's target responds with a 2xx status but a body that isn't valid JSON (HTML, plain text, or an empty `204 No Content`), the tool result is the raw response text instead of a parse error.
+
 ## Examples
 
 ### Create an HTTP tool
