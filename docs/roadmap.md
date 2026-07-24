@@ -64,7 +64,7 @@ queue ────────────────────────�
   orchestration-queue P3 (pluggable driver + SQS)
 
 usage ────────────────────────────────────────────────────────────────────────
-  usage metering P5/P6 (storage/request emitters)
+  usage metering P5/P6 (storage/request emitters) ✔ shipped
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✔
@@ -94,7 +94,7 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. **Usage infra emitters (P5–P6)** — pure extensions of shipped cores.
+1. ~~**Usage infra emitters (P5–P6)**~~ — **shipped** (pure extensions of shipped cores).
 2. **Audit-log P2** and **evaluations P1–P2** — the substrate the activity feed
    and agent-versions promotion gate need (audit-log also absorbs the deferred
    quota monitor-breach audit entry).
@@ -128,8 +128,8 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 ### G5 — Usage metering
 
 - [ ] 🚧 **Coverage:** meter the remaining LLM paths — extraction, discussions, chats (agents / conversations / orchestration nodes done)
-- [ ] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`)
-- [ ] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request)
+- [x] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`) — shipped; live behavior in the [usage module docs](../packages/website/docs/modules/usage.md#storage-metering)
+- [x] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request) — shipped; multi-instance-safe flush key; live behavior in the [usage module docs](../packages/website/docs/modules/usage.md#api-request-metering)
 - [ ] **P7** `5.2` `usage.*` guard context + per-run ceiling — ⏭️ deferred (needs the G4 evaluator; interim: a `condition` node reads the run roll-up and routes to an abort path)
 - [ ] Backlog: event-driven storage byte accounting (replaces the daily-snapshot approximation)
 

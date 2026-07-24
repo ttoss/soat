@@ -14,6 +14,7 @@ import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
 import { quotaMiddleware } from './middleware/quota';
 import { requestIdMiddleware } from './middleware/requestId';
+import { usageRequestMiddleware } from './middleware/usageRequest';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
@@ -36,6 +37,10 @@ app.use(requestIdMiddleware);
 app.use(hookRawBodyMiddleware);
 app.use(bodyParser());
 app.use(authMiddleware);
+// API-request metering: after auth (counted identity is known), before quota so
+// a request a quota will block is still counted (same count-on-arrival scope as
+// quota). Pure in-memory increment; counts flush to usage events on an interval.
+app.use(usageRequestMiddleware);
 // Request-quota enforcement: after auth (counted identity is known), before the
 // route handlers so no handler work is wasted on a blocked request. Counts
 // API-key-authenticated /api/v1 requests only; fails open on DB error.
