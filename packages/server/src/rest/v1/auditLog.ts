@@ -34,7 +34,7 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
   ctx.body = await listAuditEntries({
     projectIds,
     action: ctx.query.action as string | undefined,
-    actorId: ctx.query.actorId as string | undefined,
+    principalId: ctx.query.principalId as string | undefined,
     resourcePublicId: ctx.query.resourcePublicId as string | undefined,
     resourceSrn: ctx.query.resourceSrn as string | undefined,
     from: parseDate(ctx.query.from),

@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import type { db } from '../db';
+import { enqueueAuditWrite } from './auditQueue';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 
 const log = createDebug('soat:quotas');
@@ -71,4 +72,35 @@ export const fireQuotaExceeded = async (args: {
     },
     timestamp: args.now.toISOString(),
   });
+
+  // A `monitor` breach never blocks, so the request it rode in on returns
+  // success and leaves no durable trace of the breach beyond this webhook. Write
+  // a system-attributed audit entry so the breach is queryable after the fact —
+  // the same once-per-window guard above keeps it to one entry per window.
+  // `enforce` breaches need no entry here: they surface as a `429` the audit
+  // middleware already records on the blocked request.
+  if (quota.mode === 'monitor') {
+    enqueueAuditWrite({
+      projectPublicId,
+      // No principal authorized this: the principal columns stay null and the
+      // entry is identified by its `action` — never a fabricated actor.
+      action: 'quotas:MonitorBreach',
+      // SRN built inline (the audit middleware does the same) to avoid pulling
+      // the heavy iam module into this hot-path event helper.
+      resourceSrn: `soat:${projectPublicId}:quota:${quota.publicId}`,
+      resourcePublicId: quota.publicId,
+      // Monitor mode lets the request through, so no request was blocked.
+      status: 200,
+      detail: {
+        kind: 'quota_monitor_breach',
+        metric: quota.metric,
+        scope: quota.scope,
+        scopeRef: quota.scopeRef,
+        window: quota.window,
+        windowKey: args.windowKey,
+        limit: Number(quota.limit),
+        observedValue: args.observedValue,
+      },
+    });
+  }
 };

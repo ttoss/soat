@@ -47,7 +47,7 @@ paths:
           schema:
             type: string
             example: secrets:DeleteSecret
-        - name: actor_id
+        - name: principal_id
           in: query
           description: Public id of the principal (`user_…` or `key_…`)
           schema:
@@ -151,14 +151,19 @@ components:
           type: string
           nullable: true
           description: Project the action targeted; null for global actions
-        actor_type:
+        principal_type:
           type: string
+          nullable: true
           enum:
             - user
             - api_key
-        actor_id:
+          description: >-
+            Principal kind; null for platform-originated entries (those are
+            identified by their `action`, e.g. `quotas:MonitorBreach`)
+        principal_id:
           type: string
-          description: Public id of the principal (`user_…` or `key_…`)
+          nullable: true
+          description: Public id of the principal (`user_…` or `key_…`); null for platform-originated entries
         action:
           type: string
           description: The permission-action string that authorized the request

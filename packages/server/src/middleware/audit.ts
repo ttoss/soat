@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import type { AuthUser, Context } from '../Context';
 import { DomainError } from '../errors';
-import type { AuditActorType } from '../lib/auditLog';
+import type { AuditPrincipalType } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
 
 const log = createDebug('soat:audit');
@@ -107,13 +107,13 @@ const deriveResourcePublicId = (args: {
   return null;
 };
 
-const resolveActor = (
+const resolvePrincipal = (
   authUser: AuthUser
-): { actorType: AuditActorType; actorId: string } => {
+): { principalType: AuditPrincipalType; principalId: string } => {
   if (authUser.apiKeyPublicId) {
-    return { actorType: 'api_key', actorId: authUser.apiKeyPublicId };
+    return { principalType: 'api_key', principalId: authUser.apiKeyPublicId };
   }
-  return { actorType: 'user', actorId: authUser.publicId };
+  return { principalType: 'user', principalId: authUser.publicId };
 };
 
 const buildDetail = (
@@ -139,12 +139,12 @@ const recordEntry = (
     return i !== primaryIndex;
   });
 
-  const { actorType, actorId } = resolveActor(ctx.authUser!);
+  const { principalType, principalId } = resolvePrincipal(ctx.authUser!);
 
   enqueueAuditWrite({
     projectPublicId: primary.projectPublicId ?? null,
-    actorType,
-    actorId,
+    principalType,
+    principalId,
     action: primary.action,
     resourceSrn: primary.resource,
     resourcePublicId: deriveResourcePublicId({

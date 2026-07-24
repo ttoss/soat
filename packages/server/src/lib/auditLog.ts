@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
 
 const log = createDebug('soat:audit');
 
-export type AuditActorType = 'user' | 'api_key';
+export type AuditPrincipalType = 'user' | 'api_key';
 
 /** One authorization decision recorded during a request. */
 export type AuditCheck = {
@@ -23,8 +23,8 @@ const mapAuditEntry = (
   return {
     id: instance.publicId,
     projectId: instance.project?.publicId ?? null,
-    actorType: instance.actorType,
-    actorId: instance.actorId,
+    principalType: instance.principalType,
+    principalId: instance.principalId,
     action: instance.action,
     resourceSrn: instance.resourceSrn,
     resourcePublicId: instance.resourcePublicId,
@@ -44,10 +44,25 @@ const mapAuditEntry = (
  * its internal FK; a null/unknown project is stored as a global (`projectId`
  * null) entry.
  */
+// Resolves a project public id to its internal FK; a null/unknown project is
+// stored as a global (`projectId` null) entry. Extracted so writeAuditEntry
+// stays under the cyclomatic-complexity limit.
+const resolveAuditProjectId = async (
+  projectPublicId?: string | null
+): Promise<number | null> => {
+  if (!projectPublicId) return null;
+  const project = await db.Project.findOne({
+    where: { publicId: projectPublicId },
+  });
+  return (project?.id as number | undefined) ?? null;
+};
+
 export const writeAuditEntry = async (args: {
   projectPublicId?: string | null;
-  actorType: AuditActorType;
-  actorId: string;
+  // A request entry sets `principalType`/`principalId`; a platform-originated
+  // entry leaves them null and is identified by its `action`.
+  principalType?: AuditPrincipalType | null;
+  principalId?: string | null;
   action: string;
   resourceSrn?: string | null;
   resourcePublicId?: string | null;
@@ -57,18 +72,12 @@ export const writeAuditEntry = async (args: {
   userAgent?: string | null;
   detail?: Record<string, unknown> | null;
 }): Promise<void> => {
-  let projectId: number | null = null;
-  if (args.projectPublicId) {
-    const project = await db.Project.findOne({
-      where: { publicId: args.projectPublicId },
-    });
-    projectId = (project?.id as number | undefined) ?? null;
-  }
+  const projectId = await resolveAuditProjectId(args.projectPublicId);
 
   await db.AuditEntry.create({
     projectId,
-    actorType: args.actorType,
-    actorId: args.actorId,
+    principalType: args.principalType ?? null,
+    principalId: args.principalId ?? null,
     action: args.action,
     resourceSrn: args.resourceSrn ?? null,
     resourcePublicId: args.resourcePublicId ?? null,
@@ -97,7 +106,7 @@ const escapeLikePrefix = (value: string): string => {
 type AuditListFilters = {
   projectIds?: number[];
   action?: string;
-  actorId?: string;
+  principalId?: string;
   resourcePublicId?: string;
   resourceSrn?: string;
   from?: Date;
@@ -111,7 +120,7 @@ const buildListWhere = (args: AuditListFilters): Record<string, any> => {
 
   if (args.projectIds) where.projectId = args.projectIds;
   if (args.action) where.action = args.action;
-  if (args.actorId) where.actorId = args.actorId;
+  if (args.principalId) where.principalId = args.principalId;
   if (args.resourcePublicId) where.resourcePublicId = args.resourcePublicId;
   if (args.resourceSrn) {
     where.resourceSrn = { [Op.like]: `${escapeLikePrefix(args.resourceSrn)}%` };

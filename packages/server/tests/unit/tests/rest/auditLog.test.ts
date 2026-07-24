@@ -100,7 +100,7 @@ describe('Audit Log — write hook', () => {
     // resource_public_id captured from the response body id.
     expect(create.resource_public_id).toBe(secretId);
     expect(create.request_id).toBe(requestId);
-    expect(create.actor_type).toBe('user');
+    expect(create.principal_type).toBe('user');
     expect(create.project_id).toBe(projectId);
 
     expect(del).toBeDefined();

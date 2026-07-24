@@ -14,8 +14,15 @@ documented in the website module doc at
 
 ## Pending Work
 
-- **Monitor-mode audit entries — deferred.** A persisted audit record for a
-  monitor-mode breach is owned by the audit-log module. The `AuditEntry` model
-  now exists (audit-log Phase 1 shipped), so this is unblocked wiring rather
-  than a blocked dependency; the `quota.exceeded` webhook remains the interim
-  durable signal. Tracked under the audit-log module.
+_None — the module is fully shipped._
+
+- **Monitor-mode audit entries — shipped.** A `monitor`-mode breach now writes a
+  platform-originated `AuditEntry` (`action: quotas:MonitorBreach`,
+  null `principal_type`/`principal_id`,
+  `detail.kind: quota_monitor_breach`) once per
+  window at the same `fireQuotaExceeded` choke point that emits the
+  `quota.exceeded` webhook. `enforce` breaches surface as the `429` the audit
+  middleware already records, so they need no entry here. Live behavior in the
+  [quotas](../packages/website/docs/modules/quotas.md#monitor-mode) and
+  [audit-log](../packages/website/docs/modules/audit-log.md#system-originated-entries)
+  module docs.

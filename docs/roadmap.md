@@ -37,8 +37,8 @@ guardrails are fully shipped and have no remaining items).
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed (quotas is fully shipped save one deferred
-audit entry — see [prd-quotas.md](./prd-quotas.md)).
+Only PRDs with open work are listed (quotas is fully shipped, including the
+monitor-breach audit entry — see [prd-quotas.md](./prd-quotas.md)).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
@@ -170,9 +170,15 @@ _Not started._
 
 ### Quotas
 
-- [ ] Monitor-breach **audit entry** — deferred to the audit-log module. The
-  `AuditEntry` model exists (audit-log Phase 1 shipped), so this is unblocked
-  wiring; the `quota.exceeded` webhook remains the interim durable signal.
+_Fully shipped._
+
+- [x] Monitor-breach **audit entry** — a `monitor`-mode breach writes a
+  `system`-attributed `AuditEntry` (`action: quotas:MonitorBreach`,
+  `detail.kind: quota_monitor_breach`) once per window, alongside the
+  `quota.exceeded` webhook. Live behavior in the
+  [quotas](../packages/website/docs/modules/quotas.md#monitor-mode) and
+  [audit-log](../packages/website/docs/modules/audit-log.md#system-originated-entries)
+  module docs.
 
 ### Model routing
 
