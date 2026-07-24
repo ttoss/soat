@@ -1,6 +1,8 @@
+import { db } from 'src/db';
 import {
   flushRequestCounters,
   resetRequestCounters,
+  resolveInstanceId,
 } from 'src/lib/usageRequests';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -43,7 +45,12 @@ describe('Usage — API-request metering', () => {
   const apiRequestMeters = async (): Promise<
     Array<{
       meter_type: string;
-      components: Array<{ component: string; quantity: string; unit: string }>;
+      components: Array<{
+        component: string;
+        quantity: string;
+        unit: string;
+        cost_usd: string | null;
+      }>;
     }>
   > => {
     const res = await authenticatedTestClient(rawKey).get(
@@ -104,10 +111,55 @@ describe('Usage — API-request metering', () => {
     expect(written).toBe(0);
   });
 
+  test('prices the api_request event from an effective global soat/request SKU and flushes with the default window', async () => {
+    await db.PriceBook.create({
+      aiProviderId: null,
+      projectId: null,
+      meterType: 'api_request',
+      provider: 'soat',
+      model: 'request',
+      component: 'request',
+      unit: 'request',
+      unitPrice: '0.01',
+      effectiveFrom: new Date('2000-01-01T00:00:00.000Z'),
+    });
+
+    resetRequestCounters();
+    for (let i = 0; i < 2; i += 1) {
+      await authenticatedTestClient(rawKey).get(
+        '/api/v1/usage/meters?meter_type=api_request'
+      );
+    }
+    // No `now` argument — exercises the default flush-window path.
+    const written = await flushRequestCounters();
+    expect(written).toBeGreaterThanOrEqual(1);
+
+    const priced = (await apiRequestMeters()).some((e) => {
+      return e.components.some((c) => {
+        return (
+          c.component === 'request' &&
+          c.cost_usd != null &&
+          Number(c.cost_usd) > 0
+        );
+      });
+    });
+    expect(priced).toBe(true);
+  });
+
   test('unauthenticated meters request returns 401', async () => {
     const res = await testClient.get(
       '/api/v1/usage/meters?meter_type=api_request'
     );
     expect(res.status).toBe(401);
+  });
+
+  describe('resolveInstanceId', () => {
+    test('prefers SOAT_INSTANCE_ID, then HOSTNAME, then a constant', () => {
+      expect(resolveInstanceId({ SOAT_INSTANCE_ID: 'explicit' })).toBe(
+        'explicit'
+      );
+      expect(resolveInstanceId({ HOSTNAME: 'host-1' })).toBe('host-1');
+      expect(resolveInstanceId({})).toBe('default');
+    });
   });
 });

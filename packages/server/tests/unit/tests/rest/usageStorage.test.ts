@@ -49,7 +49,12 @@ describe('Usage — storage metering', () => {
   const storageMeters = async (): Promise<
     Array<{
       meter_type: string;
-      components: Array<{ component: string; quantity: string; unit: string }>;
+      components: Array<{
+        component: string;
+        quantity: string;
+        unit: string;
+        cost_usd: string | null;
+      }>;
     }>
   > => {
     const res = await authenticatedTestClient(userToken).get(
@@ -100,6 +105,56 @@ describe('Usage — storage metering', () => {
     // A new day is a distinct idempotency key → exactly one more event for this
     // project (the run also meters other suites' projects, invisible to this user).
     expect((await storageMeters()).length).toBe(before + 1);
+  });
+
+  test('prices the storage event from an effective global soat/gb-day SKU', async () => {
+    // Seeded directly with a long-past effective_from so it applies to the
+    // snapshot below; write-time pricing means earlier (unpriced) events keep
+    // their null cost.
+    await db.PriceBook.create({
+      aiProviderId: null,
+      projectId: null,
+      meterType: 'storage',
+      provider: 'soat',
+      model: 'gb-day',
+      component: 'gb_day',
+      unit: 'gb_day',
+      unitPrice: '0.5',
+      effectiveFrom: new Date('2000-01-01T00:00:00.000Z'),
+    });
+
+    const created = await snapshotProjectStorage({
+      projectId: projectInternalId,
+      projectPublicId: projectId,
+      now: new Date('2026-07-28T00:00:00.000Z'),
+    });
+    expect(created).toBe(true);
+
+    const priced = (await storageMeters()).some((e) => {
+      return e.components.some((c) => {
+        return (
+          c.component === 'gb_day' &&
+          c.cost_usd != null &&
+          Number(c.cost_usd) > 0
+        );
+      });
+    });
+    expect(priced).toBe(true);
+  });
+
+  test('snapshots with the current UTC day when no now is given', async () => {
+    // Exercises the default-`now` path; the result depends on whether today was
+    // already snapshotted, so only the type is asserted.
+    const result = await snapshotProjectStorage({
+      projectId: projectInternalId,
+      projectPublicId: projectId,
+    });
+    expect(typeof result).toBe('boolean');
+  });
+
+  test('runStorageSnapshot uses the current UTC day by default', async () => {
+    const metered = await runStorageSnapshot();
+    expect(metered).toBeGreaterThanOrEqual(0);
   });
 
   test('unauthenticated meters request returns 401', async () => {

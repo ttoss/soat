@@ -24,12 +24,12 @@ const utcDateKey = (now: Date): string => {
   return now.toISOString().slice(0, 10);
 };
 
-// `db.sequelize.query` returns rows as loosely-typed objects; narrow the single
-// aggregate row to its `bytes` column (null/absent → 0).
+// A `COALESCE(SUM(...), 0)` query always returns exactly one row whose `bytes`
+// column is numeric (never null), so the single aggregate row can be read
+// without defensive branching.
 const readBytes = (rows: unknown[]): number => {
-  const row = rows[0] as { bytes?: string | number } | undefined;
-  const value = row?.bytes;
-  return value == null ? 0 : Number(value);
+  const [row] = rows as Array<{ bytes: string | number }>;
+  return Number(row.bytes);
 };
 
 // Total stored bytes for a project: uploaded file sizes plus the chunked

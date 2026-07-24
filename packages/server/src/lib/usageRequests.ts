@@ -14,12 +14,21 @@ const REQUEST_PROVIDER = 'soat';
 const REQUEST_MODEL = 'request';
 const REQUEST_COMPONENT = 'request';
 
-// A stable per-process identity, folded into the idempotency key so two server
-// instances flushing the same (project, api_key, window) each write their own
-// row instead of colliding into one (which would silently drop an instance's
-// count). Correct for a single instance too — the id is just constant.
-const INSTANCE_ID =
-  process.env.SOAT_INSTANCE_ID ?? process.env.HOSTNAME ?? 'default';
+/**
+ * Resolves the stable per-process identity folded into the idempotency key so
+ * two server instances flushing the same (project, api_key, window) each write
+ * their own row instead of colliding into one (which would silently drop an
+ * instance's count). Prefers an explicit `SOAT_INSTANCE_ID`, falls back to the
+ * container `HOSTNAME`, then a constant — correct for a single instance too.
+ * Takes `env` so the fallback chain is unit-testable.
+ */
+export const resolveInstanceId = (
+  env: NodeJS.ProcessEnv = process.env
+): string => {
+  return env.SOAT_INSTANCE_ID ?? env.HOSTNAME ?? 'default';
+};
+
+const INSTANCE_ID = resolveInstanceId();
 
 // Never one row per request (that would turn every agent tool loop into meter
 // writes). Requests aggregate in memory per (project, api_key) and flush one
