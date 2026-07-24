@@ -20,6 +20,13 @@ const APPEND_ONLY_MESSAGE =
  * `resourceSrn` is the SRN it targeted, so the log reuses the permission
  * registry as its vocabulary rather than inventing a parallel one.
  *
+ * A few entries describe platform-originated events that no principal
+ * authorized (e.g. a monitor-mode quota breach). Those leave `principalType`/
+ * `principalId` null and are identified by their `action` (e.g.
+ * `quotas:MonitorBreach`) — the principal columns never hold a synthetic value.
+ * (The columns are named `principal*`, not `actor*`, to avoid confusion with
+ * the unrelated Actor resource.)
+ *
  * Append-only: written once, never updated. The model-layer hooks reject every
  * UPDATE and every single-row DELETE; the sole deletion path is the retention
  * sweep's bulk `destroy({ where })`, which prunes rows past
@@ -30,7 +37,7 @@ const APPEND_ONLY_MESSAGE =
   updatedAt: false,
   indexes: [
     { fields: ['project_id', 'created_at'] },
-    { fields: ['actor_id', 'created_at'] },
+    { fields: ['principal_id', 'created_at'] },
     { fields: ['action', 'created_at'] },
     { fields: ['resource_public_id', 'created_at'] },
   ],
@@ -73,13 +80,21 @@ export class AuditEntry extends Model {
   })
   declare project: Project | null;
 
-  /** `user` | `api_key`. */
-  @Column({ type: DataType.STRING, allowNull: false })
-  declare actorType: string;
+  /**
+   * `user` | `api_key` — the kind of principal that made the request. Null for
+   * platform-originated (non-principal) entries. Only ever holds a real
+   * principal kind, never a synthetic sentinel. Named `principalType` (not
+   * `actorType`) to avoid confusion with the unrelated Actor resource.
+   */
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare principalType: string | null;
 
-  /** Public id of the principal (`user_…` / `key_…`). */
-  @Column({ type: DataType.STRING, allowNull: false })
-  declare actorId: string;
+  /**
+   * Public id of the principal (`user_…` / `key_…`). Null for
+   * platform-originated entries (identified by their `action` instead).
+   */
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare principalId: string | null;
 
   /** The permission-action string that authorized the request. */
   @Column({ type: DataType.STRING, allowNull: false })

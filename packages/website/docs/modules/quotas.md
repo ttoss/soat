@@ -86,7 +86,9 @@ Every breach fires a `quota.exceeded` webhook event **once per window**, for bot
 
 ### Monitor mode
 
-`mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`. (A durable audit record of monitor breaches is owned by the forthcoming audit-log module; today the webhook is the signal.)
+`mode: monitor` observes without blocking: a breach fires the `quota.exceeded` webhook and lets the request (or generation) through. Use it to dry-run a cap before enforcing — flip `mode` to `enforce` via `PATCH` and the next breaching request is blocked. `enforce` quotas fire the same webhook in addition to returning `429`.
+
+Because a monitor breach never blocks, the request it rode in on returns success and leaves no trace beyond the webhook. So a monitor breach also writes a durable [audit-log](./audit-log.md) entry — `action: quotas:MonitorBreach` (no principal authorized it, so `principal_type`/`principal_id` are null), the quota as its resource, and a `detail.kind` of `quota_monitor_breach` carrying the metric, window, limit, and observed value. Like the webhook, it is written once per window. `enforce` breaches need no such entry: they surface as the `429` the audit log already records on the blocked request.
 
 ### Formation resource
 

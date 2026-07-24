@@ -1,5 +1,6 @@
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
+import { flushAuditQueue } from 'src/lib/auditQueue';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import * as quotaEnforcement from '../../../../src/lib/quotaEnforcement';
@@ -957,6 +958,93 @@ describe('Quotas', () => {
       expect(captured[0].data.mode).toBe('monitor');
       expect(captured[0].data.metric).toBe('requests');
       expect(captured[0].resourceType).toBe('quota');
+    });
+
+    // Fetches the quotas:MonitorBreach audit entries for a project (admin sees
+    // every project), after draining the fire-and-forget audit queue.
+    const monitorBreachEntries = async (
+      project: string
+    ): Promise<Array<Record<string, unknown>>> => {
+      await flushAuditQueue();
+      const res = await authenticatedTestClient(adminToken)
+        .get('/api/v1/audit-log')
+        .query({ project_id: project, action: 'quotas:MonitorBreach' });
+      expect(res.status).toBe(200);
+      return res.body.data as Array<Record<string, unknown>>;
+    };
+
+    test('a monitor breach writes a system audit entry once per window', async () => {
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-monitor-audit'
+      );
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+          mode: 'monitor',
+        },
+        enfProjectId
+      );
+
+      // Request 1 is within limit; 2 and 3 breach the limit-1 monitor quota and
+      // are not blocked. The breach fires once per window, so one audit entry.
+      for (let i = 0; i < 3; i += 1) {
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+      }
+
+      const entries = await monitorBreachEntries(enfProjectId);
+      const entry = entries.find((e) => {
+        return e.resource_public_id === quotaRes.body.id;
+      });
+      expect(entry).toBeDefined();
+      // No principal authorized the breach: the principal columns stay null and
+      // the entry is identified by its action, never a fabricated actor.
+      expect(entry!.principal_type).toBeNull();
+      expect(entry!.principal_id).toBeNull();
+      expect(entry!.action).toBe('quotas:MonitorBreach');
+      expect(entry!.resource_srn).toBe(
+        `soat:${enfProjectId}:quota:${quotaRes.body.id}`
+      );
+      expect(entry!.status).toBe(200);
+      const detail = entry!.detail as Record<string, unknown>;
+      expect(detail.kind).toBe('quota_monitor_breach');
+      expect(detail.metric).toBe('requests');
+      expect(detail.limit).toBe(1);
+      // Breach first tripped on request 2 (count 2 > limit 1); the once-per-
+      // window guard freezes the entry at that first observed value.
+      expect(detail.observed_value).toBe(2);
+    });
+
+    test('an enforce breach writes no monitor-breach audit entry', async () => {
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-enforce-noaudit'
+      );
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+          mode: 'enforce',
+        },
+        enfProjectId
+      );
+
+      expect((await get(rawKey, enfProjectId)).status).toBe(200);
+      expect((await get(rawKey, enfProjectId)).status).toBe(429);
+
+      const entries = await monitorBreachEntries(enfProjectId);
+      expect(
+        entries.some((e) => {
+          return e.resource_public_id === quotaRes.body.id;
+        })
+      ).toBe(false);
     });
 
     test('an enforce request quota fires the webhook and still blocks', async () => {

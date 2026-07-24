@@ -25,8 +25,8 @@ The API is read-only. Writes happen internally through a fire-and-forget queue, 
 | -------------------- | ------- | ------------------------------------------------------------------------------------------------- |
 | `id`                 | string  | Public identifier (e.g. `audit_…`)                                                                |
 | `project_id`         | string  | Owning project; `null` for global actions (e.g. `users:CreateUser`)                               |
-| `actor_type`         | string  | `user` or `api_key`                                                                               |
-| `actor_id`           | string  | Public id of the principal (`user_…` or `key_…`)                                                  |
+| `principal_type`     | string  | `user` or `api_key`; `null` for platform-originated entries (see [System-originated entries](#system-originated-entries)) |
+| `principal_id`       | string  | Public id of the principal (`user_…` or `key_…`); `null` for platform-originated entries |
 | `action`             | string  | The permission-action string that authorized the request                                         |
 | `resource_srn`       | string  | SRN the action targeted; type-level (`soat:{project}:{type}:*`) on creates                        |
 | `resource_public_id` | string  | Target resource id — from the SRN, or the response body `id` on creates                           |
@@ -55,6 +55,10 @@ Some routes make several authorization checks (e.g. binding a trigger to a targe
 - On a `403`, the primary is the denied check — labeling the entry with an earlier allowed action would misattribute the denial.
 
 The remaining checks are recorded under `detail.additional_checks` (each an `{ action, resource, allowed }` object) so no decision is lost.
+
+### System-originated entries
+
+Most entries describe a principal's request, but the platform also records events that no principal directly authorized. Rather than fabricate a principal, these leave `principal_type` and `principal_id` **null** and are identified by their `action`. Today's one producer is quota monitoring: a [monitor-mode quota](./quotas.md#monitor-mode) breach writes an entry with `action: quotas:MonitorBreach`, the quota as its resource, and `detail.kind: quota_monitor_breach` (metric, window, limit, observed value). It is written once per window, mirroring the `quota.exceeded` webhook. Filter for platform-originated entries with `principal_id` null (or by the specific `action`).
 
 ### Append-only & retention
 
