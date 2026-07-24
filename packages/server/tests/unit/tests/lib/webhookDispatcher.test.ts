@@ -275,6 +275,89 @@ describe('webhookDispatcher', () => {
     expect(callsToUrl('https://example.com/hook-retry-fail')).toHaveLength(3);
   });
 
+  test('dispatcher clears the per-attempt delivery timeout even when fetch rejects', async () => {
+    // Regression guard: the delivery timeout's setTimeout must be cleared on
+    // every path out of the attempt loop, including a thrown/rejected fetch —
+    // not just the success path. Leaving it uncleared holds a real 10s timer
+    // handle open per attempt, which is why Jest reports leaked handles.
+    const RETRY_LEAK_URL = 'https://example.com/hook-retry-timer-leak';
+
+    // Only this webhook's URL rejects; the sentinel (and any other webhook)
+    // keeps resolving 200 so it doesn't create its own delivery-timeout
+    // timers and pollute the assertion below.
+    fetchMock.mockImplementation((url) => {
+      if (url === RETRY_LEAK_URL) {
+        return Promise.reject(new Error('Network unreachable'));
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ ok: true }), { status: 200 })
+      );
+    });
+
+    const realSetTimeout = global.setTimeout;
+    const realClearTimeout = global.clearTimeout;
+    const openDeliveryTimers = new Set<ReturnType<typeof setTimeout>>();
+    let deliveryTimersCreated = 0;
+
+    const setTimeoutSpy = jest
+      .spyOn(global, 'setTimeout')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .mockImplementation((callback: (...args: any[]) => void, ms, ...args) => {
+        const timer = realSetTimeout(callback, ms, ...args);
+        if (ms === 10_000) {
+          deliveryTimersCreated += 1;
+          openDeliveryTimers.add(timer);
+        }
+        return timer;
+      });
+
+    const clearTimeoutSpy = jest
+      .spyOn(global, 'clearTimeout')
+      .mockImplementation((timer) => {
+        openDeliveryTimers.delete(timer as ReturnType<typeof setTimeout>);
+        return realClearTimeout(timer as ReturnType<typeof setTimeout>);
+      });
+
+    try {
+      await createWebhook({
+        project_id: projectId,
+        name: 'Retry Timer Leak Webhook',
+        url: RETRY_LEAK_URL,
+        events: ['files.created'],
+      });
+
+      emitEvent({
+        type: 'files.created',
+        projectId: projectInternalId ?? 1,
+        projectPublicId: projectId,
+        resourceType: 'file',
+        resourceId: 'fil_retry_timer_leak',
+        data: {},
+        timestamp: new Date().toISOString(),
+      });
+
+      // MAX_ATTEMPTS = 3, retries fire back-to-back with no delay between them.
+      await waitFor(() => {
+        return callsToUrl(RETRY_LEAK_URL).length >= 3;
+      });
+
+      // Give the last attempt's `finally` a turn to run after the fetch
+      // rejection resolves.
+      await waitFor(() => {
+        return deliveryTimersCreated >= 3;
+      });
+    } finally {
+      setTimeoutSpy.mockRestore();
+      clearTimeoutSpy.mockRestore();
+      for (const timer of openDeliveryTimers) {
+        realClearTimeout(timer);
+      }
+    }
+
+    expect(deliveryTimersCreated).toBeGreaterThanOrEqual(3);
+    expect(openDeliveryTimers.size).toBe(0);
+  });
+
   test('dispatcher aborts the request when it exceeds the delivery timeout', async () => {
     // A hanging fetch that only settles when the AbortSignal fires — mirrors
     // real `fetch` behavior when the 10s delivery timeout's setTimeout

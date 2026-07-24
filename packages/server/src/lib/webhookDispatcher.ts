@@ -77,12 +77,12 @@ const deliverWebhook = async (args: {
   let lastResponseBody: string | null = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => {
-        controller.abort();
-      }, DELIVERY_TIMEOUT_MS);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, DELIVERY_TIMEOUT_MS);
 
+    try {
       const response = await fetch(args.webhook.url, {
         method: 'POST',
         headers: {
@@ -94,8 +94,6 @@ const deliverWebhook = async (args: {
         body: payload,
         signal: controller.signal,
       });
-
-      clearTimeout(timeoutId);
 
       lastStatusCode = response.status;
       lastResponseBody = await response.text().catch(() => {
@@ -120,6 +118,8 @@ const deliverWebhook = async (args: {
         statusCode: lastStatusCode,
         responseBody: lastResponseBody,
       });
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
