@@ -218,7 +218,7 @@ Merge caller-supplied metadata onto a generation for per-run audit attribution. 
 
 ```bash
 soat update-generation --generation-id gen_abc123 \
-  --metadata '{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}'
+  --metadata '{"team":"payments","ticket_id":"OPS-4821"}'
 ```
 
 </TabItem>
@@ -227,10 +227,10 @@ soat update-generation --generation-id gen_abc123 \
 ```ts
 const { data, error } = await soat.generations.updateGeneration({
   path: { generation_id: 'gen_abc123' },
-  body: { metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' } },
+  body: { metadata: { team: 'payments', ticket_id: 'OPS-4821' } },
 });
 if (error) throw new Error(JSON.stringify(error));
-// data.metadata.knowledge_version === "2026-07-01"
+// data.metadata.ticket_id === "OPS-4821"
 ```
 
 </TabItem>
@@ -240,7 +240,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X PATCH https://api.example.com/api/v1/generations/gen_abc123 \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"metadata":{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}}'
+  -d '{"metadata":{"team":"payments","ticket_id":"OPS-4821"}}'
 ```
 
 </TabItem>

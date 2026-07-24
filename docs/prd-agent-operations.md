@@ -3,7 +3,7 @@
 > Umbrella document for a set of related PRDs that together make a single
 > [Formation](../packages/website/docs/modules/formations.md) able to declare a
 > complete, **operating** team of agents — schedules, guardrails, approval
-> queues, cost meters, and versioned knowledge — not just the static agent
+> queues, and cost meters — not just the static agent
 > topology. Each capability has its own PRD; this page holds the shared goals,
 > the gap analysis, and the end-state template they add up to.
 
@@ -13,7 +13,6 @@
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
 | Usage metering                            | [prd-usage-metering.md](./prd-usage-metering.md)       |
 | Feedback loop → learned rules             | [prd-learned-rules.md](./prd-learned-rules.md)         |
-| Knowledge packages & context assembly     | [prd-knowledge-packages.md](./prd-knowledge-packages.md) |
 
 ## Problem Statement
 
@@ -43,7 +42,8 @@ rather than merely *exist*, and they belong in the platform.
 5. Per-run cost accounting is billing-grade: append-only, idempotent under
    retries, attributable to `project → run → node → agent`.
 6. Human corrections are capturable as candidate rules and promotable into
-   versioned, scoped knowledge that changes the next run.
+   scoped learned rules that the consuming application injects into the next
+   run (context composition is the app's responsibility, not the platform's).
 
 ## Non-Goals
 
@@ -76,7 +76,6 @@ declarative deploy layer.
 | G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
 | G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | Per-**generation** and per-**run** metering + versioned price book **exist** (`UsageEvent`/`UsageComponent`/`PriceBook`, per-generation + per-run receipt, run roll-up, #562); grouped aggregation and non-LLM meter types (compute/storage/requests) do not — see [prd-usage-metering.md](./prd-usage-metering.md) |
 | G6 | Feedback loop → learned rules           | Candidate rule → curation → promotion, scoped                       | Memory dedup/merge stores facts; no rule lifecycle                                                                 |
-| G7 | Knowledge packages / layered assembly   | Versioned immutable packages; token-budgeted layered context        | Memories/documents/RAG exist; no package artifact, no layering                                                     |
 
 ## End State: One Template, One Operating Stack
 
@@ -85,15 +84,12 @@ triggers and guardrail modules), a single template expresses an operating
 stack. Canonical end-state example (node and resource properties follow the
 child PRDs: the `approval` node schema from
 [prd-approvals.md](./prd-approvals.md#the-approval-node--template-schema), the
-`schedule` trigger from the [Triggers module](../packages/website/docs/modules/triggers.md), the
-`action_classes` policy from [guardrails](../packages/website/docs/modules/guardrails.md), and the
-`knowledge_package` resource from
-[prd-knowledge-packages.md](./prd-knowledge-packages.md)):
+`schedule` trigger from the [Triggers module](../packages/website/docs/modules/triggers.md), and the
+`action_classes` policy from [guardrails](../packages/website/docs/modules/guardrails.md)):
 
 ```yaml
 parameters:
   OpenAiApiKey: { type: string, use_previous_value: true }
-  KnowledgeVersion: { type: string }
   ActionClassesDoc: { type: string }
   DailyCycleCron: { type: string, default: '0 8 * * *' }
   ExternalMcpUrl: { type: string }
@@ -112,12 +108,6 @@ resources:
       provider: openai
       default_model: gpt-4o
       secret_id: { ref: ProviderKey }
-
-  StackKnowledge:
-    type: knowledge_package
-    properties:
-      package: acme/ops-intelligence
-      version: { param: KnowledgeVersion }
 
   ActionPolicy:
     type: policy
@@ -142,7 +132,6 @@ resources:
       instructions: >-
         Analyze the project's daily data and produce findings with
         supporting evidence.
-      knowledge_package_id: { ref: StackKnowledge }
 
   Operator:
     type: agent
@@ -154,7 +143,6 @@ resources:
         external system, with predicted impact.
       tool_ids: [{ ref: ExternalTools }]
       guardrail_policy_id: { ref: ActionPolicy }
-      knowledge_package_id: { ref: StackKnowledge }
 
   DailyFlow:
     type: orchestration
@@ -232,8 +220,7 @@ side-effect risk while the pipeline hardens):
 | 1    | G2 queue driver (Postgres) + idempotency keys (schedule triggers already start runs) | A daily read-only cycle end to end, surviving restarts        |
 | 2    | G3 approval/exception queues + webhook events + activity feed      | Manage-by-exception surface; class C flow                     |
 | 3    | G5 metering (guardrail action-class evaluation already ships)      | Autonomous class-B actions with cost visibility from day 1     |
-| 4    | G7 knowledge packages + context assembler                          | Knowledge rollout without redeploys; full audit chain          |
-| 5    | G6 feedback loop                                                   | A promoted rule changes the next run                           |
+| 4    | G6 feedback loop                                                   | A promoted rule the app injects changes the next run           |
 
 ## Acceptance Criteria (cross-PRD)
 
@@ -245,9 +232,10 @@ side-effect risk while the pipeline hardens):
    approvals never execute; guard-failing class-B calls abort and file
    exceptions — all proven fail-closed by test (G3).
 4. Rejecting an approval with a reason creates a candidate rule; promoting it
-   changes the assembled context of the next matching run (G6+G7).
+   makes the rule available (via the learned-rules listing API) to the next
+   matching run (G6).
 5. For any executed mutation, one query returns: agent, run, evidence,
-   knowledge package version, policy version, approver (G3+G7).
+   policy version, approver (G3).
 6. Replayed/retried nodes produce exactly one `UsageMeter` row per LLM call
    (idempotency under at-least-once delivery) (G2+G5).
 
@@ -257,9 +245,10 @@ side-effect risk while the pipeline hardens):
   existing module APIs are not broken by any of these PRDs.
 - **Scope creep toward a workflow engine:** durable execution stays scoped to
   checkpoint-resume of DAG runs. Anything more waits for real demand.
-- **Knowledge confidentiality regression:** package content is encrypted at
-  rest, readable by the runtime at assembly time only, and covered by a
-  dedicated "knowledge never in logs/API/events" test suite (G7).
+- **Scope creep toward application logic:** prompt/context composition
+  (assembling doctrine and learned rules into agent context) stays in the
+  consuming application, not the platform — see
+  [roadmap → Boundary: context composition](./roadmap.md#boundary-context-composition).
 
 ### Operational Risks
 

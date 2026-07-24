@@ -145,9 +145,6 @@ export class ApprovalItem extends Model {
   declare taskTransition: string | null;
 
   @Column({ type: DataType.STRING(64), allowNull: true })
-  declare knowledgeVersion: string | null;
-
-  @Column({ type: DataType.STRING(64), allowNull: true })
   declare policyVersion: string | null;
 
   // Set on a re-proposal admitted after an earlier item with the same
