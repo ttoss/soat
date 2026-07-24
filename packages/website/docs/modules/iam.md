@@ -180,7 +180,7 @@ Authorization in SOAT is **policy-only** — there is no separate project member
 | **API key (with policies)**   | Intersection of user policies and key policies — both must allow the action |
 | **OAuth token**               | Intersection of user policies and the consented scope, hard-locked to the token's project |
 
-Every API key is hard-locked to its `project_id`, and every OAuth token to its `prj`; access to any other project is denied regardless of policy — and regardless of the owner's role. An `admin`-owned scoped key can create/delete projects (a role-based gate) but is still confined to its own project for resource operations; a cross-project resource write returns `403 API_KEY_PROJECT_SCOPE`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
+Every API key is hard-locked to its `project_id`, and every OAuth token to its `prj`; access to any other project is denied regardless of policy — and regardless of the owner's role. An `admin` owner cannot cross a scoped credential's project boundary for resource operations: admin lifts the policy ceiling within scope and passes the role-gated project create/delete, but never the scope binding itself, so a cross-project resource write still returns `403 API_KEY_PROJECT_SCOPE`. See [Project scope is a hard boundary, even for admins](./api-keys.md#project-scope-is-a-hard-boundary-even-for-admins).
 
 ### Why Intersection Semantics Matter
 
