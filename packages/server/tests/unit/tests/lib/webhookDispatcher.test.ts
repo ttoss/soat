@@ -341,11 +341,19 @@ describe('webhookDispatcher', () => {
         return callsToUrl(RETRY_LEAK_URL).length >= 3;
       });
 
-      // Give the last attempt's `finally` a turn to run after the fetch
-      // rejection resolves.
-      await waitFor(() => {
-        return deliveryTimersCreated >= 3;
-      });
+      // Settle deterministically: wait until every delivery-timeout timer that
+      // was created has also been cleared. Reaching the creation count is not
+      // enough — each attempt clears its timer in a `finally` that runs only
+      // after an awaited `delivery.update(...)`, so asserting on the count
+      // alone races that DB write (flaky under parallel load). `size === 0`
+      // holds only once all attempts' `finally` blocks have run, and stays 0
+      // because this test emits no further events.
+      await waitFor(
+        () => {
+          return deliveryTimersCreated >= 3 && openDeliveryTimers.size === 0;
+        },
+        { attempts: 200 }
+      );
     } finally {
       setTimeoutSpy.mockRestore();
       clearTimeoutSpy.mockRestore();
