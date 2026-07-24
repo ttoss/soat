@@ -31,9 +31,9 @@ guardrails are fully shipped and have no remaining items).
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 worker-fleet ops hardening + P3 (SQS driver) |
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed remains (dedup shipped) |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 recurrence view + activity feed remain (dedup shipped) |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 storage/request emitters + coverage + guard integ. |
-| G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
+| G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
 ### Adjacent / standalone module PRDs
 
@@ -73,9 +73,8 @@ cross-initiative ─────────────────────
   knowledge P5/P6/P7 (ranking, injection, evals)
 
 feedback + governance loops ────────────────────────────────────────────────
-  learned-rules ◄── approvals ✔ (capture rejections/edits)
-               ◄── memories ✔ (reuse embedding similarity)
-               (active rules exposed via API; the consuming app injects them)
+  approvals recurrence view (G3) ◄── approvals ✔ (dedup_key + previous_item_id chains)
+  learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
   agent-versions P3 (eval-gated promotion) ◄── evaluations P1
   approvals P4 (activity feed) ◄── audit-log (substrate) + guardrails (A/B labels)
 ```
@@ -87,7 +86,8 @@ feedback + governance loops ─────────────────�
 | orchestration-queue P1 ✔ | evaluations P2 | async eval runs ride the RunTask queue |
 | guardrails P3 ✔ | audit-log P2 | `guardrail_evaluation` becomes one audit `detail` kind |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
-| approvals ✔ + memories ✔ | learned-rules | captures rejection/edit signals; reuses pgvector similarity |
+| approvals ✔ | approvals recurrence view (G3) | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
+| recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
 | evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) | feed labels autonomous class-A/B actions on the audit substrate |
 | — | model-routing | standalone; complements G2, no metering change |
@@ -99,9 +99,9 @@ feedback + governance loops ─────────────────�
    and agent-versions promotion gate need (audit-log also absorbs the deferred
    quota monitor-breach audit entry).
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
-4. **G6 learned-rules** — the feedback loop, last because it consumes
-   approvals, memories, and evaluations signals; active rules are exposed via
-   API for the consuming application to inject into agent context.
+4. **Approvals recurrence view (G3)** — no blockers, can ship any time; the
+   read-only feedback surface whose usage is the demand gate for the deferred
+   learned-rules module.
 5. **Model-routing** and the deferred tail (budget-guard P7) as hardening.
 
 ## Pending backlog
@@ -117,6 +117,7 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 ### G3 — Approvals (exceptions · activity)
 
 - [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
+- [ ] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6 (no blockers)
 - [ ] **Phase 4 / activity feed** (needs G4 class-A/B labels + audit substrate):
   - [ ] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
   - [ ] `5.2` cursor-paginated `GET /api/v1/activity` (type / severity filters, per project)
@@ -133,19 +134,17 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 - [ ] **P7** `5.2` `usage.*` guard context + per-run ceiling — ⏭️ deferred (needs the G4 evaluator; interim: a `condition` node reads the run roll-up and routes to an abort path)
 - [ ] Backlog: event-driven storage byte accounting (replaces the daily-snapshot approximation)
 
-### G6 — Learned rules
+### G6 — Learned rules — ⏭️ Deferred
 
-_Not started. Captures from G3 (rejections/edits); reuses memories embeddings.
-Context assembly (deciding what doctrine/rules to inject and in what order) is
-the consuming application's responsibility, not SOAT's — see [Boundary:
-context composition](#boundary-context-composition); SOAT exposes active rules
-through the API for the app to inject._
+_Deferred (2026-07) — see [Deferral: learned rules](#deferral-learned-rules).
+Exact-key recurrence surfacing moved to G3 (approvals recurrence view). What
+remains here builds only if the recurrence view proves demand **and**
+evaluations P1 exists to measure rule efficacy — both gates in
+[prd-learned-rules.md](./prd-learned-rules.md)._
 
-- [ ] **Phase 1** Candidate capture: `CandidateRule` model + hooks (auto-created from rejections, edits, explicit corrections)
-- [ ] **Phase 2** Recurrence detection: embedding nearest-neighbor clustering → `promotion_suggested`
-- [ ] **Phase 3** Promotion lifecycle + `LearnedRule` (human-curated; `candidate → promoted | dismissed`)
-- [ ] **Phase 4** Scoped rule listing API (`global` / `project`) so the consuming app can fetch active rules to inject
-- [ ] REST endpoints + OpenAPI + permissions
+- [ ] ⏭️ Semantic (embedding) clustering of paraphrased corrections (`CandidateRule` capture + nearest-neighbor recurrence)
+- [ ] ⏭️ Promotion lifecycle + `LearnedRule` (human-curated; `candidate → promoted | dismissed`)
+- [ ] ⏭️ Scoped rule listing API (`global` / `project`) so the consuming app can fetch active rules to inject
 
 ### Agent versions
 
@@ -223,10 +222,10 @@ stays the source of truth:
   `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
   End State YAML — update the example.
-- **`PolicyVersion` reference.** ~~[prd-learned-rules.md](./prd-learned-rules.md)
-  cites the guardrails `PolicyVersion` pattern for `LearnedRuleVersion`~~ —
-  fixed (now cites `GuardrailVersion`). The same stale name still appears in
-  [prd-agent-versions.md](./prd-agent-versions.md); update on next touch.
+- **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in
+  [prd-learned-rules.md](./prd-learned-rules.md) and
+  [prd-agent-versions.md](./prd-agent-versions.md)~~ — fixed (both now cite
+  `GuardrailVersion`).
 
 ### Boundary: context composition
 
@@ -245,8 +244,36 @@ budgeted layered assembler) is therefore dropped rather than deferred.
 Consequences captured elsewhere on this page:
 
 - G6 learned rules no longer "ride an assembler": SOAT exposes active rules
-  through a scoped listing API and the app injects them.
+  through a scoped listing API and the app injects them. (Since narrowed
+  further — see [Deferral: learned rules](#deferral-learned-rules).)
 - If a future need appears for SOAT to *hold and protect confidential doctrine*
   (the one requirement the app cannot satisfy on its own), revisit as a new,
   narrowly-scoped initiative — do not resurrect the full package concept on
   spec.
+
+### Deferral: learned rules
+
+**Decision (2026-07): the learned-rules module is deferred; recurrence
+surfacing folds into approvals as a read-only view.**
+
+The module's platform-unique asset is the recurrence signal over human
+corrections — and its raw material already persists on `ApprovalItem`
+(`resolution_reason`, `edited_arguments`, `dedup_key`, `previous_item_id`).
+Consequences:
+
+- **Exact-key recurrence ships as the approvals
+  [recurrence view](./prd-approvals.md#recurrence-view--not-started) (G3)** —
+  zero new models, zero AI-provider coupling in a deliberately deterministic
+  module, and its output is a guardrail graduation prompt ("rejected 4×,
+  encode a `deny`"): a hard, enforceable, platform-owned outcome.
+- **Candidate capture is backfillable.** Rejection/edit candidates can be
+  rebuilt from approval history at any time, so deferring loses no data (only
+  explicit manual corrections are non-retrofittable).
+- **Soft-rule promotion/injection is eval-gated.** Rules are soft context; the
+  efficacy question ("does injection change behavior?") is unanswerable until
+  evaluations P1 exists.
+
+Build gates for the full module — **both** must hold: sustained demand on the
+recurrence view (humans graduating groups into guardrails *and* hitting the
+exact-match ceiling on paraphrased corrections), and evaluations P1 shipped.
+Details in [prd-learned-rules.md](./prd-learned-rules.md).

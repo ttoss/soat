@@ -12,7 +12,7 @@
 | Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
 | Usage metering                            | [prd-usage-metering.md](./prd-usage-metering.md)       |
-| Feedback loop → learned rules             | [prd-learned-rules.md](./prd-learned-rules.md)         |
+| Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [prd-approvals.md](./prd-approvals.md#recurrence-view--not-started) · [prd-learned-rules.md](./prd-learned-rules.md) |
 
 ## Problem Statement
 
@@ -41,9 +41,12 @@ rather than merely *exist*, and they belong in the platform.
    ephemeral pauses inside a DAG run.
 5. Per-run cost accounting is billing-grade: append-only, idempotent under
    retries, attributable to `project → run → node → agent`.
-6. Human corrections are capturable as candidate rules and promotable into
-   scoped learned rules that the consuming application injects into the next
-   run (context composition is the app's responsibility, not the platform's).
+6. Recurring human corrections are first-class, queryable signal: the
+   approvals recurrence view aggregates rejection chains so repeated patterns
+   graduate into guardrail `deny` rules. (The full learned-rules lifecycle —
+   semantic clustering, promotion, soft-rule listing — is deferred behind
+   demand and evals; context composition stays with the consuming
+   application.)
 
 ## Non-Goals
 
@@ -75,7 +78,7 @@ declarative deploy layer.
 | G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | Durable background execution, lease/reaper recovery, and retries **exist**; no queue abstraction, no idempotency keys, no concurrency limits |
 | G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
 | G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | Per-**generation** and per-**run** metering + versioned price book **exist** (`UsageEvent`/`UsageComponent`/`PriceBook`, per-generation + per-run receipt, run roll-up, #562); grouped aggregation and non-LLM meter types (compute/storage/requests) do not — see [prd-usage-metering.md](./prd-usage-metering.md) |
-| G6 | Feedback loop → learned rules           | Candidate rule → curation → promotion, scoped                       | Memory dedup/merge stores facts; no rule lifecycle                                                                 |
+| G6 | Feedback loop → recurrence surfacing    | Recurring corrections queryable; graduation path into guardrail `deny` | `previous_item_id` threads recurrence per item; no aggregate view (→ G3 recurrence view); full rule lifecycle ⏭️ deferred |
 
 ## End State: One Template, One Operating Stack
 
@@ -207,8 +210,8 @@ outputs:
 
 One formation deploy per project (template + project parameters) yields a
 stack that runs on schedule, executes safe actions autonomously, queues risky
-ones for approval, meters every LLM call, and learns from every human
-correction.
+ones for approval, meters every LLM call, and surfaces recurring human
+corrections for graduation into guardrails.
 
 ## Suggested Build Order
 
@@ -220,7 +223,7 @@ side-effect risk while the pipeline hardens):
 | 1    | G2 queue driver (Postgres) + idempotency keys (schedule triggers already start runs) | A daily read-only cycle end to end, surviving restarts        |
 | 2    | G3 approval/exception queues + webhook events + activity feed      | Manage-by-exception surface; class C flow                     |
 | 3    | G5 metering (guardrail action-class evaluation already ships)      | Autonomous class-B actions with cost visibility from day 1     |
-| 4    | G6 feedback loop                                                   | A promoted rule the app injects changes the next run           |
+| 4    | G3 recurrence view                                                 | Recurring rejections become one queryable group — the guardrail-graduation prompt |
 
 ## Acceptance Criteria (cross-PRD)
 
@@ -231,9 +234,10 @@ side-effect risk while the pipeline hardens):
 3. 100% of class-C tool calls are blocked without an approval record; expired
    approvals never execute; guard-failing class-B calls abort and file
    exceptions — all proven fail-closed by test (G3).
-4. Rejecting an approval with a reason creates a candidate rule; promoting it
-   makes the rule available (via the learned-rules listing API) to the next
-   matching run (G6).
+4. Rejecting the same proposal repeatedly is queryable as one recurrence
+   group — ordered chain, count, rejection reasons — via the approvals
+   recurrence view; encoding it as a guardrail `deny` stops the recurrence
+   upstream (G3+G4).
 5. For any executed mutation, one query returns: agent, run, evidence,
    policy version, approver (G3).
 6. Replayed/retried nodes produce exactly one `UsageMeter` row per LLM call

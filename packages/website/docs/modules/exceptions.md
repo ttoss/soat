@@ -50,7 +50,7 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 | Kind | Default severity | Why |
 |---|---|---|
 | `run_failed` | `critical` | A run died after exhausting retries — needs intervention |
-| `guardrail_tripwire` | `warning` | The guard worked as designed; also feeds learned rules |
+| `guardrail_tripwire` | `warning` | The guard worked as designed; also a feedback-loop signal |
 | `approval_expired` | `warning` | Fail-safe missed SLA — the action never ran |
 | `manual` | `warning` | Author-chosen |
 

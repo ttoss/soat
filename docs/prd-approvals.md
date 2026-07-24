@@ -5,7 +5,7 @@
 - **Status:** Draft v2 — supersedes the node-centric draft
 - **Area:** Agent Operations on Formations (G3)
 - **Consumes:** run-parking from orchestration (`human` node machinery), guardrail classification
-- **Feeds:** learned rules (rejections/edits as candidate-rule signal), activity/audit surfaces
+- **Feeds:** guardrail graduation (recurring rejections surfaced by the recurrence view become `deny` candidates), activity/audit surfaces; rejection/edit signal stays persisted on items for the deferred [learned-rules module](./prd-learned-rules.md)
 
 ---
 
@@ -18,6 +18,7 @@ interceptor (G4) and removed. Dedup is now complete: a duplicate emit returns th
 existing pending item, and a re-proposal matching a *rejected* item is admitted
 with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
+- [ ] Recurrence view (`GET /api/v1/approvals/recurrences`) — folded in from the deferred learned-rules module (2026-07)
 - [ ] `ActivityEntry` feed (`acte_` prefix)
 
 ---
@@ -38,6 +39,42 @@ item is **admitted** (not suppressed) with `previous_item_id` linking the prior
 item, so approvers see the recurrence and the learned-rules rejection signal is
 preserved. `previousItemId` is stamped by `emitApproval` (most-recent rejected
 match for the key) and surfaced on the REST/MCP item shape.
+
+### Recurrence view — Not started
+
+A read-only aggregate over the queue answering "what keeps coming back?" — the
+rollup of the per-item `previous_item_id` chains that dedup (decision 2)
+already threads. Folded into this module when the learned-rules module was
+deferred (see [roadmap → Deferral: learned rules](./roadmap.md#deferral-learned-rules)):
+every input is already a column on `ApprovalItem` (`dedup_key`,
+`previous_item_id`, `resolution_reason`, `edited_arguments`), so recurrence
+surfacing is a queue read surface, not a new resource.
+
+**Deliverables:**
+
+- `GET /api/v1/approvals/recurrences` — groups items by `dedup_key`
+  (`project_id` required; `status` filter, default `rejected`; `min_count`,
+  default 2; paginated). Each group returns `dedup_key`, `agent_id`,
+  `tool_id`, `count`, the ordered item chain (via `previous_item_id`), and the
+  rejection reasons in order — a human reading three rejection reasons side by
+  side *is* the curation step, without a curation lifecycle.
+- Permission `approvals:ListApprovalRecurrences`; OpenAPI spec + regenerated
+  SDK/CLI (MCP tool derives automatically).
+
+**Constraints (scope guard):**
+
+- **Read-only.** No cluster statuses, no "mark as handled", no assignments —
+  any write-side lifecycle here would be the deferred learned-rules module
+  rebuilt through the back door.
+- **Exact-key grouping only.** Semantic (embedding) clustering of paraphrased
+  corrections stays with the deferred learned-rules module — it would couple
+  this deliberately deterministic module to an AI-provider dependency.
+
+**Unlock:** "this exact proposal has been rejected 4 times" as a queryable
+fact — the graduation prompt for encoding a
+[guardrail](../packages/website/docs/modules/guardrails.md) `deny`, which
+stops the recurrence upstream. Whether humans act on this surface is the
+demand signal that decides if the full learned-rules module ever gets built.
 
 ### Phase 4 — Activity feed — Not started
 
@@ -91,6 +128,7 @@ timing (defer/batch), that extension is scoped here, not in the core loop.
 
 | Permission | Endpoint |
 |---|---|
+| `approvals:ListApprovalRecurrences` | `GET /api/v1/approvals/recurrences` |
 | `activity:ListActivity` | `GET /api/v1/activity` |
 
 ---
@@ -99,6 +137,7 @@ timing (defer/batch), that extension is scoped here, not in the core loop.
 
 | Method | Path | Function |
 |---|---|---|
+| GET | `/api/v1/approvals/recurrences` | Read-only `dedup_key` recurrence groups (chain, count, ordered reasons) |
 | GET | `/api/v1/activity` | Cursor-paginated project feed |
 
 **MCP integration:** the `list-activity` tool auto-generates from OpenAPI once
@@ -129,13 +168,17 @@ UIs.
    [prd-learned-rules.md](./prd-learned-rules.md)), and suppression would
    starve the recurrence signal that makes the pattern stop recurring — while
    also silently blocking legitimate re-proposals whose context changed.
-   Recurrence counting stays out of this module: an exact-`args_digest`
-   counter here would duplicate — more crudely — the embedding-similarity
-   clustering learned-rules owns. Spam is bounded structurally: pending-state
+   Recurrence *aggregation* has since moved into this module (revised 2026-07,
+   when the learned-rules module was deferred): the read-only
+   [recurrence view](#recurrence-view--not-started) rolls up exact-`dedup_key`
+   chains using nothing beyond columns this module already owns. Semantic
+   clustering of *paraphrased* corrections remains outside, with the deferred
+   learned-rules module. Spam is bounded structurally: pending-state
    dedup catches tight retry loops, and rejected-state re-proposals are
    rate-limited by human decision cadence. What happens *after* recurrence is
-   detected (soft context rule vs. hard guardrail `deny`) is owned by the
-   learned-rules graduation path, not by dedup.
+   detected is a human call the recurrence view informs — encode a hard
+   guardrail `deny` to stop the pattern upstream, or keep deciding per item;
+   soft context rules stay deferred with the learned-rules module.
 
 3. **`deny` effect audit record — resolved: yes, on the audit substrate.** A
    policy `deny` on a tool call writes an audit record with
