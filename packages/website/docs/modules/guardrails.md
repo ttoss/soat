@@ -26,6 +26,7 @@ A guardrail is a **reusable template**: defined once, it can govern many tools a
 | Field         | Type    | Description                                                        |
 | ------------- | ------- | ------------------------------------------------------------------ |
 | `id`          | string  | Public identifier prefixed with `guard_`                           |
+| `project_id`  | string  | ID of the owning project                                           |
 | `name`        | string  | Human-readable name                                                |
 | `description` | string  | Optional description                                               |
 | `version`     | integer | Incremented on every `document` write; prior versions are archived |
@@ -185,6 +186,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
   "guardrail_version": 3,
   "scope": "tool",
   "tool": "update-budget",
+  "action": "update-budget",
   "class": "B",
   "decision": "execute",
   "guard_result": true,
@@ -201,6 +203,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
 }
 ```
 
+- `tool` / `action` name the call being classified (the tool name and its operating action); both are `null` for a call with no tool in scope.
 - `decision` is one of `execute` \| `route_to_approval` \| `blocked` \| `tripwire`.
 - `class` is the resolved class; when the `class` expression returned an invalid value it is the applied `default_class`.
 - `scope` records where this guardrail was attached: `project` \| `agent` \| `tool`. One record is written per applying guardrail, so a call gated at several scopes produces several records; the enacted `decision` is the strictest across them.
