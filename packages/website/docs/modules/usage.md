@@ -1,5 +1,5 @@
 ---
-description: "Usage events record the cost of every metered occurrence — a completed LLM call or an orchestration node's compute, and (as emitters land) requests and storage — attributed to a project, agent, and generation."
+description: "Usage events record the cost of every metered occurrence — a completed LLM call, an orchestration node's compute, API requests, and stored bytes — attributed to a project, agent, and generation."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` is metered today (one event per orchestration node execution), with `api_request` and `storage` following as their emitters land. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
+Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` (one event per orchestration node execution), `storage` (a daily per-project snapshot), and `api_request` (flush-aggregated request counts) are all metered today. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
 
 Events and components are **append-only and immutable** — no update or delete path, no `updated_at` — so historical usage never changes after the fact. Writes are **idempotent** on the generation's public ID: a replayed completion is a no-op instead of double counting.
 
@@ -102,7 +102,7 @@ Every event carries a `meter_type`, and its measured quantities live in componen
 | `api_request`    | A batch of API requests served for a project        | `request`                                         |
 | `storage`        | One project's stored bytes for one day              | `gb_day`                                          |
 
-For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`). The `compute_execution` emitter is live (see [Coverage](#coverage)); the `api_request` and `storage` emitters land in later milestones, and because the schema and per-component pricing already exist, those remain emitter-only work.
+For platform meter types the `(provider, model)` pair is a **SKU**: `provider` is `soat` and `model` names the billable unit (e.g. `compute-second`, `gb-day`, `request`). The `compute_execution`, `storage`, and `api_request` emitters are all live (see [Coverage](#coverage)).
 
 ### Token components
 
@@ -115,6 +115,14 @@ Usage is metered for agent generations — including [conversations](./conversat
 ### Compute metering
 
 Every [orchestration](./orchestrations.md) node execution that actively ran writes one `compute_execution` event alongside any token metering, carrying a single `compute_second` component whose `quantity` is the node's wall-clock seconds (`completed_at − started_at`). This is independent of LLM tokens, so a non-agent node (a `transform`, `condition`, or `tool` node) still meters compute, and an agent node produces both an `llm_tokens` event and a `compute_execution` event. Compute is attributed at the run/node level (`run_id` + `node_id`); `generation_id`, `agent_id`, and `trace_id` are `null`. It is priced from a `soat`/`compute-second` price-book SKU when one is effective (`cost_usd = null` otherwise), and the event is idempotent on the node execution (`compute:<run_id>:node:<node_id>:attempt:<n>`) so a redelivered node is never double-counted. A skipped node (which never ran) is not metered.
+
+### Storage metering
+
+A daily snapshot writes one `storage` event per project for each UTC day, carrying a single `gb_day` component whose `quantity` is the project's stored gigabytes (total bytes ÷ 1e9). Stored bytes = uploaded [file](./files.md) sizes plus the [document](./documents.md) chunk text held for retrieval, summed at snapshot time. The event has no principal/agent/run attribution (`generation_id`, `agent_id`, `run_id`, `trace_id` are `null`), is priced from a `soat`/`gb-day` SKU when one is effective (`cost_usd = null` otherwise), and is idempotent on `storage:<project>:<YYYY-MM-DD>` — a re-run for the same day is a no-op. The daily sample misses intra-day churn (a project that uploads and deletes between samples meters zero for that span); this is accepted for v1, bounded by the sampling interval and symmetric across projects.
+
+### API-request metering
+
+Each served API request is counted in memory per (project, API key), and a periodic flush writes one `api_request` event per counter per window, carrying a single `request` component whose `quantity` is the count. It is deliberately **never one row per request** — that would turn every agent tool loop into meter writes. Counting scope mirrors [quotas](./quotas.md) exactly: only API-key-authenticated, project-scoped requests are counted; JWT-user and unscoped-key requests are not. Enforcement stays with quotas — this only prices. Priced from a `soat`/`request` SKU (`cost_usd = null` otherwise). The flush-window idempotency key includes a per-instance id, so multiple server instances each record their own window row rather than colliding; the last still-open window is lost on an unclean shutdown (a bounded, symmetric undercount).
 
 ### Trigger and action attribution
 
@@ -172,6 +180,18 @@ The webhook payload (`data`) is:
 ```
 
 `window_key` is `null` for `rolling_24h`. Subscribe a webhook to `usage.threshold_crossed` (or `usage.*`) to receive it. Deleting and recreating a threshold resets its fire state.
+
+## Configuration
+
+The infra emitters run on background timers with sane defaults; these tune or disable them.
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `USAGE_STORAGE_SNAPSHOT_INTERVAL_MS` | No | Storage-snapshot interval (default daily). |
+| `USAGE_STORAGE_SNAPSHOT_DISABLED` | No | `true` disables the storage snapshot. |
+| `USAGE_REQUEST_FLUSH_INTERVAL_MS` | No | API-request counter flush interval (default 60000). A freshness-vs-row-volume trade-off. |
+| `USAGE_REQUEST_METERING_DISABLED` | No | `true` disables API-request metering (middleware stops counting and the flush timer stops). |
+| `SOAT_INSTANCE_ID` | No | Per-instance id folded into the request-flush idempotency key so multiple instances don't collide (falls back to `HOSTNAME`, then `default`). |
 
 ## Examples
 

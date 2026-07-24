@@ -18,8 +18,8 @@
 | Component                                  | Status                     | Notes                                                                |
 | ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
 | Provider-call instrumentation coverage     | 🟡 Partial                  | Wired for agent generations, conversations, and orchestration agent nodes; **extraction, discussions, and chats still pending** |
-| Storage metering                           | ❌ Not started              | Daily per-project snapshot job (Phase 5)                             |
-| API-request metering                       | ❌ Not started              | Flush-aggregated counters; last in sequence (Phase 6)               |
+| Storage metering                           | ✅ Shipped                  | Daily per-project snapshot job (Phase 5)                             |
+| API-request metering                       | ✅ Shipped                  | Flush-aggregated counters; last in sequence (Phase 6)               |
 | `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([guardrails](../packages/website/docs/modules/guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read (Phase 7) |
 
 ## Coverage — Remaining LLM Paths 🟡
@@ -48,7 +48,7 @@ unit, e.g. `request`, `gb-day`); a missing price row records the quantity with
 
 ## Implementation Phases
 
-### Phase 5 — Storage Metering ❌ Not started
+### Phase 5 — Storage Metering ✅ Shipped
 
 **Depends on the event + component schema (shipped).** A daily snapshot job
 writes one `storage` meter row per project (`quantity` = GB-days: total bytes
@@ -59,7 +59,7 @@ double-count). Priced via a `soat`/`gb-day` SKU.
 **Unlocks:** The storage line of the project bill; "which project's knowledge
 base is costing us" visibility.
 
-### Phase 6 — API-Request Metering ❌ Not started
+### Phase 6 — API-Request Metering ✅ Shipped
 
 **Depends on the event + component schema. Deliberately last** — least
 dollar-material and the only dimension needing new infrastructure. A counting

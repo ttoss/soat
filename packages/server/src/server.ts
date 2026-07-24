@@ -15,6 +15,8 @@ import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
 import { startTriggerScheduler } from './lib/triggerScheduler';
+import { startUsageRequestScheduler } from './lib/usageRequestScheduler';
+import { startUsageStorageScheduler } from './lib/usageStorageScheduler';
 import { createFirstAdminUser } from './lib/users';
 
 const log = createDebug('soat:server');
@@ -51,6 +53,11 @@ const startServer = async () => {
     // Start the audit-log retention sweep so entries older than
     // AUDIT_RETENTION_DAYS are pruned on a daily tick.
     startAuditRetentionScheduler();
+    // Start the daily storage-metering snapshot (one `storage` usage event per
+    // project per UTC day) and the API-request counter flush (aggregated
+    // `api_request` events per window).
+    startUsageStorageScheduler();
+    startUsageRequestScheduler();
   } catch (error) {
     // This is a fatal, process-terminating failure, so print to stderr
     // unconditionally rather than via the opt-in `debug` logger — otherwise the
