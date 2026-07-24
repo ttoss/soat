@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import {
   approveApproval,
   getApproval,
+  listApprovalRecurrences,
   listApprovals,
   rejectApproval,
 } from 'src/lib/approvals';
@@ -56,6 +57,41 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     status: ctx.query.status as string | undefined,
     origin: ctx.query.origin as string | undefined,
     expiresBefore: expiresBeforeRaw ? new Date(expiresBeforeRaw) : undefined,
+    ...parsePagination(ctx),
+  });
+});
+
+// Registered before `/approvals/:approval_id` so the static `recurrences`
+// segment matches this handler rather than binding as an `:approval_id` value.
+approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
+  if (!ctx.authUser) {
+    ctx.status = 401;
+    ctx.body = { error: 'Unauthorized' };
+    return;
+  }
+
+  const projectPublicId = ctx.query.projectId as string | undefined;
+
+  const projectIds = await ctx.authUser.resolveProjectIds({
+    projectPublicId,
+    action: 'approvals:ListApprovalRecurrences',
+    resourceType: 'approval',
+  });
+
+  if (projectIds === null) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return;
+  }
+
+  const minCountRaw = ctx.query.minCount as string | undefined;
+  const minCount =
+    minCountRaw != null ? Number.parseInt(minCountRaw, 10) : undefined;
+
+  ctx.body = await listApprovalRecurrences({
+    projectIds: projectIds ?? [],
+    status: ctx.query.status as string | undefined,
+    minCount: Number.isFinite(minCount) ? minCount : undefined,
     ...parsePagination(ctx),
   });
 });

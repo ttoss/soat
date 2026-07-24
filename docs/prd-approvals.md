@@ -18,7 +18,7 @@ interceptor (G4) and removed. Dedup is now complete: a duplicate emit returns th
 existing pending item, and a re-proposal matching a *rejected* item is admitted
 with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
-- [ ] Recurrence view (`GET /api/v1/approvals/recurrences`) — folded in from the deferred learned-rules module (2026-07)
+- [x] Recurrence view (`GET /api/v1/approvals/recurrences`) — folded in from the deferred learned-rules module (2026-07); shipped. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
 - [ ] `ActivityEntry` feed (`acte_` prefix)
 
 ---
@@ -40,7 +40,10 @@ item, so approvers see the recurrence and the learned-rules rejection signal is
 preserved. `previousItemId` is stamped by `emitApproval` (most-recent rejected
 match for the key) and surfaced on the REST/MCP item shape.
 
-### Recurrence view — Not started
+### Recurrence view — Shipped
+
+Live behavior is documented in the [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view).
+The design intent below is retained for context.
 
 A read-only aggregate over the queue answering "what keeps coming back?" — the
 rollup of the per-item `previous_item_id` chains that dedup (decision 2)

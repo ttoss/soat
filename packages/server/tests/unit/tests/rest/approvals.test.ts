@@ -50,6 +50,7 @@ describe('Approvals', () => {
         'approvals:ListApprovals',
         'approvals:GetApproval',
         'approvals:ResolveApproval',
+        'approvals:ListApprovalRecurrences',
       ],
     });
 
@@ -433,6 +434,166 @@ describe('Approvals', () => {
     });
   });
 
+  describe('GET /api/v1/approvals/recurrences', () => {
+    // Emits then rejects an item once per reason, reusing the same dedup key so
+    // each re-proposal threads onto the prior rejected one (decision 2). Returns
+    // the created item ids oldest → newest — the expected chain order.
+    const seedRejectedChain = async (
+      dedupKey: string,
+      reasons: string[]
+    ): Promise<string[]> => {
+      const ids: string[] = [];
+      for (const reason of reasons) {
+        const item = await seedApproval({
+          origin: 'tool_call',
+          dedupKey,
+          agentId: 'agent_recur00000',
+        });
+        await authenticatedTestClient(userToken)
+          .post(`/api/v1/approvals/${item.id}/reject`)
+          .send({ reason });
+        ids.push(item.id);
+      }
+      return ids;
+    };
+
+    test('groups recurring rejections with an ordered chain and reasons', async () => {
+      const dedupKey = 'recurrences:happy';
+      const ids = await seedRejectedChain(dedupKey, [
+        'too risky',
+        'still no',
+        'nope again',
+      ]);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}`
+      );
+
+      expect(res.status).toBe(200);
+      const group = res.body.data.find((g: { dedup_key: string }) => {
+        return g.dedup_key === dedupKey;
+      });
+      expect(group).toBeDefined();
+      expect(group.count).toBe(3);
+      expect(group.tool_id).toBe('tool_seedtool00000');
+      expect(group.agent_id).toBe('agent_recur00000');
+      // Chain is oldest → newest, matching the previous_item_id thread order.
+      expect(
+        group.chain.map((c: { id: string }) => {
+          return c.id;
+        })
+      ).toEqual(ids);
+      expect(
+        group.chain.every((c: { status: string }) => {
+          return c.status === 'rejected';
+        })
+      ).toBe(true);
+      expect(group.reasons).toEqual(['too risky', 'still no', 'nope again']);
+    });
+
+    test('excludes groups below the default min_count of 2', async () => {
+      const dedupKey = 'recurrences:single';
+      await seedRejectedChain(dedupKey, ['one-off rejection']);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(
+        res.body.data.some((g: { dedup_key: string }) => {
+          return g.dedup_key === dedupKey;
+        })
+      ).toBe(false);
+    });
+
+    test('min_count filters out groups below the threshold', async () => {
+      const dedupKey = 'recurrences:twice';
+      await seedRejectedChain(dedupKey, ['a', 'b']);
+
+      const stricter = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&min_count=3`
+      );
+      expect(
+        stricter.body.data.some((g: { dedup_key: string }) => {
+          return g.dedup_key === dedupKey;
+        })
+      ).toBe(false);
+
+      const looser = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&min_count=2`
+      );
+      expect(
+        looser.body.data.some((g: { dedup_key: string }) => {
+          return g.dedup_key === dedupKey;
+        })
+      ).toBe(true);
+    });
+
+    test('status filter selects the lifecycle state groups are built from', async () => {
+      const dedupKey = 'recurrences:approved';
+      // Two approved items sharing a dedup key: each is created pending, then
+      // approved, so the partial-unique-pending index is never violated.
+      for (let i = 0; i < 2; i += 1) {
+        const item = await seedApproval({ origin: 'tool_call', dedupKey });
+        await authenticatedTestClient(userToken)
+          .post(`/api/v1/approvals/${item.id}/approve`)
+          .send({});
+      }
+
+      // The default (rejected) view must not surface approved recurrences.
+      const rejectedView = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}`
+      );
+      expect(
+        rejectedView.body.data.some((g: { dedup_key: string }) => {
+          return g.dedup_key === dedupKey;
+        })
+      ).toBe(false);
+
+      const approvedView = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&status=approved`
+      );
+      const group = approvedView.body.data.find((g: { dedup_key: string }) => {
+        return g.dedup_key === dedupKey;
+      });
+      expect(group).toBeDefined();
+      expect(group.count).toBe(2);
+    });
+
+    test('paginates groups and reports the total', async () => {
+      await seedRejectedChain('recurrences:page:a', ['a1', 'a2']);
+      await seedRejectedChain('recurrences:page:b', ['b1', 'b2', 'b3']);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&limit=1`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.data.length).toBe(1);
+      expect(res.body.limit).toBe(1);
+      expect(res.body.total).toBeGreaterThanOrEqual(2);
+    });
+
+    test('an unknown status filter returns 400 instead of 500', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}&status=open`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const res = await testClient.get('/api/v1/approvals/recurrences');
+      expect(res.status).toBe(401);
+    });
+
+    test('user without permission returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
   // A project-scoped principal (project key / OAuth token) carries a policy
   // whose resources are SRN-scoped to the project (`soat:<project>:*:*`) rather
   // than the wildcard `*` the other tests use. The get/approve/reject handlers
@@ -452,6 +613,7 @@ describe('Approvals', () => {
           'approvals:ListApprovals',
           'approvals:GetApproval',
           'approvals:ResolveApproval',
+          'approvals:ListApprovalRecurrences',
         ],
       });
     });
@@ -476,6 +638,14 @@ describe('Approvals', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.id).toBe(seeded.id);
+    });
+
+    test('lists recurrence groups scoped to the project', async () => {
+      const res = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/approvals/recurrences?project_id=${projectId}`
+      );
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
     });
 
     test('approves a pending item', async () => {
