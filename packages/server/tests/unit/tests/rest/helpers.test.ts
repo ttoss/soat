@@ -1,3 +1,4 @@
+import { DomainError } from 'src/errors';
 import {
   checkAuth,
   resolveProjectIdsWithAction,
@@ -57,6 +58,61 @@ describe('resolveWriteProjectId', () => {
     expect(result).toBeNull();
     expect((ctx as never as { status: number }).status).toBe(403);
   });
+
+  test('throws API_KEY_PROJECT_SCOPE when explicit projectId differs from the api key scope', async () => {
+    const resolveProjectIds = jest.fn();
+    const ctx = makeCtx({ apiKeyProjectPublicId: 'proj_A', resolveProjectIds });
+
+    const err = await resolveWriteProjectId({
+      ctx,
+      projectPublicId: 'proj_B',
+      action: 'secrets:CreateSecret',
+    }).catch((error: unknown) => {
+      return error;
+    });
+
+    expect(err).toBeInstanceOf(DomainError);
+    expect((err as DomainError).code).toBe('API_KEY_PROJECT_SCOPE');
+    expect((err as DomainError).httpStatus).toBe(403);
+    expect((err as DomainError).message).toContain('proj_A');
+    expect((err as DomainError).message).toContain('proj_B');
+    expect((err as DomainError).meta).toMatchObject({
+      scoped_project: 'proj_A',
+      requested_project: 'proj_B',
+    });
+    // Short-circuits before touching the policy engine.
+    expect(resolveProjectIds).not.toHaveBeenCalled();
+  });
+
+  test('throws API_KEY_PROJECT_SCOPE when explicit projectId differs from the oauth token scope', async () => {
+    const ctx = makeCtx({
+      oauthProjectPublicId: 'proj_A',
+      resolveProjectIds: jest.fn(),
+    });
+
+    const err = await resolveWriteProjectId({
+      ctx,
+      projectPublicId: 'proj_B',
+      action: 'secrets:CreateSecret',
+    }).catch((error: unknown) => {
+      return error;
+    });
+
+    expect((err as DomainError).code).toBe('API_KEY_PROJECT_SCOPE');
+  });
+
+  test('does not throw when explicit projectId matches the scope', async () => {
+    const ctx = makeCtx({
+      apiKeyProjectPublicId: 'proj_A',
+      resolveProjectIds: jest.fn().mockResolvedValue([5]),
+    });
+    const result = await resolveWriteProjectId({
+      ctx,
+      projectPublicId: 'proj_A',
+      action: 'test:Create',
+    });
+    expect(result).toBe(5);
+  });
 });
 
 describe('checkAuth', () => {
@@ -100,5 +156,23 @@ describe('resolveProjectIdsWithAction', () => {
       action: 'test:Action',
     });
     expect(result).toEqual([1, 2]);
+  });
+
+  test('throws API_KEY_PROJECT_SCOPE when explicit projectId differs from the api key scope', async () => {
+    const resolveProjectIds = jest.fn();
+    const ctx = {
+      authUser: { apiKeyProjectPublicId: 'proj_A', resolveProjectIds },
+    } as never;
+
+    const err = await resolveProjectIdsWithAction({
+      ctx,
+      projectPublicId: 'proj_B',
+      action: 'secrets:ListSecrets',
+    }).catch((error: unknown) => {
+      return error;
+    });
+
+    expect((err as DomainError).code).toBe('API_KEY_PROJECT_SCOPE');
+    expect(resolveProjectIds).not.toHaveBeenCalled();
   });
 });

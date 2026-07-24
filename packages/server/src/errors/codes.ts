@@ -121,6 +121,11 @@ export const ERROR_CODES = {
     description:
       'The authenticated user does not have permission to perform this action.',
   },
+  API_KEY_PROJECT_SCOPE: {
+    httpStatus: 403,
+    description:
+      'The credential (API key or OAuth token) is bound to one project and the request targets a different one. This project binding is a hard boundary that the owner’s admin role does not lift — admin only relaxes the project create/delete gate, never the per-credential project scope for resource operations. Mint a key scoped to the target project (or an unscoped key) to operate there. The error meta reports `scoped_project` and `requested_project`.',
+  },
   UNAUTHORIZED: {
     httpStatus: 401,
     description: 'Authentication is required or the token is invalid.',
