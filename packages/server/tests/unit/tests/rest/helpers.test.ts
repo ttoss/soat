@@ -77,8 +77,8 @@ describe('resolveWriteProjectId', () => {
     expect((err as DomainError).message).toContain('proj_A');
     expect((err as DomainError).message).toContain('proj_B');
     expect((err as DomainError).meta).toMatchObject({
-      scopedProject: 'proj_A',
-      requestedProject: 'proj_B',
+      scoped_project: 'proj_A',
+      requested_project: 'proj_B',
     });
     // Short-circuits before touching the policy engine.
     expect(resolveProjectIds).not.toHaveBeenCalled();
