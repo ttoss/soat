@@ -2019,6 +2019,20 @@ else
   echo "WARNING: model did not call the gated tool (LLM response varies); skipping approve step." >&2
 fi
 
+# The recurrence view is a read-only rollup over the queue's own dedup_key
+# chains. Whether a recurring group exists depends on the nondeterministic LLM
+# flow above, so assert the endpoint's envelope shape rather than a group count.
+echo "--- Approval recurrence view (read-only rollup) ---"
+RECURRENCES_RESP=$($SOAT_CLI list-approval-recurrences \
+  --project-id "$PROJECT_PUBLIC_ID" --min-count 2 | sanitize_json)
+if ! printf '%s\n' "$RECURRENCES_RESP" \
+  | jq -e 'has("data") and (.data | type == "array") and has("total")' >/dev/null 2>&1; then
+  echo "ERROR: list-approval-recurrences did not return a paginated envelope" >&2
+  echo "$RECURRENCES_RESP" >&2
+  exit 1
+fi
+echo "Approval recurrence view: OK"
+
 # Cleanup — delete gated agent (force through dependent generations), tool, and
 # guardrail (must be detached first: the agent delete drops the attachment).
 $SOAT_CLI delete-agent --agent-id "$GATED_AGENT_ID" --force >/dev/null 2>&1 || true

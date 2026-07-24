@@ -31,7 +31,7 @@ guardrails are fully shipped and have no remaining items).
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 worker-fleet ops hardening + P3 (SQS driver) |
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 recurrence view + activity feed remain (dedup shipped) |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed remains (dedup + recurrence view shipped) |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 storage/request emitters + coverage + guard integ. |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
@@ -73,7 +73,7 @@ cross-initiative ─────────────────────
   knowledge P5/P6/P7 (ranking, injection, evals)
 
 feedback + governance loops ────────────────────────────────────────────────
-  approvals recurrence view (G3) ◄── approvals ✔ (dedup_key + previous_item_id chains)
+  approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
   learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
   agent-versions P3 (eval-gated promotion) ◄── evaluations P1
   approvals P4 (activity feed) ◄── audit-log (substrate) + guardrails (A/B labels)
@@ -86,7 +86,7 @@ feedback + governance loops ─────────────────�
 | orchestration-queue P1 ✔ | evaluations P2 | async eval runs ride the RunTask queue |
 | guardrails P3 ✔ | audit-log P2 | `guardrail_evaluation` becomes one audit `detail` kind |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
-| approvals ✔ | approvals recurrence view (G3) | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
+| approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
 | evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) | feed labels autonomous class-A/B actions on the audit substrate |
@@ -99,9 +99,8 @@ feedback + governance loops ─────────────────�
    and agent-versions promotion gate need (audit-log also absorbs the deferred
    quota monitor-breach audit entry).
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
-4. **Approvals recurrence view (G3)** — no blockers, can ship any time; the
-   read-only feedback surface whose usage is the demand gate for the deferred
-   learned-rules module.
+4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
+   surface whose usage is the demand gate for the deferred learned-rules module.
 5. **Model-routing** and the deferred tail (budget-guard P7) as hardening.
 
 ## Pending backlog
@@ -117,7 +116,7 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 ### G3 — Approvals (exceptions · activity)
 
 - [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
-- [ ] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6 (no blockers)
+- [x] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6. Live behavior in [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
 - [ ] **Phase 4 / activity feed** (needs G4 class-A/B labels + audit substrate):
   - [ ] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
   - [ ] `5.2` cursor-paginated `GET /api/v1/activity` (type / severity filters, per project)

@@ -6,7 +6,11 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { assertValidApprovalFilters } from './approvalFilters';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
-import { paginatedList, type PaginatedResult } from './pagination';
+import {
+  paginatedList,
+  type PaginatedResult,
+  resolvePagination,
+} from './pagination';
 
 const log = createDebug('soat:approvals');
 
@@ -387,6 +391,155 @@ export const listApprovals = async (args: {
     },
     map: mapApproval,
   });
+};
+
+// ── Recurrence view (G3) ────────────────────────────────────────────────────
+// A read-only rollup answering "what keeps coming back?" over the queue's own
+// columns. Exact-`dedup_key` grouping only: dedup already threads a re-proposal
+// to the item it recurs from (`previous_item_id`, decision 2), so a group is the
+// set of items sharing a `dedup_key`. Semantic clustering of *paraphrased*
+// corrections stays out of this deliberately deterministic module.
+
+/** Default status a recurrence group is built from — recurring *rejections*. */
+const RECURRENCE_DEFAULT_STATUS = 'rejected';
+/** A group must have at least this many items to count as a recurrence. */
+const RECURRENCE_DEFAULT_MIN_COUNT = 2;
+
+export type ApprovalRecurrenceChainItem = {
+  id: string;
+  status: ApprovalInstance['status'];
+  resolutionReason: string | null;
+  createdAt: Date;
+};
+
+export type ApprovalRecurrenceGroup = {
+  dedupKey: string;
+  agentId: string | null;
+  toolId: string | null;
+  count: number;
+  // Oldest → newest, i.e. the `previous_item_id` chain in the order it accrued.
+  chain: ApprovalRecurrenceChainItem[];
+  // The chain's resolution reasons in order — reading them side by side is the
+  // curation step (the guardrail-graduation prompt), no lifecycle required.
+  reasons: string[];
+};
+
+// Missing/garbage → the default; anything valid is floored to an integer ≥ 1.
+const normalizeMinCount = (raw?: number): number => {
+  if (raw === undefined || !Number.isFinite(raw)) {
+    return RECURRENCE_DEFAULT_MIN_COUNT;
+  }
+  return Math.max(1, Math.floor(raw));
+};
+
+const mapRecurrenceGroup = (args: {
+  dedupKey: string;
+  chain: ApprovalInstance[];
+}): ApprovalRecurrenceGroup => {
+  const { dedupKey, chain } = args;
+  // All items in a group share the `dedup_key`, which encodes agent + tool +
+  // args, so any item carries the group's agent/tool; take the most recent.
+  const latest = chain[chain.length - 1];
+  return {
+    dedupKey,
+    agentId: latest.agentId,
+    toolId: latest.proposedAction?.toolId ?? null,
+    count: chain.length,
+    chain: chain.map((item) => {
+      return {
+        id: item.publicId,
+        status: item.status,
+        resolutionReason: item.resolutionReason,
+        createdAt: item.createdAt,
+      };
+    }),
+    reasons: chain
+      .map((item) => {
+        return item.resolutionReason;
+      })
+      .filter((reason): reason is string => {
+        return typeof reason === 'string' && reason.trim() !== '';
+      }),
+  };
+};
+
+/**
+ * Groups approval items by `dedup_key` and returns the recurring ones (count ≥
+ * `minCount`), most-recurrent first. Read-only by construction: it reports what
+ * the queue already recorded — no cluster statuses, no "mark handled". Its
+ * output is the demand signal for the deferred learned-rules module and the
+ * prompt to encode a guardrail `deny` that stops the recurrence upstream.
+ */
+export const listApprovalRecurrences = async (args: {
+  projectIds: number[];
+  status?: string;
+  minCount?: number;
+  limit?: number;
+  offset?: number;
+}): Promise<PaginatedResult<ApprovalRecurrenceGroup>> => {
+  const status = args.status ?? RECURRENCE_DEFAULT_STATUS;
+  // Reuse the shared filter guard so an out-of-enum status is a 400, not a 500.
+  assertValidApprovalFilters({ status });
+
+  const minCount = normalizeMinCount(args.minCount);
+  const { limit, offset } = resolvePagination(args);
+
+  log(
+    'listApprovalRecurrences: projects=%d status=%s minCount=%d',
+    args.projectIds.length,
+    status,
+    minCount
+  );
+
+  if (args.projectIds.length === 0) {
+    return { data: [], total: 0, limit, offset };
+  }
+
+  // Exact-key grouping in memory: only dedup-keyed items can recur, and the
+  // status filter (rejected by default) keeps the scanned set to a small subset
+  // of a project's queue — a governance-review surface, not a hot path. This
+  // avoids a GROUP BY + HAVING whose aggregate-alias ordering is brittle across
+  // pages, and keeps every value fully typed off the real model instances.
+  const items = await db.ApprovalItem.findAll({
+    where: {
+      projectId: args.projectIds,
+      status,
+      dedupKey: { [Op.ne]: null },
+    },
+    order: [['createdAt', 'ASC']],
+  });
+
+  const byKey = new Map<string, ApprovalInstance[]>();
+  for (const item of items) {
+    // `dedupKey` is guaranteed present by the `Op.ne: null` filter above.
+    const key = item.dedupKey!;
+    const chain = byKey.get(key) ?? [];
+    chain.push(item);
+    byKey.set(key, chain);
+  }
+
+  const groups = [...byKey.entries()]
+    .filter(([, chain]) => {
+      return chain.length >= minCount;
+    })
+    .map(([dedupKey, chain]) => {
+      return mapRecurrenceGroup({ dedupKey, chain });
+    })
+    // Most-recurrent first; ties broken by most-recent activity so a freshly
+    // recurring pattern surfaces above a stale one with the same count.
+    .sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      const aLast = a.chain[a.chain.length - 1].createdAt.getTime();
+      const bLast = b.chain[b.chain.length - 1].createdAt.getTime();
+      return bLast - aLast;
+    });
+
+  return {
+    data: groups.slice(offset, offset + limit),
+    total: groups.length,
+    limit,
+    offset,
+  };
 };
 
 export const getApproval = async (args: {

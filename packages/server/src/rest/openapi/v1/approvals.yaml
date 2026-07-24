@@ -101,6 +101,85 @@ paths:
           description: Forbidden
         '500':
           description: Internal server error
+  /api/v1/approvals/recurrences:
+    get:
+      tags:
+        - Approvals
+      summary: List recurring approval groups
+      description: >-
+        Read-only rollup answering "what keeps coming back?" — groups items by
+        `dedup_key` and returns those recurring at least `min_count` times,
+        most-recurrent first. Each group carries the ordered item chain (via
+        `previous_item_id`) and the resolution reasons in order, so a human can
+        read recurring rejections side by side and graduate the pattern into a
+        guardrail `deny`. Exact-key grouping only; no cluster state is stored.
+      operationId: listApprovalRecurrences
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: status
+          in: query
+          description: Lifecycle status the groups are built from (default `rejected`)
+          schema:
+            type: string
+            enum: [pending, approved, rejected, expired]
+            default: rejected
+        - name: min_count
+          in: query
+          description: Minimum items in a group for it to be returned
+          schema:
+            type: integer
+            default: 2
+            minimum: 1
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of groups to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of groups to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of recurrence groups
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApprovalRecurrenceGroup'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '400':
+          description: Invalid `status` filter value
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
   /api/v1/approvals/{approval_id}:
     get:
       tags:
@@ -218,6 +297,49 @@ components:
         type: string
         example: apr_V1StGXR8Z5jdHi6B
   schemas:
+    ApprovalRecurrenceGroup:
+      type: object
+      description: >-
+        A set of approval items sharing a `dedup_key` — the same proposed action
+        recurring — with the ordered chain and its resolution reasons.
+      properties:
+        dedup_key:
+          type: string
+          description: The shared dedup key that defines the group
+        agent_id:
+          type: string
+          nullable: true
+          description: Proposing agent (shared across the group)
+        tool_id:
+          type: string
+          nullable: true
+          description: Proposed tool (shared across the group)
+        count:
+          type: integer
+          description: Number of items in the group
+        chain:
+          type: array
+          description: The items oldest → newest (the `previous_item_id` chain)
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: apr_V1StGXR8Z5jdHi6B
+              status:
+                type: string
+                enum: [pending, approved, rejected, expired]
+              resolution_reason:
+                type: string
+                nullable: true
+              created_at:
+                type: string
+                format: date-time
+        reasons:
+          type: array
+          description: The chain's resolution reasons in order (empty entries omitted)
+          items:
+            type: string
     ApprovalItem:
       type: object
       properties:

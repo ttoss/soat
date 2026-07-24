@@ -127,6 +127,26 @@ hide the very pattern that tells a human to encode a guardrail rule that stops
 it upstream (and silently block legitimate re-proposals whose context has
 changed).
 
+### Recurrence view
+
+`GET /api/v1/approvals/recurrences` is a **read-only** rollup answering "what
+keeps coming back?". It groups items by `dedup_key` and returns those recurring
+at least `min_count` times (default `2`), most-recurrent first. Each group
+carries the `agent_id`, `tool_id`, `count`, the ordered item `chain` (the
+`previous_item_id` thread, oldest → newest), and the `reasons` in order.
+
+Because dedup already threads a re-proposal onto the item it recurs from, a
+group is simply the set of items sharing a `dedup_key` — no new model, no
+cluster lifecycle. Reading three rejection reasons side by side **is** the
+curation step: the prompt to encode a [guardrail](./guardrails.md) `deny` that
+stops the pattern upstream.
+
+- `status` (default `rejected`) selects the lifecycle state groups are built
+  from — recurring *rejections* are the primary signal.
+- `min_count` (default `2`) is the floor for a group to be returned.
+- Grouping is **exact-key only**. Semantic clustering of paraphrased
+  corrections is deliberately out of scope for this deterministic surface.
+
 ### Expiry is a hard gate
 
 Evidence goes stale, so expiry is enforced server-side in **both directions**:
@@ -214,6 +234,36 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl -X GET "https://api.example.com/api/v1/approvals?project_id=proj_ABC&status=pending" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### List recurring rejections
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-approval-recurrences --project-id proj_ABC --min-count 3
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.approvals.listApprovalRecurrences({
+  query: { project_id: 'proj_ABC', min_count: 3 },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X GET "https://api.example.com/api/v1/approvals/recurrences?project_id=proj_ABC&min_count=3" \
   -H "Authorization: Bearer <token>"
 ```
 
