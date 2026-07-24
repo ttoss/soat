@@ -148,6 +148,40 @@ describe('Approvals', () => {
       }
     });
 
+    test('a duplicate emit while pending returns the existing item', async () => {
+      const dedupKey = 'approvals:return-existing:pending';
+      const first = await seedApproval({ origin: 'tool_call', dedupKey });
+      const second = await seedApproval({ origin: 'tool_call', dedupKey });
+
+      // §3 Phase 2: a re-proposal while a matching item is still pending files
+      // nothing new and returns the existing item.
+      expect(second.id).toBe(first.id);
+      expect(first.previousItemId).toBeNull();
+    });
+
+    test('a re-proposal after a rejection threads previous_item_id', async () => {
+      const dedupKey = 'approvals:thread-rejected';
+      const first = await seedApproval({ origin: 'tool_call', dedupKey });
+      expect(first.previousItemId).toBeNull();
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${first.id}/reject`)
+        .send({ reason: 'not warranted this time' });
+
+      // §3 decision 2: the identical proposal is admitted (not suppressed) and
+      // linked to the prior rejected item so approvers see the recurrence.
+      const reproposed = await seedApproval({ origin: 'tool_call', dedupKey });
+      expect(reproposed.id).not.toBe(first.id);
+      expect(reproposed.previousItemId).toBe(first.id);
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals/${reproposed.id}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.previous_item_id).toBe(first.id);
+      expect(res.body.status).toBe('pending');
+    });
+
     test('filters by status', async () => {
       const pending = await seedApproval();
       const toReject = await seedApproval();

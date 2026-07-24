@@ -66,6 +66,7 @@ filtering only — the lifecycle never branches on it.
 | `task_transition`    | string \| null  | Transition fired on approval (`task_transition` producer)          |
 | `knowledge_version`  | string \| null  | Knowledge package version in context at emit time                  |
 | `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
+| `previous_item_id`   | string \| null  | Prior item's ID when this proposal was re-filed after an earlier matching item (same `dedup_key`) was rejected |
 | `resolved_by`        | string \| null  | Resolving user's public ID; `null` on expiry                       |
 | `resolution_reason`  | string \| null  | Required on rejection                                              |
 | `edited_arguments`   | object \| null  | Set on edit-then-approve; the original stays in `proposed_action`  |
@@ -118,6 +119,13 @@ and returns the existing item — the agent's tool result carries the existing
 `approval_id`. Once the item resolves (approved, rejected, or expired), the
 same proposal files a fresh item. Node-produced items are not deduplicated —
 each run pauses exactly once per `approval` node.
+
+When the fresh item follows a **rejected** one with the same `dedup_key`, it is
+admitted rather than suppressed and its `previous_item_id` links back to that
+rejected item, so approvers see the recurrence. Re-proposal is deliberately not
+blocked: a rejection is a learned-rules capture event, and suppressing the
+recurrence would starve the signal that makes the pattern stop recurring (and
+silently block legitimate re-proposals whose context has changed).
 
 ### Expiry is a hard gate
 
