@@ -1,7 +1,47 @@
 /**
  * Common helper functions for REST API handlers
  */
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
+import { DomainError } from 'src/errors';
+
+/**
+ * Throws an actionable `API_KEY_PROJECT_SCOPE` error when a project-scoped
+ * credential (API key or OAuth token) explicitly targets a different project
+ * than the one it is bound to.
+ *
+ * This binding is a hard boundary enforced independently of the owner's role:
+ * an admin-owned key can create projects freely (the project create/delete gate
+ * is role-based) but is still confined to its own project for resource
+ * operations. Surfacing the reason here turns the otherwise opaque `403
+ * Forbidden` into a message that names both projects and points at the fix.
+ *
+ * No-op when the credential is unscoped, or when the requested project matches
+ * the credential's project.
+ */
+const assertCredentialProjectScope = (args: {
+  authUser: AuthUser;
+  requestedProjectPublicId: string;
+}): void => {
+  const { authUser, requestedProjectPublicId } = args;
+  const scopedProject =
+    authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
+
+  if (!scopedProject || scopedProject === requestedProjectPublicId) {
+    return;
+  }
+
+  const credential = authUser.apiKeyProjectPublicId ? 'API key' : 'OAuth token';
+  throw new DomainError(
+    'API_KEY_PROJECT_SCOPE',
+    `This ${credential} is scoped to project '${scopedProject}' and cannot ` +
+      `access project '${requestedProjectPublicId}'. Mint a key scoped to ` +
+      `'${requestedProjectPublicId}' (or an unscoped key) to operate there.`,
+    {
+      scopedProject,
+      requestedProject: requestedProjectPublicId,
+    }
+  );
+};
 
 /**
  * Parses `limit` / `offset` list pagination params from the query string.
@@ -46,7 +86,18 @@ export const resolveProjectIdsWithAction = async (args: {
 }): Promise<number[] | null | undefined> => {
   // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
   // always defined here.
-  const projectIds = await args.ctx.authUser!.resolveProjectIds({
+  const authUser = args.ctx.authUser!;
+
+  // A scoped credential targeting a different project fails with an actionable
+  // error rather than the opaque `Forbidden` that resolveProjectIds would yield.
+  if (args.projectPublicId) {
+    assertCredentialProjectScope({
+      authUser,
+      requestedProjectPublicId: args.projectPublicId,
+    });
+  }
+
+  const projectIds = await authUser.resolveProjectIds({
     projectPublicId: args.projectPublicId,
     action: args.action,
     resourceType: args.resourceType,
@@ -98,6 +149,15 @@ export const resolveWriteProjectId = async (args: {
     ctx.body = { error: 'projectId is required' };
     return null;
   }
+
+  // A scoped credential targeting a different project fails with an actionable
+  // error rather than the opaque `Forbidden` that resolveProjectIds would yield.
+  // `projectPublicId` here already defaulted to the credential's own project
+  // when omitted, so this only fires on an explicit, mismatching project id.
+  assertCredentialProjectScope({
+    authUser,
+    requestedProjectPublicId: projectPublicId,
+  });
 
   // resolveProjectIds runs the permission check and, for a scoped key, returns null
   // when projectPublicId does not match the key's project (→ 403). Every

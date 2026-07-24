@@ -54,7 +54,7 @@ A key may be scoped to one project or left unscoped; `policy_ids` optionally nar
 
 `project_id` is **optional**.
 
-- **Scoped key** (`project_id` set): any request made with the key is hard-locked to its project; attempts to access resources in any other project are denied regardless of what the policies say.
+- **Scoped key** (`project_id` set): any request made with the key is hard-locked to its project; attempts to access resources in any other project are denied regardless of what the policies say. This binding is a hard boundary — see [Project scope is a hard boundary, even for admins](#project-scope-is-a-hard-boundary-even-for-admins).
 - **Unscoped key** (`project_id` omitted or null): the key is not confined to any project. It can operate across every project its owner can reach, bounded by the intersection of the owner's permissions and the key's own `policy_ids`. Use IAM policies (on the user or the key) to control which projects and actions such a key may touch. Because an unscoped key has no implicit project, a `project_id` must be supplied explicitly on requests that operate on a specific project.
 
 An update may re-scope a key to a different project, scope a previously unscoped key, or clear the scope with `project_id: null`. For a worked example of creating project-scoped keys, see [Permissions in Practice - Step 6 (Create API keys)](/docs/tutorials/permissions#step-6--create-api-keys).
@@ -65,9 +65,25 @@ Because a project-scoped key already identifies its project, `project_id` is **o
 
 - Omit `project_id` and the request defaults to the key's project. An agent using a project-scoped MCP connector can upload a file, list files, create documents, etc. without first calling `list-projects`.
 - Supply a `project_id` that matches the key's project and it is accepted.
-- Supply a `project_id` that belongs to a different project and the request is rejected with `403`.
+- Supply a `project_id` that belongs to a different project and the request is rejected with `403` and the `API_KEY_PROJECT_SCOPE` error code. The message names both the key's project and the requested one, and the `meta` carries `scoped_project` / `requested_project`:
+
+  ```json
+  {
+    "error": {
+      "code": "API_KEY_PROJECT_SCOPE",
+      "message": "This API key is scoped to project 'proj_A' and cannot access project 'proj_B'. Mint a key scoped to 'proj_B' (or an unscoped key) to operate there.",
+      "meta": { "scoped_project": "proj_A", "requested_project": "proj_B" }
+    }
+  }
+  ```
 
 JWT auth is unchanged: a write that omits `project_id` still returns `400`, since a concrete project is never inferred from a user's set of accessible projects.
+
+### Project scope is a hard boundary, even for admins
+
+A key's `project_id` binding is enforced **before**, and independently of, the owner's role. An `admin`-owned key can create and delete projects (those gates are role-based and not tied to any project), but for ordinary resource operations — secrets, formations, files, webhooks, etc. — a project-scoped key is still confined to its own project. Admin role lifts the policy ceiling, never the project binding.
+
+This means a single project-scoped key cannot both create a new project **and** provision resources inside it: create the project, then mint a key scoped to the new project (or use an unscoped key, bounded by IAM policy) to deploy into it. A cross-project resource write returns `403 API_KEY_PROJECT_SCOPE` (above) rather than silently succeeding.
 
 ### Policy Attachment
 

@@ -114,7 +114,7 @@ describe('Implicit projectId via project-scoped API key', () => {
       expect(res.body.id).toBeDefined();
     });
 
-    test('mismatched project_id returns 403', async () => {
+    test('mismatched project_id returns 403 with an actionable scope error', async () => {
       const res = await authenticatedTestClient(scopedKey)
         .post('/api/v1/files')
         .send({
@@ -125,6 +125,13 @@ describe('Implicit projectId via project-scoped API key', () => {
         });
 
       expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      // Names both the key's project and the requested one so the caller knows
+      // exactly why the write was refused and how to fix it.
+      expect(res.body.error.message).toContain(projectAId);
+      expect(res.body.error.message).toContain(projectBId);
+      expect(res.body.error.meta.scoped_project).toBe(projectAId);
+      expect(res.body.error.meta.requested_project).toBe(projectBId);
     });
 
     test('JWT auth without project_id still returns 400', async () => {
@@ -205,12 +212,15 @@ describe('Implicit projectId via project-scoped API key', () => {
       expect(res.body.id).toBeDefined();
     });
 
-    test('mismatched project_id returns 403', async () => {
+    test('mismatched project_id returns 403 with an actionable scope error', async () => {
       const res = await authenticatedTestClient(scopedKey)
         .post('/api/v1/secrets')
         .send({ project_id: projectBId, name: 'NOPE', value: 'shh' });
 
       expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(res.body.error.meta.scoped_project).toBe(projectAId);
+      expect(res.body.error.meta.requested_project).toBe(projectBId);
     });
   });
 
@@ -228,7 +238,7 @@ describe('Implicit projectId via project-scoped API key', () => {
       expect(res.body.project_id).toBe(projectAId);
     });
 
-    test('mismatched project_id returns 403', async () => {
+    test('mismatched project_id returns 403 with an actionable scope error', async () => {
       const res = await authenticatedTestClient(scopedKey)
         .post('/api/v1/webhooks')
         .send({
@@ -239,6 +249,61 @@ describe('Implicit projectId via project-scoped API key', () => {
         });
 
       expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+    });
+  });
+
+  /**
+   * Regression for #673: the key's project binding is a hard boundary that the
+   * owner's `admin` role does NOT lift. An admin-owned, project-scoped key can
+   * create a project (an admin-gated op) yet is still confined to its own
+   * project for resource writes — and the refusal is now actionable rather than
+   * a bare `Forbidden`.
+   */
+  describe('admin-owned project-scoped key stays project-bound', () => {
+    let adminScopedKey: string;
+
+    beforeAll(async () => {
+      // A second admin whose key we scope to project A.
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'pkadmin', password: 'pkadminpass', role: 'admin' });
+      const adminUserToken = await loginAs('pkadmin', 'pkadminpass');
+
+      const keyRes = await authenticatedTestClient(adminUserToken)
+        .post('/api/v1/api-keys')
+        .send({ project_id: projectAId, name: 'Admin scoped key for A' });
+      expect(keyRes.status).toBe(201);
+      adminScopedKey = keyRes.body.key;
+    });
+
+    test('can create a project (admin gate is role-based, not scope-bound)', async () => {
+      const res = await authenticatedTestClient(adminScopedKey)
+        .post('/api/v1/projects')
+        .send({ name: 'Created by admin scoped key' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBeDefined();
+    });
+
+    test('cross-project secret write still returns the actionable scope error', async () => {
+      const res = await authenticatedTestClient(adminScopedKey)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectBId, name: 'ADMIN_NOPE', value: 'shh' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+      expect(res.body.error.meta.scoped_project).toBe(projectAId);
+      expect(res.body.error.meta.requested_project).toBe(projectBId);
+    });
+
+    test('write into the key project succeeds', async () => {
+      const res = await authenticatedTestClient(adminScopedKey)
+        .post('/api/v1/secrets')
+        .send({ name: 'ADMIN_OK', value: 'shh' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBeDefined();
     });
   });
 });
