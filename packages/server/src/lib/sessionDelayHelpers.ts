@@ -41,6 +41,9 @@ export const scheduleDelayedGeneration = (args: {
       })
       .catch(() => {});
   }, args.delayMs);
+  // Never let this background debounce timer keep the process (or a test
+  // worker) alive on its own — mirrors the pollers in scheduler.ts.
+  timer.unref?.();
   sessionDelayTimers.set(args.sessionKey, timer);
 };
 
