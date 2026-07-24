@@ -118,7 +118,7 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 ### G3 — Approvals (exceptions · activity)
 
-- [ ] Dedup return-existing logic (the `dedup_key` column + partial unique index exist; the return-existing behavior does not)
+- [ ] Dedup return-existing logic (the `dedup_key` column + partial unique index exist; the return-existing behavior does not) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
 - [ ] **Knowledge-version provenance** (unblocks the audit acceptance criterion):
   - [ ] `3.1` record `knowledge_version` on `generation.metadata` at emit time
   - [ ] `3.2` stamp `knowledgeVersion` / `policyVersion` onto `ApprovalItem` + the audit record via `emitApproval`
@@ -226,11 +226,15 @@ stays the source of truth:
 - **Activity-feed ownership.** Both [prd-audit-log.md](./prd-audit-log.md)
   (`AuditEntry.detail`) and [prd-approvals.md](./prd-approvals.md)
   (`ActivityEntry`, `acte_`) describe an activity substrate. Settle which model
-  owns the feed before either ships (drives approvals Phase 4).
+  owns the feed before either ships (drives approvals Phase 4). Partially
+  narrowed: approvals decision 3 lands guardrail-`deny` records as
+  `AuditEntry` `detail->>'kind' = 'action_denied'`, so new audit-shaped kinds
+  go to `AuditEntry`; only the product-feed model question remains open.
 - **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
   `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
   End State YAML — update the example.
-- **`PolicyVersion` reference.** [prd-learned-rules.md](./prd-learned-rules.md)
-  cites the guardrails `PolicyVersion` pattern for `LearnedRuleVersion`;
-  guardrails renamed it `GuardrailVersion`. Cosmetic, but update on next touch.
+- **`PolicyVersion` reference.** ~~[prd-learned-rules.md](./prd-learned-rules.md)
+  cites the guardrails `PolicyVersion` pattern for `LearnedRuleVersion`~~ —
+  fixed (now cites `GuardrailVersion`). The same stale name still appears in
+  [prd-agent-versions.md](./prd-agent-versions.md); update on next touch.
