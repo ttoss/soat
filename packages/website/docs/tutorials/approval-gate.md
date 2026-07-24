@@ -449,7 +449,7 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## Step 8 — Reject a second run
 
-Start another run and **reject** it. A reason is required, and the run resumes down the `rejected` edge to the `declined` node. Rejection reasons and edit diffs are the raw material of the learned-rules feedback loop described in the [Approvals](/docs/modules/approvals#approve-reject-edit-then-approve) module.
+Start another run and **reject** it. A reason is required, and the run resumes down the `rejected` edge to the `declined` node. Rejection reasons and edit diffs are the raw material of the feedback loop described in the [Approvals](/docs/modules/approvals#approve-reject-edit-then-approve) module.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

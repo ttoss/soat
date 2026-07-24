@@ -1,15 +1,54 @@
 # PRD: Learned Rules (Feedback Loop)
 
+> **Status: ⏭️ Deferred (2026-07).** The platform-unique slice — surfacing
+> recurring corrections — moved into the approvals module as the read-only
+> [recurrence view](./prd-approvals.md#recurrence-view--not-started). What
+> remains here (semantic clustering, promotion lifecycle, scoped rule listing)
+> builds only if the [build gates](#deferral-decision-2026-07) pass. See
+> [roadmap → Deferral: learned rules](./roadmap.md#deferral-learned-rules).
+>
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G6).
-> Captures from [prd-approvals.md](./prd-approvals.md) resolution paths;
-> injects through the context assembler in
-> [prd-knowledge-packages.md](./prd-knowledge-packages.md). Reuses the
-> embedding nearest-neighbor machinery from
-> [prd-memories.md](./prd-memories.md).
+> Captures from [prd-approvals.md](./prd-approvals.md) resolution paths and
+> reuses the embedding nearest-neighbor machinery from
+> [prd-memories.md](./prd-memories.md). SOAT exposes promoted rules through a
+> scoped listing API; **injecting them into agent context is the consuming
+> application's responsibility** (see
+> [roadmap → Boundary: context composition](./roadmap.md#boundary-context-composition)).
+
+## Deferral decision (2026-07)
+
+Deferred — not killed — on three grounds:
+
+1. **The capture substrate already persists.** Rejection reasons
+   (`resolution_reason`), edit diffs (`edited_arguments`), and recurrence
+   chains (`dedup_key`, `previous_item_id`) live on every `ApprovalItem` row
+   forever, so candidates from rejections and edits can be **backfilled at any
+   time**. Only explicit manual corrections (`POST /candidate-rules`) are
+   non-retrofittable, and they are the least-used capture source initially —
+   deferring costs essentially no data.
+2. **Exact recurrence needs no new models.** The highest-value output — "this
+   correction happened 4 times; encode a guardrail `deny`" — falls out of
+   grouping existing approval rows by `dedup_key`. That read surface now
+   belongs to approvals (the recurrence view), with zero AI-provider coupling.
+3. **Soft rules are unmeasurable without evals.** Phase 4's acceptance test
+   proves *plumbing*, not behavior change ([below](#efficacy-is-eval-gated));
+   shipping an injection surface whose effect cannot be measured is building
+   on faith.
+
+**Build gates** — revisit when **both** hold:
+
+- The approvals recurrence view shows sustained demand: humans act on
+  recurrence groups (guardrail rules created from them) **and** hit the
+  exact-match ceiling — paraphrased corrections the `dedup_key` rollup cannot
+  cluster.
+- [Evaluations](./prd-evaluations.md) Phase 1 exists, so promoted-rule
+  efficacy can be measured (inject vs. not, compare) instead of assumed.
+
+The phases below are retained as design reference for that revisit.
 
 ## Implementation Phases
 
-### Phase 1 — Candidate Capture ❌ Not started
+### Phase 1 — Candidate Capture ⏭️ Deferred
 
 **Goal:** No human correction is lost: every intervention automatically
 becomes a reviewable candidate rule with full context.
@@ -27,13 +66,21 @@ becomes a reviewable candidate rule with full context.
 - Each candidate embeds its text (same embedding pipeline as memory entries)
   and links its provenance: project, agent, run, source approval/exception
 
-**Unlocks:** The raw material of the feedback loop accumulates from day one —
-capture cannot be retrofitted.
+**Unlocks:** The manual-correction capture path — the only source that cannot
+be backfilled. Rejection and edit candidates *can* be rebuilt from
+`ApprovalItem` history at any time (see the
+[deferral decision](#deferral-decision-2026-07)), so this phase carries no
+start-now urgency.
 
-### Phase 2 — Recurrence Detection ❌ Not started
+### Phase 2 — Recurrence Detection ⏭️ Deferred
 
 **Goal:** Repeated corrections surface themselves instead of relying on
 someone rereading the queue.
+
+> Exact-key recurrence (same `dedup_key`) is already covered by the approvals
+> [recurrence view](./prd-approvals.md#recurrence-view--not-started); what this
+> phase adds is **semantic** clustering of *paraphrased* corrections across
+> different tools and arguments.
 
 **Deliverables:**
 
@@ -62,7 +109,7 @@ someone rereading the queue.
 **Unlocks:** "This correction has happened 4 times across 3 runs" as a
 queryable fact.
 
-### Phase 3 — Promotion Lifecycle ❌ Not started
+### Phase 3 — Promotion Lifecycle ⏭️ Deferred
 
 **Goal:** A human curates candidates into versioned, scoped rules.
 
@@ -85,21 +132,21 @@ queryable fact.
 **Unlocks:** A curation flow (UI or PR-based — out of scope here) driven
 entirely through the API.
 
-### Phase 4 — Context Injection ❌ Not started
+### Phase 4 — Rule Listing API ⏭️ Deferred
 
-**Goal:** A promoted rule demonstrably changes the next matching run.
+**Goal:** A promoted rule is retrievable so the consuming application can inject
+it into the next matching run.
 
 **Deliverables:**
 
-- The [context assembler](./prd-knowledge-packages.md) pulls active
-  `LearnedRule`s whose scope matches the run's project, ordered
-  `global → project` (most specific **last**, so it wins on conflict), into
-  the dedicated learned-rules layer of the assembly
-- Rules are injected fenced as reference data (never `system` role),
-  consistent with the knowledge injection hygiene rule
+- A scoped listing endpoint returns active `LearnedRule`s whose scope matches a
+  given project, ordered `global → project` (most specific **last**, so it wins
+  on conflict) — the app applies that order when composing context
+- Guidance (non-enforced): the app should inject rules fenced as reference data
+  (never `system` role), consistent with the injection hygiene rule
 - Acceptance test: reject an approval with a reason → promote the candidate →
-  the next run's assembled context contains the rule (and the previous run's
-  did not)
+  the listing endpoint returns the promoted rule for the project (and did not
+  before promotion)
 
 **Unlocks:** The loop closes — human corrections change agent behavior without
 a redeploy.
@@ -144,8 +191,8 @@ Two signals feed that graduation decision:
 
 - **Recurring rejected re-proposals** from approvals (admitted with
   `previous_item_id` per [prd-approvals.md](./prd-approvals.md) decision 2) —
-  recurrence detection happens here (Phase 2 clustering), not in approvals
-  dedup.
+  exact-key recurrence is surfaced by the approvals recurrence view; Phase 2
+  clustering here would extend that to paraphrased corrections.
 - **Candidates auto-linking to an already-promoted rule** (Phase 2) — the
   built-in "this rule may not be working" signal.
 

@@ -1,9 +1,10 @@
 # PRD: Agent Versioning & Staged Rollout
 
 > Part of [Agent Operations on Formations](./prd-agent-operations.md).
-> Mirrors the version-archival pattern of `PolicyVersion`
-> ([guardrails](../packages/website/docs/modules/guardrails.md)) and `LearnedRuleVersion`
-> ([prd-learned-rules.md](./prd-learned-rules.md)). Eval-gated promotion
+> Mirrors the version-archival pattern of `GuardrailVersion`
+> ([guardrails](../packages/website/docs/modules/guardrails.md)); the deferred
+> [learned-rules module](./prd-learned-rules.md) plans the same pattern
+> (`LearnedRuleVersion`). Eval-gated promotion
 > integrates with [prd-evaluations.md](./prd-evaluations.md).
 
 ## Implementation Status
@@ -20,8 +21,8 @@
 
 ## Problem
 
-Guardrail policies and learned rules are getting append-only version history
-(`PolicyVersion`, `LearnedRuleVersion`), but the **agent itself** — the
+Guardrail policies already keep append-only version history
+(`GuardrailVersion`), but the **agent itself** — the
 resource whose behavior those layers govern — has none. `instructions`,
 `model`, `tools`, `knowledge_config`, and `boundary_policy` are mutable in
 place: a bad instruction edit hits 100% of traffic the instant `PUT` returns,
@@ -65,10 +66,10 @@ spec: `ai_provider_id`, `name`, `instructions`, `model`, `tool_ids`, `tools`
 `knowledge_config`, `output_schema`, `max_context_messages`,
 `single_session_per_actor`.
 
-**Not part of the snapshot:** runtime-injected context. Learned-rules
-injection and knowledge retrieval pin at **generation time**, not snapshot
-time — a version records *which* `knowledge_config` and rule scopes applied,
-not the documents or rules themselves, which keep their own histories.
+**Not part of the snapshot:** runtime-injected context. Knowledge retrieval
+(and any context the consuming app injects) pins at **generation time**, not
+snapshot time — a version records *which* `knowledge_config` applied, not the
+documents themselves, which keep their own histories.
 
 ### Single Write Path (decision)
 
@@ -85,7 +86,7 @@ config) do not create a version.
 
 `restore` copies version N's `config` into a **new** version M+1 rather than
 rewinding the pointer. Rationale: history stays append-only (the same
-invariant `PolicyVersion` and `LearnedRuleVersion` hold), audit references to
+invariant `GuardrailVersion` holds), audit references to
 intermediate versions never dangle, and "undo the undo" works — restoring the
 pre-restore version is just another restore.
 

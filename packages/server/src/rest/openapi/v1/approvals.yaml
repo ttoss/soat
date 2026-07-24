@@ -299,9 +299,6 @@ components:
           type: string
           nullable: true
           description: Transition fired on approval (task_transition producer)
-        knowledge_version:
-          type: string
-          nullable: true
         policy_version:
           type: string
           nullable: true

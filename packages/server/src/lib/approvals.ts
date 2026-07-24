@@ -74,7 +74,6 @@ export const mapApproval = (instance: ApprovalInstance) => {
     agentId: instance.agentId,
     taskId: instance.taskId,
     taskTransition: instance.taskTransition,
-    knowledgeVersion: instance.knowledgeVersion,
     policyVersion: instance.policyVersion,
     previousItemId: instance.previousItemId,
     resolvedBy: instance.resolvedByUser?.publicId ?? null,
@@ -258,7 +257,6 @@ type EmitApprovalArgs = {
   agentId?: string | null;
   taskId?: string | null;
   taskTransition?: string | null;
-  knowledgeVersion?: string | null;
   policyVersion?: string | null;
   previousItemId?: string | null;
 };
@@ -287,7 +285,6 @@ const insertApprovalItem = async (
       agentId: args.agentId,
       taskId: args.taskId,
       taskTransition: args.taskTransition,
-      knowledgeVersion: args.knowledgeVersion,
       policyVersion: args.policyVersion,
       previousItemId: args.previousItemId,
     });

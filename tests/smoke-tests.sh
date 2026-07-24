@@ -1772,14 +1772,14 @@ if [ -z "$GEN_ID" ] || [ "$GEN_ID" = "null" ]; then
 fi
 echo "--- Attaching audit metadata to generation $GEN_ID ---"
 GEN_PATCH_RESP=$($SOAT_CLI update-generation --generation-id "$GEN_ID" \
-  --metadata '{"knowledge_version":"2026-07-01","playbook":"refunds-v3"}' | sanitize_json)
-if ! printf '%s\n' "$GEN_PATCH_RESP" | jq -e '.metadata.knowledge_version == "2026-07-01" and .metadata.playbook == "refunds-v3"' >/dev/null 2>&1; then
+  --metadata '{"team":"payments","ticket_id":"OPS-4821"}' | sanitize_json)
+if ! printf '%s\n' "$GEN_PATCH_RESP" | jq -e '.metadata.team == "payments" and .metadata.ticket_id == "OPS-4821"' >/dev/null 2>&1; then
   echo "ERROR: update-generation did not round-trip caller metadata" >&2
   printf '%s\n' "$GEN_PATCH_RESP" | jq . >&2
   exit 1
 fi
 GEN_GET_RESP=$($SOAT_CLI get-generation --generation-id "$GEN_ID" | sanitize_json)
-if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.knowledge_version == "2026-07-01" and .metadata.playbook == "refunds-v3"' >/dev/null 2>&1; then
+if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.team == "payments" and .metadata.ticket_id == "OPS-4821"' >/dev/null 2>&1; then
   echo "ERROR: get-generation did not return attached metadata" >&2
   printf '%s\n' "$GEN_GET_RESP" | jq . >&2
   exit 1
