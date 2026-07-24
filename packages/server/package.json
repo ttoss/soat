@@ -1,6 +1,6 @@
 {
   "name": "@soat/server",
-  "version": "0.15.13",
+  "version": "0.15.14",
   "main": "dist/server.mjs",
   "scripts": {
     "build": "tsdown",
@@ -44,8 +44,6 @@
   "devDependencies": {
     "@stoplight/spectral-cli": "^6.16.0",
     "@testcontainers/postgresql": "^12.0.4",
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1",
     "@ttoss/config": "^1.37.17",
     "@ttoss/test-utils": "^4.2.18",
     "@types/debug": "^4.1.13",
@@ -54,6 +52,8 @@
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.1",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "jest": "^30.4.2",
     "js-yaml": "^5.2.1",
     "supertest": "^7.2.2",

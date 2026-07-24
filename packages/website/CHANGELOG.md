@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.15.14](https://127.0.0.1/41729/git/ttoss/compare/v0.15.13...v0.15.14) (2026-07-24)
+
+* feat(approvals)!: remove knowledge packages (G7); defer learned rules (G6) into an approvals recurrence view (#672) ([9ae83d9](https://127.0.0.1/41729/git/ttoss/commits/9ae83d94f041c2eb1c4fd078b3b03b9dfc0013f0)), closes [#672](https://127.0.0.1/41729/git/ttoss/issues/672)
+
+### Bug Fixes
+
+* **tools:** return raw text instead of 500 for a 2xx non-JSON http tool response ([#668](https://127.0.0.1/41729/git/ttoss/issues/668)) ([9792aad](https://127.0.0.1/41729/git/ttoss/commits/9792aad7e62986b56921938ef6dc538843cb0207)), closes [#667](https://127.0.0.1/41729/git/ttoss/issues/667)
+
+### Features
+
+* **api-keys:** return actionable API_KEY_PROJECT_SCOPE error on cross-project writes ([#674](https://127.0.0.1/41729/git/ttoss/issues/674)) ([182b2e9](https://127.0.0.1/41729/git/ttoss/commits/182b2e924cebbdc33b22395ed5910f8f5f55329c)), closes [#673](https://127.0.0.1/41729/git/ttoss/issues/673)
+* **approvals:** thread previous_item_id on re-proposals after rejection ([#671](https://127.0.0.1/41729/git/ttoss/issues/671)) ([59ed4dc](https://127.0.0.1/41729/git/ttoss/commits/59ed4dc8b1d2f6c1f1f4da253af379eac9d421b2))
+
+### BREAKING CHANGES
+
+* the `knowledge_version` field is removed from the
+  approval item shape (REST/MCP/SDK) and the ApprovalItem model.
+  `policy_version` (guardrail-tied) is unchanged.
+
+  - ApprovalItem: drop knowledgeVersion column; approvals.ts mapper /
+    EmitApprovalArgs / insert; approvals.yaml schema property
+  - generations: neutralize knowledge_version/playbook metadata examples
+    (spec, module doc, tests, smoke-tests) — they only demoed free-form
+    caller metadata
+  - docs: delete prd-knowledge-packages.md; strip G7 from roadmap,
+    prd-agent-operations, prd-approvals; reframe G6 learned-rules as an
+    app-injected read surface; add a "Boundary: context composition"
+    decision record to the roadmap
+
 ## [0.15.13](https://127.0.0.1/41729/git/ttoss/compare/v0.15.12...v0.15.13) (2026-07-23)
 
 ### Features
