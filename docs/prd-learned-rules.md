@@ -1,11 +1,12 @@
 # PRD: Learned Rules (Feedback Loop)
 
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G6).
-> Captures from [prd-approvals.md](./prd-approvals.md) resolution paths;
-> injects through the context assembler in
-> [prd-knowledge-packages.md](./prd-knowledge-packages.md). Reuses the
-> embedding nearest-neighbor machinery from
-> [prd-memories.md](./prd-memories.md).
+> Captures from [prd-approvals.md](./prd-approvals.md) resolution paths and
+> reuses the embedding nearest-neighbor machinery from
+> [prd-memories.md](./prd-memories.md). SOAT exposes promoted rules through a
+> scoped listing API; **injecting them into agent context is the consuming
+> application's responsibility** (see
+> [roadmap → Boundary: context composition](./roadmap.md#boundary-context-composition)).
 
 ## Implementation Phases
 
@@ -85,21 +86,21 @@ queryable fact.
 **Unlocks:** A curation flow (UI or PR-based — out of scope here) driven
 entirely through the API.
 
-### Phase 4 — Context Injection ❌ Not started
+### Phase 4 — Rule Listing API ❌ Not started
 
-**Goal:** A promoted rule demonstrably changes the next matching run.
+**Goal:** A promoted rule is retrievable so the consuming application can inject
+it into the next matching run.
 
 **Deliverables:**
 
-- The [context assembler](./prd-knowledge-packages.md) pulls active
-  `LearnedRule`s whose scope matches the run's project, ordered
-  `global → project` (most specific **last**, so it wins on conflict), into
-  the dedicated learned-rules layer of the assembly
-- Rules are injected fenced as reference data (never `system` role),
-  consistent with the knowledge injection hygiene rule
+- A scoped listing endpoint returns active `LearnedRule`s whose scope matches a
+  given project, ordered `global → project` (most specific **last**, so it wins
+  on conflict) — the app applies that order when composing context
+- Guidance (non-enforced): the app should inject rules fenced as reference data
+  (never `system` role), consistent with the injection hygiene rule
 - Acceptance test: reject an approval with a reason → promote the candidate →
-  the next run's assembled context contains the rule (and the previous run's
-  did not)
+  the listing endpoint returns the promoted rule for the project (and did not
+  before promotion)
 
 **Unlocks:** The loop closes — human corrections change agent behavior without
 a redeploy.

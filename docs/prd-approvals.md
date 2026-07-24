@@ -18,7 +18,6 @@ interceptor (G4) and removed. Dedup is now complete: a duplicate emit returns th
 existing pending item, and a re-proposal matching a *rejected* item is admitted
 with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
-- [ ] Knowledge-version provenance on approval items
 - [ ] `ActivityEntry` feed (`acte_` prefix)
 
 ---
@@ -39,13 +38,6 @@ item is **admitted** (not suppressed) with `previous_item_id` linking the prior
 item, so approvers see the recurrence and the learned-rules rejection signal is
 preserved. `previousItemId` is stamped by `emitApproval` (most-recent rejected
 match for the key) and surfaced on the REST/MCP item shape.
-
-### Knowledge-version provenance (pending)
-
-Populate and expose `knowledge_version` / `policy_version` on approval items so
-approvers can trace which knowledge and guardrail-policy versions a proposal was
-based on. Emit-time freezing must capture these alongside the snapshot mappings,
-and the fields must be surfaced through the REST/MCP item shape.
 
 ### Phase 4 — Activity feed — Not started
 

@@ -179,11 +179,11 @@ paths:
               $ref: '#/components/schemas/UpdateGenerationRequest'
             examples:
               audit:
-                summary: Attach knowledge-version audit metadata
+                summary: Attach caller audit metadata
                 value:
                   metadata:
-                    knowledge_version: kb_2026_07_01
-                    playbook: refunds-v3
+                    team: payments
+                    ticket_id: OPS-4821
       responses:
         '200':
           description: Updated generation
@@ -359,8 +359,8 @@ components:
             `trigger_id`, `run_id`, `node_id`, `extraction`, and internal
             recovery state) are rejected with 400.
           example:
-            knowledge_version: '2026-07-01'
-            playbook: refunds-v3
+            team: payments
+            ticket_id: OPS-4821
 
     ErrorResponse:
       type: object

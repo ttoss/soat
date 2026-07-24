@@ -64,7 +64,6 @@ filtering only — the lifecycle never branches on it.
 | `agent_id`           | string \| null  | Proposing agent                                                    |
 | `task_id`            | string \| null  | Gated task (`task_transition` producer)                            |
 | `task_transition`    | string \| null  | Transition fired on approval (`task_transition` producer)          |
-| `knowledge_version`  | string \| null  | Knowledge package version in context at emit time                  |
 | `policy_version`     | string \| null  | Guardrail policy version that routed here                          |
 | `previous_item_id`   | string \| null  | Prior item's ID when this proposal was re-filed after an earlier matching item (same `dedup_key`) was rejected |
 | `resolved_by`        | string \| null  | Resolving user's public ID; `null` on expiry                       |

@@ -329,7 +329,7 @@ describe('Generations', () => {
         .post(`/api/v1/agents/${agentId}/generate`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
-          metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' },
+          metadata: { ticket_id: 'OPS-4821', team: 'payments' },
         });
 
       expect(genResponse.status).toBe(502);
@@ -341,8 +341,8 @@ describe('Generations', () => {
       );
 
       expect(getResponse.status).toBe(200);
-      expect(getResponse.body.metadata.knowledge_version).toBe('2026-07-01');
-      expect(getResponse.body.metadata.playbook).toBe('refunds-v3');
+      expect(getResponse.body.metadata.ticket_id).toBe('OPS-4821');
+      expect(getResponse.body.metadata.team).toBe('payments');
     }, 60000);
   });
 
@@ -389,20 +389,20 @@ describe('Generations', () => {
       const patchResponse = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)
         .send({
-          metadata: { knowledge_version: '2026-07-01', playbook: 'refunds-v3' },
+          metadata: { ticket_id: 'OPS-4821', team: 'payments' },
         });
 
       expect(patchResponse.status).toBe(200);
       expect(patchResponse.body.id).toBe(failedGenerationId);
-      expect(patchResponse.body.metadata.knowledge_version).toBe('2026-07-01');
-      expect(patchResponse.body.metadata.playbook).toBe('refunds-v3');
+      expect(patchResponse.body.metadata.ticket_id).toBe('OPS-4821');
+      expect(patchResponse.body.metadata.team).toBe('payments');
 
       const getResponse = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${failedGenerationId}`
       );
       expect(getResponse.status).toBe(200);
-      expect(getResponse.body.metadata.knowledge_version).toBe('2026-07-01');
-      expect(getResponse.body.metadata.playbook).toBe('refunds-v3');
+      expect(getResponse.body.metadata.ticket_id).toBe('OPS-4821');
+      expect(getResponse.body.metadata.team).toBe('payments');
     });
 
     test('merges over existing metadata and preserves server-owned keys', async () => {
@@ -412,7 +412,7 @@ describe('Generations', () => {
         metadata: {
           extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
           pendingState: { messages: [] },
-          knowledge_version: '2026-07-01',
+          ticket_id: 'OPS-4821',
         },
       });
 
@@ -424,7 +424,7 @@ describe('Generations', () => {
       // Newly attached key is present.
       expect(patchResponse.body.metadata.reviewer).toBe('alice');
       // Pre-existing caller key is preserved (merge, not replace).
-      expect(patchResponse.body.metadata.knowledge_version).toBe('2026-07-01');
+      expect(patchResponse.body.metadata.ticket_id).toBe('OPS-4821');
       // Server-owned key is preserved and still exposed.
       expect(patchResponse.body.metadata.extraction).toEqual({
         candidates: 2,
