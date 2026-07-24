@@ -14,10 +14,10 @@
 Phase 1 (approvals queue core + `approval` orchestration node) and Phase 3 (the
 exceptions queue) have shipped; Phase 2's per-binding `approval_policy` was
 superseded by the [guardrail](../packages/website/docs/modules/guardrails.md)
-interceptor (G4) and removed. Outstanding:
+interceptor (G4) and removed. Dedup is now complete: a duplicate emit returns the
+existing pending item, and a re-proposal matching a *rejected* item is admitted
+with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
-- [ ] Dedup: a duplicate emit returns the existing pending item _(the `dedup_key`
-      column and unique partial index exist; the return-existing logic is not yet wired)_
 - [ ] Knowledge-version provenance on approval items
 - [ ] `ActivityEntry` feed (`acte_` prefix)
 
@@ -25,18 +25,20 @@ interceptor (G4) and removed. Outstanding:
 
 ## Remaining work
 
-### Dedup / idempotency — return-existing (pending)
+### Dedup / idempotency — shipped
 
 An agent retrying a proposal must not spam the queue. Dedup key:
-`(project_id, agent_id, tool_id, args_digest)` while a matching item is
-`pending`; a duplicate emit returns the existing item rather than creating a new
-one. The `dedup_key` column and its unique partial index (where
-`status = 'pending'`) already exist; the return-existing behavior in
-`emitApproval` is not yet implemented.
+`(project_id, agent_id, tool_id, args_digest)`. While a matching item is
+`pending`, a duplicate emit returns the existing item rather than creating a new
+one — the `emitApproval` fast path plus a create-time unique-violation backstop
+(the partial unique index where `status = 'pending'`) resolve the race to the
+single pending winner.
 
-Non-pending states are settled by decision 2 below: a re-proposal matching a
-*rejected* item is admitted with `previous_item_id` linking the prior item —
-that field is part of this pending work.
+Non-pending states follow decision 2 below: a re-proposal matching a *rejected*
+item is **admitted** (not suppressed) with `previous_item_id` linking the prior
+item, so approvers see the recurrence and the learned-rules rejection signal is
+preserved. `previousItemId` is stamped by `emitApproval` (most-recent rejected
+match for the key) and surfaced on the REST/MCP item shape.
 
 ### Knowledge-version provenance (pending)
 

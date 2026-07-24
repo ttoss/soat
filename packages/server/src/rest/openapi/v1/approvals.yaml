@@ -305,6 +305,13 @@ components:
         policy_version:
           type: string
           nullable: true
+        previous_item_id:
+          type: string
+          nullable: true
+          description: >-
+            Prior item's ID when this proposal was re-filed after an earlier
+            matching item (same dedup_key) had been rejected
+          example: apr_V1StGXR8Z5jdHi6B
         resolved_by:
           type: string
           nullable: true

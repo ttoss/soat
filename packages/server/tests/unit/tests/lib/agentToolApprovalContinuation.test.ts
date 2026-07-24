@@ -164,6 +164,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
       taskTransition: null,
       knowledgeVersion: null,
       policyVersion: null,
+      previousItemId: null,
       resolvedBy: null,
       resolutionReason: null,
       editedArguments: null,

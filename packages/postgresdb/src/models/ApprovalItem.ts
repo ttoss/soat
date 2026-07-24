@@ -150,6 +150,14 @@ export class ApprovalItem extends Model {
   @Column({ type: DataType.STRING(64), allowNull: true })
   declare policyVersion: string | null;
 
+  // Set on a re-proposal admitted after an earlier item with the same
+  // `dedup_key` was *rejected* (approvals decision 2): the prior rejected item's
+  // public id, so approvers see the recurrence. Null on a first proposal or a
+  // pending-dedup return. Held as the referenced item's publicId (a soft link,
+  // like the other provenance ids) rather than an FK.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare previousItemId: string | null;
+
   // ── Resolution ───────────────────────────────────────────────────────────
   @ForeignKey(() => {
     return User;

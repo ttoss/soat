@@ -31,7 +31,7 @@ guardrails are fully shipped and have no remaining items).
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 worker-fleet ops hardening + P3 (SQS driver) |
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed + provenance + dedup remain |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed + provenance remain (dedup shipped) |
 | G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 storage/request emitters + coverage + guard integ. |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ❌ Not started |
 | G7 | Knowledge packages · context assembly | [prd-knowledge-packages.md](./prd-knowledge-packages.md) | ❌ Not started |
@@ -118,7 +118,7 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 ### G3 — Approvals (exceptions · activity)
 
-- [ ] Dedup return-existing logic (the `dedup_key` column + partial unique index exist; the return-existing behavior does not) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
+- [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
 - [ ] **Knowledge-version provenance** (unblocks the audit acceptance criterion):
   - [ ] `3.1` record `knowledge_version` on `generation.metadata` at emit time
   - [ ] `3.2` stamp `knowledgeVersion` / `policyVersion` onto `ApprovalItem` + the audit record via `emitApproval`

@@ -76,6 +76,7 @@ export const mapApproval = (instance: ApprovalInstance) => {
     taskTransition: instance.taskTransition,
     knowledgeVersion: instance.knowledgeVersion,
     policyVersion: instance.policyVersion,
+    previousItemId: instance.previousItemId,
     resolvedBy: instance.resolvedByUser?.publicId ?? null,
     resolutionReason: instance.resolutionReason,
     editedArguments: instance.editedArguments,
@@ -190,6 +191,46 @@ const findPendingByDedupKey = async (args: {
   });
 };
 
+// Returns the most recent *rejected* item matching a dedup key in a project, or
+// null. Feeds §3 decision 2: a re-proposal after a rejection is admitted (not
+// suppressed) and linked to that prior rejected item via `previous_item_id`, so
+// approvers see the recurrence and learned-rules keeps the rejection signal.
+const findLatestRejectedByDedupKey = async (args: {
+  projectId: number;
+  dedupKey: string;
+}): Promise<ApprovalInstance | null> => {
+  return db.ApprovalItem.findOne({
+    where: {
+      projectId: args.projectId,
+      dedupKey: args.dedupKey,
+      status: 'rejected',
+    },
+    order: [['createdAt', 'DESC']],
+  });
+};
+
+// Resolves the `previous_item_id` to stamp on a newly filed item (§3 decision
+// 2): with no matching item still pending, a proposal identical to a *recently
+// rejected* one is admitted rather than suppressed and linked to that prior item
+// so approvers see the recurrence. Auto-linked only when the caller has a
+// `dedupKey` and did not already supply a `previousItemId`.
+const resolvePreviousItemId = async (
+  args: EmitApprovalArgs
+): Promise<string | null> => {
+  if (args.previousItemId != null) return args.previousItemId;
+  if (!args.dedupKey) return null;
+  const priorRejected = await findLatestRejectedByDedupKey({
+    projectId: args.projectId,
+    dedupKey: args.dedupKey,
+  });
+  if (!priorRejected) return null;
+  log(
+    'emitApproval: threading previous rejected id=%s',
+    priorRejected.publicId
+  );
+  return priorRejected.publicId;
+};
+
 const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
   const item = await db.ApprovalItem.findOne({
     where: { publicId: id },
@@ -219,6 +260,7 @@ type EmitApprovalArgs = {
   taskTransition?: string | null;
   knowledgeVersion?: string | null;
   policyVersion?: string | null;
+  previousItemId?: string | null;
 };
 
 // Inserts the row, or — on a dedup unique-constraint race — resolves the pending
@@ -247,6 +289,7 @@ const insertApprovalItem = async (
       taskTransition: args.taskTransition,
       knowledgeVersion: args.knowledgeVersion,
       policyVersion: args.policyVersion,
+      previousItemId: args.previousItemId,
     });
     return { instance };
   } catch (error) {
@@ -298,7 +341,8 @@ export const emitApproval = async (
     }
   }
 
-  const created = await insertApprovalItem(args);
+  const previousItemId = await resolvePreviousItemId(args);
+  const created = await insertApprovalItem({ ...args, previousItemId });
   // Dedup race backstop returned the pending winner directly (already mapped).
   if ('winner' in created) return created.winner;
 
