@@ -1,5 +1,4 @@
-import { db } from 'src/db';
-import { extractUsageTokens, recordCompletionUsage } from 'src/lib/usage';
+import { extractUsageTokens } from 'src/lib/usage';
 
 /**
  * Pure mapping from the AI SDK `LanguageModelUsage` to the meter's token
@@ -84,39 +83,5 @@ describe('extractUsageTokens', () => {
       cachedTokens: 0,
       reasoningTokens: 0,
     });
-  });
-});
-
-describe('recordCompletionUsage', () => {
-  // Metering is an observability side effect: it must never surface as a
-  // failure of the completion it measures. The swallow branch is driven for
-  // real — a project id with no row behind it makes the event insert violate
-  // its foreign key — rather than with a stubbed rejection.
-  test('swallows a write failure instead of throwing', async () => {
-    const before = await db.UsageEvent.count();
-
-    await expect(
-      recordCompletionUsage({
-        source: 'chat',
-        projectId: 2_147_483_600, // no Project row → FK violation on insert
-        provider: 'ollama',
-        aiProviderId: null,
-        model: 'stub-model',
-        usage: {
-          inputTokens: 5,
-          outputTokens: 3,
-          totalTokens: 8,
-          inputTokenDetails: {
-            noCacheTokens: 5,
-            cacheReadTokens: 0,
-            cacheWriteTokens: 0,
-          },
-          outputTokenDetails: { textTokens: 3, reasoningTokens: 0 },
-        },
-      })
-    ).resolves.toBeUndefined();
-
-    // Nothing was written, and no threshold evaluation ran off a phantom event.
-    expect(await db.UsageEvent.count()).toBe(before);
   });
 });

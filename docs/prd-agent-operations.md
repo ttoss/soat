@@ -11,7 +11,7 @@
 | ----------------------------------------- | ------------------------------------------------------ |
 | Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
-| Usage metering                            | [prd-usage-metering.md](./prd-usage-metering.md)       |
+| Usage metering ✅ shipped                  | [usage module doc](../packages/website/docs/modules/usage.md) |
 | Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [prd-approvals.md](./prd-approvals.md#recurrence-view--not-started) · [prd-learned-rules.md](./prd-learned-rules.md) |
 
 ## Problem Statement
@@ -77,7 +77,7 @@ declarative deploy layer.
 | -- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
 | G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | Durable background execution, lease/reaper recovery, and retries **exist**; no queue abstraction, no idempotency keys, no concurrency limits |
 | G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
-| G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | Per-**generation** and per-**run** metering + versioned price book **exist** (`UsageEvent`/`UsageComponent`/`PriceBook`, per-generation + per-run receipt, run roll-up, #562); grouped aggregation and non-LLM meter types (compute/storage/requests) do not — see [prd-usage-metering.md](./prd-usage-metering.md) |
+| G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | ✅ **Shipped.** Every LLM path meters, plus the `compute_execution` / `storage` / `api_request` dimensions, grouped aggregation, receipts, thresholds, and the `soat.usage.*` spend guards (project windows and per-run ceilings) — see the [usage module doc](../packages/website/docs/modules/usage.md) |
 | G6 | Feedback loop → recurrence surfacing    | Recurring corrections queryable; graduation path into guardrail `deny` | `previous_item_id` threads recurrence per item; no aggregate view (→ G3 recurrence view); full rule lifecycle ⏭️ deferred |
 
 ## End State: One Template, One Operating Stack
