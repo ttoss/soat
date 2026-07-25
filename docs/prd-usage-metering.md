@@ -21,7 +21,7 @@
 | Storage metering                           | ✅ Shipped                  | Daily per-project snapshot job (Phase 5)                             |
 | API-request metering                       | ✅ Shipped                  | Flush-aggregated counters; last in sequence (Phase 6)               |
 | `usage.*` guard context                    | ✅ Shipped                  | `soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}` resolve fail-closed in the [guardrail](../packages/website/docs/modules/guardrails.md) evaluator (Phase 7) |
-| Per-run cumulative ceiling                 | ⏭️ Deferred                 | No run-scoped guard key exists; the run roll-up is the interim signal an orchestration `condition` node reads |
+| Per-run cumulative ceiling                 | ✅ Shipped                  | `soat.usage.run_tokens` / `run_cost_usd` sum the current run's meters; a class-B ceiling trips fail-closed mid-run (#486) |
 
 ## Coverage — All LLM Paths ✅
 
@@ -89,12 +89,16 @@ usage query throws. The class-B ceiling pattern
 **Unlocks:** Hard per-project spend ceilings enforced deterministically at the
 tool boundary.
 
-**Still open — per-run cumulative ceiling (#486).** The shipped keys are
-*windowed per project*, which is the wrong granularity for aborting a single
-runaway run. No run-scoped key (`usage.run_tokens` / `usage.run_cost_usd`) exists
-in the guard-context catalog. Interim: an orchestration `condition` node reads
-the run's cumulative usage via the run roll-up and routes to an abort path — a
-modelable pattern, not a platform guarantee.
+**Per-run cumulative ceiling (#486) — shipped.** `soat.usage.run_tokens` and
+`soat.usage.run_cost_usd` join the catalog, summing only the meter rows recorded
+against the current run so far (project windows are too coarse to catch one
+runaway cycle). They resolve live at evaluation time, so a class-B rule guarded
+by `{'<': [{var: 'soat.usage.run_tokens'}, {var: 'context.action_token_ceiling'}]}`
+trips on the first gated tool call after the ceiling is crossed — aborting
+before the tool runs and filing an exception, rather than reporting after the
+run completes. Outside a run both keys are unresolvable and fail closed. The
+pattern is documented under
+[per-run spend ceilings](../packages/website/docs/modules/guardrails.md#per-run-spend-ceilings).
 
 ## Risks
 

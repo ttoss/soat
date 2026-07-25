@@ -179,6 +179,15 @@ Prices can also be **declared in a formation** with the `project_price` resource
 
 `GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), `meter_type`, `actor`, or `session`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`, or any non-session work under `group_by=actor`) collapses into a group with a `null` `key`, so the groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
+### Spend guards
+
+Metered usage feeds the [guardrail](./guardrails.md) evaluator's `soat.usage.*` context, so a spend limit is enforced deterministically at the tool boundary rather than reported after the fact. Two granularities exist:
+
+- **Per project, windowed** — `soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}`, rolling windows ending at evaluation time.
+- **Per run, cumulative** — `soat.usage.run_tokens` and `soat.usage.run_cost_usd`, summing only the meter rows recorded against the current [orchestration run](./orchestrations.md). This is what stops a single runaway cycle, which a project window is too coarse to catch; see [per-run spend ceilings](./guardrails.md#per-run-spend-ceilings).
+
+Both read live at evaluation time and fail closed. Unlike [thresholds](#thresholds-and-alerts), which alert, a guard **aborts** the call.
+
 ### Thresholds and alerts
 
 A project can carry any number of [`UsageThreshold`](#usagethreshold) rules. After **each** usage-event write — the single metering choke point — every threshold on the event's project is evaluated against its windowed aggregate, and a `usage.threshold_crossed` [webhook](./webhooks.md) fires for any that cross. Because evaluation rides the write path, infra meters count toward a `cost_usd` threshold the moment those emitters land.
