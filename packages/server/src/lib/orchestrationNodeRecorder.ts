@@ -15,7 +15,7 @@ import {
   resolveRetryPolicy,
 } from './orchestrationRetry';
 import type { OrchestrationNode } from './orchestrations';
-import { recordComputeUsage } from './usageRecording';
+import { recordComputeUsage } from './usageComputeRecording';
 
 const log = createDebug('soat:orchestrations');
 

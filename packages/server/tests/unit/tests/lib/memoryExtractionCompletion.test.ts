@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { runExtractionCompletion } from 'src/lib/memoryExtractionCompletion';
 
@@ -250,6 +251,48 @@ describe('memoryExtractionCompletion lib', () => {
         })
       ).rejects.toMatchObject({ code: 'AI_PROVIDER_NOT_FOUND' });
     });
+  });
+
+  test('meters the extraction as an llm_tokens event attributed to the agent', async () => {
+    const agentId = await createAgent({ name: 'ComplMeteredAgent' });
+    const agent = await db.Agent.findOne({ where: { publicId: agentId } });
+    const before = await db.UsageEvent.count({
+      where: { agentId: agent?.id as number },
+    });
+
+    await runExtractionCompletion({
+      agentId,
+      prompt: 'Extract facts from: user prefers metering.',
+    });
+
+    // The metering write is fire-and-forget, so poll for it rather than sleep.
+    let event: InstanceType<typeof db.UsageEvent> | undefined;
+    for (let attempt = 0; attempt < 100 && !event; attempt += 1) {
+      const rows = await db.UsageEvent.findAll({
+        where: { agentId: agent?.id as number, meterType: 'llm_tokens' },
+        order: [['createdAt', 'DESC']],
+      });
+      if (rows.length > before) event = rows[0];
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
+    expect(event).toBeDefined();
+    expect(event?.provider).toBe('ollama');
+    expect(event?.model).toBe('default-stub-model');
+    // Extraction is anchored to an agent but produces no Generation row.
+    expect(event?.generationId).toBeNull();
+
+    const components = await db.UsageComponent.findAll({
+      where: { usageEventId: event?.id as number },
+    });
+    expect(
+      Number(
+        components.find((c) => {
+          return c.component === 'input_tokens';
+        })?.quantity
+      )
+    ).toBe(1);
   });
 
   test('throws RESOURCE_NOT_FOUND for an unknown agent', async () => {

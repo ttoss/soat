@@ -2,6 +2,7 @@ import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
+import { recordCompletionUsage } from './usage';
 
 const log = createDebug('soat:memory-extraction');
 
@@ -23,19 +24,36 @@ export const runExtractionCompletion = async (args: {
   aiProviderId?: string;
   model?: string;
 }): Promise<string> => {
-  const { model, modelName } = await resolveCompletionModel({
+  const resolved = await resolveCompletionModel({
     agentId: args.agentId,
     projectIds: args.projectIds,
     aiProviderId: args.aiProviderId,
     model: args.model,
   });
 
-  log('runExtractionCompletion: agentId=%s model=%s', args.agentId, modelName);
+  log(
+    'runExtractionCompletion: agentId=%s model=%s',
+    args.agentId,
+    resolved.modelName
+  );
 
-  const { text } = await generateText({
-    model,
+  const { text, usage } = await generateText({
+    model: resolved.model,
     prompt: args.prompt,
     temperature: 0,
+  });
+
+  // Extraction is a real provider call, so it meters like any other.
+  // `recordCompletionUsage` never rejects, so `void` marks the intentional
+  // fire-and-forget: metering must not delay or fail the extraction.
+  void recordCompletionUsage({
+    source: 'memory_extraction',
+    projectId: resolved.projectId,
+    provider: resolved.provider,
+    aiProviderId: resolved.aiProviderDbId,
+    agentId: resolved.agentDbId,
+    model: resolved.modelName,
+    usage,
   });
 
   return text;

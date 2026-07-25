@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` (one event per orchestration node execution), `storage` (a daily per-project snapshot), and `api_request` (flush-aggregated request counts) are all metered today. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
+Whenever SOAT completes an LLM call, it records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` (one event per orchestration node execution), `storage` (a daily per-project snapshot), and `api_request` (flush-aggregated request counts) are all metered today. Every LLM path is covered — agent generations plus the standalone chat, discussion, and memory completions (see [Coverage](#coverage)) — and each writes through a shared choke point, so adding a provider cannot silently skip metering.
 
 Events and components are **append-only and immutable** — no update or delete path, no `updated_at` — so historical usage never changes after the fact. Writes are **idempotent** on the generation's public ID: a replayed completion is a no-op instead of double counting.
 
@@ -110,7 +110,18 @@ An LLM event's tokens are split into disjoint, additive components. `input_token
 
 ### Coverage
 
-Usage is metered for agent generations — including [conversations](./conversations.md) and [orchestration](./orchestrations.md) agent nodes, which run through the same agent-completion path. When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+**Every LLM call the platform makes is metered.** There are two write paths, and both produce the same `llm_tokens` event with the same components and pricing:
+
+| Path | Metered calls | Event attribution |
+| --- | --- | --- |
+| Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes — all run through the same agent-completion path | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `run_id`/`node_id` inside a run |
+| Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped, streaming and not), [discussion](./discussions.md) turns, and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are always `null` — these calls create no generation. `agent_id` is set for memory extraction/consolidation (which are anchored to an agent) and `null` for chats and discussions |
+
+When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+
+Standalone completions have no replay identity — nothing re-delivers them, and a retried request is a new provider call that must be billed — so their idempotency key is unique per call (`completion:<source>:<uuid>`, where `source` is `chat`, `discussion`, `memory_extraction`, or `memory_consolidation`).
+
+A **streamed** completion is metered when the stream finishes, since token counts only arrive with the provider's final chunk. A stream the client abandons mid-way is therefore not metered.
 
 ### Compute metering
 

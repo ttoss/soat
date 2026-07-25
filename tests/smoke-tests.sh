@@ -2504,6 +2504,19 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     echo "Usage receipt endpoint: OK (generation $USAGE_GEN_ID)"
   fi
 
+  # 34b-ii-b. Standalone-completion coverage — the chat completions from steps
+  # 17/18 create no generation, so they must still be metered as llm_tokens
+  # events with a null generation_id. Proves no LLM call skips metering just
+  # because it has no Generation row behind it.
+  CHAT_METERS_RESP=$($SOAT_CLI list-usage-meters --meter-type llm_tokens --limit 100 | sanitize_json)
+  CHAT_METER_COUNT=$(printf '%s\n' "$CHAT_METERS_RESP" | jq -r '[.data[] | select(.generation_id == null)] | length')
+  if [ "$CHAT_METER_COUNT" -lt 1 ]; then
+    echo "ERROR: no generation-less llm_tokens event — chat completions were not metered" >&2
+    echo "$CHAT_METERS_RESP" >&2
+    exit 1
+  fi
+  echo "Standalone completion metering: OK ($CHAT_METER_COUNT generation-less llm_tokens events)"
+
   # 34b-iii. Aggregate — the per-project usage rollup, bucketed by meter type.
   # Grand totals and each group carry summed token counts and cost_usd.
   USAGE_AGG_RESP=$($SOAT_CLI get-usage \
