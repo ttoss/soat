@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { invalidateReadAuditCache } from './auditLog';
 import { assertGuardrailsExist } from './guardrails';
 import { paginatedList, resolvePagination } from './pagination';
 
@@ -14,6 +15,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     name: project.name,
     guardrailIds: project.guardrailIds,
     maxConcurrentRuns: project.maxConcurrentRuns,
+    auditReadsEnabled: project.auditReadsEnabled,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   };
@@ -131,6 +133,7 @@ export const updateProject = async (args: {
   name?: string;
   guardrailIds?: string[] | null;
   maxConcurrentRuns?: number | null;
+  auditReadsEnabled?: boolean;
 }) => {
   log('updateProject: id=%s name=%s', args.id, args.name);
 
@@ -156,8 +159,15 @@ export const updateProject = async (args: {
   if (args.maxConcurrentRuns !== undefined) {
     updates.maxConcurrentRuns = args.maxConcurrentRuns;
   }
+  if (args.auditReadsEnabled !== undefined) {
+    updates.auditReadsEnabled = args.auditReadsEnabled;
+  }
 
   await project.update(updates);
+
+  // The audit middleware caches this flag to keep reads off its queue, so a
+  // flip must take effect on the next request rather than after the TTL.
+  invalidateReadAuditCache(args.id);
 
   return mapProject(project);
 };

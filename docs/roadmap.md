@@ -37,14 +37,16 @@ guardrails are fully shipped and have no remaining items).
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed (quotas is fully shipped, including the
-monitor-breach audit entry — see [prd-quotas.md](./prd-quotas.md)).
+Only PRDs with open work are listed. Quotas is fully shipped, including the
+monitor-breach audit entry (see [prd-quotas.md](./prd-quotas.md)); the audit log
+is now fully shipped too, through the read-auditing flag, the
+`audit.entry_created` webhook, and the per-project NDJSON export (see
+[prd-audit-log.md](./prd-audit-log.md)).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
-| Audit log | [prd-audit-log.md](./prd-audit-log.md) | 🟡 P3 + export remain (P2 shipped) | substrate for G3/G4 |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,6,7 remain | data plane |
@@ -68,7 +70,6 @@ usage ────────────────────────�
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✔
-  audit-log P2 (guardrail evaluation detail kind) ✔ shipped ◄── guardrails Phase 3 ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P6/P7 (ranking, injection, evals)
 
@@ -84,7 +85,6 @@ feedback + governance loops ─────────────────�
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
 | orchestration-queue P1 ✔ | evaluations P2 | async eval runs ride the RunTask queue |
-| guardrails P3 ✔ | ~~audit-log P2~~ ✔ shipped | decision-changing `guardrail_evaluation` becomes one audit `detail` kind (selective-write) |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
@@ -95,10 +95,11 @@ feedback + governance loops ─────────────────�
 ## Recommended build order
 
 1. ~~**Usage infra emitters (P5–P6)**~~ — **shipped** (pure extensions of shipped cores).
-2. ~~**Audit-log P2**~~ — **shipped** (decision-changing guardrail evaluations
-   mirror into `AuditEntry` via selective-write). **Evaluations P1–P2** remain —
-   the substrate the activity feed and agent-versions promotion gate need
-   (audit-log also absorbs the deferred quota monitor-breach audit entry).
+2. ~~**Audit log**~~ — **fully shipped** (P2 selective-write of
+   decision-changing guardrail evaluations, P3 read-auditing flag +
+   `audit.entry_created` webhook, and the per-project NDJSON export).
+   **Evaluations P1–P2** remain — the substrate the activity feed and
+   agent-versions promotion gate need.
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
@@ -165,9 +166,11 @@ _Not started._
 
 ### Audit log
 
+_Fully shipped._
+
 - [x] **Phase 2** Decision-changing guardrail evaluations (`route_to_approval` / `blocked` / `tripwire`) mirror into `AuditEntry` as `detail.kind = "guardrail_evaluation"` via selective-write from `persistGuardrailEvaluations`; plain `execute` stays in the dedicated `guardrail_evaluations` table. Platform-originated (`action: guardrails:Evaluate`, null principal). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#system-originated-entries)
-- [ ] **Phase 3** Read-audit config flag (off by default) + `audit.entry_created` webhook
-- [ ] Per-project NDJSON export (paginate the list endpoint; also serves LGPD)
+- [x] **Phase 3** Read-audit config flag — `audit_reads_enabled` on the project, off by default, gated at enqueue via a 30s per-project cache so read traffic never evicts mutation entries from the audit queue; a read naming no project is never audited. Plus the `audit.entry_created` webhook, emitted from the `writeAuditEntry` choke point with the full snake_case entry as its `data` (project-scoped entries only). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#read-auditing)
+- [x] **Per-project NDJSON export** — `GET /api/v1/audit-log/export`: streams one snake_case entry per line, oldest first, paged internally; `project_id` required and authorized by its own `audit:ExportAuditEntries` action (bulk egress is granted separately from read). Also serves LGPD/GDPR subject-access requests. Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#ndjson-export)
 
 ### Quotas
 

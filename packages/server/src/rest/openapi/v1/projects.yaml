@@ -145,10 +145,12 @@ paths:
         - Projects
       summary: Update a project
       description: >-
-        Updates a project's name and/or its attached guardrails
-        (`guardrail_ids` — the project-scope baseline governing every tool call
-        by every agent in the project). Requires admin role. Detaching a
-        guardrail (removing an id) additionally requires
+        Updates a project's name, its attached guardrails (`guardrail_ids` —
+        the project-scope baseline governing every tool call by every agent in
+        the project), its orchestration concurrency limit
+        (`max_concurrent_runs`), and/or its read-auditing opt-in
+        (`audit_reads_enabled`). At least one field is required. Requires admin
+        role. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
       operationId: updateProject
       parameters:
@@ -186,6 +188,13 @@ paths:
                     `null` clears the limit (unlimited); otherwise an integer
                     >= 1. Enforced at queue claim time — excess runs stay
                     queued until a slot frees.
+                audit_reads_enabled:
+                  type: boolean
+                  example: true
+                  description: >-
+                    Opt the project into read auditing. When true, `GET`
+                    requests that name this project are recorded in the audit
+                    log alongside mutations. Defaults to `false`.
       responses:
         '200':
           description: Project updated successfully
@@ -353,6 +362,12 @@ components:
             Maximum orchestration runs of this project driven at once. `null`
             means unlimited (the default). Enforced at queue claim time.
           example: null
+        audit_reads_enabled:
+          type: boolean
+          description: >-
+            Whether `GET` requests naming this project are recorded in the
+            audit log. `false` by default — v1 audits mutations only.
+          example: false
         created_at:
           type: string
           format: date-time

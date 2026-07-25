@@ -10,6 +10,11 @@
       "operationId": "getAuditEntry",
       "action": "audit:GetAuditEntry",
       "description": "Get a single audit-log entry by ID"
+    },
+    {
+      "operationId": "exportAuditEntries",
+      "action": "audit:ExportAuditEntries",
+      "description": "Export a project's audit-log entries as NDJSON"
     }
   ]
 }

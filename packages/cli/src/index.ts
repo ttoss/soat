@@ -48,6 +48,18 @@ const toKebab = (s: string) => {
     .toLowerCase();
 };
 
+/**
+ * Renders a command's payload for stdout. A non-JSON response (the NDJSON audit
+ * export, a file download) is parsed by the SDK as a Blob or a raw string;
+ * `JSON.stringify` would collapse a Blob to `{}` and escape a string into one
+ * quoted line, so those are printed as their own bytes instead.
+ */
+const formatResultData = async (data: unknown): Promise<string> => {
+  if (data instanceof Blob) return data.text();
+  if (typeof data === 'string') return data;
+  return JSON.stringify(data, null, 2);
+};
+
 const parseFlagValue = (value: string): unknown => {
   const trimmed = value.trim();
 
@@ -488,7 +500,7 @@ program
       process.exit(1);
     }
 
-    console.log(JSON.stringify(result.data, null, 2));
+    console.log(await formatResultData(result.data));
   });
 
 export const runCli = async (args: string[]) => {

@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { AuthUser, Context } from '../Context';
 import { DomainError } from '../errors';
 import type { AuditPrincipalType } from '../lib/auditLog';
+import { peekReadAuditEnabled } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
 
 const log = createDebug('soat:audit');
@@ -127,7 +128,32 @@ const buildDetail = (
   };
 };
 
-/** Builds and enqueues the audit entry for a completed mutating request. */
+/**
+ * Whether this request should produce an entry at all.
+ *
+ * Mutations always do. Reads only do when the project they name has opted into
+ * read auditing — so a read that names no project is never recorded, since no
+ * project could opt it in. The cached flag is consulted here to keep the
+ * high-volume read path off the queue entirely; on a cache miss the entry is
+ * enqueued and `writeAuditEntry` makes the authoritative decision, so the
+ * opt-in is never missed for the sake of a cold cache.
+ */
+const shouldRecord = (args: {
+  method: string;
+  checks: RecordedCheck[];
+}): boolean => {
+  if (args.checks.length === 0) return false;
+  if (MUTATING_METHODS.has(args.method)) return true;
+
+  const projectPublicId = args.checks.find((c) => {
+    return c.projectPublicId;
+  })?.projectPublicId;
+  if (!projectPublicId) return false;
+
+  return peekReadAuditEnabled(projectPublicId) !== false;
+};
+
+/** Builds and enqueues the audit entry for a completed request. */
 const recordEntry = (
   ctx: Context,
   checks: RecordedCheck[],
@@ -157,6 +183,7 @@ const recordEntry = (
     ip: ctx.ip ?? null,
     userAgent: ctx.headers?.['user-agent'] ?? null,
     detail: buildDetail(additional),
+    isRead: !MUTATING_METHODS.has(ctx.method),
   });
 };
 
@@ -168,8 +195,9 @@ const recordEntry = (
  * the fire-and-forget queue — auditing never blocks or fails the request it
  * describes.
  *
- * GET requests write nothing (read auditing is out of scope for v1); requests
- * that made no authorization check (e.g. bootstrap/login) are skipped.
+ * Read (`GET`) requests write nothing unless the project they name has opted in
+ * via `audit_reads_enabled`; requests that made no authorization check (e.g.
+ * bootstrap/login) are skipped.
  */
 export const auditMiddleware = async (ctx: Context, next: Next) => {
   if (!ctx.path.startsWith('/api/v1') || !ctx.authUser) {
@@ -191,7 +219,7 @@ export const auditMiddleware = async (ctx: Context, next: Next) => {
     errorStatus = error instanceof DomainError ? error.httpStatus : 500;
     throw error;
   } finally {
-    if (MUTATING_METHODS.has(ctx.method) && checks.length > 0) {
+    if (shouldRecord({ method: ctx.method, checks })) {
       try {
         const status =
           errorStatus ?? (typeof ctx.status === 'number' ? ctx.status : 0);

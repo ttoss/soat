@@ -6,10 +6,14 @@ import {
   resetAuditQueue,
 } from 'src/lib/auditQueue';
 import { runRetentionSweep } from 'src/lib/auditScheduler';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import type { GuardrailEvaluationRecord } from 'src/lib/guardrailEvaluationRecord';
 import { persistGuardrailEvaluations } from 'src/lib/guardrailEvaluationRecord';
 
-import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import {
+  createScopedPrincipal,
+  setupProjectWithUsers,
+} from '../../fixtures/bootstrap';
 import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
@@ -495,5 +499,401 @@ describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => 
         return e.resource_public_id === guardrailId;
       })
     ).toBeUndefined();
+  });
+});
+
+describe('Audit Log — read auditing flag (audit-log P3)', () => {
+  // A dedicated project so enabling read auditing here never pollutes the
+  // write-hook tests above. Assertions key on `request_id` rather than entry
+  // counts: with the flag on, the `listEntries` helper's own project-scoped GET
+  // is itself audited, so counts are not stable.
+  let readProjectId: string;
+  let readSecretId: string;
+
+  const setReadAuditing = async (enabled: boolean) => {
+    const res = await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${readProjectId}`)
+      .send({ audit_reads_enabled: enabled });
+    expect(res.status).toBe(200);
+    expect(res.body.audit_reads_enabled).toBe(enabled);
+  };
+
+  /** The entry written for the request that returned `requestId`, if any. */
+  const entryForRequest = async (
+    requestId: string
+  ): Promise<Record<string, unknown> | undefined> => {
+    const entries = await listEntries();
+    return entries.find((e) => {
+      return e.request_id === requestId;
+    });
+  };
+
+  beforeAll(async () => {
+    const projectRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: `${P} Read Audit Project` });
+    readProjectId = projectRes.body.id as string;
+
+    const secretRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: readProjectId, name: 'READ_AUDIT', value: 'v' });
+    expect(secretRes.status).toBe(201);
+    readSecretId = secretRes.body.id as string;
+  });
+
+  afterAll(async () => {
+    // Leave the flag off so later tests are unaffected by the opt-in.
+    await setReadAuditing(false);
+  });
+
+  test('a project defaults to audit_reads_enabled false', async () => {
+    const res = await authenticatedTestClient(adminToken).get(
+      `/api/v1/projects/${readProjectId}`
+    );
+    expect(res.status).toBe(200);
+    expect(res.body.audit_reads_enabled).toBe(false);
+  });
+
+  test('with the flag off, a project-scoped GET writes no entry', async () => {
+    await setReadAuditing(false);
+
+    const res = await authenticatedTestClient(adminToken).get(
+      `/api/v1/secrets/${readSecretId}`
+    );
+    expect(res.status).toBe(200);
+
+    expect(await entryForRequest(res.headers['x-request-id'])).toBeUndefined();
+  });
+
+  test('with the flag on, a project-scoped GET writes one entry with the read action', async () => {
+    await setReadAuditing(true);
+
+    const res = await authenticatedTestClient(adminToken).get(
+      `/api/v1/secrets/${readSecretId}`
+    );
+    expect(res.status).toBe(200);
+
+    const entry = await entryForRequest(res.headers['x-request-id']);
+    expect(entry).toBeDefined();
+    expect(entry!.action).toBe('secrets:GetSecret');
+    expect(entry!.status).toBe(200);
+    expect(entry!.resource_srn).toBe(
+      `soat:${readProjectId}:secret:${readSecretId}`
+    );
+    expect(entry!.resource_public_id).toBe(readSecretId);
+    expect(entry!.principal_type).toBe('user');
+    expect(entry!.project_id).toBe(readProjectId);
+  });
+
+  test('a list GET naming the project is audited when the flag is on', async () => {
+    await setReadAuditing(true);
+
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/secrets')
+      .query({ project_id: readProjectId });
+    expect(res.status).toBe(200);
+
+    const entry = await entryForRequest(res.headers['x-request-id']);
+    expect(entry).toBeDefined();
+    expect(entry!.action).toBe('secrets:ListSecrets');
+    expect(entry!.status).toBe(200);
+  });
+
+  test('one project’s flag never audits reads of another project', async () => {
+    await setReadAuditing(true);
+
+    const secretRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'READ_ISOLATION', value: 'v' });
+    const otherSecretId = secretRes.body.id as string;
+
+    // A read in the *main* project (flag off) while the read-audit project is on.
+    const res = await authenticatedTestClient(userToken).get(
+      `/api/v1/secrets/${otherSecretId}`
+    );
+    expect(res.status).toBe(200);
+
+    expect(await entryForRequest(res.headers['x-request-id'])).toBeUndefined();
+  });
+
+  test('turning the flag back off stops recording reads', async () => {
+    await setReadAuditing(true);
+    const on = await authenticatedTestClient(adminToken).get(
+      `/api/v1/secrets/${readSecretId}`
+    );
+    expect(await entryForRequest(on.headers['x-request-id'])).toBeDefined();
+
+    await setReadAuditing(false);
+    const off = await authenticatedTestClient(adminToken).get(
+      `/api/v1/secrets/${readSecretId}`
+    );
+    expect(await entryForRequest(off.headers['x-request-id'])).toBeUndefined();
+  });
+
+  test('a read that names no project is never audited, even with a flag on', async () => {
+    await setReadAuditing(true);
+
+    // Unscoped list enumeration: no project is named, so there is no project
+    // whose flag could opt the read in.
+    const res =
+      await authenticatedTestClient(adminToken).get('/api/v1/secrets');
+    expect(res.status).toBe(200);
+
+    expect(await entryForRequest(res.headers['x-request-id'])).toBeUndefined();
+  });
+});
+
+describe('Audit Log — audit.entry_created webhook (audit-log P3)', () => {
+  const captureEvents = async (
+    act: () => Promise<void>
+  ): Promise<SoatEvent[]> => {
+    const captured: SoatEvent[] = [];
+    const handler = (event: SoatEvent) => {
+      if (event.type === 'audit.entry_created') captured.push(event);
+    };
+    eventBus.on('soat:event', handler);
+    try {
+      await act();
+      await flushAuditQueue();
+    } finally {
+      // Never leak a listener onto the shared bus (tests.md).
+      eventBus.off('soat:event', handler);
+    }
+    return captured;
+  };
+
+  test('a project-scoped entry emits audit.entry_created with the entry payload', async () => {
+    let secretId = '';
+    const events = await captureEvents(async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/secrets')
+        .send({ project_id: projectId, name: 'AUDIT_WEBHOOK', value: 'v' });
+      expect(res.status).toBe(201);
+      secretId = res.body.id as string;
+    });
+
+    const event = events.find((e) => {
+      return e.data.resource_public_id === secretId;
+    });
+    expect(event).toBeDefined();
+    expect(event!.resourceType).toBe('audit');
+    expect(event!.projectPublicId).toBe(projectId);
+    // The event id is the entry's public id, and the payload mirrors the
+    // snake_case read contract so a SIEM consumer needs no follow-up GET.
+    expect(String(event!.resourceId).startsWith('audit_')).toBe(true);
+    expect(event!.data.id).toBe(event!.resourceId);
+    expect(event!.data.action).toBe('secrets:CreateSecret');
+    expect(event!.data.status).toBe(201);
+    expect(event!.data.principal_type).toBe('user');
+    expect(event!.data.project_id).toBe(projectId);
+    expect(event!.data.created_at).toBeDefined();
+  });
+
+  test('a platform-originated entry emits the event too, with null principal', async () => {
+    const guardrailId = 'guard_auditwebhook0';
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+
+    const events = await captureEvents(async () => {
+      await persistGuardrailEvaluations({
+        projectId: project!.id as number,
+        records: [
+          {
+            kind: 'guardrail_evaluation',
+            guardrailId,
+            guardrailVersion: 1,
+            scope: 'tool',
+            tool: 'refund',
+            action: 'refund',
+            class: 'D',
+            decision: 'blocked',
+            guardResult: null,
+            contextSource: 'none',
+            contextSnapshot: {},
+            agentId: null,
+            runId: null,
+            generationId: null,
+          },
+        ],
+      });
+    });
+
+    const event = events.find((e) => {
+      return e.data.resource_public_id === guardrailId;
+    });
+    expect(event).toBeDefined();
+    expect(event!.data.action).toBe('guardrails:Evaluate');
+    expect(event!.data.principal_type).toBeNull();
+    expect(event!.data.principal_id).toBeNull();
+  });
+
+  test('a global (project-less) entry emits no event — webhooks are project-scoped', async () => {
+    const events = await captureEvents(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: `${P}globalentry`, password: 'globalpass' });
+      expect(res.status).toBe(201);
+    });
+
+    expect(
+      events.find((e) => {
+        return e.data.action === 'users:CreateUser';
+      })
+    ).toBeUndefined();
+  });
+});
+
+describe('Audit Log — NDJSON export (audit-log P3)', () => {
+  /**
+   * Reads the export as raw text. The response is `application/x-ndjson`, which
+   * superagent does not parse, so the body is buffered and decoded by hand.
+   */
+  const exportNdjson = async (args: {
+    token: string;
+    query: Record<string, string>;
+  }) => {
+    const res = await authenticatedTestClient(args.token)
+      .get('/api/v1/audit-log/export')
+      .query(args.query)
+      .buffer(true)
+      .parse((response, callback) => {
+        let text = '';
+        response.on('data', (chunk: Buffer) => {
+          text += chunk.toString('utf8');
+        });
+        response.on('end', () => {
+          callback(null, text);
+        });
+      });
+    return res;
+  };
+
+  const parseLines = (body: unknown): Array<Record<string, unknown>> => {
+    return String(body)
+      .split('\n')
+      .filter((line) => {
+        return line.trim().length > 0;
+      })
+      .map((line) => {
+        return JSON.parse(line) as Record<string, unknown>;
+      });
+  };
+
+  test('exports the project’s entries as one snake_case JSON object per line', async () => {
+    const createRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/secrets')
+      .send({ project_id: projectId, name: 'AUDIT_EXPORT', value: 'v' });
+    const secretId = createRes.body.id as string;
+    await flushAuditQueue();
+
+    const res = await exportNdjson({
+      token: adminToken,
+      query: { project_id: projectId },
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toContain('application/x-ndjson');
+    expect(res.headers['content-disposition']).toContain('attachment');
+
+    const lines = parseLines(res.body);
+    expect(lines.length).toBeGreaterThan(0);
+    const entry = lines.find((l) => {
+      return l.resource_public_id === secretId;
+    });
+    expect(entry).toBeDefined();
+    // snake_case contract, same field set as the read API.
+    expect(entry!.action).toBe('secrets:CreateSecret');
+    expect(entry!.project_id).toBe(projectId);
+    expect(entry!.created_at).toBeDefined();
+    expect(entry!.resource_srn).toBeDefined();
+    // Every line belongs to the requested project.
+    for (const line of lines) {
+      expect(line.project_id).toBe(projectId);
+    }
+  });
+
+  test('filters apply to the export the same way they apply to the list', async () => {
+    const res = await exportNdjson({
+      token: adminToken,
+      query: { project_id: projectId, action: 'secrets:DeleteSecret' },
+    });
+    expect(res.status).toBe(200);
+
+    const lines = parseLines(res.body);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.action).toBe('secrets:DeleteSecret');
+    }
+  });
+
+  test('paginates past the internal batch size without dropping or duplicating rows', async () => {
+    // The exporter pages the table internally; assert every id is unique and
+    // the count matches what the list endpoint reports as the total.
+    const listRes = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: '1' });
+    const total = listRes.body.total as number;
+
+    const res = await exportNdjson({
+      token: adminToken,
+      query: { project_id: projectId },
+    });
+    const lines = parseLines(res.body);
+    const ids = new Set(
+      lines.map((l) => {
+        return l.id as string;
+      })
+    );
+    expect(ids.size).toBe(lines.length);
+    expect(lines.length).toBe(total);
+  });
+
+  test('project_id is required', async () => {
+    const res = await exportNdjson({ token: adminToken, query: {} });
+    expect(res.status).toBe(400);
+  });
+
+  test('unauthenticated export returns 401', async () => {
+    const res = await testClient
+      .get('/api/v1/audit-log/export')
+      .query({ project_id: projectId });
+    expect(res.status).toBe(401);
+  });
+
+  test('a user without audit:ExportAuditEntries gets 403', async () => {
+    // `userToken` holds audit:ListAuditEntries / audit:GetAuditEntry but not
+    // the export action — export is a bulk egress path and is granted separately.
+    const res = await exportNdjson({
+      token: userToken,
+      query: { project_id: projectId },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test('a user with audit:ExportAuditEntries can export', async () => {
+    const exportToken = await createScopedPrincipal({
+      adminToken,
+      projectId,
+      username: `${P}exporter`,
+      actions: ['audit:ExportAuditEntries'],
+    });
+
+    const res = await exportNdjson({
+      token: exportToken,
+      query: { project_id: projectId },
+    });
+    expect(res.status).toBe(200);
+    expect(parseLines(res.body).length).toBeGreaterThan(0);
+  });
+
+  test('an export naming an unknown project returns 403', async () => {
+    const res = await exportNdjson({
+      token: adminToken,
+      query: { project_id: 'proj_doesnotexist00' },
+    });
+    // Project scoping cannot resolve the id, so the request is refused — the
+    // same behavior every other project-scoped list endpoint has.
+    expect(res.status).toBe(403);
   });
 });
