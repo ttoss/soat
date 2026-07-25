@@ -9,6 +9,8 @@ import { resolveAgentTools } from 'src/lib/agentToolResolver';
 import { clearGuardrailContextToolCache } from 'src/lib/guardrailContext';
 import { createGuardrail } from 'src/lib/guardrails';
 
+import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
+
 // Real DB + a local fake HTTP server for the tool target (and the guardrail
 // context tool). The guardrail interceptor is exercised through the resolver —
 // the entry point that builds a generation's tool set — so the assertions
@@ -208,6 +210,43 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
       });
     }
     return evaluationCount();
+  };
+
+  // Selective-write to the audit log (audit-log PRD Phase 2): a
+  // decision-changing evaluation surfaces as an AuditEntry with
+  // detail.kind = "guardrail_evaluation"; a plain execute does not.
+  const guardrailAuditCountFor = async (
+    guardrailId: string
+  ): Promise<number> => {
+    return db.AuditEntry.count({
+      where: {
+        projectId,
+        action: 'guardrails:Evaluate',
+        resourcePublicId: guardrailId,
+      },
+    });
+  };
+
+  // Scope the lookup to the calling test's own guardrail id (unique per test)
+  // so it never races another test's fire-and-forget audit write.
+  const guardrailAuditEntryFor = async (
+    guardrailId: string
+  ): Promise<InstanceType<(typeof db)['AuditEntry']> | null> => {
+    for (let i = 0; i < 40; i += 1) {
+      const entry = await db.AuditEntry.findOne({
+        where: {
+          projectId,
+          action: 'guardrails:Evaluate',
+          resourcePublicId: guardrailId,
+        },
+        order: [['createdAt', 'DESC']],
+      });
+      if (entry) return entry;
+      await new Promise((r) => {
+        return setTimeout(r, 25);
+      });
+    }
+    return null;
   };
 
   test('no guardrails attached — the tool executes untouched (zero overhead)', async () => {
@@ -466,6 +505,71 @@ describe('agentToolGuardrail gate (resolver dispatch path)', () => {
     };
     expect(result.status).toBe('pending_approval');
     expect(toolRequests).toHaveLength(0);
+  });
+
+  test('class D (blocked) writes a guardrail_evaluation audit entry', async () => {
+    const id = await makeGuardrail({ class: 'D' });
+    const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+    await invokeExecute(refund, { amount: 10 });
+
+    const entry = await guardrailAuditEntryFor(id);
+    expect(entry).not.toBeNull();
+    expect(entry!.action).toBe('guardrails:Evaluate');
+    // Platform-originated: no principal authorized the evaluation.
+    expect(entry!.principalType).toBeNull();
+    expect(entry!.principalId).toBeNull();
+    expect(entry!.resourceSrn).toBe(`soat:${projectPublicId}:guardrail:${id}`);
+    expect(entry!.resourcePublicId).toBe(id);
+    const detail = entry!.detail as Record<string, unknown>;
+    assertGuardrailEvaluationDetail(detail, 'camel');
+    expect(detail.decision).toBe('blocked');
+    expect(detail.guardrailId).toBe(id);
+  });
+
+  test('class C (route_to_approval) writes an audit entry carrying the approval id', async () => {
+    const id = await makeGuardrail({ class: 'C' });
+    const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+    const result = (await invokeExecute(refund, {
+      amount: 500,
+      approval_reasoning: 'needs sign-off',
+    })) as { approval_id: string };
+
+    const entry = await guardrailAuditEntryFor(id);
+    expect(entry).not.toBeNull();
+    const detail = entry!.detail as Record<string, unknown>;
+    assertGuardrailEvaluationDetail(detail, 'camel');
+    expect(detail.decision).toBe('route_to_approval');
+    expect(detail.approvalId).toBe(result.approval_id);
+  });
+
+  test('class B tripwire writes a guardrail_evaluation audit entry', async () => {
+    const id = await makeGuardrail({
+      class: 'B',
+      guard: { '<': [{ var: 'args.amount' }, 100] },
+    });
+    const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+    await invokeExecute(refund, { amount: 999 });
+
+    const entry = await guardrailAuditEntryFor(id);
+    expect(entry).not.toBeNull();
+    const detail = entry!.detail as Record<string, unknown>;
+    assertGuardrailEvaluationDetail(detail, 'camel');
+    expect(detail.decision).toBe('tripwire');
+  });
+
+  test('class A (execute) writes NO guardrail audit entry (selective-write)', async () => {
+    const id = await makeGuardrail({ class: 'A' });
+    const refund = await resolveGuarded({ toolGuardrailIds: [id] });
+    const result = await invokeExecute(refund, { amount: 10 });
+    expect(result).toEqual({ ok: true });
+
+    // The evaluation row is still written to the operational table, but no
+    // audit entry — give the fire-and-forget queue a beat and confirm zero for
+    // this guardrail specifically (race-free across sibling tests).
+    await new Promise((r) => {
+      return setTimeout(r, 100);
+    });
+    expect(await guardrailAuditCountFor(id)).toBe(0);
   });
 
   test('a duplicate class-C proposal returns the existing pending item', async () => {

@@ -44,7 +44,7 @@ monitor-breach audit entry — see [prd-quotas.md](./prd-quotas.md)).
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
-| Audit log | [prd-audit-log.md](./prd-audit-log.md) | 🟡 P2/P3 + export remain | substrate for G3/G4 |
+| Audit log | [prd-audit-log.md](./prd-audit-log.md) | 🟡 P3 + export remain (P2 shipped) | substrate for G3/G4 |
 | Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,6,7 remain | data plane |
@@ -68,7 +68,7 @@ usage ────────────────────────�
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✔
-  audit-log P2 (guardrail ActivityEntry detail kind) ◄── guardrails Phase 3 ✔
+  audit-log P2 (guardrail evaluation detail kind) ✔ shipped ◄── guardrails Phase 3 ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P6/P7 (ranking, injection, evals)
 
@@ -84,7 +84,7 @@ feedback + governance loops ─────────────────�
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
 | orchestration-queue P1 ✔ | evaluations P2 | async eval runs ride the RunTask queue |
-| guardrails P3 ✔ | audit-log P2 | `guardrail_evaluation` becomes one audit `detail` kind |
+| guardrails P3 ✔ | ~~audit-log P2~~ ✔ shipped | decision-changing `guardrail_evaluation` becomes one audit `detail` kind (selective-write) |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
@@ -95,9 +95,10 @@ feedback + governance loops ─────────────────�
 ## Recommended build order
 
 1. ~~**Usage infra emitters (P5–P6)**~~ — **shipped** (pure extensions of shipped cores).
-2. **Audit-log P2** and **evaluations P1–P2** — the substrate the activity feed
-   and agent-versions promotion gate need (audit-log also absorbs the deferred
-   quota monitor-breach audit entry).
+2. ~~**Audit-log P2**~~ — **shipped** (decision-changing guardrail evaluations
+   mirror into `AuditEntry` via selective-write). **Evaluations P1–P2** remain —
+   the substrate the activity feed and agent-versions promotion gate need
+   (audit-log also absorbs the deferred quota monitor-breach audit entry).
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
@@ -164,7 +165,7 @@ _Not started._
 
 ### Audit log
 
-- [ ] **Phase 2** Guardrails `ActivityEntry` as one `detail` kind (guardrails Phase 3 ✔)
+- [x] **Phase 2** Decision-changing guardrail evaluations (`route_to_approval` / `blocked` / `tripwire`) mirror into `AuditEntry` as `detail.kind = "guardrail_evaluation"` via selective-write from `persistGuardrailEvaluations`; plain `execute` stays in the dedicated `guardrail_evaluations` table. Platform-originated (`action: guardrails:Evaluate`, null principal). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#system-originated-entries)
 - [ ] **Phase 3** Read-audit config flag (off by default) + `audit.entry_created` webhook
 - [ ] Per-project NDJSON export (paginate the list endpoint; also serves LGPD)
 
@@ -221,8 +222,10 @@ stays the source of truth:
   (`ActivityEntry`, `acte_`) describe an activity substrate. Settle which model
   owns the feed before either ships (drives approvals Phase 4). Partially
   narrowed: approvals decision 3 lands guardrail-`deny` records as
-  `AuditEntry` `detail->>'kind' = 'action_denied'`, so new audit-shaped kinds
-  go to `AuditEntry`; only the product-feed model question remains open.
+  `AuditEntry` `detail->>'kind' = 'action_denied'`, and audit-log P2 lands
+  decision-changing guardrail evaluations as
+  `AuditEntry` `detail->>'kind' = 'guardrail_evaluation'`, so new audit-shaped
+  kinds go to `AuditEntry`; only the product-feed model question remains open.
 - **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
   `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s

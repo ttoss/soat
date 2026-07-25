@@ -6,8 +6,11 @@ import {
   resetAuditQueue,
 } from 'src/lib/auditQueue';
 import { runRetentionSweep } from 'src/lib/auditScheduler';
+import type { GuardrailEvaluationRecord } from 'src/lib/guardrailEvaluationRecord';
+import { persistGuardrailEvaluations } from 'src/lib/guardrailEvaluationRecord';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
+import { assertGuardrailEvaluationDetail } from '../../fixtures/guardrailEvaluationDetail';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 const P = 'audit';
@@ -417,5 +420,80 @@ describe('Audit Log — pagination and queue metrics', () => {
   test('the dropped-entry counter is exposed as a number', async () => {
     expect(typeof getDroppedAuditCount()).toBe('number');
     expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => {
+  // A minimal evaluation record for a given decision; the production
+  // persistGuardrailEvaluations helper is the shared choke point that mirrors
+  // decision-changing records into the audit log.
+  const record = (
+    guardrailId: string,
+    decision: GuardrailEvaluationRecord['decision']
+  ): GuardrailEvaluationRecord => {
+    return {
+      kind: 'guardrail_evaluation',
+      guardrailId,
+      guardrailVersion: 1,
+      scope: 'tool',
+      tool: 'refund',
+      action: 'refund',
+      class: decision === 'blocked' ? 'D' : 'B',
+      decision,
+      guardResult: decision === 'tripwire' ? false : null,
+      contextSource: 'none',
+      contextSnapshot: {},
+      agentId: null,
+      runId: null,
+      generationId: null,
+    };
+  };
+
+  const internalProjectId = async (): Promise<number> => {
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    return project!.id;
+  };
+
+  test('a decision-changing evaluation surfaces as a guardrail_evaluation entry, snake-cased through the API', async () => {
+    const guardrailId = 'guard_auditp2block0';
+    await persistGuardrailEvaluations({
+      projectId: await internalProjectId(),
+      records: [record(guardrailId, 'blocked')],
+    });
+
+    const entries = await listEntries({ action: 'guardrails:Evaluate' });
+    const entry = entries.find((e) => {
+      return e.resource_public_id === guardrailId;
+    });
+    expect(entry).toBeDefined();
+    // Platform-originated: identified by its action, never a fabricated actor.
+    expect(entry!.principal_type).toBeNull();
+    expect(entry!.principal_id).toBeNull();
+    expect(entry!.resource_srn).toBe(
+      `soat:${projectId}:guardrail:${guardrailId}`
+    );
+    // The read endpoint snake-cases the detail payload; assert it against the
+    // shared schema fixture so the guardrails kind and the audit PRD can't drift.
+    assertGuardrailEvaluationDetail(entry!.detail, 'snake');
+    const detail = entry!.detail as Record<string, unknown>;
+    expect(detail.decision).toBe('blocked');
+    expect(detail.guardrail_id).toBe(guardrailId);
+  });
+
+  test('a plain execute evaluation writes no audit entry (selective-write boundary)', async () => {
+    const guardrailId = 'guard_auditp2exec00';
+    await persistGuardrailEvaluations({
+      projectId: await internalProjectId(),
+      records: [record(guardrailId, 'execute')],
+    });
+
+    const entries = await listEntries({ action: 'guardrails:Evaluate' });
+    expect(
+      entries.find((e) => {
+        return e.resource_public_id === guardrailId;
+      })
+    ).toBeUndefined();
   });
 });
