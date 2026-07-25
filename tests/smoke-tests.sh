@@ -4046,6 +4046,47 @@ expect_cli_error_status 400 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope api_key --metric tokens \
   --window calendar_month --limit 1000
 
+# scope=actor caps one end user's spend, matched from the generation's session.
+# A named scope_ref caps that actor; a null scope_ref is one budget per actor.
+ACTOR_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope actor --scope-ref "$ACTOR_ID" \
+  --metric cost_usd --window calendar_month --limit 5 | jq -r '.id')
+if [ -z "$ACTOR_QUOTA_ID" ] || [ "$ACTOR_QUOTA_ID" = "null" ]; then
+  echo "ERROR: Failed to create actor-scoped quota" >&2
+  exit 1
+fi
+ACTOR_QUOTA_GET=$($SOAT_CLI get-quota --quota-id "$ACTOR_QUOTA_ID")
+if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope')" != "actor" ]; then
+  echo "ERROR: Expected scope=actor on the actor quota" >&2
+  echo "$ACTOR_QUOTA_GET" >&2
+  exit 1
+fi
+if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope_ref')" != "$ACTOR_ID" ]; then
+  echo "ERROR: Expected the actor quota scope_ref to name the actor" >&2
+  echo "$ACTOR_QUOTA_GET" >&2
+  exit 1
+fi
+
+PER_ACTOR_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope actor --metric tokens \
+  --window calendar_month --limit 100000 | jq -r '.id')
+if [ "$($SOAT_CLI get-quota --quota-id "$PER_ACTOR_QUOTA_ID" | jq -r '.scope_ref')" != "null" ]; then
+  echo "ERROR: Expected a null scope_ref on the per-actor quota" >&2
+  exit 1
+fi
+
+# scope=actor + metric=requests is rejected (400) — the request middleware has
+# no end-user attribution. A scope_ref naming no actor is rejected too.
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope actor --metric requests \
+  --window rolling_1m --limit 10
+expect_cli_error_status 400 create-quota \
+  --project-id "$PROJECT_PUBLIC_ID" --scope actor --scope-ref actor_doesnotexist00 \
+  --metric tokens --window calendar_month --limit 100
+
+$SOAT_CLI delete-quota --quota-id "$ACTOR_QUOTA_ID"
+$SOAT_CLI delete-quota --quota-id "$PER_ACTOR_QUOTA_ID"
+
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"
 echo "Quotas: OK"

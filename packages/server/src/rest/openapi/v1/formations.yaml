@@ -1507,14 +1507,15 @@ components:
       properties:
         scope:
           type: string
-          enum: [project, api_key, agent]
+          enum: [project, api_key, agent, actor]
           description: The scope the quota applies to
         scope_ref:
           type: string
           nullable: true
           description: >-
-            Public id of the api key / agent the quota applies to. NULL means all
-            entities of that scope type in the project.
+            Public id of the api key / agent / actor the quota applies to. NULL
+            means all entities of that scope type in the project — for `actor`
+            scope that is one budget per actor, not a pooled total.
         metric:
           type: string
           enum: [requests, tokens, cost_usd]

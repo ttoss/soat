@@ -1,5 +1,5 @@
 ---
-description: "Hard, fail-closed enforcement of request rates and token/cost budgets per project, API key, or agent in SOAT."
+description: "Hard, fail-closed enforcement of request rates and token/cost budgets per project, API key, agent, or end user in SOAT."
 ---
 
 import Tabs from '@theme/Tabs';
@@ -23,8 +23,8 @@ The `requests` metric is enforced by a Koa middleware mounted after authenticati
 | --------------- | ------- | --------------------------------------------------------------------------------- |
 | `id`            | string  | Public identifier (e.g. `quota_…`)                                                |
 | `project_id`    | string  | ID of the owning project                                                          |
-| `scope`         | string  | `project` \| `api_key` \| `agent`                                                 |
-| `scope_ref`     | string  | Public id of the api key / agent; `null` = all entities of that scope type        |
+| `scope`         | string  | `project` \| `api_key` \| `agent` \| `actor`                                      |
+| `scope_ref`     | string  | Public id of the api key / agent / [actor](./actors.md); `null` = all entities of that scope type (for `actor`, one budget *per* actor — see [Actor scope](#actor-scope)) |
 | `metric`        | string  | `requests` \| `tokens` \| `cost_usd`                                              |
 | `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
 | `limit`         | number  | The cap (> 0)                                                                      |
@@ -33,18 +33,23 @@ The `requests` metric is enforced by a Koa middleware mounted after authenticati
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
 
-A quota is uniquely identified by `(project_id, scope, scope_ref, metric, window)`; creating a duplicate returns `409 QUOTA_CONFLICT`. `scope_ref` is validated to reference an api key / agent in the same project at create time. It is a soft reference: when the referenced entity is later deleted the quota goes inert (it is not cascade-deleted) and remains visible and deletable through the API.
+A quota is uniquely identified by `(project_id, scope, scope_ref, metric, window)`; creating a duplicate returns `409 QUOTA_CONFLICT`. `scope_ref` is validated to reference an api key / agent / actor in the same project at create time. It is a soft reference: when the referenced entity is later deleted the quota goes inert (it is not cascade-deleted) and remains visible and deletable through the API.
 
 ## Key Concepts
 
 ### Scope × metric validity
 
-Two scope/metric combinations are rejected with `400` because no attribution exists to enforce them:
+A quota is only accepted for a scope the metric can actually be aggregated by. Anything outside this table is rejected with `400` rather than stored as a silent no-op — a cap that cannot be aggregated would look healthy through the API while protecting nothing.
 
-- `scope: agent` with `metric: requests` — an agent's activity is not inbound HTTP traffic, and there is no precise per-request agent attribution.
-- `scope: api_key` with `metric: tokens` / `cost_usd` — usage events carry no API-key attribution, so the meter cannot be aggregated per key.
+| Metric | Valid scopes |
+| --- | --- |
+| `requests` | `project`, `api_key` |
+| `tokens` | `project`, `agent`, `actor` |
+| `cost_usd` | `project`, `agent`, `actor` |
 
-So `agent` scope is valid for `tokens` / `cost_usd`, and `api_key` scope is valid for `requests`. A precise semantic for the rejected combinations can be added later without breaking the contract.
+The exclusions follow from where each metric is measured. `requests` is counted by the request middleware, which sees the API key and the project but not the agent or end user behind the call. `tokens` / `cost_usd` aggregate the [usage meter](./usage.md), which carries project, agent, and end-user attribution but no API-key attribution.
+
+Widening this table later is backward-compatible; a precise semantic for a currently-rejected combination can be added without breaking the contract.
 
 ### Token and cost enforcement
 
@@ -54,7 +59,34 @@ A `cost_usd` quota is only as good as the project's pricing. Usage events carry 
 
 Because that is the one case where a quota fails **open**, it is not left silent: when a `cost_usd` check finds the window held metered usage but nothing priced, a `quota_unpriced` [exception](./exceptions.md) is filed (severity `warning`) carrying the quota, its limit, and the unpriced event count. It is deduped on the quota, so one dead cap is one triage item and its `occurrence_count` is the number of generations that ran unprotected. Resolve it by configuring the [price book](./usage.md#pricing) — an empty window files nothing, since a zero aggregate with nothing metered is legitimately zero.
 
-A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent. Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
+A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent; an `actor`-scoped quota aggregates only the end user behind the generation (see [Actor scope](#actor-scope)). Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
+
+### Actor scope
+
+An `actor` quota caps the spend of one **end user** — see [Actors](./actors.md) — rather than one agent or the whole project. It is the cap a per-user product needs: *"no single user costs me more than $5/month"*, enforced regardless of which agent they talk to.
+
+The end user is derived from the generation's [session](./sessions.md), never accepted as a separate argument. That is the same rule [usage attribution](./usage.md#end-user-attribution) follows, so the actor a quota is enforced against is always the actor the resulting usage event is billed to — a caller cannot spend one actor's budget under another actor's session.
+
+A generation with **no session** has no end user behind it (a direct API call, a [trigger](./triggers.md), an [orchestration](./orchestrations.md) node), so it matches no actor quota. The same applies to a session that carries no `actor_id`. Cap that traffic with a `project` or `agent` quota.
+
+#### `scope_ref: null` means one budget per actor
+
+For `actor` scope a null `scope_ref` is **one budget per actor**, evaluated against the current generation's actor — not a single pooled total across all actors. So one quota expresses *"every end user gets 100k tokens a month"*, and one user exhausting theirs does not block anyone else:
+
+```bash
+soat create-quota --project-id proj_ABC --scope actor \
+  --metric tokens --window calendar_month --limit 100000
+```
+
+Set a `scope_ref` to cap one named actor instead — e.g. to give a specific user a larger allowance, or to throttle an abusive one.
+
+:::note
+This differs from `agent` scope, where a null `scope_ref` aggregates the whole project. The divergence is deliberate: a project-wide aggregate is already exactly what a `project` quota expresses, so reading a null-ref actor quota as "all actors pooled" would make the combination a duplicate under a misleading name. Per-actor is the only reading that cannot be spelled another way.
+:::
+
+#### Webhook granularity
+
+The `quota.exceeded` webhook fires **once per window per quota**, not once per actor. On a null-ref actor quota that means the first actor to breach in a window fires it and later breaching actors in that same window are silent. Enforcement itself is unaffected — every actor is still checked against their own budget and blocked independently. To see exactly who hit their cap, query the meter with `group_by=actor` (see [Usage](./usage.md)).
 
 ### Windows and counters
 
@@ -62,7 +94,7 @@ For the `requests` metric, rolling windows are implemented as fixed windows keye
 
 ### Precedence
 
-When multiple quotas match a request (e.g. a project-wide cap and an API-key cap), **every** `enforce` quota is checked and any breach blocks (fail closed). The most specific scope (`agent` > `api_key` > `project`) is the one reported in the error body for attribution; a more specific quota never loosens a broader one.
+When multiple quotas match a request (e.g. a project-wide cap and an API-key cap), **every** `enforce` quota is checked and any breach blocks (fail closed). The most specific scope (`actor` > `agent` > `api_key` > `project`) is the one reported in the error body for attribution; a more specific quota never loosens a broader one. `actor` ranks highest because it names one end user — the narrowest population a cap can address, and so the most actionable thing to report to a caller who was just blocked.
 
 ### Breach contract
 
@@ -96,7 +128,7 @@ Because a monitor breach never blocks, the request it rode in on returns success
 
 ### Formation resource
 
-Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. `scope`, `metric`, and `window` are immutable after creation — only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
+Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. `scope`, `metric`, and `window` are immutable after creation — only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
 
 ### Self-modification footgun
 

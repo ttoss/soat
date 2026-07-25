@@ -167,6 +167,66 @@ describe('Quotas', () => {
       expect(res.body.error.message).toMatch(/agent/i);
     });
 
+    test('creates an actor/cost_usd quota with a scope_ref (201)', async () => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: projectId, name: 'quota actor' });
+      expect(actorRes.status).toBe(201);
+
+      const res = await createQuota(userToken, {
+        scope: 'actor',
+        scope_ref: actorRes.body.id,
+        metric: 'cost_usd',
+        window: 'calendar_month',
+        limit: 5,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.scope).toBe('actor');
+      expect(res.body.scope_ref).toBe(actorRes.body.id);
+      expect(res.body.metric).toBe('cost_usd');
+      expect(res.body.current_usage).toBeNull();
+    });
+
+    test('creates an actor/tokens quota with a null scope_ref (201)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'actor',
+        metric: 'tokens',
+        window: 'calendar_month',
+        limit: 100000,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.scope).toBe('actor');
+      expect(res.body.scope_ref).toBeNull();
+    });
+
+    test('rejects scope=actor with metric=requests (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'actor',
+        metric: 'requests',
+        window: 'rolling_1m',
+        limit: 10,
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/actor/i);
+    });
+
+    test('rejects a scope_ref that names no actor in the project (400)', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'actor',
+        scope_ref: 'actor_doesnotexist00',
+        metric: 'tokens',
+        window: 'calendar_month',
+        limit: 100,
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/actor/i);
+    });
+
     test('rejects an invalid scope (400)', async () => {
       const res = await createQuota(userToken, {
         scope: 'nonsense',

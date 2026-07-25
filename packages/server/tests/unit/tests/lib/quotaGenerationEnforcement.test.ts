@@ -71,6 +71,7 @@ describe('evaluateGenerationQuotas', () => {
   const seedUsageEvent = async (opts: {
     projectInternalId: number;
     agentInternalId?: number | null;
+    actorInternalId?: number | null;
     tokens?: {
       input?: number;
       output?: number;
@@ -83,6 +84,7 @@ describe('evaluateGenerationQuotas', () => {
     const event = await db.UsageEvent.create({
       projectId: opts.projectInternalId,
       agentId: opts.agentInternalId ?? null,
+      actorId: opts.actorInternalId ?? null,
       meterType: 'llm_tokens',
       provider: 'ollama',
       model: 'stub-model',
@@ -619,6 +621,323 @@ describe('evaluateGenerationQuotas', () => {
 
     expect(captured).toHaveLength(1);
     expect(captured[0].data.mode).toBe('enforce');
+  });
+
+  // ── Actor scope ───────────────────────────────────────────────────────────
+  //
+  // An actor-scoped quota caps one end user's spend. The generation supplies a
+  // `sessionId`; the actor is derived from the session (the same rule usage
+  // attribution follows), so a caller can never bill one actor under another's
+  // session. A generation with no session has no actor and is never matched.
+  describe('actor scope', () => {
+    const createActorAndSession = async (opts: {
+      projectPublicId: string;
+      agentPublicId: string;
+      name: string;
+    }) => {
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: opts.projectPublicId, name: opts.name });
+      expect(actorRes.status).toBe(201);
+
+      const sessionRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: opts.agentPublicId,
+          actor_id: actorRes.body.id,
+        });
+      expect(sessionRes.status).toBe(201);
+
+      const actor = await db.Actor.findOne({
+        where: { publicId: actorRes.body.id },
+      });
+
+      return {
+        actorPublicId: actorRes.body.id as string,
+        sessionPublicId: sessionRes.body.id as string,
+        actorInternalId: (actor as unknown as { id: number }).id,
+      };
+    };
+
+    test('a scope_ref actor quota aggregates only that actor', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-ref');
+      const alice = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'alice',
+      });
+      const bob = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'bob',
+      });
+
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: alice.actorInternalId,
+        tokens: { input: 10 },
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: bob.actorInternalId,
+        tokens: { input: 100 },
+      });
+
+      const quota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: bob.actorPublicId,
+        metric: 'tokens',
+        limit: 50,
+      });
+
+      // Bob is over (100 >= 50) — his own session breaches.
+      const bobBreach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: bob.sessionPublicId,
+      });
+      expect(bobBreach).not.toBeNull();
+      expect(bobBreach!.scope).toBe('actor');
+      expect(bobBreach!.quotaId).toBe(quota.publicId);
+
+      // Alice's session does not match a quota that names Bob, even though the
+      // project total (110) is over the limit.
+      const aliceBreach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: alice.sessionPublicId,
+      });
+      expect(aliceBreach).toBeNull();
+    });
+
+    test('a null-ref actor quota caps each actor independently', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-nullref');
+      const alice = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'alice',
+      });
+      const bob = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'bob',
+      });
+
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: alice.actorInternalId,
+        tokens: { input: 10 },
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: bob.actorInternalId,
+        tokens: { input: 100 },
+      });
+
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: null,
+        metric: 'tokens',
+        limit: 50,
+      });
+
+      // One budget per actor, not one shared budget: Bob's 100 breaches while
+      // Alice's 10 does not, even though the project sum (110) is over.
+      const bobBreach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: bob.sessionPublicId,
+      });
+      expect(bobBreach).not.toBeNull();
+      expect(bobBreach!.scope).toBe('actor');
+
+      const aliceBreach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: alice.sessionPublicId,
+      });
+      expect(aliceBreach).toBeNull();
+    });
+
+    test('an actor quota never matches a generation with no session', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-nosession');
+      const alice = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'alice',
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: alice.actorInternalId,
+        tokens: { input: 100 },
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: null,
+        metric: 'tokens',
+        limit: 50,
+      });
+
+      // A direct API generation has no end user behind it, so a per-end-user
+      // cap has nothing to apply to. Use a project quota to cap that traffic.
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+    });
+
+    test('an actor quota never matches a session that has no actor', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-actorless');
+      const sessionRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: ctx.agentPublicId,
+        });
+      expect(sessionRes.status).toBe(201);
+
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        tokens: { input: 100 },
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: null,
+        metric: 'tokens',
+        limit: 50,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: sessionRes.body.id,
+      });
+      expect(breach).toBeNull();
+    });
+
+    test('a session from another project resolves no actor', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-crossproject');
+      const other = await freshProjectAndAgent('genquota-actor-crossother');
+      const stranger = await createActorAndSession({
+        projectPublicId: other.projectPublicId,
+        agentPublicId: other.agentPublicId,
+        name: 'stranger',
+      });
+
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        tokens: { input: 100 },
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: null,
+        metric: 'tokens',
+        limit: 50,
+      });
+
+      // The session id is real but belongs to a different project, so it must
+      // not resolve an actor into this project's enforcement.
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: stranger.sessionPublicId,
+      });
+      expect(breach).toBeNull();
+    });
+
+    test('reports actor as the most specific scope over agent and project', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-specificity');
+      const alice = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'alice',
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        actorInternalId: alice.actorInternalId,
+        tokens: { input: 100 },
+      });
+
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'tokens',
+        limit: 10,
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'agent',
+        scopeRef: ctx.agentPublicId,
+        metric: 'tokens',
+        limit: 10,
+      });
+      const actorQuota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: alice.actorPublicId,
+        metric: 'tokens',
+        limit: 10,
+      });
+
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: alice.sessionPublicId,
+      });
+      expect(breach).not.toBeNull();
+      expect(breach!.scope).toBe('actor');
+      expect(breach!.quotaId).toBe(actorQuota.publicId);
+    });
+
+    test('an actor cost_usd quota sums only that actor priced spend', async () => {
+      const ctx = await freshProjectAndAgent('genquota-actor-cost');
+      const alice = await createActorAndSession({
+        projectPublicId: ctx.projectPublicId,
+        agentPublicId: ctx.agentPublicId,
+        name: 'alice',
+      });
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        actorInternalId: alice.actorInternalId,
+        costUsd: '2.50',
+      });
+      // Unattributed spend in the same project must not count against her cap.
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        costUsd: '99.00',
+      });
+
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'actor',
+        scopeRef: alice.actorPublicId,
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      const under = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: alice.sessionPublicId,
+      });
+      expect(under).toBeNull();
+
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        actorInternalId: alice.actorInternalId,
+        costUsd: '3.00',
+      });
+      const over = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+        sessionId: alice.sessionPublicId,
+      });
+      expect(over).not.toBeNull();
+      expect(over!.metric).toBe('cost_usd');
+    });
   });
 
   test('checkGenerationQuota fails open on an infrastructure error', async () => {

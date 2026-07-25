@@ -256,6 +256,9 @@ export const createGeneration = async (
   const quotaBreach = await checkGenerationQuota({
     agentId: args.agentId,
     projectIds: args.projectIds,
+    // Carries the end user for `actor`-scope caps; the actor is derived from
+    // the session, so this is the same attribution the usage event will record.
+    sessionId: args.sessionId,
   });
   if (quotaBreach) throw quotaBreachError(quotaBreach);
 
