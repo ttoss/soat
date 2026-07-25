@@ -3,8 +3,8 @@
 > Complements [prd-orchestration-queue.md](./prd-orchestration-queue.md) and
 > the [Triggers module](../packages/website/docs/modules/triggers.md): unattended
 > runs need completions that
-> survive a provider outage. Pricing is unaffected — see
-> [prd-usage-metering.md](./prd-usage-metering.md).
+> survive a provider outage. Pricing is unaffected — see the
+> [usage module doc](../packages/website/docs/modules/usage.md).
 
 ## Problem
 
@@ -115,7 +115,7 @@ model): `{ route_id, target_index, attempts: [{ target_index, ai_provider_id,
 model, error_class? }], fallbacks }`. Traces therefore explain which provider
 actually answered.
 
-Usage metering ([prd-usage-metering.md](./prd-usage-metering.md)) prices the
+Usage metering ([usage module doc](../packages/website/docs/modules/usage.md)) prices the
 generation off the served provider/model — since that is what the record
 stores, **no metering change is needed**; noted here for completeness.
 
