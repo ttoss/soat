@@ -288,6 +288,37 @@ describe('validateQuotaImmutableFields', () => {
     ).toMatch(/scope_ref/);
   });
 
+  // For `actor` scope a null ref means "one budget per actor" while a ref caps
+  // one named actor — materially different caps, so the null↔ref transition must
+  // be rejected in both directions rather than quietly re-pointing the budget.
+  test('rejects pinning a per-actor budget to one named actor', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { scopeRef: 'actor_abc' },
+        current: {
+          scope: 'actor',
+          scopeRef: null,
+          metric: 'tokens',
+          window: 'calendar_month',
+        },
+      })
+    ).toMatch(/scope_ref/);
+  });
+
+  test('rejects widening a named-actor budget to per-actor', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { scopeRef: null },
+        current: {
+          scope: 'actor',
+          scopeRef: 'actor_abc',
+          metric: 'tokens',
+          window: 'calendar_month',
+        },
+      })
+    ).toMatch(/scope_ref/);
+  });
+
   // The first offending field is reported rather than a combined list, so the
   // message stays actionable when a template changes several at once.
   test('reports the first offending field when several changed', () => {

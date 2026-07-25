@@ -128,8 +128,11 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 | `soat.activity.actions_1h` / `soat.activity.actions_24h`   | integer | [Activity feed](./approvals.md) (per project)           |
 | `soat.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
 | `soat.usage.tokens_24h` / `soat.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
+| `soat.usage.run_tokens` / `soat.usage.run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |
 
 `soat.activity.*` resolves from the activity feed; on a deployment where the feed is not yet populated, those keys are unresolvable and the standard fail-closed rule below applies — a guard referencing them will not pass until the feed is live.
+
+`soat.usage.run_tokens` and `soat.usage.run_cost_usd` are the odd pair out: every other `soat.usage.*` key is a rolling **project** window, while these two sum only the meter rows recorded against the **current [orchestration run](./orchestrations.md)** so far. That is the granularity a runaway single run needs — a project window barely moves while one cycle burns through its budget. They read live at evaluation time, so a ceiling trips mid-run, on the tool call that crosses it, rather than after the run completes. Outside a run there is nothing to accumulate against, so both keys are unresolvable and fail closed (they do **not** read as `0`) — a per-run ceiling attached at project scope will therefore trip on plain agent calls too; attach it to the tools the run uses, or guard it with the run keys only.
 
 **Fail-closed at both ends.** At write time, a document referencing a `var` outside the three namespaces — or a `soat.*` key outside the catalog — is rejected with `400`, never silently `null` at runtime. At evaluation time, an expression referencing a `context.*` key absent from the effective context, a context-tool failure or timeout, or a `soat.*` provider that cannot resolve all fail closed: in `class`, the result resolves to `default_class`; in `guard`, it counts as a **failed guard** and tripwire semantics apply. Forgetting to supply context tightens the posture; it never loosens it.
 
@@ -142,6 +145,33 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 A failing class-B guard is a **tripwire**: by default it aborts the action and files an exception rather than silently downgrading — a runaway loop hits a hard, non-LLM stop. A document with `escalate: true` opts into the softer behavior: a failing guard routes the call to the [approvals queue](./approvals.md) for a human decision instead of aborting.
 
 `escalate` is **per-guardrail**: a failing guard yields that guardrail's own decision — `tripwire` without `escalate`, `route_to_approval` with it — and the strictest decision across all applying guardrails still wins. If two guardrails classify the same call `B` and both guards fail, one with `escalate: true` and one without, the tripwire prevails (`tripwire` outranks `route_to_approval` in the [decision ordering](#attachment)): opting one guardrail into escalation never softens another's hard stop.
+
+### Per-run spend ceilings
+
+A runaway [orchestration run](./orchestrations.md) — a cycle that keeps calling tools long past the point of usefulness — is not caught by a project-windowed budget guard: the window barely moves while one run burns through its budget. `soat.usage.run_tokens` and `soat.usage.run_cost_usd` close that gap by exposing the **current run's** cumulative metered spend, live at evaluation time.
+
+Give the ceiling itself as `guardrail_context` (or a `context_tool`) so one guardrail serves every run, and the operator tunes the number without editing the document:
+
+```bash
+soat create-guardrail \
+  --name "Per-run token ceiling" \
+  --document '{
+    "class": "B",
+    "guard": {
+      "<": [
+        { "var": "soat.usage.run_tokens" },
+        { "var": "context.action_token_ceiling" }
+      ]
+    }
+  }'
+```
+
+Attach it to the tools the run dispatches. On the first tool call after the run crosses the ceiling the guard fails, and class-B tripwire semantics take over: the call is aborted **before** the tool runs and an exception is filed — a hard, non-LLM stop mid-run, not a post-hoc report. Swap `run_tokens` for `run_cost_usd` to cap dollars instead of tokens.
+
+Two properties worth knowing:
+
+- **Fail-closed outside a run.** Both keys are unresolvable when there is no run in scope, so the guard fails rather than reading `0` and waving the call through. Attach per-run ceilings at tool scope, not project scope, unless you intend plain agent calls to trip as well.
+- **Metering granularity is the resolution.** The counters advance as each provider call is metered (see [usage coverage](./usage.md#coverage)), so a ceiling trips on the first gated tool call *after* it is crossed — a single over-budget call can still complete.
 
 ### Client Tools
 

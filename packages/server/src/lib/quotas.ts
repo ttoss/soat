@@ -31,7 +31,7 @@ export {
   validateQuotaImmutableFields,
 } from './quotaImmutability';
 
-export const QUOTA_SCOPES = ['project', 'api_key', 'agent'] as const;
+export const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
 export const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
 export const QUOTA_MODES = ['enforce', 'monitor'] as const;
 
@@ -110,6 +110,27 @@ export const validateQuotaLimit = (args: {
 };
 
 /**
+ * The scopes each metric can actually be enforced for. A combination outside
+ * this table is rejected at create time rather than stored as a silent no-op:
+ * enforcement aggregates real attribution, so a cap it cannot aggregate would
+ * look healthy through the API while protecting nothing.
+ *
+ * - `requests` is counted by the request middleware, which sees the API key and
+ *   the project — but not the agent or end user behind the call, so `agent` and
+ *   `actor` are excluded.
+ * - `tokens` / `cost_usd` aggregate the usage meter, which carries project,
+ *   agent, and end-user (actor) attribution — but no API-key attribution, so
+ *   `api_key` is excluded.
+ *
+ * Widening a row here is backward-compatible; narrowing one is not.
+ */
+const SCOPES_BY_METRIC: Record<QuotaMetric, readonly QuotaScope[]> = {
+  requests: ['project', 'api_key'],
+  tokens: ['project', 'agent', 'actor'],
+  cost_usd: ['project', 'agent', 'actor'],
+};
+
+/**
  * Validates the immutable shape of a quota at create time. Returns a message on
  * the first problem, or `null` when valid. Pure — shared as the single source of
  * truth for the create/update rules.
@@ -133,26 +154,47 @@ export const validateQuotaShape = (args: {
   if (!isOneOf(QUOTA_MODES, args.mode)) {
     return `mode must be one of ${QUOTA_MODES.join(' / ')}.`;
   }
-  // scope: agent + metric: requests is rejected — an agent's activity is not
-  // inbound HTTP traffic and no precise per-request agent attribution exists.
-  if (args.scope === 'agent' && args.metric === 'requests') {
-    return 'scope "agent" is not valid for metric "requests".';
-  }
-  // scope: api_key + metric: tokens/cost_usd is rejected — usage events carry
-  // no API-key attribution, so such a cap could never be aggregated at the
-  // metering choke point. Rejecting it (rather than storing a silent no-op)
-  // mirrors the agent+requests rule; a precise semantic can be added later
-  // once metering attributes spend to an api key, backward-compatibly.
-  if (args.scope === 'api_key' && args.metric !== 'requests') {
-    return `scope "api_key" is not valid for metric "${args.metric}".`;
+  if (!SCOPES_BY_METRIC[args.metric].includes(args.scope)) {
+    return `scope "${args.scope}" is not valid for metric "${args.metric}".`;
   }
   return validateQuotaLimit({ metric: args.metric, limit: args.limit });
 };
 
 /**
- * Verifies `scopeRef` names an existing api key / agent in the same project. A
- * null/undefined ref (applies to all entities of the scope) is always valid.
- * `project` scope never carries a ref. Throws VALIDATION_FAILED on a mismatch.
+ * What a `scope_ref` must name, per entity scope. Keyed by scope so a new entry
+ * in `QUOTA_SCOPES` is a type error here until its lookup is declared — a scope
+ * can never silently skip the existence check. `project` is absent because it
+ * takes no ref at all.
+ */
+const SCOPE_REF_TARGETS: Record<
+  Exclude<QuotaScope, 'project'>,
+  { label: string; find: (where: Record<string, unknown>) => Promise<unknown> }
+> = {
+  api_key: {
+    label: 'an API key',
+    find: (where) => {
+      return db.ApiKey.findOne({ where, attributes: ['id'] });
+    },
+  },
+  agent: {
+    label: 'an agent',
+    find: (where) => {
+      return db.Agent.findOne({ where, attributes: ['id'] });
+    },
+  },
+  actor: {
+    label: 'an actor',
+    find: (where) => {
+      return db.Actor.findOne({ where, attributes: ['id'] });
+    },
+  },
+};
+
+/**
+ * Verifies `scopeRef` names an existing api key / agent / actor in the same
+ * project. A null/undefined ref (applies to all entities of the scope) is
+ * always valid. `project` scope never carries a ref. Throws VALIDATION_FAILED
+ * on a mismatch.
  */
 const assertScopeRefValid = async (args: {
   projectId: number;
@@ -168,29 +210,15 @@ const assertScopeRefValid = async (args: {
     );
   }
 
-  if (args.scope === 'api_key') {
-    const key = await db.ApiKey.findOne({
-      where: { publicId: args.scopeRef, projectId: args.projectId },
-      attributes: ['id'],
-    });
-    if (!key) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        `scope_ref '${args.scopeRef}' does not reference an API key in this project.`
-      );
-    }
-    return;
-  }
-
-  // agent
-  const agent = await db.Agent.findOne({
-    where: { publicId: args.scopeRef, projectId: args.projectId },
-    attributes: ['id'],
+  const target = SCOPE_REF_TARGETS[args.scope];
+  const found = await target.find({
+    publicId: args.scopeRef,
+    projectId: args.projectId,
   });
-  if (!agent) {
+  if (!found) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `scope_ref '${args.scopeRef}' does not reference an agent in this project.`
+      `scope_ref '${args.scopeRef}' does not reference ${target.label} in this project.`
     );
   }
 };

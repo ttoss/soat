@@ -45,7 +45,7 @@ export class Quota extends Model {
   })
   declare project: Project;
 
-  /** `project` | `api_key` | `agent`. */
+  /** `project` | `api_key` | `agent` | `actor`. */
   @Column({ type: DataType.STRING, allowNull: false })
   declare scope: string;
 

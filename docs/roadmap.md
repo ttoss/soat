@@ -25,26 +25,31 @@ pending backlog.
 
 The umbrella — [prd-agent-operations.md](./prd-agent-operations.md) — defines
 the gap series that turns a Formation deploy into an *operating* agent team.
-Only initiatives with open work are listed (G1 schedule triggers and G4
-guardrails are fully shipped and have no remaining items).
+Only initiatives with open work are listed. G1 (schedule triggers), G4
+(guardrails), and G5 (usage metering) are fully shipped and have no remaining
+items; G5's PRD has been retired in favor of the
+[usage module doc](../packages/website/docs/modules/usage.md), with its one
+open refinement kept in the [backlog](#g5--usage-metering) below.
 
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
 | G2 | Queue-backed runs | [prd-orchestration-queue.md](./prd-orchestration-queue.md) | 🟡 worker-fleet ops hardening + P3 (SQS driver) |
 | G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed remains (dedup + recurrence view shipped) |
-| G5 | Usage metering | [prd-usage-metering.md](./prd-usage-metering.md) | 🟡 per-run cumulative ceiling (#486) only |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed. Two initiatives are fully shipped and
+Only PRDs with open work are listed. Three initiatives are fully shipped and
 their PRDs have been retired — the live behavior lives in the module docs:
 [quotas](../packages/website/docs/modules/quotas.md) (request/token/cost
 quotas, the `QUOTA_EXCEEDED` / `429` contract, monitor mode with its
 [breach audit entry](../packages/website/docs/modules/quotas.md#monitor-mode),
-the `quota.exceeded` webhook, and the `quota` formation resource) and
+the `quota.exceeded` webhook, and the `quota` formation resource),
 [audit-log](../packages/website/docs/modules/audit-log.md) (the read-auditing
-flag, the `audit.entry_created` webhook, and the per-project NDJSON export).
+flag, the `audit.entry_created` webhook, and the per-project NDJSON export), and
+[usage](../packages/website/docs/modules/usage.md) (the event + component model,
+price book, receipts, aggregation, thresholds, every LLM path metered, the
+compute/storage/request dimensions, and the `soat.usage.*` spend guards).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
@@ -58,20 +63,15 @@ flag, the `audit.entry_created` webhook, and the per-project NDJSON export).
 ## Implementation dependency graph
 
 Arrow = "needs before it can ship". Only pending nodes are shown; the shipped
-foundations they build on (orchestration runtime, queue P1/P2, metering
-P1–P4, guardrails, knowledge P1/2/4, memories P1–4, approvals P1/P3,
-discussions core, quotas, audit-log P1) are omitted. A `✔` marks a dependency
-that is already satisfied by shipped work.
+foundations they build on (orchestration runtime, queue P1/P2, usage metering,
+guardrails, knowledge P1/2/4, memories P1–4, approvals P1/P3, discussions core,
+quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
+satisfied by shipped work.
 
 ```
 queue ────────────────────────────────────────────────────────────────────────
   orchestration-queue P2 ops hardening (worker fleet)
   orchestration-queue P3 (pluggable driver + SQS)
-
-usage ────────────────────────────────────────────────────────────────────────
-  usage metering P5/P6 (storage/request emitters) ✔ shipped
-  usage metering coverage (all LLM paths) ✔ shipped
-  usage metering P7 (usage.* guard context) ✔ shipped
 
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── orchestration-queue P1 ✔
@@ -99,7 +99,9 @@ feedback + governance loops ─────────────────�
 
 ## Recommended build order
 
-1. ~~**Usage infra emitters (P5–P6)**~~ — **shipped** (pure extensions of shipped cores).
+1. ~~**Usage metering (G5)**~~ — **fully shipped**: every LLM path metered, the
+   compute/storage/request dimensions, and the `soat.usage.*` spend guards
+   (project windows and per-run ceilings).
 2. ~~**Audit log**~~ — **fully shipped** (P2 selective-write of
    decision-changing guardrail evaluations, P3 read-auditing flag +
    `audit.entry_created` webhook, and the per-project NDJSON export).
@@ -108,8 +110,7 @@ feedback + governance loops ─────────────────�
 3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
-5. **Model-routing** and the deferred tail (the per-run cumulative ceiling,
-   #486) as hardening.
+5. **Model-routing** as hardening.
 
 ## Pending backlog
 
@@ -135,12 +136,13 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 ### G5 — Usage metering
 
-- [x] **Coverage:** every LLM path meters — agent generations / conversations / orchestration nodes via `recordGenerationUsage`, and chats / discussions / memory extraction + consolidation via `recordCompletionUsage`; live behavior in the [usage module docs](../packages/website/docs/modules/usage.md#coverage)
-- [x] **P5** `4.2` Storage metering (daily per-project snapshot; `gb_day`; idempotency key `storage:{project}:{date}`) — shipped; live behavior in the [usage module docs](../packages/website/docs/modules/usage.md#storage-metering)
-- [x] **P6** `4.3` API-request metering (flush-aggregated counting middleware; never one row per request) — shipped; multi-instance-safe flush key; live behavior in the [usage module docs](../packages/website/docs/modules/usage.md#api-request-metering)
-- [x] **P7** `5.2` `usage.*` guard context — shipped; `soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}` resolve fail-closed in the [guardrail](../packages/website/docs/modules/guardrails.md) evaluator
-- [ ] Per-run cumulative ceiling (#486) — ⏭️ deferred; the shipped keys are windowed per project, and no run-scoped key exists (interim: a `condition` node reads the run roll-up and routes to an abort path)
-- [ ] Backlog: event-driven storage byte accounting (replaces the daily-snapshot approximation)
+✅ **Shipped.** The initiative is complete and its PRD retired; live behavior is
+documented in the [usage module doc](../packages/website/docs/modules/usage.md).
+One refinement remains open:
+
+- [ ] **Event-driven storage byte accounting** — replace the daily storage
+      snapshot with incremental byte deltas on file/document mutation,
+      eliminating the intra-day sampling drift the snapshot accepts
 
 ### G6 — Learned rules — ⏭️ Deferred
 

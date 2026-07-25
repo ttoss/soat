@@ -6,7 +6,7 @@
 > [prd-approvals.md](./prd-approvals.md)) — but nothing verifies agent behavior
 > **before** a change rolls out. Cross-references
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) (async execution),
-> [prd-usage-metering.md](./prd-usage-metering.md) (cost attribution),
+> the [usage module doc](../packages/website/docs/modules/usage.md) (cost attribution),
 > the [Triggers module](../packages/website/docs/modules/triggers.md) (scheduled evals), and
 > `docs/prd-agent-versions.md` (eval-gated promotion; written in parallel).
 
@@ -243,7 +243,7 @@ redelivery, and concurrency limits come for free, and the unique
 `(evalRunId, datasetItemId)` constraint makes redelivered items no-ops.
 
 **Decision:** eval generations are attributed with `source: eval` at the
-usage-metering choke point ([prd-usage-metering.md](./prd-usage-metering.md))
+usage-metering choke point ([usage module doc](../packages/website/docs/modules/usage.md))
 so eval spend is separable from production spend in cost rollups.
 
 ### Baselines and gating
@@ -388,8 +388,7 @@ schema change.
   new item with `source_generation_id` set; `404` for a generation outside the
   caller's project
 - Eval generations carry `source: eval` attribution, asserted where the
-  metering choke point records it (or on `Generation` metadata until
-  prd-usage-metering.md Phase 1 lands)
+  [metering choke point](../packages/website/docs/modules/usage.md#coverage) records it
 
 ### Phase 3 — Scheduled Evals + Formation Resource ❌ Not started
 

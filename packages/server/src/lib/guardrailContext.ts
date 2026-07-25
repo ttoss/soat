@@ -1,10 +1,16 @@
 import createDebug from 'debug';
 
+import { db } from '../db';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
 import { callTool } from './tools';
-import { windowedCostUsd, windowedTokens } from './usageThresholds';
+import {
+  runCostUsd,
+  runTokens,
+  windowedCostUsd,
+  windowedTokens,
+} from './usageThresholds';
 
 const log = createDebug('soat:guardrails');
 
@@ -88,13 +94,90 @@ const buildDeterministicSoat = (
   };
 };
 
+// Distinguishes "leave the key unset" (→ null → fail-closed) from a resolved
+// `null`, which a failed query writes explicitly.
+const UNRESOLVED = Symbol('unresolved');
+
+const RUN_USAGE_KEYS = new Set(['usage.run_tokens', 'usage.run_cost_usd']);
+
+// Resolves the call's run public id to its internal id, at most once per
+// evaluation: the two run keys share the lookup, and a guard referencing
+// neither must not pay for it.
+const memoizedRunResolver = (
+  identity: GuardrailCallIdentity
+): (() => Promise<number | null>) => {
+  let cached: number | null | undefined;
+  return async () => {
+    if (cached !== undefined) return cached;
+    if (!identity.runId) {
+      cached = null;
+      return cached;
+    }
+    const run = await db.OrchestrationRun.findOne({
+      where: { publicId: identity.runId, projectId: identity.projectId },
+      attributes: ['id'],
+    });
+    cached = (run?.id as number | undefined) ?? null;
+    return cached;
+  };
+};
+
+// `soat.usage.run_*` — the current run's cumulative metered spend. Outside a
+// run there is nothing to accumulate against, so the key is left unresolved
+// (→ fail-closed) rather than reading as 0 and letting a ceiling pass.
+const resolveRunUsage = async (args: {
+  rel: string;
+  path: string;
+  resolveRun: () => Promise<number | null>;
+}): Promise<number | null | typeof UNRESOLVED> => {
+  try {
+    const runInternalId = await args.resolveRun();
+    if (runInternalId === null) return UNRESOLVED;
+    return args.rel === 'usage.run_cost_usd'
+      ? await runCostUsd({ runInternalId })
+      : await runTokens({ runInternalId });
+  } catch (error) {
+    log(
+      'buildGuardrailSoatContext: run usage failed path=%s %o',
+      args.path,
+      error
+    );
+    return null;
+  }
+};
+
+// `soat.usage.cost_usd_*` / `tokens_*` — the project's rolling window ending
+// now. An unknown window suffix is left unresolved.
+const resolveWindowedUsage = async (args: {
+  rel: string;
+  path: string;
+  projectId: number;
+  now: Date;
+}): Promise<number | null | typeof UNRESOLVED> => {
+  const key = args.rel.slice('usage.'.length);
+  const ms = WINDOW_MS[key.slice(key.lastIndexOf('_') + 1)];
+  if (ms === undefined) return UNRESOLVED;
+  const start = new Date(args.now.getTime() - ms);
+  try {
+    return key.startsWith('cost_usd_')
+      ? await windowedCostUsd({ projectId: args.projectId, start })
+      : await windowedTokens({ projectId: args.projectId, start });
+  } catch (error) {
+    log('buildGuardrailSoatContext: usage failed path=%s %o', args.path, error);
+    return null;
+  }
+};
+
 /**
  * Populates the `soat.*` namespace for a call, filling **only** the catalog keys
  * the applying guardrails actually reference (`referencedSoatPaths`). Identity
- * and run keys are synchronous; `soat.usage.*` sums the project's windowed usage
- * at evaluation time; `soat.activity.*` stays unresolvable (`null`) until the
- * activity feed is populated (task 5.4) — a guard referencing it fails closed.
- * Fail-closed throughout: a usage query that throws leaves the key `null`.
+ * and run keys are synchronous; `soat.usage.cost_usd_*` / `tokens_*` sum the
+ * project's windowed usage at evaluation time; `soat.usage.run_tokens` /
+ * `run_cost_usd` sum only the current orchestration run's meters so far, so a
+ * per-run ceiling can abort one runaway run mid-flight; `soat.activity.*` stays
+ * unresolvable (`null`) until the activity feed is populated (task 5.4) — a
+ * guard referencing it fails closed. Fail-closed throughout: a usage query that
+ * throws, or a run key read outside a run, leaves the key `null`.
  */
 export const buildGuardrailSoatContext = async (args: {
   identity: GuardrailCallIdentity;
@@ -102,32 +185,25 @@ export const buildGuardrailSoatContext = async (args: {
   now: Date;
 }): Promise<Record<string, unknown>> => {
   const soat = buildDeterministicSoat(args.identity);
+  const resolveRun = memoizedRunResolver(args.identity);
 
   for (const path of args.referencedSoatPaths) {
     // path is like 'soat.usage.cost_usd_24h' — strip the leading namespace.
     const rel = path.startsWith('soat.') ? path.slice('soat.'.length) : path;
-    if (rel.startsWith('usage.')) {
-      const key = rel.slice('usage.'.length);
-      const window = key.slice(key.lastIndexOf('_') + 1);
-      const ms = WINDOW_MS[window];
-      if (ms === undefined) continue;
-      const start = new Date(args.now.getTime() - ms);
-      try {
-        const value = key.startsWith('cost_usd_')
-          ? await windowedCostUsd({ projectId: args.identity.projectId, start })
-          : await windowedTokens({ projectId: args.identity.projectId, start });
-        setByPath(soat, rel, value);
-      } catch (error) {
-        log(
-          'buildGuardrailSoatContext: usage query failed path=%s %o',
-          path,
-          error
-        );
-        setByPath(soat, rel, null);
-      }
+    if (!rel.startsWith('usage.')) {
+      // activity.* and any other catalog key we don't yet compute are left
+      // unset → resolves to null → fail-closed.
+      continue;
     }
-    // activity.* and any other catalog key we don't yet compute are left unset
-    // → resolves to null → fail-closed.
+    const value = RUN_USAGE_KEYS.has(rel)
+      ? await resolveRunUsage({ rel, path, resolveRun })
+      : await resolveWindowedUsage({
+          rel,
+          path,
+          projectId: args.identity.projectId,
+          now: args.now,
+        });
+    if (value !== UNRESOLVED) setByPath(soat, rel, value);
   }
 
   return soat;
