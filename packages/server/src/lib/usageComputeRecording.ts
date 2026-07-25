@@ -41,6 +41,10 @@ const persistComputeEvent = async (args: {
         agentId: null,
         generationId: null,
         traceId: null,
+        // Compute execution is orchestration infrastructure: there is no end
+        // user behind a node's wall-clock seconds.
+        actorId: null,
+        sessionId: null,
         aiProviderId: null,
         triggerId: null,
         actionId: null,

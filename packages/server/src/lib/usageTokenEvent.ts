@@ -123,6 +123,8 @@ export const priceTokenComponents = (args: {
 // except the project: an agent generation fills them all, while a chat,
 // discussion, or memory completion — which has no Generation row behind it —
 // leaves `generationId`/`traceId` null and still meters identically.
+// `actorId`/`sessionId` are the end-user dimensions: set only where an end user
+// is behind the call, and frozen here at write time like `cost_usd`.
 export type TokenEventAttribution = {
   projectId: number;
   runId: number | null;
@@ -130,6 +132,8 @@ export type TokenEventAttribution = {
   agentId: number | null;
   generationId: number | null;
   traceId: number | null;
+  actorId: number | null;
+  sessionId: number | null;
   aiProviderId: number | null;
   triggerId: string | null;
   actionId: string | null;
@@ -161,6 +165,8 @@ export const persistTokenEvent = async (args: {
         agentId: attribution.agentId,
         generationId: attribution.generationId,
         traceId: attribution.traceId,
+        actorId: attribution.actorId,
+        sessionId: attribution.sessionId,
         aiProviderId: attribution.aiProviderId,
         triggerId: attribution.triggerId,
         actionId: attribution.actionId,

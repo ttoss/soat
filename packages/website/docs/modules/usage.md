@@ -32,6 +32,8 @@ Every event links back to the resources it attributes spend to: the [generation]
 | `agent_id`       | string \| null  | Agent that ran the generation                                                                |
 | `generation_id`  | string \| null  | Generation this usage was recorded for                                                       |
 | `trace_id`       | string \| null  | Trace this usage belongs to (reconcile against the trace tree)                               |
+| `actor_id`       | string \| null  | Actor (end user) the occurrence was produced for; `null` when no end user is behind the work |
+| `session_id`     | string \| null  | Session the occurrence ran in; `null` when not dispatched through a session                  |
 | `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book                          |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
@@ -139,6 +141,16 @@ Each served API request is counted in memory per (project, API key), and a perio
 
 `action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the [generation](./generations.md) and copied onto its event so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when a [trigger](./triggers.md) initiates the generation — both for a direct **agent-target** trigger and for generations produced inside an [orchestration](./orchestrations.md) run started by a trigger (the run carries the trigger id and propagates it to every in-run generation). Filter the event list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action.
 
+### End-user attribution
+
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, so spend can be answered per end user rather than only per agent. Both are copied from the generation at write time and **frozen** there, the same rule as `cost_usd`: renaming an actor, closing a session, or deleting either never rewrites recorded spend — the row survives with a `null` dimension instead of vanishing from the project's totals.
+
+Attribution is set on the [session](./sessions.md) path, which is the surface that knows which end user a turn belongs to — including the continuation a client-tool approval re-handoff produces, so an approved tool call stays billed to the same end user. Direct agent generations, [trigger](./triggers.md)-initiated work, and [orchestration](./orchestrations.md) nodes have no end user behind them and record `null` for both, as do the standalone completions in [Coverage](#coverage) — a chat, discussion, or memory pass is not dispatched through a session.
+
+The actor is **derived from the session**, never taken from the request: the session already owns its actor link, so an event can never be billed to one actor under another's session, and a caller cannot bill someone else by overriding `tool_context` (that bag is caller-writable and is not read for attribution).
+
+Both dimensions filter (`GET /api/v1/usage/meters?actor_id=…` / `?session_id=…`) and group (`group_by=actor` / `group_by=session`). Because the values are written, not backfilled, events recorded before this shipped carry `null` — historical spend cannot be re-attributed after the fact.
+
 ### Pricing
 
 Each component's cost is computed at write time from the effective price row for its `(provider, model, component)`, resolved most-specific first: the AI provider instance → the project's rate for that slug → the global default. The event's `cost_usd` is the sum of its component costs. Costs are frozen onto the components, so later price changes never alter them — swapping a model changes new-run cost while historical receipts stay put. `cached_tokens` falls back to the `input_tokens` rate when no cached price is set (no cache discount). A component's `cost_usd` is `null` only when no price row covers it — the quantity is still captured, it does not mean the call was free.
@@ -165,7 +177,7 @@ Prices can also be **declared in a formation** with the `project_price` resource
 
 ### Aggregation
 
-`GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), or `meter_type`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`) collapses into a group with a `null` `key`. Requires `usage:GetUsage` on the project.
+`GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), `meter_type`, `actor`, or `session`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`, or any non-session work under `group_by=actor`) collapses into a group with a `null` `key`, so the groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
 ### Thresholds and alerts
 

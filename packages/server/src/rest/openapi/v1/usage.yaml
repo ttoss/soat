@@ -34,9 +34,9 @@ paths:
       summary: List usage meters
       description: >
         Returns the raw usage-meter rows the caller can access, most recent
-        first, optionally filtered by agent and generation. Each row is the
-        per-generation token usage as reported by the provider, for audit and
-        reconciliation.
+        first, optionally filtered by agent, generation, trace, actor, or
+        session. Each row is the per-generation token usage as reported by the
+        provider, for audit and reconciliation.
       operationId: listUsageMeters
       parameters:
         - name: agent_id
@@ -55,6 +55,22 @@ paths:
           in: query
           required: false
           description: Filter by trace public ID
+          schema:
+            type: string
+        - name: actor_id
+          in: query
+          required: false
+          description: >
+            Filter by the actor (end user) the usage is attributed to. An actor
+            that does not exist in scope yields an empty page.
+          schema:
+            type: string
+        - name: session_id
+          in: query
+          required: false
+          description: >
+            Filter by the session the usage was produced in. A session that does
+            not exist in scope yields an empty page.
           schema:
             type: string
         - name: trigger_id
@@ -147,7 +163,7 @@ paths:
             day; the others bucket on the matching column.
           schema:
             type: string
-            enum: [model, agent, run, day, meter_type]
+            enum: [model, agent, run, day, meter_type, actor, session]
         - name: from
           in: query
           required: false
@@ -543,6 +559,21 @@ components:
           type: string
           nullable: true
           description: Public ID of the trace this usage belongs to
+        actor_id:
+          x-soat-ref: actors
+          type: string
+          nullable: true
+          description: >
+            Public ID of the actor (end user) the metered occurrence was
+            produced for, frozen at write time. Null when no end user is behind
+            the work — orchestration runs, triggers, direct API generations.
+        session_id:
+          x-soat-ref: sessions
+          type: string
+          nullable: true
+          description: >
+            Public ID of the session the metered occurrence ran in, frozen at
+            write time. Null for work not dispatched through a session.
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
@@ -629,7 +660,7 @@ components:
           description: Upper bound applied, echoed back; null when unbounded
         group_by:
           type: string
-          enum: [model, agent, run, day, meter_type]
+          enum: [model, agent, run, day, meter_type, actor, session]
         groups:
           type: array
           description: One entry per distinct value in the chosen dimension.
@@ -642,8 +673,10 @@ components:
                     nullable: true
                     description: >
                       The bucket's value in the chosen dimension (a model id,
-                      meter type, agent/run public id, or `YYYY-MM-DD` UTC day).
-                      Null when the dimension does not apply to an event.
+                      meter type, agent/run/actor/session public id, or
+                      `YYYY-MM-DD` UTC day). Null when the dimension does not
+                      apply to an event — under `actor`/`session` this is the
+                      bucket holding everything with no end user behind it.
               - $ref: '#/components/schemas/UsageAggregateTotals'
         totals:
           $ref: '#/components/schemas/UsageAggregateTotals'

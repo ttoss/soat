@@ -9,12 +9,18 @@ const log = createDebug('soat:usage');
 
 // The dimensions a project's usage can be rolled up by. `day` buckets on the
 // UTC calendar day of the event; the rest bucket on the matching column.
+// `actor` / `session` are the end-user dimensions: work with no end user behind
+// it (orchestration runs, triggers, direct API generations) collapses into the
+// single `null`-key bucket rather than being dropped, so the groups still sum
+// to the project total.
 export const USAGE_GROUP_BY = [
   'model',
   'agent',
   'run',
   'day',
   'meter_type',
+  'actor',
+  'session',
 ] as const;
 
 export type UsageGroupBy = (typeof USAGE_GROUP_BY)[number];
@@ -50,6 +56,8 @@ export type UsageAggregate = {
 type EventWithComponents = InstanceType<(typeof db)['UsageEvent']> & {
   agent?: InstanceType<(typeof db)['Agent']> | null;
   run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
+  actor?: InstanceType<(typeof db)['Actor']> | null;
+  session?: InstanceType<(typeof db)['Session']> | null;
   components?: InstanceType<(typeof db)['UsageComponent']>[];
 };
 
@@ -86,27 +94,44 @@ const eventTokens = (event: EventWithComponents): EventTokens => {
   };
 };
 
+// How each dimension reads its bucket key off an event. Keyed by dimension so
+// adding one is a single entry here rather than another branch — the map is
+// exhaustive over `UsageGroupBy`, so a new dimension without an extractor is a
+// type error rather than a silent `null` bucket.
+const GROUP_KEY_EXTRACTORS: {
+  [K in UsageGroupBy]: (event: EventWithComponents) => string | null;
+} = {
+  model: (event) => {
+    return event.model;
+  },
+  meter_type: (event) => {
+    return event.meterType;
+  },
+  agent: (event) => {
+    return event.agent?.publicId ?? null;
+  },
+  run: (event) => {
+    return event.run?.publicId ?? null;
+  },
+  actor: (event) => {
+    return event.actor?.publicId ?? null;
+  },
+  session: (event) => {
+    return event.session?.publicId ?? null;
+  },
+  // Immutable events carry only createdAt; bucket on its UTC calendar day.
+  day: (event) => {
+    return event.createdAt.toISOString().slice(0, 10);
+  },
+};
+
 // The event's value in the chosen dimension. Null when the column is not set on
 // the event (grouped into a `null` bucket, not dropped).
 const groupKeyForEvent = (
   event: EventWithComponents,
   groupBy: UsageGroupBy
 ): string | null => {
-  switch (groupBy) {
-    case 'model':
-      return event.model;
-    case 'meter_type':
-      return event.meterType;
-    case 'agent':
-      return event.agent?.publicId ?? null;
-    case 'run':
-      return event.run?.publicId ?? null;
-    case 'day':
-      // Immutable events carry only createdAt; bucket on its UTC calendar day.
-      return event.createdAt.toISOString().slice(0, 10);
-    default:
-      return null;
-  }
+  return GROUP_KEY_EXTRACTORS[groupBy](event);
 };
 
 type Accumulator = EventTokens & { costs: Array<string | null> };
@@ -211,7 +236,8 @@ const createdAtWhere = (
 
 /**
  * Rolls a project's usage up over an optional `[from, to]` window, bucketed by
- * one dimension (`model` | `agent` | `run` | `day` | `meter_type`). Each group
+ * one dimension (`model` | `agent` | `run` | `day` | `meter_type` | `actor` |
+ * `session`). Each group
  * and the grand total carry summed token counts and `cost_usd` (null when no
  * event in the bucket was priced). Scans the `(project_id, created_at)`-indexed
  * events with their component rows and aggregates in memory. `projectId` is the
@@ -247,6 +273,8 @@ export const aggregateUsage = async (args: {
     include: [
       { model: db.Agent, as: 'agent' },
       { model: db.OrchestrationRun, as: 'run' },
+      { model: db.Actor, as: 'actor' },
+      { model: db.Session, as: 'session' },
       { model: db.UsageComponent, as: 'components' },
     ],
     order: [['createdAt', 'ASC']],

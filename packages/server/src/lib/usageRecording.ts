@@ -140,6 +140,9 @@ const writeGenerationEvent = async (args: {
       agentId: generation.agentId,
       generationId: generation.id,
       traceId: generation.traceId,
+      // End-user attribution, copied from the generation's own FK columns.
+      actorId: generation.startedByActorId,
+      sessionId: generation.sessionId,
       aiProviderId: attribution.aiProviderId,
       triggerId: attribution.triggerId,
       actionId: attribution.actionId,
@@ -228,6 +231,10 @@ export const recordCompletionUsage = async (args: {
         agentId: args.agentId ?? null,
         generationId: null,
         traceId: null,
+        // Generation-less completions are not dispatched through a session, so
+        // there is no end user to attribute them to.
+        actorId: null,
+        sessionId: null,
         aiProviderId: args.aiProviderId,
         triggerId: null,
         actionId: null,

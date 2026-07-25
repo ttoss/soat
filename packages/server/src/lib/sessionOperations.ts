@@ -201,7 +201,6 @@ export const generateSessionResponse = async (args: {
   const agent = (
     session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
   ).agent;
-
   const mergedToolContext = {
     ...buildToolContext(session),
     ...(session.toolContext ?? {}),
@@ -222,6 +221,12 @@ export const generateSessionResponse = async (args: {
       model: args.model,
       toolContext: mergedToolContext,
       abortSignal: controller.signal,
+      // Only the session id is passed: the actor is derived from the session
+      // record itself (see resolveEndUserAttribution). Attribution is never
+      // read off `mergedToolContext` — that bag is caller-overridable (a
+      // request's `toolContext` wins the merge), so trusting it would let a
+      // caller bill another actor.
+      sessionId: session.publicId,
     });
   } finally {
     if (!controller.signal.aborted) {

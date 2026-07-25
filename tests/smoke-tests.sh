@@ -2531,6 +2531,65 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
   echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
 fi
 
+# 34b-v. End-user attribution — a session-driven generation attributes its usage
+# to the actor and session behind it, so spend is answerable per end user and not
+# only per agent. Both dimensions must filter and group.
+echo "--- Verifying end-user usage attribution ---"
+EUA_ACTOR_RESP=$($SOAT_CLI create-actor \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-usage-end-user)
+EUA_ACTOR_ID=$(printf '%s\n' "$EUA_ACTOR_RESP" | jq -r '.id')
+if [ -z "$EUA_ACTOR_ID" ] || [ "$EUA_ACTOR_ID" = "null" ]; then
+  echo "ERROR: Failed to create actor for end-user attribution test" >&2
+  printf '%s\n' "$EUA_ACTOR_RESP" >&2
+  exit 1
+fi
+
+EUA_SESSION_RESP=$($SOAT_CLI create-session \
+  --agent_id "$AGENT_ID" --actor_id "$EUA_ACTOR_ID")
+EUA_SESSION_ID=$(printf '%s\n' "$EUA_SESSION_RESP" | jq -r '.id')
+if [ -z "$EUA_SESSION_ID" ] || [ "$EUA_SESSION_ID" = "null" ]; then
+  echo "ERROR: Failed to create session for end-user attribution test" >&2
+  printf '%s\n' "$EUA_SESSION_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI add-session-message \
+  --session-id "$EUA_SESSION_ID" --message "hello from the smoke end user" >/dev/null
+$SOAT_CLI generate-session-response --session-id "$EUA_SESSION_ID" >/dev/null
+
+# Filter the raw meters by actor: every returned row must carry that actor, and
+# the session-driven event must carry the session too.
+EUA_METERS=$($SOAT_CLI list-usage-meters --actor-id "$EUA_ACTOR_ID" | sanitize_json)
+EUA_METERS_OK=$(printf '%s\n' "$EUA_METERS" | jq -r --arg actor "$EUA_ACTOR_ID" --arg session "$EUA_SESSION_ID" '((.data | length) >= 1) and all(.data[]; .actor_id == $actor and .session_id == $session)')
+if [ "$EUA_METERS_OK" != "true" ]; then
+  echo "ERROR: list-usage-meters --actor-id did not return actor-attributed rows" >&2
+  printf '%s\n' "$EUA_METERS" >&2
+  exit 1
+fi
+echo "Usage meters actor/session attribution: OK (actor $EUA_ACTOR_ID)"
+
+# The same spend must be reachable through the aggregate, bucketed by actor.
+EUA_AGG=$($SOAT_CLI get-usage \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by actor | sanitize_json)
+EUA_AGG_OK=$(printf '%s\n' "$EUA_AGG" | jq -r --arg actor "$EUA_ACTOR_ID" '(.group_by == "actor") and ([.groups[] | select(.key == $actor)] | length == 1)')
+if [ "$EUA_AGG_OK" != "true" ]; then
+  echo "ERROR: get-usage --group-by actor did not bucket the end user's spend" >&2
+  printf '%s\n' "$EUA_AGG" >&2
+  exit 1
+fi
+
+EUA_AGG_SESSION=$($SOAT_CLI get-usage \
+  --project-id "$PROJECT_PUBLIC_ID" --group-by session | sanitize_json)
+EUA_AGG_SESSION_OK=$(printf '%s\n' "$EUA_AGG_SESSION" | jq -r --arg session "$EUA_SESSION_ID" '(.group_by == "session") and ([.groups[] | select(.key == $session)] | length == 1)')
+if [ "$EUA_AGG_SESSION_OK" != "true" ]; then
+  echo "ERROR: get-usage --group-by session did not bucket the session's spend" >&2
+  printf '%s\n' "$EUA_AGG_SESSION" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-session --session-id "$EUA_SESSION_ID" >/dev/null
+echo "End-user usage attribution: OK"
+
 # 34b-iv. Usage thresholds — the spend-alert lifecycle (create → list → delete).
 # Independent of metered usage, so it runs unconditionally.
 echo "--- Verifying usage thresholds ---"

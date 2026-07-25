@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { resolveEndUserAttribution } from './generationAttribution';
 
 export type PersistedGeneration = {
   id: string;
@@ -171,6 +172,9 @@ export const createGenerationRecord = async (args: {
   initiatorGenerationId?: string | null;
   startedByPrincipalType?: string | null;
   startedByPrincipalId?: string | null;
+  // Public id of the session this generation serves. The end-user actor is
+  // derived from it (see resolveEndUserAttribution), never passed separately.
+  sessionId?: string | null;
   metadata?: Record<string, unknown> | null;
 }) => {
   const [agent, initiatorGeneration] = await Promise.all([
@@ -196,6 +200,11 @@ export const createGenerationRecord = async (args: {
     agentDbId: agent.id as number,
   });
 
+  const endUser = await resolveEndUserAttribution({
+    projectId: args.projectId,
+    sessionId: args.sessionId,
+  });
+
   const gen = await db.Generation.create({
     publicId: args.publicId,
     projectId: args.projectId,
@@ -204,6 +213,8 @@ export const createGenerationRecord = async (args: {
     initiatorGenerationId: initiatorGeneration?.id ?? null,
     startedByPrincipalType: args.startedByPrincipalType ?? null,
     startedByPrincipalId: args.startedByPrincipalId ?? null,
+    startedByActorId: endUser.actorId,
+    sessionId: endUser.sessionId,
     status: 'in_progress',
     startedAt: new Date(),
     completedAt: null,
