@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.16.1](https://127.0.0.1/41729/git/ttoss/compare/v0.16.0...v0.16.1) (2026-07-25)
+
+### Bug Fixes
+
+* **quotas:** re-arm the breach fire guard on limit change, and surface unenforceable cost caps ([#696](https://127.0.0.1/41729/git/ttoss/issues/696)) ([b4d3886](https://127.0.0.1/41729/git/ttoss/commits/b4d3886b624314bbd2dc6598f0428ce88b790390)), closes [#692](https://127.0.0.1/41729/git/ttoss/issues/692) [#694](https://127.0.0.1/41729/git/ttoss/issues/694)
+
 # [0.16.0](https://127.0.0.1/41729/git/ttoss/compare/v0.15.14...v0.16.0) (2026-07-25)
 
 ### Features

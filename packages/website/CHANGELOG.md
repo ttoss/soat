@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.16.1](https://127.0.0.1/41729/git/ttoss/compare/v0.16.0...v0.16.1) (2026-07-25)
+
+### Bug Fixes
+
+* **audit-log:** record item-scoped mutations, fix detail casing, reject bad date filters ([#697](https://127.0.0.1/41729/git/ttoss/issues/697)) ([3c77344](https://127.0.0.1/41729/git/ttoss/commits/3c77344b61884c6c26f52ad680816482e9b40144))
+* **quotas:** re-arm the breach fire guard on limit change, and surface unenforceable cost caps ([#696](https://127.0.0.1/41729/git/ttoss/issues/696)) ([b4d3886](https://127.0.0.1/41729/git/ttoss/commits/b4d3886b624314bbd2dc6598f0428ce88b790390)), closes [#692](https://127.0.0.1/41729/git/ttoss/issues/692) [#694](https://127.0.0.1/41729/git/ttoss/issues/694)
+
+### Features
+
+* **usage:** meter chat, discussion, and memory completions (G5 coverage) ([#698](https://127.0.0.1/41729/git/ttoss/issues/698)) ([8c38f9a](https://127.0.0.1/41729/git/ttoss/commits/8c38f9a573ef2bc6b911668deffc16371a04701c)), closes [#486](https://127.0.0.1/41729/git/ttoss/issues/486)
+
 # [0.16.0](https://127.0.0.1/41729/git/ttoss/compare/v0.15.14...v0.16.0) (2026-07-25)
 
 ### Features
