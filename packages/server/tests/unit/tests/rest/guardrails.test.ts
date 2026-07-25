@@ -596,6 +596,39 @@ describe('Guardrails', () => {
       expect(response.body.context_snapshot['soat.usage.cost_usd_24h']).toBe(0);
     });
 
+    test('run-scoped usage keys are catalogued and fail closed outside a run', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/guardrails')
+        .send({
+          project_id: projectId,
+          name: 'Run Ceiling Guardrail',
+          document: {
+            class: 'B',
+            guard: {
+              '<': [
+                { var: 'soat.usage.run_tokens' },
+                { var: 'context.action_token_ceiling' },
+              ],
+            },
+          },
+        });
+      // An uncatalogued soat.* key would be rejected at write time with 400.
+      expect(res.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/guardrails/${res.body.id}/evaluate`)
+        .send({ guardrail_context: { action_token_ceiling: 1_000_000 } });
+
+      expect(response.status).toBe(200);
+      // A dry-run has no run in scope, so the counter is unresolvable: the guard
+      // fails rather than reading 0 and passing under a huge ceiling.
+      expect(response.body.guard_result).toBe(false);
+      expect(response.body.decision).toBe('tripwire');
+      expect(
+        response.body.context_snapshot['soat.usage.run_tokens']
+      ).toBeNull();
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post(`/api/v1/guardrails/${evalGuardrailId}/evaluate`)

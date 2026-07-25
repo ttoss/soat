@@ -57,6 +57,11 @@ export const SOAT_CONTEXT_CATALOG: ReadonlySet<string> = new Set([
   'soat.usage.cost_usd_30d',
   'soat.usage.tokens_24h',
   'soat.usage.tokens_30d',
+  // Run-scoped cumulative spend — the current orchestration run's totals so
+  // far, not a project window. Unresolvable (→ null → fail-closed) outside a
+  // run, where there is no run to accumulate against.
+  'soat.usage.run_tokens',
+  'soat.usage.run_cost_usd',
 ]);
 
 export const isActionClass = (value: unknown): value is ActionClass => {

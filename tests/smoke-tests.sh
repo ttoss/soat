@@ -3928,6 +3928,33 @@ if [ "$(echo "$DRYRUN_HIGH" | jq -r '.class')" != "C" ] || \
 fi
 
 $SOAT_CLI delete-guardrail --guardrail-id "$GUARDRAIL_ID" >/dev/null
+
+# Per-run cumulative ceiling (#486): the run-scoped usage keys must be in the
+# soat.* catalog (an uncatalogued key is rejected at write time with 400), and
+# must fail closed outside a run — the dry-run has no run in scope, so the guard
+# fails and class B trips rather than reading the counter as 0 and passing.
+RUN_CEILING_RESP=$($SOAT_CLI create-guardrail \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-run-ceiling-guardrail \
+  --document '{"class":"B","guard":{"<":[{"var":"soat.usage.run_tokens"},{"var":"context.action_token_ceiling"}]}}')
+RUN_CEILING_ID=$(echo "$RUN_CEILING_RESP" | jq -r '.id')
+if [ -z "$RUN_CEILING_ID" ] || [ "$RUN_CEILING_ID" = "null" ]; then
+  echo "ERROR: soat.usage.run_tokens was rejected by the guardrail catalog" >&2
+  echo "$RUN_CEILING_RESP" >&2
+  exit 1
+fi
+
+DRYRUN_RUN_CEILING=$($SOAT_CLI evaluate-guardrail \
+  --guardrail-id "$RUN_CEILING_ID" \
+  --guardrail-context '{"action_token_ceiling":1000000}')
+if [ "$(echo "$DRYRUN_RUN_CEILING" | jq -r '.decision')" != "tripwire" ]; then
+  echo "ERROR: run-scoped ceiling did not fail closed outside a run" >&2
+  echo "$DRYRUN_RUN_CEILING" >&2
+  exit 1
+fi
+$SOAT_CLI delete-guardrail --guardrail-id "$RUN_CEILING_ID" >/dev/null
+echo "Per-run usage ceiling (fail-closed outside a run): OK"
+
 echo "Guardrails: OK"
 
 # 3e. Quotas module coverage (Phase 1: requests quotas + 429 middleware;

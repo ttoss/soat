@@ -302,6 +302,52 @@ export const windowedTokens = async (args: {
   return readTotal(rows[0]);
 };
 
+/**
+ * Sums the cost recorded against one orchestration run so far, across every
+ * meter type (nulls ignored by SUM). Run-scoped rather than windowed: this is
+ * the signal a per-run spend ceiling compares against, so a single runaway run
+ * can be aborted mid-flight without waiting for a project window to move.
+ * Exported for the guardrail `soat.usage.run_cost_usd` context provider.
+ */
+export const runCostUsd = async (args: {
+  runInternalId: number;
+}): Promise<number> => {
+  const rows = await db.UsageEvent.findAll({
+    where: { runId: args.runInternalId },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('cost_usd')), 'total']],
+  });
+  return readTotal(rows[0]);
+};
+
+/**
+ * Sums the billable tokens (input + output + cached) recorded against one
+ * orchestration run so far. Resolves the run's event ids first, then sums their
+ * token components — the same two-step `windowedTokens` uses, for the same
+ * reason (a join+aggregate alias is brittle across Sequelize versions).
+ * Exported for the guardrail `soat.usage.run_tokens` context provider.
+ */
+export const runTokens = async (args: {
+  runInternalId: number;
+}): Promise<number> => {
+  const events = await db.UsageEvent.findAll({
+    where: { runId: args.runInternalId },
+    attributes: ['id'],
+  });
+  const eventIds = events.map((event) => {
+    return event.id;
+  });
+  if (eventIds.length === 0) return 0;
+
+  const rows = await db.UsageComponent.findAll({
+    where: {
+      usageEventId: { [Op.in]: eventIds },
+      component: { [Op.in]: TOKEN_COMPONENTS },
+    },
+    attributes: [[Sequelize.fn('SUM', Sequelize.col('quantity')), 'total']],
+  });
+  return readTotal(rows[0]);
+};
+
 const windowedValue = (args: {
   metric: string;
   projectId: number;
