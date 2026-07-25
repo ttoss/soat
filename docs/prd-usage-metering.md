@@ -17,33 +17,34 @@
 
 | Component                                  | Status                     | Notes                                                                |
 | ------------------------------------------ | -------------------------- | ---------------------------------------------------------------------|
-| Provider-call instrumentation coverage     | 🟡 Partial                  | Wired for agent generations, conversations, and orchestration agent nodes; **extraction, discussions, and chats still pending** |
+| Provider-call instrumentation coverage     | ✅ Shipped                  | Every LLM path meters — agent generations plus the standalone chat, discussion, and memory completions |
 | Storage metering                           | ✅ Shipped                  | Daily per-project snapshot job (Phase 5)                             |
 | API-request metering                       | ✅ Shipped                  | Flush-aggregated counters; last in sequence (Phase 6)               |
-| `usage.*` guard context / per-run ceiling  | ⏭️ Deferred                 | Needs the guardrail evaluator ([guardrails](../packages/website/docs/modules/guardrails.md)), which is unbuilt. The run roll-up provides the cumulative signal an interim orchestration `condition` node can read (Phase 7) |
+| `usage.*` guard context                    | ✅ Shipped                  | `soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}` resolve fail-closed in the [guardrail](../packages/website/docs/modules/guardrails.md) evaluator (Phase 7) |
+| Per-run cumulative ceiling                 | ⏭️ Deferred                 | No run-scoped guard key exists; the run roll-up is the interim signal an orchestration `condition` node reads |
 
-## Coverage — Remaining LLM Paths 🟡
+## Coverage — All LLM Paths ✅
 
-The write side is a single choke point (`recordGenerationUsage`), so every
-metered path meters identically. Agent generations (non-stream, streaming, and
-the tool-outputs continuation path), conversations, and orchestration agent
-nodes are metered. **Extraction, discussions, and chats are not yet metered** —
-they must be routed through the same `recordGenerationUsage` side-effect so no
-LLM call silently skips metering.
+Every provider call the platform makes writes an `llm_tokens` event, through one
+of two shared choke points:
 
-## Meter Types (pending emitters)
+- `recordGenerationUsage` — agent generations (non-stream, streaming, and the
+  tool-outputs continuation path), conversations, and orchestration agent nodes,
+  all keyed on the generation's public id.
+- `recordCompletionUsage` — the paths that create no `Generation` row: chat
+  completions (stateless and chat-scoped, streaming and not), discussion turns,
+  and memory fact extraction and consolidation. Attribution is explicit rather
+  than read off a generation, so `generation_id` and `trace_id` are null and
+  `agent_id` is set only where the call is anchored to an agent. These calls have
+  no replay identity, so the idempotency key is unique per call
+  (`completion:{source}:{uuid}`).
 
-The event + component schema and per-component pricing already exist, so the
-remaining infra dimensions are emitter-only work. `compute_execution` shipped
-(P4); `storage` and `api_request` remain:
+Live behaviour is documented in the
+[Usage module doc](../packages/website/docs/modules/usage.md#coverage).
 
-| `meter_type`  | What one event records                       | Components  | Emitter (write path)                                                                 |
-| ------------- | -------------------------------------------- | ----------- | ------------------------------------------------------------------------------------- |
-| `api_request` | A batch of API requests served for a project | `request`   | Counting middleware, aggregated in memory and flushed periodically — **never one row per request** |
-| `storage`     | One project's stored bytes for one day       | `gb_day`    | Daily snapshot job summing `File.size` + document/chunk byte counts                   |
-
-Platform SKUs price these via a `soat` provider (`model` names the billable
-unit, e.g. `request`, `gb-day`); a missing price row records the quantity with
+Platform meter types (`compute_execution`, `storage`, `api_request`) price via a
+`soat` provider SKU (`model` names the billable unit, e.g. `compute-second`,
+`gb-day`, `request`); a missing price row records the quantity with
 `cost_usd = null` — usage is never lost because pricing lagged.
 
 ## Implementation Phases
@@ -73,28 +74,27 @@ atomic counters; this phase only prices.
 
 **Unlocks:** The request line of the project bill.
 
-### Phase 7 — Budget Guard Integration ⏭️ Deferred
+### Phase 7 — Budget Guard Integration ✅ Shipped (project windows)
 
-> Blocked on the guardrail evaluator and `usage.*` guard context
-> ([guardrails](../packages/website/docs/modules/guardrails.md)), which are unbuilt. The per-run
-> token-ceiling issue (#486) was deferred for the same reason. Interim: an
-> orchestration `condition` node can read the run's cumulative usage (via the
-> run roll-up) and route to an abort path — a modelable pattern, not a platform
-> guarantee.
+**Goal:** Runaway spend trips fail-closed like any other guard.
 
-**Goal:** Runaway cycles trip fail-closed like any other guard.
-
-**Deliverables:**
-
-- `usage.*` context provider for the
-  [guardrail evaluator](../packages/website/docs/modules/guardrails.md):
-  `usage.cost_usd(window)`, `usage.tokens(window)`, per project
-- Documented pattern: a class-B rule guarded by
-  `{'<': [{var: 'usage.cost_usd_24h'}, {var: 'project.context.cost_ceiling'}]}`
-  aborts (tripwire → exception) when the ceiling is hit
+**Delivered:** the `usage.*` context provider for the
+[guardrail evaluator](../packages/website/docs/modules/guardrails.md) —
+`soat.usage.cost_usd_{1h,24h,7d,30d}` and `soat.usage.tokens_{24h,30d}`,
+resolved per project at evaluation time and left `null` (fail-closed) when the
+usage query throws. The class-B ceiling pattern
+(`{'<': [{var: 'soat.usage.cost_usd_24h'}, 1000]}`) is documented in the
+[guardrails module doc](../packages/website/docs/modules/guardrails.md).
 
 **Unlocks:** Hard per-project spend ceilings enforced deterministically at the
 tool boundary.
+
+**Still open — per-run cumulative ceiling (#486).** The shipped keys are
+*windowed per project*, which is the wrong granularity for aborting a single
+runaway run. No run-scoped key (`usage.run_tokens` / `usage.run_cost_usd`) exists
+in the guard-context catalog. Interim: an orchestration `condition` node reads
+the run's cumulative usage via the run roll-up and routes to an abort path — a
+modelable pattern, not a platform guarantee.
 
 ## Risks
 

@@ -1,8 +1,11 @@
 import { db } from '../db';
 
-// The metering write path lives in `usageRecording.ts`; re-exported here so the
-// module's public surface (used by the generation lifecycle and tests) is
-// unchanged. `usage.ts` owns the read path (list + receipt re-export).
+// The metering write path is split across `usageRecording.ts` (the two
+// `llm_tokens` writers), `usageTokenEvent.ts` (their shared pricing + persist
+// primitives), and `usageComputeRecording.ts` (the `compute_execution` writer);
+// all are re-exported here so the module's public surface (used by the
+// generation lifecycle, the completion paths, and tests) is one import.
+// `usage.ts` owns the read path (list + receipt re-export).
 export type {
   UsageAggregate,
   UsageAggregateGroup,
@@ -10,6 +13,7 @@ export type {
   UsageGroupBy,
 } from './usageAggregate';
 export { aggregateUsage, USAGE_GROUP_BY } from './usageAggregate';
+export { recordComputeUsage } from './usageComputeRecording';
 export type {
   UsageReceipt,
   UsageReceiptComponent,
@@ -18,22 +22,21 @@ export type {
   UsageTotals,
 } from './usageReceipt';
 export { getReceipt, getRunReceipt, getRunUsageTotals } from './usageReceipt';
-export type { UsageTokens } from './usageRecording';
-export {
-  extractUsageTokens,
-  recordComputeUsage,
-  recordGenerationUsage,
-} from './usageRecording';
+export type { CompletionUsageSource } from './usageRecording';
+export { recordCompletionUsage, recordGenerationUsage } from './usageRecording';
 export type { PersistedUsageThreshold } from './usageThresholds';
 export {
   createThreshold,
   deleteThreshold,
   evaluateProjectThresholds,
+  getThreshold,
   listThresholds,
   USAGE_THRESHOLD_CROSSED_EVENT,
   USAGE_THRESHOLD_METRICS,
   USAGE_THRESHOLD_WINDOWS,
 } from './usageThresholds';
+export type { UsageTokens } from './usageTokenEvent';
+export { extractUsageTokens } from './usageTokenEvent';
 
 export type PersistedUsageComponent = {
   component: string;

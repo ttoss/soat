@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { runConsolidationCompletion } from 'src/lib/memoryConsolidationCompletion';
 
@@ -137,6 +138,33 @@ describe('memoryConsolidationCompletion lib', () => {
 
     expect(text).toBe('Customer prefers email over phone calls');
     expect(lastRequestBody?.model).toBe('override-stub-model');
+  });
+
+  test('meters the consolidation as an llm_tokens event attributed to the agent', async () => {
+    const agentId = await createAgent({ name: 'ConsolMeteredAgent' });
+    const agent = await db.Agent.findOne({ where: { publicId: agentId } });
+
+    await runConsolidationCompletion({
+      agentId,
+      existing: 'Customer prefers email',
+      incoming: 'Customer dislikes phone calls',
+    });
+
+    // The metering write is fire-and-forget, so poll for it rather than sleep.
+    let event: InstanceType<typeof db.UsageEvent> | undefined;
+    for (let attempt = 0; attempt < 100 && !event; attempt += 1) {
+      event =
+        (await db.UsageEvent.findOne({
+          where: { agentId: agent?.id as number, meterType: 'llm_tokens' },
+        })) ?? undefined;
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
+    expect(event).toBeDefined();
+    expect(event?.provider).toBe('ollama');
+    expect(event?.model).toBe('default-stub-model');
+    expect(event?.generationId).toBeNull();
   });
 
   test('throws RESOURCE_NOT_FOUND for an unknown agent', async () => {

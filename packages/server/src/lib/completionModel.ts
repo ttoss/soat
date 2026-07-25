@@ -24,7 +24,15 @@ export const resolveCompletionModel = async (args: {
   projectIds?: number[];
   aiProviderId?: string;
   model?: string;
-}): Promise<{ model: LanguageModel; modelName: string; provider: string }> => {
+}): Promise<{
+  model: LanguageModel;
+  modelName: string;
+  provider: string;
+  /** Attribution for usage metering — internal ids, never surfaced on an API. */
+  projectId: number;
+  agentDbId: number;
+  aiProviderDbId: number;
+}> => {
   const typedAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
@@ -85,5 +93,21 @@ export const resolveCompletionModel = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  return { model, modelName, provider: resolved.provider };
+  // `TypedAgent` deliberately omits the internal id (one of its constructors
+  // builds it from an in-memory pending generation that never had one), so the
+  // usage attribution reads it back off the row. `resolveAgentForGeneration`
+  // just matched this publicId, so the agent is guaranteed to exist.
+  const agentRow = await db.Agent.findOne({
+    where: { publicId: args.agentId },
+    attributes: ['id'],
+  });
+
+  return {
+    model,
+    modelName,
+    provider: resolved.provider,
+    projectId: typedAgent.project.id as number,
+    agentDbId: agentRow?.id as number,
+    aiProviderDbId: resolved.id,
+  };
 };

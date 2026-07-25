@@ -36,6 +36,8 @@ beforeAll(async () => {
       'tools:CreateTool',
       'tools:CallTool',
       'tools:GetTool',
+      'tools:UpdateTool',
+      'tools:DeleteTool',
       'triggers:CreateTrigger',
       'triggers:ListTriggers',
       'audit:ListAuditEntries',
@@ -211,6 +213,114 @@ describe('Audit Log — write hook', () => {
   });
 });
 
+describe('Audit Log — item-scoped mutations authorized via resolveProjectIds (no explicit project_id)', () => {
+  // `PATCH`/`DELETE /tools/:tool_id` authorize with `resolveProjectIds({ action,
+  // resourceType })` — no `projectPublicId` argument, since the route does not
+  // know which project the target belongs to until the lib layer resolves it.
+  // Regression coverage for the bug where such routes wrote no audit entry at
+  // all (github.com/ttoss/soat/issues/689): update and delete must each be
+  // recorded, scoped to the tool's actual project, with a precise resource SRN.
+  test('updating a tool by id yields a tools:UpdateTool entry scoped to its project', async () => {
+    const createRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'audit-item-scoped-update',
+        type: 'http',
+        execute: { url: 'https://example.com/hook', method: 'POST' },
+      });
+    expect(createRes.status).toBe(201);
+    const toolId = createRes.body.id as string;
+
+    const updateRes = await authenticatedTestClient(userToken)
+      .patch(`/api/v1/tools/${toolId}`)
+      .send({ description: 'renamed by test' });
+    expect(updateRes.status).toBe(200);
+
+    const entries = await listEntries({ resource_public_id: toolId });
+    const updated = entries.find((e) => {
+      return e.action === 'tools:UpdateTool';
+    });
+    expect(updated).toBeDefined();
+    expect(updated!.status).toBe(200);
+    expect(updated!.project_id).toBe(projectId);
+    expect(updated!.resource_srn).toBe(`soat:${projectId}:tool:${toolId}`);
+    expect(updated!.principal_type).toBe('user');
+  });
+
+  test('deleting a tool by id yields a tools:DeleteTool entry scoped to its project', async () => {
+    const createRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'audit-item-scoped-delete',
+        type: 'http',
+        execute: { url: 'https://example.com/hook', method: 'POST' },
+      });
+    expect(createRes.status).toBe(201);
+    const toolId = createRes.body.id as string;
+
+    const deleteRes = await authenticatedTestClient(userToken).delete(
+      `/api/v1/tools/${toolId}`
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const entries = await listEntries({ resource_public_id: toolId });
+    const deleted = entries.find((e) => {
+      return e.action === 'tools:DeleteTool';
+    });
+    expect(deleted).toBeDefined();
+    expect(deleted!.status).toBe(204);
+    expect(deleted!.project_id).toBe(projectId);
+    expect(deleted!.resource_srn).toBe(`soat:${projectId}:tool:${toolId}`);
+    expect(deleted!.principal_type).toBe('user');
+  });
+
+  test('a denied update on a route with no explicit project_id still yields a 403 entry', async () => {
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'audit-item-scoped-denied',
+        type: 'http',
+        execute: { url: 'https://example.com/hook', method: 'POST' },
+      });
+    const toolId = createRes.body.id as string;
+
+    // A plain JWT user with zero policies resolves to an *empty* accessible-
+    // project set (not a `null`/403 decision — see `resolveProjectIdsByPublicIdAndPolicy`),
+    // so the lib layer 404s instead of denying. A project-scoped API key whose
+    // policy excludes `tools:UpdateTool` genuinely denies via
+    // `resolveApiKeyScopedProjectIds`, producing the real 403 this test needs.
+    const policyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['secrets:GetSecret'] }],
+        },
+      });
+    const keyRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/api-keys')
+      .send({
+        name: 'audit-tools-no-perm-key',
+        project_id: projectId,
+        policy_ids: [policyRes.body.id],
+      });
+    const rawKey = keyRes.body.key as string;
+
+    const updateRes = await authenticatedTestClient(rawKey)
+      .patch(`/api/v1/tools/${toolId}`)
+      .send({ description: 'should be denied' });
+    expect(updateRes.status).toBe(403);
+
+    const entries = await listEntries({ resource_public_id: toolId });
+    const denied = entries.find((e) => {
+      return e.action === 'tools:UpdateTool' && e.status === 403;
+    });
+    expect(denied).toBeDefined();
+  });
+});
+
 describe('Audit Log — read API filters', () => {
   test('?action= returns only entries with that action', async () => {
     const entries = await listEntries({ action: 'secrets:CreateSecret' });
@@ -245,7 +355,7 @@ describe('Audit Log — read API filters', () => {
     }
   });
 
-  test('?from=/?to= bound results by createdAt, and an invalid date is ignored', async () => {
+  test('?from=/?to= bound results by createdAt', async () => {
     // A wide window (valid ISO dates) returns entries.
     const within = await listEntries({
       from: '2000-01-01T00:00:00.000Z',
@@ -256,11 +366,42 @@ describe('Audit Log — read API filters', () => {
     // A future-only lower bound excludes every existing entry.
     const future = await listEntries({ from: '2999-01-01T00:00:00.000Z' });
     expect(future).toHaveLength(0);
+  });
 
-    // A malformed date parses to undefined (ignored, not applied as a filter),
-    // so results are unaffected rather than erroring.
-    const ignored = await listEntries({ from: 'not-a-real-date' });
-    expect(ignored.length).toBeGreaterThan(0);
+  // Regression coverage for github.com/ttoss/soat/issues/691: an unparseable
+  // `from`/`to` used to be silently dropped rather than applied, so a typo
+  // widened a compliance query into "every entry" instead of failing loudly.
+  test('an unparseable ?from= is rejected with 400, not silently dropped', async () => {
+    await flushAuditQueue();
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, from: 'not-a-real-date' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('an unparseable ?to= is rejected with 400, not silently dropped', async () => {
+    await flushAuditQueue();
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, to: 'also-not-a-date' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('the export endpoint rejects an unparseable ?from= the same way', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log/export')
+      .query({ project_id: projectId, from: 'not-a-real-date' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('an absent ?from=/?to= is simply unfiltered, not an error', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -726,6 +867,10 @@ describe('Audit Log — audit.entry_created webhook (audit-log P3)', () => {
     expect(event!.data.action).toBe('guardrails:Evaluate');
     expect(event!.data.principal_type).toBeNull();
     expect(event!.data.principal_id).toBeNull();
+    // The webhook payload documents itself as "the same snake_case shape the
+    // read API returns" (audit-log.md) — `detail`'s inner keys must be
+    // snake_case here too, not just the entry's top-level fields.
+    assertGuardrailEvaluationDetail(event!.data.detail, 'snake');
   });
 
   test('a global (project-less) entry emits no event — webhooks are project-scoped', async () => {
@@ -825,6 +970,50 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
     for (const line of lines) {
       expect(line.action).toBe('secrets:DeleteSecret');
     }
+  });
+
+  test('a guardrail_evaluation entry exports with snake_case detail keys', async () => {
+    const guardrailId = 'guard_auditexport00';
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    await persistGuardrailEvaluations({
+      projectId: project!.id as number,
+      records: [
+        {
+          kind: 'guardrail_evaluation',
+          guardrailId,
+          guardrailVersion: 1,
+          scope: 'tool',
+          tool: 'refund',
+          action: 'refund',
+          class: 'D',
+          decision: 'blocked',
+          guardResult: null,
+          contextSource: 'none',
+          contextSnapshot: {},
+          agentId: null,
+          runId: null,
+          generationId: null,
+        },
+      ],
+    });
+    await flushAuditQueue();
+
+    const res = await exportNdjson({
+      token: adminToken,
+      query: { project_id: projectId, resource_public_id: guardrailId },
+    });
+    expect(res.status).toBe(200);
+
+    const lines = parseLines(res.body);
+    const entry = lines.find((l) => {
+      return l.resource_public_id === guardrailId;
+    });
+    expect(entry).toBeDefined();
+    // The export documents itself as "the same fields as the read API"
+    // (audit-log.md) — `detail`'s inner keys must be snake_case here too.
+    assertGuardrailEvaluationDetail(entry!.detail, 'snake');
   });
 
   test('paginates past the internal batch size without dropping or duplicating rows', async () => {

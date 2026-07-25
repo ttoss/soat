@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
 import { buildConsolidationPrompt } from './memoryConsolidation';
+import { recordCompletionUsage } from './usage';
 
 const log = createDebug('soat:memory-consolidation');
 
@@ -27,7 +28,7 @@ export const runConsolidationCompletion = async (args: {
   aiProviderId?: string;
   model?: string;
 }): Promise<string> => {
-  const { model, modelName } = await resolveCompletionModel({
+  const resolved = await resolveCompletionModel({
     agentId: args.agentId,
     projectIds: args.projectIds,
     aiProviderId: args.aiProviderId,
@@ -37,16 +38,29 @@ export const runConsolidationCompletion = async (args: {
   log(
     'runConsolidationCompletion: agentId=%s model=%s',
     args.agentId,
-    modelName
+    resolved.modelName
   );
 
-  const { text } = await generateText({
-    model,
+  const { text, usage } = await generateText({
+    model: resolved.model,
     prompt: buildConsolidationPrompt({
       existing: args.existing,
       incoming: args.incoming,
     }),
     temperature: 0,
+  });
+
+  // Consolidation is a real provider call, so it meters like any other.
+  // `recordCompletionUsage` never rejects, so `void` marks the intentional
+  // fire-and-forget: metering must not delay or fail the consolidation.
+  void recordCompletionUsage({
+    source: 'memory_consolidation',
+    projectId: resolved.projectId,
+    provider: resolved.provider,
+    aiProviderId: resolved.aiProviderDbId,
+    agentId: resolved.agentDbId,
+    model: resolved.modelName,
+    usage,
   });
 
   return text;

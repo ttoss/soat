@@ -10,6 +10,8 @@ import {
   listGuardrails,
   updateGuardrail,
 } from 'src/lib/guardrails';
+import { buildSrn } from 'src/lib/iam';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { parsePagination } from './helpers';
 import { coerceToJsonObject } from './tools';
@@ -219,6 +221,23 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
     'guardrails:DeleteGuardrail'
   );
   if (projectIds === null) return;
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const guardrail = await getGuardrail({
+    projectIds,
+    id: ctx.params.guardrail_id,
+  });
+  setAuditResourceHint(ctx, {
+    projectPublicId: guardrail.projectId,
+    resourceSrn: buildSrn({
+      projectPublicId: guardrail.projectId,
+      resourceType: 'guardrail',
+      resourceId: guardrail.id,
+    }),
+    resourcePublicId: guardrail.id,
+  });
 
   await deleteGuardrail({
     projectIds,

@@ -27,7 +27,7 @@ Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`);
 | `project_id` | string | Owning project |
 | `status` | string | `open`, `acknowledged`, `resolved` |
 | `severity` | string | `info`, `warning`, `critical` |
-| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `manual` |
+| `kind` | string | `run_failed`, `guardrail_tripwire`, `approval_expired`, `quota_unpriced`, `manual` |
 | `title` | string | Human-readable one-line summary |
 | `detail` | object \| null | Structured context (tool, error, guardrail version) |
 | `occurrence_count` | integer | Times this exact failure was observed while open |
@@ -52,6 +52,7 @@ Severity is keyed to actionability, not raw "badness". Each `kind` has a default
 | `run_failed` | `critical` | A run died after exhausting retries — needs intervention |
 | `guardrail_tripwire` | `warning` | The guard worked as designed; also a feedback-loop signal |
 | `approval_expired` | `warning` | Fail-safe missed SLA — the action never ran |
+| `quota_unpriced` | `warning` | A cost cap is protecting nothing; needs a config fix, not incident response |
 | `manual` | `warning` | Author-chosen |
 
 ### Occurrence dedup
@@ -65,6 +66,8 @@ An item is `open` when filed. **Acknowledge** it (`acknowledged`) to signal some
 ### Producers
 
 Exceptions are filed by subscribing to platform events, so producers stay decoupled: `run_failed` rides the existing `orchestration_runs.failed` event, `approval_expired` rides `approvals.expired`, and `guardrail_tripwire` rides a dedicated `guardrail.tripwire` event emitted from the guardrail dispatch path. Every filing is fire-and-forget — it never disturbs the producer.
+
+`quota_unpriced` is the exception to the event-driven pattern: it is filed inline from the [quota](./quotas.md#token-and-cost-enforcement) pre-generation check, which is the only place that knows a cost cap just evaluated against an unpriced window. It is deduped on the quota rather than the window, so one dead cap is one triage item and `occurrence_count` reads as the number of generations that ran unprotected. The check fails open, so a filing error can never block a generation.
 
 ## Examples
 

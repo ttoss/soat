@@ -6,6 +6,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import type { DiscussionEffort } from './discussionEngine';
+import { recordCompletionUsage } from './usage';
 
 const log = createDebug('soat:discussions');
 
@@ -74,7 +75,13 @@ export const resolveDiscussionModel = async (args: {
   projectId: number;
   aiProviderId: string;
   model?: string | null;
-}): Promise<{ model: LanguageModel; modelName: string; provider: string }> => {
+}): Promise<{
+  model: LanguageModel;
+  modelName: string;
+  provider: string;
+  /** Internal id of the billed provider instance, for usage attribution. */
+  aiProviderDbId: number;
+}> => {
   const provider = await db.AiProvider.findOne({
     where: { publicId: args.aiProviderId, projectId: args.projectId },
   });
@@ -112,7 +119,12 @@ export const resolveDiscussionModel = async (args: {
     config: resolved.config as Record<string, unknown> | undefined,
   });
 
-  return { model, modelName, provider: resolved.provider };
+  return {
+    model,
+    modelName,
+    provider: resolved.provider,
+    aiProviderDbId: provider.id as number,
+  };
 };
 
 /**
@@ -133,11 +145,12 @@ export const runDiscussionCompletion = async (args: {
   /** Aborts the completion (e.g. a per-turn timeout) so it cannot hang. */
   abortSignal?: AbortSignal;
 }): Promise<string> => {
-  const { model, modelName, provider } = await resolveDiscussionModel({
-    projectId: args.projectId,
-    aiProviderId: args.aiProviderId,
-    model: args.model,
-  });
+  const { model, modelName, provider, aiProviderDbId } =
+    await resolveDiscussionModel({
+      projectId: args.projectId,
+      aiProviderId: args.aiProviderId,
+      model: args.model,
+    });
 
   const options = buildDiscussionProviderOptions({
     provider,
@@ -151,7 +164,7 @@ export const runDiscussionCompletion = async (args: {
     args.effort
   );
 
-  const { text } = await generateText({
+  const { text, usage } = await generateText({
     model,
     prompt: args.prompt,
     temperature: args.temperature ?? 0,
@@ -165,6 +178,18 @@ export const runDiscussionCompletion = async (args: {
             : {}),
         }
       : {}),
+  });
+
+  // A discussion turn is a real provider call, so it meters like any other.
+  // `recordCompletionUsage` never rejects, so `void` marks the intentional
+  // fire-and-forget: metering must not delay or fail the turn it measures.
+  void recordCompletionUsage({
+    source: 'discussion',
+    projectId: args.projectId,
+    provider,
+    aiProviderId: aiProviderDbId,
+    model: modelName,
+    usage,
   });
 
   return text;

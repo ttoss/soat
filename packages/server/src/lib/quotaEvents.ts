@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { db } from '../db';
 import { enqueueAuditWrite } from './auditQueue';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { fileException } from './exceptions';
 
 const log = createDebug('soat:quotas');
 
@@ -13,6 +14,51 @@ const log = createDebug('soat:quotas');
 export const QUOTA_EXCEEDED_EVENT = 'quota.exceeded';
 
 type QuotaInstance = InstanceType<(typeof db)['Quota']>;
+
+/**
+ * Files a `quota_unpriced` exception for a `cost_usd` quota whose window holds
+ * metered usage but nothing priced.
+ *
+ * Such a quota aggregates to 0 no matter how much was actually spent, so it can
+ * never breach: the cap looks healthy through the API while protecting nothing.
+ * That is the one case where a quota fails *open* silently, so it is surfaced
+ * for triage rather than logged. The exceptions queue is the right home — it
+ * already carries severity, an `exceptions.created` webhook, and an
+ * acknowledge/resolve lifecycle.
+ *
+ * Deduped on the quota (not the window): "this cap is dead" is one issue to
+ * triage, and the occurrence count then reads as how many generations ran
+ * unprotected. Once resolved, a later recurrence files a fresh item.
+ */
+export const reportUnpricedCostQuota = async (args: {
+  quota: QuotaInstance;
+  unpricedEventCount: number;
+}): Promise<void> => {
+  const { quota } = args;
+
+  log(
+    'reportUnpricedCostQuota: quota=%s window=%s unpricedEvents=%d',
+    quota.publicId,
+    quota.window,
+    args.unpricedEventCount
+  );
+
+  await fileException({
+    projectId: quota.projectId,
+    kind: 'quota_unpriced',
+    title: `Cost quota ${quota.publicId} cannot be enforced: no priced usage in the window`,
+    dedupKey: `quota_unpriced:${quota.publicId}`,
+    detail: {
+      quotaId: quota.publicId,
+      metric: quota.metric,
+      scope: quota.scope,
+      scopeRef: quota.scopeRef,
+      window: quota.window,
+      limit: Number(quota.limit),
+      unpricedEventCount: args.unpricedEventCount,
+    },
+  });
+};
 
 /**
  * Fires the `quota.exceeded` webhook once per window for a breached quota.

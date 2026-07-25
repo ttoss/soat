@@ -1,6 +1,10 @@
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
+import {
+  camelToSnakeKey,
+  convertKeysDeep,
+} from 'src/lib/resource-inputs/normalizers';
 
 import { DomainError } from '../errors';
 import { emitEvent } from './eventBus';
@@ -113,7 +117,14 @@ const resolveAuditProject = async (
 
 /** The snake_case projection of an entry — the read contract, shared by the
  * export stream and the `audit.entry_created` webhook payload so all three
- * surfaces expose the same field names. */
+ * surfaces expose the same field names.
+ *
+ * `detail` is written camelCase and, on the read endpoints, snake-cased by
+ * the `caseTransform` middleware — which the export stream and the webhook
+ * both bypass (the export sets a stream body deliberately excluded from
+ * `caseTransform`; the webhook payload never passes through HTTP middleware
+ * at all). `convertKeysDeep` reproduces that same recursive transform here so
+ * all three surfaces agree on `detail`'s inner key casing too. */
 const toSnakeAuditEntry = (
   entry: ReturnType<typeof mapAuditEntry>
 ): Record<string, unknown> => {
@@ -129,7 +140,7 @@ const toSnakeAuditEntry = (
     request_id: entry.requestId,
     ip: entry.ip,
     user_agent: entry.userAgent,
-    detail: entry.detail,
+    detail: convertKeysDeep(entry.detail, camelToSnakeKey),
     created_at:
       entry.createdAt instanceof Date
         ? entry.createdAt.toISOString()

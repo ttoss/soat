@@ -249,6 +249,11 @@ export const resolveAiProviderSecret = async (args: {
   }
 
   return {
+    // Internal ids, for callers that must attribute usage to the exact provider
+    // instance and its project (a project may hold several providers of the
+    // same slug). Never surface these on an API response.
+    id: instance.id as number,
+    projectId: instance.projectId as number,
     provider: instance.provider,
     defaultModel: instance.defaultModel,
     baseUrl: instance.baseUrl ?? undefined,

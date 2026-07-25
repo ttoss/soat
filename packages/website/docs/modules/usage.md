@@ -11,7 +11,7 @@ Usage events record the cost of every metered occurrence, with the measured quan
 
 ## Overview
 
-Whenever an agent completes a generation, SOAT records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` (one event per orchestration node execution), `storage` (a daily per-project snapshot), and `api_request` (flush-aggregated request counts) are all metered today. Events are written at the single point every agent completion flows through, so adding a provider cannot silently skip metering.
+Whenever SOAT completes an LLM call, it records one **usage event** plus its **component** rows. An event captures the attribution and total cost; each component captures one priced dimension — for an LLM call `input_tokens`, `output_tokens`, `cached_tokens` (and a non-billable `reasoning_tokens` detail). No meter type is privileged: `llm_tokens` is just an event with several components, and other dimensions are the same shape with different components — `compute_execution` (one event per orchestration node execution), `storage` (a daily per-project snapshot), and `api_request` (flush-aggregated request counts) are all metered today. Every LLM path is covered — agent generations plus the standalone chat, discussion, and memory completions (see [Coverage](#coverage)) — and each writes through a shared choke point, so adding a provider cannot silently skip metering.
 
 Events and components are **append-only and immutable** — no update or delete path, no `updated_at` — so historical usage never changes after the fact. Writes are **idempotent** on the generation's public ID: a replayed completion is a no-op instead of double counting.
 
@@ -112,7 +112,18 @@ An LLM event's tokens are split into disjoint, additive components. `input_token
 
 ### Coverage
 
-Usage is metered for agent generations — including [conversations](./conversations.md) and [orchestration](./orchestrations.md) agent nodes, which run through the same agent-completion path. When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+**Every LLM call the platform makes is metered.** There are two write paths, and both produce the same `llm_tokens` event with the same components and pricing:
+
+| Path | Metered calls | Event attribution |
+| --- | --- | --- |
+| Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes — all run through the same agent-completion path | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `run_id`/`node_id` inside a run |
+| Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped, streaming and not), [discussion](./discussions.md) turns, and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are always `null` — these calls create no generation. `agent_id` is set for memory extraction/consolidation (which are anchored to an agent) and `null` for chats and discussions |
+
+When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+
+Standalone completions have no replay identity — nothing re-delivers them, and a retried request is a new provider call that must be billed — so their idempotency key is unique per call (`completion:<source>:<uuid>`, where `source` is `chat`, `discussion`, `memory_extraction`, or `memory_consolidation`).
+
+A **streamed** completion is metered when the stream finishes, since token counts only arrive with the provider's final chunk. A stream the client abandons mid-way is therefore not metered.
 
 ### Compute metering
 
@@ -129,6 +140,16 @@ Each served API request is counted in memory per (project, API key), and a perio
 ### Trigger and action attribution
 
 `action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the [generation](./generations.md) and copied onto its event so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when a [trigger](./triggers.md) initiates the generation — both for a direct **agent-target** trigger and for generations produced inside an [orchestration](./orchestrations.md) run started by a trigger (the run carries the trigger id and propagates it to every in-run generation). Filter the event list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action.
+
+### End-user attribution
+
+An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, so spend can be answered per end user rather than only per agent. Both are copied from the generation at write time and **frozen** there, the same rule as `cost_usd`: renaming an actor, closing a session, or deleting either never rewrites recorded spend — the row survives with a `null` dimension instead of vanishing from the project's totals.
+
+Attribution is set on the [session](./sessions.md) path, which is the surface that knows which end user a turn belongs to — including the continuation a client-tool approval re-handoff produces, so an approved tool call stays billed to the same end user. Direct agent generations, [trigger](./triggers.md)-initiated work, and [orchestration](./orchestrations.md) nodes have no end user behind them and record `null` for both, as do the standalone completions in [Coverage](#coverage) — a chat, discussion, or memory pass is not dispatched through a session.
+
+The actor is **derived from the session**, never taken from the request: the session already owns its actor link, so an event can never be billed to one actor under another's session, and a caller cannot bill someone else by overriding `tool_context` (that bag is caller-writable and is not read for attribution).
+
+Both dimensions filter (`GET /api/v1/usage/meters?actor_id=…` / `?session_id=…`) and group (`group_by=actor` / `group_by=session`). Because the values are written, not backfilled, events recorded before this shipped carry `null` — historical spend cannot be re-attributed after the fact.
 
 ### Pricing
 
@@ -153,16 +174,6 @@ Prices can also be **declared in a formation** with the `project_price` resource
 `GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event (its SKU, cost, and component breakdown), a `by_meter_type` cost split (the "tokens + infra" split — one entry per distinct meter type), reconstructed token totals (`total_input_tokens` is uncached input + cached), plus a grand total. A single-type receipt has one `by_meter_type` entry whose cost equals the receipt total. Because every component carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it.
 
 `GET /api/v1/usage/receipt?run_id=…` returns the same receipt shape for an entire [orchestration](./orchestrations.md) run — "one operating cycle → one action" billing — with one line item per usage event across every node of the run, summed for the totals and the `by_meter_type` split. The response carries `run_id` (and omits `generation_id`). The run's token/cost roll-up is also surfaced inline on the run itself as a `usage` object on `GET /api/v1/orchestration-runs/{run_id}`, so callers see run spend without a second request.
-
-### End-user attribution
-
-An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, so spend can be answered per end user rather than only per agent. Both are copied from the generation at write time and **frozen** there, the same rule as `cost_usd`: renaming an actor, closing a session, or deleting either never rewrites recorded spend — the row survives with a `null` dimension instead of vanishing from the project's totals.
-
-Attribution is set on the [session](./sessions.md) path, which is the surface that knows which end user a turn belongs to — including the continuation a client-tool approval re-handoff produces, so an approved tool call stays billed to the same end user. Direct agent generations, [trigger](./triggers.md)-initiated work, and [orchestration](./orchestrations.md) nodes have no end user behind them and record `null` for both.
-
-The actor is **derived from the session**, never taken from the request: the session already owns its actor link, so an event can never be billed to one actor under another's session, and a caller cannot bill someone else by overriding `tool_context` (that bag is caller-writable and is not read for attribution).
-
-Both dimensions filter (`GET /api/v1/usage/meters?actor_id=…` / `?session_id=…`) and group (`group_by=actor` / `group_by=session`). Because the values are written, not backfilled, events recorded before this shipped carry `null` — historical spend cannot be re-attributed after the fact.
 
 ### Aggregation
 
