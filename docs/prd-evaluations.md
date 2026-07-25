@@ -142,7 +142,7 @@ REST bodies per the case convention):
 | `exact_match`   | — (compares output to `expected_output`, trimmed)               | 0 or 1                                       |
 | `contains`      | `value`, `case_sensitive` (default false)                       | 0 or 1                                       |
 | `json_logic`    | `expression` — JSON Logic over `{input, output, expected, item.metadata}` | truthy → 1, falsy → 0              |
-| `output_schema` | — validates output against the agent's existing `output_schema` | 0 or 1                                       |
+| `output_schema` | `schema` (optional JSON Schema); falls back to the agent's `output_schema` | 0 or 1 — validates the generation's structured `object` output |
 | `llm_judge`     | `ai_provider_id`, `model`, `prompt` with `{{input}}` / `{{output}}` / `{{expected}}` slots | 0–1 + `reasoning` |
 
 **Decision:** `json_logic` reuses the shared `LogicEngine` in
@@ -158,12 +158,43 @@ judges are just completions, and they meter/trace like any other call.
 scorers emit 0/1. One shape keeps aggregation, deltas, and thresholds
 scorer-agnostic, so new scorer types need no aggregation changes.
 
+**Decision (2026-07): the `output_schema` scorer carries its own optional
+`schema`; the agent's `output_schema` is only a fallback.** Binding the scorer
+to the agent's *live* `output_schema` would break the module's core purpose —
+regression detection against a baseline: editing the agent between two runs
+would silently re-score them against **different** schemas, so their scores are
+no longer comparable. Making the schema part of the immutable scorer config
+(the same shape every other scorer already uses — `contains.value`,
+`json_logic.expression`) freezes it per Eval and keeps runs comparable; the
+agent's `output_schema` is used only when the scorer omits `schema`, as a
+convenience. An `output_schema` scorer whose schema resolves from **neither**
+source is rejected `400` at Eval-create (best-effort — the agent's schema is
+mutable) **and** re-checked at run-start (authoritative), naming the field.
+
+**Decision (2026-07): scorers read the generation's two output channels
+explicitly.** `createGeneration` returns `output.content` (the final text) and,
+for an agent with an `output_schema`, `output.object` (the structured output the
+platform already parsed and validated). Text scorers (`exact_match`, `contains`,
+`llm_judge`, and `json_logic`'s `output` var) read `output.content`; the
+`output_schema` scorer validates `output.object` (never re-parses the text). A
+missing `object` (the generation produced no structured output) scores 0.
+
 ## Execution
 
 Starting a run snapshots the dataset's items and creates one **real agent
-generation per item** through the existing `createGeneration` machinery — the
-run exercises the agent's true instructions, tools, model, and knowledge, and
-each `EvalResult` links its `generation_id`/trace for drill-down.
+generation per item** through the existing `createGeneration` machinery
+(`createGeneration({ agentId, messages, stream: false })`, one call per item) —
+the run exercises the agent's true instructions, tools, model, and knowledge,
+and each `EvalResult` links its `generation_id`/trace for drill-down.
+
+**Decision (2026-07): `wait: true` means "run synchronously or fail" — never
+silently truncate or downgrade.** A sync run over a dataset larger than the
+sync item cap (25) is rejected `400` naming the cap, rather than scoring a
+partial subset (which would read as a complete pass/fail over the whole
+dataset). This keeps the contract forward-compatible: the Phase 2 queue adds
+async as a purely additive opt-in (`wait: false` → `status: "queued"`), so the
+same over-cap `wait: true` request keeps returning `400` and no behavior
+changes under callers when async lands.
 
 **Decision:** async runs enqueue **one task per dataset item on the existing
 `RunTask` queue** ([prd-orchestration-queue.md](./prd-orchestration-queue.md)
@@ -238,7 +269,9 @@ keep-list rule: pure algorithms with large input spaces), smoke-test steps.
 
 Datasets/items CRUD, Eval CRUD, and synchronous execution (`wait: true`,
 dataset capped at 25 items for sync) with `exact_match`, `contains`,
-`json_logic`, and `output_schema` scorers.
+`json_logic`, and `output_schema` scorers. Sync runs persist the `EvalRun` as
+`running`, execute inline, and set the terminal status before returning (no
+`queued` state — that arrives with the Phase 2 queue).
 
 **Acceptance criteria:**
 
@@ -251,6 +284,14 @@ dataset capped at 25 items for sync) with `exact_match`, `contains`,
 - A sync run against a 3-item dataset with `mockCreateGeneration` produces 3
   `EvalResult` rows, one linked generation ID each, correct per-scorer 0/1
   scores for all four scorer types, and `passed` derived from `pass_threshold`
+- Text scorers (`exact_match`, `contains`) read `output.content`; the
+  `output_schema` scorer validates `output.object` and scores 0 when it is
+  absent — asserted with `mockCreateGeneration` returning each output channel
+- An `output_schema` scorer whose `schema` is omitted **and** whose agent has no
+  `output_schema` is rejected `400` at Eval-create and again at run-start; a
+  scorer-supplied `schema` is used verbatim even when the agent has one
+- A `wait: true` run over a dataset larger than the 25-item sync cap returns
+  `400` naming the cap (no partial scoring)
 - `json_logic` scorer branch coverage via a direct `lib/` scorer test (large
   input space keep-list rule); `evaluateLogic` from `jsonLogicMapping.ts` is
   the evaluator — no new engine dependency appears in `package.json`
