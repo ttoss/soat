@@ -147,6 +147,133 @@ describe('evaluateGenerationQuotas', () => {
     return quota;
   };
 
+  // ── Unpriced cost_usd caps ────────────────────────────────────────────────
+  //
+  // An unpriced usage event contributes 0 to a cost aggregate, so a `cost_usd`
+  // cap on a project with no effective price book can never breach — it looks
+  // healthy while protecting nothing. These cover the exception that surfaces
+  // that dead cap for triage.
+  describe('unpriced cost_usd quotas', () => {
+    const unpricedExceptions = async (projectInternalId: number) => {
+      return db.ExceptionItem.findAll({
+        where: { projectId: projectInternalId, kind: 'quota_unpriced' },
+      });
+    };
+
+    test('files an exception when every event in the window is unpriced', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-file');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        tokens: { input: 100, output: 50 },
+        costUsd: null,
+      });
+      const quota = await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      // The aggregate is 0 because nothing is priced, so nothing blocks...
+      const breach = await evaluateGenerationQuotas({
+        agentId: ctx.agentPublicId,
+      });
+      expect(breach).toBeNull();
+
+      // ...but the cap is silently dead, which is what the exception reports.
+      const items = await unpricedExceptions(ctx.projectInternalId);
+      expect(items).toHaveLength(1);
+      expect(items[0].severity).toBe('warning');
+      expect(items[0].title).toContain(quota.publicId);
+      const detail = items[0].detail as Record<string, unknown>;
+      expect(detail.quotaId).toBe(quota.publicId);
+      expect(detail.metric).toBe('cost_usd');
+      expect(detail.limit).toBe(5);
+      expect(detail.unpricedEventCount).toBe(1);
+    });
+
+    test('files nothing when the window has priced events', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-priced');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: '1.00',
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    });
+
+    test('files nothing when the window has no events at all', async () => {
+      // A zero aggregate with nothing metered is legitimately zero, not a
+      // pricing gap — filing here would cry wolf on every idle project.
+      const ctx = await freshProjectAndAgent('genquota-unpriced-empty');
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    });
+
+    test('files nothing for a tokens quota, which does not depend on pricing', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-tokens');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        tokens: { input: 10, output: 5 },
+        costUsd: null,
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'tokens',
+        limit: 1000,
+      });
+
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+
+      expect(await unpricedExceptions(ctx.projectInternalId)).toHaveLength(0);
+    });
+
+    test('folds repeat evaluations into one item with an occurrence count', async () => {
+      const ctx = await freshProjectAndAgent('genquota-unpriced-dedup');
+      await seedUsageEvent({
+        projectInternalId: ctx.projectInternalId,
+        agentInternalId: ctx.agentInternalId,
+        costUsd: null,
+      });
+      await createQuotaRow({
+        projectInternalId: ctx.projectInternalId,
+        scope: 'project',
+        metric: 'cost_usd',
+        limit: 5,
+      });
+
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+      await evaluateGenerationQuotas({ agentId: ctx.agentPublicId });
+
+      // One triage item, not three — the occurrence count is what conveys how
+      // many generations ran while the cap was dead.
+      const items = await unpricedExceptions(ctx.projectInternalId);
+      expect(items).toHaveLength(1);
+      expect(items[0].occurrenceCount).toBe(3);
+    });
+  });
+
   test('breaches a project cost_usd quota when the window sum reaches the limit', async () => {
     const ctx = await freshProjectAndAgent('genquota-cost-breach');
     await seedUsageEvent({
