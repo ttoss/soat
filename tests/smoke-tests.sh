@@ -4048,8 +4048,18 @@ expect_cli_error_status 400 create-quota \
 
 # scope=actor caps one end user's spend, matched from the generation's session.
 # A named scope_ref caps that actor; a null scope_ref is one budget per actor.
+#
+# Needs its own actor: the one from the actors section above is deleted there,
+# and scope_ref is validated against live rows at create time.
+QUOTA_ACTOR_ID=$($SOAT_CLI create-actor \
+  --project_id "$PROJECT_PUBLIC_ID" --name smoke-quota-actor | jq -r '.id')
+if [ -z "$QUOTA_ACTOR_ID" ] || [ "$QUOTA_ACTOR_ID" = "null" ]; then
+  echo "ERROR: Failed to create the actor for the actor-scoped quota" >&2
+  exit 1
+fi
+
 ACTOR_QUOTA_ID=$($SOAT_CLI create-quota \
-  --project-id "$PROJECT_PUBLIC_ID" --scope actor --scope-ref "$ACTOR_ID" \
+  --project-id "$PROJECT_PUBLIC_ID" --scope actor --scope-ref "$QUOTA_ACTOR_ID" \
   --metric cost_usd --window calendar_month --limit 5 | jq -r '.id')
 if [ -z "$ACTOR_QUOTA_ID" ] || [ "$ACTOR_QUOTA_ID" = "null" ]; then
   echo "ERROR: Failed to create actor-scoped quota" >&2
@@ -4061,7 +4071,7 @@ if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope')" != "actor" ]; then
   echo "$ACTOR_QUOTA_GET" >&2
   exit 1
 fi
-if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope_ref')" != "$ACTOR_ID" ]; then
+if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope_ref')" != "$QUOTA_ACTOR_ID" ]; then
   echo "ERROR: Expected the actor quota scope_ref to name the actor" >&2
   echo "$ACTOR_QUOTA_GET" >&2
   exit 1
@@ -4084,8 +4094,10 @@ expect_cli_error_status 400 create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope actor --scope-ref actor_doesnotexist00 \
   --metric tokens --window calendar_month --limit 100
 
+# Quotas first, then the actor they reference.
 $SOAT_CLI delete-quota --quota-id "$ACTOR_QUOTA_ID"
 $SOAT_CLI delete-quota --quota-id "$PER_ACTOR_QUOTA_ID"
+$SOAT_CLI delete-actor --actor-id "$QUOTA_ACTOR_ID"
 
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"
