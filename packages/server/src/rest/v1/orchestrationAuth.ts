@@ -1,4 +1,35 @@
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
+import { findOrchestration } from 'src/lib/orchestrations';
+import { setAuditResourceHint } from 'src/middleware/audit';
+
+/**
+ * Resolves the target orchestration's project/SRN and hands it to the audit
+ * middleware before a `204`-returning mutation runs — the response body it
+ * would otherwise backfill from is empty (see `setAuditResourceHint`).
+ * No-ops when the orchestration cannot be found under `projectIds`; the
+ * subsequent delete call surfaces the same not-found error to the caller.
+ */
+export const hintAuditResourceForOrchestration = async (args: {
+  ctx: Context;
+  id: string;
+  projectIds?: number[];
+}): Promise<void> => {
+  const orchestration = await findOrchestration({
+    id: args.id,
+    projectIds: args.projectIds,
+  });
+  if (!orchestration) return;
+  setAuditResourceHint(args.ctx, {
+    projectPublicId: orchestration.projectId,
+    resourceSrn: buildSrn({
+      projectPublicId: orchestration.projectId,
+      resourceType: 'orchestration',
+      resourceId: orchestration.id,
+    }),
+    resourcePublicId: orchestration.id,
+  });
+};
 
 // Run-scoped actions (cancel/human-input/resume) address an existing run by
 // run_id, so unlike create they never need a single "primary" project to

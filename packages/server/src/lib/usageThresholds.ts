@@ -184,6 +184,40 @@ export const createThreshold = async (args: {
  * Deletes a threshold by public id within the caller's scope, resetting its
  * fire state (the row is removed). Returns false when it is not visible.
  */
+/**
+ * Fetches one threshold by public id, scoped to `projectIds` (undefined = no
+ * filter, admin only). Throws `RESOURCE_NOT_FOUND` when absent or out of
+ * scope — used by the delete route to resolve the threshold's project before
+ * the `204` response leaves nothing for the audit log to backfill from.
+ */
+export const getThreshold = async (args: {
+  id: string;
+  projectIds?: number[];
+}): Promise<PersistedUsageThreshold> => {
+  const notFound = (): never => {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Usage threshold '${args.id}' not found.`
+    );
+  };
+
+  const where: Record<string, unknown> = { publicId: args.id };
+  if (args.projectIds !== undefined) {
+    if (args.projectIds.length === 0) return notFound();
+    where.projectId = args.projectIds;
+  }
+  const threshold = await db.UsageThreshold.findOne({
+    where,
+    include: [{ model: db.Project, as: 'project' }],
+  });
+  if (!threshold) return notFound();
+  return mapThreshold(
+    threshold as InstanceType<(typeof db)['UsageThreshold']> & {
+      project?: InstanceType<(typeof db)['Project']> | null;
+    }
+  );
+};
+
 export const deleteThreshold = async (args: {
   id: string;
   projectIds?: number[];

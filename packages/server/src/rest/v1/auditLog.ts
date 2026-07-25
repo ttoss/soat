@@ -2,6 +2,7 @@ import { Readable } from 'node:stream';
 
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   getAuditEntry,
   listAuditEntries,
@@ -10,10 +11,25 @@ import {
 
 const auditLogRouter = new Router<Context>();
 
-const parseDate = (value: unknown): Date | undefined => {
-  if (typeof value !== 'string' || value.length === 0) return undefined;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? undefined : date;
+// Absent is not the same as invalid: a filter the caller never supplied is
+// simply not applied (`undefined`), but one supplied and unparseable throws
+// rather than being silently dropped — an unparseable `from`/`to` must never
+// widen a query into "every entry" without the caller knowing (audit-log#691).
+const parseDateParam = (args: {
+  value: unknown;
+  paramName: string;
+}): Date | undefined => {
+  if (typeof args.value !== 'string' || args.value.length === 0) {
+    return undefined;
+  }
+  const date = new Date(args.value);
+  if (Number.isNaN(date.getTime())) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `'${args.paramName}' is not a valid ISO 8601 date: '${args.value}'.`
+    );
+  }
+  return date;
 };
 
 auditLogRouter.get('/audit-log', async (ctx: Context) => {
@@ -43,8 +59,8 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
     principalId: ctx.query.principalId as string | undefined,
     resourcePublicId: ctx.query.resourcePublicId as string | undefined,
     resourceSrn: ctx.query.resourceSrn as string | undefined,
-    from: parseDate(ctx.query.from),
-    to: parseDate(ctx.query.to),
+    from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
+    to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
     limit: ctx.query.limit ? Number(ctx.query.limit) : undefined,
     offset: ctx.query.offset ? Number(ctx.query.offset) : undefined,
   });
@@ -94,8 +110,8 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
       principalId: ctx.query.principalId as string | undefined,
       resourcePublicId: ctx.query.resourcePublicId as string | undefined,
       resourceSrn: ctx.query.resourceSrn as string | undefined,
-      from: parseDate(ctx.query.from),
-      to: parseDate(ctx.query.to),
+      from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
+      to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
     })
   );
 });

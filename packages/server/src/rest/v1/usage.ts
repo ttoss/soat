@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { buildSrn } from 'src/lib/iam';
 import { listPrices, upsertPrices } from 'src/lib/priceBook';
 import {
   aggregateUsage,
@@ -8,9 +9,11 @@ import {
   deleteThreshold,
   getReceipt,
   getRunReceipt,
+  getThreshold,
   listThresholds,
   listUsageEvents,
 } from 'src/lib/usage';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
@@ -240,6 +243,25 @@ usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
     (Array.isArray(projectIds) && projectIds.length === 0)
   ) {
     throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const threshold = await getThreshold({
+    id: ctx.params.threshold_id,
+    projectIds: projectIds ?? undefined,
+  });
+  if (threshold.projectId) {
+    setAuditResourceHint(ctx, {
+      projectPublicId: threshold.projectId,
+      resourceSrn: buildSrn({
+        projectPublicId: threshold.projectId,
+        resourceType: 'usage',
+        resourceId: threshold.id,
+      }),
+      resourcePublicId: threshold.id,
+    });
   }
 
   const deleted = await deleteThreshold({

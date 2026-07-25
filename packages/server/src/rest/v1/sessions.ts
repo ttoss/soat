@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { buildSrn } from 'src/lib/iam';
 import {
   createSession,
   deleteSession,
@@ -10,6 +11,7 @@ import {
   listSessions,
   updateSession,
 } from 'src/lib/sessions';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { sessionSubResourcesRouter } from './sessionSubResources';
 
@@ -180,7 +182,26 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
 // ── Delete Session ───────────────────────────────────────────────────────
 
 sessionsRouter.delete('/sessions/:session_id', async (ctx: Context) => {
-  const { agentId } = await checkSessionAccess(ctx, 'agents:DeleteSession');
+  const { agentId, projectId } = await checkSessionAccess(
+    ctx,
+    'agents:DeleteSession'
+  );
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const project = await db.Project.findOne({ where: { id: projectId } });
+  if (project) {
+    setAuditResourceHint(ctx, {
+      projectPublicId: project.publicId as string,
+      resourceSrn: buildSrn({
+        projectPublicId: project.publicId as string,
+        resourceType: 'session',
+        resourceId: ctx.params.session_id,
+      }),
+      resourcePublicId: ctx.params.session_id,
+    });
+  }
 
   await deleteSession({
     agentId,

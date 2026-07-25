@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import { resolveConverterRefs } from 'src/lib/ingestionRuleRefs';
 import {
   createIngestionRule,
@@ -8,6 +9,7 @@ import {
   listIngestionRules,
   updateIngestionRule,
 } from 'src/lib/ingestionRules';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   checkAuth,
@@ -168,6 +170,25 @@ ingestionRulesRouter.delete(
       resourceType: 'ingestionRule',
     });
     if (projectIds === null) return;
+
+    // The success response is `204 No Content`, so the audit middleware has
+    // no body to backfill the project/SRN from — hand it the resolved
+    // resource before the delete runs (see `setAuditResourceHint`).
+    const rule = await getIngestionRule({
+      id: ctx.params.ingestion_rule_id,
+      projectIds,
+    });
+    if (rule.projectId) {
+      setAuditResourceHint(ctx, {
+        projectPublicId: rule.projectId,
+        resourceSrn: buildSrn({
+          projectPublicId: rule.projectId,
+          resourceType: 'ingestionRule',
+          resourceId: rule.id,
+        }),
+        resourcePublicId: rule.id,
+      });
+    }
 
     await deleteIngestionRule({ id: ctx.params.ingestion_rule_id, projectIds });
     ctx.status = 204;

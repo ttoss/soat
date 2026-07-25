@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { buildSrn } from 'src/lib/iam';
 import {
   createQuota,
   deleteQuota,
@@ -7,6 +8,7 @@ import {
   listQuotas,
   updateQuota,
 } from 'src/lib/quotas';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 
@@ -148,6 +150,20 @@ quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
 quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
   const projectIds = await checkQuotasAccess(ctx, 'quotas:DeleteQuota');
   if (projectIds === null) return;
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const quota = await getQuota({ projectIds, id: ctx.params.quota_id });
+  setAuditResourceHint(ctx, {
+    projectPublicId: quota.projectId,
+    resourceSrn: buildSrn({
+      projectPublicId: quota.projectId,
+      resourceType: 'quota',
+      resourceId: quota.id,
+    }),
+    resourcePublicId: quota.id,
+  });
 
   await deleteQuota({ projectIds, id: ctx.params.quota_id });
 

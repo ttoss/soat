@@ -20,7 +20,11 @@ import {
 } from 'src/lib/orchestrations';
 
 import { parsePagination } from './helpers';
-import { resolveRunAuth, resolveStartRunScope } from './orchestrationAuth';
+import {
+  hintAuditResourceForOrchestration,
+  resolveRunAuth,
+  resolveStartRunScope,
+} from './orchestrationAuth';
 
 export const orchestrationsRouter = new Router<Context>();
 const resolveAuth = async (
@@ -306,12 +310,12 @@ orchestrationsRouter.delete(
     );
     if (projectIds === null) return;
 
-    const orchestrationId = ctx.params['orchestration_id'] as string;
-
-    await deleteOrchestration({
-      id: orchestrationId,
+    const target = {
+      id: ctx.params['orchestration_id'] as string,
       projectIds: projectIds ?? undefined,
-    });
+    };
+    await hintAuditResourceForOrchestration({ ctx, ...target });
+    await deleteOrchestration(target);
 
     ctx.status = 204;
   }

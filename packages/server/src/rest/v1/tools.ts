@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { buildSrn } from 'src/lib/iam';
 import {
   callTool,
   createTool,
@@ -9,6 +10,7 @@ import {
   listTools,
   updateTool,
 } from 'src/lib/tools';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
   assertGuardrailDetachAllowed,
@@ -341,6 +343,20 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const tool = await getTool({ projectIds, id: ctx.params.tool_id });
+  setAuditResourceHint(ctx, {
+    projectPublicId: tool.projectId,
+    resourceSrn: buildSrn({
+      projectPublicId: tool.projectId,
+      resourceType: 'tool',
+      resourceId: tool.id,
+    }),
+    resourcePublicId: tool.id,
+  });
 
   await deleteTool({
     projectIds,
