@@ -81,10 +81,14 @@ paths:
         - Quotas
       summary: Create a quota
       description: >-
-        Creates a project-scoped quota. `scope: agent` with `metric: requests`
-        and `scope: api_key` with `metric: tokens`/`cost_usd` are both rejected
-        with 400 (no attribution exists to enforce them). A duplicate quota
-        (same project, scope, scope_ref, metric, window) is rejected with 409.
+        Creates a project-scoped quota. `requests` is valid for `scope:
+        project`/`api_key`; `tokens` and `cost_usd` are valid for `scope:
+        project`/`agent`/`actor`. Any other scope/metric pair is rejected with
+        400 (no attribution exists to enforce it). An `actor` quota caps one end
+        user's spend, matched from the generation's session; a null `scope_ref`
+        means one budget *per* actor rather than a pooled project total. A
+        duplicate quota (same project, scope, scope_ref, metric, window) is
+        rejected with 409.
       operationId: createQuota
       requestBody:
         required: true
@@ -105,7 +109,7 @@ paths:
                   example: proj_V1StGXR8Z5jdHi6B
                 scope:
                   type: string
-                  enum: [project, api_key, agent]
+                  enum: [project, api_key, agent, actor]
                   description: The scope the quota applies to
                 scope_ref:
                   type: string
@@ -264,7 +268,7 @@ components:
           type: string
         scope:
           type: string
-          enum: [project, api_key, agent]
+          enum: [project, api_key, agent, actor]
         scope_ref:
           type: string
           nullable: true

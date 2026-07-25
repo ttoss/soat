@@ -28,10 +28,16 @@ export type QuotaBreach = {
 };
 
 // Specificity for attribution when several matching quotas breach at once. The
-// most specific scope is reported: an entity-scoped cap (`agent`, `api_key`) is
-// more specific than the project-wide cap. `requests` only ever produces
-// `api_key`/`project`; `tokens`/`cost_usd` only ever produce `agent`/`project`.
+// most specific scope is reported: an entity-scoped cap (`actor`, `agent`,
+// `api_key`) is more specific than the project-wide cap. `requests` only ever
+// produces `api_key`/`project`; `tokens`/`cost_usd` only ever produce
+// `actor`/`agent`/`project`.
+//
+// `actor` outranks `agent`: it names one end user, the narrowest population a
+// cap can address, so it is the most actionable thing to report to a caller who
+// was just blocked.
 const scopeRank = (scope: string): number => {
+  if (scope === 'actor') return 4;
   if (scope === 'agent') return 3;
   if (scope === 'api_key') return 2;
   return 1;
@@ -220,6 +226,7 @@ const aggregateGenerationMetric = async (args: {
   metric: 'tokens' | 'cost_usd';
   projectId: number;
   agentId: number | null;
+  actorId: number | null;
   windowStart: Date;
 }): Promise<WindowAggregate> => {
   const where: Record<string | symbol, unknown> = {
@@ -227,6 +234,7 @@ const aggregateGenerationMetric = async (args: {
     createdAt: { [Op.gte]: args.windowStart },
   };
   if (args.agentId != null) where.agentId = args.agentId;
+  if (args.actorId != null) where.actorId = args.actorId;
 
   if (args.metric === 'cost_usd') {
     const events = await db.UsageEvent.findAll({
@@ -276,6 +284,37 @@ const aggregateGenerationMetric = async (args: {
   };
 };
 
+/**
+ * Resolves the end user an `actor`-scope quota is enforced against: the actor
+ * on the generation's session, scoped to the agent's project so a session id
+ * from another tenant can never pull an actor into this project's enforcement.
+ *
+ * Both ids are needed — the public one matches `scope_ref`, the internal one
+ * filters the meter. Returns `null` when there is no session, the session does
+ * not resolve, or it carries no actor; every one of those means "no end user
+ * behind this generation", and actor quotas then match nothing.
+ */
+const resolveSessionActor = async (args: {
+  projectId: number;
+  sessionId?: string | null;
+}): Promise<{ id: number; publicId: string } | null> => {
+  if (!args.sessionId) return null;
+
+  const session = await db.Session.findOne({
+    where: { publicId: args.sessionId, projectId: args.projectId },
+    attributes: ['actorId'],
+  });
+  if (!session?.actorId) return null;
+
+  const actor = await db.Actor.findOne({
+    where: { id: session.actorId },
+    attributes: ['id', 'publicId'],
+  });
+  if (!actor) return null;
+
+  return { id: actor.id as number, publicId: actor.publicId };
+};
+
 // Aggregates one token/cost quota's current window and, on a breach (at or over
 // the limit), fires `quota.exceeded` once per window (both modes). Returns the
 // breach only when the quota is `enforce` (so a `monitor` breach fires the
@@ -283,16 +322,22 @@ const aggregateGenerationMetric = async (args: {
 const evaluateGenerationQuota = async (args: {
   quota: QuotaInstance;
   agentInternalId: number;
+  actorInternalId: number | null;
   projectId: number;
   now: Date;
 }): Promise<QuotaBreach | null> => {
   const { quota, now } = args;
   const window = quota.window as QuotaWindow;
   const scopeToAgent = quota.scope === 'agent' && quota.scopeRef != null;
+  // Actor scope always narrows to the generation's own actor, ref'd or not:
+  // a null-ref actor quota is one budget *per* actor, not one shared budget
+  // (see `evaluateGenerationQuotas`). Matching guarantees an actor is present.
+  const scopeToActor = quota.scope === 'actor';
   const { total, unpricedEventCount } = await aggregateGenerationMetric({
     metric: quota.metric as 'tokens' | 'cost_usd',
     projectId: args.projectId,
     agentId: scopeToAgent ? args.agentInternalId : null,
+    actorId: scopeToActor ? args.actorInternalId : null,
     windowStart: windowStartsAt({ window, now }),
   });
 
@@ -326,13 +371,30 @@ const evaluateGenerationQuota = async (args: {
  *
  * Matching: a `project`-scope quota (null ref) aggregates the whole project; an
  * `agent`-scope quota with this agent's ref aggregates only that agent, and
- * with a null ref aggregates the whole project. `api_key`-scope token/cost
- * quotas are never aggregated (usage events carry no api-key attribution, and
- * the create-time validation rejects the combination) — skipped defensively.
+ * with a null ref aggregates the whole project. An `actor`-scope quota
+ * aggregates only the end user behind this generation — see below.
+ * `api_key`-scope token/cost quotas are never aggregated (usage events carry no
+ * api-key attribution, and the create-time validation rejects the combination)
+ * — skipped defensively.
+ *
+ * **Actor scope.** The end user is derived from `sessionId` (never accepted
+ * directly), the same rule usage attribution follows, so a caller cannot spend
+ * one actor's budget under another's session. A generation with no session — a
+ * direct API call, a trigger, an orchestration node — has no end user behind
+ * it and matches no actor quota; cap that traffic with a `project` quota.
+ *
+ * A null `scope_ref` here means **one budget per actor**, evaluated against
+ * this generation's actor, rather than "the whole project" as it does for
+ * `agent` scope. That divergence is deliberate: a project-wide aggregate is
+ * already exactly what a `project` quota expresses, so reading null-ref as
+ * "all actors pooled" would make the combination a duplicate with a misleading
+ * name. "Every end user gets N" is the cap a per-user product actually needs,
+ * and it is the only reading that cannot be spelled another way.
  */
 export const evaluateGenerationQuotas = async (args: {
   agentId: string;
   projectIds?: number[];
+  sessionId?: string;
 }): Promise<QuotaBreach | null> => {
   const now = new Date();
 
@@ -345,6 +407,10 @@ export const evaluateGenerationQuotas = async (args: {
   if (!agent) return null;
 
   const agentPublicId = agent.publicId;
+  const actor = await resolveSessionActor({
+    projectId: agent.projectId,
+    sessionId: args.sessionId,
+  });
 
   const quotas = (await db.Quota.findAll({
     where: { projectId: agent.projectId, metric: ['tokens', 'cost_usd'] },
@@ -355,6 +421,10 @@ export const evaluateGenerationQuotas = async (args: {
     if (quota.scope === 'agent') {
       return quota.scopeRef == null || quota.scopeRef === agentPublicId;
     }
+    if (quota.scope === 'actor') {
+      if (!actor) return false;
+      return quota.scopeRef == null || quota.scopeRef === actor.publicId;
+    }
     return false; // api_key token/cost is never aggregatable
   });
 
@@ -363,6 +433,7 @@ export const evaluateGenerationQuotas = async (args: {
     const breach = await evaluateGenerationQuota({
       quota,
       agentInternalId: agent.id,
+      actorInternalId: actor?.id ?? null,
       projectId: agent.projectId,
       now,
     });
@@ -386,6 +457,7 @@ export const evaluateGenerationQuotas = async (args: {
 export const checkGenerationQuota = async (args: {
   agentId: string;
   projectIds?: number[];
+  sessionId?: string;
 }): Promise<QuotaBreach | null> => {
   try {
     return await evaluateGenerationQuotas(args);
