@@ -40,8 +40,9 @@ guardrails are fully shipped and have no remaining items).
 Only PRDs with open work are listed. Quotas is fully shipped, including the
 monitor-breach audit entry (see [prd-quotas.md](./prd-quotas.md)); the audit log
 is now fully shipped too, through the read-auditing flag, the
-`audit.entry_created` webhook, and the per-project NDJSON export (see
-[prd-audit-log.md](./prd-audit-log.md)).
+`audit.entry_created` webhook, and the per-project NDJSON export — its PRD has
+been retired and the live behavior lives in the
+[audit-log module docs](../packages/website/docs/modules/audit-log.md).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
@@ -220,15 +221,16 @@ _Not started. Standalone; complements G2; no metering change._
 Open consistency items the PRDs still carry — flagged here so the roadmap
 stays the source of truth:
 
-- **Activity-feed ownership.** Both [prd-audit-log.md](./prd-audit-log.md)
-  (`AuditEntry.detail`) and [prd-approvals.md](./prd-approvals.md)
-  (`ActivityEntry`, `acte_`) describe an activity substrate. Settle which model
-  owns the feed before either ships (drives approvals Phase 4). Partially
-  narrowed: approvals decision 3 lands guardrail-`deny` records as
-  `AuditEntry` `detail->>'kind' = 'action_denied'`, and audit-log P2 lands
-  decision-changing guardrail evaluations as
-  `AuditEntry` `detail->>'kind' = 'guardrail_evaluation'`, so new audit-shaped
-  kinds go to `AuditEntry`; only the product-feed model question remains open.
+- **Activity-feed ownership.** The shipped
+  [`AuditEntry`](../packages/website/docs/modules/audit-log.md) (`detail` kinds)
+  and [prd-approvals.md](./prd-approvals.md) (`ActivityEntry`, `acte_`) both
+  describe an activity substrate. Settle which model owns the feed before
+  approvals Phase 4 ships. Partially narrowed: approvals decision 3 lands
+  guardrail-`deny` records as `AuditEntry`
+  `detail->>'kind' = 'action_denied'`, and the shipped audit log lands
+  decision-changing guardrail evaluations as `AuditEntry`
+  `detail->>'kind' = 'guardrail_evaluation'`, so new audit-shaped kinds go to
+  `AuditEntry`; only the product-feed model question remains open.
 - **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
   `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
