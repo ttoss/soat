@@ -918,6 +918,143 @@ describe('Quotas', () => {
       expect(after).toBe(before);
     });
 
+    test('actor quota blocks that end user session generation with 429', async () => {
+      const { enfProjectId } =
+        await setupEnforcementProject('quotas-actor-gate');
+
+      const provRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: enfProjectId,
+          name: 'actor gate provider',
+          provider: 'ollama',
+          default_model: 'stub-model',
+        });
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: enfProjectId,
+          ai_provider_id: provRes.body.id,
+          name: 'actor gate agent',
+        });
+      const agentPublicId = agentRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: enfProjectId },
+      });
+      const projectInternalId = (project as unknown as { id: number }).id;
+
+      // Two end users on the same agent. Only Bob has spent anything.
+      const openSession = async (actorName: string) => {
+        const actorRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/actors')
+          .send({ project_id: enfProjectId, name: actorName });
+        expect(actorRes.status).toBe(201);
+
+        const sessionRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/sessions')
+          .send({ agent_id: agentPublicId, actor_id: actorRes.body.id });
+        expect(sessionRes.status).toBe(201);
+
+        const actor = await db.Actor.findOne({
+          where: { publicId: actorRes.body.id },
+        });
+
+        return {
+          sessionId: sessionRes.body.id as string,
+          actorInternalId: (actor as unknown as { id: number }).id,
+        };
+      };
+
+      const bob = await openSession('bob');
+      const alice = await openSession('alice');
+
+      // 30 billable tokens, attributed to Bob — the shape usageRecording
+      // writes for a session generation.
+      const event = await db.UsageEvent.create({
+        projectId: projectInternalId,
+        actorId: bob.actorInternalId,
+        meterType: 'llm_tokens',
+        provider: 'ollama',
+        model: 'stub-model',
+        costUsd: null,
+        idempotencyKey: `${generatePublicId(PUBLIC_ID_PREFIXES.usageEvent)}:seed`,
+      });
+      await db.UsageComponent.bulkCreate(
+        [
+          { component: 'input_tokens', quantity: '10', billable: true },
+          { component: 'output_tokens', quantity: '20', billable: true },
+        ].map((c) => {
+          return {
+            // bulkCreate skips the beforeValidate publicId hook — set it here.
+            publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageComponent),
+            usageEventId: (event as unknown as { id: number }).id,
+            component: c.component,
+            quantity: c.quantity,
+            unit: 'token',
+            billable: c.billable,
+            unitPrice: null,
+            costUsd: null,
+            priceId: null,
+          };
+        })
+      );
+
+      // One null-ref actor quota: a budget per end user, not a pooled total.
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'actor',
+          metric: 'tokens',
+          window: 'calendar_month',
+          limit: 30,
+        },
+        enfProjectId
+      );
+      expect(quotaRes.status).toBe(201);
+
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/sessions/${bob.sessionId}/messages`)
+        .send({ role: 'user', content: 'hello' });
+
+      const before = await db.UsageEvent.count({
+        where: { projectId: projectInternalId },
+      });
+
+      const blocked = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/sessions/${bob.sessionId}/generate`)
+        .send({});
+
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
+      expect(blocked.body.error.meta.quota_id).toBe(quotaRes.body.id);
+      expect(blocked.body.error.meta.metric).toBe('tokens');
+      expect(blocked.body.error.meta.limit).toBe(30);
+      expect(blocked.headers['retry-after']).toBeDefined();
+      expect(Number(blocked.headers['retry-after'])).toBeGreaterThan(0);
+
+      // Nothing was metered for the blocked generation.
+      expect(
+        await db.UsageEvent.count({ where: { projectId: projectInternalId } })
+      ).toBe(before);
+
+      // Alice has spent nothing, so the same quota does not stop her — this is
+      // what makes the null-ref quota per-actor rather than a project total.
+      // Her generation does reach the provider, and ollama is not running in
+      // unit CI, so it may still fail upstream; what this pins is that it was
+      // never the quota gate that stopped her.
+      await authenticatedTestClient(adminToken)
+        .post(`/api/v1/sessions/${alice.sessionId}/messages`)
+        .send({ role: 'user', content: 'hello' });
+
+      const allowed = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/sessions/${alice.sessionId}/generate`)
+        .send({});
+
+      expect(allowed.status).not.toBe(429);
+      expect(allowed.body?.error?.code).not.toBe('QUOTA_EXCEEDED');
+    });
+
     test('fails open when the counter write errors', async () => {
       const { enfProjectId, keyId, rawKey } =
         await setupEnforcementProject('quotas-fail-open');
