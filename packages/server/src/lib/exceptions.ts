@@ -18,19 +18,26 @@ export const EXCEPTION_EVENT_TYPES = {
 
 export type ExceptionSeverity = 'info' | 'warning' | 'critical';
 export type ExceptionKind =
-  'run_failed' | 'guardrail_tripwire' | 'approval_expired' | 'manual';
+  | 'run_failed'
+  | 'guardrail_tripwire'
+  | 'approval_expired'
+  | 'quota_unpriced'
+  | 'manual';
 
 /**
  * Default severity per kind, applied when a producer files without an explicit
  * severity. Keyed to actionability rather than raw "badness": a run that failed
  * after exhausting retries needs intervention (`critical`); a guardrail tripwire
  * is the guard working as designed and also feeds learned rules (`warning`); a
- * lapsed approval is a fail-safe missed SLA (`warning`).
+ * lapsed approval is a fail-safe missed SLA (`warning`); a cost cap that cannot
+ * be evaluated is a control silently protecting nothing — it needs a config fix,
+ * not an incident response (`warning`).
  */
 const DEFAULT_SEVERITY_BY_KIND: Record<ExceptionKind, ExceptionSeverity> = {
   run_failed: 'critical',
   guardrail_tripwire: 'warning',
   approval_expired: 'warning',
+  quota_unpriced: 'warning',
   manual: 'warning',
 };
 

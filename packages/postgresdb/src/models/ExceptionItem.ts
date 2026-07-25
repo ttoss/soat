@@ -83,12 +83,17 @@ export class ExceptionItem extends Model {
       'run_failed',
       'guardrail_tripwire',
       'approval_expired',
+      'quota_unpriced',
       'manual'
     ),
     allowNull: false,
   })
   declare kind:
-    'run_failed' | 'guardrail_tripwire' | 'approval_expired' | 'manual';
+    | 'run_failed'
+    | 'guardrail_tripwire'
+    | 'approval_expired'
+    | 'quota_unpriced'
+    | 'manual';
 
   @Column({ type: DataType.TEXT, allowNull: false })
   declare title: string;

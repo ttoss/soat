@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { fireQuotaExceeded } from './quotaEvents';
+import { fireQuotaExceeded, reportUnpricedCostQuota } from './quotaEvents';
 import type { QuotaWindow } from './quotas';
 import {
   retryAfterSeconds,
@@ -200,6 +200,17 @@ export const evaluateRequestQuotas = async (args: {
 const TOKEN_UNIT = 'token';
 
 /**
+ * The outcome of aggregating one window. `total` is the value compared to the
+ * limit; `unpricedEventCount` is meaningful only for `cost_usd` and is non-zero
+ * only when the window held events and **none** of them were priced — the
+ * condition under which a cost cap silently cannot be enforced.
+ */
+type WindowAggregate = {
+  total: number;
+  unpricedEventCount: number;
+};
+
+/**
  * Sums a `tokens` / `cost_usd` metric over the current fixed window from
  * `UsageEvent` (and its component rows for tokens). Optionally scoped to one
  * agent. Aggregating the meter at check time — rather than keeping a separate
@@ -210,7 +221,7 @@ const aggregateGenerationMetric = async (args: {
   projectId: number;
   agentId: number | null;
   windowStart: Date;
-}): Promise<number> => {
+}): Promise<WindowAggregate> => {
   const where: Record<string | symbol, unknown> = {
     projectId: args.projectId,
     createdAt: { [Op.gte]: args.windowStart },
@@ -222,9 +233,19 @@ const aggregateGenerationMetric = async (args: {
       where,
       attributes: ['costUsd'],
     });
-    return events.reduce((sum, event) => {
-      return sum + Number(event.costUsd ?? 0);
-    }, 0);
+    const priced = events.filter((event) => {
+      return event.costUsd != null;
+    });
+    return {
+      total: priced.reduce((sum, event) => {
+        return sum + Number(event.costUsd);
+      }, 0),
+      // Only a window that metered something yet priced none of it indicates a
+      // pricing gap. An empty window aggregates to a legitimate 0 — reporting
+      // it would cry wolf on every idle project.
+      unpricedEventCount:
+        events.length > 0 && priced.length === 0 ? events.length : 0,
+    };
   }
 
   const events = await db.UsageEvent.findAll({
@@ -238,16 +259,21 @@ const aggregateGenerationMetric = async (args: {
       },
     ],
   });
-  return events.reduce((sum, event) => {
-    const components = event.components ?? [];
-    return (
-      sum +
-      components.reduce((componentSum, component) => {
-        const counts = component.unit === TOKEN_UNIT && component.billable;
-        return componentSum + (counts ? Number(component.quantity) : 0);
-      }, 0)
-    );
-  }, 0);
+  return {
+    total: events.reduce((sum, event) => {
+      const components = event.components ?? [];
+      return (
+        sum +
+        components.reduce((componentSum, component) => {
+          const counts = component.unit === TOKEN_UNIT && component.billable;
+          return componentSum + (counts ? Number(component.quantity) : 0);
+        }, 0)
+      );
+    }, 0),
+    // Token quantities are always recorded, so a tokens quota never has a
+    // pricing dependency to report.
+    unpricedEventCount: 0,
+  };
 };
 
 // Aggregates one token/cost quota's current window and, on a breach (at or over
@@ -263,12 +289,19 @@ const evaluateGenerationQuota = async (args: {
   const { quota, now } = args;
   const window = quota.window as QuotaWindow;
   const scopeToAgent = quota.scope === 'agent' && quota.scopeRef != null;
-  const total = await aggregateGenerationMetric({
+  const { total, unpricedEventCount } = await aggregateGenerationMetric({
     metric: quota.metric as 'tokens' | 'cost_usd',
     projectId: args.projectId,
     agentId: scopeToAgent ? args.agentInternalId : null,
     windowStart: windowStartsAt({ window, now }),
   });
+
+  // A cost cap over an entirely unpriced window aggregates to 0 and can never
+  // breach, so it protects nothing while looking healthy. Surface it for triage
+  // before the (always-passing) limit comparison below.
+  if (unpricedEventCount > 0) {
+    await reportUnpricedCostQuota({ quota, unpricedEventCount });
+  }
 
   if (total < Number(quota.limit)) return null;
 
