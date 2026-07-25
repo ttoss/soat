@@ -1074,6 +1074,62 @@ describe('Quotas', () => {
       expect(captured[0].data.mode).toBe('enforce');
     });
 
+    test('changing the limit re-arms the webhook for a later breach in the same window', async () => {
+      // `calendar_month` (not `rolling_1m`) so the window key cannot roll over
+      // mid-test: every request below shares one window, which is exactly the
+      // condition the once-per-window fire guard applies to.
+      const { enfProjectId, keyId, rawKey } = await setupEnforcementProject(
+        'quotas-refire-on-limit-change'
+      );
+      const quotaRes = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: keyId,
+          metric: 'requests',
+          window: 'calendar_month',
+          limit: 1,
+          mode: 'monitor',
+        },
+        enfProjectId
+      );
+
+      const first = await withCapture(async () => {
+        // Request 1 is within limit; request 2 (count 2 > 1) is the first breach.
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+      });
+      expect(first).toHaveLength(1);
+      expect(first[0].data.observed_value).toBe(2);
+
+      // The operator raises the cap in response to the breach — the core
+      // monitor-mode tuning loop.
+      const patch = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/quotas/${quotaRes.body.id}`)
+        .send({ limit: 3 });
+      expect(patch.status).toBe(200);
+      expect(patch.body.limit).toBe(3);
+
+      const second = await withCapture(async () => {
+        // Count 3 is within the new limit; count 4 breaches it. That is a new
+        // event against a limit that has changed since the last fire, so it
+        // must fire again even though the window key is unchanged.
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+        expect((await get(rawKey, enfProjectId)).status).toBe(200);
+      });
+      expect(second).toHaveLength(1);
+      expect(second[0].data.limit).toBe(3);
+      expect(second[0].data.observed_value).toBe(4);
+
+      // The audit entry rides the same guard, so the re-arm must produce a
+      // second entry too.
+      const entries = await monitorBreachEntries(enfProjectId);
+      const forQuota = entries.filter((e) => {
+        return e.resource_public_id === quotaRes.body.id;
+      });
+      expect(forQuota).toHaveLength(2);
+    });
+
     test('flipping mode monitor->enforce blocks the next breaching request', async () => {
       const { enfProjectId, keyId, rawKey } =
         await setupEnforcementProject('quotas-flip-mode');

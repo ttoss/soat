@@ -393,7 +393,19 @@ export const updateQuota = async (args: {
     if (limitError) {
       throw new DomainError('VALIDATION_FAILED', limitError);
     }
-    updates.limit = String(Number(args.limit));
+    const nextLimit = String(Number(args.limit));
+    // The once-per-window fire guard is keyed to the window alone, so a breach
+    // already fired in this window would silence every later breach for the
+    // rest of it — including breaches of the *new* limit. Since raising a
+    // breached cap is the core monitor-mode tuning loop (and `calendar_month`
+    // windows stay open for weeks), re-arm the guard whenever the limit
+    // actually changes: a different limit makes any subsequent breach a
+    // distinct event worth reporting. `lastFiredAt` is left alone — it records
+    // when the quota genuinely last fired.
+    if (nextLimit !== String(Number(quota.limit))) {
+      updates.firedWindowKey = null;
+    }
+    updates.limit = nextLimit;
   }
 
   if (args.mode !== undefined) {
