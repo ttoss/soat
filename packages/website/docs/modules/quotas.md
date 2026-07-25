@@ -28,7 +28,7 @@ The `requests` metric is enforced by a Koa middleware mounted after authenticati
 | `metric`        | string  | `requests` \| `tokens` \| `cost_usd`                                              |
 | `window`        | string  | `rolling_1m` \| `rolling_1h` \| `rolling_24h` \| `calendar_month`                 |
 | `limit`         | number  | The cap (> 0)                                                                      |
-| `mode`          | string  | `enforce` (block with `429`) \| `monitor` (pass-through no-op until the webhook phase) |
+| `mode`          | string  | `enforce` (block with `429`) \| `monitor` (observe and report, never block — see [Monitor mode](#monitor-mode)) |
 | `current_usage` | object  | Current fixed-window usage for `requests` (`window_key`, `count`, `resets_at`); `null` for token/cost quotas (they aggregate the meter at check time) and in list responses |
 | `created_at`    | string  | ISO 8601 creation timestamp                                                       |
 | `updated_at`    | string  | ISO 8601 last-updated timestamp                                                   |
@@ -49,6 +49,8 @@ So `agent` scope is valid for `tokens` / `cost_usd`, and `api_key` scope is vali
 ### Token and cost enforcement
 
 `tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
+
+A `cost_usd` quota is only as good as the project's pricing. Usage events carry `cost_usd: null` when no [price-book](./usage.md#pricing) row covers them, and an unpriced event contributes `0` to the aggregate — so on a project with no effective prices a `cost_usd` cap never breaches and never blocks. Configure the price book before relying on a dollar cap, and verify with `GET /api/v1/usage` that `cost_usd` is non-null. A `tokens` quota has no such dependency: it sums component quantities, which are always recorded.
 
 A generation already **in flight is never killed** — its tokens are already spent and will be billed — so a budget may overshoot by at most one generation. A `project`-scoped quota aggregates the whole project; an `agent`-scoped quota with a `scope_ref` aggregates only that agent. Because the check reads the meter rather than a separate counter, quotas and usage can never disagree.
 
