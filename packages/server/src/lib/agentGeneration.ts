@@ -117,7 +117,6 @@ const resolveContextAndRecord = async (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
-  actorId?: string;
   sessionId?: string;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
@@ -149,8 +148,8 @@ const resolveContextAndRecord = async (args: {
     startedByPrincipalId: null,
     // End-user attribution is stored as typed FK columns rather than metadata
     // keys: it is identity the platform enforces (and later caps spend on), so
-    // it must not live in the caller-writable metadata bag.
-    startedByActorId: args.actorId ?? null,
+    // it must not live in the caller-writable metadata bag. The actor is
+    // derived from the session, so only the session id travels.
     sessionId: args.sessionId ?? null,
     metadata: buildGenerationMetadata({
       actionId: args.actionId,
@@ -223,10 +222,9 @@ export type CreateGenerationArgs = {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
-  // End-user attribution: the actor the generation serves and the session it
-  // runs in. Set by the session path; absent for direct API generations,
-  // triggers, and orchestration nodes, which have no end user behind them.
-  actorId?: string;
+  // End-user attribution: the session this generation runs in, from which the
+  // actor is derived. Set by the session path; absent for direct API
+  // generations, triggers, and orchestration nodes — no end user behind them.
   sessionId?: string;
   metadata?: Record<string, unknown> | null;
   // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
@@ -278,7 +276,6 @@ export const createGeneration = async (
     triggerId: args.triggerId,
     runId: args.runId,
     nodeId: args.nodeId,
-    actorId: args.actorId,
     sessionId: args.sessionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,

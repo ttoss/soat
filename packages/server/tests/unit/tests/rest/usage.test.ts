@@ -9,8 +9,10 @@ import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
 import {
   evaluateProjectThresholds,
+  recordCompletionUsage,
   recordGenerationUsage,
 } from 'src/lib/usage';
+import * as usageTokenEventModule from 'src/lib/usageTokenEvent';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -313,6 +315,31 @@ describe('Usage', () => {
       expect(response.body.data[0].session_id).toBeNull();
     });
 
+    test('a session with no actor attributes the session alone', async () => {
+      const sessionRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+      expect(sessionRes.status).toBe(201);
+      expect(sessionRes.body.actor_id).toBeNull();
+      const actorlessSessionId = sessionRes.body.id;
+
+      await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${actorlessSessionId}/messages`)
+        .send({ message: 'anonymous end user' });
+      const genRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${actorlessSessionId}/generate`)
+        .send({});
+      expect(genRes.status).toBe(200);
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${genRes.body.generation_id}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+      expect(response.body.data[0].session_id).toBe(actorlessSessionId);
+      expect(response.body.data[0].actor_id).toBeNull();
+    });
+
     test('filters meters by actor_id', async () => {
       const response = await authenticatedTestClient(userToken).get(
         `/api/v1/usage/meters?actor_id=${actorId}`
@@ -384,11 +411,9 @@ describe('Usage', () => {
         `/api/v1/usage?project_id=${projectId}&group_by=actor`
       );
       expect(res.status).toBe(200);
-      const unattributed = res.body.groups.find(
-        (g: { key: string | null }) => {
-          return g.key === null;
-        }
-      );
+      const unattributed = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === null;
+      });
       expect(unattributed).toBeDefined();
       expect(unattributed.output_tokens).toBeGreaterThanOrEqual(20);
     });
@@ -442,6 +467,71 @@ describe('Usage', () => {
       expect(response.body.total).toBe(1);
       expect(response.body.data[0].generation_id).toBe(generation.id);
       expect(response.body.data[0].trigger_id).toBe(triggerPublicId);
+    });
+  });
+
+  // Metering is an observability side effect: it must never fail the work it
+  // measures. That contract lives entirely in `.catch()` swallow branches, and
+  // no real DB write fails deterministically — so per tests.md these use the
+  // sanctioned force-failure stub (a minimal spy that rejects) purely to drive
+  // the swallow. The happy paths above still run against the real database.
+  describe('metering never fails the work it measures', () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    test('recordGenerationUsage swallows a persist failure', async () => {
+      const spy = jest
+        .spyOn(usageTokenEventModule, 'persistTokenEvent')
+        .mockRejectedValueOnce(new Error('meter write exploded'));
+
+      await expect(
+        recordGenerationUsage({
+          generationId,
+          model: 'stub-model',
+          usage: undefined,
+        })
+      ).resolves.toBeUndefined();
+      // Without this the test is vacuous: the real write also resolves, so a
+      // spy that never took effect would pass the assertion above.
+      expect(spy).toHaveBeenCalledTimes(1);
+    });
+
+    test('recordCompletionUsage swallows a persist failure', async () => {
+      jest
+        .spyOn(usageTokenEventModule, 'persistTokenEvent')
+        .mockRejectedValueOnce(new Error('meter write exploded'));
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      await expect(
+        recordCompletionUsage({
+          source: 'chat',
+          projectId: project?.id as number,
+          provider: 'ollama',
+          aiProviderId: null,
+          model: 'stub-model',
+          usage: undefined,
+        })
+      ).resolves.toBeUndefined();
+      expect(usageTokenEventModule.persistTokenEvent).toHaveBeenCalledTimes(1);
+    });
+
+    test('a non-Error rejection is swallowed just the same', async () => {
+      const spy = jest
+        .spyOn(usageTokenEventModule, 'persistTokenEvent')
+        .mockRejectedValueOnce('a bare string, not an Error');
+
+      await expect(
+        recordGenerationUsage({
+          generationId,
+          model: 'stub-model',
+          usage: undefined,
+        })
+      ).resolves.toBeUndefined();
+      expect(spy).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1595,6 +1685,24 @@ describe('Usage', () => {
       );
       expect(llmEvents).toHaveLength(1);
       expect(llmEvents[0].node_id).toBe(nodeId);
+    });
+
+    test('groups usage by run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=run`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBe('run');
+      const byRun = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === runId;
+      });
+      expect(byRun).toBeDefined();
+      expect(byRun.output_tokens).toBeGreaterThanOrEqual(20);
+      // Standalone generations carry no run and collapse into the null bucket.
+      const standalone = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === null;
+      });
+      expect(standalone).toBeDefined();
     });
 
     test('GET /usage/receipt?run_id returns a receipt summed across the run', async () => {

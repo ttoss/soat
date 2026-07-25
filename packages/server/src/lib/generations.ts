@@ -172,8 +172,8 @@ export const createGenerationRecord = async (args: {
   initiatorGenerationId?: string | null;
   startedByPrincipalType?: string | null;
   startedByPrincipalId?: string | null;
-  // Public ids of the end user (actor) and session this generation serves.
-  startedByActorId?: string | null;
+  // Public id of the session this generation serves. The end-user actor is
+  // derived from it (see resolveEndUserAttribution), never passed separately.
   sessionId?: string | null;
   metadata?: Record<string, unknown> | null;
 }) => {
@@ -202,7 +202,6 @@ export const createGenerationRecord = async (args: {
 
   const endUser = await resolveEndUserAttribution({
     projectId: args.projectId,
-    actorId: args.startedByActorId,
     sessionId: args.sessionId,
   });
 

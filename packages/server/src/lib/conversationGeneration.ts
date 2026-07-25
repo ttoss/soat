@@ -101,7 +101,6 @@ const runAgentGeneration = async (args: {
   messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
-  actorId?: string;
   sessionId?: string;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
@@ -109,7 +108,6 @@ const runAgentGeneration = async (args: {
     messages: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
-    actorId: args.actorId,
     sessionId: args.sessionId,
   });
 
@@ -145,7 +143,6 @@ const runGenerationForAgent = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
-  actorId?: string;
   sessionId?: string;
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
@@ -153,7 +150,6 @@ const runGenerationForAgent = async (args: {
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
-    actorId: args.actorId,
     sessionId: args.sessionId,
   });
 };
@@ -285,9 +281,8 @@ export const generateConversationMessage = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   // End-user attribution supplied by the session layer, which is the only
-  // caller that knows the actor/session behind the turn. Plain conversation
-  // generations leave both unset.
-  actorId?: string;
+  // caller that knows the session behind the turn (the actor is derived from
+  // it). Plain conversation generations leave it unset.
   sessionId?: string;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
@@ -310,7 +305,6 @@ export const generateConversationMessage = async (args: {
     model: args.model,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
-    actorId: args.actorId,
     sessionId: args.sessionId,
   });
 
