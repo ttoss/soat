@@ -194,7 +194,11 @@ components:
         detail:
           type: object
           nullable: true
-          description: Kind-specific payload; multi-check routes record the remaining checks under `additional_checks`
+          description: >-
+            Kind-specific payload. Multi-check routes record the remaining checks
+            under `additional_checks`. Platform-originated entries set a
+            `detail.kind` discriminator, e.g. `quota_monitor_breach` or
+            `guardrail_evaluation`.
           additionalProperties: true
         created_at:
           type: string
