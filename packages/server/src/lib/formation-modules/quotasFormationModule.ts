@@ -93,9 +93,10 @@ export const quotasFormationModule: FormationModule = {
     return result.id;
   },
 
-  // Only `limit` and `mode` are mutable; scope/metric/window are immutable and
-  // rejected as unknown-on-update would not apply (they are simply ignored here,
-  // matching the REST update contract).
+  // Only `limit` and `mode` are mutable. `scope`/`metric`/`window` are passed
+  // through rather than dropped so `updateQuota` can reject a changed value:
+  // silently applying just the mutable fields would leave the template and the
+  // enforced cap divergent with the operation still reporting success.
   update: async ({ properties: rawProperties, physicalResourceId }) => {
     const errors = validateQuotaProperties({
       properties: rawProperties,
@@ -114,6 +115,16 @@ export const quotasFormationModule: FormationModule = {
       id: physicalResourceId,
       limit: toNullableNumber(properties.limit) ?? undefined,
       mode: toOptionalString(properties.mode) ?? undefined,
+      scope: toOptionalString(properties.scope) ?? undefined,
+      metric: toOptionalString(properties.metric) ?? undefined,
+      window: toOptionalString(properties.window) ?? undefined,
+      // Distinguish "omitted" from an explicit null: only a declared value is
+      // asserted against the stored ref, so a template that leaves the nullable
+      // `scope_ref` out is not treated as clearing it.
+      scopeRef:
+        properties.scope_ref === undefined
+          ? undefined
+          : toNullableString(properties.scope_ref),
     });
 
     log('updated quota from formation: id=%s', physicalResourceId);

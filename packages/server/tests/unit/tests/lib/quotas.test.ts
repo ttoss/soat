@@ -1,5 +1,6 @@
 import {
   retryAfterSeconds,
+  validateQuotaImmutableFields,
   validateQuotaLimit,
   validateQuotaShape,
   windowKeyFor,
@@ -214,5 +215,87 @@ describe('validateQuotaShape', () => {
     expect(
       validateQuotaShape({ ...base, scope: 'api_key', metric: 'requests' })
     ).toBeNull();
+  });
+});
+
+describe('validateQuotaImmutableFields', () => {
+  const current = {
+    scope: 'agent',
+    scopeRef: 'agent_abc',
+    metric: 'tokens',
+    window: 'rolling_1h',
+  };
+
+  test('accepts an update that restates every immutable field unchanged', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: {
+          scope: 'agent',
+          scopeRef: 'agent_abc',
+          metric: 'tokens',
+          window: 'rolling_1h',
+        },
+        current,
+      })
+    ).toBeNull();
+  });
+
+  test('accepts an update that supplies no immutable field at all', () => {
+    expect(validateQuotaImmutableFields({ next: {}, current })).toBeNull();
+  });
+
+  test.each([
+    ['scope', { scope: 'project' }],
+    ['metric', { metric: 'cost_usd' }],
+    ['window', { window: 'calendar_month' }],
+    ['scope_ref', { scopeRef: 'agent_other' }],
+  ])('rejects a changed %s', (field, next) => {
+    const error = validateQuotaImmutableFields({ next, current });
+    expect(error).toMatch(new RegExp(field));
+    expect(error).toMatch(/immutable/i);
+  });
+
+  test('reports both the declared and the current value', () => {
+    const error = validateQuotaImmutableFields({
+      next: { metric: 'cost_usd' },
+      current,
+    });
+    expect(error).toMatch(/cost_usd/);
+    expect(error).toMatch(/tokens/);
+  });
+
+  test('rejects clearing scope_ref to null', () => {
+    expect(
+      validateQuotaImmutableFields({ next: { scopeRef: null }, current })
+    ).toMatch(/scope_ref/);
+  });
+
+  test('treats a null scope_ref as unchanged when it is already null', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { scopeRef: null },
+        current: { ...current, scope: 'project', scopeRef: null },
+      })
+    ).toBeNull();
+  });
+
+  test('rejects setting a scope_ref on a quota that has none', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { scopeRef: 'key_abc' },
+        current: { ...current, scope: 'project', scopeRef: null },
+      })
+    ).toMatch(/scope_ref/);
+  });
+
+  // The first offending field is reported rather than a combined list, so the
+  // message stays actionable when a template changes several at once.
+  test('reports the first offending field when several changed', () => {
+    expect(
+      validateQuotaImmutableFields({
+        next: { scope: 'project', metric: 'cost_usd' },
+        current,
+      })
+    ).toMatch(/scope/);
   });
 });
