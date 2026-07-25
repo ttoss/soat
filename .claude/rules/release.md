@@ -86,6 +86,12 @@ fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
 " && git add package.json && git commit --amend --no-edit
 ```
 
+`git commit --amend` rewrites the commit lerna just tagged, so the local tag lerna created in Step 3 (e.g. `v0.15.14`) is now orphaned — it still points at the pre-amend commit, which no longer exists on the branch. Delete it before pushing; it would otherwise sit as a stale local ref that doesn't match what CI eventually tags (`push-release-tag` in `main.yml` creates the real `vX.Y.Z` tag from the merged commit, so the local one is pure noise at this point):
+
+```bash
+git tag -d "v$(node -e "console.log(require('./lerna.json').version)")"
+```
+
 ### Step 5 — Push to a release branch and open a PR
 
 ```bash
@@ -96,7 +102,9 @@ git push -u origin release/vX.Y.Z
 
 The PR title must start with `chore(release):` — the release pipeline in `main.yml` is gated on `startsWith(github.event.head_commit.message, 'chore(release):')`. A title like `chore(release): publish packages` or `chore(release): v0.8.1` both work.
 
-Merge the PR once CI passes. The release pipeline runs automatically.
+**Merge with "Squash and merge", not the default "Create a merge commit."** The gate checks the *commit that actually lands on `main`* — every job in `main.yml` (`build-and-test`, `smoke-test`, `tutorials-test`, `push-release-tag`, `release`, `publish-docker`) independently re-checks `startsWith(head_commit.message, 'chore(release):')`. A default GitHub merge commit is titled `Merge pull request #NNN from ...`, which does **not** match — every one of those jobs would be silently skipped (green ✅, but nothing runs: no tag, no npm publish, no Docker image). Squash merge with a commit title starting with `chore(release):` (the PR title already does) keeps the message correct. If the repo's branch protection requires an admin bypass merge here, the same rule still applies: whatever merge strategy is used, double-check the resulting `main` commit message starts with `chore(release):` before walking away.
+
+Merge the PR once CI passes. The release pipeline runs automatically — but go verify the `main.yml` run actually started (not skipped) for the merge commit; a silently-skipped release is easy to miss since the PR itself still shows green.
 
 ## Breaking Changes
 
