@@ -111,6 +111,29 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
   ctx.body = result;
 });
 
+/** Parses the optional fields of a project PATCH body. Every field distinguishes
+ * "absent" (leave as-is) from a value; extracted so the handler stays under the
+ * cyclomatic-complexity limit. */
+const parseProjectPatchFields = (body: Record<string, unknown>) => {
+  return {
+    name: typeof body.name === 'string' ? body.name : undefined,
+    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    // An explicit `null` clears the limit. Any non-null, non-integer value is
+    // forwarded so the lib rejects it with a 400 rather than being silently
+    // dropped here.
+    maxConcurrentRuns: Object.prototype.hasOwnProperty.call(
+      body,
+      'maxConcurrentRuns'
+    )
+      ? (body.maxConcurrentRuns as number | null)
+      : undefined,
+    auditReadsEnabled:
+      typeof body.auditReadsEnabled === 'boolean'
+        ? body.auditReadsEnabled
+        : undefined,
+  };
+};
+
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -124,27 +147,19 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     return;
   }
 
-  const body = ctx.request.body as Record<string, unknown>;
-  const name = typeof body.name === 'string' ? body.name : undefined;
-  const guardrailIds = parseGuardrailIds(body.guardrailIds);
-  // Distinguish "absent" (leave as-is) from an explicit `null` (clear the
-  // limit). Any non-null, non-integer value is forwarded so the lib rejects it
-  // with a 400 rather than being silently dropped here.
-  const maxConcurrentRuns = Object.prototype.hasOwnProperty.call(
-    body,
-    'maxConcurrentRuns'
-  )
-    ? (body.maxConcurrentRuns as number | null)
-    : undefined;
+  const { name, guardrailIds, maxConcurrentRuns, auditReadsEnabled } =
+    parseProjectPatchFields(ctx.request.body as Record<string, unknown>);
 
   if (
     name === undefined &&
     guardrailIds === undefined &&
-    maxConcurrentRuns === undefined
+    maxConcurrentRuns === undefined &&
+    auditReadsEnabled === undefined
   ) {
     ctx.status = 400;
     ctx.body = {
-      error: 'name, guardrail_ids, or max_concurrent_runs is required',
+      error:
+        'name, guardrail_ids, max_concurrent_runs, or audit_reads_enabled is required',
     };
     return;
   }
@@ -167,6 +182,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     name,
     guardrailIds,
     maxConcurrentRuns,
+    auditReadsEnabled,
   });
 
   ctx.body = project;

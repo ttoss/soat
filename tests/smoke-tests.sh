@@ -332,6 +332,56 @@ if [ -z "$AUDIT_GET_ACTION" ] || [ "$AUDIT_GET_ACTION" = "null" ]; then
   echo "$AUDIT_GET_RESP" >&2
   exit 1
 fi
+
+# NDJSON export: one JSON object per line, scoped to the project.
+AUDIT_EXPORT_RESP=$($SOAT_CLI export-audit-entries --project_id "$PROJECT_PUBLIC_ID")
+AUDIT_EXPORT_LINES=$(echo "$AUDIT_EXPORT_RESP" | grep -c '"action"' || true)
+if [ "$AUDIT_EXPORT_LINES" -lt 1 ]; then
+  echo "ERROR: Expected at least one exported audit entry" >&2
+  echo "$AUDIT_EXPORT_RESP" >&2
+  exit 1
+fi
+# Every exported line must be valid JSON carrying the requested project.
+AUDIT_EXPORT_PROJECTS=$(echo "$AUDIT_EXPORT_RESP" | grep '"action"' \
+  | jq -r 'select(.project_id != null) | .project_id' | sort -u)
+if [ "$AUDIT_EXPORT_PROJECTS" != "$PROJECT_PUBLIC_ID" ]; then
+  echo "ERROR: Export leaked entries outside project $PROJECT_PUBLIC_ID" >&2
+  echo "$AUDIT_EXPORT_PROJECTS" >&2
+  exit 1
+fi
+
+# Read auditing is opt-in per project: off by default, recording GETs when on.
+AUDIT_READS_DEFAULT=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID" \
+  | jq -r '.audit_reads_enabled')
+if [ "$AUDIT_READS_DEFAULT" != "false" ]; then
+  echo "ERROR: Expected audit_reads_enabled to default to false, got $AUDIT_READS_DEFAULT" >&2
+  exit 1
+fi
+
+$SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" \
+  --audit_reads_enabled true >/dev/null
+$SOAT_CLI list-secrets --project_id "$PROJECT_PUBLIC_ID" >/dev/null
+# Audit writes go through an async fire-and-forget queue, so poll briefly.
+AUDIT_READ_COUNT=0
+AUDIT_READ_ATTEMPTS=0
+while [ "$AUDIT_READ_COUNT" -lt 1 ] && [ "$AUDIT_READ_ATTEMPTS" -lt 10 ]; do
+  AUDIT_READ_COUNT=$($SOAT_CLI list-audit-entries \
+    --project_id "$PROJECT_PUBLIC_ID" --action secrets:ListSecrets \
+    | jq -r '.total')
+  AUDIT_READ_ATTEMPTS=$((AUDIT_READ_ATTEMPTS + 1))
+  # Guarded with `if` rather than `&&`: under `set -e` a false `[ ]` as the
+  # last command of the loop body would abort the script on the success path.
+  if [ "$AUDIT_READ_COUNT" -lt 1 ]; then
+    sleep 1
+  fi
+done
+if [ "$AUDIT_READ_COUNT" -lt 1 ]; then
+  echo "ERROR: Expected a read entry after enabling audit_reads_enabled" >&2
+  exit 1
+fi
+$SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" \
+  --audit_reads_enabled false >/dev/null
+
 echo "Audit Log coverage: OK"
 
 # 3e. Actors module coverage

@@ -186,7 +186,8 @@ UIs.
 3. **`deny` effect audit record — resolved: yes, on the audit substrate.** A
    policy `deny` on a tool call writes an audit record with
    `detail->>'kind' = 'action_denied'` on the shipped `AuditEntry` table
-   ([prd-audit-log.md](./prd-audit-log.md)) — not on the pending
+   ([audit-log module docs](../packages/website/docs/modules/audit-log.md)) —
+   not on the pending
    `ActivityEntry` model this PRD previously assumed. A deny is a
    security-relevant event and belongs in the audit trail unconditionally;
    feed noise is a non-issue because the product activity surface filters by

@@ -44,6 +44,20 @@ describe('webhookDispatcher', () => {
     });
   };
 
+  /**
+   * Deliveries to `url` carrying a specific event type. A `*` subscriber also
+   * receives unrelated project events — notably the `audit.entry_created` entry
+   * written for the very `POST /webhooks` call that created it — so a wildcard
+   * assertion must select the event under test rather than assume the webhook
+   * received exactly one delivery.
+   */
+  const callsToUrlForEvent = (url: string, eventType: string) => {
+    return callsToUrl(url).filter(([, init]) => {
+      const { headers } = init as { headers: Record<string, string> };
+      return headers['X-Soat-Event'] === eventType;
+    });
+  };
+
   // The sentinel webhook matches every event and is never deleted. Because
   // `handleEvent` iterates all matching webhooks in one synchronous pass
   // (nothing is awaited until each webhook's own `deliverWebhook` starts),
@@ -156,16 +170,64 @@ describe('webhookDispatcher', () => {
     });
 
     await waitFor(() => {
-      return callsToUrl('https://example.com/hook-wildcard').length > 0;
+      return (
+        callsToUrlForEvent(
+          'https://example.com/hook-wildcard',
+          'agents.generation.completed'
+        ).length > 0
+      );
     });
 
-    const webhookCalls = callsToUrl('https://example.com/hook-wildcard');
+    // Exactly one delivery of the event under test; the wildcard subscriber
+    // legitimately receives other project events too (see callsToUrlForEvent).
+    const webhookCalls = callsToUrlForEvent(
+      'https://example.com/hook-wildcard',
+      'agents.generation.completed'
+    );
     expect(webhookCalls).toHaveLength(1);
     const [, init] = webhookCalls[0] as [
       string,
       { headers: Record<string, string> },
     ];
     expect(init.headers['X-Soat-Event']).toBe('agents.generation.completed');
+  });
+
+  test('a wildcard subscriber receives audit.entry_created carrying the full entry', async () => {
+    const url = 'https://example.com/hook-audit';
+    // Creating the webhook is itself an audited mutation, so the entry for
+    // `webhooks:CreateWebhook` is dispatched to the very webhook that was just
+    // created. This pins the cross-module behavior the wildcard assertion above
+    // has to account for.
+    await createWebhook({
+      project_id: projectId,
+      name: 'Audit Wildcard Webhook',
+      url,
+      events: ['*'],
+    });
+
+    await waitFor(() => {
+      return callsToUrlForEvent(url, 'audit.entry_created').length > 0;
+    });
+
+    const [, init] = callsToUrlForEvent(url, 'audit.entry_created')[0] as [
+      string,
+      { body: string },
+    ];
+
+    const payload = JSON.parse(init.body) as {
+      event: string;
+      resourceType: string;
+      data: Record<string, unknown>;
+    };
+    expect(payload.event).toBe('audit.entry_created');
+    expect(payload.resourceType).toBe('audit');
+    // The payload is the full snake_case entry, so a subscriber needs no
+    // follow-up GET.
+    expect(payload.data.action).toBe('webhooks:CreateWebhook');
+    expect(payload.data.project_id).toBe(projectId);
+    expect(payload.data.status).toBe(201);
+    expect(payload.data.principal_type).toBe('user');
+    expect(String(payload.data.id).startsWith('audit_')).toBe(true);
   });
 
   test('dispatcher delivers webhook for prefix wildcard event match', async () => {

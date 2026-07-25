@@ -15,7 +15,7 @@ The audit log answers *"who changed this policy, who deleted that secret, who ro
 
 The log reuses the permission registry as its vocabulary: the recorded `action` **is** the permission-action string that authorized the request (e.g. `secrets:DeleteSecret`), and `resource_srn` is the SRN it was authorized against. It is distinct from [Traces](./traces.md), which record what an agent did *inside a run*; the audit log records what a principal did *to the platform*.
 
-The API is read-only. Writes happen internally through a fire-and-forget queue, so auditing never blocks or fails the request it describes. Read auditing (logging `GET`s) is intentionally out of scope.
+The API is read-only. Writes happen internally through a fire-and-forget queue, so auditing never blocks or fails the request it describes. Reads (`GET`s) are not recorded unless the project opts in — see [Read auditing](#read-auditing).
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
@@ -63,9 +63,48 @@ Most entries describe a principal's request, but the platform also records event
 - **Quota monitoring** — a [monitor-mode quota](./quotas.md#monitor-mode) breach writes an entry with `action: quotas:MonitorBreach`, the quota as its resource, and `detail.kind: quota_monitor_breach` (metric, window, limit, observed value). It is written once per window, mirroring the `quota.exceeded` webhook.
 - **Guardrail evaluations** — a [guardrail evaluation](./guardrails.md#evaluation-audit-record) that **changed the call's outcome** (`route_to_approval`, `blocked`, or `tripwire`) writes an entry with `action: guardrails:Evaluate`, the guardrail as its resource, and `detail.kind: guardrail_evaluation` carrying the full evaluation record (governing version, resolved class, decision, guard outcome, context snapshot, provenance). Plain `execute` evaluations are not audited — they are high-volume operational telemetry kept solely in the guardrails' own evaluation records. A `route_to_approval` entry also carries the filed `approval_id` in its `detail`.
 
+### Read auditing
+
+By default the log records mutations only: reads are high-volume and low-value, and auditing every `GET` would bury the entries a forensic review actually looks for. A project opts into read auditing by setting `audit_reads_enabled` on the [project](./projects.md):
+
+```bash
+soat update-project --project-id proj_ABC --audit-reads-enabled true
+```
+
+With the flag on, a `GET` produces the same entry shape as a mutation — the permission-action that authorized it (`secrets:GetSecret`, `secrets:ListSecrets`), its SRN, and the response status.
+
+Two boundaries follow from the flag being per-project:
+
+- **A read that names no project is never recorded.** Unscoped list enumeration (`GET /api/v1/secrets` with no `project_id`) is not attributable to a single project, so no project's flag can opt it in. Pass `project_id` to have list reads audited.
+- **The flag is read per project, not globally.** Turning it on for one project leaves reads of every other project unrecorded.
+
+The flag is cached briefly in-process so the read path never pays a lookup; a change through the API takes effect immediately on the instance that served it, and within 30 seconds on any other instance.
+
 ### Append-only & retention
 
-Entries are never updated or deleted through the API; the model layer rejects updates and single-row deletes. A daily sweep prunes rows older than the retention window (see [Configuration](#configuration)). To export before expiry, paginate the list endpoint into NDJSON.
+Entries are never updated or deleted through the API; the model layer rejects updates and single-row deletes. A daily sweep prunes rows older than the retention window (see [Configuration](#configuration)). To archive before expiry, use the [NDJSON export](#ndjson-export).
+
+### NDJSON export
+
+`GET /api/v1/audit-log/export` streams a project's entries as newline-delimited JSON — one entry object per line, oldest first, with the same fields as the read API. It exists for archival ahead of the retention window and for shipping the log into an external system (SIEM, data lake, an LGPD/GDPR subject-access request).
+
+- `project_id` is **required**: the export is per-project by design, not an unbounded cross-project dump.
+- Every list filter (`action`, `principal_id`, `resource_public_id`, `resource_srn`, `from`, `to`) applies identically.
+- The response streams and pages internally, so exporting a large project holds neither the server nor the client at full size in memory.
+- It is authorized by its own action, `audit:ExportAuditEntries` — bulk egress is granted separately from `audit:ListAuditEntries`.
+
+Entries arrive oldest-first so that a row written during the export is appended after the cursor rather than shifting rows the consumer already read.
+
+### `audit.entry_created` webhook
+
+Every persisted **project-scoped** entry emits an `audit.entry_created` [webhook](./webhooks.md) event carrying the full entry as its `data`, in the same snake_case shape the read API returns — so a subscriber never needs a follow-up `GET`. Subscribe with `audit.*` or the exact event name:
+
+```bash
+soat create-webhook --project-id proj_ABC \
+  --url https://siem.example.com/soat --events "audit.entry_created"
+```
+
+Global entries (those with `project_id` null, e.g. `users:CreateUser`) emit nothing: webhooks are project-scoped, so such an entry has no possible subscriber. Platform-originated entries do emit, with `principal_type` and `principal_id` null.
 
 ## Configuration
 
@@ -105,6 +144,37 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl -X GET "https://api.example.com/api/v1/audit-log?project_id=proj_ABC&action=secrets:DeleteSecret" \
   -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Export a project's entries as NDJSON
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat export-audit-entries --project-id proj_ABC --from 2026-01-01T00:00:00Z
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.audit.exportAuditEntries({
+  query: { project_id: 'proj_ABC', from: '2026-01-01T00:00:00Z' },
+});
+if (error) throw new Error(JSON.stringify(error));
+// `data` is the raw NDJSON body — one JSON object per line.
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X GET "https://api.example.com/api/v1/audit-log/export?project_id=proj_ABC" \
+  -H "Authorization: Bearer <token>" > audit-log.ndjson
 ```
 
 </TabItem>

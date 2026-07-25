@@ -3,8 +3,17 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { emitEvent } from './eventBus';
 
 const log = createDebug('soat:audit');
+
+/**
+ * The webhook event fired once per persisted audit entry, so external systems
+ * (e.g. a SIEM) can subscribe to the log instead of polling the list endpoint.
+ * Only project-scoped entries emit it — webhooks are project-scoped, so a
+ * global entry (`projectId` null) has no possible subscriber.
+ */
+export const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
 
 export type AuditPrincipalType = 'user' | 'api_key';
 
@@ -18,11 +27,15 @@ export type AuditCheck = {
 const mapAuditEntry = (
   instance: InstanceType<(typeof db)['AuditEntry']> & {
     project?: InstanceType<(typeof db)['Project']> | null;
-  }
+  },
+  // Overrides the eager-loaded association when the caller already knows the
+  // project's public id (the write path, which never re-reads the row it just
+  // created).
+  projectPublicId?: string | null
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId ?? null,
+    projectId: projectPublicId ?? instance.project?.publicId ?? null,
     principalType: instance.principalType,
     principalId: instance.principalId,
     action: instance.action,
@@ -38,26 +51,115 @@ const mapAuditEntry = (
 };
 
 /**
- * Persists a single audit entry. Called only from the async audit queue, off
- * the request path — a failure here must never affect the request being
- * described, so callers swallow rejections. Resolves the project public id to
- * its internal FK; a null/unknown project is stored as a global (`projectId`
- * null) entry.
+ * Read auditing is a per-project opt-in, and reads are exactly the high-volume
+ * traffic the fire-and-forget queue must not be flooded with. So the flag is
+ * cached per project and consulted *before* enqueueing: a cached `false` drops
+ * the read on the request path, leaving the queue's capacity for mutations.
+ *
+ * A cache miss is never treated as a decision — the middleware enqueues and
+ * {@link writeAuditEntry} makes the authoritative call while resolving the
+ * project it has to look up anyway, so no entry that should be recorded is ever
+ * lost. Writes invalidate the entry (see {@link invalidateReadAuditCache}); the
+ * TTL is the backstop that converges other instances after a flag flip.
  */
-// Resolves a project public id to its internal FK; a null/unknown project is
-// stored as a global (`projectId` null) entry. Extracted so writeAuditEntry
-// stays under the cyclomatic-complexity limit.
-const resolveAuditProjectId = async (
+const READ_AUDIT_CACHE_TTL_MS = 30_000;
+
+const readAuditCache = new Map<
+  string,
+  { enabled: boolean; expiresAt: number }
+>();
+
+/**
+ * The cached read-auditing flag for a project, or `undefined` on a miss/expiry.
+ * Synchronous by design — the caller is on the request path.
+ */
+export const peekReadAuditEnabled = (
+  projectPublicId: string
+): boolean | undefined => {
+  const cached = readAuditCache.get(projectPublicId);
+  if (!cached) return undefined;
+  if (cached.expiresAt <= Date.now()) {
+    readAuditCache.delete(projectPublicId);
+    return undefined;
+  }
+  return cached.enabled;
+};
+
+/** Drops the cached flag for a project. Called whenever the project is updated. */
+export const invalidateReadAuditCache = (projectPublicId: string): void => {
+  readAuditCache.delete(projectPublicId);
+};
+
+// Resolves a project public id to the row the write needs (its internal FK and
+// its read-auditing flag). A null/unknown project means the entry is global.
+// Extracted so writeAuditEntry stays under the cyclomatic-complexity limit.
+const resolveAuditProject = async (
   projectPublicId?: string | null
-): Promise<number | null> => {
+): Promise<{ id: number; auditReadsEnabled: boolean } | null> => {
   if (!projectPublicId) return null;
   const project = await db.Project.findOne({
     where: { publicId: projectPublicId },
   });
-  return (project?.id as number | undefined) ?? null;
+  if (!project) return null;
+
+  const auditReadsEnabled = Boolean(project.auditReadsEnabled);
+  readAuditCache.set(projectPublicId, {
+    enabled: auditReadsEnabled,
+    expiresAt: Date.now() + READ_AUDIT_CACHE_TTL_MS,
+  });
+
+  return { id: project.id as number, auditReadsEnabled };
 };
 
-export const writeAuditEntry = async (args: {
+/** The snake_case projection of an entry — the read contract, shared by the
+ * export stream and the `audit.entry_created` webhook payload so all three
+ * surfaces expose the same field names. */
+const toSnakeAuditEntry = (
+  entry: ReturnType<typeof mapAuditEntry>
+): Record<string, unknown> => {
+  return {
+    id: entry.id,
+    project_id: entry.projectId,
+    principal_type: entry.principalType,
+    principal_id: entry.principalId,
+    action: entry.action,
+    resource_srn: entry.resourceSrn,
+    resource_public_id: entry.resourcePublicId,
+    status: entry.status,
+    request_id: entry.requestId,
+    ip: entry.ip,
+    user_agent: entry.userAgent,
+    detail: entry.detail,
+    created_at:
+      entry.createdAt instanceof Date
+        ? entry.createdAt.toISOString()
+        : entry.createdAt,
+  };
+};
+
+/**
+ * Fires {@link AUDIT_ENTRY_CREATED_EVENT} for a persisted entry. Extracted so
+ * `writeAuditEntry` stays under the cyclomatic-complexity limit.
+ */
+const emitAuditEntryCreated = (args: {
+  entry: InstanceType<(typeof db)['AuditEntry']>;
+  projectId: number;
+  projectPublicId: string;
+}): void => {
+  emitEvent({
+    type: AUDIT_ENTRY_CREATED_EVENT,
+    projectId: args.projectId,
+    projectPublicId: args.projectPublicId,
+    resourceType: 'audit',
+    resourceId: args.entry.publicId,
+    // The full entry, snake_cased to match the read contract, so a subscriber
+    // never needs a follow-up GET to see what happened.
+    data: toSnakeAuditEntry(mapAuditEntry(args.entry, args.projectPublicId)),
+    timestamp: new Date().toISOString(),
+  });
+};
+
+export type WriteAuditEntryArgs = {
   projectPublicId?: string | null;
   // A request entry sets `principalType`/`principalId`; a platform-originated
   // entry leaves them null and is identified by its `action`.
@@ -71,22 +173,48 @@ export const writeAuditEntry = async (args: {
   ip?: string | null;
   userAgent?: string | null;
   detail?: Record<string, unknown> | null;
-}): Promise<void> => {
-  const projectId = await resolveAuditProjectId(args.projectPublicId);
+  // Marks the entry as describing a read. Read entries are only persisted when
+  // the project they name has opted in; a read with no project is never
+  // persisted, since no project could opt it in.
+  isRead?: boolean;
+};
 
-  await db.AuditEntry.create({
-    projectId,
-    principalType: args.principalType ?? null,
-    principalId: args.principalId ?? null,
-    action: args.action,
-    resourceSrn: args.resourceSrn ?? null,
-    resourcePublicId: args.resourcePublicId ?? null,
-    status: args.status,
-    requestId: args.requestId ?? null,
-    ip: args.ip ?? null,
-    userAgent: args.userAgent ?? null,
-    detail: args.detail ?? null,
-  });
+// Normalizes the optional write args into the row's non-optional columns.
+// Extracted so writeAuditEntry stays under the cyclomatic-complexity limit —
+// each `??` default is itself a branch.
+const buildAuditEntryRow = (args: {
+  args: WriteAuditEntryArgs;
+  projectId: number | null;
+}) => {
+  const w = args.args;
+  return {
+    projectId: args.projectId,
+    principalType: w.principalType ?? null,
+    principalId: w.principalId ?? null,
+    action: w.action,
+    resourceSrn: w.resourceSrn ?? null,
+    resourcePublicId: w.resourcePublicId ?? null,
+    status: w.status,
+    requestId: w.requestId ?? null,
+    ip: w.ip ?? null,
+    userAgent: w.userAgent ?? null,
+    detail: w.detail ?? null,
+  };
+};
+
+export const writeAuditEntry = async (
+  args: WriteAuditEntryArgs
+): Promise<void> => {
+  const project = await resolveAuditProject(args.projectPublicId);
+
+  if (args.isRead && !project?.auditReadsEnabled) {
+    log('writeAuditEntry: read auditing off, skipped action=%s', args.action);
+    return;
+  }
+
+  const entry = await db.AuditEntry.create(
+    buildAuditEntryRow({ args, projectId: project?.id ?? null })
+  );
 
   log(
     'writeAuditEntry: action=%s status=%d resource=%s',
@@ -94,6 +222,16 @@ export const writeAuditEntry = async (args: {
     args.status,
     args.resourceSrn
   );
+
+  // Only project-scoped entries emit: webhooks are project-scoped, so a global
+  // entry has no possible subscriber.
+  if (project && args.projectPublicId) {
+    emitAuditEntryCreated({
+      entry,
+      projectId: project.id,
+      projectPublicId: args.projectPublicId,
+    });
+  }
 };
 
 // Escapes the LIKE metacharacters (`%`, `_`, `\`) so an SRN prefix — which
@@ -164,8 +302,57 @@ export const listAuditEntries = async (
     offset,
   });
 
-  return { data: rows.map(mapAuditEntry), total: count, limit, offset };
+  // Wrapped rather than passed by reference: `Array#map` supplies the index as
+  // the second argument, which `mapAuditEntry` reads as a project override.
+  const data = rows.map((row) => {
+    return mapAuditEntry(row);
+  });
+
+  return { data, total: count, limit, offset };
 };
+
+/**
+ * Number of rows fetched per round trip while streaming an export. Bounds the
+ * exporter's memory to one batch regardless of how many entries a project has.
+ */
+const EXPORT_BATCH_SIZE = 500;
+
+/**
+ * Streams a project's audit entries as NDJSON — one snake_case JSON object per
+ * line, oldest first. Ordering is ascending by `(created_at, id)` so a row that
+ * arrives mid-export is appended after the cursor rather than shifting rows the
+ * consumer already read (a `DESC` order would push every new row to the front
+ * and duplicate a page boundary). Pages internally, so the whole log is never
+ * held in memory. Filters mirror {@link listAuditEntries}.
+ */
+export async function* streamAuditEntriesNdjson(
+  args: AuditListFilters
+): AsyncGenerator<string> {
+  const where = buildListWhere(args);
+  let offset = 0;
+
+  for (;;) {
+    const rows = await db.AuditEntry.findAll({
+      where,
+      include: [{ model: db.Project, as: 'project' }],
+      order: [
+        ['createdAt', 'ASC'],
+        ['id', 'ASC'],
+      ],
+      limit: EXPORT_BATCH_SIZE,
+      offset,
+    });
+
+    if (rows.length === 0) return;
+
+    for (const row of rows) {
+      yield `${JSON.stringify(toSnakeAuditEntry(mapAuditEntry(row)))}\n`;
+    }
+
+    if (rows.length < EXPORT_BATCH_SIZE) return;
+    offset += rows.length;
+  }
+}
 
 /**
  * Fetches one entry by public id, scoped to the projects the caller may access

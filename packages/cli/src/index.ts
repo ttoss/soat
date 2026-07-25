@@ -48,6 +48,23 @@ const toKebab = (s: string) => {
     .toLowerCase();
 };
 
+/**
+ * Renders a command's payload for stdout.
+ *
+ * A response the SDK could not parse as JSON (the NDJSON audit export, a file
+ * download) arrives as a Blob, which `JSON.stringify` collapses to `{}` — those
+ * are printed as their own bytes instead.
+ *
+ * Everything else keeps going through `JSON.stringify`, **including a plain
+ * string**: a JSON body may legitimately *be* a bare string (a `call-tool`
+ * response whose output mapping yields a scalar), and callers pipe that into
+ * `jq`, which needs the quotes to parse it.
+ */
+const formatResultData = async (data: unknown): Promise<string> => {
+  if (data instanceof Blob) return data.text();
+  return JSON.stringify(data, null, 2);
+};
+
 const parseFlagValue = (value: string): unknown => {
   const trimmed = value.trim();
 
@@ -488,7 +505,7 @@ program
       process.exit(1);
     }
 
-    console.log(JSON.stringify(result.data, null, 2));
+    console.log(await formatResultData(result.data));
   });
 
 export const runCli = async (args: string[]) => {

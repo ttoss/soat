@@ -41,6 +41,13 @@ export class Project extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxConcurrentRuns: number | null;
 
+  // Opts the project into read auditing: when true, `GET` requests that name
+  // this project are recorded in the audit log alongside mutations. Off by
+  // default — reads are high-volume and low-value, so v1 records mutations only
+  // (audit-log PRD, Phase 3).
+  @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
+  declare auditReadsEnabled: boolean;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

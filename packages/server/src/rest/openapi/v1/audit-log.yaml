@@ -110,6 +110,73 @@ paths:
           description: Forbidden
         '500':
           description: Internal server error
+  /api/v1/audit-log/export:
+    get:
+      tags:
+        - Audit Log
+      summary: Export audit entries as NDJSON
+      description: >-
+        Streams a project's audit-log entries as newline-delimited JSON — one
+        entry object per line, oldest first — for archival before the retention
+        window expires, or for shipping into an external system. `project_id` is
+        required: the export is per-project by design. Filters behave exactly as
+        they do on the list endpoint.
+      operationId: exportAuditEntries
+      parameters:
+        - name: project_id
+          in: query
+          required: true
+          description: Project whose entries are exported
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: action
+          in: query
+          description: Exact permission-action string, e.g. `secrets:DeleteSecret`
+          schema:
+            type: string
+        - name: principal_id
+          in: query
+          description: Public id of the principal (`user_…` or `key_…`)
+          schema:
+            type: string
+        - name: resource_public_id
+          in: query
+          description: Exact target resource public id, e.g. `sec_…`
+          schema:
+            type: string
+        - name: resource_srn
+          in: query
+          description: SRN prefix match, e.g. `soat:{project}:secret:`
+          schema:
+            type: string
+        - name: from
+          in: query
+          description: Only entries created at or after this timestamp (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          description: Only entries created at or before this timestamp (ISO 8601)
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: >-
+            A newline-delimited stream of audit entries. Each line is a JSON
+            object with the same fields as `AuditEntry`.
+          content:
+            application/x-ndjson:
+              schema:
+                type: string
+        '400':
+          description: project_id is required
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
   /api/v1/audit-log/{entry_id}:
     get:
       tags:
