@@ -37,12 +37,14 @@ guardrails are fully shipped and have no remaining items).
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed. Quotas is fully shipped, including the
-monitor-breach audit entry (see [prd-quotas.md](./prd-quotas.md)); the audit log
-is now fully shipped too, through the read-auditing flag, the
-`audit.entry_created` webhook, and the per-project NDJSON export — its PRD has
-been retired and the live behavior lives in the
-[audit-log module docs](../packages/website/docs/modules/audit-log.md).
+Only PRDs with open work are listed. Two initiatives are fully shipped and
+their PRDs have been retired — the live behavior lives in the module docs:
+[quotas](../packages/website/docs/modules/quotas.md) (request/token/cost
+quotas, the `QUOTA_EXCEEDED` / `429` contract, monitor mode with its
+[breach audit entry](../packages/website/docs/modules/quotas.md#monitor-mode),
+the `quota.exceeded` webhook, and the `quota` formation resource) and
+[audit-log](../packages/website/docs/modules/audit-log.md) (the read-auditing
+flag, the `audit.entry_created` webhook, and the per-project NDJSON export).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
@@ -172,18 +174,6 @@ _Fully shipped._
 - [x] **Phase 2** Decision-changing guardrail evaluations (`route_to_approval` / `blocked` / `tripwire`) mirror into `AuditEntry` as `detail.kind = "guardrail_evaluation"` via selective-write from `persistGuardrailEvaluations`; plain `execute` stays in the dedicated `guardrail_evaluations` table. Platform-originated (`action: guardrails:Evaluate`, null principal). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#system-originated-entries)
 - [x] **Phase 3** Read-audit config flag — `audit_reads_enabled` on the project, off by default, gated at enqueue via a 30s per-project cache so read traffic never evicts mutation entries from the audit queue; a read naming no project is never audited. Plus the `audit.entry_created` webhook, emitted from the `writeAuditEntry` choke point with the full snake_case entry as its `data` (project-scoped entries only). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#read-auditing)
 - [x] **Per-project NDJSON export** — `GET /api/v1/audit-log/export`: streams one snake_case entry per line, oldest first, paged internally; `project_id` required and authorized by its own `audit:ExportAuditEntries` action (bulk egress is granted separately from read). Also serves LGPD/GDPR subject-access requests. Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#ndjson-export)
-
-### Quotas
-
-_Fully shipped._
-
-- [x] Monitor-breach **audit entry** — a `monitor`-mode breach writes a
-  `system`-attributed `AuditEntry` (`action: quotas:MonitorBreach`,
-  `detail.kind: quota_monitor_breach`) once per window, alongside the
-  `quota.exceeded` webhook. Live behavior in the
-  [quotas](../packages/website/docs/modules/quotas.md#monitor-mode) and
-  [audit-log](../packages/website/docs/modules/audit-log.md#system-originated-entries)
-  module docs.
 
 ### Model routing
 

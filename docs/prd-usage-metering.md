@@ -6,7 +6,7 @@
 > [prd-orchestration-queue.md](./prd-orchestration-queue.md) for
 > exactly-once accounting under retries; feeds the `usage.*` guard context in
 > [guardrails](../packages/website/docs/modules/guardrails.md) and the token/cost windows in
-> [prd-quotas.md](./prd-quotas.md).
+> [quotas](../packages/website/docs/modules/quotas.md#windows-and-counters).
 
 > The shipped surface (event + component model, price book, aggregation,
 > thresholds, compute metering) is documented in the
@@ -67,8 +67,9 @@ middleware aggregates requests in memory per `(project, api_key)` and flushes
 one `api_request` meter row per counter per flush interval (`quantity` =
 request count; idempotency key from the flush window). One row **per request**
 is explicitly rejected — it would multiply every agent tool loop into meter
-writes. Enforcement stays with [prd-quotas.md](./prd-quotas.md)'s atomic
-counters; this phase only prices.
+writes. Enforcement stays with the
+[quotas](../packages/website/docs/modules/quotas.md#windows-and-counters)
+atomic counters; this phase only prices.
 
 **Unlocks:** The request line of the project bill.
 
