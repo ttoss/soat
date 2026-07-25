@@ -3909,5 +3909,119 @@ resources:
       );
       expect(gone.status).toBe(404);
     });
+
+    // `scope`, `metric`, and `window` are immutable after creation. Changing one
+    // through the formation lifecycle must fail loudly: silently applying only
+    // the mutable fields would leave the declared template and the enforced cap
+    // divergent, so an operator tightening a cap would believe a limit is live
+    // while the old one is still what enforces.
+    test('fails a formation update that changes an immutable quota field, leaving the quota untouched', async () => {
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `quota-immutable-${Date.now()}`,
+          template: quotaTemplate,
+        });
+      expect(create.status).toBe(201);
+      const quotaId = create.body.resources[0].physical_resource_id as string;
+
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              MyQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  metric: 'tokens', // immutable — was cost_usd
+                  window: 'rolling_1h', // immutable — was calendar_month
+                  limit: 40,
+                  mode: 'enforce',
+                },
+              },
+            },
+          },
+        });
+
+      // The operation must not be reported as a success.
+      expect(update.status).toBe(200);
+      expect(update.body.status).toBe('failed');
+
+      // The physical quota keeps every one of its original values — including
+      // the mutable ones, which must not be applied piecemeal on a failed op.
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(after.status).toBe(200);
+      expect(after.body.metric).toBe('cost_usd');
+      expect(after.body.window).toBe('calendar_month');
+      expect(after.body.scope).toBe('project');
+      expect(after.body.limit).toBe(25.5);
+      expect(after.body.mode).toBe('monitor');
+
+      // The failure names the offending field so the operator can act on it.
+      const events = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${create.body.id}/events`
+      );
+      expect(events.status).toBe(200);
+      const failed = events.body.data.find((op: { status: string }) => {
+        return op.status === 'failed';
+      });
+      expect(failed).toBeDefined();
+      expect(failed.error.message).toMatch(/metric/);
+      expect(failed.error.message).toMatch(/immutable/i);
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+    });
+
+    test('allows a formation update that restates immutable quota fields unchanged', async () => {
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `quota-restate-${Date.now()}`,
+          template: quotaTemplate,
+        });
+      expect(create.status).toBe(201);
+      const quotaId = create.body.resources[0].physical_resource_id as string;
+
+      // Same scope/metric/window as created — only limit and mode move. This is
+      // the normal path: templates always carry the immutable fields, since
+      // they are required on create.
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              MyQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  metric: 'cost_usd',
+                  window: 'calendar_month',
+                  limit: 99.5,
+                  mode: 'enforce',
+                },
+              },
+            },
+          },
+        });
+      expect(update.status).toBe(200);
+      expect(update.body.status).toBe('active');
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(after.body.limit).toBe(99.5);
+      expect(after.body.mode).toBe('enforce');
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+    });
   });
 });
