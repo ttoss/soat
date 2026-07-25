@@ -53,6 +53,33 @@ describe('discussionCompletion lib', () => {
     return `http://127.0.0.1:${port}`;
   };
 
+  // Metering is a fire-and-forget side effect of the completion, so poll the
+  // written row instead of sleeping past it.
+  const countTokenEvents = async (): Promise<number> => {
+    return db.UsageEvent.count({
+      where: { projectId: projectDbId, meterType: 'llm_tokens' },
+    });
+  };
+
+  const waitForNewTokenEvent = async (
+    before: number
+  ): Promise<InstanceType<typeof db.UsageEvent>> => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      if ((await countTokenEvents()) > before) {
+        const rows = await db.UsageEvent.findAll({
+          where: { projectId: projectDbId, meterType: 'llm_tokens' },
+          order: [['createdAt', 'DESC']],
+          limit: 1,
+        });
+        return rows[0];
+      }
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
+    throw new Error('timed out waiting for the discussion usage event');
+  };
+
   beforeAll(async () => {
     const stubBaseUrl = await startStubServer();
 
@@ -160,6 +187,37 @@ describe('discussionCompletion lib', () => {
       });
       expect(text).toBe('discussion text');
       expect(lastRequestBody?.temperature).toBe(0);
+    });
+
+    test('meters the turn as an llm_tokens event with no generation', async () => {
+      const before = await countTokenEvents();
+
+      await runDiscussionCompletion({
+        projectId: projectDbId,
+        aiProviderId,
+        prompt: 'Deliberate on metering.',
+      });
+
+      const event = await waitForNewTokenEvent(before);
+      expect(event.provider).toBe('ollama');
+      expect(event.model).toBe('disc-default-model');
+      // A discussion turn has no Generation, agent, or run behind it.
+      expect(event.generationId).toBeNull();
+      expect(event.agentId).toBeNull();
+      expect(event.runId).toBeNull();
+
+      const components = await db.UsageComponent.findAll({
+        where: { usageEventId: event.id as number },
+      });
+      const quantityOf = (component: string): number => {
+        return Number(
+          components.find((c) => {
+            return c.component === component;
+          })?.quantity
+        );
+      };
+      expect(quantityOf('input_tokens')).toBe(1);
+      expect(quantityOf('output_tokens')).toBe(1);
     });
   });
 });

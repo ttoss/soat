@@ -1,34 +1,17 @@
-import type { LanguageModel, ModelMessage } from 'ai';
+import type { ModelMessage } from 'ai';
 import { generateText, streamText } from 'ai';
 import type { AuthUser } from 'src/Context';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { buildModel } from './agentModel';
+import {
+  buildResolvedChatModel,
+  meterChatCompletion,
+  resolveChatModel,
+} from './chatCompletionModel';
 import { resolveMessageContent } from './messageContent';
 import { paginatedList, type PaginatedResult } from './pagination';
-
-const resolveModel = async (args: {
-  aiProviderId: string;
-  model?: string;
-}): Promise<LanguageModel> => {
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.aiProviderId,
-  });
-
-  if (!resolved) {
-    throw new Error('AI provider not found');
-  }
-
-  return buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
-};
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -209,7 +192,7 @@ export const createChatCompletion = async (args: {
   model?: string;
   messages: ChatMessage[];
 }) => {
-  const model = await resolveModel({
+  const resolved = await resolveChatModel({
     aiProviderId: args.aiProviderId,
     model: args.model,
   });
@@ -222,13 +205,16 @@ export const createChatCompletion = async (args: {
   });
 
   const result = await generateText({
-    model,
+    model: resolved.model,
     instructions: system,
     messages: nonSystemMessages as ModelMessage[],
   });
 
+  const model = result.response?.modelId ?? args.model ?? '';
+  meterChatCompletion({ resolved, model, usage: result.usage });
+
   return {
-    model: result.response?.modelId ?? args.model ?? '',
+    model,
     content: result.text,
     finishReason: result.finishReason,
   };
@@ -239,7 +225,7 @@ export const streamChatCompletion = async (args: {
   model?: string;
   messages: ChatMessage[];
 }) => {
-  const model = await resolveModel({
+  const resolved = await resolveChatModel({
     aiProviderId: args.aiProviderId,
     model: args.model,
   });
@@ -252,9 +238,15 @@ export const streamChatCompletion = async (args: {
   });
 
   const result = streamText({
-    model,
+    model: resolved.model,
     instructions: system,
     messages: nonSystemMessages as ModelMessage[],
+    // Token counts only arrive once the provider closes the stream, so a
+    // streamed completion meters at the end rather than up front. A stream the
+    // client abandons never reaches `onEnd` and is not metered.
+    onEnd: ({ usage }) => {
+      meterChatCompletion({ resolved, model: args.model, usage });
+    },
   });
 
   return result.textStream;
@@ -321,24 +313,24 @@ export const createChatCompletionForChat = async (args: {
   );
   const finalMessages = buildChatFinalMessages(resolvedMessages, systemMessage);
 
-  const model = buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.model ?? typedChat.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
+  const resolvedModel = buildResolvedChatModel({
+    resolved,
+    modelName: args.model ?? typedChat.model ?? resolved.defaultModel,
   });
 
   const result = await generateText({
-    model,
+    model: resolvedModel.model,
     instructions: systemMessage ?? undefined,
     messages: finalMessages.filter((m) => {
       return m.role !== 'system';
     }) as ModelMessage[],
   });
 
+  const model = result.response?.modelId ?? args.model ?? typedChat.model ?? '';
+  meterChatCompletion({ resolved: resolvedModel, model, usage: result.usage });
+
   return {
-    model: result.response?.modelId ?? args.model ?? typedChat.model ?? '',
+    model,
     content: result.text,
     finishReason: result.finishReason,
   };
@@ -386,18 +378,23 @@ export const streamChatCompletionForChat = async (args: {
     return m.role !== 'system';
   });
 
-  const model = buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.model ?? typedChat.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
+  const resolvedModel = buildResolvedChatModel({
+    resolved,
+    modelName: args.model ?? typedChat.model ?? resolved.defaultModel,
   });
 
   const result = streamText({
-    model,
+    model: resolvedModel.model,
     instructions: systemMessage ?? undefined,
     messages: userAssistantMessages as ModelMessage[],
+    // See `streamChatCompletion`: usage is only known at stream end.
+    onEnd: ({ usage }) => {
+      meterChatCompletion({
+        resolved: resolvedModel,
+        model: args.model ?? typedChat.model ?? undefined,
+        usage,
+      });
+    },
   });
 
   return result.textStream;
