@@ -29,6 +29,7 @@ export {
   createThreshold,
   deleteThreshold,
   evaluateProjectThresholds,
+  getThreshold,
   listThresholds,
   USAGE_THRESHOLD_CROSSED_EVENT,
   USAGE_THRESHOLD_METRICS,

@@ -104,6 +104,8 @@ paths:
                     type: integer
                   offset:
                     type: integer
+        '400':
+          description: '`from` or `to` is present but not a valid ISO 8601 date'
         '401':
           description: Unauthorized
         '403':
@@ -172,7 +174,9 @@ paths:
               schema:
                 type: string
         '400':
-          description: project_id is required
+          description: >-
+            `project_id` is required, or `from`/`to` is present but not a valid
+            ISO 8601 date
         '401':
           description: Unauthorized
         '403':

@@ -10,6 +10,8 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
+import { buildSrn } from 'src/lib/iam';
+import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { agentGenerationRouter } from './agentGeneration';
 import {
@@ -411,6 +413,20 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
     ctx.body = { error: 'Forbidden' };
     return;
   }
+
+  // The success response is `204 No Content`, so the audit middleware has no
+  // body to backfill the project/SRN from — hand it the resolved resource
+  // before the delete runs (see `setAuditResourceHint`).
+  const agent = await getAgent({ projectIds, id: ctx.params.agent_id });
+  setAuditResourceHint(ctx, {
+    projectPublicId: agent.projectId,
+    resourceSrn: buildSrn({
+      projectPublicId: agent.projectId,
+      resourceType: 'agent',
+      resourceId: agent.id,
+    }),
+    resourcePublicId: agent.id,
+  });
 
   const force = ctx.query.force === 'true';
 
