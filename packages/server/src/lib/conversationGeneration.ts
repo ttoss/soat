@@ -101,12 +101,16 @@ const runAgentGeneration = async (args: {
   messagesForModel: Array<{ role: string; content: unknown }>;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
+  actorId?: string;
+  sessionId?: string;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
     messages: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
+    actorId: args.actorId,
+    sessionId: args.sessionId,
   });
 
   if (result instanceof ReadableStream) {
@@ -141,12 +145,16 @@ const runGenerationForAgent = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
+  actorId?: string;
+  sessionId?: string;
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
     messagesForModel: args.messagesForModel,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
+    actorId: args.actorId,
+    sessionId: args.sessionId,
   });
 };
 
@@ -276,6 +284,11 @@ export const generateConversationMessage = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
+  // End-user attribution supplied by the session layer, which is the only
+  // caller that knows the actor/session behind the turn. Plain conversation
+  // generations leave both unset.
+  actorId?: string;
+  sessionId?: string;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
@@ -297,6 +310,8 @@ export const generateConversationMessage = async (args: {
     model: args.model,
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
+    actorId: args.actorId,
+    sessionId: args.sessionId,
   });
 
   if (genResult.status !== 'completed') {

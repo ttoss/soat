@@ -53,6 +53,8 @@ export type PersistedUsageEvent = {
   agentId: string | null;
   generationId: string | null;
   traceId: string | null;
+  actorId: string | null;
+  sessionId: string | null;
   aiProviderId: string | null;
   triggerId: string | null;
   actionId: string | null;
@@ -94,6 +96,8 @@ const mapUsageEvent = (
     generation?: InstanceType<(typeof db)['Generation']> | null;
     run?: InstanceType<(typeof db)['OrchestrationRun']> | null;
     trace?: InstanceType<(typeof db)['Trace']> | null;
+    actor?: InstanceType<(typeof db)['Actor']> | null;
+    session?: InstanceType<(typeof db)['Session']> | null;
     aiProvider?: InstanceType<(typeof db)['AiProvider']> | null;
     components?: InstanceType<(typeof db)['UsageComponent']>[];
   }
@@ -109,6 +113,8 @@ const mapUsageEvent = (
     agentId: assocPublicId(event.agent),
     generationId: assocPublicId(event.generation),
     traceId: assocPublicId(event.trace),
+    actorId: assocPublicId(event.actor),
+    sessionId: assocPublicId(event.session),
     aiProviderId: assocPublicId(event.aiProvider),
     triggerId: event.triggerId,
     actionId: event.actionId,
@@ -138,50 +144,73 @@ const resolveScopedId = async (
   return row?.id ?? null;
 };
 
-// Resolves agent/generation/trace publicId filters into `where` (mutating it).
-// Returns false when a referenced resource does not exist in scope.
+type ScopedFilterArgs = {
+  agentId?: string;
+  generationId?: string;
+  traceId?: string;
+  actorId?: string;
+  sessionId?: string;
+};
+
+// The publicId filters that resolve to an internal FK on the event, and the
+// model each one resolves against. Adding a filter is one entry here.
+const SCOPED_FILTERS: Array<{
+  key: keyof ScopedFilterArgs;
+  find: (where: {
+    publicId: string;
+    projectId?: number[];
+  }) => Promise<{ id?: number } | null>;
+}> = [
+  {
+    key: 'agentId',
+    find: (w) => {
+      return db.Agent.findOne({ where: w });
+    },
+  },
+  {
+    key: 'generationId',
+    find: (w) => {
+      return db.Generation.findOne({ where: w });
+    },
+  },
+  {
+    key: 'traceId',
+    find: (w) => {
+      return db.Trace.findOne({ where: w });
+    },
+  },
+  {
+    key: 'actorId',
+    find: (w) => {
+      return db.Actor.findOne({ where: w });
+    },
+  },
+  {
+    key: 'sessionId',
+    find: (w) => {
+      return db.Session.findOne({ where: w });
+    },
+  },
+];
+
+// Resolves the publicId filters into `where` (mutating it). Returns false when
+// a referenced resource does not exist in scope, so the caller yields an empty
+// page rather than silently dropping the filter and over-reporting.
 const applyUsageScopeFilters = async (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   where: Record<string, any>,
-  args: {
-    agentId?: string;
-    generationId?: string;
-    traceId?: string;
-    projectIds?: number[];
-  }
+  args: ScopedFilterArgs & { projectIds?: number[] }
 ): Promise<boolean> => {
-  if (args.agentId !== undefined) {
-    const agentId = await resolveScopedId(
-      (w) => {
-        return db.Agent.findOne({ where: w });
-      },
-      args.agentId,
+  for (const filter of SCOPED_FILTERS) {
+    const publicId = args[filter.key];
+    if (publicId === undefined) continue;
+    const resolved = await resolveScopedId(
+      filter.find,
+      publicId,
       args.projectIds
     );
-    if (agentId === null) return false;
-    where.agentId = agentId;
-  }
-  if (args.generationId !== undefined) {
-    const generationId = await resolveScopedId(
-      (w) => {
-        return db.Generation.findOne({ where: w });
-      },
-      args.generationId,
-      args.projectIds
-    );
-    if (generationId === null) return false;
-    where.generationId = generationId;
-  }
-  if (args.traceId !== undefined) {
-    const traceId = await resolveScopedId(
-      (w) => {
-        return db.Trace.findOne({ where: w });
-      },
-      args.traceId,
-      args.projectIds
-    );
-    if (traceId === null) return false;
-    where.traceId = traceId;
+    if (resolved === null) return false;
+    where[filter.key] = resolved;
   }
   return true;
 };
@@ -191,6 +220,8 @@ export const listUsageEvents = async (args: {
   agentId?: string;
   generationId?: string;
   traceId?: string;
+  actorId?: string;
+  sessionId?: string;
   triggerId?: string;
   actionId?: string;
   meterType?: string;
@@ -217,6 +248,8 @@ export const listUsageEvents = async (args: {
     agentId: args.agentId,
     generationId: args.generationId,
     traceId: args.traceId,
+    actorId: args.actorId,
+    sessionId: args.sessionId,
     projectIds: args.projectIds,
   });
   if (!resolved) return empty;
@@ -229,6 +262,8 @@ export const listUsageEvents = async (args: {
       { model: db.Generation, as: 'generation' },
       { model: db.OrchestrationRun, as: 'run' },
       { model: db.Trace, as: 'trace' },
+      { model: db.Actor, as: 'actor' },
+      { model: db.Session, as: 'session' },
       { model: db.AiProvider, as: 'aiProvider' },
       {
         model: db.UsageComponent,

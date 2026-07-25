@@ -135,6 +135,9 @@ export const emitClientToolReHandoff = async (args: {
     initiatorGenerationId: args.item.generationId ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
+    // Keeps the continuation's usage attributed to the same end user as the
+    // turn that produced the approval; the actor is derived from the session.
+    sessionId: args.item.sessionId,
   });
 
   seedReHandoffPending({

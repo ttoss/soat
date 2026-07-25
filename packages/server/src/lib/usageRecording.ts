@@ -215,6 +215,12 @@ const persistEvent = async (args: {
         generationId: generation.id,
         traceId: generation.traceId,
         aiProviderId: attribution.aiProviderId,
+        // End-user attribution, frozen onto the event at write time from the
+        // generation's own FK columns — the same rule as `cost_usd`. A later
+        // change to the generation (or deletion of the actor/session) never
+        // rewrites recorded spend.
+        actorId: generation.startedByActorId,
+        sessionId: generation.sessionId,
         triggerId: attribution.triggerId,
         actionId: attribution.actionId,
         meterType: 'llm_tokens',
@@ -349,6 +355,10 @@ const persistComputeEvent = async (args: {
         generationId: null,
         traceId: null,
         aiProviderId: null,
+        // Compute execution is orchestration infrastructure: there is no end
+        // user behind a node's wall-clock seconds.
+        actorId: null,
+        sessionId: null,
         triggerId: null,
         actionId: null,
         meterType: 'compute_execution',

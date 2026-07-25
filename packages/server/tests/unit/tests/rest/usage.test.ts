@@ -31,6 +31,9 @@ describe('Usage', () => {
   let aiProviderId: string;
   let generationId: string;
   let traceId: string;
+  let actorId: string;
+  let sessionId: string;
+  let sessionGenerationId: string;
   let stubServer: Server;
 
   const startStubServer = async (): Promise<string> => {
@@ -88,6 +91,9 @@ describe('Usage', () => {
       policyActions: [
         'agents:CreateAgent',
         'agents:CreateAgentGeneration',
+        'agents:CreateSession',
+        'agents:SendSessionMessage',
+        'actors:CreateActor',
         'usage:ListUsageMeters',
         'usage:GetReceipt',
         'usage:GetUsage',
@@ -130,6 +136,32 @@ describe('Usage', () => {
     expect(genRes.body.status).toBe('completed');
     generationId = genRes.body.id;
     traceId = genRes.body.trace_id;
+
+    // A session-driven generation: the end user is an actor talking to the
+    // agent through a session, which is the surface actor/session attribution
+    // exists for.
+    const actorRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/actors')
+      .send({ project_id: projectId, name: 'Usage End User' });
+    expect(actorRes.status).toBe(201);
+    actorId = actorRes.body.id;
+
+    const sessionRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/sessions')
+      .send({ agent_id: agentId, actor_id: actorId });
+    expect(sessionRes.status).toBe(201);
+    sessionId = sessionRes.body.id;
+
+    await authenticatedTestClient(userToken)
+      .post(`/api/v1/sessions/${sessionId}/messages`)
+      .send({ message: 'hello from the end user' });
+
+    const sessionGenRes = await authenticatedTestClient(userToken)
+      .post(`/api/v1/sessions/${sessionId}/generate`)
+      .send({});
+    expect(sessionGenRes.status).toBe(200);
+    expect(sessionGenRes.body.status).toBe('completed');
+    sessionGenerationId = sessionGenRes.body.generation_id;
   }, 60000);
 
   afterAll(async () => {
@@ -256,6 +288,109 @@ describe('Usage', () => {
       expect(response.status).toBe(200);
       expect(response.body.data).toEqual([]);
       expect(response.body.total).toBe(0);
+    });
+  });
+
+  describe('actor and session attribution', () => {
+    test('a session-driven generation records actor_id and session_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${sessionGenerationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBe(1);
+
+      const event = response.body.data[0];
+      expect(event.actor_id).toBe(actorId);
+      expect(event.session_id).toBe(sessionId);
+    });
+
+    test('a generation outside a session has null actor_id and session_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?generation_id=${generationId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data[0].actor_id).toBeNull();
+      expect(response.body.data[0].session_id).toBeNull();
+    });
+
+    test('filters meters by actor_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?actor_id=${actorId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      for (const event of response.body.data) {
+        expect(event.actor_id).toBe(actorId);
+      }
+    });
+
+    test('filters meters by session_id', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/meters?session_id=${sessionId}`
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.total).toBeGreaterThanOrEqual(1);
+      for (const event of response.body.data) {
+        expect(event.session_id).toBe(sessionId);
+      }
+    });
+
+    test('unknown actor_id filter returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?actor_id=actor_doesnotexist'
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
+    });
+
+    test('unknown session_id filter returns an empty page', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?session_id=sess_doesnotexist'
+      );
+      expect(response.status).toBe(200);
+      expect(response.body.data).toEqual([]);
+      expect(response.body.total).toBe(0);
+    });
+
+    test('groups usage by actor', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=actor`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBe('actor');
+      const byActor = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === actorId;
+      });
+      expect(byActor).toBeDefined();
+      expect(byActor.output_tokens).toBeGreaterThanOrEqual(20);
+    });
+
+    test('groups usage by session', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=session`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.group_by).toBe('session');
+      const bySession = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === sessionId;
+      });
+      expect(bySession).toBeDefined();
+      expect(bySession.output_tokens).toBeGreaterThanOrEqual(20);
+    });
+
+    test('generations outside a session collapse into the null actor bucket', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=actor`
+      );
+      expect(res.status).toBe(200);
+      const unattributed = res.body.groups.find(
+        (g: { key: string | null }) => {
+          return g.key === null;
+        }
+      );
+      expect(unattributed).toBeDefined();
+      expect(unattributed.output_tokens).toBeGreaterThanOrEqual(20);
     });
   });
 

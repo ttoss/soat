@@ -117,6 +117,8 @@ const resolveContextAndRecord = async (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
+  actorId?: string;
+  sessionId?: string;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
 }): Promise<GenerationContext> => {
@@ -145,6 +147,11 @@ const resolveContextAndRecord = async (args: {
     initiatorGenerationId: args.initiatorGenerationId ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
+    // End-user attribution is stored as typed FK columns rather than metadata
+    // keys: it is identity the platform enforces (and later caps spend on), so
+    // it must not live in the caller-writable metadata bag.
+    startedByActorId: args.actorId ?? null,
+    sessionId: args.sessionId ?? null,
     metadata: buildGenerationMetadata({
       actionId: args.actionId,
       triggerId: args.triggerId,
@@ -197,7 +204,7 @@ const buildDepthGuardIfExhausted = async (args: {
   });
 };
 
-export const createGeneration = async (args: {
+export type CreateGenerationArgs = {
   projectIds?: number[];
   agentId: string;
   messages: GenerationInputMessage[];
@@ -216,11 +223,20 @@ export const createGeneration = async (args: {
   triggerId?: string;
   runId?: string;
   nodeId?: string;
+  // End-user attribution: the actor the generation serves and the session it
+  // runs in. Set by the session path; absent for direct API generations,
+  // triggers, and orchestration nodes, which have no end user behind them.
+  actorId?: string;
+  sessionId?: string;
   metadata?: Record<string, unknown> | null;
   // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
   // Context); the `context.*` namespace guards read at tool-dispatch time.
   guardrailContext?: Record<string, unknown> | null;
-}): Promise<GenerationResult | ReadableStream> => {
+};
+
+export const createGeneration = async (
+  args: CreateGenerationArgs
+): Promise<GenerationResult | ReadableStream> => {
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 
@@ -262,6 +278,8 @@ export const createGeneration = async (args: {
     triggerId: args.triggerId,
     runId: args.runId,
     nodeId: args.nodeId,
+    actorId: args.actorId,
+    sessionId: args.sessionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
   });

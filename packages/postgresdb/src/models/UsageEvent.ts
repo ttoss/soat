@@ -10,11 +10,13 @@ import {
 } from '@ttoss/postgresdb';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
+import { Actor } from './Actor';
 import { Agent } from './Agent';
 import { AiProvider } from './AiProvider';
 import { Generation } from './Generation';
 import { OrchestrationRun } from './OrchestrationRun';
 import { Project } from './Project';
+import { Session } from './Session';
 import { Trace } from './Trace';
 import { UsageComponent } from './UsageComponent';
 
@@ -37,6 +39,8 @@ import { UsageComponent } from './UsageComponent';
     { fields: ['run_id'] },
     { fields: ['trace_id'] },
     { fields: ['generation_id'] },
+    { fields: ['actor_id'] },
+    { fields: ['session_id'] },
     { fields: ['meter_type'] },
     { unique: true, fields: ['idempotency_key'] },
   ],
@@ -118,6 +122,41 @@ export class UsageEvent extends Model {
     { onDelete: 'SET NULL' }
   )
   declare generation: Generation | null;
+
+  // End-user attribution: the actor the metered occurrence was produced for and
+  // the session it ran in, copied from the generation at write time (the same
+  // freeze-at-write rule as `cost_usd`). Both null for work with no end user
+  // behind it — orchestration runs, triggers, direct API generations. SET NULL
+  // on delete so removing an actor or session never blocks on, or silently
+  // rewrites, the historical spend attributed to it: the row survives with a
+  // null dimension rather than disappearing from the project's totals.
+  @ForeignKey(() => {
+    return Actor;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare actorId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Actor;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare actor: Actor | null;
+
+  @ForeignKey(() => {
+    return Session;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare sessionId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Session;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare session: Session | null;
 
   // Trace the metered occurrence belongs to, for reconciliation against the
   // trace tree. SET NULL on delete so an old event never blocks trace removal.

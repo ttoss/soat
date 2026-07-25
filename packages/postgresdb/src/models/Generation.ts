@@ -12,6 +12,7 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Actor } from './Actor';
 import { Agent } from './Agent';
 import { Project } from './Project';
+import { Session } from './Session';
 import { Trace } from './Trace';
 
 @Table({
@@ -111,6 +112,25 @@ export class Generation extends Model {
     { onDelete: 'SET NULL' }
   )
   declare startedByActor: Actor | null;
+
+  // Session the generation was produced for, when it was dispatched through one.
+  // Together with `startedByActorId` this is the end-user attribution chain the
+  // usage event copies at metering time, so spend can be rolled up per end user
+  // and per conversation session. SET NULL on delete so removing a session never
+  // blocks on (or rewrites) the generations it produced.
+  @ForeignKey(() => {
+    return Session;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare sessionId: number | null;
+
+  @BelongsTo(
+    () => {
+      return Session;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare session: Session | null;
 
   // Denormalized principal info (set from JWT/API key context)
   @Column({ type: DataType.STRING, allowNull: true })
