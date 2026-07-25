@@ -135,8 +135,10 @@ paths:
                   default: enforce
                   description: >-
                     enforce blocks with 429 (requests at the middleware,
-                    tokens/cost_usd at the pre-generation check); monitor is a
-                    pass-through no-op until the webhook phase ships.
+                    tokens/cost_usd at the pre-generation check); monitor
+                    observes without blocking — a breach fires the
+                    quota.exceeded webhook and writes a quotas:MonitorBreach
+                    audit entry, but the request is let through.
                   example: enforce
       responses:
         '201':
