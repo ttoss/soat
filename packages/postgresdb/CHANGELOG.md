@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.16.0](https://127.0.0.1/41729/git/ttoss/compare/v0.15.14...v0.16.0) (2026-07-25)
+
+### Features
+
+* **audit-log:** read-auditing flag, audit.entry_created webhook, NDJSON export (P3) ([#685](https://127.0.0.1/41729/git/ttoss/issues/685)) ([2a105ce](https://127.0.0.1/41729/git/ttoss/commits/2a105ce1482c06f9f863701f774129f1388640df))
+* **quotas:** persist monitor-mode breach as a system audit entry ([#679](https://127.0.0.1/41729/git/ttoss/issues/679)) ([47ce5bf](https://127.0.0.1/41729/git/ttoss/commits/47ce5bfc01f90570b7a494760d850663943fd190))
+
 ## [0.15.14](https://127.0.0.1/41729/git/ttoss/compare/v0.15.13...v0.15.14) (2026-07-24)
 
 * feat(approvals)!: remove knowledge packages (G7); defer learned rules (G6) into an approvals recurrence view (#672) ([9ae83d9](https://127.0.0.1/41729/git/ttoss/commits/9ae83d94f041c2eb1c4fd078b3b03b9dfc0013f0)), closes [#672](https://127.0.0.1/41729/git/ttoss/issues/672)

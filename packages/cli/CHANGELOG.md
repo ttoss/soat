@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.16.0](https://github.com/ttoss/soat/compare/v0.15.14...v0.16.0) (2026-07-25)
+
+### Features
+
+* **audit-log:** read-auditing flag, audit.entry_created webhook, NDJSON export (P3) ([#685](https://github.com/ttoss/soat/issues/685)) ([2a105ce](https://github.com/ttoss/soat/commit/2a105ce1482c06f9f863701f774129f1388640df))
+
 ## [0.15.14](https://github.com/ttoss/soat/compare/v0.15.13...v0.15.14) (2026-07-24)
 
 **Note:** Version bump only for package @soat/cli

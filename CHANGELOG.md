@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.16.0](https://github.com/ttoss/soat/compare/v0.15.14...v0.16.0) (2026-07-25)
+
+### Bug Fixes
+
+* **webhooks:** clear delivery-timeout timer on every attempt outcome ([#676](https://github.com/ttoss/soat/issues/676)) ([b54ac09](https://github.com/ttoss/soat/commit/b54ac09880c3587c163028fcd085510f699be6ea))
+
+### Features
+
+* **approvals:** add read-only recurrence view (G3) ([#678](https://github.com/ttoss/soat/issues/678)) ([4c730cd](https://github.com/ttoss/soat/commit/4c730cd153bfed1adac19ab661ec6528fc48114f))
+* **audit-log:** mirror decision-changing guardrail evaluations into AuditEntry (P2) ([#681](https://github.com/ttoss/soat/issues/681)) ([736bdf3](https://github.com/ttoss/soat/commit/736bdf3d758f026fd154538121eea0048106410f))
+* **audit-log:** read-auditing flag, audit.entry_created webhook, NDJSON export (P3) ([#685](https://github.com/ttoss/soat/issues/685)) ([2a105ce](https://github.com/ttoss/soat/commit/2a105ce1482c06f9f863701f774129f1388640df))
+* **claude:** install guardian skill and add open-questions gate rule ([#683](https://github.com/ttoss/soat/issues/683)) ([3a0113e](https://github.com/ttoss/soat/commit/3a0113e6252d17dc27421af981e114c7af74bd61)), closes [high-risk](https://github.com/hi/issues/risk)
+* **quotas:** persist monitor-mode breach as a system audit entry ([#679](https://github.com/ttoss/soat/issues/679)) ([47ce5bf](https://github.com/ttoss/soat/commit/47ce5bfc01f90570b7a494760d850663943fd190))
+* **usage:** storage and API-request metering emitters (P5, P6) ([#680](https://github.com/ttoss/soat/issues/680)) ([415a443](https://github.com/ttoss/soat/commit/415a4439593265a10ba8733dd85f7fa31366085d))
+
 ## [0.15.14](https://github.com/ttoss/soat/compare/v0.15.13...v0.15.14) (2026-07-24)
 
 * feat(approvals)!: remove knowledge packages (G7); defer learned rules (G6) into an approvals recurrence view (#672) ([9ae83d9](https://github.com/ttoss/soat/commit/9ae83d94f041c2eb1c4fd078b3b03b9dfc0013f0)), closes [#672](https://github.com/ttoss/soat/issues/672)
