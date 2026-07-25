@@ -49,14 +49,19 @@ const toKebab = (s: string) => {
 };
 
 /**
- * Renders a command's payload for stdout. A non-JSON response (the NDJSON audit
- * export, a file download) is parsed by the SDK as a Blob or a raw string;
- * `JSON.stringify` would collapse a Blob to `{}` and escape a string into one
- * quoted line, so those are printed as their own bytes instead.
+ * Renders a command's payload for stdout.
+ *
+ * A response the SDK could not parse as JSON (the NDJSON audit export, a file
+ * download) arrives as a Blob, which `JSON.stringify` collapses to `{}` — those
+ * are printed as their own bytes instead.
+ *
+ * Everything else keeps going through `JSON.stringify`, **including a plain
+ * string**: a JSON body may legitimately *be* a bare string (a `call-tool`
+ * response whose output mapping yields a scalar), and callers pipe that into
+ * `jq`, which needs the quotes to parse it.
  */
 const formatResultData = async (data: unknown): Promise<string> => {
   if (data instanceof Blob) return data.text();
-  if (typeof data === 'string') return data;
   return JSON.stringify(data, null, 2);
 };
 

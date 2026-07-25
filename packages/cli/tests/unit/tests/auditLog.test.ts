@@ -55,6 +55,26 @@ describe('audit-log commands', () => {
     expect(JSON.parse(lines[1]).action).toBe('secrets:DeleteSecret');
   });
 
+  test('a bare JSON string body stays quoted so it is still valid JSON', async () => {
+    // A `call-tool` response whose output mapping yields a scalar comes back as
+    // application/json with a bare string body. Callers pipe CLI output into
+    // `jq`, so it must print `"hello"`, not `hello`.
+    cliTestClient.setResponse({
+      body: '"hello"',
+      contentType: 'application/json',
+    });
+
+    await cliTestClient.call([
+      'list-audit-entries',
+      '--project-id',
+      'proj_test',
+    ]);
+
+    const printed = String(logSpy.mock.calls.at(-1)?.[0]);
+    expect(printed).toBe('"hello"');
+    expect(JSON.parse(printed)).toBe('hello');
+  });
+
   test('a JSON body is still pretty-printed as an object', async () => {
     cliTestClient.setResponse({
       body: '{"total":2,"data":[]}',
