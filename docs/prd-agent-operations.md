@@ -9,7 +9,7 @@
 
 | Capability                                | PRD                                                    |
 | ----------------------------------------- | ------------------------------------------------------ |
-| Queue-backed run execution ✅ shipped     | [prd-orchestration-queue.md](./prd-orchestration-queue.md) · [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution) |
+| Queue-backed run execution ✅ shipped     | [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
 | Usage metering ✅ shipped                  | [usage module doc](../packages/website/docs/modules/usage.md) |
 | Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [prd-approvals.md](./prd-approvals.md#recurrence-view--not-started) · [prd-learned-rules.md](./prd-learned-rules.md) |

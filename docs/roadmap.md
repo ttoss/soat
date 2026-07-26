@@ -27,9 +27,10 @@ The umbrella — [prd-agent-operations.md](./prd-agent-operations.md) — define
 the gap series that turns a Formation deploy into an *operating* agent team.
 Only initiatives with open work are listed. G1 (schedule triggers), G2
 (queue-backed runs), G4 (guardrails), and G5 (usage metering) are fully shipped
-and have no remaining items; G5's PRD has been retired in favor of the
-[usage module doc](../packages/website/docs/modules/usage.md), with its one
-open refinement kept in the [backlog](#g5--usage-metering) below.
+and have no remaining items. The G2 and G5 PRDs have been retired in favor of
+the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution)
+and the [usage module doc](../packages/website/docs/modules/usage.md); G5's one
+open refinement is kept in the [backlog](#g5--usage-metering) below.
 
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
@@ -62,15 +63,14 @@ compute/storage/request dimensions, and the `soat.usage.*` spend guards).
 ## Implementation dependency graph
 
 Arrow = "needs before it can ship". Only pending nodes are shown; the shipped
-foundations they build on (orchestration runtime, the whole queue initiative
-G2 — P1/P2/P3, worker fleet, and the SQS driver — usage metering,
-guardrails, knowledge P1/2/4, memories P1–4, approvals P1/P3, discussions core,
-quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
+foundations they build on (orchestration runtime, the queue-backed durable
+runtime, usage metering, guardrails, knowledge P1/2/4, memories P1–4, approvals
+P1/P3, discussions core, quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
 satisfied by shipped work.
 
 ```
 cross-initiative ──────────────────────────────────────────────────────────
-  evaluations P2 (async) ◄── orchestration-queue ✔
+  evaluations P2 (async) ◄── queue-backed durable runtime ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P6/P7 (ranking, injection, evals)
 
@@ -85,7 +85,7 @@ feedback + governance loops ─────────────────�
 
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
-| orchestration-queue ✔ (P1–P3) | evaluations P2 | async eval runs ride the RunTask queue |
+| queue-backed durable runtime ✔ | evaluations P2 | async eval runs ride the RunTask queue |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
@@ -112,14 +112,6 @@ feedback + governance loops ─────────────────�
 
 Every open item across all PRDs. Grouped by initiative; task IDs (e.g. `4.1`)
 are preserved from the former topic roadmaps. Blockers are noted inline.
-
-### G2 — Orchestration queue
-
-✅ **Shipped.** The initiative is complete; live behavior is documented in the
-[orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution).
-
-- [x] **P2 ops hardening** — dedicated compose worker service, heartbeat-based worker healthcheck, and worker-fleet smoke coverage
-- [x] **P3** Pluggable driver + SQS: env-selected driver (`ORCHESTRATION_QUEUE_DRIVER=postgres|sqs`), SQS driver (visibility-timeout→lease, DLQ→`failed`), a shared driver-conformance suite, and a load/soak harness
 
 ### G3 — Approvals (exceptions · activity)
 
