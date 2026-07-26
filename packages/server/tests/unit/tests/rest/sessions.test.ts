@@ -171,6 +171,63 @@ describe('Sessions', () => {
         env: 'test',
       });
     });
+
+    // The stored key — not the key the caller sent — is what becomes the
+    // outbound `X-Soat-Context-*` header, and `tool_context` is NOT a
+    // caseTransform pass-through field. So a snake_case key sent over REST is
+    // normalized to camelCase on the way in, and only key shapes the
+    // normalizer does not touch (kebab, dotted, PascalCase) reach the header
+    // builder verbatim. Pinned because the header a tool endpoint actually
+    // receives is not predictable from the request body alone.
+    test('normalizes snake_case tool_context keys to camelCase in storage', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: {
+            actor_external_id: 'snake',
+            'actor-external-id': 'kebab',
+            PascalKey: 'pascal',
+          },
+        });
+
+      expect(response.status).toBe(201);
+
+      const stored = await db.Session.findOne({
+        where: { publicId: response.body.id },
+      });
+      expect(stored?.toolContext).toEqual({
+        actorExternalId: 'snake',
+        'actor-external-id': 'kebab',
+        PascalKey: 'pascal',
+      });
+    });
+
+    test('rejects a tool_context key that cannot be an HTTP header name', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { 'bad key': 'x' },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+      expect(response.body.error.meta.keys).toEqual(['bad key']);
+    });
+
+    test('rejects two tool_context keys that map to the same header', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { UserId: 'a', userId: 'b' },
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+      expect(response.body.error.meta.header).toBe('X-Soat-Context-UserId');
+    });
   });
 
   // ── List Sessions ──────────────────────────────────────────────────────
@@ -336,6 +393,15 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.tool_context).toEqual({ env: 'prod' });
+    });
+
+    test('rejects an invalid tool_context key on update', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${sessionId}`)
+        .send({ tool_context: { 'bad:key': 'x' } });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
     });
 
     test('unauthenticated request returns 401', async () => {

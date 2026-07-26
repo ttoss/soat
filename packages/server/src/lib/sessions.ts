@@ -4,6 +4,7 @@ import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
+import { assertValidToolContextKeys } from './toolContext';
 
 const isSessionExpired = (session: InstanceType<(typeof db)['Session']>) => {
   const ttl = session.inactivityTtlSeconds;
@@ -133,6 +134,8 @@ export const createSession = async (args: {
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
 }) => {
+  assertValidToolContextKeys(args.toolContext);
+
   const agent = await db.Agent.findByPk(args.agentId);
   if (!agent) {
     throw new DomainError(
@@ -332,6 +335,8 @@ export const updateSession = async (args: {
   inactivityTtlSeconds?: number;
   messageDelaySeconds?: number | null;
 }) => {
+  assertValidToolContextKeys(args.toolContext);
+
   const session = await db.Session.findOne({
     where: { publicId: args.sessionId, agentId: args.agentId },
   });

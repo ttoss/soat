@@ -25,6 +25,11 @@ import {
   resolveSecretRefsInString,
 } from './secrets';
 import {
+  assertValidToolContextKeys,
+  buildContextHeaderName,
+  buildContextHeaders,
+} from './toolContext';
+import {
   assertEphemeralTypeSupported,
   callTool,
   type InlineToolDefinition,
@@ -91,16 +96,13 @@ export const resolveBodyParamInterpolations = (args: {
 
 // ── Context Headers ───────────────────────────────────────────────────────
 
-export const buildContextHeaders = (
-  toolContext?: Record<string, string>
-): Record<string, string> => {
-  if (!toolContext) return {};
-  return Object.fromEntries(
-    Object.entries(toolContext).map(([key, value]) => {
-      const titleCased = key.charAt(0).toUpperCase() + key.slice(1);
-      return [`X-Soat-Context-${titleCased}`, value];
-    })
-  );
+// The mechanism lives in `toolContext.ts` so the session/generation write paths
+// can validate caller-supplied keys without importing this module. Re-exported
+// here because this is where tool callers reach for it.
+export {
+  assertValidToolContextKeys,
+  buildContextHeaderName,
+  buildContextHeaders,
 };
 
 // ── IAM Boundary Check ────────────────────────────────────────────────────

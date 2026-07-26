@@ -60,6 +60,12 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 
 HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserved **verbatim** — SOAT does not case-transform them. `{ "headers": { "Authorization": "Bearer …" } }` round-trips as `Authorization`, not `authorization` or any snake_cased variant.
 
+### Context Headers (`X-Soat-Context-*`)
+
+`execute.headers` is not the only source of headers on an outbound call. On every `http` and `mcp` tool call, the server also injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the session's `sessionId`, `actorId` and `actorExternalId`, which are auto-populated. These arrive **in addition to** the headers you configure, and are applied after them, so a context header wins over a tool-defined header of the same name.
+
+This is how a tool endpoint learns who the agent is acting for without trusting the prompt. It is a header mechanism, not templating: nothing is interpolated into `execute`. See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
+
 ### Tool ID vs Tool Name
 
 A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via [`tool_bindings`](./agents.md#tool-bindings) (or the deprecated `tool_ids` shorthand), and in `active_tool_ids` and `step_rules[].active_tool_ids`.
