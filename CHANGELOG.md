@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.16.3](https://github.com/ttoss/soat/compare/v0.16.2...v0.16.3) (2026-07-26)
+
+### Bug Fixes
+
+* **audit-log:** validate non-numeric limit/offset instead of 500ing ([#715](https://github.com/ttoss/soat/issues/715)) ([8e02787](https://github.com/ttoss/soat/commit/8e02787a954acce5dc5231eaf84c12d827da2b06)), closes [ttoss/soat#707](https://github.com/ttoss/soat/issues/707)
+
+### Features
+
+* **orchestrations:** pluggable queue drivers, SQS driver, and a standalone worker fleet ([#714](https://github.com/ttoss/soat/issues/714)) ([d2870f6](https://github.com/ttoss/soat/commit/d2870f68d6d5dda072b91f30b34649849bc96a44))
+
 ## [0.16.2](https://github.com/ttoss/soat/compare/v0.16.1...v0.16.2) (2026-07-26)
 
 ### Bug Fixes
