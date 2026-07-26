@@ -113,11 +113,14 @@ export const quotasFormationModule: FormationModule = {
 
     await updateQuota({
       id: physicalResourceId,
+      // `limit` keeps its `?? undefined` because `toNullableNumber` can return
+      // null; `toOptionalString` never does, so the string fields need no
+      // fallback (adding one would only leave an unreachable branch behind).
       limit: toNullableNumber(properties.limit) ?? undefined,
-      mode: toOptionalString(properties.mode) ?? undefined,
-      scope: toOptionalString(properties.scope) ?? undefined,
-      metric: toOptionalString(properties.metric) ?? undefined,
-      window: toOptionalString(properties.window) ?? undefined,
+      mode: toOptionalString(properties.mode),
+      scope: toOptionalString(properties.scope),
+      metric: toOptionalString(properties.metric),
+      window: toOptionalString(properties.window),
       // Distinguish "omitted" from an explicit null: only a declared value is
       // asserted against the stored ref, so a template that leaves the nullable
       // `scope_ref` out is not treated as clearing it.

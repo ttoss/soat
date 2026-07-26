@@ -3978,6 +3978,68 @@ resources:
       );
     });
 
+    // Exercises the declared-`scope_ref` path: an explicit null is compared
+    // against the stored ref (rather than skipped as "not supplied"), and
+    // null-vs-null must read as unchanged so the update still applies.
+    test('allows a formation update that restates an explicitly null scope_ref', async () => {
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `quota-null-ref-${Date.now()}`,
+          template: {
+            resources: {
+              MyQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  scope_ref: null,
+                  metric: 'cost_usd',
+                  window: 'calendar_month',
+                  limit: 10,
+                  mode: 'monitor',
+                },
+              },
+            },
+          },
+        });
+      expect(create.status).toBe(201);
+      const quotaId = create.body.resources[0].physical_resource_id as string;
+
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              MyQuota: {
+                type: 'quota',
+                properties: {
+                  scope: 'project',
+                  scope_ref: null,
+                  metric: 'cost_usd',
+                  window: 'calendar_month',
+                  limit: 22,
+                  mode: 'enforce',
+                },
+              },
+            },
+          },
+        });
+      expect(update.status).toBe(200);
+      expect(update.body.status).toBe('active');
+
+      const after = await authenticatedTestClient(userToken).get(
+        `/api/v1/quotas/${quotaId}`
+      );
+      expect(after.body.scope_ref).toBeNull();
+      expect(after.body.limit).toBe(22);
+      expect(after.body.mode).toBe('enforce');
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+    });
+
     test('allows a formation update that restates immutable quota fields unchanged', async () => {
       const create = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
