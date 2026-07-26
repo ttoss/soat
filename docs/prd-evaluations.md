@@ -4,8 +4,8 @@
 > *did* (traces, generations) and will constrain what they *may do*
 > ([guardrails](../packages/website/docs/modules/guardrails.md),
 > [prd-approvals.md](./prd-approvals.md)) — but nothing verifies agent behavior
-> **before** a change rolls out. Cross-references
-> [prd-orchestration-queue.md](./prd-orchestration-queue.md) (async execution),
+> **before** a change rolls out. Cross-references the
+> [durable orchestration queue](../packages/website/docs/modules/orchestrations.md#durable-background-execution) (async execution),
 > the [usage module doc](../packages/website/docs/modules/usage.md) (cost attribution),
 > the [Triggers module](../packages/website/docs/modules/triggers.md) (scheduled evals), and
 > `docs/prd-agent-versions.md` (eval-gated promotion; written in parallel).
@@ -237,8 +237,8 @@ unavailable, naming the phase), and Phase 2 flips that same request to `queued`
 orchestrations, without any existing caller changing behavior.
 
 **Decision:** async runs enqueue **one task per dataset item on the existing
-`RunTask` queue** ([prd-orchestration-queue.md](./prd-orchestration-queue.md)
-Phase 1, new `kind: eval_item`) rather than inventing a second worker — leases,
+`RunTask` queue** (the [durable orchestration queue](../packages/website/docs/modules/orchestrations.md#durable-background-execution),
+new `kind: eval_item`) rather than inventing a second worker — leases,
 redelivery, and concurrency limits come for free, and the unique
 `(evalRunId, datasetItemId)` constraint makes redelivered items no-ops.
 
@@ -492,10 +492,10 @@ as recommendations rather than settled decisions:
   runs judged by different models are not comparable. The judge model is
   pinned per scorer config, and `reasoning` is stored for audit, but baseline
   comparisons should re-run the baseline when the judge changes.
-- **Queue dependency** — Phase 2 async execution assumes
-  prd-orchestration-queue.md Phase 1 (`RunTask`) has shipped; until then only
-  sync runs exist. Degraded-mode fallback (in-process loop) is deliberately
-  not built to avoid a second execution path.
+- **Queue dependency** — Phase 2 async execution rides the shipped `RunTask`
+  queue (see [Durable Background Execution](../packages/website/docs/modules/orchestrations.md#durable-background-execution)). Degraded-mode fallback
+  (in-process loop) is deliberately not built to avoid a second execution
+  path.
 - **Flaky non-determinism** — agents are stochastic; a red run may be
   variance, not regression. Aggregate scores over datasets (not single items)
   and thresholds below 1.0 are the intended mitigation; seed/temperature

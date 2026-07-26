@@ -1,6 +1,6 @@
 # PRD: Model Routing & Fallback Module
 
-> Complements [prd-orchestration-queue.md](./prd-orchestration-queue.md) and
+> Complements the [durable orchestration queue](../packages/website/docs/modules/orchestrations.md#durable-background-execution) and
 > the [Triggers module](../packages/website/docs/modules/triggers.md): unattended
 > runs need completions that
 > survive a provider outage. Pricing is unaffected — see the
