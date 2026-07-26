@@ -566,6 +566,43 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(typeof getDroppedAuditCount()).toBe('number');
     expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
   });
+
+  // Regression coverage for github.com/ttoss/soat/issues/707: a non-numeric
+  // ?limit=/?offset= used to reach `Number()` unvalidated, produce `NaN`,
+  // and surface as an unhandled 500 instead of a typed 400 — the same
+  // "absent is not invalid" principle #691 established for `from`/`to`.
+  test('a non-numeric ?limit= is rejected with 400, not a 500', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('a non-numeric ?offset= is rejected with 400, not a 500', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, offset: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('?limit=NaN (the literal string) is rejected with 400', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: 'NaN' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('an absent ?limit=/?offset= is simply unfiltered, not an error', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId });
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(25);
+    expect(res.body.offset).toBe(0);
+  });
 });
 
 describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => {
