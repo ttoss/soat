@@ -113,8 +113,65 @@ export const logDatabaseConnectionError = (error: unknown) => {
   console.error('failed to connect to database:', error);
 };
 
+// PostgreSQL error codes for "this object already exists": a unique violation
+// on `pg_extension_name_index`, or the duplicate-object error.
+const DUPLICATE_OBJECT_CODES = new Set(['23505', '42710']);
+
+const errorCodeOf = (error: object): string | undefined => {
+  for (const key of ['original', 'parent'] as const) {
+    const nested: unknown = (error as Record<string, unknown>)[key];
+    if (typeof nested === 'object' && nested !== null) {
+      const code = (nested as Record<string, unknown>).code;
+      if (typeof code === 'string') return code;
+    }
+  }
+  return undefined;
+};
+
+/**
+ * Whether an initialization failure is the benign `CREATE EXTENSION` race.
+ *
+ * `CREATE EXTENSION IF NOT EXISTS` is **not** race-safe: the existence check
+ * and the insert are not atomic, so two processes booting at the same moment
+ * (the API tier and a worker-fleet member, or several API tasks in a rolling
+ * deploy) can both pass the check and one loses on `pg_extension_name_index`.
+ * The loser's boot fails even though the extension is now present — retrying
+ * simply succeeds. Anything else (bad credentials, unreachable host, a real
+ * permission error) is not this, and must still fail the boot.
+ */
+export const isConcurrentExtensionCreationError = (error: unknown): boolean => {
+  if (typeof error !== 'object' || error === null) return false;
+  const sql = (error as Record<string, unknown>).sql;
+  if (typeof sql !== 'string' || !sql.includes('CREATE EXTENSION')) {
+    return false;
+  }
+  const code = errorCodeOf(error);
+  return code !== undefined && DUPLICATE_OBJECT_CODES.has(code);
+};
+
+const EXTENSION_RACE_RETRIES = 3;
+const EXTENSION_RACE_RETRY_DELAY_MS = 250;
+
 export const initializeDatabase = async (app: App) => {
-  db = await initialize(buildDatabaseConfig());
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      db = await initialize(buildDatabaseConfig());
+      break;
+    } catch (error) {
+      if (
+        attempt >= EXTENSION_RACE_RETRIES ||
+        !isConcurrentExtensionCreationError(error)
+      ) {
+        throw error;
+      }
+      // The process that won the race has committed by now, so the retry's
+      // `IF NOT EXISTS` finds the extension and skips creating it.
+      log('initializeDatabase: extension creation raced, retry %d', attempt);
+      await new Promise<void>((resolve) => {
+        setTimeout(resolve, EXTENSION_RACE_RETRY_DELAY_MS);
+      });
+    }
+  }
 
   app.context.db = db;
 
