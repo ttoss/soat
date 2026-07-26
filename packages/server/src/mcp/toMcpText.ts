@@ -41,6 +41,16 @@ const VERBATIM_KEYS: ReadonlySet<string> = new Set([
   // session over MCP rewrites `actor_external_id` to `actorExternalId`, so
   // re-sending what the read returned changes which header the tool receives.
   'toolContext',
+  // A resource `tags` key is read back by IAM as a `soat:ResourceTag/<key>`
+  // condition-context key, so rewriting it here desyncs the MCP surface from the
+  // tag REST stored — a tag set over MCP would not match a policy written for it.
+  'tags',
+  // An `inputMapping` key is an author-authored output name that leaves SOAT
+  // verbatim (a sub-tool's body key, an emit-event node's `data` key), and an
+  // approval node's `arguments` keys are frozen onto the proposed tool call.
+  // Both sit alongside `stateMapping`, already above.
+  'inputMapping',
+  'arguments',
 ]);
 
 export const snakeToCamelDeep = (value: unknown): unknown => {

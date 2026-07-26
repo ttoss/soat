@@ -205,20 +205,34 @@ describe('webhookDispatcher', () => {
       events: ['*'],
     });
 
-    await waitFor(() => {
-      return callsToUrlForEvent(url, 'audit.entry_created').length > 0;
-    });
-
-    const [, init] = callsToUrlForEvent(url, 'audit.entry_created')[0] as [
-      string,
-      { body: string },
-    ];
-
-    const payload = JSON.parse(init.body) as {
+    type AuditPayload = {
       event: string;
       resourceType: string;
       data: Record<string, unknown>;
     };
+
+    // Select the entry under test by action, don't assume it arrived first. The
+    // previous test's `afterEach` deletes its webhooks, and each delete is itself
+    // an audited mutation whose `webhooks:DeleteWebhook` entry dispatches
+    // asynchronously — late enough to land on *this* test's wildcard subscriber
+    // and take the first slot. Same principle as `callsToUrlForEvent`, one level
+    // deeper: filter to the event under test rather than trusting arrival order.
+    const auditPayloads = (): AuditPayload[] => {
+      return callsToUrlForEvent(url, 'audit.entry_created').map(([, init]) => {
+        return JSON.parse((init as { body: string }).body) as AuditPayload;
+      });
+    };
+    const createEntry = (): AuditPayload | undefined => {
+      return auditPayloads().find((p) => {
+        return p.data.action === 'webhooks:CreateWebhook';
+      });
+    };
+
+    await waitFor(() => {
+      return createEntry() !== undefined;
+    });
+
+    const payload = createEntry()!;
     expect(payload.event).toBe('audit.entry_created');
     expect(payload.resourceType).toBe('audit');
     // The payload is the full snake_case entry, so a subscriber needs no

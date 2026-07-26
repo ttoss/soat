@@ -166,6 +166,14 @@ Conditions add attribute-based constraints to statements. A condition block maps
 | `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
 | `soat:ResourceType`      | Request       | The type of the resource being accessed |
 
+Condition operators and condition keys are matched **by exact string**, and both
+are stored exactly as written — no case conversion is applied to a `condition`
+block or to a resource's `tags`, unlike ordinary API fields. So
+`soat:ResourceTag/cost_center` selects the tag `cost_center` and **not**
+`costCenter`: they are two different tags, and a policy naming one does not match
+a resource carrying the other. Write the tag key and the condition key the same
+way and they always agree.
+
 ## Authorization Model
 
 Authorization in SOAT is **policy-only** — there is no separate project membership gate. All access decisions are evaluated through the policy engine against the requested action and the target resource SRN.
@@ -223,7 +231,7 @@ A statement matches a request when **all** of the following are true:
 
 ## Tags
 
-Tags are key-value pairs attached to resources. They enable attribute-based access control (ABAC) via conditions. Taggable resources include documents, files, actors, and conversations.
+Tags are key-value pairs attached to resources. They enable attribute-based access control (ABAC) via conditions. Taggable resources include documents, files, actors, conversations, and discussions.
 
 ```json
 {
@@ -242,6 +250,21 @@ PUT    /api/v1/<resource>/:id/tags    Replace all tags
 PATCH  /api/v1/<resource>/:id/tags    Merge tags
 GET    /api/v1/<resource>/:id/tags    Get tags
 ```
+
+### Tag keys are stored verbatim
+
+A tag key is an opaque label, not an API field name, so — unlike every other
+field in the REST API — it is **never case-converted**. It is stored, returned,
+and matched against `soat:ResourceTag/<key>` exactly as you wrote it, on REST, in
+formation templates, and over MCP alike.
+
+Two consequences worth knowing:
+
+- `cost_center` and `costCenter` are **two different tags**. A resource can carry
+  both, and a policy naming one does not match a resource carrying only the other.
+- The key you read back is the key to name in a condition. `GET .../tags` returns
+  the stored key verbatim, so it can be copied straight into
+  `soat:ResourceTag/<key>`.
 
 ## Examples
 

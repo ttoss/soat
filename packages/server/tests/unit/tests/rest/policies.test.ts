@@ -113,6 +113,46 @@ describe('Policies', () => {
       expect(response.body.updated_at).toBeDefined();
     });
 
+    // A `condition` block's keys are IAM condition operators (`StringEquals`)
+    // and context keys (`soat:ResourceTag/<tag>`) — an external vocabulary the
+    // policy compiler matches by exact string, not SOAT field names. They must
+    // round-trip verbatim: `camelToSnake` mangles the operator to
+    // `_string_equals` and the context key to `soat:_resource_tag/env`, and
+    // `snakeToCamel` rewrites a snake_case tag name (`cost_center` →
+    // `costCenter`) so it no longer matches the tag a formation template wrote.
+    test('condition operators and context keys round-trip verbatim', async () => {
+      const condition = {
+        StringEquals: { 'soat:ResourceTag/env': 'prod' },
+        StringNotEquals: { 'soat:ResourceTag/cost_center': 'shared' },
+      };
+
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          name: 'Condition Round Trip Policy',
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['files:GetFile'],
+                resource: ['*'],
+                condition,
+              },
+            ],
+          },
+        });
+
+      expect(created.status).toBe(201);
+      expect(created.body.document.statement[0].condition).toEqual(condition);
+
+      const fetched = await authenticatedTestClient(adminToken).get(
+        `/api/v1/policies/${created.body.id}`
+      );
+
+      expect(fetched.status).toBe(200);
+      expect(fetched.body.document.statement[0].condition).toEqual(condition);
+    });
+
     test('returns 400 for a document with an invalid effect', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')

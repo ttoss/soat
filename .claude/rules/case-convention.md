@@ -43,12 +43,16 @@ The middleware at `packages/server/src/middleware/caseTransform.ts` handles auto
 
 Some fields carry a bag whose **inner keys are not SOAT field names** — they are author-authored data, JSON Logic paths, or literal HTTP header names. Converting those keys silently desyncs the write from every downstream read, so the middleware skips them (see the `buildBodySkipKeys` / `buildResponseSkipKeys` sets, each with an inline rationale).
 
-Current pass-throughs include `template`, `parameters`, `execute`, `mcp`, `headers`, `guard`, `when`, `expression`, `stateMapping`, `guardrailContext`, `toolContext`, and the path-scoped `metadata`, `input`, `payload`, `document`, `args`.
+Current pass-throughs include `template`, `parameters`, `execute`, `mcp`, `headers`, `guard`, `when`, `expression`, `stateMapping`, `inputMapping`, `arguments`, `guardrailContext`, `toolContext`, `tags`, `condition`, and the path-scoped `metadata`, `input`, `payload`, `document`, `args`.
 
-Two rules when touching this list:
+Four rules when touching this list:
 
 - **A field whose keys become HTTP header names must be a pass-through.** `toolContext` was not, and the conversion made a caller's `actor_external_id` land on `X-Soat-Context-ActorExternalId` — unpredictable from the request body, divergent from the same key in a (pass-through) formation template, and lossy for keys the reverse conversion cannot restore.
+- **A field whose keys are matched by exact string anywhere must be a pass-through.** `tags` and `condition` were not. A tag key becomes a `soat:ResourceTag/<key>` IAM condition key, so the conversion collapsed `cost_center` and `costCenter` into one tag (silently dropping a value a policy may key on) and returned `Environment` as `_environment`, leaving no way to read the key needed to write the matching policy. It also mangled the IAM vocabulary itself: `StringEquals` → `_string_equals`.
 - **Add both directions.** The inbound set is keyed on the camelCase name (`toolContext`), the outbound set on the snake_case name (`tool_context`). Skipping only inbound leaves the response echo lossy, which breaks read-modify-write.
+- **Mirror it in `src/mcp/toMcpText.ts`.** Its `VERBATIM_KEYS` tracks the outbound set; a key added here and not there stays broken on the MCP surface.
+
+Two fields must stay in lockstep once added: `tags` and `condition`. A condition key and the tag key it selects have to be the same string, so converting one without the other silently changes which resources a policy matches.
 
 ## Path Parameters
 
