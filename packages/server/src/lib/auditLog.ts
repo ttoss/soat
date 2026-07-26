@@ -300,8 +300,13 @@ export const listAuditEntries = async (
   limit: number;
   offset: number;
 }> => {
-  const limit = Math.min(Math.max(args.limit ?? 25, 1), 200);
-  const offset = Math.max(args.offset ?? 0, 0);
+  // Defense in depth (audit-log#707): the REST route already rejects a
+  // non-finite limit/offset before this is called, but NaN would otherwise
+  // survive Math.max/Math.min unclamped and reach Sequelize's LIMIT/OFFSET.
+  const rawLimit = Number.isFinite(args.limit) ? (args.limit as number) : 25;
+  const rawOffset = Number.isFinite(args.offset) ? (args.offset as number) : 0;
+  const limit = Math.min(Math.max(rawLimit, 1), 200);
+  const offset = Math.max(rawOffset, 0);
 
   const where = buildListWhere(args);
 
