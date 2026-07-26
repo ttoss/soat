@@ -13,6 +13,13 @@ import { Trigger } from './Trigger';
 
 @Table({
   tableName: 'trigger_firings',
+  indexes: [
+    {
+      name: 'trigger_firings_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: TriggerFiring) => {
       if (!instance.publicId) {
@@ -24,7 +31,6 @@ import { Trigger } from './Trigger';
 export class TriggerFiring extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

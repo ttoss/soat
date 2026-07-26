@@ -16,14 +16,17 @@ import { Document } from './Document';
   tableName: 'conversation_messages',
   indexes: [
     {
+      name: 'conversation_messages_conversation_id_document_id_unique',
       unique: true,
       fields: ['conversation_id', 'document_id'],
     },
     {
+      name: 'conversation_messages_conversation_id_position_unique',
       unique: true,
       fields: ['conversation_id', 'position'],
     },
     {
+      name: 'conversation_messages_conversation_id_idempotency_key_unique',
       unique: true,
       fields: ['conversation_id', 'idempotency_key'],
     },

@@ -4,6 +4,13 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 
 @Table({
   tableName: 'policies',
+  indexes: [
+    {
+      name: 'policies_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Policy) => {
       if (!instance.publicId) {
@@ -15,7 +22,6 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 export class Policy extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

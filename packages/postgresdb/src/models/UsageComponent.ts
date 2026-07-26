@@ -25,7 +25,14 @@ import { UsageEvent } from './UsageEvent';
   tableName: 'usage_components',
   timestamps: true,
   updatedAt: false,
-  indexes: [{ fields: ['usage_event_id'] }],
+  indexes: [
+    {
+      name: 'usage_components_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    { fields: ['usage_event_id'] },
+  ],
   hooks: {
     beforeValidate: (instance: UsageComponent) => {
       if (!instance.publicId) {
@@ -37,7 +44,6 @@ import { UsageEvent } from './UsageEvent';
 export class UsageComponent extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

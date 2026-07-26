@@ -17,6 +17,11 @@ import { Project } from './Project';
   tableName: 'traces',
   indexes: [
     {
+      name: 'traces_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
       fields: ['project_id', 'created_at'],
     },
   ],
@@ -31,7 +36,6 @@ import { Project } from './Project';
 export class Trace extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

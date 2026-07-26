@@ -12,6 +12,18 @@ import { File } from './File';
 
 @Table({
   tableName: 'documents',
+  indexes: [
+    {
+      name: 'documents_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'documents_file_id_unique',
+      unique: true,
+      fields: ['file_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Document) => {
       if (!instance.publicId) {
@@ -23,7 +35,6 @@ import { File } from './File';
 export class Document extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;
@@ -31,7 +42,7 @@ export class Document extends Model {
   @ForeignKey(() => {
     return File;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false, unique: true })
+  @Column({ type: DataType.INTEGER, allowNull: false })
   declare fileId: number;
 
   @BelongsTo(

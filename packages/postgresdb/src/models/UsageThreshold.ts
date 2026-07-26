@@ -24,7 +24,14 @@ import { Project } from './Project';
   tableName: 'usage_thresholds',
   timestamps: true,
   updatedAt: false,
-  indexes: [{ fields: ['project_id'] }],
+  indexes: [
+    {
+      name: 'usage_thresholds_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    { fields: ['project_id'] },
+  ],
   hooks: {
     beforeValidate: (instance: UsageThreshold) => {
       if (!instance.publicId) {
@@ -36,7 +43,6 @@ import { Project } from './Project';
 export class UsageThreshold extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

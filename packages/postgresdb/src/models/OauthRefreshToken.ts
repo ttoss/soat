@@ -1,8 +1,17 @@
-import { Column, DataType, Model, Table, Unique } from '@ttoss/postgresdb';
+import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 
-@Table({ tableName: 'oauth_refresh_tokens', timestamps: false })
+@Table({
+  tableName: 'oauth_refresh_tokens',
+  indexes: [
+    {
+      name: 'oauth_refresh_tokens_token_hash_unique',
+      unique: true,
+      fields: ['token_hash'],
+    },
+  ],
+  timestamps: false,
+})
 export class OauthRefreshToken extends Model {
-  @Unique
   @Column({ type: DataType.TEXT, allowNull: false })
   declare tokenHash: string;
 

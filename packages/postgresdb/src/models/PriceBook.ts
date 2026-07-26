@@ -30,6 +30,11 @@ import { Project } from './Project';
   updatedAt: false,
   indexes: [
     {
+      name: 'price_books_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
       // Explicit name: the auto-generated name for this many columns exceeds
       // Postgres's 63-char identifier limit, and a truncated catalog name no
       // longer matches the recomputed expected name on the next
@@ -59,7 +64,6 @@ import { Project } from './Project';
 export class PriceBook extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

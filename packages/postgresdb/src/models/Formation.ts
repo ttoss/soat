@@ -21,12 +21,22 @@ import { Project } from './Project';
       }
     },
   },
-  indexes: [{ unique: true, fields: ['project_id', 'name'] }],
+  indexes: [
+    {
+      name: 'formations_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'formations_project_id_name_unique',
+      unique: true,
+      fields: ['project_id', 'name'],
+    },
+  ],
 })
 export class Formation extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

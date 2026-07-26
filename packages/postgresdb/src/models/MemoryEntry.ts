@@ -20,6 +20,13 @@ export type MemoryEntrySource = (typeof MEMORY_ENTRY_SOURCES)[number];
 
 @Table({
   tableName: 'memory_entries',
+  indexes: [
+    {
+      name: 'memory_entries_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: MemoryEntry) => {
       if (!instance.publicId) {
@@ -31,7 +38,6 @@ export type MemoryEntrySource = (typeof MEMORY_ENTRY_SOURCES)[number];
 export class MemoryEntry extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

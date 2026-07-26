@@ -13,6 +13,13 @@ import { Project } from './Project';
 
 @Table({
   tableName: 'webhooks',
+  indexes: [
+    {
+      name: 'webhooks_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Webhook) => {
       if (!instance.publicId) {
@@ -24,7 +31,6 @@ import { Project } from './Project';
 export class Webhook extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -13,6 +13,13 @@ import { User } from './User';
 
 @Table({
   tableName: 'api_keys',
+  indexes: [
+    {
+      name: 'api_keys_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: ApiKey) => {
       if (!instance.publicId) {
@@ -24,7 +31,6 @@ import { User } from './User';
 export class ApiKey extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

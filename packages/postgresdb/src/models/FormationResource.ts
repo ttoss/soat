@@ -21,12 +21,22 @@ import { Formation } from './Formation';
       }
     },
   },
-  indexes: [{ unique: true, fields: ['formation_id', 'logical_id'] }],
+  indexes: [
+    {
+      name: 'formation_resources_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'formation_resources_formation_id_logical_id_unique',
+      unique: true,
+      fields: ['formation_id', 'logical_id'],
+    },
+  ],
 })
 export class FormationResource extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

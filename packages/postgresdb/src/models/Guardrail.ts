@@ -14,6 +14,13 @@ import { Project } from './Project';
 
 @Table({
   tableName: 'guardrails',
+  indexes: [
+    {
+      name: 'guardrails_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Guardrail) => {
       if (!instance.publicId) {
@@ -25,7 +32,6 @@ import { Project } from './Project';
 export class Guardrail extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

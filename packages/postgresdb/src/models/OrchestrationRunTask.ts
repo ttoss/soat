@@ -26,6 +26,13 @@ import { OrchestrationRun } from './OrchestrationRun';
  */
 @Table({
   tableName: 'orchestration_run_tasks',
+  indexes: [
+    {
+      name: 'orchestration_run_tasks_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: OrchestrationRunTask) => {
       if (!instance.publicId) {
@@ -39,7 +46,6 @@ import { OrchestrationRun } from './OrchestrationRun';
 export class OrchestrationRunTask extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

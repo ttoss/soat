@@ -21,6 +21,13 @@ import { Project } from './Project';
  */
 @Table({
   tableName: 'guardrail_evaluations',
+  indexes: [
+    {
+      name: 'guardrail_evaluations_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   updatedAt: false,
   hooks: {
     beforeValidate: (instance: GuardrailEvaluation) => {
@@ -35,7 +42,6 @@ import { Project } from './Project';
 export class GuardrailEvaluation extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -21,6 +21,11 @@ import { User } from './User';
 @Table({
   tableName: 'approval_items',
   indexes: [
+    {
+      name: 'approval_items_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     { fields: ['project_id', 'status', 'expires_at'] },
     // A tool-call producer must not enqueue the same proposal twice while one
     // is still pending — the partial unique index makes that a DB-level
@@ -43,7 +48,6 @@ import { User } from './User';
 export class ApprovalItem extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

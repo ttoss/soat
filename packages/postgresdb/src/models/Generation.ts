@@ -19,6 +19,11 @@ import { Trace } from './Trace';
   tableName: 'generations',
   indexes: [
     {
+      name: 'generations_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
       fields: ['project_id', 'status', 'started_at'],
     },
     {
@@ -39,7 +44,6 @@ import { Trace } from './Trace';
 export class Generation extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

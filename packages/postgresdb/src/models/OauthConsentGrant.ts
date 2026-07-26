@@ -1,8 +1,17 @@
-import { Column, DataType, Model, Table, Unique } from '@ttoss/postgresdb';
+import { Column, DataType, Model, Table } from '@ttoss/postgresdb';
 
-@Table({ tableName: 'oauth_consent_grants', timestamps: false })
+@Table({
+  tableName: 'oauth_consent_grants',
+  indexes: [
+    {
+      name: 'oauth_consent_grants_code_challenge_unique',
+      unique: true,
+      fields: ['code_challenge'],
+    },
+  ],
+  timestamps: false,
+})
 export class OauthConsentGrant extends Model {
-  @Unique
   @Column({ type: DataType.TEXT, allowNull: false })
   declare codeChallenge: string;
 

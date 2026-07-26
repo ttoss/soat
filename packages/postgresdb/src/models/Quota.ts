@@ -15,6 +15,11 @@ import { QuotaWindowCounter } from './QuotaWindowCounter';
 @Table({
   tableName: 'quotas',
   indexes: [
+    {
+      name: 'quotas_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     { fields: ['project_id'] },
     { fields: ['project_id', 'scope', 'scope_ref', 'metric'] },
   ],
@@ -29,7 +34,6 @@ import { QuotaWindowCounter } from './QuotaWindowCounter';
 export class Quota extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -14,6 +14,12 @@ import { Project } from './Project';
   tableName: 'files',
   indexes: [
     {
+      name: 'files_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'files_project_id_path_unique',
       unique: true,
       fields: ['project_id', 'path'],
     },
@@ -29,7 +35,6 @@ import { Project } from './Project';
 export class File extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

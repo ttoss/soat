@@ -22,6 +22,11 @@ import { User } from './User';
 @Table({
   tableName: 'exception_items',
   indexes: [
+    {
+      name: 'exception_items_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     { fields: ['project_id', 'status', 'severity'] },
     // At most one OPEN exception per dedup key: repeated identical failures
     // fold into it (occurrenceCount++) instead of filing duplicates. A resolved
@@ -46,7 +51,6 @@ import { User } from './User';
 export class ExceptionItem extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

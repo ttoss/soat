@@ -18,7 +18,14 @@ import { Task } from './Task';
 @Table({
   tableName: 'task_transitions',
   updatedAt: false,
-  indexes: [{ fields: ['task_id', 'created_at'] }],
+  indexes: [
+    {
+      name: 'task_transitions_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    { fields: ['task_id', 'created_at'] },
+  ],
   hooks: {
     beforeValidate: (instance: TaskTransition) => {
       if (!instance.publicId) {
@@ -30,7 +37,6 @@ import { Task } from './Task';
 export class TaskTransition extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

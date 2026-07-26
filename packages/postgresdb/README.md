@@ -61,11 +61,42 @@ pnpm build
 pnpm test
 ```
 
+The suite runs against `dist`, so build first (`turbo run test` already depends on `build`).
+
 ### Adding New Models
 
 1. Create a new model file in `src/models/`
 2. Export it from `src/models/index.ts`
-3. Update consuming packages as needed
+3. Register the model's `publicId` prefix in `src/utils/publicId.ts`
+4. Declare unique constraints as **named indexes** (see below)
+5. Update consuming packages as needed
+
+### Unique Constraints Must Be Named Indexes
+
+Never use column-level `unique: true` or the `@Unique` decorator. Declare every unique constraint as an entry in the model's `indexes` array with an explicit `name`:
+
+```ts
+@Table({
+  tableName: 'agents',
+  indexes: [
+    {
+      name: 'agents_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
+})
+export class Agent extends Model {
+  @Column({ type: DataType.STRING(32), allowNull: false })
+  declare publicId: string;
+}
+```
+
+Column-level `unique` emits a bare `UNIQUE` in the column DDL instead of an index Sequelize can recognize later, so every `sync({ alter: true })` re-adds the same constraint until a name collision crashes boot with `42P07`. A named index is matched against the catalog by name and left alone on subsequent syncs.
+
+The name must be explicit: Sequelize derives one from the table and field list when it is omitted, and a derived name silently exceeds Postgres's 63-character identifier limit on wider indexes — Postgres truncates what it stores, the derived name stops matching, and the re-add loop starts over.
+
+Convention: `<table>_<field>_..._unique`, using snake_case column names (models are `underscored`). `tests/unit/tests/modelIndexes.test.ts` enforces all of this.
 
 ### Running Database for Development
 

@@ -35,6 +35,11 @@ import { UsageComponent } from './UsageComponent';
   timestamps: true,
   updatedAt: false,
   indexes: [
+    {
+      name: 'usage_events_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     { fields: ['project_id', 'created_at'] },
     { fields: ['run_id'] },
     { fields: ['trace_id'] },
@@ -42,7 +47,11 @@ import { UsageComponent } from './UsageComponent';
     { fields: ['actor_id'] },
     { fields: ['session_id'] },
     { fields: ['meter_type'] },
-    { unique: true, fields: ['idempotency_key'] },
+    {
+      name: 'usage_events_idempotency_key_unique',
+      unique: true,
+      fields: ['idempotency_key'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: UsageEvent) => {
@@ -55,7 +64,6 @@ import { UsageComponent } from './UsageComponent';
 export class UsageEvent extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;
@@ -225,7 +233,7 @@ export class UsageEvent extends Model {
   @Column({ type: DataType.DECIMAL, allowNull: true })
   declare costUsd: string | null;
 
-  @Column({ type: DataType.STRING, unique: true, allowNull: false })
+  @Column({ type: DataType.STRING, allowNull: false })
   declare idempotencyKey: string;
 
   @HasMany(

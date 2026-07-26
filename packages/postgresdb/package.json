@@ -19,8 +19,9 @@
   "scripts": {
     "build": "tsdown",
     "lint": "eslint src",
-    "typecheck": "tsc --noEmit",
-    "sync": "ttoss-postgresdb sync"
+    "sync": "ttoss-postgresdb sync",
+    "test": "jest --projects tests/unit",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@ttoss/postgresdb": "^0.11.0",
@@ -31,7 +32,9 @@
     "@ttoss/config": "^1.37.17",
     "@ttoss/postgresdb-cli": "^0.2.17",
     "@ttoss/test-utils": "^4.2.18",
+    "@types/jest": "^30.0.0",
     "@types/node": "^26.1.1",
+    "jest": "^30.4.2",
     "tsdown": "^0.22.7",
     "typescript": "~6.0.3"
   }
