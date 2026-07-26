@@ -19,6 +19,11 @@ Every event links back to the resources it attributes spend to: the [generation]
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Cap Spend Per End User - Step 6 (Read spend per end user)](/docs/tutorials/cap-spend-per-end-user#step-6--read-spend-per-end-user)
+- [Meter and Budget Your Project's Spend - Step 4 (Inspect the raw usage meter)](/docs/tutorials/metering-and-budgets#step-4--inspect-the-raw-usage-meter)
+
 ## Data Model
 
 ### UsageEvent

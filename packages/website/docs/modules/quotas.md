@@ -17,6 +17,12 @@ The `requests` metric is enforced by a Koa middleware mounted after authenticati
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Cap Spend Per End User - Step 7 (One quota, one budget per end user)](/docs/tutorials/cap-spend-per-end-user#step-7--one-quota-one-budget-per-end-user)
+- [Cap Spend Per End User - Step 8 (One user is blocked, the other is not)](/docs/tutorials/cap-spend-per-end-user#step-8--one-user-is-blocked-the-other-is-not)
+- [Cap Spend Per End User - Step 11 (Observe before you enforce)](/docs/tutorials/cap-spend-per-end-user#step-11--observe-before-you-enforce)
+
 ## Data Model
 
 | Field           | Type    | Description                                                                       |

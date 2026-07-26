@@ -193,8 +193,16 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Governance & Safety',
+      items: ['tutorials/gate-a-tool-with-guardrails'],
+    },
+    {
+      type: 'category',
       label: 'Cost & Operations',
-      items: ['tutorials/metering-and-budgets'],
+      items: [
+        'tutorials/metering-and-budgets',
+        'tutorials/cap-spend-per-end-user',
+      ],
     },
   ],
 

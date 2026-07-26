@@ -19,6 +19,11 @@ The API is read-only. Writes happen internally through a fire-and-forget queue, 
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Gate a Dangerous Tool with Guardrails - Step 11 (Read the governance trail)](/docs/tutorials/gate-a-tool-with-guardrails#step-11--read-the-governance-trail)
+- [Cap Spend Per End User - Step 11 (Observe before you enforce)](/docs/tutorials/cap-spend-per-end-user#step-11--observe-before-you-enforce)
+
 ## Data Model
 
 | Field                | Type    | Description                                                                                       |

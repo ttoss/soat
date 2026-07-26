@@ -17,6 +17,11 @@ Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`);
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Gate a Dangerous Tool with Guardrails - Step 10 (A failing guard files a tripwire exception)](/docs/tutorials/gate-a-tool-with-guardrails#step-10--a-failing-guard-the-tripwire)
+- [Cap Spend Per End User - Step 10 (A cost cap with no prices protects nothing)](/docs/tutorials/cap-spend-per-end-user#step-10--a-cost-cap-with-no-prices-protects-nothing)
+
 ## Data Model
 
 ### ExceptionItem

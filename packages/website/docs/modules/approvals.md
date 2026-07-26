@@ -42,6 +42,7 @@ filtering only — the lifecycle never branches on it.
 ## Related Tutorials
 
 - [Approval Gates - Step 7 (Approve it — the run resumes)](/docs/tutorials/approval-gate#step-7--approve-it--the-run-resumes)
+- [Gate a Dangerous Tool with Guardrails - Step 9 (A class-C call parks for sign-off)](/docs/tutorials/gate-a-tool-with-guardrails#step-9--class-c-the-run-parks-for-sign-off)
 
 ## Data Model
 
