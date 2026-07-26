@@ -223,6 +223,38 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     // session / generation body (agents, sessions, conversations, formations), so
     // it round-trips verbatim globally.
     'toolContext',
+    // A resource `tags` bag is a user-authored label set, and its keys are read
+    // back by IAM: every tag becomes a `soat:ResourceTag/<key>` condition-context
+    // key (`rest/v1/documents.ts`, `actors.ts`, `discussions.ts`,
+    // `lib/fileAuthorization.ts`) and `policyCompiler` compiles the same string
+    // into a jsonb lookup. Transforming it broke two things at once: two distinct
+    // tags collapsed into one (`cost_center` + `costCenter`), silently dropping a
+    // value an IAM condition may key on, and a leading-uppercase tag came back as
+    // `_environment`, so a caller could not read the key they needed to write the
+    // matching policy. Covers actors / conversations / discussions / documents /
+    // files (the five with a policy-visible tags column); array-valued `tags`
+    // (memories, memory entries) are unaffected either way.
+    'tags',
+    // A policy `condition` block's keys are the IAM vocabulary — operators
+    // (`StringEquals`) and context keys (`soat:ResourceTag/<tag>`) — matched by
+    // exact string in `lib/iam.ts` and `lib/policyCompiler.ts`. They are not SOAT
+    // field names: `camelToSnake` turned the operator into `_string_equals` and
+    // the context key into `soat:_resource_tag/env`, so every policy read returned
+    // a document whose conditions no longer matched the documented vocabulary.
+    // Must stay in lockstep with the `tags` skip above — the condition key and the
+    // tag key it selects have to be the same string. (Orchestration's unrelated
+    // string-valued `condition` is unaffected: a scalar is never recursed into.)
+    'condition',
+    // An `input_mapping` key is an author-authored output name that leaves SOAT
+    // verbatim — it becomes a sub-tool's body key, an emit-event node's `data`
+    // key, or a line in the prompt an agent node builds (`applyInputMapping` in
+    // `lib/jsonLogicMapping.ts` preserves keys as written). An approval node's
+    // `arguments` keys are frozen onto the proposed tool call the same way. Both
+    // belong with `state_mapping` on the same node, which was already a
+    // pass-through — leaving these two out meant one node's mapping keys
+    // round-tripped and the other's were rewritten.
+    'inputMapping',
+    'arguments',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
@@ -277,6 +309,15 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     // `PascalKey` into `_pascal_key`, so re-sending what the API returned
     // changed which header the tool received.
     'tool_context',
+    // Mirrors of the inbound `tags` / `condition` / `inputMapping` / `arguments`
+    // skips. Required in this direction too: the response is where a caller reads
+    // the tag key they must name in a `soat:ResourceTag/<key>` condition, and
+    // where an operator like `StringEquals` has to survive as itself rather than
+    // as `_string_equals`.
+    'tags',
+    'condition',
+    'input_mapping',
+    'arguments',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) {

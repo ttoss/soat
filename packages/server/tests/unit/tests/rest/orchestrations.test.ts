@@ -3343,4 +3343,71 @@ describe('Orchestrations', () => {
       }
     });
   });
+
+  // `input_mapping` and `arguments` keys are author-authored names that leave
+  // SOAT verbatim: an `input_mapping` key becomes a sub-tool's body key, an
+  // emit-event node's `data` key, or a line in the prompt an agent node builds;
+  // an approval node's `arguments` keys are frozen onto the proposed tool call.
+  // They belong with `state_mapping` on the same node — which is already a
+  // pass-through — rather than with SOAT's own field names. Without the skip a
+  // caller's `cost_center` was stored as `costCenter`, so the sub-tool received
+  // a key the author never wrote while every `{"var": ...}` reference kept the
+  // authored casing.
+  describe('author-authored mapping keys', () => {
+    test('input_mapping and arguments keys round-trip verbatim', async () => {
+      const authored = {
+        cost_center: { var: 'input.cc' },
+        costCenter: { var: 'input.cc2' },
+        PascalKey: { var: 'input.pk' },
+        'dotted.key': { var: 'input.dk' },
+      };
+
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'mapping-keys-client-tool',
+          type: 'client',
+          description: 'Approval target for the mapping-keys test',
+        });
+      expect(toolRes.status).toBe(201);
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          project_id: projectId,
+          name: 'Mapping Keys Verbatim',
+          nodes: [
+            {
+              id: 'start',
+              type: 'transform',
+              expression: { var: '' },
+              input_mapping: authored,
+              state_mapping: { 'state.result': { var: 'output.output' } },
+            },
+            {
+              id: 'appr',
+              type: 'approval',
+              tool_id: toolRes.body.id,
+              arguments: authored,
+            },
+          ],
+          edges: [{ from: 'start', to: 'appr' }],
+          state_schema: {},
+          input_schema: {},
+        });
+
+      expect(created.status).toBe(201);
+      expect(created.body.nodes[0].input_mapping).toEqual(authored);
+      expect(created.body.nodes[1].arguments).toEqual(authored);
+
+      const fetched = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestrations/${created.body.id}`
+      );
+
+      expect(fetched.status).toBe(200);
+      expect(fetched.body.nodes[0].input_mapping).toEqual(authored);
+      expect(fetched.body.nodes[1].arguments).toEqual(authored);
+    });
+  });
 });

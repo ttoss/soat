@@ -250,6 +250,10 @@ components:
             Optional condition block. Keys are condition operators (e.g.
             StringEquals) mapping to context-key/value maps; evaluated by the
             policy compiler. Free-form — keys are dynamic, not validated.
+            Operator and context keys are matched by exact string and are never
+            case-converted, so they round-trip exactly as written:
+            `soat:ResourceTag/cost_center` selects the tag `cost_center`, not
+            `costCenter`.
           example: { StringEquals: { 'soat:ResourceTag/env': 'prod' } }
     PolicyDocument:
       type: object

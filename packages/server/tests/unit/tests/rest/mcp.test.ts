@@ -555,6 +555,29 @@ describe('MCP tools - happy path', () => {
       expect(createDocumentResult.id).toBeDefined();
     });
 
+    // A tag key is read back by IAM as a `soat:ResourceTag/<key>` context key, so
+    // the MCP surface must preserve it exactly as the REST caseTransform does.
+    // `snakeToCamelDeep` would rewrite `cost_center` to `costCenter` on read, so
+    // a tag set through one surface would not match a policy written for the
+    // other.
+    test('create-document preserves multi-word tag keys verbatim', async () => {
+      const tags = { cost_center: 'platform', Environment: 'prod' };
+
+      const created = await mcpCall('create-document', {
+        projectId,
+        content: 'tagged via mcp',
+        tags,
+      });
+      expect(created.status).toBe(200);
+      expect(parseResult(created).tags).toEqual(tags);
+
+      const fetched = await mcpCall('get-document', {
+        documentId: parseResult(created).id,
+      });
+      expect(fetched.status).toBe(200);
+      expect(parseResult(fetched).tags).toEqual(tags);
+    });
+
     test('ingest-document ingests a PDF', async () => {
       const uploadRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/files/upload')
@@ -1361,6 +1384,42 @@ describe('MCP tools - happy path', () => {
       expect(createPolicyResult.name).toBe('MCP Test Policy');
       expect(createPolicyResult.document.statement[0].action).toContain(
         'files:GetFile'
+      );
+    });
+
+    // The MCP surface mirrors caseTransform's outbound pass-through set, so an
+    // IAM condition must survive here too: `snakeToCamelDeep` would rewrite the
+    // context key `soat:ResourceTag/cost_center` to `soat:ResourceTag/costCenter`
+    // on read, so echoing a policy back through update-policy would silently
+    // change which tag the condition selects.
+    test('policy condition keys survive a read → write round-trip', async () => {
+      const condition = {
+        StringEquals: { 'soat:ResourceTag/cost_center': 'platform' },
+      };
+
+      const created = await mcpCall('create-policy', {
+        name: 'MCP Condition Policy',
+        document: {
+          statement: [
+            {
+              effect: 'Allow',
+              action: ['documents:GetDocument'],
+              resource: ['*'],
+              condition,
+            },
+          ],
+        },
+      });
+      expect(created.status).toBe(200);
+      const createdPolicy = parseResult(created);
+      expect(createdPolicy.document.statement[0].condition).toEqual(condition);
+
+      const fetched = await mcpCall('get-policy', {
+        policyId: createdPolicy.id,
+      });
+      expect(fetched.status).toBe(200);
+      expect(parseResult(fetched).document.statement[0].condition).toEqual(
+        condition
       );
     });
 
