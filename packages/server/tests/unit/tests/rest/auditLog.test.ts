@@ -566,6 +566,51 @@ describe('Audit Log — pagination and queue metrics', () => {
     expect(typeof getDroppedAuditCount()).toBe('number');
     expect(getDroppedAuditCount()).toBeGreaterThanOrEqual(0);
   });
+
+  // Regression coverage for github.com/ttoss/soat/issues/707: a non-numeric
+  // `limit`/`offset` used to reach Sequelize as `NaN` and crash with a bare
+  // 500, instead of failing loudly like the `from`/`to` date params do.
+  test('a non-numeric ?limit= is rejected with 400, not a 500', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('a non-numeric ?offset= is rejected with 400, not a 500', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, offset: 'abc' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('?limit=NaN is rejected with 400, not a 500', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: 'NaN' });
+    expect(res.status).toBe(400);
+    expect(res.body.error.code).toBe('VALIDATION_FAILED');
+  });
+
+  test('an absent ?limit=/?offset= still falls back to the default, not an error', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId });
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(25);
+    expect(res.body.offset).toBe(0);
+  });
+
+  test('out-of-range numeric limit/offset still clamp instead of erroring', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .get('/api/v1/audit-log')
+      .query({ project_id: projectId, limit: '0', offset: '-10' });
+    expect(res.status).toBe(200);
+    expect(res.body.limit).toBe(1);
+    expect(res.body.offset).toBe(0);
+  });
 });
 
 describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => {

@@ -300,8 +300,13 @@ export const listAuditEntries = async (
   limit: number;
   offset: number;
 }> => {
-  const limit = Math.min(Math.max(args.limit ?? 25, 1), 200);
-  const offset = Math.max(args.offset ?? 0, 0);
+  // A non-finite value should never reach here (the REST layer validates it),
+  // but guarding here too keeps this shared clamp — also used by
+  // streamAuditEntriesNdjson's paging loop — safe against any other caller.
+  const rawLimit = Number.isFinite(args.limit) ? args.limit : undefined;
+  const rawOffset = Number.isFinite(args.offset) ? args.offset : undefined;
+  const limit = Math.min(Math.max(rawLimit ?? 25, 1), 200);
+  const offset = Math.max(rawOffset ?? 0, 0);
 
   const where = buildListWhere(args);
 

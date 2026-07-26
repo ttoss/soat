@@ -32,6 +32,26 @@ const parseDateParam = (args: {
   return date;
 };
 
+// Mirrors parseDateParam: absent stays undefined (the default applies further
+// down), but a supplied, non-numeric value throws rather than reaching
+// Sequelize as `NaN`, which the driver rejects with a bare 500 (audit-log#707).
+const parseIntParam = (args: {
+  value: unknown;
+  paramName: string;
+}): number | undefined => {
+  if (typeof args.value !== 'string' || args.value.length === 0) {
+    return undefined;
+  }
+  const parsed = Number(args.value);
+  if (!Number.isFinite(parsed)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `'${args.paramName}' is not a valid number: '${args.value}'.`
+    );
+  }
+  return parsed;
+};
+
 auditLogRouter.get('/audit-log', async (ctx: Context) => {
   if (!ctx.authUser) {
     ctx.status = 401;
@@ -61,8 +81,8 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
     resourceSrn: ctx.query.resourceSrn as string | undefined,
     from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
     to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
-    limit: ctx.query.limit ? Number(ctx.query.limit) : undefined,
-    offset: ctx.query.offset ? Number(ctx.query.offset) : undefined,
+    limit: parseIntParam({ value: ctx.query.limit, paramName: 'limit' }),
+    offset: parseIntParam({ value: ctx.query.offset, paramName: 'offset' }),
   });
 });
 
