@@ -245,6 +245,11 @@ const sidebars: SidebarsConfig = {
       id: 'advanced/expressions-and-templating',
       label: 'Expressions & Templating',
     },
+    {
+      type: 'doc',
+      id: 'advanced/tool-context',
+      label: 'Tool Context',
+    },
     'permissions',
     'openapi-specs',
   ],

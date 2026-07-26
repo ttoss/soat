@@ -141,6 +141,10 @@ See [Knowledge](./knowledge.md) for how `write_memory_id` and `extraction` are c
 
 Deep reasoning lives in the [Discussions](./discussions.md) module. A discussion run records its deliberation as a Conversation transcript and its outcome as a Document referenced from the run, so it does not appear as `metadata` on, or as a child generation of, the calling generation.
 
+### Tool context
+
+The generation-creation endpoints (`POST /agents/{agent_id}/generate`, and the session and conversation generate endpoints) accept an optional `tool_context` object. Its entries are forwarded as `X-Soat-Context-*` request headers on every `http`, `mcp` and `soat` tool call the generation makes, and an invalid key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` before the provider is called. It is not persisted on the Generation record. See the [Tool Context reference](../advanced/tool-context.md).
+
 ## Examples
 
 ### List generations

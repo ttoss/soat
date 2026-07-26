@@ -290,7 +290,7 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 `tool_context` lets callers inject key-value pairs forwarded as HTTP headers to every tool call in a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
 
-`tool_context` is a flat `Record<string, string>`. Each key is title-cased and prefixed with `X-Soat-Context-`:
+`tool_context` is a flat `Record<string, string>`. Each key's first character is uppercased and the key is prefixed with `X-Soat-Context-` — use **camelCase** keys and the header is predictable on every surface:
 
 | `tool_context` key | Forwarded header          |
 | ------------------ | ------------------------- |
@@ -305,6 +305,8 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 | `client`  | No                        | Executes on the caller's side                             |
 
 Context headers are injected **after** any headers configured on the tool definition. When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and automatically reapplied on resume.
+
+A [session](./sessions.md) also auto-populates `sessionId`, `actorId` and `actorExternalId`, which caller-supplied keys override. For the exact key→header rule (including non-camelCase keys), validation and `400 INVALID_TOOL_CONTEXT_KEY`, and the security notes on header trust and PII egress, see the [Tool Context reference](../advanced/tool-context.md).
 
 ### Context Window Limiting
 

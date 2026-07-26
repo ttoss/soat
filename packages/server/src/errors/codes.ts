@@ -87,6 +87,11 @@ export const ERROR_CODES = {
     description:
       'A {{...}} double-curly token was found that is not a {{secret:sec_...}} reference. Double curly braces are reserved for secret references; use single braces ({param}) for URL path parameters.',
   },
+  INVALID_TOOL_CONTEXT_KEY: {
+    httpStatus: 400,
+    description:
+      "A tool_context key cannot be used as an HTTP header name. Keys are forwarded as X-Soat-Context-<Key> headers, so a key may only contain letters, digits and the characters !#$%&'*+-.^_`|~, and two keys must not map to the same header name (header names are case-insensitive).",
+  },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

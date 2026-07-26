@@ -171,7 +171,7 @@ HTTP 410 Gone
 
 ### Tool Context
 
-Sessions support the same `tool_context` mechanism as direct agent generations — see [Tool Context](./agents.md#tool-context) in the Agents module.
+Sessions support the same `tool_context` mechanism as direct agent generations — see the [Tool Context reference](../advanced/tool-context.md) for the key→header rule, validation and security notes.
 
 When a generation is triggered through a session, the server automatically injects the following keys into `tool_context`:
 
@@ -181,7 +181,9 @@ When a generation is triggered through a session, the server automatically injec
 | `actorExternalId` | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set |
 | `sessionId`       | `X-Soat-Context-SessionId`       | Public ID of the session; always present               |
 
-Any values provided by the caller in `tool_context` take precedence over the auto-populated values.
+Any values provided by the caller in `tool_context` take precedence over the auto-populated values — the session's own `tool_context` overrides the auto-populated keys, and a per-request `tool_context` overrides both.
+
+Note that `actorExternalId` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
 
 ### Async Generation
 

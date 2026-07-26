@@ -466,7 +466,12 @@ paths:
                   additionalProperties:
                     type: string
                   nullable: true
-                  description: Key-value pairs injected as context headers into all tool call requests made during this generation.
+                  description: >-
+                    Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
+                    `http`, `mcp` and `soat` tool call in this generation. Each key's
+                    first character is uppercased and the rest is used verbatim, so
+                    camelCase keys are recommended. An invalid or colliding key is
+                    rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
       responses:
         '200':
           description: Generation completed or requires action

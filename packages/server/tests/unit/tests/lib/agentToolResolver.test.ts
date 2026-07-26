@@ -2,7 +2,6 @@ import { createServer } from 'node:http';
 
 import { db } from 'src/db';
 import {
-  buildContextHeaders,
   HttpToolError,
   isSoatActionAllowedByBoundary,
   parseHttpExecuteConfig,
@@ -17,6 +16,10 @@ import {
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
 import { soatTools } from 'src/lib/soatTools';
+import {
+  assertValidToolContextKeys,
+  buildContextHeaders,
+} from 'src/lib/toolContext';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -934,6 +937,144 @@ describe('buildContextHeaders', () => {
     expect(result['X-Soat-Context-A']).toBe('1');
     expect(result['X-Soat-Context-B']).toBe('2');
     expect(result['X-Soat-Context-C']).toBe('3');
+  });
+
+  // Only the first character is uppercased — the rest of the key is used
+  // verbatim, so a snake_case key does NOT become `ActorExternalId`. Pinned
+  // because the docs previously called this "title-casing", which led callers
+  // to set snake_case keys and read a camelCase header that never arrived.
+  test('uppercases only the first character, leaving the rest verbatim', () => {
+    expect(
+      buildContextHeaders({
+        actor_external_id: 'snake',
+        'actor-external-id': 'kebab',
+        actorExternalId: 'camel',
+      })
+    ).toEqual({
+      'X-Soat-Context-Actor_external_id': 'snake',
+      'X-Soat-Context-Actor-external-id': 'kebab',
+      'X-Soat-Context-ActorExternalId': 'camel',
+    });
+  });
+});
+
+describe('assertValidToolContextKeys', () => {
+  test('accepts undefined and null', () => {
+    expect(() => {
+      return assertValidToolContextKeys(undefined);
+    }).not.toThrow();
+    expect(() => {
+      return assertValidToolContextKeys(null);
+    }).not.toThrow();
+  });
+
+  test('accepts an empty object', () => {
+    expect(() => {
+      return assertValidToolContextKeys({});
+    }).not.toThrow();
+  });
+
+  test('accepts the keys the session path auto-populates', () => {
+    expect(() => {
+      return assertValidToolContextKeys({
+        sessionId: 'ses_01',
+        actorId: 'actor_01',
+        actorExternalId: '+5511999999999',
+      });
+    }).not.toThrow();
+  });
+
+  // Every key shape that survives the header-name grammar keeps working —
+  // validation must reject only what would break at call time, never narrow
+  // what callers can already send.
+  test('accepts snake_case, kebab-case and dotted keys', () => {
+    expect(() => {
+      return assertValidToolContextKeys({
+        actor_external_id: 'a',
+        'actor-external-id': 'b',
+        'actor.external.id': 'c',
+        "weird!#$%&'*+^_`|~1": 'd',
+      });
+    }).not.toThrow();
+  });
+
+  test('rejects a key containing a space', () => {
+    expect(() => {
+      return assertValidToolContextKeys({ 'bad key': 'x' });
+    }).toThrow(
+      expect.objectContaining({
+        code: 'INVALID_TOOL_CONTEXT_KEY',
+        httpStatus: 400,
+      })
+    );
+  });
+
+  test.each([
+    ['colon', 'bad:key'],
+    ['parenthesis', 'bad(key)'],
+    ['non-ASCII', 'usuário'],
+    ['newline', 'bad\nkey'],
+    ['empty', ''],
+  ])('rejects a key containing %s', (_label, key) => {
+    expect(() => {
+      return assertValidToolContextKeys({ [key]: 'x' });
+    }).toThrow(expect.objectContaining({ code: 'INVALID_TOOL_CONTEXT_KEY' }));
+  });
+
+  test('reports every offending key in the error meta', () => {
+    try {
+      assertValidToolContextKeys({ 'bad key': '1', 'worse:key': '2', ok: '3' });
+      throw new Error('expected assertValidToolContextKeys to throw');
+    } catch (error) {
+      const meta = (error as { meta?: { keys?: string[] } }).meta;
+      expect(meta?.keys).toEqual(['bad key', 'worse:key']);
+    }
+  });
+
+  // HTTP header names are case-insensitive, so two keys differing only in the
+  // casing of a later character collapse into one outbound header and the last
+  // one silently wins. Reject instead of dropping a value.
+  test('rejects two keys that collide into the same header name', () => {
+    expect(() => {
+      return assertValidToolContextKeys({ userId: '1', userID: '2' });
+    }).toThrow(
+      expect.objectContaining({
+        code: 'INVALID_TOOL_CONTEXT_KEY',
+        httpStatus: 400,
+      })
+    );
+  });
+
+  test('rejects a collision caused by the first-character uppercase', () => {
+    expect(() => {
+      return assertValidToolContextKeys({ userId: '1', UserId: '2' });
+    }).toThrow(expect.objectContaining({ code: 'INVALID_TOOL_CONTEXT_KEY' }));
+  });
+
+  test('names the colliding header in the collision error', () => {
+    try {
+      assertValidToolContextKeys({ tenantId: '1', TenantId: '2' });
+      throw new Error('expected assertValidToolContextKeys to throw');
+    } catch (error) {
+      const err = error as { message?: string; meta?: Record<string, unknown> };
+      expect(err.message).toMatch(/X-Soat-Context-TenantId/);
+      expect(err.meta?.header).toBe('X-Soat-Context-TenantId');
+    }
+  });
+
+  // Guards the contract the validator exists to protect: anything it accepts
+  // must survive `new Headers()`, which is what fails at call time today.
+  test('every accepted key produces a constructible Headers object', () => {
+    const context = {
+      sessionId: 'ses_01',
+      actor_external_id: 'a',
+      'actor-external-id': 'b',
+      'actor.external.id': 'c',
+    };
+    assertValidToolContextKeys(context);
+    expect(() => {
+      return new Headers(buildContextHeaders(context));
+    }).not.toThrow();
   });
 });
 

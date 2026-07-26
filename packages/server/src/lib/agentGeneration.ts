@@ -30,6 +30,7 @@ import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
+import { assertValidToolContextKeys } from './toolContext';
 
 const log = createDebug('soat:generation');
 
@@ -235,6 +236,12 @@ export type CreateGenerationArgs = {
 export const createGeneration = async (
   args: CreateGenerationArgs
 ): Promise<GenerationResult | ReadableStream> => {
+  // Rejects a caller-supplied key that could not become a header before any
+  // provider call or usage metering happens. The session path validates its
+  // persisted keys at write time too; this covers the direct API, triggers,
+  // orchestration nodes and nested `soat` tool calls.
+  assertValidToolContextKeys(args.toolContext);
+
   const maxDepth = args.remainingDepth ?? 10;
   const traceId = args.traceId ?? generatePublicId(PUBLIC_ID_PREFIXES.trace);
 

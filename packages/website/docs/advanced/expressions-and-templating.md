@@ -148,9 +148,16 @@ Because each family has its own delimiter and resolution phase, they nest withou
 
 The same phase rule explains `${body.x}`: `sub` leaves it alone at apply time so the tool resolver can fill it at call time.
 
+## Not templating: request context
+
+Session and actor context does **not** reach a tool through any of the families above. There is no `{{context:...}}` form — writing one is rejected with `400 INVALID_TEMPLATE_TOKEN` like any other non-secret double-curly token.
+
+Instead, the server injects the generation's `tool_context` as `X-Soat-Context-*` **request headers** on every `http` and `mcp` tool call, alongside the tool's own `execute.headers`. If you are looking for how to get the actor, session or caller identity into an outbound call, that is the mechanism — see the [Tool Context reference](./tool-context.md).
+
 ## Common mistakes
 
 - **`{{param}}` in a tool URL** — double braces are secrets-only; use `{param}`. Rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
+- **A `{{context:...}}` token to read session context** — context is not templating; it arrives as `X-Soat-Context-*` headers. See [Tool Context](./tool-context.md).
 - **camelCase `var` paths for run input** — orchestration run-input keys round-trip verbatim: an input sent as `cycle_task` is read as `{"var": "input.cycle_task"}`, not `cycleTask`.
 - **Bare string as a state read** — in an `input_mapping`, a bare string is a literal. `"state.key"` does not read state; use `{"var": "key"}`.
 - **Forward references** — a pipeline step may only read `steps.<id>` of an *earlier* step; formations reject circular `ref`/`sub` dependencies.
