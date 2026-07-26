@@ -18,11 +18,11 @@ issue tracker (issues close; a coverage map never does).
 
 The split is:
 
-| Artifact | Lifetime | Home |
-|---|---|---|
-| **The checklist** — what must be verified | As long as the module | **This directory** |
-| **A run report** — what one pass observed, in what environment | Point-in-time | A `QA` **discussion**, linked from the Run history table |
-| **A defect found** — reproducible bug | Until fixed | An **issue**, labeled `qa` |
+| Artifact                                                       | Lifetime              | Home                                                     |
+| -------------------------------------------------------------- | --------------------- | -------------------------------------------------------- |
+| **The checklist** — what must be verified                      | As long as the module | **This directory**                                       |
+| **A run report** — what one pass observed, in what environment | Point-in-time         | A `QA` **discussion**, linked from the Run history table |
+| **A defect found** — reproducible bug                          | Until fixed           | An **issue**, labeled `qa`                               |
 
 ## Checkbox semantics
 
@@ -79,20 +79,20 @@ the module checklist in `.claude/rules/modules.md`.
 Coverage is `verified / total items`. The shortfall is always itemized in that
 file's **Not covered** section — it is a gap list, not a failure count.
 
-| Module | Coverage | Last pass | Source |
-|---|---|---|---|
-| [audit-log](./audit-log.md) | 42/45 | 2026-07-25 | [#707](https://github.com/ttoss/soat/issues/707) |
-| [guardrails](./guardrails.md) | 26/37 | 2026-07-20 | [#633](https://github.com/ttoss/soat/issues/633) |
-| [knowledge](./knowledge.md) | 14/17 | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348) |
-| [memories](./memories.md) | 21/27 | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348) |
-| [orchestrations](./orchestrations.md) | 63/66 | 2026-07-05 | [#370](https://github.com/ttoss/soat/issues/370) |
-| [quotas](./quotas.md) | 82/85 | 2026-07-26 | [#705](https://github.com/ttoss/soat/issues/705), [#713](https://github.com/ttoss/soat/issues/713) |
-| [tasks](./tasks.md) | 20/20 | 2026-07-18 | [#595](https://github.com/ttoss/soat/issues/595) |
-| [workflows](./workflows.md) | 72/74 | 2026-07-19 | [#594](https://github.com/ttoss/soat/issues/594), [#596](https://github.com/ttoss/soat/issues/596), [#597](https://github.com/ttoss/soat/issues/597), [#616](https://github.com/ttoss/soat/issues/616), [#617](https://github.com/ttoss/soat/issues/617) |
+| Module                                | Coverage | Last pass  | Source                                                                                                                                                                                                                                                   |
+| ------------------------------------- | -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [audit-log](./audit-log.md)           | 42/45    | 2026-07-25 | [#707](https://github.com/ttoss/soat/issues/707)                                                                                                                                                                                                         |
+| [guardrails](./guardrails.md)         | 26/37    | 2026-07-20 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
+| [knowledge](./knowledge.md)           | 14/17    | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
+| [memories](./memories.md)             | 21/27    | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
+| [orchestrations](./orchestrations.md) | 63/66    | 2026-07-05 | [#370](https://github.com/ttoss/soat/issues/370)                                                                                                                                                                                                         |
+| [quotas](./quotas.md)                 | 94/99    | 2026-07-26 | [#705](https://github.com/ttoss/soat/issues/705), [#713](https://github.com/ttoss/soat/issues/713)                                                                                                                                                       |
+| [tasks](./tasks.md)                   | 20/20    | 2026-07-18 | [#595](https://github.com/ttoss/soat/issues/595)                                                                                                                                                                                                         |
+| [workflows](./workflows.md)           | 72/74    | 2026-07-19 | [#594](https://github.com/ttoss/soat/issues/594), [#596](https://github.com/ttoss/soat/issues/596), [#597](https://github.com/ttoss/soat/issues/597), [#616](https://github.com/ttoss/soat/issues/616), [#617](https://github.com/ttoss/soat/issues/617) |
 
 Guardrails is the thinnest coverage and the most consequential: its unverified
 items include stricter-wins composition across scopes, the only gap here that
-could silently *loosen* enforcement if wrong.
+could silently _loosen_ enforcement if wrong.
 
 ## Pending a first pass
 
