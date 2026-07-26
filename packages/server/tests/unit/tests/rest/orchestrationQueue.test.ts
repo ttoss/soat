@@ -1,25 +1,35 @@
+import fs from 'node:fs/promises';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 
 import { db } from 'src/db';
+import { postgresQueueDriver } from 'src/lib/orchestration-queue-drivers/postgresQueueDriver';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
 import { computeNodeIdempotencyKey } from 'src/lib/orchestrationIdempotency';
 import { executeAndRecordNode } from 'src/lib/orchestrationNodeRecorder';
 import {
   ackRunTask,
-  claimLatencySnapshot,
   claimRunTasks,
   enqueueRunTask,
-  resetClaimLatencyRing,
   retryRunTask,
 } from 'src/lib/orchestrationQueue';
-import { getQueueStats } from 'src/lib/orchestrationQueueStats';
+import {
+  claimLatencySnapshot,
+  resetClaimLatencyRing,
+} from 'src/lib/orchestrationQueueMetrics';
+import { getPostgresQueueStats } from 'src/lib/orchestrationQueueStats';
 import {
   drainQueueOnce,
   effectiveClaimLimit,
   handleRunTask,
   inFlightTaskCount,
+  lastSuccessfulDrainAtMs,
+  publishWorkerHeartbeat,
+  resetLastSuccessfulDrain,
 } from 'src/lib/orchestrationWorker';
+import { checkWorkerHealth } from 'src/lib/orchestrationWorkerHealth';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -245,19 +255,22 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       )?.id as number;
 
       // First worker claims the task (lease set) but "crashes" before acking.
-      const [claimed] = await claimRunTasks({ limit: 10 });
+      const [claimed] = await postgresQueueDriver.claim({ limit: 10 });
       expect(claimed).toBeDefined();
 
       // Nothing acked it, so once the lease is past it is redelivered. Simulate
       // by claiming again with a `now` past the lease.
       const future = new Date(Date.now() + 10 * 60_000);
-      const [redelivered] = await claimRunTasks({ limit: 10, now: future });
+      const [redelivered] = await postgresQueueDriver.claim({
+        limit: 10,
+        now: future,
+      });
       expect(redelivered?.id).toBe(claimed.id);
-      expect((redelivered?.attempts as number) >= 2).toBe(true);
+      expect(redelivered.attempts >= 2).toBe(true);
 
       // The redelivering worker drives the run to completion and acks.
       await handleRunTask({ task: redelivered });
-      await ackRunTask({ id: redelivered.id as number });
+      await postgresQueueDriver.ack({ task: redelivered });
 
       const settled = await db.OrchestrationRun.findByPk(runPk);
       expect(settled?.status).toBe('succeeded');
@@ -974,7 +987,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const run = await createRunRow(orchPk);
       await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
 
-      const before = await getQueueStats();
+      const before = await getPostgresQueueStats();
       const beforeRow = before.perProject.find((r) => {
         return r.projectId === projectId;
       });
@@ -982,7 +995,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       await claimRunTasks({ limit: 10 });
 
-      const after = await getQueueStats();
+      const after = await getPostgresQueueStats();
       const afterRow = after.perProject.find((r) => {
         return r.projectId === projectId;
       });
@@ -1000,7 +1013,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const run = await createRunRow(orchPk);
       await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
 
-      const stats = await getQueueStats({ projectIds: [projectPk] });
+      const stats = await getPostgresQueueStats({ projectIds: [projectPk] });
       expect(
         stats.perProject.every((r) => {
           return r.projectId === projectId;
@@ -1014,10 +1027,72 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
     });
 
     test('an empty project list yields an empty per_project breakdown', async () => {
-      const stats = await getQueueStats({ projectIds: [] });
+      const stats = await getPostgresQueueStats({ projectIds: [] });
       expect(stats.perProject).toEqual([]);
       // Global counts are still reported regardless of the (empty) scope.
       expect(typeof stats.queueDepth).toBe('number');
+    });
+  });
+
+  // The standalone worker's liveness signal: a drain that reached the queue
+  // publishes a heartbeat its container healthcheck grades. Driven here, at the
+  // worker loop, because that is where the timestamp is produced — the file
+  // format and grading rules are covered in lib/orchestrationWorkerHealth.test.ts.
+  describe('worker heartbeat published by the drain', () => {
+    let heartbeatDir: string;
+
+    beforeEach(async () => {
+      heartbeatDir = await fs.mkdtemp(path.join(os.tmpdir(), 'soat-drain-hb-'));
+      process.env.ORCHESTRATION_WORKER_HEARTBEAT_FILE = path.join(
+        heartbeatDir,
+        'worker.heartbeat'
+      );
+      resetLastSuccessfulDrain();
+    });
+
+    afterEach(async () => {
+      delete process.env.ORCHESTRATION_WORKER_HEARTBEAT_FILE;
+      resetLastSuccessfulDrain();
+      await fs.rm(heartbeatDir, { recursive: true, force: true });
+    });
+
+    test('nothing is published before the first successful drain', async () => {
+      expect(lastSuccessfulDrainAtMs()).toBeNull();
+
+      await publishWorkerHeartbeat();
+
+      expect((await checkWorkerHealth()).reason).toBe('no_heartbeat');
+    });
+
+    test('a completed drain publishes a heartbeat the healthcheck accepts', async () => {
+      // An empty queue is still a successful claim — reaching the queue is what
+      // liveness attests, not that there was work to do.
+      await drainQueueOnce();
+      expect(lastSuccessfulDrainAtMs()).not.toBeNull();
+
+      await publishWorkerHeartbeat();
+
+      expect(await checkWorkerHealth()).toMatchObject({
+        healthy: true,
+        reason: 'ok',
+      });
+    });
+
+    test('a drained task also refreshes the heartbeat', async () => {
+      const orchPk = await orchPkOf(
+        await createOrchestration({
+          name: 'Heartbeat Drive',
+          nodes: [{ id: 'start', type: 'transform', expression: 1 }],
+          edges: [],
+        })
+      );
+      const run = await createRunRow(orchPk);
+      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+
+      expect(await drainQueueOnce()).toBeGreaterThanOrEqual(1);
+      await publishWorkerHeartbeat();
+
+      expect((await checkWorkerHealth()).healthy).toBe(true);
     });
   });
 });

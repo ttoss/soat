@@ -2,8 +2,8 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { getOrchestrationQueueDriver } from './orchestration-queue-drivers';
 import { newLeaseExpiry } from './orchestrationLease';
-import { enqueueRunTask } from './orchestrationQueue';
 import { kickWorker } from './orchestrationWorker';
 import { createScheduler, createSweep } from './scheduler';
 
@@ -45,7 +45,10 @@ export const wakeDueRuns = createSweep({
     return claimed > 0;
   },
   handle: async ({ row: run }) => {
-    await enqueueRunTask({ runId: run.id as number, kind: 'wake' });
+    await getOrchestrationQueueDriver().enqueue({
+      runId: run.id as number,
+      kind: 'wake',
+    });
     kickWorker();
   },
 });
@@ -91,7 +94,10 @@ export const reapOrphanedRuns = createSweep({
     return claimed > 0;
   },
   handle: async ({ row: run }) => {
-    await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+    await getOrchestrationQueueDriver().enqueue({
+      runId: run.id as number,
+      kind: 'continue',
+    });
     kickWorker();
   },
 });

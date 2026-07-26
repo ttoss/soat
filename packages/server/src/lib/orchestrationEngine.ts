@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import type { DecisionOutput, MappedApproval } from './approvals';
 import { emitApproval, registerApprovalResumeHandler } from './approvals';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
+import { getOrchestrationQueueDriver } from './orchestration-queue-drivers';
 import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
@@ -24,7 +25,6 @@ import {
   recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
-import { enqueueRunTask } from './orchestrationQueue';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
@@ -456,7 +456,10 @@ export const startOrchestrationRun = async (args: {
   // a worker claims the task and drives the run. `kickWorker` lets a
   // single-process deployment (the API process is itself a valid worker) start
   // draining right away without a separate worker process.
-  await enqueueRunTask({ runId: runRecord.id as number, kind: 'continue' });
+  await getOrchestrationQueueDriver().enqueue({
+    runId: runRecord.id as number,
+    kind: 'continue',
+  });
   kickWorker();
 
   return startMapped;

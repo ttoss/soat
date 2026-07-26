@@ -41,7 +41,10 @@ const copyPermissionFiles = () => {
 
 export default {
   ...tsdownConfig(),
-  entry: ['src/server.ts'],
+  // `server.ts` is the API process; `worker.ts` is the standalone orchestration
+  // worker (no HTTP listener) and `workerHealthcheck.ts` the liveness probe its
+  // container runs — both are deployed from this same image.
+  entry: ['src/server.ts', 'src/worker.ts', 'src/workerHealthcheck.ts'],
   format: ['esm'],
   sourcemap: true,
   onSuccess: () => {

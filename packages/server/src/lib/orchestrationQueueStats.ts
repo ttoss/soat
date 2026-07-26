@@ -2,7 +2,8 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { claimLatencySnapshot } from './orchestrationQueue';
+import type { QueueStats } from './orchestration-queue-drivers/types';
+import { claimLatencySnapshot } from './orchestrationQueueMetrics';
 
 const log = createDebug('soat:orchestrations');
 
@@ -12,38 +13,12 @@ const RUN_TASK_TABLE = 'orchestration_run_tasks';
 const RUN_TABLE = 'orchestration_runs';
 const PROJECT_TABLE = 'projects';
 
-export type QueueStats = {
-  driver: 'postgres';
-  queueDepth: number;
-  claimedTasks: number;
-  oldestQueuedAgeSeconds: number | null;
-  claimLatencyMs: {
-    p50: number | null;
-    p95: number | null;
-    windowSeconds: number;
-  };
-  perProject: Array<{ projectId: string; queued: number; claimed: number }>;
-};
-
 type PerProjectRow = {
   project_id: string;
   queued: string | number;
   claimed: string | number;
 };
 
-/**
- * A point-in-time snapshot of the orchestration queue for the queue-stats
- * endpoint. `queueDepth` counts claimable-now unclaimed tasks (backoff-delayed
- * tasks with a future `available_at` are excluded — they are not claimable
- * yet); `claimedTasks` counts tasks holding a valid (unexpired) lease.
- * `oldestQueuedAgeSeconds` is the age of the oldest claimable-now task, or
- * `null` when the queue is empty. `claimLatencyMs` reports p50/p95 over a
- * rolling in-process window. `perProject` lists one row per project with any
- * queued or claimed task, keyed by the project's public id.
- *
- * When `projectIds` is provided, `perProject` is restricted to those projects
- * (a project-scoped caller sees only their own rows); `undefined` includes all.
- */
 /**
  * Per-project queued/claimed task counts, one row per project with any such
  * task. `projectIds` restricts the breakdown to those projects; `undefined`
@@ -89,7 +64,21 @@ const loadPerProject = async (args: {
   });
 };
 
-export const getQueueStats = async (args?: {
+/**
+ * A point-in-time snapshot of the Postgres-backed orchestration queue for the
+ * queue-stats endpoint (the `postgres` driver's `stats`). `queueDepth` counts
+ * claimable-now unclaimed tasks (backoff-delayed tasks with a future
+ * `available_at` are excluded — they are not claimable yet); `claimedTasks`
+ * counts tasks holding a valid (unexpired) lease.
+ * `oldestQueuedAgeSeconds` is the age of the oldest claimable-now task, or
+ * `null` when the queue is empty. `claimLatencyMs` reports p50/p95 over a
+ * rolling in-process window. `perProject` lists one row per project with any
+ * queued or claimed task, keyed by the project's public id.
+ *
+ * When `projectIds` is provided, `perProject` is restricted to those projects
+ * (a project-scoped caller sees only their own rows); `undefined` includes all.
+ */
+export const getPostgresQueueStats = async (args?: {
   projectIds?: number[];
   now?: Date;
 }): Promise<QueueStats> => {

@@ -1,6 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import { getQueueStats } from 'src/lib/orchestrationQueueStats';
+import { getOrchestrationQueueDriver } from 'src/lib/orchestration-queue-drivers';
 
 // Queue operations for orchestrations live on their own router so the main
 // orchestrations router stays within its size budget. The `queue/stats` path
@@ -37,6 +37,8 @@ orchestrationQueueRouter.get(
       ctx.body = { error: 'Forbidden' };
       return;
     }
-    ctx.body = await getQueueStats({ projectIds: projectIds ?? undefined });
+    ctx.body = await getOrchestrationQueueDriver().stats({
+      projectIds: projectIds ?? undefined,
+    });
   }
 );
