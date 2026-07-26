@@ -36,6 +36,11 @@ const VERBATIM_KEYS: ReadonlySet<string> = new Set([
   'guard',
   'when',
   'headers',
+  // A `tool_context` entry's key is an HTTP header name (`X-Soat-Context-<Key>`),
+  // not a SOAT field name — same category as `headers`. Without this, reading a
+  // session over MCP rewrites `actor_external_id` to `actorExternalId`, so
+  // re-sending what the read returned changes which header the tool receives.
+  'toolContext',
 ]);
 
 export const snakeToCamelDeep = (value: unknown): unknown => {

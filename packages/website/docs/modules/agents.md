@@ -290,7 +290,7 @@ Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's 
 
 `tool_context` lets callers inject key-value pairs forwarded as HTTP headers to every tool call in a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.
 
-`tool_context` is a flat `Record<string, string>`. Each key's first character is uppercased and the key is prefixed with `X-Soat-Context-` — use **camelCase** keys and the header is predictable on every surface:
+`tool_context` is a flat `Record<string, string>`. Each key's first character is uppercased and the key is prefixed with `X-Soat-Context-`; the rest of the key is used verbatim and is never case-converted, so the header is predictable from the key alone:
 
 | `tool_context` key | Forwarded header          |
 | ------------------ | ------------------------- |

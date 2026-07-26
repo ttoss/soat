@@ -133,17 +133,19 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 
 ### Tool Context
 
-`POST /api/v1/conversations/:id/generate` accepts an optional `tool_context` field in the request body. The context is forwarded to the underlying agent generation exactly as described in [Tool Context](./agents.md#tool-context) in the Agents module.
+`POST /api/v1/conversations/:id/generate` accepts an optional `tool_context` field in the request body. The context is forwarded to the underlying agent generation exactly as described in the [Tool Context reference](../advanced/tool-context.md).
 
 ```json
 {
   "agent_id": "agent_...",
   "tool_context": {
-    "user_id": "user_abc123",
-    "tenant_id": "tenant_xyz"
+    "userId": "user_abc123",
+    "tenantId": "tenant_xyz"
   }
 }
 ```
+
+Keys are used verbatim, so the tool calls in that generation receive `X-Soat-Context-UserId` and `X-Soat-Context-TenantId`. A `user_id` key would instead produce `X-Soat-Context-User_id`.
 
 ### Filtering by Actor
 

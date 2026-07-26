@@ -172,34 +172,70 @@ describe('Sessions', () => {
       });
     });
 
-    // The stored key — not the key the caller sent — is what becomes the
-    // outbound `X-Soat-Context-*` header, and `tool_context` is NOT a
-    // caseTransform pass-through field. So a snake_case key sent over REST is
-    // normalized to camelCase on the way in, and only key shapes the
-    // normalizer does not touch (kebab, dotted, PascalCase) reach the header
-    // builder verbatim. Pinned because the header a tool endpoint actually
-    // receives is not predictable from the request body alone.
-    test('normalizes snake_case tool_context keys to camelCase in storage', async () => {
+    // `tool_context` is a caseTransform pass-through: its keys are HTTP header
+    // names, not SOAT field names, so every shape is stored exactly as sent and
+    // the outbound `X-Soat-Context-*` header is predictable from the request
+    // body alone. Pinned in all three places it could drift — storage (the
+    // header source), the response echo, and the round-trip.
+    test('stores tool_context keys verbatim, whatever their case', async () => {
+      const toolContext = {
+        actor_external_id: 'snake',
+        actorExternalId: 'camel',
+        'actor-external-id': 'kebab',
+        PascalKey: 'pascal',
+      };
+
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/sessions')
-        .send({
-          agent_id: agentId,
-          tool_context: {
-            actor_external_id: 'snake',
-            'actor-external-id': 'kebab',
-            PascalKey: 'pascal',
-          },
-        });
+        .send({ agent_id: agentId, tool_context: toolContext });
 
       expect(response.status).toBe(201);
 
       const stored = await db.Session.findOne({
         where: { publicId: response.body.id },
       });
-      expect(stored?.toolContext).toEqual({
-        actorExternalId: 'snake',
-        'actor-external-id': 'kebab',
-        PascalKey: 'pascal',
+      expect(stored?.toolContext).toEqual(toolContext);
+      expect(response.body.tool_context).toEqual(toolContext);
+    });
+
+    // A leading-uppercase key used to come back as `_pascal_key`, so reading a
+    // session and re-sending its `tool_context` changed which header went out.
+    test('tool_context survives a read-modify-write round-trip', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { PascalKey: 'a', snake_key: 'b' },
+        });
+
+      const echoed = created.body.tool_context;
+
+      const updated = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${created.body.id}`)
+        .send({ tool_context: echoed });
+
+      expect(updated.status).toBe(200);
+      expect(updated.body.tool_context).toEqual({
+        PascalKey: 'a',
+        snake_key: 'b',
+      });
+    });
+
+    // Distinct keys that the inbound normalizer used to collapse into one
+    // (`user_id` → `userId`) now survive as two independent headers, so neither
+    // value is silently dropped before validation can see it.
+    test('keeps snake_case and camelCase spellings as distinct keys', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({
+          agent_id: agentId,
+          tool_context: { user_id: 'snake', userId: 'camel' },
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.tool_context).toEqual({
+        user_id: 'snake',
+        userId: 'camel',
       });
     });
 

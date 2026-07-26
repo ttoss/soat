@@ -33,39 +33,27 @@ When a generation pauses with `status: "requires_action"`, the `tool_context` fr
 
 ## Key → header name
 
-Given a **stored** key, the header name is that key with its **first character uppercased** and `X-Soat-Context-` prepended. The rest of the key is used **verbatim**:
+The header name is your key with its **first character uppercased** and `X-Soat-Context-` prepended. The rest of the key is used **verbatim**:
 
-| Stored key | Forwarded header |
+| `tool_context` key | Forwarded header |
 | --- | --- |
 | `userId` | `X-Soat-Context-UserId` |
 | `tenantId` | `X-Soat-Context-TenantId` |
 | `actorExternalId` | `X-Soat-Context-ActorExternalId` |
+| `actor_external_id` | `X-Soat-Context-Actor_external_id` |
 | `actor-external-id` | `X-Soat-Context-Actor-external-id` |
 | `actor.external.id` | `X-Soat-Context-Actor.external.id` |
 | `env` | `X-Soat-Context-Env` |
 
-This is **not** title-casing: separators are not collapsed and later characters are never re-cased. `actor_external_id` as a *stored* key yields `X-Soat-Context-Actor_external_id`, not `X-Soat-Context-ActorExternalId`.
+This is **not** title-casing: separators are not collapsed and later characters are never re-cased. `actor_external_id` yields `X-Soat-Context-Actor_external_id`, not `X-Soat-Context-ActorExternalId` — the two are different keys and produce different headers.
 
-### The stored key is not always the key you sent
+**Keys are never case-converted.** Unlike every other field in the REST API, `tool_context` keys are not rewritten between snake_case and camelCase: a key is an HTTP header name, not a SOAT field name, so it is stored, echoed in responses, and forwarded exactly as you wrote it — on REST, in formation templates, and over MCP alike. The one table above is enough to predict the header on any surface, and reading a session's `tool_context` and sending it back unchanged is lossless.
 
-On the REST API `tool_context` is an ordinary body field, so it goes through the usual snake_case → camelCase conversion the API applies to every request body — including its **inner keys**. The header is derived from the *stored* (camelCase) key, not from what you wrote in the request:
+:::note Changed in a recent release
 
-| Sent over REST | Stored | Forwarded header |
-| --- | --- | --- |
-| `actor_external_id` | `actorExternalId` | `X-Soat-Context-ActorExternalId` |
-| `actorExternalId` | `actorExternalId` | `X-Soat-Context-ActorExternalId` |
-| `user_id` | `userId` | `X-Soat-Context-UserId` |
-| `actor-external-id` | `actor-external-id` | `X-Soat-Context-Actor-external-id` |
-| `PascalKey` | `PascalKey` | `X-Soat-Context-PascalKey` |
+`tool_context` keys used to be case-converted like any other body field, so a `actor_external_id` sent over REST was stored as `actorExternalId` and produced `X-Soat-Context-ActorExternalId`. If a tool endpoint of yours reads a camelCase context header that it receives from an explicitly-set snake_case key, either rename the key to camelCase or read the snake_case header. Session-auto-populated keys (`sessionId` / `actorId` / `actorExternalId`) are unaffected — they were and remain camelCase.
 
-So over REST, `snake_case` and `camelCase` spellings of the same key are equivalent — both land on the camelCase header. Only shapes the converter does not touch (kebab-case, dotted, leading uppercase) reach the header builder verbatim.
-
-Two consequences worth knowing:
-
-- **Formation templates are not converted.** A template's `tool_context` is a pass-through document, so `actor_external_id` there stays `actor_external_id` and produces `X-Soat-Context-Actor_external_id` — a *different* header than the same key sent over REST. Write formation `tool_context` keys in **camelCase** to match the REST behavior.
-- **The response body is not a reliable preview of the header.** Responses convert camelCase back to snake_case, so a session created with `actorExternalId` reads back as `actor_external_id`, and a key with a leading uppercase (`PascalKey`) reads back with a leading underscore (`_pascal_key`). Neither changes the header that is actually sent; use the table above, not the response, to predict it.
-
-To avoid all of this ambiguity: **use camelCase keys everywhere.** A camelCase key is stored, echoed and forwarded identically on every surface.
+:::
 
 ## Auto-populated keys (sessions)
 

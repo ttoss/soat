@@ -211,6 +211,18 @@ const buildBodySkipKeys = (path: string): Set<string> => {
     // dry-run body (agents, sessions, conversations, orchestrations, guardrails),
     // so it round-trips verbatim globally, exactly like `parameters`/`execute`.
     'guardrailContext',
+    // A `tool_context` entry's key *is* an HTTP header name — it is forwarded as
+    // `X-Soat-Context-<Key>` on every http/mcp/soat tool call — so it belongs
+    // with `headers` rather than with SOAT's own field names. Transforming it
+    // desynced three things: the header a caller predicted from their request
+    // body (`actor_external_id` silently became `X-Soat-Context-ActorExternalId`),
+    // the same key written in a formation template (a `template` pass-through, so
+    // it stayed snake_case and produced a *different* header), and two distinct
+    // keys that collapsed into one (`user_id` + `userId`), dropping a value
+    // before validation could reject the collision. It appears on every
+    // session / generation body (agents, sessions, conversations, formations), so
+    // it round-trips verbatim globally.
+    'toolContext',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) keys.add('input');
@@ -259,6 +271,12 @@ const buildResponseSkipKeys = (path: string): Set<string> => {
     // Mirror of the inbound `headers` skip — HTTP header names round-trip
     // verbatim in responses (e.g. the orchestration webhook node's `headers`).
     'headers',
+    // Mirror of the inbound `toolContext` skip. Required for the response to be
+    // a usable preview of the outbound header, and for a read-modify-write on a
+    // session to be lossless: `camelToSnake` turned a leading-uppercase key like
+    // `PascalKey` into `_pascal_key`, so re-sending what the API returned
+    // changed which header the tool received.
+    'tool_context',
   ]);
   if (isMetadataPassthroughPath(path)) keys.add('metadata');
   if (isToolInputPassthroughPath(path)) {
