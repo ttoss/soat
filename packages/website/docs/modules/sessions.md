@@ -1,5 +1,5 @@
 ---
-description: "A simplified one-user-to-one-agent conversational interface owned by an agent."
+description: 'A simplified one-user-to-one-agent conversational interface owned by an agent.'
 ---
 
 import Tabs from '@theme/Tabs';
@@ -11,7 +11,7 @@ A simplified 1 user ↔ 1 agent conversational interface, owned by an agent.
 
 ## Overview
 
-Sessions hide the underlying [Conversation](./conversations.md), [Actor](./actors.md), and generation plumbing. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call. Walk through it end to end in [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
+Sessions hide the underlying [Conversation](./conversations.md) and generation plumbing. The [Actor](./actors.md) is not hidden and not created for you — link one with `actor_id` when the session represents a specific end user. By default, interacting with an agent requires three API calls: create a session, save a user message, and trigger generation. When `auto_generate` is enabled, the message and generation collapse into a single call. Walk through it end to end in [Chat with an LLM - Step 5 (Create a session)](/docs/tutorials/chat-with-llm#step-5--create-a-session) and [Step 6 (Send messages and receive replies)](/docs/tutorials/chat-with-llm#step-6--send-messages-and-receive-replies).
 
 Sessions are a top-level resource at `/sessions`. Each session belongs to an [Agent](./agents.md) — set `agent_id` on create, and filter by it with `GET /sessions?agent_id=`. Each session exposes its `conversation_id` as an escape hatch to the full [Conversations](./conversations.md) API; list a session's messages via `GET /conversations/:conversation_id/messages` (this is governed by `conversations:GetConversation`, not the `agents:*` session actions).
 
@@ -27,30 +27,30 @@ Sessions are a top-level resource at `/sessions`. Each session belongs to an [Ag
 
 ### Session
 
-| Field                    | Type            | Description                                                                                                    |
-| ------------------------ | --------------- | -------------------------------------------------------------------------------------------------------------- |
-| `id`                     | string          | Public identifier prefixed with `sess_`                                                                        |
-| `agent_id`               | string          | Public ID of the agent this session belongs to                                                                 |
-| `conversation_id`        | string          | Public ID of the underlying conversation                                                                       |
-| `status`                 | string          | `open` (default), `closed`, or `expired`                                                                       |
-| `name`                   | string          | Optional display name                                                                                          |
-| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) associated with this session (`actor_` prefix)                  |
-| `tags`                   | object          | Free-form key-value metadata                                                                                   |
-| `auto_generate`          | boolean         | When `true`, saving a message automatically triggers LLM generation (default: `false`)                         |
-| `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).      |
-| `inactivity_ttl_seconds` | integer         | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                       |
-| `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                           |
-| `created_at`             | string          | ISO 8601 creation timestamp                                                                                    |
-| `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                |
+| Field                    | Type            | Description                                                                                                      |
+| ------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `id`                     | string          | Public identifier prefixed with `sess_`                                                                          |
+| `agent_id`               | string          | Public ID of the agent this session belongs to                                                                   |
+| `conversation_id`        | string          | Public ID of the underlying conversation                                                                         |
+| `status`                 | string          | `open` (default), `closed`, or `expired`                                                                         |
+| `name`                   | string          | Optional display name                                                                                            |
+| `actor_id`               | string \| null  | Optional public ID of the [Actor](./actors.md) linked on create (`actor_` prefix); `null` when none was supplied |
+| `tags`                   | object          | Free-form key-value metadata                                                                                     |
+| `auto_generate`          | boolean         | When `true`, saving a message automatically triggers LLM generation (default: `false`)                           |
+| `message_delay_seconds`  | integer \| null | Debounce delay in seconds before the LLM is called after a user message. `null` means no delay (default).        |
+| `inactivity_ttl_seconds` | integer         | Seconds of inactivity before the session expires. `0` means never expires (default: `0`)                         |
+| `last_activity_at`       | string \| null  | ISO 8601 timestamp of the last user message; `null` until the first message is added                             |
+| `created_at`             | string          | ISO 8601 creation timestamp                                                                                      |
+| `updated_at`             | string          | ISO 8601 last-updated timestamp                                                                                  |
 
 ### Message (within a session)
 
-| Field        | Type   | Description                                                 |
-| ------------ | ------ | ----------------------------------------------------------- |
-| `role`       | string | `user` or `assistant`                                       |
-| `content`    | string | Message text                                                |
-| `model`      | string | Model used for assistant messages                           |
-| `created_at` | string | ISO 8601 timestamp                                          |
+| Field        | Type   | Description                       |
+| ------------ | ------ | --------------------------------- |
+| `role`       | string | `user` or `assistant`             |
+| `content`    | string | Message text                      |
+| `model`      | string | Model used for assistant messages |
+| `created_at` | string | ISO 8601 timestamp                |
 
 When creating a session message (`POST .../messages`), send exactly one of:
 
@@ -68,6 +68,10 @@ An optional `idempotency_key` string can be included with either variant — see
 | **Chats**         | Raw LLM completions — no agents, no tools, caller manages history                   |
 | **Sessions**      | 1 user ↔ 1 agent — full tool support, automatic history, owned by an agent          |
 | **Conversations** | Multi-party dialogue engine — powers sessions internally, available as escape hatch |
+
+### The Session's End User (Actor)
+
+A session has an end user only when `actor_id` is supplied on create. [Actors](./actors.md) are created separately and are never auto-created here. This matters beyond naming: end-user attribution on the resulting [usage](./usage.md#end-user-attribution) events is derived from the session's actor, so a session without one produces generations that match no `actor`-scoped [quota](./quotas.md#actor-scope). Attach an actor before relying on a per-user spend cap.
 
 ### Lifecycle
 
@@ -114,6 +118,7 @@ Content-Type: application/json
 ```
 
 With the above:
+
 - User sends "What's the" → timer starts (3 s)
 - User sends "weather in" → timer resets (3 s)
 - User sends "Paris?" → timer resets (3 s)
@@ -170,11 +175,11 @@ Sessions support the same `tool_context` mechanism as direct agent generations �
 
 When a generation is triggered through a session, the server automatically injects the following keys into `tool_context`:
 
-| Injected key        | Forwarded header                 | Value                                                             |
-| ------------------- | -------------------------------- | ----------------------------------------------------------------- |
-| `actorId`           | `X-Soat-Context-ActorId`         | Public ID of the session's actor; omitted if not set             |
-| `actorExternalId`   | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set            |
-| `sessionId`         | `X-Soat-Context-SessionId`       | Public ID of the session; always present                          |
+| Injected key      | Forwarded header                 | Value                                                  |
+| ----------------- | -------------------------------- | ------------------------------------------------------ |
+| `actorId`         | `X-Soat-Context-ActorId`         | Public ID of the session's actor; omitted if not set   |
+| `actorExternalId` | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set |
+| `sessionId`       | `X-Soat-Context-SessionId`       | Public ID of the session; always present               |
 
 Any values provided by the caller in `tool_context` take precedence over the auto-populated values.
 
@@ -240,7 +245,10 @@ soat generate-session-response --session-id sess_01
 
 ```ts
 import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
+const soat = new SoatClient({
+  baseUrl: 'https://api.example.com',
+  token: 'sk_...',
+});
 
 const { data: session } = await soat.sessions.createSession({
   body: { agent_id: 'agent_01', name: 'My Session' },

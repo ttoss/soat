@@ -5,7 +5,9 @@ info:
   description: >
     Agent Sessions provide a simplified 1-user ↔ 1-agent conversational
     abstraction. Each session belongs to an agent (set via agent_id) and manages
-    the underlying conversation, actors, and generation plumbing automatically.
+    the underlying conversation and generation plumbing automatically. The end
+    user behind the session is not created for you — pass actor_id to attach an
+    existing actor.
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -28,9 +30,13 @@ paths:
         - Sessions
       summary: Create a session
       description: >
-        Creates a new session for the specified agent. Internally creates a
-        conversation and two actors (agent + user) so the caller only needs
-        this single call to start interacting with the agent.
+        Creates a new session for the specified agent, along with the underlying
+        conversation, so the caller only needs this single call to start
+        interacting with the agent. No actor is created: pass `actor_id` to
+        attach an existing actor as the session's end user. When it is omitted
+        the session has no actor, and generations in it carry no end-user
+        attribution — they are not billed to an actor in the usage meter and
+        they match no `actor`-scoped quota.
       operationId: createSession
       requestBody:
         content:
@@ -505,7 +511,9 @@ components:
           x-soat-ref: actors
           type: string
           nullable: true
-          description: Public ID of the user actor
+          description: >
+            Public ID of the user actor, or null when the session was created
+            without one
           example: actor_V1StGXR8Z5jdHi6B
         tags:
           type: object
@@ -568,7 +576,11 @@ components:
         actor_id:
           x-soat-ref: actors
           type: string
-          description: Optional public ID of an existing actor to use as the user actor
+          description: >
+            Optional public ID of an existing actor to use as the user actor.
+            Actors are created separately (POST /actors); this field only links
+            one. Omit it and the session has no end user, so its generations
+            match no actor-scoped quota.
           example: actor_V1StGXR8Z5jdHi6B
         auto_generate:
           type: boolean

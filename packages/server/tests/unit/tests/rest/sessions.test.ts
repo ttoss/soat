@@ -107,6 +107,32 @@ describe('Sessions', () => {
       expect(response.body.actor_id).toBeNull();
     });
 
+    // Creating a session provisions a conversation but deliberately no actor:
+    // the end user is linked by the caller via `actor_id`. Pinned because a
+    // session without an actor carries no end-user attribution, so its
+    // generations match no actor-scoped quota — silently unenforced spend if
+    // this ever starts auto-creating (or is documented as if it did).
+    test('creates no actors — the caller links one via actor_id', async () => {
+      const before = await authenticatedTestClient(adminToken).get(
+        `/api/v1/actors?project_id=${projectId}`
+      );
+      expect(before.status).toBe(200);
+      expect(typeof before.body.total).toBe('number');
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/sessions')
+        .send({ agent_id: agentId });
+
+      expect(response.status).toBe(201);
+      expect(response.body.actor_id).toBeNull();
+
+      const after = await authenticatedTestClient(adminToken).get(
+        `/api/v1/actors?project_id=${projectId}`
+      );
+      expect(after.status).toBe(200);
+      expect(after.body.total).toBe(before.body.total);
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
         .post('/api/v1/sessions')
