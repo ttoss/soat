@@ -70,10 +70,9 @@ Each file has:
 
 ## Adding a module
 
-`pnpm --filter @soat/server test --testPathPatterns=qaChecklists.test.ts`
-fails when a module has an OpenAPI spec but no checklist here. A new module
-either gets a checklist or an explicit entry in that test's pending list — the
-pending list is the visible backlog, and it is expected to shrink.
+A new module either gets a checklist here or an entry in the pending list below.
+Nothing enforces this automatically — it is a review-time obligation, wired into
+the module checklist in `.claude/rules/modules.md`.
 
 ## Index
 
@@ -91,10 +90,18 @@ file's **Not covered** section — it is a gap list, not a failure count.
 | [tasks](./tasks.md) | 20/20 | 2026-07-18 | [#595](https://github.com/ttoss/soat/issues/595) |
 | [workflows](./workflows.md) | 72/74 | 2026-07-19 | [#594](https://github.com/ttoss/soat/issues/594), [#596](https://github.com/ttoss/soat/issues/596), [#597](https://github.com/ttoss/soat/issues/597), [#616](https://github.com/ttoss/soat/issues/616), [#617](https://github.com/ttoss/soat/issues/617) |
 
-**8 of 34 modules have had a live pass.** The other 26 are pending a first pass —
-they are listed explicitly in `PENDING_FIRST_PASS` in
-`packages/server/tests/unit/tests/lib/qaChecklists.test.ts`, which is the backlog.
-
 Guardrails is the thinnest coverage and the most consequential: its unverified
 items include stricter-wins composition across scopes, the only gap here that
 could silently *loosen* enforcement if wrong.
+
+## Pending a first pass
+
+**8 of 34 modules have had a live pass.** These 26 have not. This list is the
+backlog — remove an entry when its checklist lands, and add one whenever a new
+module ships without a pass.
+
+`actors` · `agents` · `ai-providers` · `api-keys` · `approvals` · `chats` ·
+`conversations` · `discussions` · `documents` · `embeddings` · `exceptions` ·
+`files` · `formations` · `generations` · `ingestion-rules` · `memoryEntries` ·
+`policies` · `projects` · `secrets` · `sessions` · `tools` · `traces` ·
+`triggers` · `usage` · `users` · `webhooks`
