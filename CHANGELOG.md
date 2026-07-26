@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.16.2](https://github.com/ttoss/soat/compare/v0.16.1...v0.16.2) (2026-07-26)
+
+### Bug Fixes
+
+* **postgresdb:** declare unique constraints as named indexes ([#710](https://github.com/ttoss/soat/issues/710)) ([7a7c405](https://github.com/ttoss/soat/commit/7a7c40595fbe33f5aa7307a438d89a15047fabc2))
+* **quotas:** reject formation updates that change immutable quota fields ([#706](https://github.com/ttoss/soat/issues/706)) ([3a94680](https://github.com/ttoss/soat/commit/3a946803ae38200750e2a1b3b93f36f91cccd059)), closes [#703](https://github.com/ttoss/soat/issues/703)
+
+### Features
+
+* **guardrails:** per-run cumulative usage ceiling ([#486](https://github.com/ttoss/soat/issues/486)) ([#701](https://github.com/ttoss/soat/issues/701)) ([636a277](https://github.com/ttoss/soat/commit/636a277582a6f1a14cab63e0cf06fb58e845f2fa))
+* **quotas:** add actor scope for per-end-user token and cost caps ([#702](https://github.com/ttoss/soat/issues/702)) ([2c41429](https://github.com/ttoss/soat/commit/2c4142998d1ace53b04043a4851b997fc133afdf)), closes [#699](https://github.com/ttoss/soat/issues/699)
+* **usage:** attribute usage events to the end-user actor and session ([#699](https://github.com/ttoss/soat/issues/699)) ([06636cc](https://github.com/ttoss/soat/commit/06636cc3f90facb7cb85b43eba98a15386493cee)), closes [#482](https://github.com/ttoss/soat/issues/482) [#484](https://github.com/ttoss/soat/issues/484)
+
 ## [0.16.1](https://github.com/ttoss/soat/compare/v0.16.0...v0.16.1) (2026-07-25)
 
 ### Bug Fixes

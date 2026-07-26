@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.16.2](https://127.0.0.1/41729/git/ttoss/compare/v0.16.1...v0.16.2) (2026-07-26)
+
+### Bug Fixes
+
+* **quotas:** reject formation updates that change immutable quota fields ([#706](https://127.0.0.1/41729/git/ttoss/issues/706)) ([3a94680](https://127.0.0.1/41729/git/ttoss/commits/3a946803ae38200750e2a1b3b93f36f91cccd059)), closes [#703](https://127.0.0.1/41729/git/ttoss/issues/703)
+
+### Features
+
+* **guardrails:** per-run cumulative usage ceiling ([#486](https://127.0.0.1/41729/git/ttoss/issues/486)) ([#701](https://127.0.0.1/41729/git/ttoss/issues/701)) ([636a277](https://127.0.0.1/41729/git/ttoss/commits/636a277582a6f1a14cab63e0cf06fb58e845f2fa))
+* **quotas:** add actor scope for per-end-user token and cost caps ([#702](https://127.0.0.1/41729/git/ttoss/issues/702)) ([2c41429](https://127.0.0.1/41729/git/ttoss/commits/2c4142998d1ace53b04043a4851b997fc133afdf)), closes [#699](https://127.0.0.1/41729/git/ttoss/issues/699)
+* **usage:** attribute usage events to the end-user actor and session ([#699](https://127.0.0.1/41729/git/ttoss/issues/699)) ([06636cc](https://127.0.0.1/41729/git/ttoss/commits/06636cc3f90facb7cb85b43eba98a15386493cee)), closes [#482](https://127.0.0.1/41729/git/ttoss/issues/482) [#484](https://127.0.0.1/41729/git/ttoss/issues/484)
+
 ## [0.16.1](https://127.0.0.1/41729/git/ttoss/compare/v0.16.0...v0.16.1) (2026-07-25)
 
 ### Bug Fixes
