@@ -12,6 +12,13 @@ import { Document } from './Document';
 
 @Table({
   tableName: 'document_chunks',
+  indexes: [
+    {
+      name: 'document_chunks_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: DocumentChunk) => {
       if (!instance.publicId) {
@@ -23,7 +30,6 @@ import { Document } from './Document';
 export class DocumentChunk extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

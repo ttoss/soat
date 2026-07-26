@@ -33,6 +33,12 @@ import { Tool } from './Tool';
   },
   indexes: [
     {
+      name: 'ingestion_rules_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'ingestion_rules_project_id_content_type_glob_unique',
       unique: true,
       fields: ['project_id', 'content_type_glob'],
     },
@@ -41,7 +47,6 @@ import { Tool } from './Tool';
 export class IngestionRule extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -1,0 +1,11 @@
+{
+  "extends": "@ttoss/config/tsconfig.test.json",
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "paths": {
+      "src/*": ["../src/*"],
+      "tests/*": ["./*"]
+    }
+  }
+}

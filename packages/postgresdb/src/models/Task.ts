@@ -22,6 +22,11 @@ import { Workflow } from './Workflow';
 @Table({
   tableName: 'tasks',
   indexes: [
+    {
+      name: 'tasks_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     // Board queries: columns of a workflow filtered by state/status.
     { fields: ['project_id', 'workflow_id', 'state', 'status'] },
     // Board queries and stall-episode reasoning by how long a task has parked.
@@ -43,7 +48,6 @@ import { Workflow } from './Workflow';
 export class Task extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

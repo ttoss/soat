@@ -36,6 +36,11 @@ const APPEND_ONLY_MESSAGE =
   tableName: 'audit_entries',
   updatedAt: false,
   indexes: [
+    {
+      name: 'audit_entries_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
     { fields: ['project_id', 'created_at'] },
     { fields: ['principal_id', 'created_at'] },
     { fields: ['action', 'created_at'] },
@@ -63,7 +68,6 @@ const APPEND_ONLY_MESSAGE =
 export class AuditEntry extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

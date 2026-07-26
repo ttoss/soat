@@ -18,6 +18,13 @@ import { Project } from './Project';
  */
 @Table({
   tableName: 'upload_tokens',
+  indexes: [
+    {
+      name: 'upload_tokens_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: UploadToken) => {
       if (!instance.publicId) {
@@ -29,7 +36,6 @@ import { Project } from './Project';
 export class UploadToken extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

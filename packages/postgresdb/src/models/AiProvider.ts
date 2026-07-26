@@ -28,6 +28,13 @@ export type AiProviderSlug = (typeof AI_PROVIDER_SLUGS)[number];
 
 @Table({
   tableName: 'ai_providers',
+  indexes: [
+    {
+      name: 'ai_providers_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: AiProvider) => {
       if (!instance.publicId) {
@@ -39,7 +46,6 @@ export type AiProviderSlug = (typeof AI_PROVIDER_SLUGS)[number];
 export class AiProvider extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -12,6 +12,13 @@ import { Project } from './Project';
 
 @Table({
   tableName: 'tools',
+  indexes: [
+    {
+      name: 'tools_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Tool) => {
       if (!instance.publicId) {
@@ -23,7 +30,6 @@ import { Project } from './Project';
 export class Tool extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

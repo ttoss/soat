@@ -18,6 +18,13 @@ import { Guardrail } from './Guardrail';
  */
 @Table({
   tableName: 'guardrail_versions',
+  indexes: [
+    {
+      name: 'guardrail_versions_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   updatedAt: false,
   hooks: {
     beforeValidate: (instance: GuardrailVersion) => {
@@ -32,7 +39,6 @@ import { Guardrail } from './Guardrail';
 export class GuardrailVersion extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

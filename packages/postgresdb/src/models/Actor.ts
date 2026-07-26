@@ -29,6 +29,12 @@ import { Project } from './Project';
   },
   indexes: [
     {
+      name: 'actors_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+    {
+      name: 'actors_project_id_external_id_unique',
       unique: true,
       fields: ['project_id', 'external_id'],
     },
@@ -37,7 +43,6 @@ import { Project } from './Project';
 export class Actor extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

@@ -12,6 +12,13 @@ import { Formation } from './Formation';
 
 @Table({
   tableName: 'formation_operations',
+  indexes: [
+    {
+      name: 'formation_operations_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: FormationOperation) => {
       if (!instance.publicId) {
@@ -25,7 +32,6 @@ import { Formation } from './Formation';
 export class FormationOperation extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;

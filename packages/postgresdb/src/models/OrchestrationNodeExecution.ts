@@ -11,6 +11,13 @@ import { OrchestrationRun } from './OrchestrationRun';
 
 @Table({
   tableName: 'orchestration_node_executions',
+  indexes: [
+    {
+      name: 'orchestration_node_executions_idempotency_key_unique',
+      unique: true,
+      fields: ['idempotency_key'],
+    },
+  ],
 })
 export class OrchestrationNodeExecution extends Model {
   @ForeignKey(() => {
@@ -43,7 +50,7 @@ export class OrchestrationNodeExecution extends Model {
   // same key reuses its stored `output` instead of re-executing. NULL for pure
   // nodes (condition, transform, delay, human, approval, webhook), which have no
   // external side effect and keep record-after-execution behavior.
-  @Column({ type: DataType.STRING, allowNull: true, unique: true })
+  @Column({ type: DataType.STRING, allowNull: true })
   declare idempotencyKey: string | null;
 
   @Column({

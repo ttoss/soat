@@ -20,6 +20,13 @@ import { Task } from './Task';
  */
 @Table({
   tableName: 'workflows',
+  indexes: [
+    {
+      name: 'workflows_public_id_unique',
+      unique: true,
+      fields: ['public_id'],
+    },
+  ],
   hooks: {
     beforeValidate: (instance: Workflow) => {
       if (!instance.publicId) {
@@ -31,7 +38,6 @@ import { Task } from './Task';
 export class Workflow extends Model {
   @Column({
     type: DataType.STRING(32),
-    unique: true,
     allowNull: false,
   })
   declare publicId: string;
