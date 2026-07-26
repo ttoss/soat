@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { validateQuotaImmutableFields } from './quotaImmutability';
 import {
   QUOTA_WINDOWS,
   type QuotaWindow,
@@ -23,6 +24,12 @@ export {
   windowResetsAt,
   windowStartsAt,
 } from './quotaWindows';
+// The immutability rule lives in `quotaImmutability.ts`; re-exported so callers
+// reach it through the module's single public surface.
+export {
+  QUOTA_IMMUTABLE_FIELDS,
+  validateQuotaImmutableFields,
+} from './quotaImmutability';
 
 export const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
 export const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
@@ -403,6 +410,14 @@ export const updateQuota = async (args: {
   id: string;
   limit?: unknown;
   mode?: string;
+  // Immutable fields are accepted so callers that carry the full desired state
+  // (formation templates) can be validated here rather than silently dropping
+  // them. Supplying a value that differs from the stored one is an error; the
+  // REST route rejects these fields earlier via its PATCH field allowlist.
+  scope?: unknown;
+  scopeRef?: unknown;
+  metric?: unknown;
+  window?: unknown;
 }): Promise<ReturnType<typeof mapQuota>> => {
   log('updateQuota: id=%s', args.id);
 
@@ -410,6 +425,27 @@ export const updateQuota = async (args: {
     projectIds: args.projectIds,
     id: args.id,
   });
+
+  // Enforced before any field is written, so a rejected update leaves the quota
+  // exactly as it was rather than applying `limit`/`mode` piecemeal.
+  const immutableError = validateQuotaImmutableFields({
+    next: {
+      scope: args.scope,
+      scopeRef: args.scopeRef,
+      metric: args.metric,
+      window: args.window,
+    },
+    current: {
+      scope: quota.scope,
+      scopeRef: quota.scopeRef,
+      metric: quota.metric,
+      window: quota.window,
+    },
+  });
+  if (immutableError) {
+    log('updateQuota: rejected immutable change id=%s', args.id);
+    throw new DomainError('VALIDATION_FAILED', immutableError);
+  }
 
   const updates: Record<string, unknown> = {};
 

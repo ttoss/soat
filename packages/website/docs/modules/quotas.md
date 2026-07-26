@@ -128,7 +128,11 @@ Because a monitor breach never blocks, the request it rode in on returns success
 
 ### Formation resource
 
-Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. `scope`, `metric`, and `window` are immutable after creation — only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
+Quotas can be declared as a `quota` formation resource (`QuotaResourceProperties`): `scope`, `scope_ref`, `metric`, `window`, `limit`, `mode`. A `scope_ref` naming an actor can be a `{ "ref": … }` to an actor resource in the same template. Only `limit` and `mode` update through the formation lifecycle. Unknown fields are rejected with `400`.
+
+`scope`, `scope_ref`, `metric`, and `window` are immutable after creation — together with the project they form the quota's identity, and its window counters are keyed to that identity. Declaring a **different** value for any of them fails the operation: the formation is left `status: "failed"` with the offending field named in the operation error, and the quota keeps every one of its previous values (including `limit` and `mode`, which are never applied piecemeal on a failed update). Restating an immutable field at its current value is always fine — templates carry `scope`, `metric`, and `window` on every update because they are required on create. To change one, replace the quota resource.
+
+Because `scope_ref` is nullable, omitting it is treated as "not supplied" rather than as clearing it; an explicit `null` that disagrees with the stored ref is a change. For `actor` scope that difference is especially load-bearing: `null` is [one budget per actor](#scope_ref-null-means-one-budget-per-actor), while a ref caps one named actor.
 
 ### Self-modification footgun
 
