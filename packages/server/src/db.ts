@@ -150,8 +150,6 @@ export const isConcurrentExtensionCreationError = (error: unknown): boolean => {
 };
 
 const EXTENSION_RACE_RETRIES = 3;
-const EXTENSION_RACE_RETRY_DELAY_MS = 250;
-
 export const initializeDatabase = async (app: App) => {
   for (let attempt = 1; ; attempt += 1) {
     try {
@@ -164,12 +162,10 @@ export const initializeDatabase = async (app: App) => {
       ) {
         throw error;
       }
-      // The process that won the race has committed by now, so the retry's
-      // `IF NOT EXISTS` finds the extension and skips creating it.
+      // No backoff needed: PostgreSQL raises the duplicate only once the
+      // transaction that won the race has committed, so the retry's
+      // `IF NOT EXISTS` already sees the extension and skips creating it.
       log('initializeDatabase: extension creation raced, retry %d', attempt);
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, EXTENSION_RACE_RETRY_DELAY_MS);
-      });
     }
   }
 
