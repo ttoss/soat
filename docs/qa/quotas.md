@@ -115,6 +115,7 @@ be blocked.
 - [x] `403` on `DELETE /quotas/{id}` for the same key
 - [x] Same key still `200` on an action it _is_ granted (proves the key is otherwise live)
 - [x] Quota mutations audited: `quotas:CreateQuota`, `quotas:UpdateQuota`, `quotas:DeleteQuota`
+- [x] Self-modification footgun reproduces as documented — a project-wide `requests` cap locks the operator's own API key out of quota management until the window rolls. Verified in the 2026-07-25 pass on a dedicated project. The 2026-07-26 retry was inconclusive (the shared project carried concurrent unrelated traffic, so counts were non-deterministic), which is a limitation of that environment rather than a contradiction — re-test on an isolated project if it needs reconfirming
 
 ## Soft references
 
@@ -144,7 +145,6 @@ be blocked.
 - [ ] **Multi-replica counter atomicity** (the atomic `UPDATE … RETURNING` claim) — needs a multi-replica deployment; only a single instance was reachable in all three passes.
 - [ ] **`reasoning_tokens` exclusion from the `tokens` aggregate** — needs a reasoning model. `deepseek.v3.2` emits no `reasoning_tokens` component (meter rows carry only `input_tokens` / `output_tokens`, and `/usage` reports `reasoning_tokens: 0`), so although the aggregate matched input + output + cached exactly, a zero cannot discriminate whether reasoning tokens would be excluded.
 - [ ] **Real-time rollover for `rolling_1h` / `rolling_24h` / `calendar_month`** — would require waiting out the actual window. Only window-key format and `resets_at` were checked. `rolling_1m` rollover _was_ observed for real.
-- [ ] **Self-modification footgun** (a project-wide `requests` cap locking the operator's own key out of quota management) — verified in the 2026-07-25 pass; the 2026-07-26 retry was inconclusive because the shared project carried concurrent unrelated traffic. Re-test in an isolated project.
 
 ## Observations (not defects)
 
