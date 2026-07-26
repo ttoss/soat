@@ -193,15 +193,15 @@ const mapOrchestration = (
 ): MappedOrchestration => {
   return {
     id: orch.publicId,
-    projectId: orch.project.publicId,
+    project_id: orch.project.publicId,
     name: orch.name,
     description: orch.description,
     nodes: orch.nodes as OrchestrationNode[],
     edges: orch.edges as OrchestrationEdge[],
-    stateSchema: orch.stateSchema,
-    inputSchema: orch.inputSchema,
-    createdAt: orch.createdAt,
-    updatedAt: orch.updatedAt,
+    state_schema: orch.stateSchema,
+    input_schema: orch.inputSchema,
+    created_at: orch.createdAt,
+    updated_at: orch.updatedAt,
   };
 };
 
@@ -209,16 +209,16 @@ export const mapNodeExecution = (
   exec: InstanceType<typeof db.OrchestrationNodeExecution>
 ): MappedNodeExecution => {
   return {
-    nodeId: exec.nodeId,
-    nodeType: exec.nodeType,
+    node_id: exec.nodeId,
+    node_type: exec.nodeType,
     attempt: exec.attempt,
     status: exec.status,
     input: exec.input as Record<string, unknown> | null,
     output: exec.output as Record<string, unknown> | null,
     error: exec.error,
-    startedAt: exec.startedAt,
-    completedAt: exec.completedAt,
-    createdAt: exec.createdAt,
+    started_at: exec.startedAt,
+    completed_at: exec.completedAt,
+    created_at: exec.createdAt,
   };
 };
 
@@ -232,23 +232,23 @@ export const mapOrchestrationRun = (
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
-    orchestrationId: run.orchestration.publicId,
-    projectId: run.project.publicId,
+    orchestration_id: run.orchestration.publicId,
+    project_id: run.project.publicId,
     status: run.status,
     state: run.state as Record<string, unknown>,
-    activeNodes: run.activeNodes as string[],
+    active_nodes: run.activeNodes as string[],
     artifacts: run.artifacts as Record<string, unknown>,
     error: run.error,
-    requiredAction: run.requiredAction as object | null,
-    traceId: run.traceId,
+    required_action: run.requiredAction as object | null,
+    trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,
-    nodeExecutions: (run.nodeExecutions ?? []).map(mapNodeExecution),
+    node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage ? { usage } : {}),
-    startedAt: run.startedAt,
-    completedAt: run.completedAt,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
+    started_at: run.startedAt,
+    completed_at: run.completedAt,
+    created_at: run.createdAt,
+    updated_at: run.updatedAt,
   };
 };
 

@@ -21,15 +21,15 @@ const getGuardrailIncludes = () => {
 export const mapGuardrail = (guardrail: GuardrailInstance) => {
   return {
     id: guardrail.publicId,
-    projectId: guardrail.project.publicId,
+    project_id: guardrail.project.publicId,
     name: guardrail.name,
     description: guardrail.description,
     version: guardrail.version,
     document: guardrail.document,
-    contextToolId: guardrail.contextToolId,
-    contextMode: guardrail.contextMode,
-    createdAt: guardrail.createdAt,
-    updatedAt: guardrail.updatedAt,
+    context_tool_id: guardrail.contextToolId,
+    context_mode: guardrail.contextMode,
+    created_at: guardrail.createdAt,
+    updated_at: guardrail.updatedAt,
   };
 };
 
@@ -38,10 +38,10 @@ export const mapGuardrailVersion = (
   guardrailPublicId: string
 ) => {
   return {
-    guardrailId: guardrailPublicId,
+    guardrail_id: guardrailPublicId,
     version: version.version,
     document: version.document,
-    createdAt: version.createdAt,
+    created_at: version.createdAt,
   };
 };
 

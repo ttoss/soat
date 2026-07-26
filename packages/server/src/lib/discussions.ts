@@ -42,8 +42,8 @@ const mapParticipant = (
     name: participant.name ?? null,
     prompt: participant.prompt ?? null,
     position: participant.position,
-    actorId: participant.actor?.publicId ?? null,
-    aiProviderId: participant.aiProvider?.publicId ?? null,
+    actor_id: participant.actor?.publicId ?? null,
+    ai_provider_id: participant.aiProvider?.publicId ?? null,
     model: participant.model ?? null,
     temperature: participant.temperature ?? null,
     effort: participant.effort ?? null,
@@ -59,21 +59,21 @@ export const mapDiscussion = (discussion: DiscussionModel) => {
     .map(mapParticipant);
   return {
     id: discussion.publicId,
-    projectId: discussion.project?.publicId,
+    project_id: discussion.project?.publicId,
     name: discussion.name,
     description: discussion.description ?? null,
-    maxRounds: discussion.maxRounds,
-    aiProviderId: discussion.aiProvider?.publicId ?? null,
+    max_rounds: discussion.maxRounds,
+    ai_provider_id: discussion.aiProvider?.publicId ?? null,
     model: discussion.model ?? null,
     synthesis: discussion.synthesis ?? null,
     tags: discussion.tags ?? undefined,
     participants,
-    templateWarnings: findDiscussionTemplateWarnings({
+    template_warnings: findDiscussionTemplateWarnings({
       participants,
       synthesis: discussion.synthesis as SynthesisConfig | null,
     }),
-    createdAt: discussion.createdAt,
-    updatedAt: discussion.updatedAt,
+    created_at: discussion.createdAt,
+    updated_at: discussion.updatedAt,
   };
 };
 

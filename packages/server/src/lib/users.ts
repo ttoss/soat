@@ -12,8 +12,8 @@ const mapUser = (user: InstanceType<(typeof db)['User']>) => {
     id: user.publicId,
     username: user.username,
     role: user.role,
-    createdAt: user.createdAt,
-    updatedAt: user.updatedAt,
+    created_at: user.createdAt,
+    updated_at: user.updatedAt,
   };
 };
 

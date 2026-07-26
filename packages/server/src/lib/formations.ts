@@ -63,9 +63,9 @@ const mapFormation = (
     ? (instance.formationResources ?? []).map((r) => {
         return {
           id: r.publicId,
-          logicalId: r.logicalId,
-          resourceType: r.resourceType,
-          physicalResourceId: r.physicalResourceId,
+          logical_id: r.logicalId,
+          resource_type: r.resourceType,
+          physical_resource_id: r.physicalResourceId,
           status: r.status,
         };
       })
@@ -73,17 +73,17 @@ const mapFormation = (
 
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId ?? '',
+    project_id: instance.project?.publicId ?? '',
     name: instance.name,
     template: instance.template as FormationTemplate | null,
     outputs: instance.outputs,
     status: instance.status,
     metadata: instance.metadata,
-    resolvedMetadata: instance.resolvedMetadata,
-    resolvedParameters: instance.resolvedParameters,
+    resolved_metadata: instance.resolvedMetadata,
+    resolved_parameters: instance.resolvedParameters,
     ...(resources !== undefined ? { resources } : {}),
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

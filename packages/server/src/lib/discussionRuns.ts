@@ -47,25 +47,25 @@ const runIncludes = () => {
 const mapRunArtifacts = (run: RunModel) => {
   return {
     outcome: run.outcome ?? null,
-    conversationId: run.conversation?.publicId ?? null,
-    outcomeDocumentId: run.outcomeDocument?.publicId ?? null,
-    startedBy: run.startedBy ?? null,
-    initiatorGenerationId: run.initiatorGenerationId ?? null,
-    traceId: run.traceId ?? null,
-    completedAt: run.completedAt ?? null,
+    conversation_id: run.conversation?.publicId ?? null,
+    outcome_document_id: run.outcomeDocument?.publicId ?? null,
+    started_by: run.startedBy ?? null,
+    initiator_generation_id: run.initiatorGenerationId ?? null,
+    trace_id: run.traceId ?? null,
+    completed_at: run.completedAt ?? null,
   };
 };
 
 const mapRun = (run: RunModel) => {
   return {
     id: run.publicId,
-    discussionId: run.discussion?.publicId,
-    projectId: run.project?.publicId,
+    discussion_id: run.discussion?.publicId,
+    project_id: run.project?.publicId,
     topic: run.topic,
     status: run.status,
     ...mapRunArtifacts(run),
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
+    created_at: run.createdAt,
+    updated_at: run.updatedAt,
   };
 };
 

@@ -10,7 +10,6 @@ import {
   hasProperties,
   isObjectRecord,
 } from './openapiSchemaFields';
-import { snakeToCamel } from './soatToolsHelpers';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -87,20 +86,19 @@ export const getMergedOpenApiSpec = (): MergedSpec => {
   return cachedSpec;
 };
 
-// Request bodies are compared in camelCase (after caseTransform), so the
-// kernel keys every set/spec by its camelCase name here.
+// Request bodies arrive in the wire contract's snake_case, so the kernel keys
+// every set/spec by the spec's own property name — no conversion in between.
 export type RequestSchemaFields = SchemaFields;
 
 const deriveFields = (schema: SchemaWithProperties): RequestSchemaFields => {
-  return deriveSchemaFields({ schema, transformKey: snakeToCamel });
+  return deriveSchemaFields({ schema });
 };
 
 /**
  * Derives the set of known body fields for a named request schema directly from
  * the OpenAPI specs — the single source of truth for the REST contract, SDK,
- * CLI, and MCP surface. Property names are stored as snake_case in the spec and
- * returned here as camelCase to match the request body after the caseTransform
- * middleware has run.
+ * CLI, and MCP surface. Property names are snake_case in the spec and returned
+ * verbatim, matching the snake_case request body as the client sent it.
  */
 export const getRequestSchemaFields = (args: {
   schemaName: string;
@@ -232,4 +230,44 @@ export const getRouteRequestSchemaFields = (args: {
 }): RequestSchemaFields | null => {
   const schema = getRouteRequestSchema(args);
   return hasProperties(schema) ? deriveFields(schema) : null;
+};
+
+const resolveJsonContentSchema = (container: unknown): unknown => {
+  if (!isObjectRecord(container)) return undefined;
+  const { content } = container;
+  if (!isObjectRecord(content)) return undefined;
+  const json = content['application/json'];
+  if (!isObjectRecord(json)) return undefined;
+  return json.schema;
+};
+
+/**
+ * Resolves the `application/json` response schema an operation declares for a
+ * given status code — following a top-level `$ref` to its named component
+ * schema. Returns `null` when the operation declares no JSON body for that
+ * status (a `204`, a stream, an unspecified status).
+ *
+ * `path` is the OpenAPI path template (e.g. `/api/v1/agents/{agent_id}`).
+ */
+export const getRouteResponseSchema = (args: {
+  method: string;
+  path: string;
+  status: number;
+}): Record<string, unknown> | null => {
+  const method = args.method.toLowerCase();
+  if (!HTTP_METHODS.has(method)) return null;
+
+  const pathItem = getMergedOpenApiSpec().paths[normalizeRoutePath(args.path)];
+  if (!isObjectRecord(pathItem)) return null;
+
+  const operation = pathItem[method];
+  if (!isObjectRecord(operation)) return null;
+
+  const { responses } = operation;
+  if (!isObjectRecord(responses)) return null;
+
+  const schema = resolveJsonContentSchema(responses[String(args.status)]);
+  if (!isObjectRecord(schema)) return null;
+
+  return resolveSchemaRef(schema);
 };

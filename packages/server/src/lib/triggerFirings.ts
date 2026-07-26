@@ -13,17 +13,17 @@ type TriggerFiringInstance = InstanceType<(typeof db)['TriggerFiring']> & {
 export const mapTriggerFiring = (instance: TriggerFiringInstance) => {
   return {
     id: instance.publicId,
-    triggerId: instance.trigger?.publicId,
-    projectId: instance.project?.publicId,
+    trigger_id: instance.trigger?.publicId,
+    project_id: instance.project?.publicId,
     source: instance.source,
     status: instance.status,
     input: instance.input,
     result: instance.result,
     error: instance.error,
-    startedAt: instance.startedAt,
-    completedAt: instance.completedAt,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    started_at: instance.startedAt,
+    completed_at: instance.completedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

@@ -24,7 +24,7 @@ export const mapRunWithIncludes = async (
   const run = finalRun as InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
     project: InstanceType<typeof db.Project>;
-    nodeExecutions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
+    node_executions?: InstanceType<typeof db.OrchestrationNodeExecution>[];
   };
 
   return mapOrchestrationRun(run);

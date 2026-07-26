@@ -32,19 +32,19 @@ export type TaskInstance = InstanceType<(typeof db)['Task']> & {
 export const mapTask = (instance: TaskInstance) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
-    workflowId: instance.workflow?.publicId,
+    project_id: instance.project?.publicId,
+    workflow_id: instance.workflow?.publicId,
     title: instance.title,
     state: instance.state,
     status: instance.status,
     payload: instance.payload,
     assignee: instance.assignee,
-    activeDispatch: instance.activeDispatch,
-    automationStatus: instance.automationStatus,
-    pendingTransition: instance.pendingTransition,
-    enteredStateAt: instance.enteredStateAt,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    active_dispatch: instance.activeDispatch,
+    automation_status: instance.automationStatus,
+    pending_transition: instance.pendingTransition,
+    entered_state_at: instance.enteredStateAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

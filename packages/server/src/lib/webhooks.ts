@@ -16,16 +16,16 @@ const mapWebhook = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
-    policyId: instance.policy?.publicId ?? null,
+    project_id: instance.project?.publicId,
+    policy_id: instance.policy?.publicId ?? null,
     name: instance.name,
     description: instance.description,
     url: instance.url,
     events: instance.events,
     active: instance.active,
     ...(args?.includeSecret ? { secret: instance.secret } : {}),
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

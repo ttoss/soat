@@ -13,11 +13,11 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
   return {
     id: project.publicId,
     name: project.name,
-    guardrailIds: project.guardrailIds,
-    maxConcurrentRuns: project.maxConcurrentRuns,
-    auditReadsEnabled: project.auditReadsEnabled,
-    createdAt: project.createdAt,
-    updatedAt: project.updatedAt,
+    guardrail_ids: project.guardrailIds,
+    max_concurrent_runs: project.maxConcurrentRuns,
+    audit_reads_enabled: project.auditReadsEnabled,
+    created_at: project.createdAt,
+    updated_at: project.updatedAt,
   };
 };
 

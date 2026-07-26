@@ -39,12 +39,12 @@ const mapFile = (file: InstanceType<(typeof db)['File']>) => {
     prefix: prefixFromPath(file.path),
     filename: file.filename ?? filenameFromPath(file.path),
     path: file.path ?? undefined,
-    contentType: file.contentType,
+    content_type: file.contentType,
     size: file.size,
     metadata: file.metadata,
     tags: file.tags ?? undefined,
-    createdAt: file.createdAt,
-    updatedAt: file.updatedAt,
+    created_at: file.createdAt,
+    updated_at: file.updatedAt,
   };
 };
 

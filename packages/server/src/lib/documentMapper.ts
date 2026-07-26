@@ -20,17 +20,17 @@ type MappableDocument = InstanceType<(typeof db)['Document']> & {
 // Extracted so `mapDocument` stays within the complexity budget.
 const mapDocumentChunkConfig = (doc: MappableDocument) => {
   return {
-    chunkStrategy: doc.chunkStrategy ?? undefined,
-    chunkSize: doc.chunkSize ?? undefined,
-    chunkOverlap: doc.chunkOverlap ?? undefined,
+    chunk_strategy: doc.chunkStrategy ?? undefined,
+    chunk_size: doc.chunkSize ?? undefined,
+    chunk_overlap: doc.chunkOverlap ?? undefined,
   };
 };
 
 export const mapDocument = (doc: MappableDocument) => {
   return {
     id: doc.publicId,
-    fileId: doc.file?.publicId,
-    projectId: doc.file?.project?.publicId,
+    file_id: doc.file?.publicId,
+    project_id: doc.file?.project?.publicId,
     path: doc.file?.path ?? undefined,
     filename: doc.file?.filename,
     size: doc.file?.size,
@@ -40,7 +40,7 @@ export const mapDocument = (doc: MappableDocument) => {
     ...mapDocumentChunkConfig(doc),
     status: doc.status as
       'pending' | 'processing' | 'ready' | 'failed' | undefined,
-    createdAt: doc.createdAt,
-    updatedAt: doc.updatedAt,
+    created_at: doc.createdAt,
+    updated_at: doc.updatedAt,
   };
 };

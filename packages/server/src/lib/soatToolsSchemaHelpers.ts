@@ -160,14 +160,18 @@ export const resolveParameter = (
   return param;
 };
 
+// MCP tool arguments are named exactly as the spec names them, so every builder
+// below reads `args[name]` — the same string it writes to the path, query, or
+// body. There is no casing step to get wrong.
+
 export const buildPathFn = (
   pathTemplate: string,
-  pathParams: Array<{ name: string; camelName: string }>
+  pathParams: Array<{ name: string }>
 ): ((args: Record<string, unknown>) => string) => {
   return (args: Record<string, unknown>) => {
     let result = pathTemplate;
-    for (const { name, camelName } of pathParams) {
-      const value = args[camelName];
+    for (const { name } of pathParams) {
+      const value = args[name];
       if (value !== undefined) {
         result = result.replace(`{${name}}`, encodeURIComponent(String(value)));
       }
@@ -177,14 +181,14 @@ export const buildPathFn = (
 };
 
 export const buildQueryFn = (
-  queryParams: Array<{ name: string; camelName: string }>
+  queryParams: Array<{ name: string }>
 ): ((args: Record<string, unknown>) => string) | undefined => {
   if (queryParams.length === 0) return undefined;
 
   return (args: Record<string, unknown>) => {
     const search = new URLSearchParams();
-    for (const { name, camelName } of queryParams) {
-      const value = args[camelName];
+    for (const { name } of queryParams) {
+      const value = args[name];
       if (value === undefined || value === null) continue;
       if (Array.isArray(value)) {
         for (const item of value) {
@@ -200,15 +204,15 @@ export const buildQueryFn = (
 };
 
 export const buildBodyFn = (
-  bodyProps: Array<{ snakeName: string; camelName: string }>
+  bodyProps: Array<{ name: string }>
 ): ((args: Record<string, unknown>) => Record<string, unknown>) | undefined => {
   if (bodyProps.length === 0) return undefined;
 
   return (args: Record<string, unknown>) => {
     const body: Record<string, unknown> = {};
-    for (const { snakeName, camelName } of bodyProps) {
-      if (args[camelName] !== undefined) {
-        body[snakeName] = args[camelName];
+    for (const { name } of bodyProps) {
+      if (args[name] !== undefined) {
+        body[name] = args[name];
       }
     }
     return body;
