@@ -244,7 +244,8 @@ paths:
       description: >-
         Creates a new run for the orchestration named by orchestration_id. By
         default the run executes durably in the background: the response returns
-        immediately with status "running" and progress is observed via
+        immediately with status "queued" (a worker then claims it and moves it
+        to "running") and progress is observed via
         get-orchestration-run or run lifecycle webhook events
         (orchestration_runs.started/awaiting_input/succeeded/failed). Delay and
         poll waits park the run as "sleeping" and are woken by a background
@@ -392,7 +393,12 @@ paths:
       tags:
         - Orchestrations
       summary: Resume an orchestration run
-      description: Resumes an awaiting_input orchestration run from its last checkpoint.
+      description: >-
+        Re-drives an awaiting_input orchestration run from its last checkpoint.
+        This does not satisfy the pause itself — it carries no node_id or
+        payload, so a run parked on a human or webhook-receive node re-parks on
+        the same node. Use submit-human-input to supply the awaited payload and
+        advance the run.
       operationId: resumeOrchestrationRun
       parameters:
         - $ref: '#/components/parameters/run_id'
@@ -1079,7 +1085,7 @@ components:
           description: >-
             When true, block until the run reaches a terminal (succeeded/failed)
             or awaiting_input state and return the settled run. When false
-            (default), return immediately with status "running" and execute the
+            (default), return immediately with status "queued" and execute the
             run in the background.
 
     ValidateOrchestrationRequest:

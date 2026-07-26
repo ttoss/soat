@@ -2828,6 +2828,57 @@ describe('Orchestrations', () => {
       expect(reviewExecs[0].output).toEqual({ decision: 'approve' });
       expect(reviewExecs[0].completed_at).not.toBeNull();
     });
+
+    test('re-parking on resume updates the requires_action record instead of appending a duplicate', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({ ...humanNodeOrchestration, project_id: projectId });
+      expect(createRes.status).toBe(201);
+
+      const runRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestration-runs')
+        .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
+      expect(runRes.status).toBe(201);
+      expect(runRes.body.status).toBe('awaiting_input');
+      const runId = runRes.body.id;
+      const humanNodeId = runRes.body.required_action.node_id;
+
+      const execsFor = (body: {
+        node_executions: Array<{ node_id: string; status: string }>;
+      }) => {
+        return body.node_executions.filter((e) => {
+          return e.node_id === humanNodeId;
+        });
+      };
+
+      expect(execsFor(runRes.body)).toHaveLength(1);
+
+      // Each resume re-drives the frontier, which re-executes the still-parked
+      // human node. The re-park must reuse the node's existing
+      // requires_action record rather than inserting another one, or the
+      // history grows by one row per (caller-triggerable) resume.
+      for (let i = 0; i < 2; i++) {
+        const resumeRes = await authenticatedTestClient(userToken).post(
+          `/api/v1/orchestration-runs/${runId}/resume`
+        );
+        expect(resumeRes.status).toBe(200);
+        expect(resumeRes.body.status).toBe('awaiting_input');
+        expect(execsFor(resumeRes.body)).toHaveLength(1);
+      }
+
+      const submitRes = await authenticatedTestClient(userToken)
+        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .send({ node_id: humanNodeId, output: { decision: 'approve' } });
+      expect(submitRes.status).toBe(200);
+
+      const finalRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${runId}`
+      );
+      expect(finalRes.status).toBe(200);
+      const finalExecs = execsFor(finalRes.body);
+      expect(finalExecs).toHaveLength(1);
+      expect(finalExecs[0].status).toBe('completed');
+    });
   });
 
   // ── Durable background execution ──────────────────────────────────────────

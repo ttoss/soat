@@ -22,9 +22,9 @@ import { executeToolNode } from './orchestrationNodeExecutors';
 import {
   buildRunError,
   recordDelayResumption,
-  recordHumanInputResumption,
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
+import { recordHumanInputResumption } from './orchestrationPauseRecords';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
