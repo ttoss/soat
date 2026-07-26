@@ -199,8 +199,8 @@ export const guardrailsFormationModule: FormationModule = {
         default_class: document.default_class ?? null,
         guard: document.guard ?? null,
         escalate: document.escalate ?? null,
-        context_tool_id: guardrail.contextToolId,
-        context_mode: guardrail.contextMode,
+        context_tool_id: guardrail.context_tool_id,
+        context_mode: guardrail.context_mode,
       };
     } catch {
       return null;

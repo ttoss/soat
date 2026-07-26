@@ -109,13 +109,13 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
   return {
     decision: item.status as 'approved' | 'rejected' | 'expired',
     approvalId: item.id,
-    resolvedBy: item.resolvedBy,
-    editedArgs: item.editedArguments ?? null,
+    resolvedBy: item.resolved_by,
+    editedArgs: item.edited_arguments ?? null,
     // On approval the executed tool output belongs here. Actual execution of
     // the (frozen or edited) action at resolution time is wired in with the
     // producer that consumes it; until then the decision carries no result.
     result: null,
-    reason: item.resolutionReason,
+    reason: item.resolution_reason,
   };
 };
 
@@ -408,14 +408,14 @@ const RECURRENCE_DEFAULT_MIN_COUNT = 2;
 export type ApprovalRecurrenceChainItem = {
   id: string;
   status: ApprovalInstance['status'];
-  resolutionReason: string | null;
-  createdAt: Date;
+  resolution_reason: string | null;
+  created_at: Date;
 };
 
 export type ApprovalRecurrenceGroup = {
-  dedupKey: string;
-  agentId: string | null;
-  toolId: string | null;
+  dedup_key: string;
+  agent_id: string | null;
+  tool_id: string | null;
   count: number;
   // Oldest → newest, i.e. the `previous_item_id` chain in the order it accrued.
   chain: ApprovalRecurrenceChainItem[];
@@ -441,7 +441,7 @@ const mapRecurrenceGroup = (args: {
   // args, so any item carries the group's agent/tool; take the most recent.
   const latest = chain[chain.length - 1];
   return {
-    dedupKey,
+    dedup_key: dedupKey,
     agent_id: latest.agentId,
     tool_id: latest.proposedAction?.toolId ?? null,
     count: chain.length,
@@ -529,8 +529,8 @@ export const listApprovalRecurrences = async (args: {
     // recurring pattern surfaces above a stale one with the same count.
     .sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
-      const aLast = a.chain[a.chain.length - 1].createdAt.getTime();
-      const bLast = b.chain[b.chain.length - 1].createdAt.getTime();
+      const aLast = a.chain[a.chain.length - 1].created_at.getTime();
+      const bLast = b.chain[b.chain.length - 1].created_at.getTime();
       return bLast - aLast;
     });
 

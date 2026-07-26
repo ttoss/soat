@@ -12,15 +12,15 @@ export type MemoryQueryConfig = {
 };
 
 export type MemoryKnowledgeResult = {
-  sourceType: 'memory';
-  entryId: string;
-  memoryId: string;
-  memoryName: string;
+  source_type: 'memory';
+  entry_id: string;
+  memory_id: string;
+  memory_name: string;
   content: string;
   tags: string[] | null;
-  similarityScore?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  similarity_score?: number;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const globToLikePattern = (tag: string): string => {
@@ -147,7 +147,7 @@ const resolveMemorySearchBySemantic = async (args: {
   if (args.minScore === undefined) return results;
   const { minScore } = args;
   return results.filter((r) => {
-    return (r.similarityScore ?? 0) >= minScore;
+    return (r.similarity_score ?? 0) >= minScore;
   });
 };
 

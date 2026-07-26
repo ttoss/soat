@@ -81,10 +81,10 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.projectId!,
+    projectPublicId: provider.project_id!,
     action: 'ai-providers:GetAiProvider',
     resource: buildSrn({
-      projectPublicId: provider.projectId!,
+      projectPublicId: provider.project_id!,
       resourceType: 'aiProvider',
       resourceId: provider.id,
     }),
@@ -129,10 +129,10 @@ const authorizeProviderPrices = async (args: {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.projectId!,
+    projectPublicId: provider.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: provider.projectId!,
+      projectPublicId: provider.project_id!,
       resourceType: 'aiProvider',
       resourceId: provider.id,
     }),
@@ -251,10 +251,10 @@ aiProvidersRouter.patch(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.projectId!,
+      projectPublicId: existing.project_id!,
       action: 'ai-providers:UpdateAiProvider',
       resource: buildSrn({
-        projectPublicId: existing.projectId!,
+        projectPublicId: existing.project_id!,
         resourceType: 'aiProvider',
         resourceId: existing.id,
       }),
@@ -277,7 +277,7 @@ aiProvidersRouter.patch(
     let resolvedSecretId: number | undefined;
     if (body.secretId !== undefined) {
       const project = await db.Project.findOne({
-        where: { publicId: existing.projectId! },
+        where: { publicId: existing.project_id! },
       });
       const secret = await db.Secret.findOne({
         where: { publicId: body.secretId, projectId: project!.id },
@@ -321,10 +321,10 @@ aiProvidersRouter.delete(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.projectId!,
+      projectPublicId: existing.project_id!,
       action: 'ai-providers:DeleteAiProvider',
       resource: buildSrn({
-        projectPublicId: existing.projectId!,
+        projectPublicId: existing.project_id!,
         resourceType: 'aiProvider',
         resourceId: existing.id,
       }),

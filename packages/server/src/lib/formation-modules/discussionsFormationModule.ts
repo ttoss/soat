@@ -176,8 +176,8 @@ export const discussionsFormationModule: FormationModule = {
       return {
         name: discussion.name,
         description: discussion.description,
-        max_rounds: discussion.maxRounds,
-        ai_provider_id: discussion.aiProviderId,
+        max_rounds: discussion.max_rounds,
+        ai_provider_id: discussion.ai_provider_id,
         model: discussion.model,
         synthesis: discussion.synthesis,
         // Mapped to the same snake_case shape the template declares, omitting
@@ -195,8 +195,8 @@ export const discussionsFormationModule: FormationModule = {
             const mapped: Record<string, unknown> = {
               name: participant.name,
               prompt: participant.prompt,
-              actor_id: participant.actorId,
-              ai_provider_id: participant.aiProviderId,
+              actor_id: participant.actor_id,
+              ai_provider_id: participant.ai_provider_id,
               model: participant.model,
               temperature: participant.temperature,
               effort: participant.effort,

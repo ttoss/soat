@@ -230,9 +230,9 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
     id: ctx.params.guardrail_id,
   });
   setAuditResourceHint(ctx, {
-    projectPublicId: guardrail.projectId,
+    projectPublicId: guardrail.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: guardrail.projectId,
+      projectPublicId: guardrail.project_id,
       resourceType: 'guardrail',
       resourceId: guardrail.id,
     }),

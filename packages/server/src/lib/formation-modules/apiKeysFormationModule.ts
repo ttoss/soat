@@ -159,7 +159,7 @@ export const apiKeysFormationModule: FormationModule = {
       if (!key) return null;
       return {
         name: key.name,
-        policy_ids: key.policyIds,
+        policy_ids: key.policy_ids,
       };
     } catch {
       return null;

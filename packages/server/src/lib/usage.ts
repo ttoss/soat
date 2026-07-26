@@ -43,30 +43,30 @@ export type PersistedUsageComponent = {
   quantity: number;
   unit: string;
   billable: boolean;
-  unitPrice: number | null;
-  costUsd: number | null;
-  priceId: string | null;
+  unit_price: number | null;
+  cost_usd: number | null;
+  price_id: string | null;
 };
 
 export type PersistedUsageEvent = {
   id: string;
-  projectId: string;
-  runId: string | null;
-  nodeId: string | null;
-  agentId: string | null;
-  generationId: string | null;
-  traceId: string | null;
-  actorId: string | null;
-  sessionId: string | null;
-  aiProviderId: string | null;
-  triggerId: string | null;
-  actionId: string | null;
-  meterType: string;
+  project_id: string;
+  run_id: string | null;
+  node_id: string | null;
+  agent_id: string | null;
+  generation_id: string | null;
+  trace_id: string | null;
+  actor_id: string | null;
+  session_id: string | null;
+  ai_provider_id: string | null;
+  trigger_id: string | null;
+  action_id: string | null;
+  meter_type: string;
   provider: string;
   model: string;
-  costUsd: number | null;
+  cost_usd: number | null;
   components: PersistedUsageComponent[];
-  createdAt: Date;
+  created_at: Date;
 };
 
 const assocPublicId = (

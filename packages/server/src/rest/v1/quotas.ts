@@ -156,9 +156,9 @@ quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const quota = await getQuota({ projectIds, id: ctx.params.quota_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: quota.projectId,
+    projectPublicId: quota.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: quota.projectId,
+      projectPublicId: quota.project_id,
       resourceType: 'quota',
       resourceId: quota.id,
     }),

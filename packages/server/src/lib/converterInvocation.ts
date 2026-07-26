@@ -127,7 +127,7 @@ const buildToolConverterInput = async (args: {
     size: args.file.size ?? null,
   };
 
-  if (args.rule.fileDelivery === 'download_url') {
+  if (args.rule.file_delivery === 'download_url') {
     fileInput['download_url'] = buildFileDownloadUrl({
       fileId: args.file.publicId,
     });
@@ -139,7 +139,7 @@ const buildToolConverterInput = async (args: {
     // `preset_parameters` merge at the top level; `file`/`callback` are
     // reserved and win (enforced at rule creation — see
     // ingestionRuleValidation.ts).
-    ...(args.rule.presetParameters ?? {}),
+    ...(args.rule.preset_parameters ?? {}),
     file: fileInput,
   };
 
@@ -166,7 +166,7 @@ const invokeToolConverter = async (args: {
   try {
     raw = await callTool({
       projectIds: [args.projectId],
-      id: args.rule.toolId!,
+      id: args.rule.tool_id!,
       action: args.rule.action ?? undefined,
       input,
     });
@@ -174,7 +174,7 @@ const invokeToolConverter = async (args: {
     const message = error instanceof Error ? error.message : String(error);
     throw new DomainError(
       'CONVERTER_FAILED',
-      `Converter tool '${args.rule.toolId}' failed: ${message}`
+      `Converter tool '${args.rule.tool_id}' failed: ${message}`
     );
   }
 
@@ -182,13 +182,13 @@ const invokeToolConverter = async (args: {
   if (outcome.status === 'pending') {
     log(
       'invokeToolConverter: deferred (pending) toolId=%s documentId=%s attemptId=%s',
-      args.rule.toolId,
+      args.rule.tool_id,
       args.documentId,
       args.attemptId
     );
     return {
       status: 'pending',
-      converterId: args.rule.toolId!,
+      converterId: args.rule.tool_id!,
       submittedAt: new Date().toISOString(),
     };
   }
@@ -216,7 +216,7 @@ const invokeAgentConverter = async (args: {
   try {
     result = await createGeneration({
       projectIds: [args.projectId],
-      agentId: args.rule.agentId!,
+      agentId: args.rule.agent_id!,
       messages: [
         {
           role: 'user',
@@ -228,7 +228,7 @@ const invokeAgentConverter = async (args: {
     const message = error instanceof Error ? error.message : String(error);
     throw new DomainError(
       'CONVERTER_FAILED',
-      `Converter agent '${args.rule.agentId}' failed: ${message}`
+      `Converter agent '${args.rule.agent_id}' failed: ${message}`
     );
   }
 
@@ -239,7 +239,7 @@ const invokeAgentConverter = async (args: {
   ) {
     throw new DomainError(
       'CONVERTER_FAILED',
-      `Converter agent '${args.rule.agentId}' did not return text output.`
+      `Converter agent '${args.rule.agent_id}' did not return text output.`
     );
   }
 
@@ -251,7 +251,7 @@ const invokeAgentConverter = async (args: {
   if (outcome.status === 'pending') {
     throw new DomainError(
       'CONVERTER_FAILED',
-      `Converter agent '${args.rule.agentId}' returned an async deferral, which agent converters do not support.`
+      `Converter agent '${args.rule.agent_id}' returned an async deferral, which agent converters do not support.`
     );
   }
   return outcome;
@@ -274,13 +274,13 @@ export const invokeConverter = async (args: {
   log(
     'invokeConverter: file=%s glob=%s toolId=%s agentId=%s delivery=%s',
     args.file.publicId,
-    args.rule.contentTypeGlob,
-    args.rule.toolId,
-    args.rule.agentId,
-    args.rule.fileDelivery
+    args.rule.content_type_glob,
+    args.rule.tool_id,
+    args.rule.agent_id,
+    args.rule.file_delivery
   );
 
-  if (args.rule.agentId) {
+  if (args.rule.agent_id) {
     return invokeAgentConverter(args);
   }
   return invokeToolConverter(args);

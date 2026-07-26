@@ -254,7 +254,7 @@ export const getDocumentStatus = async (args: { id: string }) => {
     error: doc.status === 'failed' ? failureReason : undefined,
     // Context for the route's permission check — not part of the public
     // status response shape.
-    projectId: mapped.projectId,
+    projectId: mapped.project_id,
     path: mapped.path,
     tags: mapped.tags,
   };

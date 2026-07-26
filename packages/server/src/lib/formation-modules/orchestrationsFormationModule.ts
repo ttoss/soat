@@ -181,8 +181,8 @@ export const orchestrationsFormationModule: FormationModule = {
         description: orch.description,
         nodes: convertCollectionKeys(orch.nodes, camelToSnakeKey),
         edges: convertCollectionKeys(orch.edges, camelToSnakeKey),
-        state_schema: orch.stateSchema,
-        input_schema: orch.inputSchema,
+        state_schema: orch.state_schema,
+        input_schema: orch.input_schema,
       };
     } catch {
       return null;

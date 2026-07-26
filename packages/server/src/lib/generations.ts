@@ -4,21 +4,21 @@ import { resolveEndUserAttribution } from './generationAttribution';
 
 export type PersistedGeneration = {
   id: string;
-  projectId: string;
-  agentId: string;
-  traceId: string;
-  initiatorGenerationId: string | null;
-  startedByPrincipalType: string | null;
-  startedByPrincipalId: string | null;
+  project_id: string;
+  agent_id: string;
+  trace_id: string;
+  initiator_generation_id: string | null;
+  started_by_principal_type: string | null;
+  started_by_principal_id: string | null;
   status: string;
-  startedAt: Date;
-  completedAt: Date | null;
-  lastActivityAt: Date | null;
-  stopReason: string | null;
+  started_at: Date;
+  completed_at: Date | null;
+  last_activity_at: Date | null;
+  stop_reason: string | null;
   error: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const mapGeneration = (

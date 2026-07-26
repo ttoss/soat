@@ -61,11 +61,11 @@ export const resolveChunkConfig = (
   args: ChunkConfigInput,
   rule: MappedIngestionRule | null
 ): { strategy: ChunkStrategy; chunkSize?: number; chunkOverlap?: number } => {
-  const strategy = args.chunkStrategy ?? rule?.chunkStrategy ?? 'page';
+  const strategy = args.chunkStrategy ?? rule?.chunk_strategy ?? 'page';
   return {
     strategy: strategy as ChunkStrategy,
-    chunkSize: args.chunkSize ?? rule?.chunkSize ?? undefined,
-    chunkOverlap: args.chunkOverlap ?? rule?.chunkOverlap ?? undefined,
+    chunkSize: args.chunkSize ?? rule?.chunk_size ?? undefined,
+    chunkOverlap: args.chunkOverlap ?? rule?.chunk_overlap ?? undefined,
   };
 };
 

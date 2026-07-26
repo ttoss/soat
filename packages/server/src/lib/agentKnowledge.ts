@@ -143,10 +143,10 @@ const hasDocumentFilters = (config: KnowledgeConfig): boolean => {
 const formatResult = (
   r: Awaited<ReturnType<typeof searchKnowledge>>[0]
 ): string => {
-  if (r.sourceType === 'document') {
+  if (r.source_type === 'document') {
     return `[Document: ${r.path ?? r.filename}]\n${r.content}`;
   }
-  return `[Memory: ${r.memoryName}]\n${r.content}`;
+  return `[Memory: ${r.memory_name}]\n${r.content}`;
 };
 
 // Retrieved knowledge is partly user-derived (extraction-sourced memory

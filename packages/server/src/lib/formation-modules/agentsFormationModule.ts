@@ -168,33 +168,33 @@ const toOptional = <T>(value: T | null | undefined): T | undefined => {
 
 const mapAgentProperties = (properties: Record<string, unknown>) => {
   return {
-    ai_provider_id: properties.ai_provider_id as string,
+    aiProviderId: properties.ai_provider_id as string,
     name: toOptionalString(properties.name),
     instructions: toOptionalString(properties.instructions),
     model: toOptionalString(properties.model),
-    tool_bindings: toOptional(resolveFormationToolBindings(properties)),
-    max_steps: toOptional(toNullableNumber(properties.max_steps)),
-    tool_choice: toOptional(toNullableStringOrObject(properties.tool_choice)),
-    stop_conditions: toOptional(
+    toolBindings: toOptional(resolveFormationToolBindings(properties)),
+    maxSteps: toOptional(toNullableNumber(properties.max_steps)),
+    toolChoice: toOptional(toNullableStringOrObject(properties.tool_choice)),
+    stopConditions: toOptional(
       toNullableArray<object>(properties.stop_conditions)
     ),
-    active_tool_ids: toOptional(
+    activeToolIds: toOptional(
       toNullableArray<string>(properties.active_tool_ids)
     ),
-    guardrail_ids: toOptional(toNullableArray<string>(properties.guardrail_ids)),
-    step_rules: toOptional(toNullableArray<object>(properties.step_rules)),
-    boundary_policy: toOptional(toNullableObject(properties.boundary_policy)),
+    guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
+    stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
+    boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
     temperature: toOptional(toNullableNumber(properties.temperature)),
-    max_context_messages: toOptional(
+    maxContextMessages: toOptional(
       toNullableNumber(properties.max_context_messages)
     ),
-    single_session_per_actor: toOptionalBoolean(
+    singleSessionPerActor: toOptionalBoolean(
       properties.single_session_per_actor
     ),
-    knowledge_config: toOptional(
+    knowledgeConfig: toOptional(
       normalizeKnowledgeConfig(properties.knowledge_config)
     ),
-    output_schema: toOptional(toNullableObject(properties.output_schema)),
+    outputSchema: toOptional(toNullableObject(properties.output_schema)),
   };
 };
 
@@ -278,26 +278,26 @@ export const agentsFormationModule: FormationModule = {
     try {
       const agent = await getAgent({ id: physicalResourceId });
       return {
-        ai_provider_id: agent.aiProviderId,
+        ai_provider_id: agent.ai_provider_id,
         name: agent.name,
         instructions: agent.instructions,
         model: agent.model,
         // Both views: the diff only compares keys the template declares, so a
         // template using either form converges against its own key.
-        tool_bindings: readFormationToolBindings(agent.toolBindings),
-        tool_ids: agent.toolIds,
-        max_steps: agent.maxSteps,
-        tool_choice: agent.toolChoice,
-        stop_conditions: agent.stopConditions,
-        active_tool_ids: agent.activeToolIds,
-        guardrail_ids: agent.guardrailIds,
-        step_rules: agent.stepRules,
-        boundary_policy: agent.boundaryPolicy,
+        tool_bindings: readFormationToolBindings(agent.tool_bindings),
+        tool_ids: agent.tool_ids,
+        max_steps: agent.max_steps,
+        tool_choice: agent.tool_choice,
+        stop_conditions: agent.stop_conditions,
+        active_tool_ids: agent.active_tool_ids,
+        guardrail_ids: agent.guardrail_ids,
+        step_rules: agent.step_rules,
+        boundary_policy: agent.boundary_policy,
         temperature: agent.temperature,
-        max_context_messages: agent.maxContextMessages,
-        single_session_per_actor: agent.singleSessionPerActor,
-        knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig),
-        output_schema: agent.outputSchema,
+        max_context_messages: agent.max_context_messages,
+        single_session_per_actor: agent.single_session_per_actor,
+        knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
+        output_schema: agent.output_schema,
       };
     } catch {
       return null;

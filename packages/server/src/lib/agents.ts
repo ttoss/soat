@@ -32,28 +32,28 @@ export { resolveUrlPathParams } from './agentToolResolver';
 
 export type MappedAgent = {
   id: string;
-  projectId: string;
-  aiProviderId: string;
+  project_id: string;
+  ai_provider_id: string;
   name: string | null;
   instructions: string | null;
   model: string | null;
-  toolBindings: AgentToolBinding[] | null;
-  toolIds: string[] | null;
+  tool_bindings: AgentToolBinding[] | null;
+  tool_ids: string[] | null;
   tools: InlineToolDefinition[] | null;
-  maxSteps: number | null;
-  toolChoice: string | object | null;
-  stopConditions: object[] | null;
-  activeToolIds: string[] | null;
-  stepRules: object[] | null;
-  boundaryPolicy: object | null;
+  max_steps: number | null;
+  tool_choice: string | object | null;
+  stop_conditions: object[] | null;
+  active_tool_ids: string[] | null;
+  step_rules: object[] | null;
+  boundary_policy: object | null;
   temperature: number | null;
-  knowledgeConfig: object | null;
-  outputSchema: object | null;
-  maxContextMessages: number | null;
-  singleSessionPerActor: boolean;
-  guardrailIds: string[] | null;
-  createdAt: Date;
-  updatedAt: Date;
+  knowledge_config: object | null;
+  output_schema: object | null;
+  max_context_messages: number | null;
+  single_session_per_actor: boolean;
+  guardrail_ids: string[] | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Functions ────────────────────────────────────────────────────────
@@ -83,7 +83,7 @@ const mapAgent = (
     name: agent.name,
     instructions: agent.instructions,
     model: agent.model,
-    toolBindings,
+    tool_bindings: toolBindings,
     tool_ids: legacyViews.toolIds,
     tools: legacyViews.tools,
     max_steps: agent.maxSteps,

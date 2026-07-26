@@ -157,13 +157,13 @@ describe('Approvals', () => {
       // §3 Phase 2: a re-proposal while a matching item is still pending files
       // nothing new and returns the existing item.
       expect(second.id).toBe(first.id);
-      expect(first.previousItemId).toBeNull();
+      expect(first.previous_item_id).toBeNull();
     });
 
     test('a re-proposal after a rejection threads previous_item_id', async () => {
       const dedupKey = 'approvals:thread-rejected';
       const first = await seedApproval({ origin: 'tool_call', dedupKey });
-      expect(first.previousItemId).toBeNull();
+      expect(first.previous_item_id).toBeNull();
 
       await authenticatedTestClient(userToken)
         .post(`/api/v1/approvals/${first.id}/reject`)
@@ -173,7 +173,7 @@ describe('Approvals', () => {
       // linked to the prior rejected item so approvers see the recurrence.
       const reproposed = await seedApproval({ origin: 'tool_call', dedupKey });
       expect(reproposed.id).not.toBe(first.id);
-      expect(reproposed.previousItemId).toBe(first.id);
+      expect(reproposed.previous_item_id).toBe(first.id);
 
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/approvals/${reproposed.id}`
@@ -430,7 +430,7 @@ describe('Approvals', () => {
       });
       expect(found).toBeDefined();
       expect(found!.origin).toBe('tool_call');
-      expect(found!.dedupKey).toBe('approvals:dedup:1');
+      expect(found!.dedup_key).toBe('approvals:dedup:1');
     });
   });
 

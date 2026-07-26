@@ -151,10 +151,10 @@ discussionsRouter.get('/discussions/runs/:run_id', async (ctx: Context) => {
 
   const run = await getDiscussionRun({ id: ctx.params.run_id });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: run.projectId!,
+    projectPublicId: run.project_id!,
     action: 'discussions:GetDiscussionRun',
     resource: buildSrn({
-      projectPublicId: run.projectId!,
+      projectPublicId: run.project_id!,
       resourceType: 'discussion',
       resourceId: run.id,
     }),
@@ -178,10 +178,10 @@ discussionsRouter.get('/discussions/:discussion_id', async (ctx: Context) => {
 
   const discussion = await getDiscussion({ id: ctx.params.discussion_id });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: discussion.projectId!,
+    projectPublicId: discussion.project_id!,
     action: 'discussions:GetDiscussion',
     resource: buildSrn({
-      projectPublicId: discussion.projectId!,
+      projectPublicId: discussion.project_id!,
       resourceType: 'discussion',
       resourceId: discussion.id,
     }),
@@ -205,10 +205,10 @@ discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
 
   const discussion = await getDiscussion({ id: ctx.params.discussion_id });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: discussion.projectId!,
+    projectPublicId: discussion.project_id!,
     action: 'discussions:UpdateDiscussion',
     resource: buildSrn({
-      projectPublicId: discussion.projectId!,
+      projectPublicId: discussion.project_id!,
       resourceType: 'discussion',
       resourceId: discussion.id,
     }),
@@ -245,10 +245,10 @@ discussionsRouter.delete(
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: discussion.projectId!,
+      projectPublicId: discussion.project_id!,
       action: 'discussions:DeleteDiscussion',
       resource: buildSrn({
-        projectPublicId: discussion.projectId!,
+        projectPublicId: discussion.project_id!,
         resourceType: 'discussion',
         resourceId: discussion.id,
       }),
@@ -276,10 +276,10 @@ discussionsRouter.post(
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: discussion.projectId!,
+      projectPublicId: discussion.project_id!,
       action: 'discussions:CreateDiscussionRun',
       resource: buildSrn({
-        projectPublicId: discussion.projectId!,
+        projectPublicId: discussion.project_id!,
         resourceType: 'discussion',
         resourceId: discussion.id,
       }),
@@ -323,10 +323,10 @@ discussionsRouter.get(
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: discussion.projectId!,
+      projectPublicId: discussion.project_id!,
       action: 'discussions:ListDiscussionRuns',
       resource: buildSrn({
-        projectPublicId: discussion.projectId!,
+        projectPublicId: discussion.project_id!,
         resourceType: 'discussion',
         resourceId: discussion.id,
       }),

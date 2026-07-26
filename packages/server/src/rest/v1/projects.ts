@@ -172,7 +172,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     await assertGuardrailDetachAllowed({
       ctx,
       projectPublicId: current.id,
-      current: current.guardrailIds,
+      current: current.guardrail_ids,
       next: guardrailIds,
     });
   }

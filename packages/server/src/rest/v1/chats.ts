@@ -33,12 +33,12 @@ const checkChatPermission = async (
   action: string
 ): Promise<boolean> => {
   const resource = buildSrn({
-    projectPublicId: chat.projectId,
+    projectPublicId: chat.project_id,
     resourceType: 'chat',
     resourceId: chat.id,
   });
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: chat.projectId,
+    projectPublicId: chat.project_id,
     action,
     resource,
   });

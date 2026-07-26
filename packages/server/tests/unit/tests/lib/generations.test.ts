@@ -56,13 +56,13 @@ describe('generations', () => {
 
       expect(gen.id).toBe('gen_create_test001');
       expect(gen.status).toBe('in_progress');
-      expect(gen.projectId).toBe(projectPublicId);
-      expect(gen.agentId).toBe(agentId);
-      expect(gen.traceId).toBe('trc_gen_create_001');
-      expect(gen.completedAt).toBeNull();
-      expect(gen.stopReason).toBeNull();
-      expect(gen.lastActivityAt).toBeNull();
-      expect(gen.initiatorGenerationId).toBeNull();
+      expect(gen.project_id).toBe(projectPublicId);
+      expect(gen.agent_id).toBe(agentId);
+      expect(gen.trace_id).toBe('trc_gen_create_001');
+      expect(gen.completed_at).toBeNull();
+      expect(gen.stop_reason).toBeNull();
+      expect(gen.last_activity_at).toBeNull();
+      expect(gen.initiator_generation_id).toBeNull();
     });
 
     test('creates a generation with optional initiatorGenerationId', async () => {
@@ -83,9 +83,9 @@ describe('generations', () => {
         startedByPrincipalId: 'usr_test_001',
       });
 
-      expect(gen.initiatorGenerationId).toBe('gen_parent_001');
-      expect(gen.startedByPrincipalType).toBe('user');
-      expect(gen.startedByPrincipalId).toBe('usr_test_001');
+      expect(gen.initiator_generation_id).toBe('gen_parent_001');
+      expect(gen.started_by_principal_type).toBe('user');
+      expect(gen.started_by_principal_id).toBe('usr_test_001');
     });
   });
 
@@ -119,8 +119,8 @@ describe('generations', () => {
 
       expect(result).not.toBeNull();
       expect(result?.status).toBe('completed');
-      expect(result?.stopReason).toBe('stop');
-      expect(result?.completedAt).not.toBeNull();
+      expect(result?.stop_reason).toBe('stop');
+      expect(result?.completed_at).not.toBeNull();
     });
 
     test('updates lastActivityAt and metadata', async () => {
@@ -137,7 +137,7 @@ describe('generations', () => {
         metadata: { key: 'value' },
       });
 
-      expect(result?.lastActivityAt).not.toBeNull();
+      expect(result?.last_activity_at).not.toBeNull();
       expect(result?.metadata).toEqual({ key: 'value' });
     });
 
@@ -213,7 +213,7 @@ describe('generations', () => {
 
       expect(
         result.data.every((g) => {
-          return g.agentId === 'agt_list_001';
+          return g.agent_id === 'agt_list_001';
         })
       ).toBe(true);
     });
@@ -251,13 +251,13 @@ describe('generations', () => {
 
       const gen = result.data[0];
       expect(gen.id).toBeDefined();
-      expect(gen.projectId).toBe(projectPublicId);
-      expect(gen.agentId).toBe('agt_list_001');
-      expect(gen.traceId).toBeDefined();
+      expect(gen.project_id).toBe(projectPublicId);
+      expect(gen.agent_id).toBe('agt_list_001');
+      expect(gen.trace_id).toBeDefined();
       expect(gen.status).toBe('in_progress');
-      expect(gen.startedAt).toBeDefined();
-      expect(gen.createdAt).toBeDefined();
-      expect(gen.updatedAt).toBeDefined();
+      expect(gen.started_at).toBeDefined();
+      expect(gen.created_at).toBeDefined();
+      expect(gen.updated_at).toBeDefined();
     });
   });
 
@@ -284,7 +284,7 @@ describe('generations', () => {
 
       expect(result).not.toBeNull();
       expect(result?.id).toBe('gen_get_test001');
-      expect(result?.projectId).toBe(projectPublicId);
+      expect(result?.project_id).toBe(projectPublicId);
     });
 
     test('returns null when projectIds does not include the project', async () => {

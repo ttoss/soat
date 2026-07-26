@@ -66,7 +66,7 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
   const exception = await getException({ id: ctx.params.exception_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: exception.projectId!,
+    projectPublicId: exception.project_id!,
     action: 'exceptions:GetException',
     resource: exceptionSrn(exception),
   });
@@ -91,7 +91,7 @@ exceptionsRouter.post(
     const exception = await getException({ id: ctx.params.exception_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.projectId!,
+      projectPublicId: exception.project_id!,
       action: 'exceptions:AcknowledgeException',
       resource: exceptionSrn(exception),
     });
@@ -120,7 +120,7 @@ exceptionsRouter.post(
     const exception = await getException({ id: ctx.params.exception_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.projectId!,
+      projectPublicId: exception.project_id!,
       action: 'exceptions:ResolveException',
       resource: exceptionSrn(exception),
     });

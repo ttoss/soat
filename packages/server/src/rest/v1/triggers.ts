@@ -76,10 +76,10 @@ triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:GetTrigger',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -166,10 +166,10 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:UpdateTrigger',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -193,14 +193,14 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   };
 
   // Re-check the target-start action when the target type changes.
-  if (body.targetType !== undefined && body.targetType !== trigger.targetType) {
+  if (body.targetType !== undefined && body.targetType !== trigger.target_type) {
     const canStartTarget = await ctx.authUser.isAllowed({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       action: targetStartAction(body.targetType),
       resource: buildSrn({
-        projectPublicId: trigger.projectId!,
+        projectPublicId: trigger.project_id!,
         resourceType: body.targetType,
-        resourceId: body.targetId ?? (trigger.targetId as string),
+        resourceId: body.targetId ?? (trigger.target_id as string),
       }),
     });
     if (!canStartTarget) {
@@ -241,10 +241,10 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:DeleteTrigger',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -277,10 +277,10 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:FireTrigger',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -322,10 +322,10 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
   // empty project set, which would otherwise read as "not found").
   const trigger = await getTrigger({ id: triggerPublicId });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:ListTriggerFirings',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -356,10 +356,10 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
   const firing = await getTriggerFiring({ id: ctx.params.firing_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: firing.projectId!,
+    projectPublicId: firing.project_id!,
     action: 'triggers:GetTriggerFiring',
     resource: buildSrn({
-      projectPublicId: firing.projectId!,
+      projectPublicId: firing.project_id!,
       resourceType: 'triggerFiring',
       resourceId: firing.id,
     }),
@@ -383,10 +383,10 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: trigger.projectId!,
+    projectPublicId: trigger.project_id!,
     action: 'triggers:GetTriggerSecret',
     resource: buildSrn({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       resourceType: 'trigger',
       resourceId: trigger.id,
     }),
@@ -412,10 +412,10 @@ triggersRouter.post(
     const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: trigger.projectId!,
+      projectPublicId: trigger.project_id!,
       action: 'triggers:RotateTriggerSecret',
       resource: buildSrn({
-        projectPublicId: trigger.projectId!,
+        projectPublicId: trigger.project_id!,
         resourceType: 'trigger',
         resourceId: trigger.id,
       }),

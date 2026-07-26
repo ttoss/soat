@@ -69,10 +69,10 @@ tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:GetTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -92,10 +92,10 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:GetTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -147,10 +147,10 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:UpdateTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -181,10 +181,10 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:TransitionTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -214,10 +214,10 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:DeleteTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),

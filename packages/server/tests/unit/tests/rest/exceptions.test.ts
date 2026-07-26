@@ -75,7 +75,7 @@ describe('Exceptions', () => {
       expect(filed.id).toMatch(/^exc_/);
       expect(filed.status).toBe('open');
       expect(filed.severity).toBe('warning'); // manual default
-      expect(filed.occurrenceCount).toBe(1);
+      expect(filed.occurrence_count).toBe(1);
 
       const list = await listExceptions('');
       expect(list.status).toBe(200);
@@ -205,7 +205,7 @@ describe('Exceptions', () => {
         dedupKey,
       });
       expect(second.id).toBe(first.id);
-      expect(second.occurrenceCount).toBe(2);
+      expect(second.occurrence_count).toBe(2);
 
       const list = await listExceptions('&kind=guardrail_tripwire');
       const matches = list.body.data.filter((e: { id: string }) => {
@@ -443,7 +443,7 @@ describe('Exceptions', () => {
       // The partial unique index on (dedup_key WHERE status = 'open') guarantees
       // one insert wins and the other folds into it — same item, occurrence 2.
       expect(a.id).toBe(b.id);
-      expect([a.occurrenceCount, b.occurrenceCount].sort()).toEqual([1, 2]);
+      expect([a.occurrence_count, b.occurrence_count].sort()).toEqual([1, 2]);
     });
   });
 });

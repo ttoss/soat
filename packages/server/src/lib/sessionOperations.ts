@@ -296,7 +296,7 @@ export const addSessionMessage = async (args: {
   });
 
   const savedContent = userMsg.content ?? resolvedContent.content;
-  const savedDocumentId = userMsg.documentId ?? resolvedContent.documentId;
+  const savedDocumentId = userMsg.document_id ?? resolvedContent.documentId;
 
   if ((userMsg as { idempotent?: boolean }).idempotent) {
     return {

@@ -130,21 +130,21 @@ const toSnakeAuditEntry = (
 ): Record<string, unknown> => {
   return {
     id: entry.id,
-    project_id: entry.projectId,
-    principal_type: entry.principalType,
-    principal_id: entry.principalId,
+    project_id: entry.project_id,
+    principal_type: entry.principal_type,
+    principal_id: entry.principal_id,
     action: entry.action,
-    resource_srn: entry.resourceSrn,
-    resource_public_id: entry.resourcePublicId,
+    resource_srn: entry.resource_srn,
+    resource_public_id: entry.resource_public_id,
     status: entry.status,
-    request_id: entry.requestId,
+    request_id: entry.request_id,
     ip: entry.ip,
-    user_agent: entry.userAgent,
+    user_agent: entry.user_agent,
     detail: convertKeysDeep(entry.detail, camelToSnakeKey),
     created_at:
-      entry.createdAt instanceof Date
-        ? entry.createdAt.toISOString()
-        : entry.createdAt,
+      entry.created_at instanceof Date
+        ? entry.created_at.toISOString()
+        : entry.created_at,
   };
 };
 

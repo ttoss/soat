@@ -233,7 +233,7 @@ const resolveDocumentContent = async (args: {
 }): Promise<{ content: string; documentId: string }> => {
   const document = await getDocument({ id: args.content.documentId });
 
-  if (!document || !document.projectId) {
+  if (!document || !document.project_id) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `Document '${args.content.documentId}' not found.`
@@ -242,14 +242,14 @@ const resolveDocumentContent = async (args: {
 
   const resources = buildDocumentPermissionResources({
     documentId: args.content.documentId,
-    projectPublicId: document.projectId,
+    projectPublicId: document.project_id,
     path: document.path,
   });
   const context = buildDocumentPermissionContext({ tags: document.tags });
 
   await assertCallerAllowed({
     authUser: args.authUser,
-    projectPublicId: document.projectId,
+    projectPublicId: document.project_id,
     action: 'documents:GetDocument',
     resources,
     context,
@@ -287,7 +287,7 @@ const resolveToolOutputContent = async (args: {
 
   await assertCallerAllowed({
     authUser: args.authUser,
-    projectPublicId: tool.projectId,
+    projectPublicId: tool.project_id,
     action: 'tools:CallTool',
   });
 

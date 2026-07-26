@@ -78,7 +78,7 @@ const resolveApprovedArguments = (args: {
   decision: DecisionOutput;
 }): Record<string, unknown> | null => {
   if (isPlainRecord(args.decision.editedArgs)) return args.decision.editedArgs;
-  const proposedArgs = args.item.proposedAction?.arguments;
+  const proposedArgs = args.item.proposed_action?.arguments;
   return isPlainRecord(proposedArgs) ? proposedArgs : null;
 };
 
@@ -223,9 +223,9 @@ const settleRun = async (args: {
     });
     requiredAction.approvalId = item.id;
     requiredAction.expiresAt =
-      item.expiresAt instanceof Date
-        ? item.expiresAt.toISOString()
-        : String(item.expiresAt);
+      item.expires_at instanceof Date
+        ? item.expires_at.toISOString()
+        : String(item.expires_at);
     // Cross-links the guardrail_evaluation audit rows to the item they filed —
     // deferred from `runToolNodeGate` because the item didn't exist yet then.
     if (spec.guardrailEvaluationRecords?.length) {
@@ -937,10 +937,10 @@ const resumeRunForApproval = async (args: {
   decision: DecisionOutput;
 }): Promise<void> => {
   const { item, decision } = args;
-  if (item.origin !== 'node' || !item.runId || !item.nodeId) return;
+  if (item.origin !== 'node' || !item.run_id || !item.node_id) return;
 
   const run = await db.OrchestrationRun.findOne({
-    where: { publicId: item.runId },
+    where: { publicId: item.run_id },
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
@@ -949,17 +949,17 @@ const resumeRunForApproval = async (args: {
   if (!run || run.status !== 'awaiting_input') return;
 
   const activeNodes = run.activeNodes as string[];
-  if (!activeNodes.includes(item.nodeId)) return;
+  if (!activeNodes.includes(item.node_id)) return;
 
   log('resumeRunForApproval %o', {
     runId: run.id,
-    nodeId: item.nodeId,
+    nodeId: item.node_id,
     decision: decision.decision,
   });
 
   await resumeOrchestrationRunExecution({
     run,
-    humanNodeId: item.nodeId,
+    humanNodeId: item.node_id,
     humanOutput: { ...decision },
     decisionLabel: decision.decision,
     approvedArguments: resolveApprovedArguments({ item, decision }),

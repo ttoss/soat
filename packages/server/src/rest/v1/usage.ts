@@ -258,11 +258,11 @@ usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
     id: ctx.params.threshold_id,
     projectIds: projectIds ?? undefined,
   });
-  if (threshold.projectId) {
+  if (threshold.project_id) {
     setAuditResourceHint(ctx, {
-      projectPublicId: threshold.projectId,
+      projectPublicId: threshold.project_id,
       resourceSrn: buildSrn({
-        projectPublicId: threshold.projectId,
+        projectPublicId: threshold.project_id,
         resourceType: 'usage',
         resourceId: threshold.id,
       }),

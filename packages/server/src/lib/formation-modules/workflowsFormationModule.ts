@@ -191,7 +191,7 @@ export const workflowsFormationModule: FormationModule = {
         description: workflow.description,
         states: toSnakeCollection(workflow.states),
         transitions: toSnakeCollection(workflow.transitions),
-        payload_schema: workflow.payloadSchema,
+        payload_schema: workflow.payload_schema,
       };
     } catch {
       return null;

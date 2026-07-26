@@ -245,8 +245,8 @@ const runAgentUpdate = async (args: {
     const current = await getAgent({ projectIds, id: ctx.params.agent_id });
     await assertGuardrailDetachAllowed({
       ctx,
-      projectPublicId: current.projectId,
-      current: current.guardrailIds,
+      projectPublicId: current.project_id,
+      current: current.guardrail_ids,
       next: parsed.guardrailIds,
     });
   }
@@ -419,9 +419,9 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const agent = await getAgent({ projectIds, id: ctx.params.agent_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: agent.projectId,
+    projectPublicId: agent.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: agent.projectId,
+      projectPublicId: agent.project_id,
       resourceType: 'agent',
       resourceId: agent.id,
     }),
