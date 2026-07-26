@@ -1269,6 +1269,32 @@ describe('MCP tools - happy path', () => {
       expect(result.toolContext).toEqual({ userId: 'u1' });
     });
 
+    // A `toolContext` key is an HTTP header name (`X-Soat-Context-<Key>`), not a
+    // SOAT field name, so the MCP surface must preserve it verbatim exactly as
+    // the REST caseTransform middleware does. `snakeToCamelDeep` would otherwise
+    // rewrite `actor_external_id` to `actorExternalId` on read, breaking the
+    // read→write round-trip and changing which header the tool receives.
+    test('create-session preserves non-camelCase toolContext keys verbatim', async () => {
+      const toolContext = {
+        actor_external_id: 'snake',
+        'actor-external-id': 'kebab',
+        PascalKey: 'pascal',
+      };
+
+      const created = await mcpCall('create-session', {
+        agentId: sessionAgentId,
+        toolContext,
+      });
+      expect(created.status).toBe(200);
+      expect(parseResult(created).toolContext).toEqual(toolContext);
+
+      const fetched = await mcpCall('get-session', {
+        sessionId: parseResult(created).id,
+      });
+      expect(fetched.status).toBe(200);
+      expect(parseResult(fetched).toolContext).toEqual(toolContext);
+    });
+
     test('list-sessions filtered by agentId returns sessions', async () => {
       const res = await mcpCall('list-sessions', {
         agentId: sessionAgentId,

@@ -39,6 +39,17 @@ The middleware at `packages/server/src/middleware/caseTransform.ts` handles auto
 2. Define the field in **snake_case** in the OpenAPI spec YAML.
 3. The middleware converts automatically — no manual mapping needed.
 
+### Pass-through fields (keys NOT converted)
+
+Some fields carry a bag whose **inner keys are not SOAT field names** — they are author-authored data, JSON Logic paths, or literal HTTP header names. Converting those keys silently desyncs the write from every downstream read, so the middleware skips them (see the `buildBodySkipKeys` / `buildResponseSkipKeys` sets, each with an inline rationale).
+
+Current pass-throughs include `template`, `parameters`, `execute`, `mcp`, `headers`, `guard`, `when`, `expression`, `stateMapping`, `guardrailContext`, `toolContext`, and the path-scoped `metadata`, `input`, `payload`, `document`, `args`.
+
+Two rules when touching this list:
+
+- **A field whose keys become HTTP header names must be a pass-through.** `toolContext` was not, and the conversion made a caller's `actor_external_id` land on `X-Soat-Context-ActorExternalId` — unpredictable from the request body, divergent from the same key in a (pass-through) formation template, and lossy for keys the reverse conversion cannot restore.
+- **Add both directions.** The inbound set is keyed on the camelCase name (`toolContext`), the outbound set on the snake_case name (`tool_context`). Skipping only inbound leaves the response echo lossy, which breaks read-modify-write.
+
 ## Path Parameters
 
 Path parameters in URL templates use **snake_case**, consistent with the rest of the external REST API contract:
