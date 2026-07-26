@@ -105,7 +105,7 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | Type           | Description                                                                                                                         |
 | -------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | `agent`        | Invokes a SOAT [Agent](./agents.md) with a prompt. Uses `agent_id` and `prompt`.                                                    |
-| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`. Gated by [Guardrails](./guardrails.md) at dispatch — see [Guardrail interception](#guardrail-interception-on-tool-nodes).                     |
+| `tool`         | Calls a SOAT [Tool](./tools.md). Uses `tool_id` and `input_mapping`. Its artifact is the tool's own result object — see [Node artifacts](#node-artifacts). Gated by [Guardrails](./guardrails.md) at dispatch — see [Guardrail interception](#guardrail-interception-on-tool-nodes).                     |
 | `transform`    | Evaluates a [JSON Logic](https://jsonlogic.com) rule against the current state. Uses `expression`.                                  |
 | `knowledge`    | Searches a knowledge source via the [Knowledge](./knowledge.md) module. Uses `input_mapping` with `query` and optional `memory_ids`. |
 | `memory_write` | Writes a [Memory](./memories.md) entry. Uses `memory_id` and `input_mapping` with `content`.                                        |
@@ -118,6 +118,30 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. Any [Webhook](./webhooks.md) subscribed to that event type in the run's project delivers it — signed, retried, and tracked by the Webhooks module. The graph holds no URL or secret. Fire-and-forget: the run does not block on or fail from delivery. See [Emitting events](#emitting-events). |
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
 | `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
+
+### Node artifacts
+
+Every completed node produces an **artifact** — the object that `state_mapping` reads as `output` and that downstream nodes read as [`nodes.<id>`](#the-nodesid-namespace). The shape is per node type:
+
+| Type | Artifact |
+| ---- | -------- |
+| `agent` | `{ content }`. With an `output_schema`, a response that parses as a JSON object becomes **that object** instead (so its own fields are read directly). |
+| `tool` | **The tool's result object itself**, not a wrapper — a tool returning `{"status":"ok"}` yields `{"status":"ok"}`, read as `{"var": "output.status"}`. Only a **non-object** result (string, number) is wrapped as `{ result }`. A guardrail-blocked call yields `{ status: "blocked", reason }` instead — see [Guardrail interception](#guardrail-interception-on-tool-nodes). |
+| `transform` | `{ result }` — the evaluated `expression`. |
+| `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
+| `knowledge` | `{ results }` — the matched entries. |
+| `memory_write` | `{ action }` — e.g. `"created"`. |
+| `human`, `webhook` (`mode: "receive"`) | The payload submitted to `submit-human-input`, verbatim. |
+| `approval` | `{ decision, approvalId, resolvedBy, reason, result, editedArgs }` — see [Approval Nodes](#approval-nodes). |
+| `loop` | `{ results }` — one entry per item, each the sub-run's `output`. See [Loops](#loops-collection-iteration). |
+| `poll` | `{ result, attempts, conditionMet, timedOut }`. See [Polling](#polling). |
+| `delay` | `{ waited }` — the `duration` as declared. |
+| `emit_event` | `{ emitted, eventType }`. See [Emitting events](#emitting-events). |
+| `sub_orchestration` | The child run's `output`, i.e. `{ terminalNodeId: terminalArtifact }`. |
+
+The common trap is `tool`: because the artifact is the tool's result verbatim, `{"var": "output.result"}` resolves to `null` for any tool returning a JSON object. Map the field the tool actually returns.
+
+> **Tip:** a `state_mapping` that writes `null` usually means the mapping read a field the artifact does not have. Every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`, so check there for the real shape.
 
 ### Guardrail interception on tool nodes
 
@@ -236,7 +260,7 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 
 - `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — **no node executes inside the request**. A worker claims the task and drives the run; observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
 - `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler enqueues a `wake` task when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); resume them with `submit-human-input` or `resume-orchestration-run`, which drive the run inline and return the settled result.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
 
 **Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
 
@@ -362,12 +386,12 @@ Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`,
     "id": "summarise",
     "type": "agent",
     "agent_id": "agent_xyz",
-    "input_mapping": { "prompt": { "var": "nodes.fetch.result" } }
+    "input_mapping": { "prompt": { "var": "nodes.fetch.text" } }
   }
 ]
 ```
 
-`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node completes with a label rather than an artifact; its namespace entry is `{ "label": "<emitted label>" }`, readable as `{ "var": "nodes.<id>.label" }`.
+`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node completes with a label rather than an artifact; its namespace entry is `{ "label": "<emitted label>" }`, readable as `{ "var": "nodes.<id>.label" }`. The field names available under `nodes.<id>` are the artifact's own — `nodes.fetch.text` above assumes the `fetch` tool returns a `text` field, since a `tool` node's artifact is its result object verbatim (see [Node artifacts](#node-artifacts)).
 
 #### Evaluation scope
 
@@ -468,7 +492,7 @@ When a run completes, nodes that were never reached (because they were on an un-
 ```json
 {
   "status": "failed",
-  "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agent_x' not found." },
+  "error": { "code": "RESOURCE_NOT_FOUND", "message": "Agent 'agent_x' not found." },
   "node_executions": [
     {
       "node_id": "fetch",
@@ -483,19 +507,21 @@ When a run completes, nodes that were never reached (because they were on an un-
       "status": "failed",
       "input": { "prompt": "..." },
       "output": null,
-      "error": { "code": "ORCHESTRATION_NODE_FAILED", "message": "Agent 'agent_x' not found." }
+      "error": { "code": "RESOURCE_NOT_FOUND", "message": "Agent 'agent_x' not found." }
     }
   ]
 }
 ```
 
-Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` (or `resume-orchestration-run`) satisfies the pause, that same record is updated to `status: "completed"` with `output` set to the submitted payload and `completed_at` set to the resume time — it is never left behind as `requires_action` in a finished run. A node that was never reached is recorded with `status: "skipped"` once the run completes. For a worked example of reading back the accumulated state and per-node output of a finished run, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` satisfies the pause, that same record is updated to `status: "completed"` with `output` set to the submitted payload and `completed_at` set to the resume time — it is never left behind as `requires_action` in a finished run. A pause that is re-entered without being satisfied — by `resume-orchestration-run`, a reaper redrive, or a queue redelivery — reuses that same record rather than appending another, so a paused node stays exactly one record per attempt. A node that was never reached is recorded with `status: "skipped"` once the run completes. For a worked example of reading back the accumulated state and per-node output of a finished run, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
 
 ### Run usage
 
 Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across the run's generations — "one operating cycle → one action" cost, without a second request. For the full per-event breakdown (line items, price rows, `by_meter_type` split), fetch the run receipt at `GET /api/v1/usage/receipt?run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation).
 
 When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger via the [usage](./usage.md) event list (`?trigger_id=`).
+
+> **Note:** usage events are metered as each generation settles, so the roll-up is read from `get-orchestration-run`, not from the `start-orchestration-run` response. Even with `wait: true` the start response can carry `usage: null` — the run has settled but its final usage events may not have landed yet. Read the run once more to get the totals.
 
 ### Human Nodes
 
@@ -543,7 +569,8 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | ---------------------------------- | ------ | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
 | `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
-| `ORCHESTRATION_NODE_FAILED`        | `422`  | A node threw during execution (e.g. a referenced `agent_id`/`tool_id` no longer exists)       | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
+| `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
+| _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from `node_executions` — see [Node Executions](#node-executions) |
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
 
 **Debugging a failed run beyond "check the trace":** call `get-orchestration-run` and read `node_executions` — each entry has `node_id`, the resolved `input` the node received, and (on failure) the structured `error`, so you can see exactly which node failed, with what input, and why, without reconstructing state from the trace alone. See [Node Executions](#node-executions).
@@ -551,13 +578,15 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 **A run appears stuck in a non-terminal state:**
 
 - `queued` — the run is enqueued and waiting for a worker to claim its `continue` task; it advances to `running` on the next worker tick. Expected briefly after an async `start-orchestration-run`. If it never advances, confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`) — see [Durable Background Execution](#durable-background-execution).
-- `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once `active_nodes[].wake_at` (or the node's backoff delay) elapses. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
-- `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` (or `resume-orchestration-run`) is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
+- `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once its scheduled wake (or the node's backoff delay) elapses. `active_nodes` names the node being waited on; the wake time itself is persisted with the run but is not exposed on the API, so use the node's declared `duration`/`interval` to know when to expect it. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
+- `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
 - `running` for far longer than expected — the process driving it may have crashed or been redeployed mid-execution. The background reaper reclaims any run whose lease (`lease_expires_at`) has expired and resumes it from the last checkpoint; a healthy run refreshes its lease every round, so this self-heals within `ORCHESTRATION_RUN_LEASE_TTL_MS` without intervention — see [Durable Background Execution](#durable-background-execution).
 
 ## Examples
 
 ### Create a sequential pipeline
+
+The `fetch` node maps `output.text` because a `tool` node's artifact is its tool's result object verbatim — substitute whatever field your tool returns (see [Node artifacts](#node-artifacts)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -567,7 +596,7 @@ soat create-orchestration \
   --project-id "$PROJECT_ID" \
   --name "fetch-and-summarize" \
   --nodes '[
-    {"id":"fetch","type":"tool","tool_id":"tool_abc","state_mapping": { "state.raw": { "var": "output.result" } }},
+    {"id":"fetch","type":"tool","tool_id":"tool_abc","state_mapping": { "state.raw": { "var": "output.text" } }},
     {"id":"summarise","type":"agent","agent_id":"agent_xyz","input_mapping":{"prompt":{"var":"raw"}},"state_mapping": { "state.summary": { "var": "output.content" } }}
   ]' \
   --edges '[{"from":"fetch","to":"summarise"}]'
@@ -589,7 +618,7 @@ const { data, error } = await soat.orchestrations.createOrchestration({
         id: 'fetch',
         type: 'tool',
         tool_id: 'tool_abc',
-        state_mapping: { 'state.raw': { var: 'output.result' } },
+        state_mapping: { 'state.raw': { var: 'output.text' } },
       },
       {
         id: 'summarise',
@@ -620,7 +649,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
         "id": "fetch",
         "type": "tool",
         "tool_id": "tool_abc",
-        "state_mapping": { "state.raw": { "var": "output.result" } }
+        "state_mapping": { "state.raw": { "var": "output.text" } }
       },
       {
         "id": "summarise",
@@ -639,7 +668,7 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
 
 ### Start a run
 
-Returns immediately with `status: "running"`; the run executes in the background. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
+Returns immediately with `status: "queued"`; a worker claims the run and drives it in the background, moving it to `running`. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
