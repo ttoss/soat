@@ -19,6 +19,13 @@ A guardrail is a **reusable template**: defined once, it can govern many tools a
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Gate a Dangerous Tool with Guardrails - Step 4 (Write the guardrail)](/docs/tutorials/gate-a-tool-with-guardrails#step-4--write-the-guardrail)
+- [Gate a Dangerous Tool with Guardrails - Step 5 (Dry-run every decision)](/docs/tutorials/gate-a-tool-with-guardrails#step-5--dry-run-every-decision-before-attaching)
+- [Gate a Dangerous Tool with Guardrails - Step 10 (A failing guard: the tripwire)](/docs/tutorials/gate-a-tool-with-guardrails#step-10--a-failing-guard-the-tripwire)
+- [Gate a Dangerous Tool with Guardrails - Step 12 (Raise the floor for the whole project)](/docs/tutorials/gate-a-tool-with-guardrails#step-12--raise-the-floor-for-the-whole-project)
+
 ## Data Model
 
 ### Guardrail

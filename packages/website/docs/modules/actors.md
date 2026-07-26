@@ -23,6 +23,11 @@ The module covers:
 - **Instructions** — per-actor system prompt overrides composed into generate calls
 - **Tags** — key-value metadata enabling attribute-based access control via IAM conditions
 
+## Related Tutorials
+
+- [Cap Spend Per End User - Step 4 (Create an actor per end user)](/docs/tutorials/cap-spend-per-end-user#step-4--create-an-actor-per-end-user)
+- [Cap Spend Per End User - Step 5 (Run a turn through a session bound to the actor)](/docs/tutorials/cap-spend-per-end-user#step-5--run-a-turn-through-a-session-bound-to-the-actor)
+
 ## Data Model
 
 | Field          | Type           | Required | Description                                                                                                       |
