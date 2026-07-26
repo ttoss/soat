@@ -1,12 +1,12 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { driveQueuedRun, redriveRun, wakeRun } from './orchestrationEngine';
 import {
-  ackRunTask,
-  claimRunTasks,
-  type RunTaskInstance,
-} from './orchestrationQueue';
+  type ClaimedTask,
+  getOrchestrationQueueDriver,
+} from './orchestration-queue-drivers';
+import { driveQueuedRun, redriveRun, wakeRun } from './orchestrationEngine';
+import { writeWorkerHeartbeat } from './orchestrationWorkerHealth';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:orchestrations');
@@ -41,6 +41,27 @@ let inFlight = 0;
 /** The tasks currently claimed-and-unacked by this worker process. */
 export const inFlightTaskCount = (): number => {
   return inFlight;
+};
+
+// When this process last completed a claim against the queue without error.
+// A claim that throws (the database or SQS is unreachable) deliberately does
+// **not** update it, so the value ages out and the worker healthcheck reports
+// unhealthy — a worker whose timer still fires but which cannot reach the queue
+// is not doing its job.
+let lastSuccessfulDrainAt: number | null = null;
+
+/**
+ * Epoch milliseconds of this process's last successful queue claim, or `null`
+ * if it has not completed one yet. The liveness signal behind the worker
+ * heartbeat file (see {@link writeWorkerHeartbeat}).
+ */
+export const lastSuccessfulDrainAtMs = (): number | null => {
+  return lastSuccessfulDrainAt;
+};
+
+/** Test-only: forgets the last successful drain so liveness starts cold. */
+export const resetLastSuccessfulDrain = (): void => {
+  lastSuccessfulDrainAt = null;
 };
 
 /**
@@ -82,17 +103,17 @@ const TERMINAL_STATUSES = new Set([
  * redelivery.
  */
 export const handleRunTask = async (args: {
-  task: RunTaskInstance;
+  task: ClaimedTask;
 }): Promise<void> => {
   const { task } = args;
-  const run = await db.OrchestrationRun.findByPk(task.runId as number);
+  const run = await db.OrchestrationRun.findByPk(task.runId);
   if (!run) {
-    log('handleRunTask: run %d gone, acking task %d', task.runId, task.id);
+    log('handleRunTask: run %d gone, acking task %s', task.runId, task.id);
     return;
   }
   if (TERMINAL_STATUSES.has(run.status)) {
     log(
-      'handleRunTask: run %s already %s, acking task %d',
+      'handleRunTask: run %s already %s, acking task %s',
       run.publicId,
       run.status,
       task.id
@@ -102,7 +123,7 @@ export const handleRunTask = async (args: {
 
   log(
     'handleRunTask: task=%s kind=%s run=%s status=%s',
-    task.publicId,
+    task.id,
     task.kind,
     run.publicId,
     run.status
@@ -145,13 +166,19 @@ export const drainQueueOnce = async (args?: {
     inFlight,
   });
 
-  let tasks: RunTaskInstance[];
+  const driver = getOrchestrationQueueDriver();
+
+  let tasks: ClaimedTask[];
   try {
-    tasks = await claimRunTasks({ limit, now: args?.now });
+    tasks = await driver.claim({ limit, now: args?.now });
   } catch (error) {
     log('drainQueueOnce: claim failed %o', error);
     return 0;
   }
+
+  // A completed claim (even an empty one) proves this process can still reach
+  // the queue — the liveness signal the worker healthcheck reads.
+  lastSuccessfulDrainAt = (args?.now ?? new Date()).getTime();
 
   inFlight += tasks.length;
 
@@ -159,10 +186,10 @@ export const drainQueueOnce = async (args?: {
     tasks.map(async (task) => {
       try {
         await handleRunTask({ task });
-        await ackRunTask({ id: task.id as number });
+        await driver.ack({ task });
       } catch (error) {
         // Leave the task un-acked so its lease expires and it is redelivered.
-        log('drainQueueOnce: handle failed task=%d %o', task.id, error);
+        log('drainQueueOnce: handle failed task=%s %o', task.id, error);
       } finally {
         inFlight -= 1;
       }
@@ -184,14 +211,28 @@ export const kickWorker = (): void => {
   void drainQueueOnce();
 };
 
+/**
+ * Publishes this process's liveness to the heartbeat file after the drain, so a
+ * container healthcheck can tell a working worker from a wedged one. A no-op
+ * unless `ORCHESTRATION_WORKER_HEARTBEAT_FILE` is set, so the in-API worker
+ * writes nothing by default. Returns 0 to satisfy the `Sweep` contract.
+ */
+export const publishWorkerHeartbeat = async (): Promise<number> => {
+  await writeWorkerHeartbeat({
+    lastSuccessfulDrainAtMs: lastSuccessfulDrainAt,
+  });
+  return 0;
+};
+
 const scheduler = createScheduler({
   log,
   defaultIntervalMs: 5000,
   envVar: 'ORCHESTRATION_WORKER_INTERVAL_MS',
   disabledEnvVar: 'ORCHESTRATION_WORKER_DISABLED',
-  // The sweep is the queue drain — its `(args?: { now? })` signature is a
-  // superset of the Sweep contract, so it is used directly.
-  sweeps: [drainQueueOnce],
+  // The first sweep is the queue drain — its `(args?: { now? })` signature is a
+  // superset of the Sweep contract, so it is used directly. The second
+  // publishes the heartbeat the worker healthcheck reads.
+  sweeps: [drainQueueOnce, publishWorkerHeartbeat],
 });
 
 /**

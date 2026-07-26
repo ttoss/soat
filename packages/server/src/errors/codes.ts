@@ -294,6 +294,11 @@ export const ERROR_CODES = {
     description:
       'The file storage backend is not configured correctly — an unknown FILES_STORAGE_PROVIDER, an unsupported storage type, or a missing required variable (e.g. FILES_STORAGE_DIR for local, FILES_S3_BUCKET for s3).',
   },
+  QUEUE_DRIVER_MISCONFIGURED: {
+    httpStatus: 500,
+    description:
+      'The orchestration queue driver is not configured correctly — an unknown ORCHESTRATION_QUEUE_DRIVER, or a missing required variable for the selected driver (e.g. ORCHESTRATION_QUEUE_SQS_QUEUE_URL for sqs).',
+  },
   INGESTION_CALLBACK_INVALID_TOKEN: {
     httpStatus: 401,
     description:

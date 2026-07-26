@@ -9,7 +9,7 @@
 
 | Capability                                | PRD                                                    |
 | ----------------------------------------- | ------------------------------------------------------ |
-| Queue-backed run execution                | [prd-orchestration-queue.md](./prd-orchestration-queue.md) |
+| Queue-backed run execution ✅ shipped     | [prd-orchestration-queue.md](./prd-orchestration-queue.md) · [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution) |
 | Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
 | Usage metering ✅ shipped                  | [usage module doc](../packages/website/docs/modules/usage.md) |
 | Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [prd-approvals.md](./prd-approvals.md#recurrence-view--not-started) · [prd-learned-rules.md](./prd-learned-rules.md) |
@@ -75,7 +75,7 @@ declarative deploy layer.
 
 | #  | Gap                                    | Requirement                                                        | SOAT today                                                                                                      |
 | -- | -------------------------------------- | ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
-| G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | Durable background execution, lease/reaper recovery, and retries **exist**; no queue abstraction, no idempotency keys, no concurrency limits |
+| G2 | Queue-backed runs                       | Worker pool, at-least-once + idempotency, concurrency limits        | ✅ **Shipped.** Queue abstraction with a Postgres default and an SQS driver, run-scoped idempotency keys, per-project + per-worker concurrency limits, a standalone worker fleet with its own healthcheck, and the queue-stats endpoint — see the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution) |
 | G3 | Approval & exception queues             | Persistent queue with evidence + expiry; manage-by-exception        | `human` nodes pause runs (`awaiting_input`); no persistent queue, no expiry, no severity routing                   |
 | G5 | Billing-grade cost metering             | Per-run token/cost accounting, idempotent under retries             | ✅ **Shipped.** Every LLM path meters, plus the `compute_execution` / `storage` / `api_request` dimensions, grouped aggregation, receipts, thresholds, and the `soat.usage.*` spend guards (project windows and per-run ceilings) — see the [usage module doc](../packages/website/docs/modules/usage.md) |
 | G6 | Feedback loop → recurrence surfacing    | Recurring corrections queryable; graduation path into guardrail `deny` | `previous_item_id` threads recurrence per item; no aggregate view (→ G3 recurrence view); full rule lifecycle ⏭️ deferred |

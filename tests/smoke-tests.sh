@@ -1209,6 +1209,59 @@ if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestratio
 fi
 echo "Completed run: OK"
 
+# Worker-fleet coverage: the API tier runs with ORCHESTRATION_WORKER_DISABLED,
+# so nothing drains the queue except the standalone `worker` compose service.
+# An async run (no --wait) therefore only reaches `succeeded` if that separate
+# process claimed the task and drove the run.
+echo "--- Async run drained by the standalone worker fleet ---"
+ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --input '{"theme":"worker-fleet"}')
+ORCH_ASYNC_ID=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.id')
+ORCH_ASYNC_STATUS=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.status')
+if [ -z "$ORCH_ASYNC_ID" ] || [ "$ORCH_ASYNC_ID" = "null" ]; then
+  echo "ERROR: start-orchestration-run (async) did not return a run" >&2
+  printf '%s\n' "$ORCH_ASYNC_RESP" >&2
+  exit 1
+fi
+# No node executes inside the request: the run comes back parked in the queue.
+if [ "$ORCH_ASYNC_STATUS" = "succeeded" ]; then
+  echo "ERROR: async run completed inside the request (expected it to be queued)" >&2
+  printf '%s\n' "$ORCH_ASYNC_RESP" >&2
+  exit 1
+fi
+
+i=0
+ORCH_ASYNC_FINAL=""
+while [ $i -lt 60 ]; do
+  ORCH_ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$ORCH_ASYNC_ID")
+  ORCH_ASYNC_FINAL=$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.status')
+  [ "$ORCH_ASYNC_FINAL" = "succeeded" ] && break
+  [ "$ORCH_ASYNC_FINAL" = "failed" ] && break
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$ORCH_ASYNC_FINAL" != "succeeded" ]; then
+  echo "ERROR: standalone worker did not drain the queued run (status: $ORCH_ASYNC_FINAL)" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.state.title')" != "worker-fleet sonnet" ]; then
+  echo "ERROR: worker-drained run produced unexpected state" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+echo "Worker fleet drained async run: OK"
+
+# The queue drained back to empty once the worker acked the task.
+QUEUE_DRAINED=$($SOAT_CLI get-queue-stats)
+if [ "$(printf '%s\n' "$QUEUE_DRAINED" | jq -r '.queue_depth')" != "0" ]; then
+  echo "ERROR: queue still has waiting tasks after the run settled" >&2
+  printf '%s\n' "$QUEUE_DRAINED" >&2
+  exit 1
+fi
+echo "Queue drained to empty: OK"
+
 # Exceptions module coverage: a run that fails (nonexistent tool) auto-files a
 # run_failed exception, which we then acknowledge and resolve. The exception is
 # filed fire-and-forget off the failed event, so poll for it.

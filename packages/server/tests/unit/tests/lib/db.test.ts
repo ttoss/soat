@@ -1,6 +1,7 @@
 import {
   buildDatabaseConfig,
   getSchemaSyncLockTimeoutMs,
+  isConcurrentExtensionCreationError,
   logDatabaseConnectionError,
   SCHEMA_SYNC_LOCK_KEY,
   syncSchemaWithAdvisoryLock,
@@ -201,5 +202,60 @@ describe('logDatabaseConnectionError', () => {
       'failed to connect to database:',
       error
     );
+  });
+});
+
+// `CREATE EXTENSION IF NOT EXISTS` is not race-safe in PostgreSQL: two
+// processes booting together (the API tier and a worker-fleet member) can both
+// pass the existence check and one loses on `pg_extension_name_index`. The
+// predicate below is what tells that recoverable race apart from a real
+// failure, so it is tested directly with the error shapes PostgreSQL produces.
+describe('isConcurrentExtensionCreationError', () => {
+  const raceError = (code: string): unknown => {
+    return Object.assign(new Error('duplicate key value'), {
+      sql: 'CREATE EXTENSION IF NOT EXISTS vector;',
+      original: Object.assign(new Error('duplicate key value'), { code }),
+    });
+  };
+
+  test('recognizes the unique-violation form (23505)', () => {
+    expect(isConcurrentExtensionCreationError(raceError('23505'))).toBe(true);
+  });
+
+  test('recognizes the duplicate-object form (42710)', () => {
+    expect(isConcurrentExtensionCreationError(raceError('42710'))).toBe(true);
+  });
+
+  test('reads the code off `parent` as well as `original`', () => {
+    const error = Object.assign(new Error('duplicate key value'), {
+      sql: 'CREATE EXTENSION IF NOT EXISTS vector;',
+      parent: Object.assign(new Error('duplicate key value'), {
+        code: '23505',
+      }),
+    });
+    expect(isConcurrentExtensionCreationError(error)).toBe(true);
+  });
+
+  test.each([
+    ['a different statement', 'INSERT INTO users (id) VALUES (1);', '23505'],
+    [
+      'an unrelated error code',
+      'CREATE EXTENSION IF NOT EXISTS vector;',
+      '42501',
+    ],
+  ])('rejects %s', (_label, sql, code) => {
+    const error = Object.assign(new Error('nope'), {
+      sql,
+      original: Object.assign(new Error('nope'), { code }),
+    });
+    expect(isConcurrentExtensionCreationError(error)).toBe(false);
+  });
+
+  test.each([
+    ['a connection refusal', new Error('ECONNREFUSED')],
+    ['a non-error value', 'boom'],
+    ['null', null],
+  ])('rejects %s', (_label, error) => {
+    expect(isConcurrentExtensionCreationError(error)).toBe(false);
   });
 });

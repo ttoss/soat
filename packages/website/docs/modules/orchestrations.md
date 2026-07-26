@@ -240,7 +240,47 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 
 **Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
 
+**Pluggable queue drivers.** The queue is reached through a four-operation abstraction (`enqueue` / `claim` / `ack` / `retry`, plus a stats snapshot), so the backend is selected with `ORCHESTRATION_QUEUE_DRIVER` and nothing else in the engine, scheduler, or worker changes. Both drivers are held to one shared conformance suite, so they are interchangeable for at-least-once delivery, lease-based redelivery, delayed availability, and exclusive claim.
+
+| | `postgres` (default) | `sqs` |
+| --- | --- | --- |
+| Backing store | `orchestration_run_tasks` table | an SQS queue |
+| `enqueue` | `INSERT` (a future `available_at` parks the task) | `SendMessage` (`DelaySeconds`) |
+| `claim` | `SELECT … FOR UPDATE SKIP LOCKED` + lease | `ReceiveMessage`; the visibility timeout **is** the lease |
+| `ack` | `DELETE` the row | `DeleteMessage` |
+| `retry` | clear the claim, set a new `available_at` | `ChangeMessageVisibility` |
+| Repeated failure | redelivered until acked | the queue's redrive policy → DLQ |
+| Delivery counter | `attempts` column | `ApproximateReceiveCount` |
+| Per-project `max_concurrent_runs` | **enforced** at claim time | **not enforced** |
+| `oldest_queued_age_seconds`, `per_project` stats | reported | `null` / empty |
+
+Postgres remains the default and needs no infrastructure beyond the database. Choose `sqs` when a deployment standardizes on a managed queue and accepts the two differences above: per-project concurrency limits are not evaluated (only the per-worker `ORCHESTRATION_WORKER_CONCURRENCY` cap applies), and the operator stats are limited to what `GetQueueAttributes` exposes. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes — the task simply becomes visible early, and the run's own persisted `wake_at` still decides whether there is anything to do.
+
+```bash
+ORCHESTRATION_QUEUE_DRIVER=sqs
+ORCHESTRATION_QUEUE_SQS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/soat-orchestration-tasks
+```
+
+An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails loudly (`QUEUE_DRIVER_MISCONFIGURED`) rather than silently falling back to Postgres.
+
 **Separate worker process.** The worker loop is an extractable module that runs inside the API process by default. `node dist/worker.js` (built from `src/worker.ts`) starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). On `SIGTERM`/`SIGINT` the worker shuts down gracefully: it stops claiming new tasks and waits for tasks it has already claimed to finish before exiting (tasks not finished before the timeout are left un-acked and redelivered, so no work is lost).
+
+**Worker fleet deployment.** The published image ships both entrypoints, so a fleet is a second service off the same image:
+
+```yaml
+server:
+  environment:
+    ORCHESTRATION_WORKER_DISABLED: 'true' # API tier stays request-only
+
+worker:
+  command: ['node', 'packages/server/dist/worker.mjs']
+  environment:
+    ORCHESTRATION_WORKER_HEARTBEAT_FILE: /tmp/soat-orchestration-worker.heartbeat
+  healthcheck:
+    test: ['CMD', 'node', 'packages/server/dist/workerHealthcheck.mjs']
+```
+
+**Worker healthcheck.** A worker serves no HTTP, so it cannot answer the API's `/health` probe. Instead it republishes a heartbeat file after every **successful** queue claim, and `workerHealthcheck.mjs` exits `0` only while that heartbeat is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS`. Grading the last successful *claim* rather than the last timer tick is deliberate: a worker whose loop still fires but can no longer reach the queue goes unhealthy instead of looking alive. The API's `GET /health` is unchanged — still a bare `{"status":"ok"}`.
 
 **Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round.
 
@@ -275,6 +315,12 @@ The scheduler tick (which enqueues `wake` tasks for due `sleeping` runs and `con
 | `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to stop the API process from running the in-process worker loop and its enqueue kicks, so a dedicated `worker.js` process owns draining. |
 | `ORCHESTRATION_WORKER_BATCH` | No | Maximum tasks a worker claims per tick (default `10`). |
 | `ORCHESTRATION_WORKER_CONCURRENCY` | No | Global cap on simultaneously claimed, unacked tasks **per worker process** (unset = no cap, bounded only by the batch size). Each tick claims at most `CONCURRENCY − in-flight`. A fleet of P workers bounds global parallelism at `P × CONCURRENCY`. See [Concurrency limits](#concurrency-limits). |
+| `ORCHESTRATION_QUEUE_DRIVER` | No | Queue backend: `postgres` (default) or `sqs`. An unknown value is rejected at startup. |
+| `ORCHESTRATION_QUEUE_SQS_QUEUE_URL` | With `sqs` | The SQS queue URL tasks are published to and received from. |
+| `ORCHESTRATION_QUEUE_SQS_REGION` | No | Region for the SQS client (falls back to `AWS_REGION`, then `us-east-1`). |
+| `ORCHESTRATION_QUEUE_SQS_ENDPOINT` | No | Override the SQS endpoint (LocalStack / ElasticMQ). Credentials otherwise resolve through the standard AWS provider chain. |
+| `ORCHESTRATION_WORKER_HEARTBEAT_FILE` | No | Where a standalone worker publishes its liveness heartbeat. Unset (the default for the in-API worker) writes nothing. |
+| `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS` | No | How old the heartbeat may be before the worker healthcheck fails (default `30000`). Must exceed `ORCHESTRATION_WORKER_INTERVAL_MS`. |
 
 ### Concurrency limits
 
@@ -286,9 +332,11 @@ Parallelism is bounded on two axes so a busy tenant can't starve others and the 
 
 - **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps the tasks a single worker process holds claimed-and-unacked at any instant, across ticks (not merely per claim batch). `ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size beneath it, so the effective claim each tick is `min(BATCH, CONCURRENCY − in-flight)`.
 
+> Per-project limits are enforced by the **Postgres** driver only — its claim is a SQL join over tasks → runs → projects, evaluated in the same transaction that leases the task. Under `ORCHESTRATION_QUEUE_DRIVER=sqs` only the global per-worker cap applies.
+
 ### Queue metrics
 
-`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window, no external metrics stack), and a per-project breakdown. It is guarded by the `orchestrations:GetQueueStats` action (intended for admin/operator policies); a project-scoped caller sees only their own projects under `per_project`. This is distinct from the unauthenticated `GET /health` liveness probe, which stays a bare `{"status":"ok"}`.
+`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window, no external metrics stack), and a per-project breakdown. `driver` names the active backend; under `sqs` the depths come from `GetQueueAttributes`, and `oldest_queued_age_seconds` / `per_project` are `null` / empty because SQS exposes neither. It is guarded by the `orchestrations:GetQueueStats` action (intended for admin/operator policies); a project-scoped caller sees only their own projects under `per_project`. This is distinct from the unauthenticated `GET /health` liveness probe, which stays a bare `{"status":"ok"}`.
 
 ### State and Mappings
 

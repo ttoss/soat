@@ -465,7 +465,13 @@ components:
       properties:
         driver:
           type: string
-          description: The active queue driver.
+          enum:
+            - postgres
+            - sqs
+          description: >-
+            The active queue driver (`ORCHESTRATION_QUEUE_DRIVER`). Under
+            `sqs`, `oldest_queued_age_seconds` is always `null` and
+            `per_project` is always empty — SQS exposes neither.
           example: postgres
         queue_depth:
           type: integer
