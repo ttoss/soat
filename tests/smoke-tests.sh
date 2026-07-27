@@ -1411,8 +1411,10 @@ if [ "$HUMAN_RUN_STATUS" != "awaiting_input" ] || [ "$HUMAN_NODE_ID" != "approva
   printf '%s\n' "$HUMAN_RUN_RESP"
   exit 1
 fi
-# JSON Logic input_mapping: literal passthrough, {var} from run input, computed expression.
-if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.document_id == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
+# JSON Logic input_mapping: literal passthrough, {var} from run input, computed
+# expression. The mapping keys are the author's own (`documentId`), so they come
+# back exactly as written — nothing rewrites them (#737).
+if ! printf '%s\n' "$HUMAN_RUN_RESP" | jq -e '.required_action.context.language == "pt-BR" and .required_action.context.documentId == "ood_123" and .required_action.context.label == "Tema: Verao"' >/dev/null 2>&1; then
   echo "Human node input_mapping did not resolve JSON Logic as expected"
   printf '%s\n' "$HUMAN_RUN_RESP"
   exit 1
