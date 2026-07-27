@@ -136,11 +136,11 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   });
 
   const result: {
-    projectId: string;
+    project_id: string;
     scopes: string[];
     policy: typeof policy;
-    authorizeUrl?: string;
-  } = { projectId: body.project_id, scopes: granted, policy };
+    authorize_url?: string;
+  } = { project_id: body.project_id, scopes: granted, policy };
 
   // When completing an OAuth flow, store the grant keyed by PKCE code_challenge
   // and hand the app the URL to navigate back to so /authorize can issue a code.
@@ -172,7 +172,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
       subject: ctx.authUser.publicId,
       scopes,
     });
-    result.authorizeUrl = `/authorize?${body.authorize_query}`;
+    result.authorize_url = `/authorize?${body.authorize_query}`;
   }
 
   ctx.status = 200;
