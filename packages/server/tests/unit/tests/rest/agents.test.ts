@@ -1264,6 +1264,45 @@ describe('Agents', () => {
       expect(res.body.tools[0].name).toBe('inline-lookup');
     });
 
+    // Regression: fromWireInlineTool/toWireInlineTool convert an inline
+    // binding's tool between the wire's snake_case fields and the camelCase
+    // fields every consumer (toolsCall.ts's deny-list/preset-parameter
+    // handling) actually reads. Storing the wire object verbatim (the bug)
+    // made denied_actions a deny-list that never denied anything and dropped
+    // preset_parameters/output_mapping silently.
+    test('an inline binding tool round-trips denied_actions/preset_parameters/output_mapping', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          {
+            tool: {
+              name: 'inline-gated',
+              type: 'soat',
+              actions: ['list-documents', 'get-document'],
+              denied_actions: ['get-document'],
+              preset_parameters: { project_id: projectId },
+              output_mapping: { result: '$.data' },
+            },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      const tool = res.body.tool_bindings[0].tool;
+      expect(tool.denied_actions).toEqual(['get-document']);
+      expect(tool.preset_parameters).toEqual({ project_id: projectId });
+      expect(tool.output_mapping).toEqual({ result: '$.data' });
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${res.body.id}`
+      );
+      const roundTripped = getRes.body.tool_bindings[0].tool;
+      expect(roundTripped.denied_actions).toEqual(['get-document']);
+      expect(roundTripped.preset_parameters).toEqual({
+        project_id: projectId,
+      });
+      expect(roundTripped.output_mapping).toEqual({ result: '$.data' });
+    });
+
     test('an unknown field on a binding is rejected', async () => {
       // A binding carries only tool_id / tool; the strict-fields validator
       // rejects any unknown field at the binding level.
