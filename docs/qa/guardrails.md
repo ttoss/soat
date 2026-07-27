@@ -78,14 +78,18 @@ items need a **live generation** — the 2026-07-27 pass closed everything that
 `/evaluate` and the REST surface could reach on their own, and these two are
 what is left:
 
-- [ ] **Stricter-wins composition across scopes on a live generation** — the
-  central promise of attachment, and the only item here that could silently
-  *loosen* enforcement if wrong. `/evaluate` cannot reach it: it evaluates a
-  single guardrail, while composition is by definition the interaction of
-  several applying to one call. Needs an agent that actually emits a tool call,
-  with guardrails attached at two or more of the project / agent / tool scopes,
-  asserting one `guardrail_evaluation` record per guardrail and an effective
-  decision equal to the strictest (`blocked` > `tripwire` > `route_to_approval`
-  > `execute`).
-- [ ] **Client-tool gating at the `requires_action` handoff** — the client-side
-  execution path is unverified end-to-end.
+These restate the unchecked boxes above rather than adding new ones — they carry
+no checkbox so the coverage count stays honest (every gap is counted once, at its
+topical section).
+
+**Stricter-wins composition across scopes on a live generation** — the central
+promise of attachment, and the only item here that could silently *loosen*
+enforcement if wrong. `/evaluate` cannot reach it: it evaluates a single
+guardrail, while composition is by definition the interaction of several applying
+to one call. Needs an agent that actually emits a tool call, with guardrails
+attached at two or more of the project / agent / tool scopes, asserting one
+`guardrail_evaluation` record per guardrail and an effective decision equal to
+the strictest (`blocked` > `tripwire` > `route_to_approval` > `execute`).
+
+**Client-tool gating at the `requires_action` handoff** — the client-side
+execution path is unverified end-to-end.

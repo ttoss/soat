@@ -79,10 +79,20 @@ the module checklist in `.claude/rules/modules.md`.
 Coverage is `verified / total items`. The shortfall is always itemized in that
 file's **Not covered** section — it is a gap list, not a failure count.
 
+Count each gap **once**, at its topical section. Where a **Not covered** section
+restates a gap for emphasis, the restatement carries no checkbox — otherwise the
+denominator counts one gap twice and the coverage figure understates itself.
+
+Most unchecked boxes carry no issue, and should not: an issue is for a **defect**,
+and it closes. An unbuilt feature, an environment limit, or a behavior nobody has
+attempted yet is a coverage gap, which never closes — it is tracked by the box
+itself and its annotation. Of the 32 unchecked boxes today, 7 are defects and all
+7 link an issue.
+
 | Module                                | Coverage | Last pass  | Source                                                                                                                                                                                                                                                   |
 | ------------------------------------- | -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [audit-log](./audit-log.md)           | 42/45    | 2026-07-27 | [#707](https://github.com/ttoss/soat/issues/707), [#745](https://github.com/ttoss/soat/issues/745)                                                                                                                                                       |
-| [guardrails](./guardrails.md)         | 31/35    | 2026-07-27 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
+| [guardrails](./guardrails.md)         | 31/33    | 2026-07-27 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
 | [knowledge](./knowledge.md)           | 15/17    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
 | [memories](./memories.md)             | 22/27    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
 | [orchestrations](./orchestrations.md) | 125/135  | 2026-07-27 | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724), [#746](https://github.com/ttoss/soat/issues/746), [#747](https://github.com/ttoss/soat/issues/747) |
