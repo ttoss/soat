@@ -66,6 +66,38 @@ describe('orchestrationRetry', () => {
         true
       ); // 500 — retriable
     });
+
+    // TOOL_HTTP_ERROR always wraps a tool's non-2xx response as httpStatus 502,
+    // but the real upstream status is preserved in meta.tool_status_code — a
+    // deterministic 4xx from the tool's target must still be terminal.
+    test('consults the upstream tool_status_code on a TOOL_HTTP_ERROR instead of its wrapping 502', () => {
+      expect(
+        isRetriableError(
+          new DomainError('TOOL_HTTP_ERROR', 'x', { tool_status_code: 404 })
+        )
+      ).toBe(false);
+      expect(
+        isRetriableError(
+          new DomainError('TOOL_HTTP_ERROR', 'x', { tool_status_code: 400 })
+        )
+      ).toBe(false);
+      expect(
+        isRetriableError(
+          new DomainError('TOOL_HTTP_ERROR', 'x', { tool_status_code: 503 })
+        )
+      ).toBe(true);
+    });
+
+    test('falls back to the DomainError httpStatus when tool_status_code is absent or not a number', () => {
+      expect(isRetriableError(new DomainError('TOOL_HTTP_ERROR', 'x'))).toBe(
+        true
+      ); // no meta at all — 502 wrapper status applies
+      expect(
+        isRetriableError(
+          new DomainError('TOOL_HTTP_ERROR', 'x', { tool_status_code: '404' })
+        )
+      ).toBe(true); // non-number meta value is ignored, not coerced
+    });
   });
 
   describe('backoffMs', () => {

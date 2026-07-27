@@ -48,9 +48,18 @@ export const resolveRetryPolicy = (
  * which surface as non-`DomainError`s) and upstream `5xx` `DomainError`s — are
  * retriable. Deliberate business errors with a `4xx` status (validation, not
  * found, conflict) are terminal: retrying cannot change the outcome.
+ *
+ * `TOOL_HTTP_ERROR` always wraps a tool's non-2xx response as `httpStatus 502`
+ * (see `toHttpToolDomainError`), so the wrapper status can never tell a
+ * terminal 4xx from a transient 5xx upstream failure. The real status is
+ * preserved in `meta.tool_status_code`; consult it first when present.
  */
 export const isRetriableError = (error: unknown): boolean => {
   if (error instanceof DomainError) {
+    const upstreamStatus = error.meta?.tool_status_code;
+    if (typeof upstreamStatus === 'number') {
+      return upstreamStatus >= 500;
+    }
     return error.httpStatus >= 500;
   }
   return true;
