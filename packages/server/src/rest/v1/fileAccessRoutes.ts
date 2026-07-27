@@ -48,7 +48,7 @@ const ensureAllowed = async (args: {
   action: 'files:GetFile' | 'files:DownloadFile' | 'files:UpdateFileMetadata';
   file: {
     id: string;
-    projectId?: string | null;
+    project_id?: string | null;
     path?: string | null;
     tags?: Record<string, unknown> | null;
   };
@@ -58,7 +58,7 @@ const ensureAllowed = async (args: {
     action: args.action,
     file: {
       id: args.file.id,
-      projectId: args.file.projectId!,
+      projectId: args.file.project_id!,
       path: args.file.path,
       tags: args.file.tags,
     },
