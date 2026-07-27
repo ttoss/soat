@@ -163,6 +163,31 @@ export const rotateWebhookSecret = async (args: { id: string }) => {
   return mapWebhook(withIncludes!, { includeSecret: true });
 };
 
+/**
+ * The wire projection of a delivery row, shared by the list and single reads so
+ * the two cannot drift. `payload` is the event body the subscriber receives —
+ * copied as a value, keys untouched.
+ */
+const mapWebhookDelivery = (
+  delivery: InstanceType<typeof db.WebhookDelivery>
+) => {
+  return {
+    id: delivery.publicId,
+    webhook_id: (
+      delivery as typeof delivery & { webhook?: { publicId: string } }
+    ).webhook?.publicId,
+    event_type: delivery.eventType,
+    payload: delivery.payload,
+    status: delivery.status,
+    status_code: delivery.statusCode,
+    attempts: delivery.attempts,
+    last_attempt_at: delivery.lastAttemptAt,
+    response_body: delivery.responseBody,
+    created_at: delivery.createdAt,
+    updated_at: delivery.updatedAt,
+  };
+};
+
 export const listWebhookDeliveries = async (args: {
   webhookId: number;
   limit?: number;
@@ -180,22 +205,7 @@ export const listWebhookDeliveries = async (args: {
   });
 
   return {
-    data: rows.map((d) => {
-      return {
-        id: d.publicId,
-        webhookId: (d as typeof d & { webhook?: { publicId: string } }).webhook
-          ?.publicId,
-        eventType: d.eventType,
-        payload: d.payload,
-        status: d.status,
-        statusCode: d.statusCode,
-        attempts: d.attempts,
-        lastAttemptAt: d.lastAttemptAt,
-        responseBody: d.responseBody,
-        createdAt: d.createdAt,
-        updatedAt: d.updatedAt,
-      };
-    }),
+    data: rows.map(mapWebhookDelivery),
     total: count,
     limit,
     offset,
@@ -208,19 +218,5 @@ export const getWebhookDelivery = async (args: { id: string }) => {
     include: [{ model: db.Webhook, as: 'webhook' }],
   });
   if (!delivery) return null;
-  return {
-    id: delivery.publicId,
-    webhookId: (
-      delivery as typeof delivery & { webhook?: { publicId: string } }
-    ).webhook?.publicId,
-    eventType: delivery.eventType,
-    payload: delivery.payload,
-    status: delivery.status,
-    statusCode: delivery.statusCode,
-    attempts: delivery.attempts,
-    lastAttemptAt: delivery.lastAttemptAt,
-    responseBody: delivery.responseBody,
-    createdAt: delivery.createdAt,
-    updatedAt: delivery.updatedAt,
-  };
+  return mapWebhookDelivery(delivery);
 };

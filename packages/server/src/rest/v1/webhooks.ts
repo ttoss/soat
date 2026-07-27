@@ -295,7 +295,7 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
     return;
   }
 
-  const webhook = await getWebhook({ id: delivery.webhookId! });
+  const webhook = await getWebhook({ id: delivery.webhook_id! });
   if (!webhook) {
     ctx.status = 404;
     ctx.body = { error: 'Delivery not found' };
