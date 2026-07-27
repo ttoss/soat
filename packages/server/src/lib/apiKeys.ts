@@ -50,9 +50,9 @@ const mapApiKeyWithAssociations = async (
 
   return {
     ...mapApiKey(apiKey),
-    userId: apiKey.user?.publicId ?? null,
-    projectId: apiKey.project?.publicId ?? null,
-    policyIds: policyPublicIds,
+    user_id: apiKey.user?.publicId ?? null,
+    project_id: apiKey.project?.publicId ?? null,
+    policy_ids: policyPublicIds,
   };
 };
 

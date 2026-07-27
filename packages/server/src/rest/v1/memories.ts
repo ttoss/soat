@@ -63,10 +63,10 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:GetMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -124,10 +124,10 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:UpdateMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -169,10 +169,10 @@ memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:DeleteMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),

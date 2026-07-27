@@ -21,20 +21,20 @@ export type FileDelivery = 'base64' | 'download_url';
 
 export type MappedIngestionRule = {
   id: string;
-  projectId: string;
-  contentTypeGlob: string;
-  toolId: string | null;
-  agentId: string | null;
+  project_id: string;
+  content_type_glob: string;
+  tool_id: string | null;
+  agent_id: string | null;
   action: string | null;
-  presetParameters: object | null;
-  nativeExtraction: string;
-  fileDelivery: string;
-  chunkStrategy: string | null;
-  chunkSize: number | null;
-  chunkOverlap: number | null;
+  preset_parameters: object | null;
+  native_extraction: string;
+  file_delivery: string;
+  chunk_strategy: string | null;
+  chunk_size: number | null;
+  chunk_overlap: number | null;
   metadata: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Helpers ───────────────────────────────────────────────────────────────
@@ -433,12 +433,12 @@ export const resolveIngestionRule = async (args: {
     })
     .filter((rule) => {
       return matchesContentTypeGlob({
-        glob: rule.contentTypeGlob,
+        glob: rule.content_type_glob,
         contentType: args.contentType,
       });
     })
     .sort((a, b) => {
-      return compareGlobSpecificity(a.contentTypeGlob, b.contentTypeGlob);
+      return compareGlobSpecificity(a.content_type_glob, b.content_type_glob);
     });
 
   return matches[0] ?? null;

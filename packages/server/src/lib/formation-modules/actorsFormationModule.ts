@@ -158,11 +158,11 @@ export const actorsFormationModule: FormationModule = {
       const actor = await getActor({ id: physicalResourceId });
       return {
         name: actor.name,
-        external_id: actor.externalId,
+        external_id: actor.external_id,
         instructions: actor.instructions,
-        agent_id: actor.agentId,
-        chat_id: actor.chatId,
-        memory_id: actor.memoryId,
+        agent_id: actor.agent_id,
+        chat_id: actor.chat_id,
+        memory_id: actor.memory_id,
       };
     } catch {
       return null;

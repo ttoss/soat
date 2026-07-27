@@ -152,7 +152,7 @@ apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    apiKey.userId !== ctx.authUser.publicId &&
+    apiKey.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;
@@ -184,7 +184,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    existing.userId !== ctx.authUser.publicId &&
+    existing.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;
@@ -233,7 +233,7 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    existing.userId !== ctx.authUser.publicId &&
+    existing.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;

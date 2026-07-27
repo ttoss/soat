@@ -48,10 +48,10 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:GetWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),
@@ -104,10 +104,10 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:UpdateWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),
@@ -142,10 +142,10 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:DeleteWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),

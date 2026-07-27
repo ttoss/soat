@@ -162,9 +162,9 @@ export const memoryEntriesFormationModule: FormationModule = {
       const entry = await getMemoryEntry({ id: physicalResourceId });
       if (!entry) return null;
       return {
-        memory_id: entry.memoryId,
+        memory_id: entry.memory_id,
         content: entry.content,
-        source_type: entry.sourceType,
+        source_type: entry.source_type,
         tags: entry.tags,
         metadata: entry.metadata,
       };

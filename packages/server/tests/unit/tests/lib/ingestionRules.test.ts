@@ -225,13 +225,13 @@ describe('IngestionRule CRUD', () => {
       });
 
       expect(rule.id).toBeDefined();
-      expect(rule.projectId).toBeDefined();
-      expect(rule.contentTypeGlob).toBe('image/png');
-      expect(rule.toolId).toBeDefined();
-      expect(rule.agentId).toBeNull();
-      expect(rule.nativeExtraction).toBe('first');
-      expect(rule.fileDelivery).toBe('base64');
-      expect(rule.chunkStrategy).toBe('whole');
+      expect(rule.project_id).toBeDefined();
+      expect(rule.content_type_glob).toBe('image/png');
+      expect(rule.tool_id).toBeDefined();
+      expect(rule.agent_id).toBeNull();
+      expect(rule.native_extraction).toBe('first');
+      expect(rule.file_delivery).toBe('base64');
+      expect(rule.chunk_strategy).toBe('whole');
     });
 
     test('creates an agent converter rule', async () => {
@@ -242,9 +242,9 @@ describe('IngestionRule CRUD', () => {
         nativeExtraction: 'skip',
       });
 
-      expect(rule.agentId).toBeDefined();
-      expect(rule.toolId).toBeNull();
-      expect(rule.nativeExtraction).toBe('skip');
+      expect(rule.agent_id).toBeDefined();
+      expect(rule.tool_id).toBeNull();
+      expect(rule.native_extraction).toBe('skip');
     });
 
     test('creates a soat tool converter rule with an action', async () => {
@@ -335,7 +335,7 @@ describe('IngestionRule CRUD', () => {
 
       const fetched = await getIngestionRule({ id: created.id });
       expect(fetched.id).toBe(created.id);
-      expect(fetched.contentTypeGlob).toBe('image/webp');
+      expect(fetched.content_type_glob).toBe('image/webp');
     });
 
     test('throws RESOURCE_NOT_FOUND for an unknown id', async () => {
@@ -364,7 +364,7 @@ describe('IngestionRule CRUD', () => {
       expect(rules.data.length).toBeGreaterThan(0);
       expect(
         rules.data.every((r) => {
-          return r.projectId;
+          return r.project_id;
         })
       ).toBe(true);
     });
@@ -384,8 +384,8 @@ describe('IngestionRule CRUD', () => {
         chunkSize: 500,
       });
 
-      expect(updated.chunkStrategy).toBe('size');
-      expect(updated.chunkSize).toBe(500);
+      expect(updated.chunk_strategy).toBe('size');
+      expect(updated.chunk_size).toBe(500);
     });
 
     test('switches converter from tool to agent', async () => {
@@ -401,8 +401,8 @@ describe('IngestionRule CRUD', () => {
         agentId,
       });
 
-      expect(updated.toolId).toBeNull();
-      expect(updated.agentId).toBeDefined();
+      expect(updated.tool_id).toBeNull();
+      expect(updated.agent_id).toBeDefined();
     });
 
     test('rejects setting both tool_id and agent_id', async () => {
@@ -492,7 +492,7 @@ describe('resolveIngestionRule', () => {
       projectId,
       contentType: 'image/png',
     });
-    expect(rule?.contentTypeGlob).toBe('image/png');
+    expect(rule?.content_type_glob).toBe('image/png');
   });
 
   test('picks the subtype wildcard over the full wildcard', async () => {
@@ -500,7 +500,7 @@ describe('resolveIngestionRule', () => {
       projectId,
       contentType: 'image/jpeg',
     });
-    expect(rule?.contentTypeGlob).toBe('image/*');
+    expect(rule?.content_type_glob).toBe('image/*');
   });
 
   test('falls back to the full wildcard when nothing more specific matches', async () => {
@@ -508,7 +508,7 @@ describe('resolveIngestionRule', () => {
       projectId,
       contentType: 'text/csv',
     });
-    expect(rule?.contentTypeGlob).toBe('*/*');
+    expect(rule?.content_type_glob).toBe('*/*');
   });
 
   test('matches an exact non-wildcard glob for its own content type', async () => {
@@ -516,7 +516,7 @@ describe('resolveIngestionRule', () => {
       projectId,
       contentType: 'audio/mpeg',
     });
-    expect(rule?.contentTypeGlob).toBe('audio/mpeg');
+    expect(rule?.content_type_glob).toBe('audio/mpeg');
   });
 
   test('returns null when no rule matches and no wildcard rule exists', async () => {

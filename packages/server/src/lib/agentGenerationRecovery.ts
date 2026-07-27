@@ -209,7 +209,7 @@ export const recoverPendingFromDb = async (args: {
   const pendingState = gen?.metadata?.pendingState as
     PendingStateDb | undefined;
 
-  if (!gen || !pendingState || gen.agentId !== args.agentId) {
+  if (!gen || !pendingState || gen.agent_id !== args.agentId) {
     return undefined;
   }
 
@@ -225,7 +225,7 @@ export const recoverPendingFromDb = async (args: {
     projectIds: args.projectIds,
     authHeader: args.authHeader,
     typedAgent,
-    traceId: gen.traceId,
+    traceId: gen.trace_id,
     pendingState,
   });
 };

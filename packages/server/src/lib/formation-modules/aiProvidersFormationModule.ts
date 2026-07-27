@@ -171,10 +171,10 @@ export const aiProvidersFormationModule: FormationModule = {
       return {
         name: provider.name,
         provider: provider.provider,
-        default_model: provider.defaultModel,
-        base_url: provider.baseUrl,
+        default_model: provider.default_model,
+        base_url: provider.base_url,
         config: provider.config,
-        secret_id: provider.secretId,
+        secret_id: provider.secret_id,
       };
     } catch {
       return null;

@@ -63,7 +63,7 @@ describe('runDiscussion — traceId propagation', () => {
       traceId: 'trc_calling_generation',
     });
 
-    expect(run.traceId).toBe('trc_calling_generation');
+    expect(run.trace_id).toBe('trc_calling_generation');
   });
 
   test('a directly-invoked run (no traceId given) leaves trace_id null', async () => {
@@ -83,6 +83,6 @@ describe('runDiscussion — traceId propagation', () => {
       topic: 'Q',
     });
 
-    expect(run.traceId).toBeNull();
+    expect(run.trace_id).toBeNull();
   });
 });

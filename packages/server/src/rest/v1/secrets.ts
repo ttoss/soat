@@ -50,10 +50,10 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
   const secret = await getSecret({ id: ctx.params.secret_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.projectId!,
+    projectPublicId: secret.project_id!,
     action: 'secrets:GetSecret',
     resource: buildSrn({
-      projectPublicId: secret.projectId!,
+      projectPublicId: secret.project_id!,
       resourceType: 'secret',
       resourceId: secret.id,
     }),
@@ -106,10 +106,10 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
   const secret = await getSecret({ id: ctx.params.secret_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.projectId!,
+    projectPublicId: secret.project_id!,
     action: 'secrets:UpdateSecret',
     resource: buildSrn({
-      projectPublicId: secret.projectId!,
+      projectPublicId: secret.project_id!,
       resourceType: 'secret',
       resourceId: secret.id,
     }),
@@ -141,10 +141,10 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
   const secret = await getSecret({ id: ctx.params.secret_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: secret.projectId!,
+    projectPublicId: secret.project_id!,
     action: 'secrets:DeleteSecret',
     resource: buildSrn({
-      projectPublicId: secret.projectId!,
+      projectPublicId: secret.project_id!,
       resourceType: 'secret',
       resourceId: secret.id,
     }),

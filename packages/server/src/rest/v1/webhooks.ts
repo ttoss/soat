@@ -120,10 +120,10 @@ webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:GetWebhook',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -152,10 +152,10 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:UpdateWebhook',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -208,10 +208,10 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:DeleteWebhook',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -251,10 +251,10 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:ListWebhookDeliveries',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -303,10 +303,10 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:GetWebhookDelivery',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -331,10 +331,10 @@ webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: webhook.projectId!,
+    projectPublicId: webhook.project_id!,
     action: 'webhooks:GetWebhookSecret',
     resource: buildSrn({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       resourceType: 'webhook',
       resourceId: webhook.id,
     }),
@@ -367,10 +367,10 @@ webhooksRouter.post(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: webhook.projectId!,
+      projectPublicId: webhook.project_id!,
       action: 'webhooks:RotateWebhookSecret',
       resource: buildSrn({
-        projectPublicId: webhook.projectId!,
+        projectPublicId: webhook.project_id!,
         resourceType: 'webhook',
         resourceId: webhook.id,
       }),

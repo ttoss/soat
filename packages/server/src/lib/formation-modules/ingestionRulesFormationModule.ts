@@ -248,16 +248,16 @@ export const ingestionRulesFormationModule: FormationModule = {
     try {
       const rule = await getIngestionRule({ id: physicalResourceId });
       return {
-        content_type_glob: rule.contentTypeGlob,
-        tool_id: rule.toolId,
-        agent_id: rule.agentId,
+        content_type_glob: rule.content_type_glob,
+        tool_id: rule.tool_id,
+        agent_id: rule.agent_id,
         action: rule.action,
-        preset_parameters: rule.presetParameters,
-        native_extraction: rule.nativeExtraction,
-        file_delivery: rule.fileDelivery,
-        chunk_strategy: rule.chunkStrategy,
-        chunk_size: rule.chunkSize,
-        chunk_overlap: rule.chunkOverlap,
+        preset_parameters: rule.preset_parameters,
+        native_extraction: rule.native_extraction,
+        file_delivery: rule.file_delivery,
+        chunk_strategy: rule.chunk_strategy,
+        chunk_size: rule.chunk_size,
+        chunk_overlap: rule.chunk_overlap,
         metadata: rule.metadata,
       };
     } catch {

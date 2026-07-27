@@ -93,7 +93,7 @@ const resolveNativeSourcePages = async (
   documentId: string,
   attemptId: string
 ): Promise<ResolvedSourcePages> => {
-  if (rule && rule.nativeExtraction === 'skip') {
+  if (rule && rule.native_extraction === 'skip') {
     return convertWithRule({ file, rule, documentId, attemptId });
   }
   const pages = await extractNativePages(file);

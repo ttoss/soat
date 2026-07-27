@@ -293,8 +293,8 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     const current = await getTool({ projectIds, id: ctx.params.tool_id });
     await assertGuardrailDetachAllowed({
       ctx,
-      projectPublicId: current.projectId,
-      current: current.guardrailIds,
+      projectPublicId: current.project_id,
+      current: current.guardrail_ids,
       next: nextGuardrailIds,
     });
   }
@@ -349,9 +349,9 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const tool = await getTool({ projectIds, id: ctx.params.tool_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: tool.projectId,
+    projectPublicId: tool.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: tool.projectId,
+      projectPublicId: tool.project_id,
       resourceType: 'tool',
       resourceId: tool.id,
     }),

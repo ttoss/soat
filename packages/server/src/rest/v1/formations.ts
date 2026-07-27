@@ -207,10 +207,10 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:GetFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -234,10 +234,10 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:UpdateFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -293,10 +293,10 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:DeleteFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -324,10 +324,10 @@ formationsRouter.get(
     const formation = await getFormation({ id: ctx.params.formation_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       action: 'formations:ListFormationEvents',
       resource: buildSrn({
-        projectPublicId: formation.projectId,
+        projectPublicId: formation.project_id,
         resourceType: 'formation',
         resourceId: formation.id,
       }),

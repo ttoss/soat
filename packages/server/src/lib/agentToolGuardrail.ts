@@ -319,7 +319,7 @@ const routeToApproval = async (args: {
   return {
     status: 'pending_approval',
     approval_id: item.id,
-    expires_at: toIso(item.expiresAt),
+    expires_at: toIso(item.expires_at),
   };
 };
 

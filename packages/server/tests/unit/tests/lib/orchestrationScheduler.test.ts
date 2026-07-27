@@ -20,22 +20,22 @@ import { authenticatedTestClient } from '../../testClient';
 
 const fakeRun: MappedOrchestrationRun = {
   id: 'orch_run_fake',
-  orchestrationId: 'orch_fake',
-  projectId: 'prj_fake',
+  orchestration_id: 'orch_fake',
+  project_id: 'prj_fake',
   status: 'succeeded',
   state: {},
-  activeNodes: [],
+  active_nodes: [],
   artifacts: {},
   error: null,
-  requiredAction: null,
-  traceId: null,
+  required_action: null,
+  trace_id: null,
   input: null,
   output: null,
-  nodeExecutions: [],
-  startedAt: null,
-  completedAt: null,
-  createdAt: new Date(),
-  updatedAt: new Date(),
+  node_executions: [],
+  started_at: null,
+  completed_at: null,
+  created_at: new Date(),
+  updated_at: new Date(),
 };
 
 // Kept per the scheduler's timer-free design: after wakeDueRuns/reapOrphanedRuns

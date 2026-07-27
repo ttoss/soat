@@ -29,7 +29,7 @@ describe('priceBookFormation', () => {
         unitPrice: 0.00002,
       });
       expect(created.id).toMatch(/^price_/);
-      expect(created.projectId).toBe(project.publicId);
+      expect(created.project_id).toBe(project.publicId);
 
       // No effective_from was given, so it defaults to deploy time (<= now):
       // a generation run right after deploy is priced rather than left null.
@@ -61,10 +61,10 @@ describe('priceBookFormation', () => {
         unitPrice: 0.00009,
       });
       expect(updated.id).toBe(created.id);
-      expect(updated.unitPrice).toBe(0.00009);
+      expect(updated.unit_price).toBe(0.00009);
 
       const read = await getFormationProjectPrice({ id: created.id });
-      expect(read?.unitPrice).toBe(0.00009);
+      expect(read?.unit_price).toBe(0.00009);
     });
 
     test('an explicit effective_from is honored on create and update', async () => {
@@ -79,7 +79,7 @@ describe('priceBookFormation', () => {
         unitPrice: 0.00001,
         effectiveFrom: '2030-01-01T00:00:00.000Z',
       });
-      expect(created.effectiveFrom.toISOString()).toBe(
+      expect(created.effective_from.toISOString()).toBe(
         '2030-01-01T00:00:00.000Z'
       );
 
@@ -87,11 +87,11 @@ describe('priceBookFormation', () => {
         id: created.id,
         effectiveFrom: '2031-06-01T00:00:00.000Z',
       });
-      expect(updated.effectiveFrom.toISOString()).toBe(
+      expect(updated.effective_from.toISOString()).toBe(
         '2031-06-01T00:00:00.000Z'
       );
       // unit_price was not part of this update, so it is left untouched.
-      expect(updated.unitPrice).toBe(0.00001);
+      expect(updated.unit_price).toBe(0.00001);
     });
 
     test('update throws RESOURCE_NOT_FOUND for a missing price', async () => {

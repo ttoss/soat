@@ -33,14 +33,14 @@ const executeApprovedAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
 }): Promise<object | null> => {
-  const proposed = args.item.proposedAction;
+  const proposed = args.item.proposed_action;
   if (!proposed?.toolId) {
     return {
       error:
         'The approved action targets an inline tool and cannot be executed at resolution time.',
     };
   }
-  const input = (args.item.editedArguments ??
+  const input = (args.item.edited_arguments ??
     proposed.arguments ??
     {}) as Record<string, unknown>;
 
@@ -74,7 +74,7 @@ const buildContinuationMessage = (args: {
   const { item, decision } = args;
   // Always a tool-call item here (guarded upstream), so proposedAction is set;
   // fall back defensively rather than asserting.
-  const proposed = item.proposedAction;
+  const proposed = item.proposed_action;
   const toolRef = proposed?.action
     ? `${proposed.toolId} (${proposed.action})`
     : (proposed?.toolId ?? 'the requested tool');
@@ -119,17 +119,17 @@ const fireContinuation = async (args: {
   projectInternalId: number;
 }): Promise<void> => {
   const { item } = args;
-  if (!item.agentId) return;
+  if (!item.agent_id) return;
 
   const message = buildContinuationMessage({ item, decision: args.decision });
 
-  if (item.sessionId) {
-    const agent = await db.Agent.findOne({ where: { publicId: item.agentId } });
+  if (item.session_id) {
+    const agent = await db.Agent.findOne({ where: { publicId: item.agent_id } });
     if (!agent) return;
-    log('fireContinuation: session id=%s session=%s', item.id, item.sessionId);
+    log('fireContinuation: session id=%s session=%s', item.id, item.session_id);
     await sendSessionMessage({
       agentId: agent.id as number,
-      sessionId: item.sessionId,
+      sessionId: item.session_id,
       message,
     });
     return;
@@ -137,9 +137,9 @@ const fireContinuation = async (args: {
 
   log('fireContinuation: standalone id=%s', item.id);
   await createGeneration({
-    agentId: item.agentId,
+    agentId: item.agent_id,
     projectIds: [args.projectInternalId],
-    initiatorGenerationId: item.generationId,
+    initiatorGenerationId: item.generation_id,
     messages: [{ role: 'user', content: message }],
   });
 };
@@ -157,11 +157,11 @@ export const runToolCallContinuation = async (args: {
 }): Promise<void> => {
   const { item } = args;
   if (item.origin !== 'tool_call') return;
-  if (!item.projectId) return;
+  if (!item.project_id) return;
 
   try {
     const project = await db.Project.findOne({
-      where: { publicId: item.projectId },
+      where: { publicId: item.project_id },
     });
     if (!project) {
       log('runToolCallContinuation: project not found id=%s', item.id);

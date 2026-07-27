@@ -141,25 +141,25 @@ export type FormationEvent = {
 
 export type MappedFormationResource = {
   id: string;
-  logicalId: string;
-  resourceType: string;
-  physicalResourceId: string | null;
+  logical_id: string;
+  resource_type: string;
+  physical_resource_id: string | null;
   status: string;
 };
 
 export type MappedFormation = {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   template: FormationTemplate | null;
   outputs: Record<string, string> | null;
   status: string;
   metadata: Record<string, unknown> | null;
-  resolvedMetadata: Record<string, unknown> | null;
-  resolvedParameters: Record<string, string> | null;
+  resolved_metadata: Record<string, unknown> | null;
+  resolved_parameters: Record<string, string> | null;
   resources?: MappedFormationResource[];
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type MappedFormationOperation = {

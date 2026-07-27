@@ -30,13 +30,13 @@ export type ChatMessageInput =
 
 export type MappedChat = {
   id: string;
-  projectId: string;
-  aiProviderId: string;
+  project_id: string;
+  ai_provider_id: string;
   name: string | null;
-  systemMessage: string | null;
+  system_message: string | null;
   model: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const mapChat = (

@@ -11,14 +11,14 @@ const log = createDebug('soat:traces');
 
 export type Trace = {
   id: string;
-  projectId: string;
-  agentId: string;
-  fileId: string | null;
-  stepCount: number;
-  parentTraceId: string | null;
-  rootTraceId: string | null;
+  project_id: string;
+  agent_id: string;
+  file_id: string | null;
+  step_count: number;
+  parent_trace_id: string | null;
+  root_trace_id: string | null;
   error: Record<string, unknown> | null;
-  createdAt: Date;
+  created_at: Date;
 };
 
 export type TraceTreeNode = Trace & {
@@ -328,10 +328,10 @@ const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
 
   let root: TraceTreeNode | undefined;
   for (const node of nodeMap.values()) {
-    if (!node.parentTraceId) {
+    if (!node.parent_trace_id) {
       root = node;
     } else {
-      const parent = nodeMap.get(node.parentTraceId);
+      const parent = nodeMap.get(node.parent_trace_id);
       if (parent) {
         parent.children.push(node);
       }
@@ -364,9 +364,9 @@ const attachGenerationsToTree = async (
 
   const byTraceId = new Map<string, PersistedGeneration[]>();
   for (const gen of allGens) {
-    const list = byTraceId.get(gen.traceId) ?? [];
+    const list = byTraceId.get(gen.trace_id) ?? [];
     list.push(gen);
-    byTraceId.set(gen.traceId, list);
+    byTraceId.set(gen.trace_id, list);
   }
 
   attachNodeGenerations(tree, byTraceId);

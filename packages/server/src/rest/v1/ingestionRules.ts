@@ -178,11 +178,11 @@ ingestionRulesRouter.delete(
       id: ctx.params.ingestion_rule_id,
       projectIds,
     });
-    if (rule.projectId) {
+    if (rule.project_id) {
       setAuditResourceHint(ctx, {
-        projectPublicId: rule.projectId,
+        projectPublicId: rule.project_id,
         resourceSrn: buildSrn({
-          projectPublicId: rule.projectId,
+          projectPublicId: rule.project_id,
           resourceType: 'ingestionRule',
           resourceId: rule.id,
         }),

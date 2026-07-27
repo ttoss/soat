@@ -106,7 +106,7 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
   const approval = await getApproval({ id: ctx.params.approval_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     action: 'approvals:GetApproval',
     resource: approvalSrn(approval),
   });
@@ -131,7 +131,7 @@ approvalsRouter.post(
     const approval = await getApproval({ id: ctx.params.approval_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: approval.projectId!,
+      projectPublicId: approval.project_id!,
       action: 'approvals:ResolveApproval',
       resource: approvalSrn(approval),
     });
@@ -163,7 +163,7 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
   const approval = await getApproval({ id: ctx.params.approval_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     action: 'approvals:ResolveApproval',
     resource: approvalSrn(approval),
   });

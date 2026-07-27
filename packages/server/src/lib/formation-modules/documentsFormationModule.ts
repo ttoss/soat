@@ -173,9 +173,9 @@ export const documentsFormationModule: FormationModule = {
         title: doc.title,
         metadata: doc.metadata,
         tags: doc.tags,
-        chunk_strategy: doc.chunkStrategy,
-        chunk_size: doc.chunkSize,
-        chunk_overlap: doc.chunkOverlap,
+        chunk_strategy: doc.chunk_strategy,
+        chunk_size: doc.chunk_size,
+        chunk_overlap: doc.chunk_overlap,
       };
     } catch {
       return null;

@@ -212,7 +212,7 @@ export const addConversationMessage = async (args: {
         projectId: conversation.projectId,
         projectPublicId,
         resourceType: 'conversation_message',
-        resourceId: mapped.documentId,
+        resourceId: mapped.document_id,
         data: {
           ...mapped,
           conversationId: args.conversationId,
@@ -293,7 +293,7 @@ export const addConversationDocumentMessage = async (args: {
         projectId: conversation.projectId,
         projectPublicId,
         resourceType: 'conversation_message',
-        resourceId: mapped.documentId,
+        resourceId: mapped.document_id,
         data: {
           ...mapped,
           conversationId: args.conversationId,

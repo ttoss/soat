@@ -146,9 +146,9 @@ export const projectPricesFormationModule: FormationModule = {
       model: price.model,
       component: price.component,
       unit: price.unit,
-      unit_price: price.unitPrice,
-      meter_type: price.meterType,
-      effective_from: price.effectiveFrom.toISOString(),
+      unit_price: price.unit_price,
+      meter_type: price.meter_type,
+      effective_from: price.effective_from.toISOString(),
     };
   },
 };

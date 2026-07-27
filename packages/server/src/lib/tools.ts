@@ -68,7 +68,7 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
 
 export type MappedTool = {
   id: string;
-  projectId: string;
+  project_id: string;
   type: string;
   name: string;
   description: string | null;
@@ -76,14 +76,14 @@ export type MappedTool = {
   execute: object | null;
   mcp: object | null;
   actions: string[] | null;
-  deniedActions: string[] | null;
-  presetParameters: object | null;
+  denied_actions: string[] | null;
+  preset_parameters: object | null;
   pipeline: object | null;
-  discussionId: string | null;
-  outputMapping: object | null;
-  guardrailIds: string[] | null;
-  createdAt: Date;
-  updatedAt: Date;
+  discussion_id: string | null;
+  output_mapping: object | null;
+  guardrail_ids: string[] | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Helpers ───────────────────────────────────────────────────────────

@@ -104,7 +104,7 @@ actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srnGet = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
@@ -113,7 +113,7 @@ actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
     contextGet[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:GetActor',
     resource: srnGet,
     context: contextGet,
@@ -222,7 +222,7 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srnDel = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
@@ -231,7 +231,7 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
     contextDel[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:DeleteActor',
     resource: srnDel,
     context: contextDel,
@@ -256,7 +256,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srnUpd = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
@@ -265,7 +265,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     contextUpd[`soat:ResourceTag/${k}`] = v as string;
   }
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:UpdateActor',
     resource: srnUpd,
     context: contextUpd,

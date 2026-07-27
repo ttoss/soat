@@ -90,10 +90,10 @@ const resolveMemoryForAction = async (
     return null;
   }
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -125,17 +125,17 @@ const resolveEntryForAction = async (
     ctx.body = { error: 'Memory entry not found' };
     return null;
   }
-  const memory = await getMemory({ id: entry.memoryId! });
+  const memory = await getMemory({ id: entry.memory_id! });
   if (!memory) {
     ctx.status = 404;
     ctx.body = { error: 'Memory entry not found' };
     return null;
   }
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memoryEntry',
       resourceId: entry.id,
     }),

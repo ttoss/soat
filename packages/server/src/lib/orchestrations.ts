@@ -129,34 +129,34 @@ export type OrchestrationEdge = {
 
 export type MappedOrchestration = {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   description: string | null;
   nodes: OrchestrationNode[];
   edges: OrchestrationEdge[];
-  stateSchema: object | null;
-  inputSchema: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  state_schema: object | null;
+  input_schema: object | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type MappedNodeExecution = {
-  nodeId: string;
-  nodeType: string | null;
+  node_id: string;
+  node_type: string | null;
   attempt: number;
   status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
 };
 
 export type MappedOrchestrationRun = {
   id: string;
-  orchestrationId: string;
-  projectId: string;
+  orchestration_id: string;
+  project_id: string;
   status:
     | 'queued'
     | 'running'
@@ -167,21 +167,21 @@ export type MappedOrchestrationRun = {
     | 'cancelled'
     | 'expired';
   state: Record<string, unknown>;
-  activeNodes: string[];
+  active_nodes: string[];
   artifacts: Record<string, unknown>;
   error: object | null;
-  requiredAction: object | null;
-  traceId: string | null;
+  required_action: object | null;
+  trace_id: string | null;
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
-  nodeExecutions: MappedNodeExecution[];
+  node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
   usage?: UsageTotals;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map helpers ───────────────────────────────────────────────────────────
