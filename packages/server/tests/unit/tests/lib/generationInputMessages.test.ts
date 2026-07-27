@@ -56,7 +56,7 @@ describe('resolveGenerationInputMessages', () => {
         messages: [
           {
             role: 'user',
-            content: { type: 'document', documentId: 'doc_missing' },
+            content: { type: 'document', document_id: 'doc_missing' },
           },
         ],
       })
