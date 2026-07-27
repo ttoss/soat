@@ -551,10 +551,10 @@ resources:
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('FORMATION_INVALID_METADATA');
-      // `metadata` is not a caseTransform pass-through on the formations routes,
-      // so the inbound `my_version` key is camelCased before the handler (and
-      // the guard) sees it — the reported path reflects that.
-      expect(res.body.error.meta.details[0].path).toBe('metadata.myVersion');
+      // `metadata` is an author-authored, opaque annotation bag — its inner
+      // keys are never rewritten (see `.claude/rules/case-convention.md`), so
+      // the reported path reflects the wire key exactly as submitted.
+      expect(res.body.error.meta.details[0].path).toBe('metadata.my_version');
       expect(res.body.error.meta.details[0].message).toMatch(
         /template.*top-level.*metadata/i
       );

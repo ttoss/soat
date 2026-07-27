@@ -137,6 +137,76 @@ export type FormationEvent = {
   error?: string;
 };
 
+// ── Wire Types ────────────────────────────────────────────────────────────
+//
+// `PlanChange`/`FormationEvent` carry structural keys in camelCase
+// internally, but are documented (and specced in `formations.yaml`) as
+// snake_case on the wire — both in the `POST /formations/plan` response and
+// embedded in a `FormationOperation`'s `events`/`plan`. `diff.desired` /
+// `diff.current` are the resource's own template properties (already
+// snake_case, author-authored) and round-trip verbatim, unlike the
+// structural fields around them.
+
+export type PlanChangeWire = {
+  logical_id: string;
+  resource_type: string;
+  action: 'create' | 'update' | 'delete' | 'no-op';
+  physical_resource_id?: string;
+  diff?: {
+    desired: Record<string, unknown>;
+    current: Record<string, unknown> | null;
+  };
+};
+
+export type PlanResultWire = {
+  changes: PlanChangeWire[];
+};
+
+export type FormationEventWire = {
+  timestamp: string;
+  logical_id: string;
+  resource_type: string;
+  action: string;
+  status: 'succeeded' | 'failed';
+  physical_resource_id?: string;
+  error?: string;
+};
+
+/** Converts an internal `PlanChange` to its snake_case wire shape. */
+export const planChangeToWire = (change: PlanChange): PlanChangeWire => {
+  return {
+    logical_id: change.logicalId,
+    resource_type: change.resourceType,
+    action: change.action,
+    ...(change.physicalResourceId !== undefined
+      ? { physical_resource_id: change.physicalResourceId }
+      : {}),
+    ...(change.diff !== undefined ? { diff: change.diff } : {}),
+  };
+};
+
+/** Converts an internal `PlanResult` to its snake_case wire shape. */
+export const planResultToWire = (plan: PlanResult): PlanResultWire => {
+  return { changes: plan.changes.map(planChangeToWire) };
+};
+
+/** Converts an internal `FormationEvent` to its snake_case wire shape. */
+export const formationEventToWire = (
+  event: FormationEvent
+): FormationEventWire => {
+  return {
+    timestamp: event.timestamp,
+    logical_id: event.logicalId,
+    resource_type: event.resourceType,
+    action: event.action,
+    status: event.status,
+    ...(event.physicalResourceId !== undefined
+      ? { physical_resource_id: event.physicalResourceId }
+      : {}),
+    ...(event.error !== undefined ? { error: event.error } : {}),
+  };
+};
+
 // ── Mapped Types ──────────────────────────────────────────────────────────
 
 export type MappedFormationResource = {
@@ -167,9 +237,8 @@ export type MappedFormationOperation = {
   id: string;
   operation_type: string;
   status: string;
-  // `events` and `plan` are author-shaped payloads — copied as values.
-  events: FormationEvent[] | null;
-  plan: PlanResult | null;
+  events: FormationEventWire[] | null;
+  plan: PlanResultWire | null;
   error: object | null;
   created_at: Date;
   updated_at: Date;

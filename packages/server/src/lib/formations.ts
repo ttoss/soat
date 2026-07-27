@@ -22,14 +22,16 @@ import {
   computeOrphanedPlanChanges,
   planResourceChange,
 } from './formationsPlanHelpers';
-import type {
-  FormationEvent,
-  FormationTemplate,
-  MappedFormation,
-  MappedFormationOperation,
-  MappedFormationResource,
-  PlanChange,
-  PlanResult,
+import {
+  type FormationEvent,
+  formationEventToWire,
+  type FormationTemplate,
+  type MappedFormation,
+  type MappedFormationOperation,
+  type MappedFormationResource,
+  type PlanChange,
+  type PlanResult,
+  planResultToWire,
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
@@ -45,6 +47,7 @@ export type {
   PlanChange,
   PlanResult,
 } from './formationsTypes';
+export { planResultToWire } from './formationsTypes';
 export {
   parseFormationTemplateInput,
   validateFormationTemplate,
@@ -427,12 +430,14 @@ export const listFormationEvents = async (args: {
       });
     },
     map: (op) => {
+      const events = op.events as FormationEvent[] | null;
+      const plan = op.plan as PlanResult | null;
       return {
         id: op.publicId,
         operation_type: op.operationType,
         status: op.status,
-        events: op.events as FormationEvent[] | null,
-        plan: op.plan as PlanResult | null,
+        events: events ? events.map(formationEventToWire) : null,
+        plan: plan ? planResultToWire(plan) : null,
         error: op.error,
         created_at: op.createdAt,
         updated_at: op.updatedAt,

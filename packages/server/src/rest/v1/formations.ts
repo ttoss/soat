@@ -12,6 +12,7 @@ import {
   listFormations,
   parseFormationTemplateInput,
   planFormation,
+  planResultToWire,
   updateFormation,
   validateFormationTemplate,
 } from 'src/lib/formations';
@@ -120,12 +121,13 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await planFormation({
+  const plan = await planFormation({
     projectId: Number(targetProjectId),
     template: parsedTemplate as FormationTemplate,
     formationId: body.formation_id,
     parameters: body.parameters,
   });
+  ctx.body = planResultToWire(plan);
 });
 
 formationsRouter.post('/formations', async (ctx: Context) => {
