@@ -21,6 +21,29 @@ import { checkAuth, resolveWriteProjectId } from './helpers';
 
 const discussionsRouter = new Router<Context>();
 
+// The wire contract (discussions.yaml `SynthesisConfig` / `ParticipantInput`)
+// is snake_case, but the lib types (`SynthesisConfig` / `ParticipantInput`
+// from `src/lib/discussions.ts`) are camelCase — these two are NOT the same
+// shape despite the shared type names. Nothing rewrites keys on the way in
+// anymore, so the raw request body fields below are the wire shape.
+type WireSynthesisConfig = {
+  ai_provider_id?: string;
+  model?: string;
+  prompt?: string;
+  effort?: SynthesisConfig['effort'];
+};
+
+type WireParticipantInput = {
+  name?: string | null;
+  prompt?: string | null;
+  position?: number;
+  actor_id?: string | null;
+  ai_provider_id?: string | null;
+  model?: string | null;
+  temperature?: number | null;
+  effort?: ParticipantInput['effort'];
+};
+
 type CreateDiscussionBody = {
   project_id?: string;
   name: string;
@@ -28,9 +51,9 @@ type CreateDiscussionBody = {
   description?: string | null;
   max_rounds?: number | null;
   model?: string | null;
-  synthesis?: SynthesisConfig | null;
+  synthesis?: WireSynthesisConfig | null;
   tags?: Record<string, string> | null;
-  participants?: ParticipantInput[];
+  participants?: WireParticipantInput[];
 };
 
 type UpdateDiscussionBody = {
@@ -39,9 +62,41 @@ type UpdateDiscussionBody = {
   max_rounds?: number | null;
   ai_provider_id?: string;
   model?: string | null;
-  synthesis?: SynthesisConfig | null;
+  synthesis?: WireSynthesisConfig | null;
   tags?: Record<string, string> | null;
-  participants?: ParticipantInput[];
+  participants?: WireParticipantInput[];
+};
+
+/** Converts the wire (snake_case) synthesis config into the lib's camelCase shape. */
+const toSynthesisConfig = (
+  synthesis?: WireSynthesisConfig | null
+): SynthesisConfig | null | undefined => {
+  if (synthesis === undefined) return undefined;
+  if (synthesis === null) return null;
+  return {
+    aiProviderId: synthesis.ai_provider_id,
+    model: synthesis.model,
+    prompt: synthesis.prompt,
+    effort: synthesis.effort,
+  };
+};
+
+/** Converts wire (snake_case) participant inputs into the lib's camelCase shape. */
+const toParticipantInputs = (
+  participants?: WireParticipantInput[]
+): ParticipantInput[] | undefined => {
+  return participants?.map((participant) => {
+    return {
+      name: participant.name,
+      prompt: participant.prompt,
+      position: participant.position,
+      actorId: participant.actor_id,
+      aiProviderId: participant.ai_provider_id,
+      model: participant.model,
+      temperature: participant.temperature,
+      effort: participant.effort,
+    };
+  });
 };
 
 const parsePage = (ctx: Context) => {
@@ -131,9 +186,9 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
     description: body.description,
     maxRounds: body.max_rounds,
     model: body.model,
-    synthesis: body.synthesis,
+    synthesis: toSynthesisConfig(body.synthesis),
     tags: body.tags,
-    participants: body.participants,
+    participants: toParticipantInputs(body.participants),
   });
 
   ctx.status = 201;
@@ -228,9 +283,9 @@ discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
     maxRounds: body.max_rounds,
     aiProviderId: body.ai_provider_id,
     model: body.model,
-    synthesis: body.synthesis,
+    synthesis: toSynthesisConfig(body.synthesis),
     tags: body.tags,
-    participants: body.participants,
+    participants: toParticipantInputs(body.participants),
   });
 });
 

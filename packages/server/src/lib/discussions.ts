@@ -34,6 +34,27 @@ export {
 
 // ── Mapping ──────────────────────────────────────────────────────────────────
 
+/**
+ * The discussion's `synthesis` config is stored as a raw JSON blob (no DB
+ * columns to convert case for us), and its `aiProviderId` is read internally
+ * as camelCase (see `assertSynthesisProvider`). The wire contract
+ * (`SynthesisConfig` in discussions.yaml) is snake_case, so the stored
+ * camelCase config must be converted back on the way out — mirrors
+ * `discussionsFormationModule.ts`'s `toSynthesis`, which does the same
+ * conversion in reverse for formation templates.
+ */
+const toWireSynthesis = (
+  synthesis: SynthesisConfig | null | undefined
+): Record<string, unknown> | null => {
+  if (!synthesis) return null;
+  return {
+    ai_provider_id: synthesis.aiProviderId ?? null,
+    model: synthesis.model ?? null,
+    prompt: synthesis.prompt ?? null,
+    effort: synthesis.effort ?? null,
+  };
+};
+
 const mapParticipant = (
   participant: NonNullable<DiscussionModel['participants']>[number]
 ) => {
@@ -65,7 +86,7 @@ export const mapDiscussion = (discussion: DiscussionModel) => {
     max_rounds: discussion.maxRounds,
     ai_provider_id: discussion.aiProvider?.publicId ?? null,
     model: discussion.model ?? null,
-    synthesis: discussion.synthesis ?? null,
+    synthesis: toWireSynthesis(discussion.synthesis as SynthesisConfig | null),
     tags: discussion.tags ?? undefined,
     participants,
     template_warnings: findDiscussionTemplateWarnings({
