@@ -62,7 +62,7 @@ describe('strictFieldsMiddleware', () => {
     const ctx = makeCtx({
       method: 'POST',
       path: '/api/v1/agents',
-      body: { aiProviderId: 'aip_1', knowledgeConfig: { bogus: true } },
+      body: { ai_provider_id: 'aip_1', knowledge_config: { bogus: true } },
       authUser,
     });
 
@@ -71,7 +71,7 @@ describe('strictFieldsMiddleware', () => {
     expect(next).not.toHaveBeenCalled();
     expect(
       (thrown as { meta?: { unknownFields?: string[] } }).meta?.unknownFields
-    ).toEqual(['knowledgeConfig.bogus']);
+    ).toEqual(['knowledge_config.bogus']);
   });
 
   test('rejects a missing top-level required field', async () => {
