@@ -129,17 +129,6 @@ const parseFormationToolBindings = (
   });
 };
 
-const readFormationToolBindings = (
-  bindings: AgentToolBinding[] | null
-): Record<string, unknown>[] | null => {
-  if (!bindings) return null;
-  return bindings.map((binding) => {
-    return {
-      ...(binding.toolId !== undefined ? { tool_id: binding.toolId } : {}),
-    };
-  });
-};
-
 // A formation declares the agent's full desired state, so the binding list is
 // always driven through the canonical `toolBindings` replace: an explicit
 // `tool_bindings` wins, a declared `tool_ids` shorthand maps to bare bindings,
@@ -284,7 +273,7 @@ export const agentsFormationModule: FormationModule = {
         model: agent.model,
         // Both views: the diff only compares keys the template declares, so a
         // template using either form converges against its own key.
-        tool_bindings: readFormationToolBindings(agent.tool_bindings),
+        tool_bindings: agent.tool_bindings,
         tool_ids: agent.tool_ids,
         max_steps: agent.max_steps,
         tool_choice: agent.tool_choice,

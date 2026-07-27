@@ -2,7 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import type { AgentToolBinding, InlineToolDefinition } from 'src/lib/agents';
+import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
   deleteAgent,
@@ -10,6 +10,7 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
+import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -143,7 +144,7 @@ const parseUpdateAgentBody = (
     name: parseNullableString(body.name),
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.tool_bindings),
+    toolBindings: parseWireToolBindings(body.tool_bindings),
     toolIds: parseOptional<string[] | null>(body.tool_ids),
     tools,
     maxSteps: parseOptional<number | null>(body.max_steps),
@@ -199,7 +200,7 @@ const buildCreateAgentArgs = (
     instructions:
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.tool_bindings),
+    toolBindings: parseWireToolBindings(body.tool_bindings),
     toolIds: Array.isArray(body.tool_ids) ? body.tool_ids : undefined,
     tools,
     maxSteps: parseNumber(body.max_steps),

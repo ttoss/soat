@@ -9,6 +9,8 @@ import {
   readAgentToolBindings,
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
+  toWireToolBinding,
+  type WireAgentToolBinding,
 } from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
@@ -37,7 +39,7 @@ export type MappedAgent = {
   name: string | null;
   instructions: string | null;
   model: string | null;
-  tool_bindings: AgentToolBinding[] | null;
+  tool_bindings: WireAgentToolBinding[] | null;
   tool_ids: string[] | null;
   tools: InlineToolDefinition[] | null;
   max_steps: number | null;
@@ -83,7 +85,7 @@ const mapAgent = (
     name: agent.name,
     instructions: agent.instructions,
     model: agent.model,
-    tool_bindings: toolBindings,
+    tool_bindings: toolBindings ? toolBindings.map(toWireToolBinding) : null,
     tool_ids: legacyViews.toolIds,
     tools: legacyViews.tools,
     max_steps: agent.maxSteps,

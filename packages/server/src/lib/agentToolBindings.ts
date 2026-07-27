@@ -154,6 +154,42 @@ const validateBindingEntry = async (args: {
   return clean;
 };
 
+/** Parses one wire `tool_bindings` entry (snake_case `tool_id`) into the canonical internal shape. */
+const fromWireBindingEntry = (entry: unknown): unknown => {
+  if (!isPlainObject(entry)) return entry;
+  const wire = entry as WireAgentToolBinding;
+  const converted: AgentToolBinding = {};
+  if (wire.tool_id !== undefined) converted.toolId = wire.tool_id;
+  if (wire.tool !== undefined) converted.tool = wire.tool;
+  return converted;
+};
+
+/** Parses a raw wire `tool_bindings` array into canonical (camelCase) bindings, ready for validation. */
+export const parseWireToolBindings = (
+  value: unknown
+): AgentToolBinding[] | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Array.isArray(value)) return value as never;
+  return value.map(fromWireBindingEntry) as AgentToolBinding[];
+};
+
+/** The wire shape of one `tool_bindings` entry — snake_case, as documented in agents.yaml. */
+export type WireAgentToolBinding = {
+  tool_id?: string;
+  tool?: InlineToolDefinition;
+};
+
+/** Serializes one canonical binding to its wire shape for a response. */
+export const toWireToolBinding = (
+  binding: AgentToolBinding
+): WireAgentToolBinding => {
+  const wire: WireAgentToolBinding = {};
+  if (binding.toolId !== undefined) wire.tool_id = binding.toolId;
+  if (binding.tool !== undefined) wire.tool = binding.tool;
+  return wire;
+};
+
 /**
  * Validates newly provided `tool_bindings` entries: entry shape (exactly one
  * of `tool_id` / `tool`) and inline definitions (same rules as the deprecated

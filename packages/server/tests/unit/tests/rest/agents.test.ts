@@ -199,7 +199,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/tools')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -207,7 +207,7 @@ describe('Agents', () => {
     test('authenticated user can list agent tools', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/tools')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -619,7 +619,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/agents')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -627,7 +627,7 @@ describe('Agents', () => {
     test('authenticated user can list agents', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/agents')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -1698,7 +1698,7 @@ describe('Agents', () => {
           `/api/v1/agents/${agentId}/generate/gen_doesnotexist000/tool-outputs`
         )
         .send({
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       expect(response.status).toBe(404);
@@ -1714,7 +1714,7 @@ describe('Agents', () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_fake/tool-outputs`)
         .send({
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope
