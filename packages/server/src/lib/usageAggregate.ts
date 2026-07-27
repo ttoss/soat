@@ -44,11 +44,12 @@ export type UsageAggregateGroup = UsageAggregateTotals & {
   key: string | null;
 };
 
+/** The wire shape of an aggregate — this value is a response body, not internal state. */
 export type UsageAggregate = {
-  projectId: string;
+  project_id: string;
   from: string | null;
   to: string | null;
-  groupBy: UsageGroupBy;
+  group_by: UsageGroupBy;
   groups: UsageAggregateGroup[];
   totals: UsageAggregateTotals;
 };
@@ -283,10 +284,10 @@ export const aggregateUsage = async (args: {
   const { groups, totals } = bucketEvents(events, groupBy);
 
   return {
-    projectId: args.projectPublicId,
+    project_id: args.projectPublicId,
     from: from ? from.toISOString() : null,
     to: to ? to.toISOString() : null,
-    groupBy,
+    group_by: groupBy,
     groups,
     totals,
   };
