@@ -17,21 +17,21 @@ const sessionSubResourcesRouter = new Router<Context>();
 
 const validateAddMessageBody = (body: {
   message?: string;
-  documentId?: string;
+  document_id?: string;
 }) => {
   if (body.message !== undefined && typeof body.message !== 'string') {
     throw new DomainError('VALIDATION_FAILED', 'message must be a string');
   }
-  if (body.documentId !== undefined && typeof body.documentId !== 'string') {
+  if (body.document_id !== undefined && typeof body.document_id !== 'string') {
     throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
   }
-  if (!body.message && !body.documentId) {
+  if (!body.message && !body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
       'either message or documentId is required'
     );
   }
-  if (body.message && body.documentId) {
+  if (body.message && body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
       'message and documentId are mutually exclusive'

@@ -55,6 +55,31 @@ export type GuardrailEvaluationRecord = {
 };
 
 /**
+ * The wire projection of an evaluation record, matching the `GuardrailEvaluation`
+ * schema in `openapi/v1/guardrails.yaml`. `context_snapshot` is an opaque,
+ * author-owned bag — copied as a value, so its inner keys keep the casing the
+ * guardrail's `var` paths are written against.
+ */
+export const mapGuardrailEvaluation = (record: GuardrailEvaluationRecord) => {
+  return {
+    kind: record.kind,
+    guardrail_id: record.guardrailId,
+    guardrail_version: record.guardrailVersion,
+    scope: record.scope,
+    tool: record.tool,
+    action: record.action,
+    class: record.class,
+    decision: record.decision,
+    guard_result: record.guardResult,
+    context_source: record.contextSource,
+    context_snapshot: record.contextSnapshot,
+    agent_id: record.agentId,
+    run_id: record.runId,
+    generation_id: record.generationId,
+  };
+};
+
+/**
  * Assembles one evaluation record from an engine result plus the call context.
  * `version` 0 (a dangling reference) is surfaced as `null` — there is no real
  * governing version. Pure — no DB, so the dry-run path reuses it verbatim.

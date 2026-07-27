@@ -144,7 +144,7 @@ ingestionRulesRouter.patch(
     ctx.body = await updateIngestionRule({
       id: ctx.params.ingestion_rule_id,
       projectIds,
-      contentTypeGlob: body.contentTypeGlob,
+      contentTypeGlob: body.content_type_glob,
       toolId: refs.toolId,
       agentId: refs.agentId,
       action: body.action,

@@ -63,9 +63,9 @@ const coerceToolJsonFields = (body: Record<string, unknown>) => {
     parameters: coerceToJsonObject(body.parameters) ?? undefined,
     execute: coerceToJsonObject(body.execute) ?? undefined,
     mcp: coerceToJsonObject(body.mcp) ?? undefined,
-    presetParameters: coerceToJsonObject(body.presetParameters) ?? undefined,
+    presetParameters: coerceToJsonObject(body.preset_parameters) ?? undefined,
     pipeline: coerceToJsonObject(body.pipeline) ?? undefined,
-    outputMapping: coerceToJsonObject(body.outputMapping) ?? undefined,
+    outputMapping: coerceToJsonObject(body.output_mapping) ?? undefined,
   };
 };
 
@@ -138,8 +138,8 @@ const checkToolsAccess = async (
 toolsRouter.post('/tools', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
   const { name, type, description, actions, deniedActions } = body;
-  const projectPublicId = body.projectId as string | undefined;
-  const discussionId = body.discussionId as string | undefined;
+  const projectPublicId = body.project_id as string | undefined;
+  const discussionId = body.discussion_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
     ctx.status = 400;
@@ -171,7 +171,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       ? (deniedActions as string[])
       : undefined,
     discussionId,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
     ...jsonFields,
   });
 

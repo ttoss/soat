@@ -139,28 +139,28 @@ const parseUpdateAgentBody = (
 ) => {
   return {
     aiProviderId:
-      typeof body.aiProviderId === 'string' ? body.aiProviderId : undefined,
+      typeof body.ai_provider_id === 'string' ? body.ai_provider_id : undefined,
     name: parseNullableString(body.name),
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
-    toolIds: parseOptional<string[] | null>(body.toolIds),
+    toolBindings: parseOptional<AgentToolBinding[] | null>(body.tool_bindings),
+    toolIds: parseOptional<string[] | null>(body.tool_ids),
     tools,
-    maxSteps: parseOptional<number | null>(body.maxSteps),
-    toolChoice: parseOptional<string | object | null>(body.toolChoice),
-    stopConditions: parseOptional<object[] | null>(body.stopConditions),
-    activeToolIds: parseOptional<string[] | null>(body.activeToolIds),
-    stepRules: parseOptional<object[] | null>(body.stepRules),
-    boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
+    maxSteps: parseOptional<number | null>(body.max_steps),
+    toolChoice: parseOptional<string | object | null>(body.tool_choice),
+    stopConditions: parseOptional<object[] | null>(body.stop_conditions),
+    activeToolIds: parseOptional<string[] | null>(body.active_tool_ids),
+    stepRules: parseOptional<object[] | null>(body.step_rules),
+    boundaryPolicy: parseOptional<object | null>(body.boundary_policy),
     temperature: parseOptional<number | null>(body.temperature),
-    knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
-    outputSchema: parseOptional<object | null>(body.outputSchema),
-    maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
+    knowledgeConfig: parseOptional<object | null>(body.knowledge_config),
+    outputSchema: parseOptional<object | null>(body.output_schema),
+    maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
-      typeof body.singleSessionPerActor === 'boolean'
-        ? body.singleSessionPerActor
+      typeof body.single_session_per_actor === 'boolean'
+        ? body.single_session_per_actor
         : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
   };
 };
 
