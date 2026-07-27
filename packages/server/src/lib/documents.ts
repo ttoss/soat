@@ -243,9 +243,9 @@ export const getDocumentStatus = async (args: { id: string }) => {
   return {
     id: mapped.id,
     status: doc.status,
-    chunkCount,
-    totalChunks: totalChunks ?? null,
-    totalPages,
+    chunk_count: chunkCount,
+    total_chunks: totalChunks ?? null,
+    total_pages: totalPages,
     progress: computeIngestionProgress({
       status: doc.status,
       chunkCount,
