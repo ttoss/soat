@@ -10,9 +10,12 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 | 2026-07-25 | live server, dedicated project + disposable "victim" API key, real Bedrock agent (`deepseek.v3.2`)                                   | 30/31 documented behaviors verified                                              | [#703](https://github.com/ttoss/soat/issues/703) — formation update silently drops immutable fields ([#705](https://github.com/ttoss/soat/issues/705))                                    |
 | 2026-07-26 | live server, shared project `proj_ck7jvYsjVKI9UHCG`, victim key, priced + unpriced Bedrock agents                                    | regression pass — #703 confirmed fixed, 0 new defects, 8 new checks added        | none ([#713](https://github.com/ttoss/soat/issues/713))                                                                                                                                   |
 | 2026-07-26 | live server, shared project `proj_ck7jvYsjVKI9UHCG`, MCP surface, unpriced Bedrock agent (`deepseek.v3.2`), two purpose-built actors | targeted pass on claims the prior two did not exercise — 13 new checks, 1 defect | [#719](https://github.com/ttoss/soat/issues/719) — immutability error renders a null `scope_ref` as `""` ([run report](https://github.com/ttoss/soat/issues/713#issuecomment-5083613032)) |
+| 2026-07-27 | live server, **dedicated** project `proj_IZnU7FY04SXoQkeN` + shared `proj_ck7jvYsjVKI9UHCG`, CLI `@soat/cli@0.17.0`, JWT user + scoped and unscoped API keys, Bedrock agent (`deepseek.v3.2`) | PM pass driven end-to-end through the published CLI — 6 new checks, 2 new defects, #719 re-confirmed open | [#742](https://github.com/ttoss/soat/issues/742) — unscoped API keys silently bypass every `requests` quota; [#743](https://github.com/ttoss/soat/issues/743) — `scope_ref` field description contradicts `actor` semantics on CLI/SDK/MCP |
 
 Enforcement was always scoped via `scope_ref` so no other tenant's traffic could
-be blocked.
+be blocked. The 2026-07-27 pass additionally used a dedicated project for every
+project-wide cap, so the one check the 2026-07-26 pass could not run
+deterministically (the self-modification footgun) was reachable.
 
 ## CRUD & response contract
 
@@ -42,6 +45,7 @@ be blocked.
 - [x] `limit: -5` → `400`
 - [x] Fractional `limit` allowed for `cost_usd` (`0.05` → `201`)
 - [x] Fractional `limit` rejected for `tokens` (`10.5` → `400`, "must be a positive integer")
+- [x] Fractional `limit` rejected for `requests` (`2.5` → `400`, same message naming `requests`)
 - [x] Invalid `scope` / `metric` / `window` / `mode` enum → `400`, each naming the valid set
 - [x] `scope_ref` pointing at a nonexistent entity → `400`
 - [x] `scope_ref` pointing at an entity in a **different** project → `400`
@@ -58,6 +62,8 @@ be blocked.
 - [x] JWT (interactive) requests are **never counted** — counter held across JWT requests
 - [x] JWT requests are **never blocked** — `200` while an API key got `429` at the same moment
 - [x] Counters dropped on delete — recreate identical quota in the same window → `count: 0`
+- [ ] **Unscoped API keys are never counted or blocked** — [#742](https://github.com/ttoss/soat/issues/742). Four requests from an unscoped key against a project holding a `project`-scope cap of `2` all returned `200` with the counter stuck at `count: 0`; the same four requests from a project-scoped key incremented to `4` and blocked on the third. Deliberate in `quota.ts` ("unscoped keys are skipped") but absent from the docs, which name only the JWT exemption
+- [ ] **No configuration can cap unscoped-key request traffic** — [#742](https://github.com/ttoss/soat/issues/742). `scope: project` skips them, and `scope: api_key` cannot name one (`scope_ref` → `400`, the key is not "in" the project). The cap reads healthy while enforcing nothing, which is the state the scope × metric `400`s exist to prevent
 
 ## `tokens` / `cost_usd` enforcement (pre-generation)
 
@@ -74,6 +80,7 @@ be blocked.
 - [x] A generation with **no session** matches no actor quota — two session-less generations both completed under a null-ref `actor` quota with `limit: 1`, where any match at all would have blocked
 - [x] A session carrying **no `actor_id`** matches no actor quota — generation allowed under the same quota; the meter row shows `session_id` set and `actor_id` null
 - [x] In-flight generation is not killed (overshoot bounded to one generation) — measured: an allowed generation took the aggregate `76` → `121` against `limit: 77`, and the next one blocked
+- [x] `tokens` / `cost_usd` quotas **do** apply to unscoped API keys, unlike `requests` — a generation issued with an unscoped key was blocked `429` by an agent-scoped `tokens` cap, because this check runs pre-generation off the meter rather than in the middleware. The asymmetry with [#742](https://github.com/ttoss/soat/issues/742) is undocumented
 
 ## `cost_usd` unpriced path (the documented fail-open)
 
@@ -95,6 +102,7 @@ be blocked.
 - [x] `quotas:MonitorBreach` audit entry written
 - [x] Audit entry has null `principal_type` / `principal_id` (no principal authorized it)
 - [x] Audit `detail.kind` = `quota_monitor_breach` with metric, window, limit, observed value
+- [x] Audit entry carries **the quota as its resource** — `resource_srn: soat:{project}:quota:{quota_id}` and `resource_public_id: quota_…`, so a breach joins back to the quota by id and not only by the `(scope, scope_ref, metric, window)` tuple
 - [x] `observed_value` matches the meter aggregate
 - [x] `PATCH mode: monitor → enforce` takes effect on the next breaching request
 
@@ -115,7 +123,8 @@ be blocked.
 - [x] `403` on `DELETE /quotas/{id}` for the same key
 - [x] Same key still `200` on an action it _is_ granted (proves the key is otherwise live)
 - [x] Quota mutations audited: `quotas:CreateQuota`, `quotas:UpdateQuota`, `quotas:DeleteQuota`
-- [x] Self-modification footgun reproduces as documented — a project-wide `requests` cap locks the operator's own API key out of quota management until the window rolls. Verified in the 2026-07-25 pass on a dedicated project. The 2026-07-26 retry was inconclusive (the shared project carried concurrent unrelated traffic, so counts were non-deterministic), which is a limitation of that environment rather than a contradiction — re-test on an isolated project if it needs reconfirming
+- [x] Self-modification footgun reproduces as documented — a capped API key is locked out of quota management until the window rolls. Re-confirmed deterministically on the dedicated project in the 2026-07-27 pass: with its own cap breached, the key got `429` on both `PATCH /quotas/{id}` (raise the limit) and `DELETE /quotas/{id}` (remove the cap). The 2026-07-26 retry had been inconclusive only because the shared project carried concurrent unrelated traffic
+- [x] The documented JWT escape hatch works — an admin JWT deleted the same quota with `204` while the API key was locked out of it
 
 ## Soft references
 
@@ -140,11 +149,21 @@ be blocked.
 - [x] Invalid scope/metric combo rejected at formation **create**, proving the formation module reuses the REST shared validator rather than duplicating it
 - [x] Deleting a formation whose template declares a `quota` cascades to the quota (`GET` → `404`)
 
+## Generated surfaces (CLI / SDK / MCP)
+
+The OpenAPI spec is the source of truth for all three, so a wrong description
+here is not a docs typo — it is the contract an integrator or an
+argument-filling agent reads at call time.
+
+- [x] `create-quota` / `get-quota` / `list-quotas` / `update-quota` / `delete-quota` all present and functional in the published CLI (`@soat/cli@0.17.0`)
+- [x] Operation-level description states the `actor` null-`scope_ref` rule correctly
+- [ ] **`scope_ref` field description contradicts the operation description above it** — [#743](https://github.com/ttoss/soat/issues/743). It says "api key / agent" (omitting `actor`) and "NULL means all entities of that scope type in the project" — the pooled reading the module docs explicitly rule out for `actor`. One tool definition, two opposite rules
+
 ## Not covered
 
-- [ ] **Multi-replica counter atomicity** (the atomic `UPDATE … RETURNING` claim) — needs a multi-replica deployment; only a single instance was reachable in all three passes.
-- [ ] **`reasoning_tokens` exclusion from the `tokens` aggregate** — needs a reasoning model. `deepseek.v3.2` emits no `reasoning_tokens` component (meter rows carry only `input_tokens` / `output_tokens`, and `/usage` reports `reasoning_tokens: 0`), so although the aggregate matched input + output + cached exactly, a zero cannot discriminate whether reasoning tokens would be excluded.
-- [ ] **Real-time rollover for `rolling_1h` / `rolling_24h` / `calendar_month`** — would require waiting out the actual window. Only window-key format and `resets_at` were checked. `rolling_1m` rollover _was_ observed for real.
+- [ ] **Multi-replica counter atomicity** (the atomic `UPDATE … RETURNING` claim) — needs a multi-replica deployment; only a single instance was reachable in all four passes.
+- [ ] **`reasoning_tokens` exclusion from the `tokens` aggregate** — needs a reasoning model. `deepseek.v3.2` emits no `reasoning_tokens` component (meter rows carry only `input_tokens` / `output_tokens`, and `/usage` reports `reasoning_tokens: 0`), so although the aggregate matched input + output + cached exactly, a zero cannot discriminate whether reasoning tokens would be excluded. Still the only model reachable in the 2026-07-27 pass. Reading the implementation, the sum filters on `component.billable` rather than on the component's name (`quotaEnforcement.ts`), so the exclusion holds for any non-billable component — but that is code inspection, not a live observation, and does not tick the box.
+- [ ] **Real-time rollover for `rolling_1h` / `rolling_24h` / `calendar_month`** — would require waiting out the actual window. Only window-key format and `resets_at` were checked. `rolling_1m` rollover _was_ observed for real, again on 2026-07-27 (`18:30Z` count `5` → `18:31Z` count `0`).
 
 ## Observations (not defects)
 
@@ -158,6 +177,21 @@ be blocked.
   actor named, because the quota itself carries no `scope_ref`. Consistent with
   the webhook granularity the docs describe, but it means neither the `429` nor
   the webhook identifies _which_ end user was capped.
+- A `quota_unpriced` exception is filed for the `cost_usd` fail-open, but the
+  `requests` fail-open in [#742](https://github.com/ttoss/soat/issues/742) files
+  nothing. The module already has the vocabulary for "this cap is inert" — that
+  is what makes the silence on unscoped keys read as an oversight rather than a
+  deliberate asymmetry.
+- **Fixture hygiene:** `quota_yT5pg2YvY1dbmPak` (an `enforce` `requests` cap,
+  `limit: 2`, `rolling_1m`, on key `key_Uh1itG9lJlmrGU5V` / `qa-quotas-pm-victim`)
+  is still live in the shared project from an earlier pass. Left in place rather
+  than deleted, since it is another pass's fixture — but it is an *enforcing* cap
+  on a live key, so it should be removed by whoever owns it.
+- **A QA project cannot be fully cleaned up.** `proj_IZnU7FY04SXoQkeN` could not
+  be deleted (`409 PROJECT_HAS_DEPENDENTS`) once it had accrued audit entries,
+  which are not deletable by design. Every quota, formation, webhook, policy,
+  key, and user created for the pass was removed; the empty project remains.
+  Future passes should expect dedicated projects to be permanent.
 - The 2026-07-26 targeted pass surfaced a defect in **sessions**, not quotas:
   `POST /sessions` claimed it created two actors when it creates none
   ([#720](https://github.com/ttoss/soat/issues/720), fixed). It matters here
