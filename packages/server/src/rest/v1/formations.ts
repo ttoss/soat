@@ -98,15 +98,15 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
-    formationId?: string;
+    project_id?: string;
+    formation_id?: string;
     template?: unknown;
     parameters?: Record<string, string>;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'formations:PlanFormation',
     resourceType: 'formation',
   });
@@ -123,7 +123,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
   ctx.body = await planFormation({
     projectId: Number(targetProjectId),
     template: parsedTemplate as FormationTemplate,
-    formationId: body.formationId,
+    formationId: body.formation_id,
     parameters: body.parameters,
   });
 });
@@ -132,7 +132,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     template?: unknown;
     metadata?: Record<string, unknown>;
@@ -141,7 +141,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'formations:CreateFormation',
     resourceType: 'formation',
   });
@@ -177,7 +177,7 @@ formationsRouter.get('/formations', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,

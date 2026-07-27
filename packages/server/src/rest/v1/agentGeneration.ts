@@ -138,29 +138,29 @@ agentGenerationRouter.post(
     const {
       messages,
       stream,
-      traceId,
-      parentTraceId,
-      rootTraceId,
-      maxCallDepth,
-      toolContext,
-      knowledgeConfig,
-      actionId,
+      trace_id: traceId,
+      parent_trace_id: parentTraceId,
+      root_trace_id: rootTraceId,
+      max_call_depth: maxCallDepth,
+      tool_context: toolContext,
+      knowledge_config: knowledgeConfig,
+      action_id: actionId,
       extract,
       metadata,
-      guardrailContext,
+      guardrail_context: guardrailContext,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
-      traceId?: string;
-      parentTraceId?: string;
-      rootTraceId?: string;
-      maxCallDepth?: unknown;
-      toolContext?: Record<string, string>;
-      knowledgeConfig?: object;
-      actionId?: string;
+      trace_id?: string;
+      parent_trace_id?: string;
+      root_trace_id?: string;
+      max_call_depth?: unknown;
+      tool_context?: Record<string, string>;
+      knowledge_config?: object;
+      action_id?: string;
       extract?: boolean;
       metadata?: unknown;
-      guardrailContext?: unknown;
+      guardrail_context?: unknown;
     };
 
     const bodyError = validateGenerateBody({ messages, metadata });
@@ -223,8 +223,8 @@ agentGenerationRouter.post(
       return;
     }
 
-    const { toolOutputs } = ctx.request.body as {
-      toolOutputs?: unknown;
+    const { tool_outputs: toolOutputs } = ctx.request.body as {
+      tool_outputs?: unknown;
     };
 
     if (!Array.isArray(toolOutputs) || toolOutputs.length === 0) {

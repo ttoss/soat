@@ -91,7 +91,7 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,

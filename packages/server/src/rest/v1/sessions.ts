@@ -62,13 +62,13 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    agentId?: string;
+    agent_id?: string;
     name?: string;
-    actorId?: string;
-    autoGenerate?: boolean;
-    toolContext?: Record<string, string> | null;
-    inactivityTtlSeconds?: number;
-    messageDelaySeconds?: number | null;
+    actor_id?: string;
+    auto_generate?: boolean;
+    tool_context?: Record<string, string> | null;
+    inactivity_ttl_seconds?: number;
+    message_delay_seconds?: number | null;
   };
 
   const projectIds = await ctx.authUser.resolveProjectIds({
@@ -83,7 +83,7 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const agent = await db.Agent.findOne({ where: { publicId: body.agentId } });
+  const agent = await db.Agent.findOne({ where: { publicId: body.agent_id } });
   if (!agent) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
   }
@@ -97,11 +97,11 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     projectId: agent.projectId,
     agentId: agent.id as number,
     name: body.name,
-    actorId: body.actorId,
-    autoGenerate: body.autoGenerate,
-    toolContext: body.toolContext,
-    inactivityTtlSeconds: body.inactivityTtlSeconds,
-    messageDelaySeconds: body.messageDelaySeconds,
+    actorId: body.actor_id,
+    autoGenerate: body.auto_generate,
+    toolContext: body.tool_context,
+    inactivityTtlSeconds: body.inactivity_ttl_seconds,
+    messageDelaySeconds: body.message_delay_seconds,
   });
 
   ctx.status = 201;
@@ -161,10 +161,10 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string | null;
     status?: string;
-    autoGenerate?: boolean;
-    toolContext?: Record<string, string> | null;
-    inactivityTtlSeconds?: number;
-    messageDelaySeconds?: number | null;
+    auto_generate?: boolean;
+    tool_context?: Record<string, string> | null;
+    inactivity_ttl_seconds?: number;
+    message_delay_seconds?: number | null;
   };
 
   ctx.body = await updateSession({
@@ -172,10 +172,10 @@ sessionsRouter.patch('/sessions/:session_id', async (ctx: Context) => {
     sessionId: ctx.params.session_id,
     name: body.name,
     status: body.status,
-    autoGenerate: body.autoGenerate,
-    toolContext: body.toolContext,
-    inactivityTtlSeconds: body.inactivityTtlSeconds,
-    messageDelaySeconds: body.messageDelaySeconds,
+    autoGenerate: body.auto_generate,
+    toolContext: body.tool_context,
+    inactivityTtlSeconds: body.inactivity_ttl_seconds,
+    messageDelaySeconds: body.message_delay_seconds,
   });
 });
 

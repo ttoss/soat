@@ -18,12 +18,12 @@ import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 const aiProvidersRouter = new Router<Context>();
 
 type CreateAiProviderBody = {
-  projectId?: string;
-  secretId?: string;
+  project_id?: string;
+  secret_id?: string;
   name?: string;
   provider?: string;
-  defaultModel?: string;
-  baseUrl?: string;
+  default_model?: string;
+  base_url?: string;
   config?: Record<string, unknown>;
 };
 
@@ -46,7 +46,7 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -201,16 +201,16 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'ai-providers:CreateAiProvider',
     resourceType: 'aiProvider',
   });
   if (targetProjectId === null) return;
 
   let resolvedSecretId: number | undefined;
-  if (body.secretId) {
+  if (body.secret_id) {
     const secret = await db.Secret.findOne({
-      where: { publicId: body.secretId, projectId: Number(targetProjectId) },
+      where: { publicId: body.secret_id, projectId: Number(targetProjectId) },
     });
     if (!secret) {
       ctx.status = 400;
@@ -225,8 +225,8 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     secretId: resolvedSecretId,
     name: body.name!,
     provider: body.provider as AiProviderSlug,
-    defaultModel: body.defaultModel!,
-    baseUrl: body.baseUrl,
+    defaultModel: body.default_model!,
+    baseUrl: body.base_url,
     config: body.config,
   });
 
@@ -266,21 +266,21 @@ aiProvidersRouter.patch(
     }
 
     const body = ctx.request.body as {
-      secretId?: string;
+      secret_id?: string;
       name?: string;
       provider?: string;
-      defaultModel?: string;
-      baseUrl?: string | null;
+      default_model?: string;
+      base_url?: string | null;
       config?: Record<string, unknown> | null;
     };
 
     let resolvedSecretId: number | undefined;
-    if (body.secretId !== undefined) {
+    if (body.secret_id !== undefined) {
       const project = await db.Project.findOne({
         where: { publicId: existing.project_id! },
       });
       const secret = await db.Secret.findOne({
-        where: { publicId: body.secretId, projectId: project!.id },
+        where: { publicId: body.secret_id, projectId: project!.id },
       });
       if (!secret) {
         ctx.status = 400;
@@ -295,8 +295,8 @@ aiProvidersRouter.patch(
       secretId: resolvedSecretId,
       name: body.name,
       provider: body.provider as AiProviderSlug | undefined,
-      defaultModel: body.defaultModel,
-      baseUrl: body.baseUrl,
+      defaultModel: body.default_model,
+      baseUrl: body.base_url,
       config: body.config,
     });
 

@@ -20,7 +20,7 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -73,14 +73,14 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
   // `name` and `value` are guaranteed present by the strict-field middleware
   // (both are `required` in the OpenAPI request schema).
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     value: string;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'secrets:CreateSecret',
     resourceType: 'secret',
   });

@@ -36,7 +36,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -50,7 +50,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     return;
   }
 
-  const expiresBeforeRaw = ctx.query.expiresBefore as string | undefined;
+  const expiresBeforeRaw = ctx.query.expires_before as string | undefined;
 
   ctx.body = await listApprovals({
     projectIds: projectIds ?? [],
@@ -70,7 +70,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -84,7 +84,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     return;
   }
 
-  const minCountRaw = ctx.query.minCount as string | undefined;
+  const minCountRaw = ctx.query.min_count as string | undefined;
   const minCount =
     minCountRaw != null ? Number.parseInt(minCountRaw, 10) : undefined;
 

@@ -100,7 +100,7 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -170,21 +170,21 @@ documentsRouter.post('/documents', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     content: string;
     path?: string;
     filename?: string;
     title?: string;
     metadata?: Record<string, unknown>;
     tags?: Record<string, string>;
-    chunkStrategy?: 'page' | 'whole' | 'size';
-    chunkSize?: number;
-    chunkOverlap?: number;
+    chunk_strategy?: 'page' | 'whole' | 'size';
+    chunk_size?: number;
+    chunk_overlap?: number;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'documents:CreateDocument',
     resourceType: 'document',
   });
@@ -198,9 +198,9 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     title: body.title,
     metadata: body.metadata,
     tags: body.tags,
-    chunkStrategy: body.chunkStrategy,
-    chunkSize: body.chunkSize,
-    chunkOverlap: body.chunkOverlap,
+    chunkStrategy: body.chunk_strategy,
+    chunkSize: body.chunk_size,
+    chunkOverlap: body.chunk_overlap,
   });
   ctx.status = 201;
   ctx.body = doc;
@@ -378,13 +378,13 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    fileId: string;
-    projectId?: string;
-    pathPrefix?: string;
+    file_id: string;
+    project_id?: string;
+    path_prefix?: string;
     tags?: Record<string, string>;
-    chunkStrategy?: 'page' | 'whole' | 'size';
-    chunkSize?: number;
-    chunkOverlap?: number;
+    chunk_strategy?: 'page' | 'whole' | 'size';
+    chunk_size?: number;
+    chunk_overlap?: number;
   };
 
   // Async by default; ?async=false runs synchronously and returns 201.
@@ -392,20 +392,20 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'documents:IngestDocument',
     resourceType: 'document',
   });
   if (targetProjectId === null) return;
 
   const result = await enqueueDocumentIngestion({
-    fileId: body.fileId,
+    fileId: body.file_id,
     projectId: Number(targetProjectId),
-    pathPrefix: body.pathPrefix,
+    pathPrefix: body.path_prefix,
     tags: body.tags,
-    chunkStrategy: body.chunkStrategy,
-    chunkSize: body.chunkSize,
-    chunkOverlap: body.chunkOverlap,
+    chunkStrategy: body.chunk_strategy,
+    chunkSize: body.chunk_size,
+    chunkOverlap: body.chunk_overlap,
     async: isAsync,
   });
 
@@ -432,9 +432,9 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    chunkStrategy?: 'page' | 'whole' | 'size';
-    chunkSize?: number;
-    chunkOverlap?: number;
+    chunk_strategy?: 'page' | 'whole' | 'size';
+    chunk_size?: number;
+    chunk_overlap?: number;
   };
 
   // Async by default; ?async=false runs synchronously and returns 201.
@@ -442,9 +442,9 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
 
   const result = await reingestDocument({
     id: ctx.params.document_id,
-    chunkStrategy: body.chunkStrategy,
-    chunkSize: body.chunkSize,
-    chunkOverlap: body.chunkOverlap,
+    chunkStrategy: body.chunk_strategy,
+    chunkSize: body.chunk_size,
+    chunkOverlap: body.chunk_overlap,
     async: isAsync,
   });
 

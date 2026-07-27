@@ -77,7 +77,7 @@ conversationSubResourcesRouter.post(
     const body = ctx.request.body as {
       message: string;
       role: string;
-      actorId?: string | null;
+      actor_id?: string | null;
       position?: number;
       metadata?: Record<string, unknown>;
     };
@@ -106,7 +106,7 @@ conversationSubResourcesRouter.post(
       conversationId: ctx.params.conversation_id,
       message: body.message,
       role: body.role,
-      actorId: body.actorId ?? null,
+      actorId: body.actor_id ?? null,
       position: body.position,
       metadata: body.metadata,
     });
@@ -290,10 +290,10 @@ conversationSubResourcesRouter.post(
     }
 
     const body = ctx.request.body as {
-      agentId: string;
+      agent_id: string;
       model?: string;
       stream?: boolean;
-      toolContext?: Record<string, string>;
+      tool_context?: Record<string, string>;
     };
 
     if (body.stream) {
@@ -327,9 +327,9 @@ conversationSubResourcesRouter.post(
 
     const result = await generateConversationMessage({
       conversationId: ctx.params.conversation_id,
-      agentId: body.agentId,
+      agentId: body.agent_id,
       model: body.model,
-      toolContext: body.toolContext,
+      toolContext: body.tool_context,
     });
 
     ctx.status = 200;

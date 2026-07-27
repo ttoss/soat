@@ -18,14 +18,14 @@ import { checkAuth, resolveWriteProjectId } from './helpers';
 const actorsRouter = new Router<Context>();
 
 type CreateActorBody = {
-  projectId?: string;
+  project_id?: string;
   name: string;
-  externalId?: string;
+  external_id?: string;
   instructions?: string | null;
-  agentId?: string;
-  chatId?: string;
-  memoryId?: string;
-  autoCreateMemory?: boolean;
+  agent_id?: string;
+  chat_id?: string;
+  memory_id?: string;
+  auto_create_memory?: boolean;
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
@@ -35,12 +35,12 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
-  const externalId = ctx.query.externalId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
+  const externalId = ctx.query.external_id as string | undefined;
   const name = ctx.query.name as string | undefined;
-  const agentId = ctx.query.agentId as string | undefined;
-  const chatId = ctx.query.chatId as string | undefined;
-  const conversationId = ctx.query.conversationId as string | undefined;
+  const agentId = ctx.query.agent_id as string | undefined;
+  const chatId = ctx.query.chat_id as string | undefined;
+  const conversationId = ctx.query.conversation_id as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -135,13 +135,13 @@ const performCreateActor = async (args: {
   memoryDbId: number | undefined;
 }): Promise<{ status: 200 | 201; actor: unknown }> => {
   const instructions = args.body.instructions ?? null;
-  const autoCreateMemory = args.body.autoCreateMemory ?? false;
+  const autoCreateMemory = args.body.auto_create_memory ?? false;
   const memoryId = args.memoryDbId ?? null;
 
-  if (args.body.externalId !== undefined) {
+  if (args.body.external_id !== undefined) {
     const result = await findOrCreateActor({
       projectId: args.project.id!,
-      externalId: args.body.externalId,
+      externalId: args.body.external_id,
       name: args.body.name,
       instructions,
       agentId: args.agentDbId,
@@ -155,7 +155,7 @@ const performCreateActor = async (args: {
   const actor = await createActor({
     projectId: args.project.id!,
     name: args.body.name,
-    externalId: args.body.externalId,
+    externalId: args.body.external_id,
     instructions,
     agentId: args.agentDbId,
     chatId: args.chatDbId,
@@ -168,8 +168,8 @@ const performCreateActor = async (args: {
 
 const validateCreateActorBody = (body: CreateActorBody): string | null => {
   return validateActorExclusivity({
-    agentId: body.agentId,
-    chatId: body.chatId,
+    agentId: body.agent_id,
+    chatId: body.chat_id,
   });
 };
 
@@ -186,7 +186,7 @@ actorsRouter.post('/actors', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'actors:CreateActor',
     resourceType: 'actor',
   });
@@ -194,9 +194,9 @@ actorsRouter.post('/actors', async (ctx: Context) => {
 
   const projectDbId = Number(targetProjectId);
   const resolved = await resolveActorLinkedIds({
-    agentId: body.agentId,
-    chatId: body.chatId,
-    memoryId: body.memoryId,
+    agentId: body.agent_id,
+    chatId: body.chat_id,
+    memoryId: body.memory_id,
     projectId: projectDbId,
   });
 
@@ -278,21 +278,21 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
 
   const body = ctx.request.body as {
     name?: string;
-    externalId?: string;
+    external_id?: string;
     instructions?: string | null;
-    agentId?: string | null;
-    chatId?: string | null;
-    memoryId?: string | null;
+    agent_id?: string | null;
+    chat_id?: string | null;
+    memory_id?: string | null;
   };
 
   const updated = await updateActor({
     id: ctx.params.actor_id,
     name: body.name,
-    externalId: body.externalId,
+    externalId: body.external_id,
     instructions: body.instructions,
-    agentId: body.agentId,
-    chatId: body.chatId,
-    memoryId: body.memoryId,
+    agentId: body.agent_id,
+    chatId: body.chat_id,
+    memoryId: body.memory_id,
   });
 
   ctx.body = updated;

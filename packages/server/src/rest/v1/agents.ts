@@ -26,26 +26,26 @@ export const agentsRouter = new Router<Context>();
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 
 type CreateAgentBody = {
-  aiProviderId?: unknown;
+  ai_provider_id?: unknown;
   name?: unknown;
   instructions?: unknown;
   model?: unknown;
-  toolBindings?: unknown;
-  toolIds?: unknown;
+  tool_bindings?: unknown;
+  tool_ids?: unknown;
   tools?: unknown;
-  maxSteps?: unknown;
-  toolChoice?: unknown;
-  stopConditions?: unknown;
-  activeToolIds?: unknown;
-  stepRules?: unknown;
-  boundaryPolicy?: unknown;
+  max_steps?: unknown;
+  tool_choice?: unknown;
+  stop_conditions?: unknown;
+  active_tool_ids?: unknown;
+  step_rules?: unknown;
+  boundary_policy?: unknown;
   temperature?: unknown;
-  knowledgeConfig?: unknown;
-  outputSchema?: unknown;
-  maxContextMessages?: unknown;
-  singleSessionPerActor?: unknown;
-  guardrailIds?: unknown;
-  projectId?: string;
+  knowledge_config?: unknown;
+  output_schema?: unknown;
+  max_context_messages?: unknown;
+  single_session_per_actor?: unknown;
+  guardrail_ids?: unknown;
+  project_id?: string;
 };
 
 /**
@@ -194,33 +194,33 @@ const buildCreateAgentArgs = (
 ): Parameters<typeof createAgent>[0] => {
   return {
     projectId,
-    aiProviderId: body.aiProviderId as string,
+    aiProviderId: body.ai_provider_id as string,
     name: typeof body.name === 'string' ? body.name : undefined,
     instructions:
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
-    toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
+    toolBindings: parseOptional<AgentToolBinding[] | null>(body.tool_bindings),
+    toolIds: Array.isArray(body.tool_ids) ? body.tool_ids : undefined,
     tools,
-    maxSteps: parseNumber(body.maxSteps),
-    toolChoice: body.toolChoice as string | object | undefined,
-    stopConditions: Array.isArray(body.stopConditions)
-      ? body.stopConditions
+    maxSteps: parseNumber(body.max_steps),
+    toolChoice: body.tool_choice as string | object | undefined,
+    stopConditions: Array.isArray(body.stop_conditions)
+      ? body.stop_conditions
       : undefined,
-    activeToolIds: Array.isArray(body.activeToolIds)
-      ? body.activeToolIds
+    activeToolIds: Array.isArray(body.active_tool_ids)
+      ? body.active_tool_ids
       : undefined,
-    stepRules: Array.isArray(body.stepRules) ? body.stepRules : undefined,
-    boundaryPolicy: body.boundaryPolicy as object | undefined,
+    stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
+    boundaryPolicy: body.boundary_policy as object | undefined,
     temperature: parseNumber(body.temperature),
-    knowledgeConfig: body.knowledgeConfig as object | undefined,
-    outputSchema: body.outputSchema as object | undefined,
-    maxContextMessages: parseNumber(body.maxContextMessages),
+    knowledgeConfig: body.knowledge_config as object | undefined,
+    outputSchema: body.output_schema as object | undefined,
+    maxContextMessages: parseNumber(body.max_context_messages),
     singleSessionPerActor:
-      typeof body.singleSessionPerActor === 'boolean'
-        ? body.singleSessionPerActor
+      typeof body.single_session_per_actor === 'boolean'
+        ? body.single_session_per_actor
         : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
   };
 };
 
@@ -263,7 +263,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
+  if (!reqBody.ai_provider_id || typeof reqBody.ai_provider_id !== 'string') {
     ctx.status = 400;
     ctx.body = { error: 'aiProviderId is required' };
     return;
@@ -276,7 +276,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const targetProjectId = await resolveAgentProjectId(
     ctx.authUser,
-    reqBody.projectId
+    reqBody.project_id
   );
 
   if (targetProjectId === 403) {
@@ -307,7 +307,7 @@ agentsRouter.get('/agents', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,

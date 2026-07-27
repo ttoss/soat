@@ -23,8 +23,8 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
-  const actorId = ctx.query.actorId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
+  const actorId = ctx.query.actor_id as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -112,24 +112,24 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     status?: string;
     name?: string | null;
-    actorId?: string | null;
+    actor_id?: string | null;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'conversations:CreateConversation',
     resourceType: 'conversation',
   });
   if (targetProjectId === null) return;
 
   let resolvedActorId: number | null = null;
-  if (body.actorId) {
+  if (body.actor_id) {
     const actor = await db.Actor.findOne({
-      where: { publicId: body.actorId },
+      where: { publicId: body.actor_id },
     });
     if (!actor) {
       ctx.status = 400;

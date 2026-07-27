@@ -1,101 +1,147 @@
 # Case Convention
 
-This project uses an automatic case-transform middleware that decouples the external REST API contract (snake_case) from the internal JavaScript/TypeScript code (camelCase).
+The wire is **snake_case**. Internal TypeScript is **camelCase**. A lib mapper
+converts between them explicitly, field by field, at one boundary.
 
-## REST API — External Contract
+That is the whole rule. There is no middleware, no skip list, and no recursive
+key transform anywhere in the request or response path.
 
-All REST API request and response **body fields** use **snake_case**:
+## The one hard prohibition
 
-```json
-{
-  "project_id": "prj_01",
-  "ai_provider_id": "aip_01",
-  "default_model": "gpt-4o"
-}
-```
+**Never write a function that walks a JSON value and rewrites its keys.**
 
-This applies to every field in JSON request bodies and JSON response bodies under `/api/v1`.
+Every case-transform incident in this project's history (#651, #690, #729, #737)
+had the same shape: a key-blind recursive transform rewrote every key at a
+boundary, and correctness depended on a hand-curated skip list that someone had
+to remember to extend. Not one incident involved a field SOAT owns. They were all
+keys the platform does not own and must never touch:
 
-## Internal Code — camelCase
+| What | Example | What the recursion did to it |
+|---|---|---|
+| JSON Logic vars / operators | `{"var": "context.max_daily_budget"}` | rewrote the path; every underscore key resolved to `null` |
+| HTTP header names | `X-Auth`, `tool_context` keys | `X-Auth` → `_x-_auth`; `actor_external_id` → header `…-ActorExternalId` |
+| IAM vocabulary | `StringEquals`, `soat:ResourceTag/env` | → `_string_equals`, `soat:_resource_tag/env` |
+| Resource tag keys | `cost_center` + `costCenter` | collapsed two distinct tags into one, dropping a value |
+| Contract-fixed fields | a guardrail document's `default_class` | → `defaultClass`, rejected on write as unknown |
+| Author-authored template fields | formation `template` resource IDs | returned template diverged from what was stored |
 
-All internal TypeScript code (models, lib functions, route handlers) uses **camelCase**:
+Explicit serialization makes the bug class unrepresentable. An opaque bag is
+copied as a **value**, so its inner keys are never even looked at — there is
+nothing to exempt, because nothing was at risk.
 
-```ts
-const project = await Project.findOne({ where: { publicId: projectId } });
-```
+## Where the conversion happens
 
-You never need to manually convert between cases in route handlers.
+### Outbound — lib mappers
 
-## caseTransform Middleware
-
-The middleware at `packages/server/src/middleware/caseTransform.ts` handles automatic conversion for paths starting with `/api/v1`:
-
-- **Inbound**: snake_case request body → camelCase (so handlers receive camelCase)
-- **Outbound**: camelCase response body → snake_case (so clients receive snake_case)
-
-### When adding new fields
-
-1. Add the field in **camelCase** in the model and lib code.
-2. Define the field in **snake_case** in the OpenAPI spec YAML.
-3. The middleware converts automatically — no manual mapping needed.
-
-### Pass-through fields (keys NOT converted)
-
-Some fields carry a bag whose **inner keys are not SOAT field names** — they are author-authored data, JSON Logic paths, or literal HTTP header names. Converting those keys silently desyncs the write from every downstream read, so the middleware skips them (see the `buildBodySkipKeys` / `buildResponseSkipKeys` sets, each with an inline rationale).
-
-Current pass-throughs include `template`, `parameters`, `execute`, `mcp`, `headers`, `guard`, `when`, `expression`, `stateMapping`, `inputMapping`, `arguments`, `guardrailContext`, `toolContext`, `tags`, `condition`, and the path-scoped `metadata`, `input`, `payload`, `document`, `args`.
-
-Four rules when touching this list:
-
-- **A field whose keys become HTTP header names must be a pass-through.** `toolContext` was not, and the conversion made a caller's `actor_external_id` land on `X-Soat-Context-ActorExternalId` — unpredictable from the request body, divergent from the same key in a (pass-through) formation template, and lossy for keys the reverse conversion cannot restore.
-- **A field whose keys are matched by exact string anywhere must be a pass-through.** `tags` and `condition` were not. A tag key becomes a `soat:ResourceTag/<key>` IAM condition key, so the conversion collapsed `cost_center` and `costCenter` into one tag (silently dropping a value a policy may key on) and returned `Environment` as `_environment`, leaving no way to read the key needed to write the matching policy. It also mangled the IAM vocabulary itself: `StringEquals` → `_string_equals`.
-- **Add both directions.** The inbound set is keyed on the camelCase name (`toolContext`), the outbound set on the snake_case name (`tool_context`). Skipping only inbound leaves the response echo lossy, which breaks read-modify-write.
-- **Mirror it in `src/mcp/toMcpText.ts`.** Its `VERBATIM_KEYS` tracks the outbound set; a key added here and not there stays broken on the MCP surface.
-
-Two fields must stay in lockstep once added: `tags` and `condition`. A condition key and the tag key it selects have to be the same string, so converting one without the other silently changes which resources a policy matches.
-
-## Path Parameters
-
-Path parameters in URL templates use **snake_case**, consistent with the rest of the external REST API contract:
-
-```
-/api/v1/agents/{agent_id}/generate/{generation_id}/tool-outputs
-```
-
-In the SDK, `params.path` objects also use snake_case to match the URL templates:
+A lib function returns a plain object built field by field, with the spec's own
+snake_case names:
 
 ```ts
-params: { path: { agent_id: agent.id, generation_id: gen.id } }
+const mapActor = (actor: ActorRow) => {
+  return {
+    id: actor.publicId, // publicId is exposed as `id`
+    project_id: actor.project?.publicId,
+    external_id: actor.externalId ?? undefined,
+    memory_id: getLinkedPublicId(actor.memory),
+    tags: actor.tags ?? undefined, // an opaque bag: copied as a value
+    created_at: actor.createdAt,
+  };
+};
 ```
 
-## OpenAPI Specs
+This is the single serialization point. The field list already had to exist (see
+`server.md`: lib functions must return explicitly mapped plain objects), so
+nothing is duplicated by keying it in snake_case.
 
-Property names in OpenAPI spec files (`packages/server/src/rest/openapi/v1/*.yaml`) must be **snake_case**. These specs define the external contract and are used to generate the SDK.
+Consequences to keep in mind:
 
-## MCP — camelCase
+- **A lib return value is wire-shaped.** Internal code that consumes one reads
+  the snake_case key (`actor.project_id`) or works from the model instance
+  instead. TypeScript enforces this — the mapper's inferred type is the contract.
+- **Webhook payloads and the NDJSON audit export use the same mappers**, so they
+  are consistent with the read API by construction. That is what killed #690.
 
-MCP tool `inputSchema` properties and response fields use **camelCase**. The MCP endpoint (`POST /mcp`) is **not** processed by the caseTransform middleware. The MCP tools layer has its own conversion in `packages/server/src/mcp/tools/caseTransform.ts` using `toMcpText` which converts API responses from snake_case back to camelCase for MCP clients.
+### Inbound — route handlers
 
-## soat-tools — camelCase
+Handlers read the body and query exactly as the client sent them, then pass
+explicit camelCase args to the lib function:
 
-SOAT tool input schemas use **camelCase**. These are internal tool definitions consumed by agents, not part of the REST API contract.
+```ts
+const body = ctx.request.body as {
+  project_id?: string;
+  external_id?: string;
+};
 
-## SDK
+await createActor({
+  projectId: Number(targetProjectId),
+  externalId: body.external_id,
+});
+```
 
-The generated SDK (`packages/sdk/src/generated/openapi.ts`) reflects the OpenAPI specs:
+Destructuring aliases the wire name to the internal one, which keeps the mapping
+visible at the read site:
 
-- Body and response fields are **snake_case** (e.g., `body: { project_id: '...' }`)
-- Path parameters are **snake_case** (e.g., `params: { path: { agent_id: '...' } }`)
+```ts
+const { trace_id: traceId, tool_context: toolContext } = ctx.request.body as {
+  trace_id?: string;
+  tool_context?: Record<string, string>;
+};
+```
 
-## Summary Table
+Because nothing rewrites inbound keys, two things that used to be possible no
+longer are: a caller-authored key inside a bag cannot be mangled before it
+reaches the lib, and two keys (`user_id` + `userId`) can no longer collide into
+one and silently drop a value.
 
-| Context                             | Convention | Example                                 |
-| ----------------------------------- | ---------- | --------------------------------------- |
-| REST body fields (request/response) | snake_case | `project_id`, `default_model`           |
-| URL path parameters                 | snake_case | `{agent_id}`, `{generation_id}`         |
-| OpenAPI spec properties             | snake_case | `project_id`                            |
-| Internal TS code                    | camelCase  | `projectId`, `defaultModel`             |
-| MCP tool schemas & responses        | camelCase  | `projectId`, `defaultModel`             |
-| soat-tool input schemas             | camelCase  | `projectId`                             |
-| SDK body fields                     | snake_case | `body: { project_id: '...' }`           |
-| SDK path params                     | snake_case | `params: { path: { agent_id: '...' } }` |
+## Surfaces
+
+| Surface | Convention | Produced by |
+|---|---|---|
+| REST bodies, queries, path params | snake_case | explicit per-resource mappers |
+| OpenAPI specs | snake_case | authored |
+| SDK / CLI | snake_case | generated from the specs |
+| MCP tool **names** | kebab-case | `operationIdToToolName` from `operationId` |
+| MCP tool inputs / outputs | snake_case | schemas from the specs verbatim; responses passed through verbatim |
+| Webhook payloads, NDJSON export | snake_case | the same lib mappers as REST |
+| Internal TS, models, lib args | camelCase | handlers map at the boundary |
+
+The OpenAPI document served at `/api/v1/openapi.json` keeps its **camelCase
+structural vocabulary** (`operationId`, `requestBody`) — that is valid OpenAPI,
+describing snake_case field names.
+
+MCP speaks snake_case, the same contract as everything else: tool `inputSchema`
+properties are the spec's property names verbatim, path-parameter arguments are
+the spec's names (`agent_id`, not `agentId`), and a tool result is the REST
+response JSON-stringified with nothing rewritten. An agent that reads the docs
+can call a tool with no translation, and there is nothing left to drift.
+
+## Enforcement
+
+Two middlewares check the contract. **Neither modifies a body** — they only read.
+
+| Middleware | Direction | On violation |
+|---|---|---|
+| `strictFields` | request | `400 VALIDATION_FAILED` — unknown field at any nesting level, or a missing top-level required field |
+| `responseContract` | response | camelCase key → throws in tests; undeclared snake_case key → debug log |
+
+Both derive their field sets from the OpenAPI specs via `deriveSchemaFields`,
+which keys everything by the spec's own property name. It deliberately has **no
+key-transform hook**: a field name cannot be rewritten on its way from the spec
+to the check that uses it.
+
+`responseContract` is the deterministic replacement for what used to be a prose
+rule. A mapper that forgets to convert a field fails the REST suite with the
+field named. It only logs an undeclared *snake_case* key, because that is
+pre-existing spec drift (~1900 cases, tracked in `tests/unit/openapiContract.ts`)
+rather than the bug this rule is about.
+
+## Adding a new field
+
+1. Add it in **camelCase** to the model and lib args.
+2. Add it in **snake_case** to the OpenAPI spec YAML.
+3. Add it in **snake_case** to the lib mapper, mapping from the camelCase model
+   attribute.
+4. Read it in **snake_case** in the route handler.
+
+Nothing converts automatically, and that is the point: every field name on the
+wire appears literally in the mapper, so you can grep for it.

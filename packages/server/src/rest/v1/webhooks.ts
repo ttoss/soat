@@ -42,7 +42,7 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -66,17 +66,17 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name?: string;
     description?: string;
     url?: string;
     events?: string[];
-    policyId?: string;
+    policy_id?: string;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'webhooks:CreateWebhook',
     resourceType: 'webhook',
   });
@@ -90,7 +90,7 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     return;
   }
 
-  const policyId = await resolvePolicyId(body.policyId);
+  const policyId = await resolvePolicyId(body.policy_id);
 
   const webhook = await createWebhook({
     projectId: Number(targetProjectId),
@@ -172,12 +172,12 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     url?: string;
     events?: string[];
     active?: boolean;
-    policyId?: string | null;
+    policy_id?: string | null;
   };
 
   let policyInternalId: number | null | undefined;
-  if (body.policyId !== undefined) {
-    policyInternalId = await resolvePolicyId(body.policyId ?? undefined);
+  if (body.policy_id !== undefined) {
+    policyInternalId = await resolvePolicyId(body.policy_id ?? undefined);
   }
 
   const updated = await updateWebhook({
@@ -236,7 +236,7 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
     return;
   }
 
-  const webhookPublicId = ctx.query.webhookId as string | undefined;
+  const webhookPublicId = ctx.query.webhook_id as string | undefined;
   if (!webhookPublicId) {
     ctx.status = 400;
     ctx.body = { error: 'webhook_id is required' };
