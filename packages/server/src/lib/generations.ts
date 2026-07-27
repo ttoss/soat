@@ -62,17 +62,21 @@ const INTERNAL_METADATA_KEYS = ['pendingState'];
 
 // Keys the server owns inside the metadata bag. Callers may attach arbitrary
 // key/value metadata for their own auditing (F-15), but must not clobber these:
-// `pendingState` is internal recovery state; `actionId`/`triggerId`/`runId`/
-// `nodeId` are usage-attribution keys read back by usageRecording.ts; and
-// `extraction` is the memory-extraction summary written on completion. Writes
-// that include any of these are rejected so caller metadata can never corrupt
-// system bookkeeping or usage rollups.
+// `pendingState` is internal recovery state; `action_id`/`trigger_id`/`run_id`/
+// `node_id` are the wire names (see generations.yaml) for the usage-attribution
+// keys read back by usageRecording.ts (stored internally as `actionId`/
+// `triggerId`/`runId`/`nodeId`); and `extraction` is the memory-extraction
+// summary written on completion. Writes that include any of these are rejected
+// so caller metadata can never corrupt system bookkeeping or usage rollups.
+// Reserved-key validation runs against the raw wire request body (there is no
+// recursive case-transform middleware anymore), so the wire (snake_case) names
+// are what must be checked here, not the internal camelCase storage keys.
 export const RESERVED_GENERATION_METADATA_KEYS = [
   'pendingState',
-  'actionId',
-  'triggerId',
-  'runId',
-  'nodeId',
+  'action_id',
+  'trigger_id',
+  'run_id',
+  'node_id',
   'extraction',
 ];
 
