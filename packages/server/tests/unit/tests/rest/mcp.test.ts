@@ -126,16 +126,22 @@ describe('MCP tools - happy path', () => {
 
   test('get-usage returns an aggregate rollup for a project', async () => {
     const res = await mcpCall('get-usage', {
-      projectId,
-      groupBy: 'meter_type',
+      project_id: projectId,
+      group_by: 'meter_type',
     });
     expect(res.status).toBe(200);
     const result = parseResult(res);
-    // MCP responses are camelCase. No generation has been metered on this
-    // project, so the rollup is empty with zeroed totals — but well-formed.
-    expect(result.projectId).toBe(projectId);
-    expect(result.groupBy).toBe('meter_type');
+    // MCP responses are snake_case, matching the REST contract. No generation
+    // has been metered on this project, so the rollup is empty with zeroed
+    // totals — but well-formed.
+    expect(result.project_id).toBe(projectId);
+    expect(result.group_by).toBe('meter_type');
     expect(Array.isArray(result.groups)).toBe(true);
+    // NOTE: `totals` (and each group) is still emitted camelCase by
+    // usageAggregate.ts's `finalizeTotals` — a pre-existing gap in the
+    // snake_case migration unrelated to the MCP casing fix this test file is
+    // being converted for (packages/server/tests/unit/tests/rest/usage.test.ts
+    // has the same mismatch on the equivalent REST assertion).
     expect(result.totals.inputTokens).toBe(0);
     expect(result.totals.costUsd).toBeNull();
   });
@@ -143,7 +149,7 @@ describe('MCP tools - happy path', () => {
   test('create-, list-, and delete-usage-threshold manage a threshold', async () => {
     const created = parseResult(
       await mcpCall('create-usage-threshold', {
-        projectId,
+        project_id: projectId,
         metric: 'cost_usd',
         window: 'calendar_month',
         threshold: 250,
@@ -155,7 +161,7 @@ describe('MCP tools - happy path', () => {
     expect(created.threshold).toBe(250);
 
     const listed = parseResult(
-      await mcpCall('list-usage-thresholds', { projectId })
+      await mcpCall('list-usage-thresholds', { project_id: projectId })
     );
     expect(
       listed.data.some((t: { id: string }) => {
@@ -164,7 +170,7 @@ describe('MCP tools - happy path', () => {
     ).toBe(true);
 
     const del = await mcpCall('delete-usage-threshold', {
-      thresholdId: created.id,
+      threshold_id: created.id,
     });
     expect(del.status).toBe(200);
   });
@@ -172,15 +178,15 @@ describe('MCP tools - happy path', () => {
   test('upload-file-with-token uploads via a presigned token', async () => {
     const presigned = parseResult(
       await mcpCall('create-presigned-url', {
-        projectId,
+        project_id: projectId,
         prefix: '/mcp',
         filename: 'mcp-token-upload.txt',
       })
     );
-    expect(presigned.uploadToken).toMatch(/^upt_/);
+    expect(presigned.upload_token).toMatch(/^upt_/);
 
     const res = await mcpCall('upload-file-with-token', {
-      token: presigned.uploadToken,
+      token: presigned.upload_token,
       content: Buffer.from('uploaded via mcp token').toString('base64'),
     });
     expect(res.status).toBe(200);
@@ -202,20 +208,20 @@ describe('MCP tools - happy path', () => {
 
     const listed = parseResult(
       await mcpCall('list-audit-entries', {
-        projectId,
-        resourcePublicId: secretId,
+        project_id: projectId,
+        resource_public_id: secretId,
       })
     );
-    // MCP responses are camelCase.
+    // MCP responses are snake_case, matching the REST contract.
     expect(Array.isArray(listed.data)).toBe(true);
     const entry = listed.data.find((e: { action: string }) => {
       return e.action === 'secrets:CreateSecret';
     });
     expect(entry).toBeDefined();
-    expect(entry.resourcePublicId).toBe(secretId);
+    expect(entry.resource_public_id).toBe(secretId);
 
     const fetched = parseResult(
-      await mcpCall('get-audit-entry', { entryId: entry.id })
+      await mcpCall('get-audit-entry', { entry_id: entry.id })
     );
     expect(fetched.id).toBe(entry.id);
     expect(fetched.action).toBe('secrets:CreateSecret');
@@ -235,7 +241,9 @@ describe('MCP tools - happy path', () => {
       title: 'MCP exception',
     });
 
-    const listed = parseResult(await mcpCall('list-exceptions', { projectId }));
+    const listed = parseResult(
+      await mcpCall('list-exceptions', { project_id: projectId })
+    );
     expect(Array.isArray(listed.data)).toBe(true);
     expect(
       listed.data.some((e: { id: string }) => {
@@ -244,14 +252,14 @@ describe('MCP tools - happy path', () => {
     ).toBe(true);
 
     const fetched = parseResult(
-      await mcpCall('get-exception', { exceptionId: filed.id })
+      await mcpCall('get-exception', { exception_id: filed.id })
     );
     expect(fetched.id).toBe(filed.id);
     expect(fetched.kind).toBe('manual');
 
     const resolved = parseResult(
       await mcpCall('resolve-exception', {
-        exceptionId: filed.id,
+        exception_id: filed.id,
         note: 'Handled via MCP.',
       })
     );
@@ -263,7 +271,7 @@ describe('MCP tools - happy path', () => {
   test('create-workflow, create-task, transition-task, and history via MCP', async () => {
     const workflow = parseResult(
       await mcpCall('create-workflow', {
-        projectId,
+        project_id: projectId,
         name: 'mcp-pipeline',
         states: [
           { name: 'todo', initial: true },
@@ -281,8 +289,8 @@ describe('MCP tools - happy path', () => {
 
     const task = parseResult(
       await mcpCall('create-task', {
-        projectId,
-        workflowId: workflow.id,
+        project_id: projectId,
+        workflow_id: workflow.id,
         title: 'first card',
       })
     );
@@ -292,7 +300,7 @@ describe('MCP tools - happy path', () => {
 
     const moved = parseResult(
       await mcpCall('transition-task', {
-        taskId: task.id,
+        task_id: task.id,
         transition: 'start',
       })
     );
@@ -300,7 +308,7 @@ describe('MCP tools - happy path', () => {
 
     const closed = parseResult(
       await mcpCall('transition-task', {
-        taskId: task.id,
+        task_id: task.id,
         transition: 'finish',
       })
     );
@@ -308,7 +316,10 @@ describe('MCP tools - happy path', () => {
     expect(closed.status).toBe('closed');
 
     const listed = parseResult(
-      await mcpCall('list-tasks', { projectId, workflowId: workflow.id })
+      await mcpCall('list-tasks', {
+        project_id: projectId,
+        workflow_id: workflow.id,
+      })
     );
     expect(
       listed.data.some((t: { id: string }) => {
@@ -317,13 +328,13 @@ describe('MCP tools - happy path', () => {
     ).toBe(true);
 
     const history = parseResult(
-      await mcpCall('get-task-history', { taskId: task.id })
+      await mcpCall('get-task-history', { task_id: task.id })
     );
     // initial placement + two transitions, oldest first.
     expect(history).toHaveLength(3);
     expect(
-      history.map((h: { toState: string }) => {
-        return h.toState;
+      history.map((h: { to_state: string }) => {
+        return h.to_state;
       })
     ).toEqual(['todo', 'doing', 'done']);
   });
@@ -336,7 +347,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('upload-file-base64', {
-        projectId,
+        project_id: projectId,
         content: Buffer.from('hello mcp').toString('base64'),
         filename: 'mcp-test.txt',
       });
@@ -356,14 +367,14 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-file returns the file', async () => {
-      const res = await mcpCall('get-file', { fileId });
+      const res = await mcpCall('get-file', { file_id: fileId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(fileId);
     });
 
     test('download-file returns base64 content', async () => {
-      const res = await mcpCall('download-file-base64', { fileId });
+      const res = await mcpCall('download-file-base64', { file_id: fileId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.content).toBeDefined();
@@ -371,7 +382,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-file-metadata renames the file', async () => {
       const res = await mcpCall('update-file-metadata', {
-        fileId,
+        file_id: fileId,
         filename: 'mcp-renamed.txt',
       });
       expect(res.status).toBe(200);
@@ -381,7 +392,7 @@ describe('MCP tools - happy path', () => {
 
     test('create-file registers a file record', async () => {
       const res = await mcpCall('create-file', {
-        projectId,
+        project_id: projectId,
         filename: 'mcp-registered.txt',
       });
       expect(res.status).toBe(200);
@@ -390,7 +401,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-file deletes the file', async () => {
-      const res = await mcpCall('delete-file', { fileId });
+      const res = await mcpCall('delete-file', { file_id: fileId });
       expect(res.status).toBe(200);
     });
   });
@@ -403,7 +414,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-actor', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Actor',
       });
       createActorResult = parseResult(res);
@@ -423,7 +434,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-actor updates the name', async () => {
       const res = await mcpCall('update-actor', {
-        actorId,
+        actor_id: actorId,
         name: 'MCP Actor Updated',
       });
       expect(res.status).toBe(200);
@@ -432,14 +443,14 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-actor returns the actor', async () => {
-      const res = await mcpCall('get-actor', { actorId });
+      const res = await mcpCall('get-actor', { actor_id: actorId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(actorId);
     });
 
     test('delete-actor deletes the actor', async () => {
-      const res = await mcpCall('delete-actor', { actorId });
+      const res = await mcpCall('delete-actor', { actor_id: actorId });
       expect(res.status).toBe(200);
     });
   });
@@ -451,7 +462,9 @@ describe('MCP tools - happy path', () => {
     let createConversationResult: { id: string; [key: string]: unknown };
 
     beforeAll(async () => {
-      const res = await mcpCall('create-conversation', { projectId });
+      const res = await mcpCall('create-conversation', {
+        project_id: projectId,
+      });
       createConversationResult = parseResult(res);
       conversationId = createConversationResult.id;
     });
@@ -469,19 +482,19 @@ describe('MCP tools - happy path', () => {
 
     test('add-conversation-message adds a message', async () => {
       const res = await mcpCall('add-conversation-message', {
-        conversationId,
+        conversation_id: conversationId,
         message: 'hello from mcp',
         role: 'user',
-        actorId: setupActorId,
+        actor_id: setupActorId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result.documentId).toBeDefined();
+      expect(result.document_id).toBeDefined();
     });
 
     test('list-conversation-messages returns data array', async () => {
       const res = await mcpCall('list-conversation-messages', {
-        conversationId,
+        conversation_id: conversationId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -490,7 +503,7 @@ describe('MCP tools - happy path', () => {
 
     test('list-actors filtered by conversationId returns results', async () => {
       const res = await mcpCall('list-actors', {
-        conversationId,
+        conversation_id: conversationId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -498,7 +511,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-conversation returns the conversation', async () => {
-      const res = await mcpCall('get-conversation', { conversationId });
+      const res = await mcpCall('get-conversation', {
+        conversation_id: conversationId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(conversationId);
@@ -506,23 +521,23 @@ describe('MCP tools - happy path', () => {
 
     test('remove-conversation-message removes the message', async () => {
       const addRes = await mcpCall('add-conversation-message', {
-        conversationId,
+        conversation_id: conversationId,
         message: 'message to remove',
         role: 'user',
-        actorId: setupActorId,
+        actor_id: setupActorId,
       });
-      const documentId = parseResult(addRes).documentId;
+      const documentId = parseResult(addRes).document_id;
 
       const res = await mcpCall('remove-conversation-message', {
-        conversationId,
-        documentId,
+        conversation_id: conversationId,
+        document_id: documentId,
       });
       expect(res.status).toBe(200);
     });
 
     test('update-conversation updates the status', async () => {
       const res = await mcpCall('update-conversation', {
-        conversationId,
+        conversation_id: conversationId,
         status: 'closed',
       });
       expect(res.status).toBe(200);
@@ -531,7 +546,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-conversation deletes the conversation', async () => {
-      const res = await mcpCall('delete-conversation', { conversationId });
+      const res = await mcpCall('delete-conversation', {
+        conversation_id: conversationId,
+      });
       expect(res.status).toBe(200);
     });
   });
@@ -544,7 +561,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-document', {
-        projectId,
+        project_id: projectId,
         content: 'MCP test document content',
       });
       createDocumentResult = parseResult(res);
@@ -564,7 +581,7 @@ describe('MCP tools - happy path', () => {
       const tags = { cost_center: 'platform', Environment: 'prod' };
 
       const created = await mcpCall('create-document', {
-        projectId,
+        project_id: projectId,
         content: 'tagged via mcp',
         tags,
       });
@@ -572,7 +589,7 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(created).tags).toEqual(tags);
 
       const fetched = await mcpCall('get-document', {
-        documentId: parseResult(created).id,
+        document_id: parseResult(created).id,
       });
       expect(fetched.status).toBe(200);
       expect(parseResult(fetched).tags).toEqual(tags);
@@ -594,8 +611,8 @@ describe('MCP tools - happy path', () => {
         .mockResolvedValue(['MCP PDF page 1']);
       try {
         const res = await mcpCall('ingest-document', {
-          fileId: pdfFileId,
-          projectId,
+          file_id: pdfFileId,
+          project_id: projectId,
         });
         expect(res.status).toBe(200);
         const result = parseResult(res);
@@ -613,12 +630,14 @@ describe('MCP tools - happy path', () => {
           await new Promise((r) => {
             return setTimeout(r, 50);
           });
-          const pollRes = await mcpCall('get-document', { documentId: docId });
+          const pollRes = await mcpCall('get-document', {
+            document_id: docId,
+          });
           doc = parseResult(pollRes);
         }
         expect(doc.status).toBe('ready');
         expect(
-          (doc.metadata as { chunkCount?: number })?.chunkCount
+          (doc.metadata as { chunk_count?: number })?.chunk_count
         ).toBeGreaterThan(0);
       } finally {
         spy.mockRestore();
@@ -634,7 +653,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-document updates content', async () => {
       const res = await mcpCall('update-document', {
-        documentId,
+        document_id: documentId,
         content: 'MCP updated content',
       });
       expect(res.status).toBe(200);
@@ -643,14 +662,16 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-document returns the document', async () => {
-      const res = await mcpCall('get-document', { documentId });
+      const res = await mcpCall('get-document', { document_id: documentId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(documentId);
     });
 
     test('get-document-status returns a lightweight status payload', async () => {
-      const res = await mcpCall('get-document-status', { documentId });
+      const res = await mcpCall('get-document-status', {
+        document_id: documentId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(documentId);
@@ -661,7 +682,7 @@ describe('MCP tools - happy path', () => {
 
     test('reingest-document re-processes an existing document', async () => {
       const res = await mcpCall('reingest-document', {
-        documentId,
+        document_id: documentId,
         async: false,
       });
       expect(res.status).toBe(200);
@@ -672,7 +693,7 @@ describe('MCP tools - happy path', () => {
 
     test('search-knowledge returns results', async () => {
       const res = await mcpCall('search-knowledge', {
-        projectId,
+        project_id: projectId,
         query: 'mcp test',
       });
       expect(res.status).toBe(200);
@@ -681,7 +702,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-document deletes the document', async () => {
-      const res = await mcpCall('delete-document', { documentId });
+      const res = await mcpCall('delete-document', {
+        document_id: documentId,
+      });
       expect(res.status).toBe(200);
     });
   });
@@ -695,7 +718,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-project returns the project', async () => {
-      const res = await mcpCall('get-project', { projectId });
+      const res = await mcpCall('get-project', { project_id: projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(projectId);
@@ -703,7 +726,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-project renames the project', async () => {
       const res = await mcpCall('update-project', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Happy Path Renamed',
       });
       expect(res.status).toBe(200);
@@ -721,7 +744,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-secret', {
-        projectId,
+        project_id: projectId,
         name: 'mcp-secret',
         value: 'supersecretvalue',
       });
@@ -731,7 +754,7 @@ describe('MCP tools - happy path', () => {
 
     test('create-secret creates a secret', () => {
       expect(createSecretResult.id).toBeDefined();
-      expect(createSecretResult.hasValue).toBe(true);
+      expect(createSecretResult.has_value).toBe(true);
     });
 
     test('list-secrets returns array', async () => {
@@ -742,7 +765,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-secret returns the secret', async () => {
-      const res = await mcpCall('get-secret', { secretId });
+      const res = await mcpCall('get-secret', { secret_id: secretId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(secretId);
@@ -750,7 +773,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-secret updates the name', async () => {
       const res = await mcpCall('update-secret', {
-        secretId,
+        secret_id: secretId,
         name: 'mcp-secret-renamed',
       });
       expect(res.status).toBe(200);
@@ -759,7 +782,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-secret deletes the secret', async () => {
-      const res = await mcpCall('delete-secret', { id: secretId });
+      const res = await mcpCall('delete-secret', { secret_id: secretId });
       expect(res.status).toBe(200);
     });
   });
@@ -772,10 +795,10 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-ai-provider', {
-        projectId,
+        project_id: projectId,
         name: 'Test Provider',
         provider: 'ollama',
-        defaultModel: 'llama3',
+        default_model: 'llama3',
       });
       createAiProviderResult = parseResult(res);
       testAiProviderId = createAiProviderResult.id;
@@ -792,7 +815,7 @@ describe('MCP tools - happy path', () => {
 
     test('get-ai-provider returns the provider', async () => {
       const res = await mcpCall('get-ai-provider', {
-        aiProviderId: testAiProviderId,
+        ai_provider_id: testAiProviderId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -801,7 +824,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-ai-provider updates the name', async () => {
       const res = await mcpCall('update-ai-provider', {
-        aiProviderId: testAiProviderId,
+        ai_provider_id: testAiProviderId,
         name: 'Test Provider Updated',
       });
       expect(res.status).toBe(200);
@@ -810,7 +833,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-ai-provider deletes the provider', async () => {
-      const res = await mcpCall('delete-ai-provider', { id: testAiProviderId });
+      const res = await mcpCall('delete-ai-provider', {
+        ai_provider_id: testAiProviderId,
+      });
       expect(res.status).toBe(200);
     });
   });
@@ -823,8 +848,8 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-chat', {
-        projectId,
-        aiProviderId: chatAiProviderId,
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
         name: 'MCP Chat',
       });
       createChatResult = parseResult(res);
@@ -841,14 +866,14 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-chat returns the chat', async () => {
-      const res = await mcpCall('get-chat', { chatId });
+      const res = await mcpCall('get-chat', { chat_id: chatId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(chatId);
     });
 
     test('delete-chat deletes the chat', async () => {
-      const res = await mcpCall('delete-chat', { chatId });
+      const res = await mcpCall('delete-chat', { chat_id: chatId });
       expect(res.status).toBe(200);
     });
 
@@ -864,7 +889,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-tool', {
-        projectId,
+        project_id: projectId,
         name: 'mcp-test-tool',
         type: 'http',
         description: 'A test tool',
@@ -883,7 +908,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-tool returns the tool', async () => {
-      const res = await mcpCall('get-tool', { toolId });
+      const res = await mcpCall('get-tool', { tool_id: toolId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(toolId);
@@ -891,7 +916,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-tool updates the tool', async () => {
       const res = await mcpCall('update-tool', {
-        toolId,
+        tool_id: toolId,
         name: 'mcp-test-tool-renamed',
       });
       expect(res.status).toBe(200);
@@ -900,7 +925,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-tool deletes the tool', async () => {
-      const res = await mcpCall('delete-tool', { toolId });
+      const res = await mcpCall('delete-tool', { tool_id: toolId });
       expect(res.status).toBe(200);
       const text = res.body.result?.content?.[0]?.text;
       expect(typeof text).toBe('string');
@@ -917,8 +942,8 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-agent', {
-        projectId,
-        aiProviderId: chatAiProviderId,
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
         name: 'MCP Agent',
       });
       createAgentResult = parseResult(res);
@@ -935,7 +960,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-agent returns the agent', async () => {
-      const res = await mcpCall('get-agent', { agentId });
+      const res = await mcpCall('get-agent', { agent_id: agentId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(agentId);
@@ -943,7 +968,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-agent updates the agent', async () => {
       const res = await mcpCall('update-agent', {
-        agentId,
+        agent_id: agentId,
         name: 'MCP Agent Renamed',
       });
       expect(res.status).toBe(200);
@@ -957,7 +982,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-agent deletes the agent', async () => {
-      const res = await mcpCall('delete-agent', { agentId });
+      const res = await mcpCall('delete-agent', { agent_id: agentId });
       expect(res.status).toBe(200);
     });
   });
@@ -972,8 +997,8 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const agentRes = await mcpCall('create-agent', {
-        projectId,
-        aiProviderId: chatAiProviderId,
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
         name: 'MCP Generations Agent',
       });
       genAgentId = parseResult(agentRes).id;
@@ -993,7 +1018,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('list-generations returns the seeded generation', async () => {
-      const res = await mcpCall('list-generations', { agentId: genAgentId });
+      const res = await mcpCall('list-generations', {
+        agent_id: genAgentId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(
@@ -1005,7 +1032,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-generation attaches caller metadata', async () => {
       const res = await mcpCall('update-generation', {
-        generationId: mcpGenerationId,
+        generation_id: mcpGenerationId,
         metadata: { playbook: 'refunds-v3' },
       });
       expect(res.status).toBe(200);
@@ -1028,7 +1055,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-webhook', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Webhook',
         url: 'https://example.com/mcp-hook',
         events: ['file.*'],
@@ -1044,7 +1071,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('list-webhooks returns results', async () => {
-      const res = await mcpCall('list-webhooks', { projectId });
+      const res = await mcpCall('list-webhooks', { project_id: projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(Array.isArray(result.data)).toBe(true);
@@ -1052,7 +1079,10 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-webhook returns the webhook', async () => {
-      const res = await mcpCall('get-webhook', { projectId, webhookId });
+      const res = await mcpCall('get-webhook', {
+        project_id: projectId,
+        webhook_id: webhookId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(webhookId);
@@ -1060,8 +1090,8 @@ describe('MCP tools - happy path', () => {
 
     test('update-webhook updates the webhook', async () => {
       const res = await mcpCall('update-webhook', {
-        projectId,
-        webhookId,
+        project_id: projectId,
+        webhook_id: webhookId,
         name: 'MCP Webhook Updated',
         active: false,
       });
@@ -1073,8 +1103,8 @@ describe('MCP tools - happy path', () => {
 
     test('rotate-webhook-secret returns new secret', async () => {
       const res = await mcpCall('rotate-webhook-secret', {
-        projectId,
-        webhookId,
+        project_id: projectId,
+        webhook_id: webhookId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1083,8 +1113,8 @@ describe('MCP tools - happy path', () => {
 
     test('list-webhook-deliveries returns results', async () => {
       const res = await mcpCall('list-webhook-deliveries', {
-        projectId,
-        webhookId,
+        project_id: projectId,
+        webhook_id: webhookId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1093,7 +1123,10 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-webhook deletes the webhook', async () => {
-      const res = await mcpCall('delete-webhook', { projectId, webhookId });
+      const res = await mcpCall('delete-webhook', {
+        project_id: projectId,
+        webhook_id: webhookId,
+      });
       expect(res.status).toBe(200);
     });
   });
@@ -1106,7 +1139,7 @@ describe('MCP tools - happy path', () => {
     let createTriggerResult: {
       id: string;
       type: string;
-      targetType: string;
+      target_type: string;
       secret?: string;
       [key: string]: unknown;
     };
@@ -1133,11 +1166,11 @@ describe('MCP tools - happy path', () => {
       ).body.id;
 
       const res = await mcpCall('create-trigger', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Manual Trigger',
         type: 'manual',
-        targetType: 'orchestration',
-        targetId: triggerOrchestrationId,
+        target_type: 'orchestration',
+        target_id: triggerOrchestrationId,
         input: { foo: 'bar' },
       });
       createTriggerResult = parseResult(res);
@@ -1147,13 +1180,13 @@ describe('MCP tools - happy path', () => {
     test('create-trigger creates a trigger', () => {
       expect(createTriggerResult.id).toMatch(/^trg_/);
       expect(createTriggerResult.type).toBe('manual');
-      expect(createTriggerResult.targetType).toBe('orchestration');
+      expect(createTriggerResult.target_type).toBe('orchestration');
       // Manual triggers have no signing secret.
       expect(createTriggerResult.secret).toBeUndefined();
     });
 
     test('list-triggers returns results', async () => {
-      const res = await mcpCall('list-triggers', { projectId });
+      const res = await mcpCall('list-triggers', { project_id: projectId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(Array.isArray(result.data)).toBe(true);
@@ -1161,7 +1194,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-trigger returns the trigger', async () => {
-      const res = await mcpCall('get-trigger', { triggerId: manualTriggerId });
+      const res = await mcpCall('get-trigger', {
+        trigger_id: manualTriggerId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(manualTriggerId);
@@ -1170,7 +1205,7 @@ describe('MCP tools - happy path', () => {
 
     test('fire-trigger runs the target and records a terminal firing', async () => {
       const res = await mcpCall('fire-trigger', {
-        triggerId: manualTriggerId,
+        trigger_id: manualTriggerId,
         input: { extra: 'value' },
       });
       expect(res.status).toBe(200);
@@ -1182,7 +1217,7 @@ describe('MCP tools - happy path', () => {
 
     test('list-trigger-firings returns results', async () => {
       const res = await mcpCall('list-trigger-firings', {
-        triggerId: manualTriggerId,
+        trigger_id: manualTriggerId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1192,19 +1227,21 @@ describe('MCP tools - happy path', () => {
 
     test('get-trigger-firing returns the firing', async () => {
       const list = parseResult(
-        await mcpCall('list-trigger-firings', { triggerId: manualTriggerId })
+        await mcpCall('list-trigger-firings', {
+          trigger_id: manualTriggerId,
+        })
       );
       const firingId = list.data[0].id;
-      const res = await mcpCall('get-trigger-firing', { firingId });
+      const res = await mcpCall('get-trigger-firing', { firing_id: firingId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(firingId);
-      expect(result.triggerId).toBe(manualTriggerId);
+      expect(result.trigger_id).toBe(manualTriggerId);
     });
 
     test('update-trigger updates the trigger', async () => {
       const res = await mcpCall('update-trigger', {
-        triggerId: manualTriggerId,
+        trigger_id: manualTriggerId,
         name: 'MCP Manual Trigger Updated',
         active: false,
       });
@@ -1217,11 +1254,11 @@ describe('MCP tools - happy path', () => {
     test('get-trigger-secret and rotate-trigger-secret work for a webhook trigger', async () => {
       const created = parseResult(
         await mcpCall('create-trigger', {
-          projectId,
+          project_id: projectId,
           name: 'MCP Webhook Trigger',
           type: 'webhook',
-          targetType: 'orchestration',
-          targetId: triggerOrchestrationId,
+          target_type: 'orchestration',
+          target_id: triggerOrchestrationId,
         })
       );
       const webhookTriggerId = created.id;
@@ -1229,12 +1266,14 @@ describe('MCP tools - happy path', () => {
       expect(created.secret).toBeDefined();
 
       const secret = parseResult(
-        await mcpCall('get-trigger-secret', { triggerId: webhookTriggerId })
+        await mcpCall('get-trigger-secret', { trigger_id: webhookTriggerId })
       );
       expect(secret.secret).toBeDefined();
 
       const rotated = parseResult(
-        await mcpCall('rotate-trigger-secret', { triggerId: webhookTriggerId })
+        await mcpCall('rotate-trigger-secret', {
+          trigger_id: webhookTriggerId,
+        })
       );
       expect(rotated.secret).toBeDefined();
       expect(rotated.secret).not.toBe(secret.secret);
@@ -1242,7 +1281,7 @@ describe('MCP tools - happy path', () => {
 
     test('delete-trigger deletes the trigger', async () => {
       const res = await mcpCall('delete-trigger', {
-        triggerId: manualTriggerId,
+        trigger_id: manualTriggerId,
       });
       expect(res.status).toBe(200);
     });
@@ -1255,21 +1294,21 @@ describe('MCP tools - happy path', () => {
     let sessionId: string;
     let createSessionResult: {
       id: string;
-      agentId: string;
-      conversationId: string;
+      agent_id: string;
+      conversation_id: string;
       [key: string]: unknown;
     };
 
     beforeAll(async () => {
       const agentRes = await mcpCall('create-agent', {
-        projectId,
-        aiProviderId: chatAiProviderId,
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
         name: 'MCP Session Agent',
       });
       sessionAgentId = parseResult(agentRes).id;
 
       const res = await mcpCall('create-session', {
-        agentId: sessionAgentId,
+        agent_id: sessionAgentId,
         name: 'MCP Test Session',
       });
       createSessionResult = parseResult(res);
@@ -1278,18 +1317,18 @@ describe('MCP tools - happy path', () => {
 
     test('create-session creates a session', () => {
       expect(createSessionResult.id).toMatch(/^sess_/);
-      expect(createSessionResult.agentId).toBe(sessionAgentId);
-      expect(createSessionResult.conversationId).toBeDefined();
+      expect(createSessionResult.agent_id).toBe(sessionAgentId);
+      expect(createSessionResult.conversation_id).toBeDefined();
     });
 
     test('create-session accepts toolContext', async () => {
       const res = await mcpCall('create-session', {
-        agentId: sessionAgentId,
-        toolContext: { userId: 'u1' },
+        agent_id: sessionAgentId,
+        tool_context: { userId: 'u1' },
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
-      expect(result.toolContext).toEqual({ userId: 'u1' });
+      expect(result.tool_context).toEqual({ userId: 'u1' });
     });
 
     // A `toolContext` key is an HTTP header name (`X-Soat-Context-<Key>`), not a
@@ -1305,22 +1344,22 @@ describe('MCP tools - happy path', () => {
       };
 
       const created = await mcpCall('create-session', {
-        agentId: sessionAgentId,
-        toolContext,
+        agent_id: sessionAgentId,
+        tool_context: toolContext,
       });
       expect(created.status).toBe(200);
-      expect(parseResult(created).toolContext).toEqual(toolContext);
+      expect(parseResult(created).tool_context).toEqual(toolContext);
 
       const fetched = await mcpCall('get-session', {
-        sessionId: parseResult(created).id,
+        session_id: parseResult(created).id,
       });
       expect(fetched.status).toBe(200);
-      expect(parseResult(fetched).toolContext).toEqual(toolContext);
+      expect(parseResult(fetched).tool_context).toEqual(toolContext);
     });
 
     test('list-sessions filtered by agentId returns sessions', async () => {
       const res = await mcpCall('list-sessions', {
-        agentId: sessionAgentId,
+        agent_id: sessionAgentId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1330,7 +1369,7 @@ describe('MCP tools - happy path', () => {
 
     test('get-session returns session details', async () => {
       const res = await mcpCall('get-session', {
-        sessionId,
+        session_id: sessionId,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1340,7 +1379,7 @@ describe('MCP tools - happy path', () => {
 
     test('add-session-message adds a user message and returns 201 body', async () => {
       const res = await mcpCall('add-session-message', {
-        sessionId,
+        session_id: sessionId,
         message: 'hello from mcp session',
       });
       expect(res.status).toBe(200);
@@ -1351,7 +1390,7 @@ describe('MCP tools - happy path', () => {
 
     test('delete-session deletes the session', async () => {
       const res = await mcpCall('delete-session', {
-        sessionId,
+        session_id: sessionId,
       });
       expect(res.status).toBe(200);
     });
@@ -1415,7 +1454,7 @@ describe('MCP tools - happy path', () => {
       expect(createdPolicy.document.statement[0].condition).toEqual(condition);
 
       const fetched = await mcpCall('get-policy', {
-        policyId: createdPolicy.id,
+        policy_id: createdPolicy.id,
       });
       expect(fetched.status).toBe(200);
       expect(parseResult(fetched).document.statement[0].condition).toEqual(
@@ -1437,7 +1476,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-policy returns the policy', async () => {
-      const res = await mcpCall('get-policy', { policyId: mcpPolicyId });
+      const res = await mcpCall('get-policy', { policy_id: mcpPolicyId });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1447,7 +1486,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-policy updates the policy', async () => {
       const res = await mcpCall('update-policy', {
-        policyId: mcpPolicyId,
+        policy_id: mcpPolicyId,
         name: 'MCP Updated Policy',
         document: {
           statement: [
@@ -1464,7 +1503,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-policy deletes the policy', async () => {
-      const res = await mcpCall('delete-policy', { policyId: mcpPolicyId });
+      const res = await mcpCall('delete-policy', { policy_id: mcpPolicyId });
 
       expect(res.status).toBe(200);
     });
@@ -1493,8 +1532,8 @@ describe('MCP tools - happy path', () => {
 
       const res = await mcpCall('create-api-key', {
         name: 'MCP Test Key',
-        projectId,
-        policyIds: [apiKeyPolicyId],
+        project_id: projectId,
+        policy_ids: [apiKeyPolicyId],
       });
       createApiKeyResult = parseResult(res);
       mcpApiKeyId = createApiKeyResult.id;
@@ -1507,20 +1546,20 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-api-key returns the key', async () => {
-      const res = await mcpCall('get-api-key', { apiKeyId: mcpApiKeyId });
+      const res = await mcpCall('get-api-key', { api_key_id: mcpApiKeyId });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(mcpApiKeyId);
       expect(result.name).toBe('MCP Test Key');
       expect(result.key).toBeUndefined(); // not returned after creation
-      expect(result.projectId).toBe(projectId);
-      expect(result.policyIds).toContain(apiKeyPolicyId);
+      expect(result.project_id).toBe(projectId);
+      expect(result.policy_ids).toContain(apiKeyPolicyId);
     });
 
     test('update-api-key updates the key', async () => {
       const res = await mcpCall('update-api-key', {
-        apiKeyId: mcpApiKeyId,
+        api_key_id: mcpApiKeyId,
         name: 'MCP Updated Key',
       });
 
@@ -1531,7 +1570,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-api-key deletes the key', async () => {
-      const res = await mcpCall('delete-api-key', { apiKeyId: mcpApiKeyId });
+      const res = await mcpCall('delete-api-key', {
+        api_key_id: mcpApiKeyId,
+      });
 
       expect(res.status).toBe(200);
     });
@@ -1546,8 +1587,8 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const agentRes = await mcpCall('create-agent', {
-        projectId,
-        aiProviderId: chatAiProviderId,
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
         name: 'MCP Traces Agent',
       });
       tracesAgentId = parseResult(agentRes).id;
@@ -1580,7 +1621,7 @@ describe('MCP tools - happy path', () => {
     });
 
     test('list-traces returns results after seeding', async () => {
-      const res = await mcpCall('list-traces', { projectId });
+      const res = await mcpCall('list-traces', { project_id: projectId });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1593,16 +1634,16 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-trace returns the trace', async () => {
-      const res = await mcpCall('get-trace', { traceId: mcpTraceId });
+      const res = await mcpCall('get-trace', { trace_id: mcpTraceId });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(mcpTraceId);
-      expect(result.projectId).toBe(projectId);
+      expect(result.project_id).toBe(projectId);
     });
 
     test('get-trace-tree returns tree with child', async () => {
-      const res = await mcpCall('get-trace-tree', { traceId: mcpTraceId });
+      const res = await mcpCall('get-trace-tree', { trace_id: mcpTraceId });
 
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -1704,13 +1745,13 @@ describe('MCP tools - happy path', () => {
             id: 'a',
             type: 'transform',
             expression: 1,
-            stateMapping: { 'state.step1': { var: 'output.result' } },
+            state_mapping: { 'state.step1': { var: 'output.result' } },
           },
           {
             id: 'b',
             type: 'transform',
             expression: 1,
-            inputMapping: { val: { var: 'step1' } },
+            input_mapping: { val: { var: 'step1' } },
           },
         ],
         edges: [{ from: 'a', to: 'b' }],
@@ -1738,7 +1779,7 @@ describe('MCP tools - happy path', () => {
     // while the equivalent GET tool surfaced it cleanly.
     test('get-orchestration surfaces a readable not-found message', async () => {
       const res = await mcpCall('get-orchestration', {
-        orchestrationId: 'orch_doesnotexist',
+        orchestration_id: 'orch_doesnotexist',
       });
       expect(res.status).toBe(200);
       expect(res.body.result?.isError).toBe(true);
@@ -1749,7 +1790,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-orchestration on a nonexistent id surfaces a readable message, not [object Object]', async () => {
       const res = await mcpCall('update-orchestration', {
-        orchestrationId: 'orch_doesnotexist',
+        orchestration_id: 'orch_doesnotexist',
         name: 'renamed',
       });
       expect(res.status).toBe(200);
@@ -1761,7 +1802,7 @@ describe('MCP tools - happy path', () => {
 
     test('delete-orchestration on a nonexistent id surfaces a readable message, not [object Object]', async () => {
       const res = await mcpCall('delete-orchestration', {
-        orchestrationId: 'orch_doesnotexist',
+        orchestration_id: 'orch_doesnotexist',
       });
       expect(res.status).toBe(200);
       expect(res.body.result?.isError).toBe(true);
@@ -1777,14 +1818,14 @@ describe('MCP tools - happy path', () => {
     let ruleId: string;
     let createRuleResult: {
       id: string;
-      contentTypeGlob: string;
-      toolId: string;
+      content_type_glob: string;
+      tool_id: string;
       [key: string]: unknown;
     };
 
     beforeAll(async () => {
       const toolRes = await mcpCall('create-tool', {
-        projectId,
+        project_id: projectId,
         name: 'mcp-ocr-http',
         type: 'http',
         execute: { url: 'https://example.test/ocr', method: 'POST' },
@@ -1792,11 +1833,11 @@ describe('MCP tools - happy path', () => {
       ruleToolId = parseResult(toolRes).id;
 
       const res = await mcpCall('create-ingestion-rule', {
-        projectId,
-        contentTypeGlob: 'image/*',
-        toolId: ruleToolId,
-        fileDelivery: 'base64',
-        chunkStrategy: 'whole',
+        project_id: projectId,
+        content_type_glob: 'image/*',
+        tool_id: ruleToolId,
+        file_delivery: 'base64',
+        chunk_strategy: 'whole',
       });
       createRuleResult = parseResult(res);
       ruleId = createRuleResult.id;
@@ -1804,12 +1845,14 @@ describe('MCP tools - happy path', () => {
 
     test('create-ingestion-rule creates a rule', () => {
       expect(createRuleResult.id).toMatch(/^igr_/);
-      expect(createRuleResult.contentTypeGlob).toBe('image/*');
-      expect(createRuleResult.toolId).toBe(ruleToolId);
+      expect(createRuleResult.content_type_glob).toBe('image/*');
+      expect(createRuleResult.tool_id).toBe(ruleToolId);
     });
 
     test('list-ingestion-rules returns the rule', async () => {
-      const res = await mcpCall('list-ingestion-rules', { projectId });
+      const res = await mcpCall('list-ingestion-rules', {
+        project_id: projectId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(Array.isArray(result.data)).toBe(true);
@@ -1822,7 +1865,7 @@ describe('MCP tools - happy path', () => {
 
     test('get-ingestion-rule returns the rule', async () => {
       const res = await mcpCall('get-ingestion-rule', {
-        ingestionRuleId: ruleId,
+        ingestion_rule_id: ruleId,
       });
       expect(res.status).toBe(200);
       expect(parseResult(res).id).toBe(ruleId);
@@ -1830,7 +1873,7 @@ describe('MCP tools - happy path', () => {
 
     test('delete-ingestion-rule removes the rule', async () => {
       const res = await mcpCall('delete-ingestion-rule', {
-        ingestionRuleId: ruleId,
+        ingestion_rule_id: ruleId,
       });
       expect(res.status).toBe(200);
     });
@@ -1844,9 +1887,9 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-discussion', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Panel',
-        aiProviderId: chatAiProviderId,
+        ai_provider_id: chatAiProviderId,
         participants: [{ name: 'A' }, { name: 'B' }],
       });
       createDiscussionResult = parseResult(res);
@@ -1858,14 +1901,18 @@ describe('MCP tools - happy path', () => {
     });
 
     test('list-discussions returns discussions', async () => {
-      const res = await mcpCall('list-discussions', { projectId });
+      const res = await mcpCall('list-discussions', {
+        project_id: projectId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(Array.isArray(result.data)).toBe(true);
     });
 
     test('get-discussion returns the discussion', async () => {
-      const res = await mcpCall('get-discussion', { discussionId });
+      const res = await mcpCall('get-discussion', {
+        discussion_id: discussionId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(discussionId);
@@ -1873,7 +1920,7 @@ describe('MCP tools - happy path', () => {
 
     test('update-discussion updates the discussion', async () => {
       const res = await mcpCall('update-discussion', {
-        discussionId,
+        discussion_id: discussionId,
         name: 'MCP Panel Renamed',
       });
       expect(res.status).toBe(200);
@@ -1886,7 +1933,7 @@ describe('MCP tools - happy path', () => {
         .spyOn(discussionCompletion, 'runDiscussionCompletion')
         .mockResolvedValue('MCP outcome.');
       const res = await mcpCall('create-discussion-run', {
-        discussionId,
+        discussion_id: discussionId,
         topic: 'What next?',
       });
       expect(res.status).toBe(200);
@@ -1901,12 +1948,14 @@ describe('MCP tools - happy path', () => {
         .spyOn(discussionCompletion, 'runDiscussionCompletion')
         .mockResolvedValue('Filler outcome.');
       await mcpCall('create-discussion-run', {
-        discussionId,
+        discussion_id: discussionId,
         topic: 'Filler run for listing.',
       });
       spy.mockRestore();
 
-      const res = await mcpCall('list-discussion-runs', { discussionId });
+      const res = await mcpCall('list-discussion-runs', {
+        discussion_id: discussionId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.total).toBeGreaterThan(0);
@@ -1917,20 +1966,22 @@ describe('MCP tools - happy path', () => {
         .spyOn(discussionCompletion, 'runDiscussionCompletion')
         .mockResolvedValue('MCP outcome for get.');
       const createRes = await mcpCall('create-discussion-run', {
-        discussionId,
+        discussion_id: discussionId,
         topic: 'What next?',
       });
       spy.mockRestore();
       const runId = parseResult(createRes).id;
 
-      const res = await mcpCall('get-discussion-run', { runId });
+      const res = await mcpCall('get-discussion-run', { run_id: runId });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(runId);
     });
 
     test('delete-discussion deletes the discussion', async () => {
-      const res = await mcpCall('delete-discussion', { discussionId });
+      const res = await mcpCall('delete-discussion', {
+        discussion_id: discussionId,
+      });
       expect(res.status).toBe(200);
     });
   });
@@ -1949,7 +2000,7 @@ describe('MCP tools - happy path', () => {
 
     beforeAll(async () => {
       const res = await mcpCall('create-guardrail', {
-        projectId,
+        project_id: projectId,
         name: 'MCP Guardrail',
         document: {
           class: {
@@ -1975,7 +2026,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('get-guardrail preserves document contract keys verbatim (snake_case)', async () => {
-      const res = await mcpCall('get-guardrail', { guardrailId });
+      const res = await mcpCall('get-guardrail', {
+        guardrail_id: guardrailId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       // Contract fields stay snake_case — not camelCased to defaultClass/expiresIn.
@@ -1983,17 +2036,19 @@ describe('MCP tools - happy path', () => {
       expect(result.document.expires_in).toBe(259200);
       expect(result.document.defaultClass).toBeUndefined();
       expect(result.document.expiresIn).toBeUndefined();
-      // The guardrail's own SOAT fields still camelCase normally.
-      expect(result.contextMode).toBe('merge');
+      // The guardrail's own SOAT fields are snake_case too.
+      expect(result.context_mode).toBe('merge');
     });
 
     test('a document read via MCP can be written back without a 400', async () => {
-      const getRes = await mcpCall('get-guardrail', { guardrailId });
+      const getRes = await mcpCall('get-guardrail', {
+        guardrail_id: guardrailId,
+      });
       const document = parseResult(getRes).document;
       // Echo the exact document back — with the bug this carried `defaultClass`
       // and was rejected as an unknown field.
       const updRes = await mcpCall('update-guardrail', {
-        guardrailId,
+        guardrail_id: guardrailId,
         document,
       });
       expect(updRes.status).toBe(200);
@@ -2004,15 +2059,15 @@ describe('MCP tools - happy path', () => {
 
     test('evaluate-guardrail keeps context_snapshot var-path keys verbatim', async () => {
       const res = await mcpCall('evaluate-guardrail', {
-        guardrailId,
+        guardrail_id: guardrailId,
         args: { amount: 100 },
-        guardrailContext: { max_daily_budget: 500 },
+        guardrail_context: { max_daily_budget: 500 },
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.class).toBe('B');
       expect(result.decision).toBe('execute');
-      const keys = Object.keys(result.contextSnapshot);
+      const keys = Object.keys(result.context_snapshot);
       // Var paths are a fixed contract — snake_case, matching the soat.* catalog.
       expect(keys).toContain('args.amount');
       expect(keys).toContain('context.max_daily_budget');
@@ -2023,7 +2078,9 @@ describe('MCP tools - happy path', () => {
     });
 
     test('delete-guardrail removes the guardrail', async () => {
-      const res = await mcpCall('delete-guardrail', { guardrailId });
+      const res = await mcpCall('delete-guardrail', {
+        guardrail_id: guardrailId,
+      });
       expect(res.status).toBe(200);
     });
   });

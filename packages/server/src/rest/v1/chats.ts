@@ -64,11 +64,16 @@ const validateCreateChatBody = (
       error?: undefined;
     }
   | { error: string; aiProviderId?: undefined } => {
-  const { aiProviderId, name, systemMessage, model, projectId } =
-    body as Record<string, unknown>;
+  const {
+    ai_provider_id: aiProviderId,
+    name,
+    system_message: systemMessage,
+    model,
+    project_id: projectId,
+  } = body as Record<string, unknown>;
 
   if (!aiProviderId || typeof aiProviderId !== 'string') {
-    return { error: 'aiProviderId is required' };
+    return { error: 'ai_provider_id is required' };
   }
 
   return {
