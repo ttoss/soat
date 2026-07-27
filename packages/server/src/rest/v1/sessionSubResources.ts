@@ -103,7 +103,7 @@ sessionSubResourcesRouter.post(
         // Fire-and-forget: errors are emitted via event bus
       });
       ctx.status = 202;
-      ctx.body = { status: 'accepted', sessionId: ctx.params.session_id };
+      ctx.body = { status: 'accepted', session_id: ctx.params.session_id };
       return;
     }
 

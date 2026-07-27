@@ -303,7 +303,7 @@ export const addSessionMessage = async (args: {
     return {
       role: 'user' as const,
       content: savedContent,
-      documentId: savedDocumentId,
+      document_id: savedDocumentId,
       idempotent: true as const,
     };
   }
