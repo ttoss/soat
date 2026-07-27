@@ -119,7 +119,8 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   if (targetProjectId === null) return;
 
   // No privilege escalation: the caller must also hold the target-start action.
-  const projectPublicId = body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
+  const projectPublicId =
+    body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
   const canStartTarget = await ctx.authUser!.isAllowed({
     projectPublicId: projectPublicId!,
     action: targetStartAction(body.target_type),
@@ -193,7 +194,10 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   };
 
   // Re-check the target-start action when the target type changes.
-  if (body.target_type !== undefined && body.target_type !== trigger.target_type) {
+  if (
+    body.target_type !== undefined &&
+    body.target_type !== trigger.target_type
+  ) {
     const canStartTarget = await ctx.authUser.isAllowed({
       projectPublicId: trigger.project_id!,
       action: targetStartAction(body.target_type),

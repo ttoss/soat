@@ -49,7 +49,7 @@ export const recordGenerationFailure = async (args: {
     }),
   ]);
 
-  // Error responses bypass the caseTransform middleware, so meta keys are
+  // Meta keys are
   // written in snake_case to match the external REST contract.
   if (args.error instanceof DomainError) {
     return new DomainError(args.error.code, args.error.message, {

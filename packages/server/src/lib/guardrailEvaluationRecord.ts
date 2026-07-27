@@ -35,7 +35,7 @@ const isAuditWorthyDecision = (decision: GuardrailDecision): boolean => {
  * The `guardrail_evaluation` record — the shape both persisted at dispatch time
  * (task 2.6) and returned by the dry-run endpoint (task 2.9). Mirrors the
  * documented JSON (guardrails.md — Evaluation Audit Record); snake_case is
- * applied by the caseTransform middleware on the way out.
+ * applied by the lib mapper on the way out.
  */
 export type GuardrailEvaluationRecord = {
   kind: 'guardrail_evaluation';

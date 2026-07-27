@@ -79,7 +79,7 @@ export const runDispatch = async (args: {
  * Extracts the failed generation/run id a dispatch error carries in its meta.
  * `createGeneration` wraps terminal failures in a `DomainError` whose meta holds
  * the `generation_id` (see `recordGenerationFailure`), written snake_case
- * because error responses bypass the caseTransform middleware. This lets the
+ * to match the external REST contract. This lets the
  * on_failure-driven transition link the causing record, mirroring the
  * on_complete path's `id: generationId ?? runId` provenance (#607).
  */

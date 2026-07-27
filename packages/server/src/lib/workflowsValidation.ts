@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
  * Types describing a workflow definition as it is stored (structural keys in
  * camelCase — the case-transform middleware converts the snake_case API
  * contract inbound — while JSON Logic bodies `guard`/`when` and the opaque
- * `payload`/`payloadSchema` bags round-trip verbatim, see caseTransform.ts).
+ * `payload`/`payloadSchema` bags round-trip verbatim).
  */
 export type WorkflowDispatch = {
   kind: 'agent' | 'orchestration';

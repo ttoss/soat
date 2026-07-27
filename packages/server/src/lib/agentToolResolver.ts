@@ -221,8 +221,9 @@ export const parseHttpExecuteConfig = (
 
   const method = parsedExecute.method;
 
-  // `body_mode` (snake_case) arrives verbatim from formation templates, while
-  // the REST caseTransform middleware rewrites it to `bodyMode` — accept both.
+  // `body_mode` is the wire and template spelling. The `bodyMode` fallback
+  // reads rows persisted before single-casing, when the request middleware
+  // camelCased nested keys before they were stored.
   const rawBodyMode = parsedExecute.bodyMode ?? parsedExecute.body_mode;
 
   return {
@@ -321,7 +322,7 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
     return null;
   }
 
-  // Error responses bypass the caseTransform middleware, so meta keys are
+  // Meta keys are
   // written in snake_case to match the external REST contract.
   return new DomainError(
     'TOOL_HTTP_ERROR',

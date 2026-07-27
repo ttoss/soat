@@ -164,11 +164,13 @@ usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
     return;
   }
 
-  const { policyIds } = ctx.request.body as { policyIds: string[] };
+  const { policy_ids: policyIds } = ctx.request.body as {
+    policy_ids: string[];
+  };
 
   if (!Array.isArray(policyIds)) {
     ctx.status = 400;
-    ctx.body = { error: 'policyIds must be an array' };
+    ctx.body = { error: 'policy_ids must be an array' };
     return;
   }
 
