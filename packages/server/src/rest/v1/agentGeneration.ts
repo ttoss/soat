@@ -7,6 +7,7 @@ import type { ServerResponse } from 'node:http';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
+import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateGenerationMetadata } from 'src/lib/generations';
@@ -63,7 +64,7 @@ const handleGenerationResult = async (
     await sendStreamResponse(ctx, result as ReadableStream);
     return;
   }
-  ctx.body = result;
+  ctx.body = mapGenerationResult(result as GenerationResult);
 };
 
 const fireExtractionForCompletedResult = (args: {
@@ -246,6 +247,6 @@ agentGenerationRouter.post(
       authHeader: (ctx.headers.authorization as string) ?? undefined,
     });
 
-    ctx.body = result;
+    ctx.body = mapGenerationResult(result);
   }
 );
