@@ -31,6 +31,33 @@ export const setAuditResourceHint = (
   ctx.state.auditResource = hint;
 };
 
+/**
+ * Records an authorization decision made *outside* `isAllowed`/
+ * `resolveProjectIds` — a direct role or ownership comparison (`ctx.authUser
+ * .role !== 'admin'`, an API key's owner check) that `instrumentAuthUser`
+ * never sees because no wrapped function was called. Without this, a route
+ * built entirely on such a comparison records zero `checks` and produces no
+ * audit entry at all, even for a successful mutation (see #745).
+ *
+ * Call it with the actual decision being enforced — this does not itself
+ * gate anything, it only makes an already-made decision visible to the audit
+ * write hook. A no-op outside `/api/v1` or when the audit middleware never
+ * ran for this request (`ctx.state.auditChecks` unset).
+ */
+export const recordAuthorizationDecision = (
+  ctx: Context,
+  args: { action: string; allowed: boolean }
+): void => {
+  const checks = ctx.state?.auditChecks as RecordedCheck[] | undefined;
+  if (!checks) return;
+  checks.push({
+    action: args.action,
+    resource: null,
+    projectPublicId: undefined,
+    allowed: args.allowed,
+  });
+};
+
 type Next = () => Promise<void>;
 
 /** One authorization decision captured during a request. */
@@ -366,6 +393,8 @@ export const auditMiddleware = async (ctx: Context, next: Next) => {
   }
 
   const checks: RecordedCheck[] = [];
+  ctx.state = ctx.state ?? {};
+  ctx.state.auditChecks = checks;
   instrumentAuthUser(ctx.authUser, checks, ctx.method);
 
   // The status recorded is the final one. On a thrown error the outer error

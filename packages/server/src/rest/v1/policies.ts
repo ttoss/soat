@@ -9,7 +9,7 @@ import {
   updatePolicy,
 } from 'src/lib/policies';
 
-import { parsePagination } from './helpers';
+import { parsePagination, requireAdmin } from './helpers';
 
 const policiesRouter = new Router<Context>();
 
@@ -31,17 +31,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
 });
 
 policiesRouter.post('/policies', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'policies:CreatePolicy')) return;
 
   const { name, description, document } = ctx.request.body as {
     name?: string;
@@ -90,17 +80,7 @@ policiesRouter.get('/policies/:policy_id', async (ctx: Context) => {
 });
 
 policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'policies:UpdatePolicy')) return;
 
   const { name, description, document } = ctx.request.body as {
     name?: string;
@@ -125,17 +105,7 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
 });
 
 policiesRouter.delete('/policies/:policy_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'policies:DeletePolicy')) return;
 
   await deletePolicy({ policyId: ctx.params.policy_id });
 

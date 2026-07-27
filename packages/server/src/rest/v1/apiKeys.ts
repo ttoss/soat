@@ -8,6 +8,7 @@ import {
   listApiKeys,
   updateApiKey,
 } from 'src/lib/apiKeys';
+import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 import { parsePagination } from './helpers';
 
@@ -137,6 +138,14 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     policyIds: policyResult.ids,
   });
 
+  // Self-service — any authenticated caller may create a key for themselves,
+  // so there is no allow/deny branch to record; this is the one point that
+  // makes the mutation visible to the audit log at all (see #745).
+  recordAuthorizationDecision(ctx, {
+    action: 'api-keys:CreateApiKey',
+    allowed: true,
+  });
+
   ctx.status = 201;
   ctx.body = apiKey;
 });
@@ -191,10 +200,13 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     return;
   }
 
-  if (
-    existing.user_id !== ctx.authUser.publicId &&
-    ctx.authUser.role !== 'admin'
-  ) {
+  const allowedToUpdate =
+    existing.user_id === ctx.authUser.publicId || ctx.authUser.role === 'admin';
+  recordAuthorizationDecision(ctx, {
+    action: 'api-keys:UpdateApiKey',
+    allowed: allowedToUpdate,
+  });
+  if (!allowedToUpdate) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;
@@ -240,10 +252,13 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
     return;
   }
 
-  if (
-    existing.user_id !== ctx.authUser.publicId &&
-    ctx.authUser.role !== 'admin'
-  ) {
+  const allowedToDelete =
+    existing.user_id === ctx.authUser.publicId || ctx.authUser.role === 'admin';
+  recordAuthorizationDecision(ctx, {
+    action: 'api-keys:DeleteApiKey',
+    allowed: allowedToDelete,
+  });
+  if (!allowedToDelete) {
     ctx.status = 403;
     ctx.body = { error: 'Forbidden' };
     return;

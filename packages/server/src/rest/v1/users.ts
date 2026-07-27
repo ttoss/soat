@@ -10,7 +10,7 @@ import {
   loginUser,
 } from 'src/lib/users';
 
-import { parsePagination } from './helpers';
+import { parsePagination, requireAdmin } from './helpers';
 
 const usersRouter = new Router<Context>();
 
@@ -69,17 +69,7 @@ usersRouter.get('/users/:user_id', async (ctx: Context) => {
 });
 
 usersRouter.post('/users', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'users:CreateUser')) return;
 
   const body = ctx.request.body as {
     username: string;
@@ -128,17 +118,7 @@ usersRouter.post('/users/login', async (ctx: Context) => {
 });
 
 usersRouter.delete('/users/:user_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'users:DeleteUser')) return;
 
   const deleted = await deleteUser({ id: ctx.params.user_id });
 
@@ -152,17 +132,7 @@ usersRouter.delete('/users/:user_id', async (ctx: Context) => {
 });
 
 usersRouter.put('/users/:user_id/policies', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'users:AttachUserPolicies')) return;
 
   const { policy_ids: policyIds } = ctx.request.body as {
     policy_ids: string[];

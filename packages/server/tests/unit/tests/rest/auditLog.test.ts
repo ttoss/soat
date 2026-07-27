@@ -1131,3 +1131,202 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
     expect(res.status).toBe(403);
   });
 });
+
+// Global (non-project-scoped) admin operations are gated by a direct
+// `ctx.authUser.role !== 'admin'` comparison rather than `isAllowed`, so they
+// never touched the audit middleware's instrumentation and produced zero
+// entries — successful mutations included (see #745). These pin that the
+// gate now explicitly records its decision via `recordAuthorizationDecision`.
+describe('Audit Log — global admin-gated mutations (#745)', () => {
+  test('creating a user is audited', async () => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: `${P}-newuser-${Date.now()}`, password: 'pw123456' });
+    expect(res.status).toBe(201);
+
+    const entries = await listEntries({ action: 'users:CreateUser' });
+    const entry = entries.find((e) => {
+      return e.resource_public_id === res.body.id;
+    });
+    expect(entry).toBeDefined();
+    expect(entry!.status).toBe(201);
+    expect(entry!.project_id).toBeNull();
+  });
+
+  test('a non-admin creating a user is still audited, as a 403', async () => {
+    const res = await authenticatedTestClient(userToken)
+      .post('/api/v1/users')
+      .send({ username: `${P}-denied-${Date.now()}`, password: 'pw123456' });
+    expect(res.status).toBe(403);
+
+    const entries = await listEntries({ action: 'users:CreateUser' });
+    expect(
+      entries.some((e) => {
+        return e.status === 403;
+      })
+    ).toBe(true);
+  });
+
+  test('deleting a user is audited', async () => {
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: `${P}-todelete-${Date.now()}`, password: 'pw123456' });
+    const userId = createRes.body.id as string;
+
+    const delRes = await authenticatedTestClient(adminToken).delete(
+      `/api/v1/users/${userId}`
+    );
+    expect(delRes.status).toBe(204);
+
+    const entries = await listEntries({ action: 'users:DeleteUser' });
+    const entry = entries.find((e) => {
+      return e.resource_public_id === userId;
+    });
+    expect(entry).toBeDefined();
+    expect(entry!.status).toBe(204);
+  });
+
+  test('attaching user policies is audited', async () => {
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: `${P}-attach-${Date.now()}`, password: 'pw123456' });
+    const targetUserId = createRes.body.id as string;
+
+    const attachRes = await authenticatedTestClient(adminToken)
+      .put(`/api/v1/users/${targetUserId}/policies`)
+      .send({ policy_ids: [] });
+    expect(attachRes.status).toBe(204);
+
+    const entries = await listEntries({
+      action: 'users:AttachUserPolicies',
+    });
+    expect(entries.length).toBeGreaterThan(0);
+  });
+
+  test('creating, updating, and deleting a policy are all audited', async () => {
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/policies')
+      .send({
+        name: `${P}-policy-${Date.now()}`,
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:GetFile'] }],
+        },
+      });
+    expect(createRes.status).toBe(201);
+    const policyId = createRes.body.id as string;
+
+    const updateRes = await authenticatedTestClient(adminToken)
+      .put(`/api/v1/policies/${policyId}`)
+      .send({
+        document: {
+          statement: [{ effect: 'Allow', action: ['files:DeleteFile'] }],
+        },
+      });
+    expect(updateRes.status).toBe(200);
+
+    const deleteRes = await authenticatedTestClient(adminToken).delete(
+      `/api/v1/policies/${policyId}`
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const entries = await listEntries({ resource_public_id: policyId });
+    const actions = entries.map((e) => {
+      return e.action;
+    });
+    expect(actions).toContain('policies:CreatePolicy');
+    expect(actions).toContain('policies:UpdatePolicy');
+    expect(actions).toContain('policies:DeletePolicy');
+  });
+
+  test('creating, updating, and deleting a project are all audited', async () => {
+    const createRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: `${P}-project-${Date.now()}` });
+    expect(createRes.status).toBe(201);
+    const newProjectId = createRes.body.id as string;
+
+    const updateRes = await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${newProjectId}`)
+      .send({ name: `${P}-project-renamed-${Date.now()}` });
+    expect(updateRes.status).toBe(200);
+
+    const deleteRes = await authenticatedTestClient(adminToken).delete(
+      `/api/v1/projects/${newProjectId}`
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const entries = await listEntries({ resource_public_id: newProjectId });
+    const actions = entries.map((e) => {
+      return e.action;
+    });
+    expect(actions).toContain('projects:CreateProject');
+    expect(actions).toContain('projects:UpdateProject');
+    expect(actions).toContain('projects:DeleteProject');
+  });
+
+  test('upserting the price book is audited', async () => {
+    const effectiveFrom = new Date(Date.now() + 86_400_000).toISOString();
+    const res = await authenticatedTestClient(adminToken)
+      .put('/api/v1/usage/prices')
+      .send({
+        prices: [
+          {
+            provider: 'openai',
+            model: `${P}-audit-price-model`,
+            component: 'input_tokens',
+            unit: 'token',
+            unit_price: 0.000002,
+            effective_from: effectiveFrom,
+          },
+        ],
+      });
+    expect(res.status).toBe(200);
+
+    const entries = await listEntries({ action: 'usage:ManagePriceBook' });
+    expect(entries.length).toBeGreaterThan(0);
+  });
+
+  test('creating, updating, and deleting an API key are all audited', async () => {
+    const createRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({ name: `${P}-audit-key-${Date.now()}` });
+    expect(createRes.status).toBe(201);
+    const apiKeyId = createRes.body.id as string;
+
+    const updateRes = await authenticatedTestClient(userToken)
+      .put(`/api/v1/api-keys/${apiKeyId}`)
+      .send({ name: `${P}-audit-key-renamed` });
+    expect(updateRes.status).toBe(200);
+
+    const deleteRes = await authenticatedTestClient(userToken).delete(
+      `/api/v1/api-keys/${apiKeyId}`
+    );
+    expect(deleteRes.status).toBe(204);
+
+    const entries = await listEntries({ resource_public_id: apiKeyId });
+    const actions = entries.map((e) => {
+      return e.action;
+    });
+    expect(actions).toContain('api-keys:CreateApiKey');
+    expect(actions).toContain('api-keys:UpdateApiKey');
+    expect(actions).toContain('api-keys:DeleteApiKey');
+  });
+
+  test('a non-owner, non-admin updating an API key is audited as a 403', async () => {
+    const createRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({ name: `${P}-owned-key-${Date.now()}` });
+    const apiKeyId = createRes.body.id as string;
+
+    const updateRes = await authenticatedTestClient(noPermToken)
+      .put(`/api/v1/api-keys/${apiKeyId}`)
+      .send({ name: 'hijacked' });
+    expect(updateRes.status).toBe(403);
+
+    const entries = await listEntries({ resource_public_id: apiKeyId });
+    const denied = entries.find((e) => {
+      return e.action === 'api-keys:UpdateApiKey' && e.status === 403;
+    });
+    expect(denied).toBeDefined();
+  });
+});
