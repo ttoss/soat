@@ -203,7 +203,7 @@ WRITE_POEM_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Write the completed poem to the shared document" \
   --actions '["update-document"]' \
-  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "WRITE_POEM_TOOL_ID: $WRITE_POEM_TOOL_ID"
 ```
 

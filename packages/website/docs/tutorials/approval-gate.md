@@ -148,7 +148,7 @@ REFUND_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Stand-in for the sensitive action the approval gates" \
   --actions '["get-project"]' \
-  --preset-parameters '{"projectId": "'"$PROJECT_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"project_id": "'"$PROJECT_ID"'"}' | jq -r '.id')
 echo "REFUND_TOOL_ID: $REFUND_TOOL_ID"
 ```
 

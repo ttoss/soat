@@ -404,7 +404,7 @@ WRITE_TOOL_ID=$(soat create-tool \
   --name "docs" \
   --type soat \
   --actions '["update-document"]' \
-  --preset-parameters '{"documentId": "'"$PUBLIC_DOC_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"document_id": "'"$PUBLIC_DOC_ID"'"}' | jq -r '.id')
 
 echo "List:  $LIST_TOOL_ID"
 echo "Read:  $READ_TOOL_ID"
@@ -849,7 +849,7 @@ The server merges `preset_parameters` into the call before dispatching — alice
 
 ## What happened
 
-1. **Tool creation with `preset_parameters`**: When you created `docs-write`, you stored `{ "documentId": "<public doc id>" }` alongside the tool. The server stripped `documentId` from the schema before registering the tool with the model (preset keys must use the **camelCase** form of the parameter name).
+1. **Tool creation with `preset_parameters`**: When you created `docs-write`, you stored `{ "document_id": "<public doc id>" }` alongside the tool. The server stripped `document_id` from the schema before registering the tool with the model (preset keys use the parameter name exactly as the tool declares it — **snake_case**, the same spelling everywhere on the wire).
 
 2. **Model's view**: The model saw `docs_update-document` accepting only `content`, `title`, `path`, `metadata`, and `tags` — no `documentId` in sight. This eliminates the risk of the model supplying a wrong or hallucinated ID.
 
