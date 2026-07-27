@@ -158,7 +158,7 @@ const deriveResourcePublicId = (args: {
  * `projectPublicId` (see {@link instrumentAuthUser}). The response body is the
  * only place that project surfaces: on success, mapped resources always
  * include `project_id` (the external, already snake_cased contract — this
- * runs after `caseTransform`, which sits inside `restRouter` and therefore
+ * runs inside `restRouter` and therefore
  * unwinds *before* this middleware's `finally` block reads `ctx.body`).
  */
 const backfillFromResponseBody = (

@@ -31,8 +31,7 @@ const assertCredentialProjectScope = (args: {
   }
 
   const credential = authUser.apiKeyProjectPublicId ? 'API key' : 'OAuth token';
-  // Error responses bypass the caseTransform middleware, so meta keys are
-  // snake_case to match the external REST contract.
+  // Meta keys are snake_case to match the external REST contract.
   throw new DomainError(
     'API_KEY_PROJECT_SCOPE',
     `This ${credential} is scoped to project '${scopedProject}' and cannot ` +

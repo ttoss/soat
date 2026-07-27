@@ -48,14 +48,11 @@ export type KnowledgeConfig = {
  * Normalizes a raw `knowledge_config` bag to the canonical camelCase
  * `KnowledgeConfig` shape, accepting either casing for every (nested) key.
  *
- * A direct `POST`/`PUT /api/v1/agents` call already arrives camelCased —
- * `caseTransformMiddleware` recursively converts the whole request body. A
- * Formation template does not: `template` is a deliberate case-transform
- * skip-key (its inner keys are validated against the snake_case OpenAPI spec
- * and must round-trip verbatim), so a formation-deployed agent's
- * `knowledge_config` reaches here exactly as authored — snake_case. Without
- * this normalization, `agent.knowledgeConfig.writeMemoryId` / `.memoryIds`
- * read `undefined` for such agents, silently disabling memory-scoped
+ * Every caller now sends snake_case, so the snake_case branch is the live one.
+ * The camelCase branch remains only to read agent rows persisted before
+ * single-casing, when the request middleware camelCased the bag before it was
+ * stored. Without it, `agent.knowledgeConfig.writeMemoryId` / `.memoryIds`
+ * read `undefined` for those rows, silently disabling memory-scoped
  * injection, the `write_memory` tool, and extraction.
  *
  * A generic deep key transform (rather than a field-by-field mapping) keeps

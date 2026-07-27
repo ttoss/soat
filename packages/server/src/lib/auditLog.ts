@@ -119,12 +119,13 @@ const resolveAuditProject = async (
  * export stream and the `audit.entry_created` webhook payload so all three
  * surfaces expose the same field names.
  *
- * `detail` is written camelCase and, on the read endpoints, snake-cased by
- * the `caseTransform` middleware — which the export stream and the webhook
- * both bypass (the export sets a stream body deliberately excluded from
- * `caseTransform`; the webhook payload never passes through HTTP middleware
- * at all). `convertKeysDeep` reproduces that same recursive transform here so
- * all three surfaces agree on `detail`'s inner key casing too. */
+ * `detail` is still written camelCase by its producers, so `convertKeysDeep`
+ * snake-cases it here — the one place all three surfaces share, which is what
+ * makes them agree on its inner key casing.
+ *
+ * This recursion is the last one left on a read path and is scheduled for
+ * removal: the fix is to have `detail`'s producers write snake_case at the
+ * source, so the projection can copy the bag as a value like every other. */
 const toSnakeAuditEntry = (
   entry: ReturnType<typeof mapAuditEntry>
 ): Record<string, unknown> => {

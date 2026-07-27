@@ -46,8 +46,8 @@ const scopeRank = (scope: string): number => {
 /**
  * The `QUOTA_EXCEEDED` DomainError for a breach — the shared source of the 429
  * body across every enforcement point (the request middleware and the
- * token/cost generation gate). Error responses bypass the caseTransform
- * middleware, so meta keys are snake_case to match the external REST contract.
+ * token/cost generation gate). Error meta keys are snake_case to match the
+ * external REST contract.
  */
 export const quotaBreachError = (breach: QuotaBreach): DomainError => {
   return new DomainError(

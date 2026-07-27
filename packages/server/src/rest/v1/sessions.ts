@@ -127,10 +127,13 @@ sessionsRouter.get('/sessions', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const { agentId, actorId, status, limit, offset } = ctx.query as Record<
-    string,
-    string | undefined
-  >;
+  const {
+    agent_id: agentId,
+    actor_id: actorId,
+    status,
+    limit,
+    offset,
+  } = ctx.query as Record<string, string | undefined>;
 
   ctx.body = await listSessions({
     projectIds,

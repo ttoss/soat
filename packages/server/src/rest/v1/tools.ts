@@ -371,8 +371,8 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
  * extracted via `{ var: "output.text" }`). Koa infers a `text/plain` content
  * type for raw string/number/boolean bodies, so those are explicitly
  * serialized as JSON to honor the endpoint's declared `application/json`
- * contract. Object/array results are left as-is so the caseTransform
- * middleware can still convert their keys to snake_case.
+ * contract. Object/array results are left as-is: a tool result is caller-owned
+ * data, so its keys are passed through untouched.
  */
 const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
   if (result !== null && typeof result === 'object') {

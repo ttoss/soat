@@ -63,14 +63,14 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   }
 
   const {
-    agentId,
-    generationId,
-    traceId,
-    actorId,
-    sessionId,
-    triggerId,
-    actionId,
-    meterType,
+    agent_id: agentId,
+    generation_id: generationId,
+    trace_id: traceId,
+    actor_id: actorId,
+    session_id: sessionId,
+    trigger_id: triggerId,
+    action_id: actionId,
+    meter_type: meterType,
     limit,
     offset,
   } = ctx.query as Record<string, string | undefined>;
@@ -107,13 +107,11 @@ usageRouter.get('/usage', async (ctx: Context) => {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
 
-  // The caseTransform middleware camelCases query keys, so `project_id` and
-  // `group_by` arrive as `projectId` / `groupBy`.
   const {
-    projectId: projectPublicId,
+    project_id: projectPublicId,
     from,
     to,
-    groupBy,
+    group_by: groupBy,
   } = ctx.query as Record<string, string | undefined>;
 
   if (!projectPublicId) {
@@ -172,7 +170,10 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const { projectId } = ctx.query as Record<string, string | undefined>;
+  const { project_id: projectId } = ctx.query as Record<
+    string,
+    string | undefined
+  >;
 
   ctx.body = await listThresholds({
     projectIds: projectIds ?? undefined,
@@ -356,7 +357,7 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
     return;
   }
 
-  const { generationId, runId } = ctx.query as Record<
+  const { generation_id: generationId, run_id: runId } = ctx.query as Record<
     string,
     string | undefined
   >;

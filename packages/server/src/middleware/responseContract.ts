@@ -73,6 +73,21 @@ const isCamelCase = (key: string): boolean => {
 
 type Finding = { key: string; camel: boolean };
 
+/**
+ * The item schema of a list envelope's `data` array, or `null` when this level
+ * is not an envelope. Resolving it is the only non-recursive half of the descent.
+ */
+const envelopeItemSchema = (
+  properties: Record<string, unknown>
+): Record<string, unknown> | null => {
+  const dataSchema = resolveSchemaRef(properties.data);
+  const itemSchema = isObjectRecord(dataSchema)
+    ? resolveSchemaRef(dataSchema.items)
+    : null;
+
+  return isObjectRecord(itemSchema) ? itemSchema : null;
+};
+
 const findings = (args: {
   schema: Record<string, unknown>;
   value: unknown;
@@ -85,38 +100,37 @@ const findings = (args: {
   if (!isObjectRecord(properties)) return [];
 
   const declared = new Set(Object.keys(properties));
-  const found: Finding[] = [];
 
-  for (const key of Object.keys(args.value)) {
-    if (declared.has(key)) continue;
-    found.push({
-      key: args.path ? `${args.path}.${key}` : key,
-      camel: isCamelCase(key),
+  const own = Object.keys(args.value)
+    .filter((key) => {
+      return !declared.has(key);
+    })
+    .map((key) => {
+      return {
+        key: args.path ? `${args.path}.${key}` : key,
+        camel: isCamelCase(key),
+      };
     });
-  }
 
   // Descend exactly one level into a list envelope's `data` array — the other
   // place a resource mapper's own keys surface. Deeper nesting is deliberately
   // not walked: below a resource's top level the spec thins out, and a false
   // positive in a guardrail is worse than a missed key.
-  const dataSchema = resolveSchemaRef(properties.data);
-  const itemSchema = isObjectRecord(dataSchema)
-    ? resolveSchemaRef(dataSchema.items)
-    : null;
+  const itemSchema = envelopeItemSchema(properties);
   const data = args.value.data;
-  if (isObjectRecord(itemSchema) && Array.isArray(data)) {
-    for (const [index, element] of data.entries()) {
-      found.push(
-        ...findings({
-          schema: itemSchema,
-          value: element,
-          path: `data.${index}`,
-        })
-      );
-    }
-  }
 
-  return found;
+  if (!itemSchema || !Array.isArray(data)) return own;
+
+  return [
+    ...own,
+    ...data.flatMap((element, index) => {
+      return findings({
+        schema: itemSchema,
+        value: element,
+        path: `data.${index}`,
+      });
+    }),
+  ];
 };
 
 const collectFindings = (args: {
@@ -149,16 +163,54 @@ const isEnabled = (): boolean => {
   return process.env.NODE_ENV !== 'production';
 };
 
+/** The response body worth checking, or `null` when the route is out of scope. */
+const checkableBody = (
+  ctx: Context
+): { body: unknown; status: number } | null => {
+  if (!isEnabled() || !ctx.path.startsWith('/api/v1')) return null;
+
+  const status = typeof ctx.status === 'number' ? ctx.status : 0;
+  if (isErrorStatus(status)) return null;
+
+  const body = ctx.body;
+  if (!isObjectRecord(body) && !Array.isArray(body)) return null;
+
+  return { body, status };
+};
+
+const keyList = (found: Finding[]): string => {
+  return found
+    .map((f) => {
+      return f.key;
+    })
+    .join(', ');
+};
+
+/** Logs pre-existing spec drift; returns the camelCase findings to act on. */
+const reportDrift = (args: { found: Finding[]; where: string }): Finding[] => {
+  const drifted = args.found.filter((f) => {
+    return !f.camel;
+  });
+
+  if (drifted.length > 0) {
+    log(
+      '%s: key(s) not declared by the OpenAPI schema: %s (pre-existing spec ' +
+        'drift — see tests/unit/openapiContract.ts)',
+      args.where,
+      keyList(drifted)
+    );
+  }
+
+  return args.found.filter((f) => {
+    return f.camel;
+  });
+};
+
 export const responseContractMiddleware = async (ctx: Context, next: Next) => {
   await next();
 
-  if (!isEnabled() || !ctx.path.startsWith('/api/v1')) return;
-
-  const status = typeof ctx.status === 'number' ? ctx.status : 0;
-  if (isErrorStatus(status)) return;
-
-  const body = ctx.body;
-  if (!isObjectRecord(body) && !Array.isArray(body)) return;
+  const checkable = checkableBody(ctx);
+  if (!checkable) return;
 
   const template = matchOpenApiPath({ path: ctx.path });
   if (!template) return;
@@ -166,46 +218,23 @@ export const responseContractMiddleware = async (ctx: Context, next: Next) => {
   const schema = getRouteResponseSchema({
     method: ctx.method,
     path: template,
-    status,
+    status: checkable.status,
   });
   if (!schema) return;
 
-  const found = collectFindings({ schema, body });
+  const found = collectFindings({ schema, body: checkable.body });
   if (found.length === 0) return;
 
-  const where = `${ctx.method} ${template} (${status})`;
-
-  const drifted = found.filter((f) => {
-    return !f.camel;
-  });
-  if (drifted.length > 0) {
-    log(
-      '%s: key(s) not declared by the OpenAPI schema: %s (pre-existing spec ' +
-        'drift — see tests/unit/openapiContract.ts)',
-      where,
-      drifted
-        .map((f) => {
-          return f.key;
-        })
-        .join(', ')
-    );
-  }
-
-  const camel = found.filter((f) => {
-    return f.camel;
-  });
+  const where = `${ctx.method} ${template} (${checkable.status})`;
+  const camel = reportDrift({ found, where });
   if (camel.length === 0) return;
 
   const message =
-    `Response for ${where} contains camelCase key(s): ` +
-    `${camel
-      .map((f) => {
-        return f.key;
-      })
-      .join(', ')}. The wire contract is snake_case in both directions — the ` +
-    `lib mapper for this resource must serialize every field with its spec ` +
-    `name. Nothing rewrites keys at the boundary any more, so an unconverted ` +
-    `field reaches the client as-is.`;
+    `Response for ${where} contains camelCase key(s): ${keyList(camel)}. The ` +
+    `wire contract is snake_case in both directions — the lib mapper for this ` +
+    `resource must serialize every field with its spec name. Nothing rewrites ` +
+    `keys at the boundary any more, so an unconverted field reaches the ` +
+    `client as-is.`;
 
   log(message);
 

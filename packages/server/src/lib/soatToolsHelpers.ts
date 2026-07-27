@@ -145,9 +145,7 @@ export const buildInputSchema = (
     items?: unknown;
   }>
 ): JsonObjectSchema => {
-  if (
-    pathParams.length + queryParams.length + bodyProps.length === 0
-  ) {
+  if (pathParams.length + queryParams.length + bodyProps.length === 0) {
     return {
       type: 'object',
     };

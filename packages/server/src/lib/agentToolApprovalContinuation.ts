@@ -124,7 +124,9 @@ const fireContinuation = async (args: {
   const message = buildContinuationMessage({ item, decision: args.decision });
 
   if (item.session_id) {
-    const agent = await db.Agent.findOne({ where: { publicId: item.agent_id } });
+    const agent = await db.Agent.findOne({
+      where: { publicId: item.agent_id },
+    });
     if (!agent) return;
     log('fireContinuation: session id=%s session=%s', item.id, item.session_id);
     await sendSessionMessage({

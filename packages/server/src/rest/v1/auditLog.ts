@@ -121,8 +121,7 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
   ctx.set('Content-Type', 'application/x-ndjson');
   ctx.set('Content-Disposition', `attachment; filename="${filename}"`);
   ctx.status = 200;
-  // A stream body is not a plain object, so `caseTransform` leaves it alone —
-  // the generator already emits the snake_case read contract.
+  // The generator emits the snake_case read contract directly.
   ctx.body = Readable.from(
     streamAuditEntriesNdjson({
       projectIds,

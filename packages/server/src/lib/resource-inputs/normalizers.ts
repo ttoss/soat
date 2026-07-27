@@ -88,7 +88,7 @@ export const isPlainObject = (
  * by hand, which silently drops any field a future change forgets to list. Only
  * safe for bags whose keys are all part of the resource contract; do **not**
  * use it on free-form value maps that must round-trip verbatim (JSON Schema,
- * user-defined metadata, JSON-Logic), which is why `caseTransform` keeps its
+ * user-defined metadata, JSON-Logic), which is why nothing rewrites its
  * own skip-key list rather than sharing this helper wholesale.
  */
 export const convertKeysDeep = (
