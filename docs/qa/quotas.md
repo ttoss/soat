@@ -157,7 +157,7 @@ argument-filling agent reads at call time.
 
 - [x] `create-quota` / `get-quota` / `list-quotas` / `update-quota` / `delete-quota` all present and functional in the published CLI (`@soat/cli@0.17.0`)
 - [x] Operation-level description states the `actor` null-`scope_ref` rule correctly
-- [ ] **`scope_ref` field description contradicts the operation description above it** — [#743](https://github.com/ttoss/soat/issues/743). It says "api key / agent" (omitting `actor`) and "NULL means all entities of that scope type in the project" — the pooled reading the module docs explicitly rule out for `actor`. One tool definition, two opposite rules
+- [x] `scope_ref` field description names `actor` and splits the null semantics per scope, agreeing with the operation description above it (was [#743](https://github.com/ttoss/soat/issues/743) — it had said "api key / agent" and "NULL means all entities of that scope type", the pooled reading the docs rule out for `actor`). All three renderings of the field — the `quotas.yaml` request body, its response schema, and `QuotaResourceProperties` in `formations.yaml` — now state the same rule
 
 ## Not covered
 
@@ -184,9 +184,12 @@ argument-filling agent reads at call time.
   deliberate asymmetry.
 - **Fixture hygiene:** `quota_yT5pg2YvY1dbmPak` (an `enforce` `requests` cap,
   `limit: 2`, `rolling_1m`, on key `key_Uh1itG9lJlmrGU5V` / `qa-quotas-pm-victim`)
-  is still live in the shared project from an earlier pass. Left in place rather
-  than deleted, since it is another pass's fixture — but it is an *enforcing* cap
-  on a live key, so it should be removed by whoever owns it.
+  was found live in the shared project — created `18:20` the same day, i.e. by a
+  concurrent PM pass rather than by the 07-25/26 passes. **Deleted** at the end
+  of this pass; the shared project now holds zero quotas. Its victim key still
+  exists. An `enforce` cap surviving a pass is the failure mode worth guarding
+  against: it silently rate-limits a live key to 2 req/min with nothing pointing
+  back to the pass that created it.
 - **A QA project cannot be fully cleaned up.** `proj_IZnU7FY04SXoQkeN` could not
   be deleted (`409 PROJECT_HAS_DEPENDENTS`) once it had accrued audit entries,
   which are not deletable by design. Every quota, formation, webhook, policy,
