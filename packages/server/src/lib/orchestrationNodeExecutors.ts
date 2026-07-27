@@ -1,4 +1,6 @@
 /* eslint-disable max-lines */
+import createDebug from 'debug';
+
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
@@ -12,7 +14,10 @@ import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
 import type { OrchestrationNode } from './orchestrations';
 import type { ToolNodeGateResult } from './orchestrationToolGuardrail';
 import { runToolNodeGate } from './orchestrationToolGuardrail';
+import { isPlainObject, stripMarkdownJsonFence } from './outputSchema';
 import { callTool } from './tools';
+
+const log = createDebug('soat:orchestrations');
 
 /**
  * Describes how a scheduled `wait` should be resumed once its timer elapses.
@@ -121,22 +126,61 @@ export const applyStateMapping = (
   }
 };
 
-const parseAgentOutput = (
-  content: unknown,
-  outputSchema: object | undefined
-): Record<string, unknown> => {
-  if (!outputSchema || typeof content !== 'string') {
-    return { content: content ?? null };
-  }
+/**
+ * Fallback for when the AI SDK's own structured output is unavailable: parses
+ * `content` itself, stripping a markdown code fence first — the shape a model
+ * commonly wraps JSON in even when told to return it bare, which a plain
+ * `JSON.parse` rejects outright. A parse failure is logged (see #747) rather
+ * than silently reverting to `{ content }` with no signal, though the
+ * artifact still degrades to `{ content }` so a run never fails on account of
+ * the model's prose not being JSON.
+ */
+const parseAgentOutputContent = (content: string): Record<string, unknown> => {
   try {
-    const parsed: unknown = JSON.parse(content);
-    if (typeof parsed === 'object' && parsed !== null) {
-      return parsed as Record<string, unknown>;
-    }
-  } catch {
-    // leave artifact as { content }
+    const parsed: unknown = JSON.parse(stripMarkdownJsonFence(content));
+    if (isPlainObject(parsed)) return parsed;
+    log(
+      'parseAgentOutput: output_schema configured but parsed content was not a JSON object (got %s)',
+      typeof parsed
+    );
+  } catch (error) {
+    log(
+      'parseAgentOutput: output_schema configured but content did not parse as JSON: %s',
+      error instanceof Error ? error.message : String(error)
+    );
   }
   return { content };
+};
+
+/**
+ * Builds an `agent` node's artifact. Without an `output_schema` the artifact
+ * is always `{ content }` — the model's raw text response.
+ *
+ * With an `output_schema` configured, prefer the AI SDK's own structured
+ * output (`generation.output.object`, produced by `buildStructuredOutput` at
+ * generation time) — when the provider honors it, this is already a parsed,
+ * schema-validated object and needs no further work. Only when that is
+ * absent (a provider/model that ignores structured-output mode) does this
+ * fall back to {@link parseAgentOutputContent}.
+ */
+const parseAgentOutput = (
+  output: { content: unknown; object?: unknown } | undefined,
+  outputSchema: object | undefined
+): Record<string, unknown> => {
+  const content = output?.content;
+  if (!outputSchema) {
+    return { content: content ?? null };
+  }
+
+  if (isPlainObject(output?.object)) {
+    return output!.object as Record<string, unknown>;
+  }
+
+  if (typeof content !== 'string') {
+    return { content: content ?? null };
+  }
+
+  return parseAgentOutputContent(content);
 };
 
 export const executeAgentNode = async (args: {
@@ -195,7 +239,7 @@ export const executeAgentNode = async (args: {
     );
   }
 
-  const artifact = parseAgentOutput(result.output?.content, node.outputSchema);
+  const artifact = parseAgentOutput(result.output, node.outputSchema);
   return { kind: 'artifact', artifact, traceId: result.traceId };
 };
 
