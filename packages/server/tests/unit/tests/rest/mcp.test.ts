@@ -137,13 +137,8 @@ describe('MCP tools - happy path', () => {
     expect(result.project_id).toBe(projectId);
     expect(result.group_by).toBe('meter_type');
     expect(Array.isArray(result.groups)).toBe(true);
-    // NOTE: `totals` (and each group) is still emitted camelCase by
-    // usageAggregate.ts's `finalizeTotals` — a pre-existing gap in the
-    // snake_case migration unrelated to the MCP casing fix this test file is
-    // being converted for (packages/server/tests/unit/tests/rest/usage.test.ts
-    // has the same mismatch on the equivalent REST assertion).
-    expect(result.totals.inputTokens).toBe(0);
-    expect(result.totals.costUsd).toBeNull();
+    expect(result.totals.input_tokens).toBe(0);
+    expect(result.totals.cost_usd).toBeNull();
   });
 
   test('create-, list-, and delete-usage-threshold manage a threshold', async () => {
