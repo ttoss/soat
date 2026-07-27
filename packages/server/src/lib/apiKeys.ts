@@ -15,9 +15,9 @@ const mapApiKey = (apiKey: InstanceType<(typeof db)['ApiKey']>) => {
   return {
     id: apiKey.publicId,
     name: apiKey.name,
-    keyPrefix: apiKey.keyPrefix,
-    createdAt: apiKey.createdAt,
-    updatedAt: apiKey.updatedAt,
+    key_prefix: apiKey.keyPrefix,
+    created_at: apiKey.createdAt,
+    updated_at: apiKey.updatedAt,
   };
 };
 
@@ -26,12 +26,12 @@ const mapApiKeyWithAssociations = async (
 ): Promise<{
   id: string;
   name: string;
-  keyPrefix: string;
-  createdAt: Date;
-  updatedAt: Date;
-  userId: string | null;
-  projectId: string | null;
-  policyIds: string[];
+  key_prefix: string;
+  created_at: Date;
+  updated_at: Date;
+  user_id: string | null;
+  project_id: string | null;
+  policy_ids: string[];
 }> => {
   /* projectId is null for unscoped keys, and the association is also null if the
    * project row was removed; expose null as project_id in both cases. */

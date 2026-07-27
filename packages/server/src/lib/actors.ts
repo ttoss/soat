@@ -38,16 +38,16 @@ const mapActor = (
 ) => {
   return {
     id: actor.publicId,
-    projectId: actor.project?.publicId,
+    project_id: actor.project?.publicId,
     name: actor.name,
-    externalId: actor.externalId ?? undefined,
+    external_id: actor.externalId ?? undefined,
     instructions: actor.instructions ?? null,
-    agentId: getLinkedPublicId(actor.agent),
-    chatId: getLinkedPublicId(actor.chat),
-    memoryId: getLinkedPublicId(actor.memory),
+    agent_id: getLinkedPublicId(actor.agent),
+    chat_id: getLinkedPublicId(actor.chat),
+    memory_id: getLinkedPublicId(actor.memory),
     tags: actor.tags ?? undefined,
-    createdAt: actor.createdAt,
-    updatedAt: actor.updatedAt,
+    created_at: actor.createdAt,
+    updated_at: actor.updatedAt,
   };
 };
 

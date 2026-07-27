@@ -19,15 +19,15 @@ const mapAiProvider = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
-    secretId: instance.secret?.publicId ?? null,
+    project_id: instance.project?.publicId,
+    secret_id: instance.secret?.publicId ?? null,
     name: instance.name,
     provider: instance.provider,
-    defaultModel: instance.defaultModel,
-    baseUrl: instance.baseUrl ?? undefined,
+    default_model: instance.defaultModel,
+    base_url: instance.baseUrl ?? undefined,
     config: instance.config ?? undefined,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

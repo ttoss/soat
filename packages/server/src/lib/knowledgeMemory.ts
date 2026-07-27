@@ -94,15 +94,15 @@ const mapEntry = (
 ): MemoryKnowledgeResult => {
   const memory = entry.memory;
   return {
-    sourceType: 'memory' as const,
-    entryId: entry.publicId,
-    memoryId: memory.publicId,
-    memoryName: memory.name,
+    source_type: 'memory' as const,
+    entry_id: entry.publicId,
+    memory_id: memory.publicId,
+    memory_name: memory.name,
     content: entry.content,
     tags: entry.tags ?? null,
     ...(similarityScore === undefined ? {} : { similarityScore }),
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
   };
 };
 

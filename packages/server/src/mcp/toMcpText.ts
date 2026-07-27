@@ -1,96 +1,23 @@
-const snakeToCamel = (str: string): string => {
-  return str.replace(/_([a-z])/g, (_, char) => {
-    return char.toUpperCase();
-  });
-};
-
 /**
- * Keys whose values are free-form / JSON-Logic-bearing bags: their inner keys
- * are author-authored data or fixed contract paths — a guardrail `document`'s
- * `default_class` / `expires_in`, a `context_snapshot`'s fully-qualified var
- * paths (`soat.usage.cost_usd_24h`, `context.max_daily_budget`), a JSON Logic
- * `guard` / `expression` body — NOT SOAT field names. The REST caseTransform
- * middleware preserves these verbatim on the way out (see its skip lists); the
- * MCP surface must match, or a read mangles them to `defaultClass` /
- * `costUsd_24h`, which breaks read→write round-trips (the mangled field is
- * rejected as an unknown field on write) and the audit-key contract (#651).
+ * Renders a REST response as the text payload of an MCP tool result.
  *
- * Mirrors caseTransform's GLOBAL outbound skip set, plus the guardrail
- * `document` / `context_snapshot` bags. Path-scoped bags (`input`, `output`,
- * `state`, `artifacts`, `args`, `payload`) are intentionally omitted: the MCP
- * layer has no request path to scope them by, and some collide with genuine
- * camelCase fields (e.g. a generation's `output`), so they stay transformed.
- * Keys are the camelCased (post-transform) form, matching the check below.
+ * The MCP surface speaks the same contract as REST/SDK/CLI/docs: snake_case,
+ * exactly as the route produced it. Nothing here rewrites keys — a response is
+ * either already a string (passed through) or JSON-stringified verbatim — so
+ * author-authored and contract-fixed keys inside opaque bags (a guardrail
+ * `document`'s `default_class`, a `tool_context` header name, a `tags` key an
+ * IAM condition selects on) reach the client as themselves. This is the property
+ * a recursive key transform with a hand-curated skip list could never hold:
+ * every historical incident was a bag somebody forgot to exempt.
  */
-const VERBATIM_KEYS: ReadonlySet<string> = new Set([
-  'document',
-  'contextSnapshot',
-  'template',
-  'parameters',
-  'execute',
-  'mcp',
-  'presetParameters',
-  'stateMapping',
-  'expression',
-  'exitCondition',
-  'guard',
-  'when',
-  'headers',
-  // A `tool_context` entry's key is an HTTP header name (`X-Soat-Context-<Key>`),
-  // not a SOAT field name — same category as `headers`. Without this, reading a
-  // session over MCP rewrites `actor_external_id` to `actorExternalId`, so
-  // re-sending what the read returned changes which header the tool receives.
-  'toolContext',
-  // A resource `tags` key is read back by IAM as a `soat:ResourceTag/<key>`
-  // condition-context key, so rewriting it here desyncs the MCP surface from the
-  // tag REST stored — a tag set over MCP would not match a policy written for it.
-  'tags',
-  // An `inputMapping` key is an author-authored output name that leaves SOAT
-  // verbatim (a sub-tool's body key, an emit-event node's `data` key), and an
-  // approval node's `arguments` keys are frozen onto the proposed tool call.
-  // Both sit alongside `stateMapping`, already above.
-  'inputMapping',
-  'arguments',
-]);
-
-export const snakeToCamelDeep = (value: unknown): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => {
-      return snakeToCamelDeep(item);
-    });
-  }
-
-  if (value !== null && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, nested]) => {
-        const newKey = snakeToCamel(key);
-        // A verbatim bag: camelCase the key itself (it is a SOAT field) but do
-        // not recurse into its value, so its author-authored / contract inner
-        // keys survive unchanged — exactly as the REST caseTransform does.
-        if (VERBATIM_KEYS.has(newKey)) {
-          return [newKey, nested];
-        }
-        return [newKey, snakeToCamelDeep(nested)];
-      })
-    );
-  }
-
-  return value;
-};
-
 export const toMcpText = (value: unknown): string => {
   if (value == null) {
     return 'Deleted successfully.';
   }
 
   if (typeof value === 'string') {
-    try {
-      const parsed = JSON.parse(value) as unknown;
-      return JSON.stringify(snakeToCamelDeep(parsed));
-    } catch {
-      return value;
-    }
+    return value;
   }
 
-  return JSON.stringify(snakeToCamelDeep(value));
+  return JSON.stringify(value);
 };

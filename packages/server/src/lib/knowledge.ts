@@ -174,13 +174,13 @@ const mapChunkResult = (
 
   return {
     id: doc ? doc.publicId : '',
-    chunkId: chunk.publicId,
+    chunk_id: chunk.publicId,
     ...pickDocumentFields(base),
     content: chunk.content,
     page: chunk.pageNumber ?? undefined,
     similarityScore,
-    createdAt: chunk.createdAt,
-    updatedAt: chunk.updatedAt,
+    created_at: chunk.createdAt,
+    updated_at: chunk.updatedAt,
   };
 };
 

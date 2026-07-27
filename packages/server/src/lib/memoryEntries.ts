@@ -25,13 +25,13 @@ const mapMemoryEntry = (
 ) => {
   return {
     id: instance.publicId,
-    memoryId: instance.memory?.publicId,
+    memory_id: instance.memory?.publicId,
     content: instance.content,
-    sourceType: instance.sourceType,
+    source_type: instance.sourceType,
     tags: instance.tags ?? null,
     metadata: instance.metadata ?? null,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

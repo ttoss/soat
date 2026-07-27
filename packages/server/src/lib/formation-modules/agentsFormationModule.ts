@@ -168,33 +168,33 @@ const toOptional = <T>(value: T | null | undefined): T | undefined => {
 
 const mapAgentProperties = (properties: Record<string, unknown>) => {
   return {
-    aiProviderId: properties.ai_provider_id as string,
+    ai_provider_id: properties.ai_provider_id as string,
     name: toOptionalString(properties.name),
     instructions: toOptionalString(properties.instructions),
     model: toOptionalString(properties.model),
-    toolBindings: toOptional(resolveFormationToolBindings(properties)),
-    maxSteps: toOptional(toNullableNumber(properties.max_steps)),
-    toolChoice: toOptional(toNullableStringOrObject(properties.tool_choice)),
-    stopConditions: toOptional(
+    tool_bindings: toOptional(resolveFormationToolBindings(properties)),
+    max_steps: toOptional(toNullableNumber(properties.max_steps)),
+    tool_choice: toOptional(toNullableStringOrObject(properties.tool_choice)),
+    stop_conditions: toOptional(
       toNullableArray<object>(properties.stop_conditions)
     ),
-    activeToolIds: toOptional(
+    active_tool_ids: toOptional(
       toNullableArray<string>(properties.active_tool_ids)
     ),
-    guardrailIds: toOptional(toNullableArray<string>(properties.guardrail_ids)),
-    stepRules: toOptional(toNullableArray<object>(properties.step_rules)),
-    boundaryPolicy: toOptional(toNullableObject(properties.boundary_policy)),
+    guardrail_ids: toOptional(toNullableArray<string>(properties.guardrail_ids)),
+    step_rules: toOptional(toNullableArray<object>(properties.step_rules)),
+    boundary_policy: toOptional(toNullableObject(properties.boundary_policy)),
     temperature: toOptional(toNullableNumber(properties.temperature)),
-    maxContextMessages: toOptional(
+    max_context_messages: toOptional(
       toNullableNumber(properties.max_context_messages)
     ),
-    singleSessionPerActor: toOptionalBoolean(
+    single_session_per_actor: toOptionalBoolean(
       properties.single_session_per_actor
     ),
-    knowledgeConfig: toOptional(
+    knowledge_config: toOptional(
       normalizeKnowledgeConfig(properties.knowledge_config)
     ),
-    outputSchema: toOptional(toNullableObject(properties.output_schema)),
+    output_schema: toOptional(toNullableObject(properties.output_schema)),
   };
 };
 

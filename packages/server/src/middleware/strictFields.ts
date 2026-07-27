@@ -50,8 +50,9 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
  * unknown fields (at every nesting level) and missing top-level required fields
  * with `VALIDATION_FAILED` (400); see `validateRequestBody`.
  *
- * Runs after `authMiddleware` and `caseTransformMiddleware`, so the body is
- * already camelCase and `ctx.authUser` is resolved. Validation is skipped for
+ * Runs after `authMiddleware`, so `ctx.authUser` is resolved. The body is
+ * compared exactly as the client sent it — snake_case, the wire contract, with
+ * no key rewriting anywhere in between. Validation is skipped for
  * unauthenticated requests, leaving the `401` to the route handler (so a
  * validation error never preempts the auth error or leaks the schema pre-auth).
  */

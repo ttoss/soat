@@ -35,21 +35,21 @@ const mapGeneration = (
 
   return {
     id: gen.publicId,
-    projectId: gen.project.publicId,
-    agentId: gen.agent.publicId,
-    traceId: gen.trace.publicId,
-    initiatorGenerationId: gen.initiatorGeneration?.publicId ?? null,
-    startedByPrincipalType: gen.startedByPrincipalType,
-    startedByPrincipalId: gen.startedByPrincipalId,
+    project_id: gen.project.publicId,
+    agent_id: gen.agent.publicId,
+    trace_id: gen.trace.publicId,
+    initiator_generation_id: gen.initiatorGeneration?.publicId ?? null,
+    started_by_principal_type: gen.startedByPrincipalType,
+    started_by_principal_id: gen.startedByPrincipalId,
     status: gen.status,
-    startedAt: gen.startedAt,
-    completedAt: gen.completedAt,
-    lastActivityAt: gen.lastActivityAt,
-    stopReason: gen.stopReason,
+    started_at: gen.startedAt,
+    completed_at: gen.completedAt,
+    last_activity_at: gen.lastActivityAt,
+    stop_reason: gen.stopReason,
     error: gen.error,
     metadata: gen.metadata,
-    createdAt: gen.createdAt,
-    updatedAt: gen.updatedAt,
+    created_at: gen.createdAt,
+    updated_at: gen.updatedAt,
   };
 };
 

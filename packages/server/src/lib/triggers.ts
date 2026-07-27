@@ -37,21 +37,21 @@ const mapTrigger = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     name: instance.name,
     description: instance.description,
     type: instance.type,
-    targetType: instance.targetType,
-    targetId: instance.targetId,
+    target_type: instance.targetType,
+    target_id: instance.targetId,
     action: instance.action,
     input: instance.input,
     cron: instance.cron,
     active: instance.active,
-    policyId: instance.policy?.publicId ?? null,
-    nextFireAt: instance.nextFireAt,
+    policy_id: instance.policy?.publicId ?? null,
+    next_fire_at: instance.nextFireAt,
     ...(args?.includeSecret ? { secret: instance.secret } : {}),
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

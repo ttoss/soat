@@ -43,8 +43,7 @@ describe('buildInputSchema', () => {
       [],
       [
         {
-          snakeName: 'input',
-          camelName: 'input',
+          name: 'input',
           description: 'Initial state for the run.',
           required: false,
           type: 'object',
@@ -64,29 +63,28 @@ describe('buildQueryFn', () => {
     expect(buildQueryFn([])).toBeUndefined();
   });
 
-  test('builds a query string from camelCase args using snake_case keys', () => {
-    const fn = buildQueryFn([
-      { name: 'project_id', camelName: 'projectId' },
-      { name: 'limit', camelName: 'limit' },
-    ]);
-    expect(fn?.({ projectId: 'prj_01', limit: 50 })).toBe(
+  test('builds a query string from the spec\'s own snake_case names', () => {
+    const fn = buildQueryFn([{ name: 'project_id' }, { name: 'limit' }]);
+    expect(fn?.({ project_id: 'prj_01', limit: 50 })).toBe(
       '?project_id=prj_01&limit=50'
     );
   });
 
+  test('ignores a camelCase arg — the tool schema advertises snake_case', () => {
+    const fn = buildQueryFn([{ name: 'project_id' }]);
+    expect(fn?.({ projectId: 'prj_01' })).toBe('');
+  });
+
   test('omits undefined and null values', () => {
-    const fn = buildQueryFn([
-      { name: 'project_id', camelName: 'projectId' },
-      { name: 'limit', camelName: 'limit' },
-    ]);
-    expect(fn?.({ projectId: 'prj_01', limit: undefined })).toBe(
+    const fn = buildQueryFn([{ name: 'project_id' }, { name: 'limit' }]);
+    expect(fn?.({ project_id: 'prj_01', limit: undefined })).toBe(
       '?project_id=prj_01'
     );
     expect(fn?.({})).toBe('');
   });
 
   test('repeats the key for array values', () => {
-    const fn = buildQueryFn([{ name: 'events', camelName: 'events' }]);
+    const fn = buildQueryFn([{ name: 'events' }]);
     expect(fn?.({ events: ['a', 'b'] })).toBe('?events=a&events=b');
   });
 });
@@ -120,7 +118,7 @@ describe('extractBodyProps', () => {
     expect(result).toHaveLength(2);
     expect(
       result.map((p) => {
-        return p.snakeName;
+        return p.name;
       })
     ).toEqual(['name', 'count']);
   });
@@ -158,20 +156,20 @@ describe('extractBodyProps', () => {
     });
 
     expect(result).toHaveLength(1);
-    expect(result[0].snakeName).toBe('message');
+    expect(result[0].name).toBe('message');
     expect(
       result.map((p) => {
-        return p.snakeName;
+        return p.name;
       })
     ).not.toContain('trace_id');
     expect(
       result.map((p) => {
-        return p.snakeName;
+        return p.name;
       })
     ).not.toContain('parent_trace_id');
     expect(
       result.map((p) => {
-        return p.snakeName;
+        return p.name;
       })
     ).not.toContain('root_trace_id');
   });
@@ -221,17 +219,17 @@ describe('extractBodyProps', () => {
 
     expect(
       result.map((p) => {
-        return p.snakeName;
+        return p.name;
       })
     ).toEqual(['message', 'tool_context', 'document_id']);
     expect(
       result.find((p) => {
-        return p.snakeName === 'message';
+        return p.name === 'message';
       })?.required
     ).toBe(false);
     expect(
       result.find((p) => {
-        return p.snakeName === 'document_id';
+        return p.name === 'document_id';
       })?.required
     ).toBe(false);
   });
@@ -292,7 +290,7 @@ describe('extractBodyProps', () => {
     });
 
     const messagesProp = result.find((p) => {
-      return p.snakeName === 'messages';
+      return p.name === 'messages';
     });
 
     expect(messagesProp).toBeDefined();

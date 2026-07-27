@@ -39,18 +39,18 @@ const mapAuditEntry = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: projectPublicId ?? instance.project?.publicId ?? null,
-    principalType: instance.principalType,
-    principalId: instance.principalId,
+    project_id: projectPublicId ?? instance.project?.publicId ?? null,
+    principal_type: instance.principalType,
+    principal_id: instance.principalId,
     action: instance.action,
-    resourceSrn: instance.resourceSrn,
-    resourcePublicId: instance.resourcePublicId,
+    resource_srn: instance.resourceSrn,
+    resource_public_id: instance.resourcePublicId,
     status: instance.status,
-    requestId: instance.requestId,
+    request_id: instance.requestId,
     ip: instance.ip,
-    userAgent: instance.userAgent,
+    user_agent: instance.userAgent,
     detail: instance.detail,
-    createdAt: instance.createdAt,
+    created_at: instance.createdAt,
   };
 };
 

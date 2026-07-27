@@ -72,8 +72,8 @@ const mapSession = (
     name: session.name ?? null,
     ...extractSessionFlags(session),
     ...extractSessionOptional(session),
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
+    created_at: session.createdAt,
+    updated_at: session.updatedAt,
   };
 };
 

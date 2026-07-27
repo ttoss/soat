@@ -31,16 +31,16 @@ export const mapPrice = (
 ): PersistedPrice => {
   return {
     id: price.publicId,
-    aiProviderId: price.aiProvider?.publicId ?? null,
-    projectId: price.project?.publicId ?? null,
-    meterType: price.meterType,
+    ai_provider_id: price.aiProvider?.publicId ?? null,
+    project_id: price.project?.publicId ?? null,
+    meter_type: price.meterType,
     provider: price.provider,
     model: price.model,
     component: price.component,
     unit: price.unit,
-    unitPrice: Number(price.unitPrice),
-    effectiveFrom: price.effectiveFrom,
-    createdAt: price.createdAt,
+    unit_price: Number(price.unitPrice),
+    effective_from: price.effectiveFrom,
+    created_at: price.createdAt,
   };
 };
 

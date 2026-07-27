@@ -22,13 +22,13 @@ const mapConversation = (
 ) => {
   return {
     id: conversation.publicId,
-    projectId: conversation.project?.publicId,
-    actorId: conversation.actor?.publicId ?? null,
+    project_id: conversation.project?.publicId,
+    actor_id: conversation.actor?.publicId ?? null,
     name: conversation.name ?? null,
     status: conversation.status,
     tags: conversation.tags ?? undefined,
-    createdAt: conversation.createdAt,
-    updatedAt: conversation.updatedAt,
+    created_at: conversation.createdAt,
+    updated_at: conversation.updatedAt,
   };
 };
 

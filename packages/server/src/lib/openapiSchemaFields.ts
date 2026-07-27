@@ -3,14 +3,16 @@
  *
  * Both runtime validators are built on this:
  * - REST strict-field validation (`openapiSpec.ts` → `requestValidation.ts`)
- *   reads request-body schemas and compares in camelCase.
+ *   reads request-body schemas.
  * - Formation template validation (`formation-modules/formationSpecLoader.ts`)
- *   reads `*ResourceProperties` schemas and compares in snake_case.
+ *   reads `*ResourceProperties` schemas.
  *
- * Each layer keeps its own policy (key casing, throw-vs-accumulate, depth,
- * type checking); this module only owns the one thing they had duplicated —
- * turning a `{ properties, required }` schema into `{ allowedFields,
- * requiredFields, fieldSpecs }`.
+ * Both compare against the spec's own snake_case property names: the wire
+ * contract is snake_case end to end, so there is no casing to reconcile here.
+ * Each layer keeps its own policy (throw-vs-accumulate, depth, type checking);
+ * this module only owns the one thing they had duplicated — turning a
+ * `{ properties, required }` schema into `{ allowedFields, requiredFields,
+ * fieldSpecs }`.
  */
 
 export type FieldSpec = {
@@ -45,21 +47,15 @@ export const hasProperties = (
   return isObjectRecord(value.properties);
 };
 
-const identity = (key: string): string => {
-  return key;
-};
-
 /**
  * Derives the allowed/required field sets and per-field type specs from an
- * OpenAPI object schema. `transformKey` maps spec property names to the
- * convention the caller compares against (e.g. `snakeToCamel` for REST request
- * bodies); it defaults to identity, which keeps the spec's snake_case keys.
+ * OpenAPI object schema, keyed by the spec's own property names. Callers compare
+ * against those names verbatim — there is deliberately no key-transform hook, so
+ * a field name can never be rewritten on its way from the spec to a validator.
  */
 export const deriveSchemaFields = (args: {
   schema: SchemaWithProperties;
-  transformKey?: (key: string) => string;
 }): SchemaFields => {
-  const transform = args.transformKey ?? identity;
   const required = Array.isArray(args.schema.required)
     ? args.schema.required
     : [];
@@ -67,7 +63,7 @@ export const deriveSchemaFields = (args: {
   const fieldSpecs: Record<string, FieldSpec> = {};
   for (const [key, value] of Object.entries(args.schema.properties)) {
     const propertySchema = isObjectRecord(value) ? value : {};
-    fieldSpecs[transform(key)] = {
+    fieldSpecs[key] = {
       type:
         typeof propertySchema.type === 'string'
           ? propertySchema.type
@@ -77,13 +73,11 @@ export const deriveSchemaFields = (args: {
   }
 
   return {
-    allowedFields: new Set(Object.keys(args.schema.properties).map(transform)),
+    allowedFields: new Set(Object.keys(args.schema.properties)),
     requiredFields: new Set(
-      required
-        .filter((field): field is string => {
-          return typeof field === 'string';
-        })
-        .map(transform)
+      required.filter((field): field is string => {
+        return typeof field === 'string';
+      })
     ),
     fieldSpecs,
   };

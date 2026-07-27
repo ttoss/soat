@@ -47,19 +47,19 @@ describe('openapiSchemaFields', () => {
       expect([...fields.requiredFields]).toEqual(['project_id']);
     });
 
-    test('applies a key transform to every derived key', () => {
-      const toCamel = (key: string) => {
-        return key.replace(/_([a-z])/g, (_m, c: string) => {
-          return c.toUpperCase();
-        });
-      };
-      const fields = deriveSchemaFields({ schema, transformKey: toCamel });
+    test('keys every derived set by the spec name verbatim', () => {
+      // There is deliberately no key-transform hook: a validator compares
+      // against the spec's own names, so a field name can never be rewritten on
+      // its way from the spec to the check that uses it.
+      const fields = deriveSchemaFields({ schema });
 
-      expect(fields.allowedFields.has('projectId')).toBe(true);
-      expect(fields.allowedFields.has('boundaryPolicy')).toBe(true);
-      expect([...fields.requiredFields]).toEqual(['projectId']);
-      // fieldSpecs are keyed by the transformed name too
-      expect(fields.fieldSpecs.maxSteps?.type).toBe('integer');
+      expect(fields.allowedFields.has('project_id')).toBe(true);
+      expect(fields.allowedFields.has('boundary_policy')).toBe(true);
+      expect(fields.allowedFields.has('projectId')).toBe(false);
+      expect(fields.allowedFields.has('boundaryPolicy')).toBe(false);
+      expect([...fields.requiredFields]).toEqual(['project_id']);
+      expect(fields.fieldSpecs.max_steps?.type).toBe('integer');
+      expect(fields.fieldSpecs.maxSteps).toBeUndefined();
     });
 
     test('derives type and nullable per field', () => {

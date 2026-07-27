@@ -61,14 +61,14 @@ const mapTrace = (
 
   return {
     id: row.publicId,
-    projectId: (row.project?.publicId ?? String(row.projectId)) as string,
-    agentId: row.agent.publicId,
-    fileId: row.file?.publicId ?? null,
-    stepCount: row.stepCount,
-    parentTraceId: row.parentTrace?.publicId ?? null,
-    rootTraceId: row.rootTrace?.publicId ?? null,
+    project_id: (row.project?.publicId ?? String(row.projectId)) as string,
+    agent_id: row.agent.publicId,
+    file_id: row.file?.publicId ?? null,
+    step_count: row.stepCount,
+    parent_trace_id: row.parentTrace?.publicId ?? null,
+    root_trace_id: row.rootTrace?.publicId ?? null,
     error: row.error,
-    createdAt: row.createdAt,
+    created_at: row.createdAt,
   };
 };
 

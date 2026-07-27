@@ -62,29 +62,29 @@ const buildIncludes = () => {
 export const mapApproval = (instance: ApprovalInstance) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     origin: instance.origin,
     status: instance.status,
-    proposedAction: instance.proposedAction,
+    proposed_action: instance.proposedAction,
     reasoning: instance.reasoning,
     evidence: instance.evidence,
-    predictedImpact: instance.predictedImpact,
-    expiresAt: instance.expiresAt,
-    dedupKey: instance.dedupKey,
-    runId: instance.orchestrationRun?.publicId ?? null,
-    nodeId: instance.nodeId,
-    generationId: instance.generationId,
-    sessionId: instance.sessionId,
-    agentId: instance.agentId,
-    taskId: instance.taskId,
-    taskTransition: instance.taskTransition,
-    policyVersion: instance.policyVersion,
-    previousItemId: instance.previousItemId,
-    resolvedBy: instance.resolvedByUser?.publicId ?? null,
-    resolutionReason: instance.resolutionReason,
-    editedArguments: instance.editedArguments,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    predicted_impact: instance.predictedImpact,
+    expires_at: instance.expiresAt,
+    dedup_key: instance.dedupKey,
+    run_id: instance.orchestrationRun?.publicId ?? null,
+    node_id: instance.nodeId,
+    generation_id: instance.generationId,
+    session_id: instance.sessionId,
+    agent_id: instance.agentId,
+    task_id: instance.taskId,
+    task_transition: instance.taskTransition,
+    policy_version: instance.policyVersion,
+    previous_item_id: instance.previousItemId,
+    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    resolution_reason: instance.resolutionReason,
+    edited_arguments: instance.editedArguments,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 
@@ -442,15 +442,15 @@ const mapRecurrenceGroup = (args: {
   const latest = chain[chain.length - 1];
   return {
     dedupKey,
-    agentId: latest.agentId,
-    toolId: latest.proposedAction?.toolId ?? null,
+    agent_id: latest.agentId,
+    tool_id: latest.proposedAction?.toolId ?? null,
     count: chain.length,
     chain: chain.map((item) => {
       return {
         id: item.publicId,
         status: item.status,
-        resolutionReason: item.resolutionReason,
-        createdAt: item.createdAt,
+        resolution_reason: item.resolutionReason,
+        created_at: item.createdAt,
       };
     }),
     reasons: chain

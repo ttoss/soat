@@ -75,16 +75,6 @@ export interface OperationSpec {
   'x-soat-mcp-exclude'?: boolean;
 }
 
-// Distinct from `snakeToCamelKey` in resource-inputs/normalizers on purpose:
-// OpenAPI operation/parameter names can be kebab-case (e.g. `list-tools`), so
-// this variant also folds `-`. Do not merge the two — the normalizers helper is
-// underscore-only by design (it must not touch hyphens inside data values).
-export const snakeToCamel = (str: string): string => {
-  return str.replace(/[_-]([a-z])/g, (_, letter) => {
-    return letter.toUpperCase();
-  });
-};
-
 export const resolveSchema = (
   schema: Record<string, unknown> | undefined,
   spec: OpenApiSpec
@@ -133,27 +123,31 @@ export const getJsonSchemaType = (
   return 'string';
 };
 
+/**
+ * Builds an MCP tool's `inputSchema` from the operation's path, query, and body
+ * parameters. Property names are the spec's own snake_case names, verbatim — the
+ * MCP contract is the OpenAPI contract, so a client that read the docs can call
+ * a tool with no translation, and nothing can drift between the two.
+ */
 export const buildInputSchema = (
-  pathParams: Array<{ name: string; camelName: string }>,
+  pathParams: Array<{ name: string }>,
   queryParams: Array<{
     name: string;
-    camelName: string;
     description: string;
     required: boolean;
     type: string;
   }>,
   bodyProps: Array<{
-    snakeName: string;
-    camelName: string;
+    name: string;
     description: string;
     required: boolean;
     type: string;
     items?: unknown;
   }>
 ): JsonObjectSchema => {
-  const allParams = [...pathParams, ...queryParams, ...bodyProps];
-
-  if (allParams.length === 0) {
+  if (
+    pathParams.length + queryParams.length + bodyProps.length === 0
+  ) {
     return {
       type: 'object',
     };
@@ -161,55 +155,50 @@ export const buildInputSchema = (
 
   const requiredFields = [
     ...pathParams.map((p) => {
-      return p.camelName;
+      return p.name;
     }),
     ...queryParams
       .filter((p) => {
         return p.required;
       })
       .map((p) => {
-        return p.camelName;
+        return p.name;
       }),
     ...bodyProps
       .filter((p) => {
         return p.required;
       })
       .map((p) => {
-        return p.camelName;
+        return p.name;
       }),
   ];
 
   const properties: Record<string, JSONSchema7> = {};
-  for (const param of allParams) {
-    if ('type' in param) {
-      const jsonType = getJsonSchemaType(param.type);
-      const description = (param.description || '')
-        .replace(/'/g, "\\'")
-        .replace(/\n/g, ' ')
-        .trim();
-      if (param.type === 'array') {
-        const itemsSchema =
-          'items' in param && param.items
-            ? (param.items as JSONSchema7)
-            : { type: 'string' as const };
-        properties[param.camelName] = {
-          type: 'array',
-          items: itemsSchema,
-          description,
-        };
-      } else {
-        properties[param.camelName] = {
-          type: jsonType,
-          description,
-        };
-      }
-    } else {
-      // path param
-      properties[param.camelName] = {
-        type: 'string',
-        description: '',
-      };
+
+  // Path params are always required strings and carry no spec description.
+  for (const param of pathParams) {
+    properties[param.name] = { type: 'string', description: '' };
+  }
+
+  for (const param of [...queryParams, ...bodyProps]) {
+    const description = (param.description || '')
+      .replace(/'/g, "\\'")
+      .replace(/\n/g, ' ')
+      .trim();
+
+    if (param.type === 'array') {
+      const items =
+        'items' in param && param.items
+          ? (param.items as JSONSchema7)
+          : { type: 'string' as const };
+      properties[param.name] = { type: 'array', items, description };
+      continue;
     }
+
+    properties[param.name] = {
+      type: getJsonSchemaType(param.type),
+      description,
+    };
   }
 
   return {
@@ -222,7 +211,7 @@ export const buildInputSchema = (
 export const extractPathParams = (args: {
   parameters: Array<{ name?: string; in?: string; [key: string]: unknown }>;
   spec: OpenApiSpec;
-}): Array<{ name: string; camelName: string }> => {
+}): Array<{ name: string }> => {
   return (args.parameters || [])
     .map((p) => {
       return resolveParameter(p, args.spec);
@@ -231,10 +220,7 @@ export const extractPathParams = (args: {
       return p.in === 'path';
     })
     .map((p) => {
-      return {
-        name: p.name || '',
-        camelName: snakeToCamel(p.name || ''),
-      };
+      return { name: p.name || '' };
     });
 };
 
@@ -243,7 +229,6 @@ export const extractQueryParams = (args: {
   spec: OpenApiSpec;
 }): Array<{
   name: string;
-  camelName: string;
   description: string;
   required: boolean;
   type: string;
@@ -258,7 +243,6 @@ export const extractQueryParams = (args: {
     .map((p) => {
       return {
         name: p.name || '',
-        camelName: snakeToCamel(p.name || ''),
         description: p.description || '',
         required: p.required || false,
         type: p.schema?.type || 'string',
@@ -288,8 +272,7 @@ export const extractBodyProps = (args: {
   requestBody?: RequestBodySpec;
   spec: OpenApiSpec;
 }): Array<{
-  snakeName: string;
-  camelName: string;
+  name: string;
   description: string;
   required: boolean;
   type: string;
@@ -326,8 +309,7 @@ export const extractBodyProps = (args: {
       items?: unknown;
     };
     return {
-      snakeName: key,
-      camelName: snakeToCamel(key),
+      name: key,
       description: typeof val.description === 'string' ? val.description : '',
       required: (bodySchema.required || []).includes(key),
       type: typeof val.type === 'string' ? val.type : 'string',

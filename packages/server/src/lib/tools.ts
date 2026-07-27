@@ -99,7 +99,7 @@ const mapTool = (
 ): MappedTool => {
   return {
     id: tool.publicId,
-    projectId: tool.project.publicId,
+    project_id: tool.project.publicId,
     type: tool.type,
     name: tool.name,
     description: tool.description,
@@ -107,16 +107,16 @@ const mapTool = (
     execute: tool.execute,
     mcp: tool.mcp,
     actions: tool.actions,
-    deniedActions: tool.deniedActions,
-    presetParameters: tool.presetParameters,
+    denied_actions: tool.deniedActions,
+    preset_parameters: tool.presetParameters,
     pipeline: tool.pipeline,
-    discussionId:
+    discussion_id:
       (tool.discussion as { discussionId?: string } | null)?.discussionId ??
       null,
-    outputMapping: tool.outputMapping,
-    guardrailIds: tool.guardrailIds,
-    createdAt: tool.createdAt,
-    updatedAt: tool.updatedAt,
+    output_mapping: tool.outputMapping,
+    guardrail_ids: tool.guardrailIds,
+    created_at: tool.createdAt,
+    updated_at: tool.updatedAt,
   };
 };
 

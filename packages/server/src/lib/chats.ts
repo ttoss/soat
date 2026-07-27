@@ -47,13 +47,13 @@ const mapChat = (
 ): MappedChat => {
   return {
     id: chat.publicId,
-    projectId: chat.project.publicId,
-    aiProviderId: chat.aiProvider.publicId,
+    project_id: chat.project.publicId,
+    ai_provider_id: chat.aiProvider.publicId,
     name: chat.name,
-    systemMessage: chat.systemMessage,
+    system_message: chat.systemMessage,
     model: chat.model,
-    createdAt: chat.createdAt,
-    updatedAt: chat.updatedAt,
+    created_at: chat.createdAt,
+    updated_at: chat.updatedAt,
   };
 };
 
