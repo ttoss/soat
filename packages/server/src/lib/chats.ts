@@ -172,7 +172,7 @@ const resolveMessages = async (args: {
       const resolvedContent = await resolveMessageContent({
         content:
           'documentId' in message
-            ? { type: 'document' as const, documentId: message.documentId }
+            ? { type: 'document' as const, document_id: message.documentId }
             : message.content,
         authUser: args.authUser,
       });

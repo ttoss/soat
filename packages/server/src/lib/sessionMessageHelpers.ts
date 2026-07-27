@@ -35,7 +35,7 @@ export const addResolvedSessionUserMessage = async (args: {
 }) => {
   const resolvedContent = await resolveMessageContent({
     content: args.documentId
-      ? { type: 'document', documentId: args.documentId }
+      ? { type: 'document', document_id: args.documentId }
       : (args.message ?? ''),
     authUser: args.authUser,
   });

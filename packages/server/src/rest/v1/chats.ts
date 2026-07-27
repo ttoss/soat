@@ -227,7 +227,20 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
     return;
   }
 
-  const chatMessages = messages as ChatMessageInput[];
+  const chatMessages = (messages as Record<string, unknown>[]).map(
+    (message): ChatMessageInput => {
+      if (typeof message.document_id === 'string') {
+        return {
+          role: message.role as 'user' | 'assistant',
+          documentId: message.document_id,
+        };
+      }
+      return {
+        role: message.role as 'user' | 'assistant' | 'system',
+        content: message.content as string,
+      };
+    }
+  );
 
   // An unknown chatId is left to createChatCompletionForChat / the streaming
   // handler below, which already produce the established 400 / SSE-error

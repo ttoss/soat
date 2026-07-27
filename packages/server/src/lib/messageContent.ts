@@ -13,15 +13,15 @@ import { callTool, getTool } from './tools';
 
 export type ToolOutputMessageContent = {
   type: 'tool_output';
-  toolId: string;
+  tool_id: string;
   action?: string;
   input?: Record<string, unknown>;
-  outputPath?: string;
+  output_path?: string;
 };
 
 export type DocumentMessageContent = {
   type: 'document';
-  documentId: string;
+  document_id: string;
 };
 
 export type ResolvableMessageContent =
@@ -32,7 +32,7 @@ export const isDocumentMessageContent = (
 ): value is DocumentMessageContent => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return record.type === 'document' && typeof record.documentId === 'string';
+  return record.type === 'document' && typeof record.document_id === 'string';
 };
 
 export const isToolOutputMessageContent = (
@@ -40,7 +40,7 @@ export const isToolOutputMessageContent = (
 ): value is ToolOutputMessageContent => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
-  return record.type === 'tool_output' && typeof record.toolId === 'string';
+  return record.type === 'tool_output' && typeof record.tool_id === 'string';
 };
 
 const resolvePathValue = (args: {
@@ -231,17 +231,17 @@ const resolveDocumentContent = async (args: {
   authUser?: AuthUser;
   agentBoundaryPolicy?: unknown;
 }): Promise<{ content: string; documentId: string }> => {
-  const document = await getDocument({ id: args.content.documentId });
+  const document = await getDocument({ id: args.content.document_id });
 
   if (!document || !document.project_id) {
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
-      `Document '${args.content.documentId}' not found.`
+      `Document '${args.content.document_id}' not found.`
     );
   }
 
   const resources = buildDocumentPermissionResources({
-    documentId: args.content.documentId,
+    documentId: args.content.document_id,
     projectPublicId: document.project_id,
     path: document.path,
   });
@@ -263,7 +263,7 @@ const resolveDocumentContent = async (args: {
 
   return {
     content: document.content ?? '',
-    documentId: args.content.documentId,
+    documentId: args.content.document_id,
   };
 };
 
@@ -277,12 +277,12 @@ const resolveToolOutputContent = async (args: {
 }): Promise<{ content: string }> => {
   assertToolAllowedForAgent({
     allowedToolIds: args.allowedToolIds,
-    toolId: args.content.toolId,
+    toolId: args.content.tool_id,
   });
 
   const tool = await getTool({
     projectIds: args.projectIds,
-    id: args.content.toolId,
+    id: args.content.tool_id,
   });
 
   await assertCallerAllowed({
@@ -301,23 +301,23 @@ const resolveToolOutputContent = async (args: {
 
   const toolResult = await callTool({
     projectIds: args.projectIds,
-    id: args.content.toolId,
+    id: args.content.tool_id,
     action: args.content.action,
     input: args.content.input,
     authHeader: args.authHeader,
   });
 
-  const resolvedContent = args.content.outputPath
+  const resolvedContent = args.content.output_path
     ? resolvePathValue({
         value: toolResult,
-        outputPath: args.content.outputPath,
+        outputPath: args.content.output_path,
       })
     : toolResult;
 
   if (resolvedContent === undefined) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `outputPath '${args.content.outputPath}' could not be resolved from tool output.`
+      `outputPath '${args.content.output_path}' could not be resolved from tool output.`
     );
   }
 
