@@ -162,15 +162,17 @@ export type MappedFormation = {
   updated_at: Date;
 };
 
+/** A formation operation is a response body, so the type is the wire shape. */
 export type MappedFormationOperation = {
   id: string;
-  operationType: string;
+  operation_type: string;
   status: string;
+  // `events` and `plan` are author-shaped payloads — copied as values.
   events: FormationEvent[] | null;
   plan: PlanResult | null;
   error: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Supported Resource Types ──────────────────────────────────────────────

@@ -382,16 +382,16 @@ export const getTaskHistory = async (args: { id: string }) => {
   return rows.map((row) => {
     return {
       id: row.publicId,
-      taskId: task.publicId,
-      fromState: row.fromState,
-      toState: row.toState,
+      task_id: task.publicId,
+      from_state: row.fromState,
+      to_state: row.toState,
       transition: row.transition,
-      actorKind: row.actorKind,
-      actorId: row.actorId,
-      generationId: row.generationId,
-      runId: row.runId,
+      actor_kind: row.actorKind,
+      actor_id: row.actorId,
+      generation_id: row.generationId,
+      run_id: row.runId,
       note: row.note,
-      createdAt: row.createdAt,
+      created_at: row.createdAt,
     };
   });
 };
