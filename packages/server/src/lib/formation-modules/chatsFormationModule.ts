@@ -116,9 +116,9 @@ export const chatsFormationModule: FormationModule = {
     try {
       const chat = await getChat({ id: physicalResourceId });
       return {
-        ai_provider_id: chat.aiProviderId,
+        ai_provider_id: chat.ai_provider_id,
         name: chat.name,
-        system_message: chat.systemMessage,
+        system_message: chat.system_message,
         model: chat.model,
       };
     } catch {

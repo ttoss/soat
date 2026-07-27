@@ -143,7 +143,7 @@ export const quotasFormationModule: FormationModule = {
       const quota = await getQuota({ id: physicalResourceId });
       return {
         scope: quota.scope,
-        scope_ref: quota.scopeRef,
+        scope_ref: quota.scope_ref,
         metric: quota.metric,
         window: quota.window,
         limit: quota.limit,

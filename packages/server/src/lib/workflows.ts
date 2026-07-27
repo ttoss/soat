@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import {
   assertDispatchTargetsValid,
   assertWorkflowValid,
+  workflowCollectionToSnake,
   type WorkflowState,
   type WorkflowTransition,
 } from './workflowsValidation';
@@ -27,14 +28,14 @@ type WorkflowInstance = InstanceType<(typeof db)['Workflow']> & {
 export const mapWorkflow = (instance: WorkflowInstance) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     name: instance.name,
     description: instance.description,
-    states: instance.states,
-    transitions: instance.transitions,
-    payloadSchema: instance.payloadSchema,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    states: workflowCollectionToSnake(instance.states),
+    transitions: workflowCollectionToSnake(instance.transitions),
+    payload_schema: instance.payloadSchema,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

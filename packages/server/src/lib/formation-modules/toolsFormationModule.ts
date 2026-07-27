@@ -252,12 +252,12 @@ export const toolsFormationModule: FormationModule = {
         execute: tool.execute,
         mcp: tool.mcp,
         actions: tool.actions,
-        denied_actions: tool.deniedActions,
-        preset_parameters: tool.presetParameters,
+        denied_actions: tool.denied_actions,
+        preset_parameters: tool.preset_parameters,
         pipeline: tool.pipeline,
-        discussion_id: tool.discussionId,
-        output_mapping: tool.outputMapping,
-        guardrail_ids: tool.guardrailIds,
+        discussion_id: tool.discussion_id,
+        output_mapping: tool.output_mapping,
+        guardrail_ids: tool.guardrail_ids,
       };
     } catch {
       return null;

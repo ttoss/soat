@@ -4,21 +4,21 @@ import { resolveEndUserAttribution } from './generationAttribution';
 
 export type PersistedGeneration = {
   id: string;
-  projectId: string;
-  agentId: string;
-  traceId: string;
-  initiatorGenerationId: string | null;
-  startedByPrincipalType: string | null;
-  startedByPrincipalId: string | null;
+  project_id: string;
+  agent_id: string;
+  trace_id: string;
+  initiator_generation_id: string | null;
+  started_by_principal_type: string | null;
+  started_by_principal_id: string | null;
   status: string;
-  startedAt: Date;
-  completedAt: Date | null;
-  lastActivityAt: Date | null;
-  stopReason: string | null;
+  started_at: Date;
+  completed_at: Date | null;
+  last_activity_at: Date | null;
+  stop_reason: string | null;
   error: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const mapGeneration = (
@@ -35,21 +35,21 @@ const mapGeneration = (
 
   return {
     id: gen.publicId,
-    projectId: gen.project.publicId,
-    agentId: gen.agent.publicId,
-    traceId: gen.trace.publicId,
-    initiatorGenerationId: gen.initiatorGeneration?.publicId ?? null,
-    startedByPrincipalType: gen.startedByPrincipalType,
-    startedByPrincipalId: gen.startedByPrincipalId,
+    project_id: gen.project.publicId,
+    agent_id: gen.agent.publicId,
+    trace_id: gen.trace.publicId,
+    initiator_generation_id: gen.initiatorGeneration?.publicId ?? null,
+    started_by_principal_type: gen.startedByPrincipalType,
+    started_by_principal_id: gen.startedByPrincipalId,
     status: gen.status,
-    startedAt: gen.startedAt,
-    completedAt: gen.completedAt,
-    lastActivityAt: gen.lastActivityAt,
-    stopReason: gen.stopReason,
+    started_at: gen.startedAt,
+    completed_at: gen.completedAt,
+    last_activity_at: gen.lastActivityAt,
+    stop_reason: gen.stopReason,
     error: gen.error,
     metadata: gen.metadata,
-    createdAt: gen.createdAt,
-    updatedAt: gen.updatedAt,
+    created_at: gen.createdAt,
+    updated_at: gen.updatedAt,
   };
 };
 
@@ -62,16 +62,27 @@ const INTERNAL_METADATA_KEYS = ['pendingState'];
 
 // Keys the server owns inside the metadata bag. Callers may attach arbitrary
 // key/value metadata for their own auditing (F-15), but must not clobber these:
-// `pendingState` is internal recovery state; `actionId`/`triggerId`/`runId`/
-// `nodeId` are usage-attribution keys read back by usageRecording.ts; and
-// `extraction` is the memory-extraction summary written on completion. Writes
-// that include any of these are rejected so caller metadata can never corrupt
-// system bookkeeping or usage rollups.
+// `pendingState` is internal recovery state; `action_id`/`trigger_id`/`run_id`/
+// `node_id` are the wire names (see generations.yaml) for the usage-attribution
+// keys read back by usageRecording.ts (stored internally as `actionId`/
+// `triggerId`/`runId`/`nodeId`); and `extraction` is the memory-extraction
+// summary written on completion. Writes that include any of these are rejected
+// so caller metadata can never corrupt system bookkeeping or usage rollups.
+// Reserved-key validation runs against the raw wire request body (there is no
+// recursive case-transform middleware anymore), so both the wire (snake_case)
+// names AND the internal camelCase storage names must be blocked here —
+// updateGenerationMetadata shallow-merges caller metadata directly over the
+// stored object, so a caller sending the camelCase spelling verbatim would
+// otherwise overwrite real attribution with a forged one.
 export const RESERVED_GENERATION_METADATA_KEYS = [
   'pendingState',
+  'action_id',
   'actionId',
+  'trigger_id',
   'triggerId',
+  'run_id',
   'runId',
+  'node_id',
   'nodeId',
   'extraction',
 ];

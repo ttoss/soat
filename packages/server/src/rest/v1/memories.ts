@@ -20,7 +20,7 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const rawTags = ctx.query.tags;
   const tags: string[] | undefined = rawTags
     ? Array.isArray(rawTags)
@@ -63,10 +63,10 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:GetMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -84,7 +84,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     description?: string;
     tags?: string[];
@@ -92,7 +92,7 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'memories:CreateMemory',
     resourceType: 'memory',
   });
@@ -124,10 +124,10 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:UpdateMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -169,10 +169,10 @@ memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action: 'memories:DeleteMemory',
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),

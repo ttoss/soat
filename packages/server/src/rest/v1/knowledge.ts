@@ -6,16 +6,16 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 const knowledgeRouter = new Router<Context>();
 
 type KnowledgeSearchBody = {
-  projectId?: string;
+  project_id?: string;
   query?: string;
-  minScore?: number;
+  min_score?: number;
   limit?: number;
   // Array-typed filters. Typed loosely to tolerate non-conforming clients that
   // send a single value as a bare scalar; `toStringArray` normalizes them.
-  memoryIds?: string[] | string;
-  memoryTags?: string[] | string;
-  documentPaths?: string[] | string;
-  documentIds?: string[] | string;
+  memory_ids?: string[] | string;
+  memory_tags?: string[] | string;
+  document_paths?: string[] | string;
+  document_ids?: string[] | string;
 };
 
 /**
@@ -33,11 +33,11 @@ const toStringArray = (
 
 const hasSearchFilters = (body: KnowledgeSearchBody): boolean => {
   const hasDocumentFilters =
-    (body.documentPaths !== undefined && body.documentPaths.length > 0) ||
-    (body.documentIds !== undefined && body.documentIds.length > 0);
+    (body.document_paths !== undefined && body.document_paths.length > 0) ||
+    (body.document_ids !== undefined && body.document_ids.length > 0);
   const hasMemoryFilters =
-    (body.memoryIds !== undefined && body.memoryIds.length > 0) ||
-    (body.memoryTags !== undefined && body.memoryTags.length > 0);
+    (body.memory_ids !== undefined && body.memory_ids.length > 0) ||
+    (body.memory_tags !== undefined && body.memory_tags.length > 0);
   return Boolean(body.query) || hasDocumentFilters || hasMemoryFilters;
 };
 
@@ -45,13 +45,13 @@ const resolvePolicyWhere = async (
   ctx: Context,
   body: KnowledgeSearchBody
 ): Promise<{ forbidden: boolean; policyWhere?: Record<string, unknown> }> => {
-  if (!body.projectId) return { forbidden: false };
-  const policies = await ctx.authUser!.getPolicies(body.projectId);
+  if (!body.project_id) return { forbidden: false };
+  const policies = await ctx.authUser!.getPolicies(body.project_id);
   const compiled = compilePolicy({
     policies,
     action: 'knowledge:SearchKnowledge',
     resourceType: 'document',
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
   });
   if (!compiled.hasAccess) return { forbidden: true };
   return { forbidden: false, policyWhere: compiled.where };
@@ -76,7 +76,7 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
   }
 
   const projectIds = await ctx.authUser.resolveProjectIds({
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'knowledge:SearchKnowledge',
     resourceType: 'document',
   });
@@ -97,12 +97,12 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     projectIds,
     policyWhere,
     query: body.query,
-    minScore: body.minScore,
+    minScore: body.min_score,
     limit: body.limit,
-    paths: toStringArray(body.documentPaths),
-    documentIds: toStringArray(body.documentIds),
-    memoryIds: toStringArray(body.memoryIds),
-    memoryTags: toStringArray(body.memoryTags),
+    paths: toStringArray(body.document_paths),
+    documentIds: toStringArray(body.document_ids),
+    memoryIds: toStringArray(body.memory_ids),
+    memoryTags: toStringArray(body.memory_tags),
   });
   ctx.body = { results };
 });

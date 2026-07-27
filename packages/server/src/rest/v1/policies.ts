@@ -26,7 +26,7 @@ policiesRouter.get('/policies', async (ctx: Context) => {
     return;
   }
 
-  const userId = ctx.query.userId as string | undefined;
+  const userId = ctx.query.user_id as string | undefined;
   ctx.body = await listPolicies({ userId, ...parsePagination(ctx) });
 });
 

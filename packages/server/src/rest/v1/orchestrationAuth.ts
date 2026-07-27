@@ -21,9 +21,9 @@ export const hintAuditResourceForOrchestration = async (args: {
   });
   if (!orchestration) return;
   setAuditResourceHint(args.ctx, {
-    projectPublicId: orchestration.projectId,
+    projectPublicId: orchestration.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: orchestration.projectId,
+      projectPublicId: orchestration.project_id,
       resourceType: 'orchestration',
       resourceId: orchestration.id,
     }),

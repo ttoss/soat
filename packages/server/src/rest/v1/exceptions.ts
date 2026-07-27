@@ -16,11 +16,11 @@ const exceptionsRouter = new Router<Context>();
 // pattern, never the bare `*`) is authorized on get/acknowledge/resolve — see
 // the equivalent note in approvals.ts.
 const exceptionSrn = (exception: {
-  projectId?: string;
+  project_id?: string;
   id: string;
 }): string => {
   return buildSrn({
-    projectPublicId: exception.projectId!,
+    projectPublicId: exception.project_id!,
     resourceType: 'exception',
     resourceId: exception.id,
   });
@@ -33,7 +33,7 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -66,7 +66,7 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
   const exception = await getException({ id: ctx.params.exception_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: exception.projectId!,
+    projectPublicId: exception.project_id!,
     action: 'exceptions:GetException',
     resource: exceptionSrn(exception),
   });
@@ -91,7 +91,7 @@ exceptionsRouter.post(
     const exception = await getException({ id: ctx.params.exception_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.projectId!,
+      projectPublicId: exception.project_id!,
       action: 'exceptions:AcknowledgeException',
       resource: exceptionSrn(exception),
     });
@@ -120,7 +120,7 @@ exceptionsRouter.post(
     const exception = await getException({ id: ctx.params.exception_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: exception.projectId!,
+      projectPublicId: exception.project_id!,
       action: 'exceptions:ResolveException',
       resource: exceptionSrn(exception),
     });

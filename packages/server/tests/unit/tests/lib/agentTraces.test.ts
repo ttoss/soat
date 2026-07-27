@@ -79,9 +79,9 @@ describe('saveTrace and upsertTraceRecord', () => {
 
     const result = await getTrace({ traceId });
     expect(result.id).toBe(traceId);
-    expect(result.projectId).toBe(projectPublicId);
-    expect(result.agentId).toBe('agt_trace_lib_001');
-    expect(result.stepCount).toBe(1);
+    expect(result.project_id).toBe(projectPublicId);
+    expect(result.agent_id).toBe('agt_trace_lib_001');
+    expect(result.step_count).toBe(1);
   });
 
   test('updates an existing Trace row on second save', async () => {
@@ -105,7 +105,7 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId });
-    expect(result.stepCount).toBe(3);
+    expect(result.step_count).toBe(3);
   });
 
   test('saves a trace with empty steps', async () => {
@@ -121,7 +121,7 @@ describe('saveTrace and upsertTraceRecord', () => {
     });
 
     const result = await getTrace({ traceId });
-    expect(result.stepCount).toBe(0);
+    expect(result.step_count).toBe(0);
   });
 
   test('listTraces returns created traces for a given projectId', async () => {
@@ -159,7 +159,7 @@ describe('saveTrace and upsertTraceRecord', () => {
 
     const result = await getTrace({ traceId, projectIds: [projectId] });
     expect(result.id).toBe(traceId);
-    expect(result.fileId).toBeDefined();
+    expect(result.file_id).toBeDefined();
   });
 
   test('getTrace returns not_found when projectIds excludes the project', async () => {

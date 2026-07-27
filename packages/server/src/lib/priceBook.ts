@@ -11,16 +11,16 @@ const log = createDebug('soat:priceBook');
 
 export type PersistedPrice = {
   id: string;
-  aiProviderId: string | null;
-  projectId: string | null;
-  meterType: string;
+  ai_provider_id: string | null;
+  project_id: string | null;
+  meter_type: string;
   provider: string;
   model: string;
   component: string;
   unit: string;
-  unitPrice: number;
-  effectiveFrom: Date;
-  createdAt: Date;
+  unit_price: number;
+  effective_from: Date;
+  created_at: Date;
 };
 
 export const mapPrice = (
@@ -31,16 +31,16 @@ export const mapPrice = (
 ): PersistedPrice => {
   return {
     id: price.publicId,
-    aiProviderId: price.aiProvider?.publicId ?? null,
-    projectId: price.project?.publicId ?? null,
-    meterType: price.meterType,
+    ai_provider_id: price.aiProvider?.publicId ?? null,
+    project_id: price.project?.publicId ?? null,
+    meter_type: price.meterType,
     provider: price.provider,
     model: price.model,
     component: price.component,
     unit: price.unit,
-    unitPrice: Number(price.unitPrice),
-    effectiveFrom: price.effectiveFrom,
-    createdAt: price.createdAt,
+    unit_price: Number(price.unitPrice),
+    effective_from: price.effectiveFrom,
+    created_at: price.createdAt,
   };
 };
 

@@ -33,12 +33,12 @@ const checkChatPermission = async (
   action: string
 ): Promise<boolean> => {
   const resource = buildSrn({
-    projectPublicId: chat.projectId,
+    projectPublicId: chat.project_id,
     resourceType: 'chat',
     resourceId: chat.id,
   });
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: chat.projectId,
+    projectPublicId: chat.project_id,
     action,
     resource,
   });
@@ -64,11 +64,16 @@ const validateCreateChatBody = (
       error?: undefined;
     }
   | { error: string; aiProviderId?: undefined } => {
-  const { aiProviderId, name, systemMessage, model, projectId } =
-    body as Record<string, unknown>;
+  const {
+    ai_provider_id: aiProviderId,
+    name,
+    system_message: systemMessage,
+    model,
+    project_id: projectId,
+  } = body as Record<string, unknown>;
 
   if (!aiProviderId || typeof aiProviderId !== 'string') {
-    return { error: 'aiProviderId is required' };
+    return { error: 'ai_provider_id is required' };
   }
 
   return {
@@ -114,7 +119,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
 chatsRouter.get('/chats', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await resolveProjectIdsWithAction({
     ctx,
@@ -222,7 +227,20 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
     return;
   }
 
-  const chatMessages = messages as ChatMessageInput[];
+  const chatMessages = (messages as Record<string, unknown>[]).map(
+    (message): ChatMessageInput => {
+      if (typeof message.document_id === 'string') {
+        return {
+          role: message.role as 'user' | 'assistant',
+          documentId: message.document_id,
+        };
+      }
+      return {
+        role: message.role as 'user' | 'assistant' | 'system',
+        content: message.content as string,
+      };
+    }
+  );
 
   // An unknown chatId is left to createChatCompletionForChat / the streaming
   // handler below, which already produce the established 400 / SSE-error
@@ -317,8 +335,13 @@ const handleStatelessStreamingCompletion = async (args: {
 chatsRouter.post('/chat/completions', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const { aiProviderId, model, messages, stream } = ctx.request.body as {
-    aiProviderId?: string;
+  const {
+    ai_provider_id: aiProviderId,
+    model,
+    messages,
+    stream,
+  } = ctx.request.body as {
+    ai_provider_id?: string;
     model?: string;
     messages?: unknown;
     stream?: boolean;

@@ -342,7 +342,7 @@ export const generateConversationMessage = async (args: {
     projectId: conversation.projectId as number,
     generationId,
     traceId,
-    documentId: persisted.documentId,
+    documentId: persisted.document_id,
     messagesForModel,
     assistantContent,
   });

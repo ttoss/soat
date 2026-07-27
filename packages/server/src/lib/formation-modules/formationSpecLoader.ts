@@ -156,7 +156,7 @@ export const loadModuleSpec = (args: {
   }
 
   // Identity key transform: formation templates use the spec's snake_case
-  // property names verbatim (they are not run through caseTransform).
+  // property names verbatim.
   const result = deriveSchemaFields({ schema });
 
   specCache[args.schemaName] = result;

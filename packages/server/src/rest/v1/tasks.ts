@@ -44,7 +44,7 @@ const actorFromCtx = (ctx: Context): TaskActor => {
 tasksRouter.get('/tasks', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const projectIds = await resolveProjectIdsWithAction({
     ctx,
     projectPublicId,
@@ -55,7 +55,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
 
   ctx.body = await listTasks({
     projectIds: projectIds ?? [],
-    workflowId: ctx.query.workflowId as string | undefined,
+    workflowId: ctx.query.workflow_id as string | undefined,
     state: ctx.query.state as string | undefined,
     status: ctx.query.status as string | undefined,
     assignee: ctx.query.assignee as string | undefined,
@@ -69,10 +69,10 @@ tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:GetTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -92,10 +92,10 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:GetTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -113,8 +113,8 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
-    workflowId: string;
+    project_id?: string;
+    workflow_id: string;
     title: string;
     payload?: Record<string, unknown> | null;
     assignee?: string | null;
@@ -122,7 +122,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
 
   const projectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'tasks:CreateTask',
     resourceType: 'task',
   });
@@ -130,7 +130,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
 
   const task = await createTask({
     projectId,
-    workflowId: body.workflowId,
+    workflowId: body.workflow_id,
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
@@ -147,10 +147,10 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:UpdateTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -181,10 +181,10 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:TransitionTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),
@@ -214,10 +214,10 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: task.projectId!,
+    projectPublicId: task.project_id!,
     action: 'tasks:DeleteTask',
     resource: buildSrn({
-      projectPublicId: task.projectId!,
+      projectPublicId: task.project_id!,
       resourceType: 'task',
       resourceId: task.id,
     }),

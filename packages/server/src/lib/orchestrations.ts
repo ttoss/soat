@@ -3,6 +3,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type {
+  mapOrchestrationEdge,
+  mapOrchestrationNode,
+} from './orchestrationGraphWire';
+import { mapOrchestrationGraph } from './orchestrationGraphWire';
 import {
   assertOrchestrationUpdateValid,
   assertOrchestrationValid,
@@ -129,34 +134,34 @@ export type OrchestrationEdge = {
 
 export type MappedOrchestration = {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   description: string | null;
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
-  stateSchema: object | null;
-  inputSchema: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  nodes: ReturnType<typeof mapOrchestrationNode>[];
+  edges: ReturnType<typeof mapOrchestrationEdge>[];
+  state_schema: object | null;
+  input_schema: object | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type MappedNodeExecution = {
-  nodeId: string;
-  nodeType: string | null;
+  node_id: string;
+  node_type: string | null;
   attempt: number;
   status: 'running' | 'completed' | 'failed' | 'requires_action' | 'skipped';
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
   error: object | null;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
 };
 
 export type MappedOrchestrationRun = {
   id: string;
-  orchestrationId: string;
-  projectId: string;
+  orchestration_id: string;
+  project_id: string;
   status:
     | 'queued'
     | 'running'
@@ -167,21 +172,28 @@ export type MappedOrchestrationRun = {
     | 'cancelled'
     | 'expired';
   state: Record<string, unknown>;
-  activeNodes: string[];
+  active_nodes: string[];
   artifacts: Record<string, unknown>;
   error: object | null;
-  requiredAction: object | null;
-  traceId: string | null;
+  required_action: object | null;
+  trace_id: string | null;
   input: Record<string, unknown> | null;
   output: Record<string, unknown> | null;
-  nodeExecutions: MappedNodeExecution[];
+  node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
-  usage?: UsageTotals;
-  startedAt: Date | null;
-  completedAt: Date | null;
-  createdAt: Date;
-  updatedAt: Date;
+  // `UsageTotals` is the internal camelCase shape; this is its wire projection.
+  usage?: {
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cached_tokens: number;
+    total_reasoning_tokens: number;
+    total_cost_usd: number | null;
+  };
+  started_at: Date | null;
+  completed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map helpers ───────────────────────────────────────────────────────────
@@ -193,15 +205,17 @@ const mapOrchestration = (
 ): MappedOrchestration => {
   return {
     id: orch.publicId,
-    projectId: orch.project.publicId,
+    project_id: orch.project.publicId,
     name: orch.name,
     description: orch.description,
-    nodes: orch.nodes as OrchestrationNode[],
-    edges: orch.edges as OrchestrationEdge[],
-    stateSchema: orch.stateSchema,
-    inputSchema: orch.inputSchema,
-    createdAt: orch.createdAt,
-    updatedAt: orch.updatedAt,
+    ...mapOrchestrationGraph({
+      nodes: orch.nodes as OrchestrationNode[],
+      edges: orch.edges as OrchestrationEdge[],
+    }),
+    state_schema: orch.stateSchema,
+    input_schema: orch.inputSchema,
+    created_at: orch.createdAt,
+    updated_at: orch.updatedAt,
   };
 };
 
@@ -209,16 +223,52 @@ export const mapNodeExecution = (
   exec: InstanceType<typeof db.OrchestrationNodeExecution>
 ): MappedNodeExecution => {
   return {
-    nodeId: exec.nodeId,
-    nodeType: exec.nodeType,
+    node_id: exec.nodeId,
+    node_type: exec.nodeType,
     attempt: exec.attempt,
     status: exec.status,
     input: exec.input as Record<string, unknown> | null,
     output: exec.output as Record<string, unknown> | null,
     error: exec.error,
-    startedAt: exec.startedAt,
-    completedAt: exec.completedAt,
-    createdAt: exec.createdAt,
+    started_at: exec.startedAt,
+    completed_at: exec.completedAt,
+    created_at: exec.createdAt,
+  };
+};
+
+/**
+ * The wire projection of a `RequiredAction`, used for both the freshly-built
+ * action and the one persisted on the run row (stored camelCase, so it is read
+ * loosely here). `context` is the input-mapped payload the graph author shaped
+ * and `approval_spec` is the frozen tool proposal — both copied as values, so
+ * their inner keys stay exactly as authored.
+ */
+export const mapRequiredAction = (raw: unknown): object | null => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
+    return null;
+
+  const action = raw as Record<string, unknown>;
+
+  /** Reads a field under either spelling — persisted rows carry the camelCase one. */
+  const field = (camel: string, snake: string): unknown => {
+    return action[camel] ?? action[snake];
+  };
+
+  const optional = Object.entries({
+    options: action.options,
+    approval_spec: field('approvalSpec', 'approval_spec'),
+    approval_id: field('approvalId', 'approval_id'),
+    expires_at: field('expiresAt', 'expires_at'),
+  }).filter(([, value]) => {
+    return value !== undefined && value !== null;
+  });
+
+  return {
+    type: action.type,
+    node_id: field('nodeId', 'node_id'),
+    prompt: action.prompt,
+    context: action.context,
+    ...Object.fromEntries(optional),
   };
 };
 
@@ -232,23 +282,33 @@ export const mapOrchestrationRun = (
 ): MappedOrchestrationRun => {
   return {
     id: run.publicId,
-    orchestrationId: run.orchestration.publicId,
-    projectId: run.project.publicId,
+    orchestration_id: run.orchestration.publicId,
+    project_id: run.project.publicId,
     status: run.status,
     state: run.state as Record<string, unknown>,
-    activeNodes: run.activeNodes as string[],
+    active_nodes: run.activeNodes as string[],
     artifacts: run.artifacts as Record<string, unknown>,
     error: run.error,
-    requiredAction: run.requiredAction as object | null,
-    traceId: run.traceId,
+    required_action: mapRequiredAction(run.requiredAction),
+    trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,
-    nodeExecutions: (run.nodeExecutions ?? []).map(mapNodeExecution),
-    ...(usage ? { usage } : {}),
-    startedAt: run.startedAt,
-    completedAt: run.completedAt,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
+    node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
+    ...(usage
+      ? {
+          usage: {
+            total_input_tokens: usage.totalInputTokens,
+            total_output_tokens: usage.totalOutputTokens,
+            total_cached_tokens: usage.totalCachedTokens,
+            total_reasoning_tokens: usage.totalReasoningTokens,
+            total_cost_usd: usage.totalCostUsd,
+          },
+        }
+      : {}),
+    started_at: run.startedAt,
+    completed_at: run.completedAt,
+    created_at: run.createdAt,
+    updated_at: run.updatedAt,
   };
 };
 

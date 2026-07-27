@@ -28,11 +28,6 @@ const log = createDebug('soat:formations:aiProviders');
 const SCHEMA_NAME = 'AiProviderResourceProperties';
 const RESOURCE_LABEL = 'ai_provider';
 
-// ── Key normalization ────────────────────────────────────────────────────
-// caseTransform middleware converts all nested request body keys to camelCase.
-// Formation templates are stored with those camelCase keys. Normalize back to
-// snake_case so the spec validators and property accessors work correctly.
-
 // ── Property validation ──────────────────────────────────────────────────
 
 const validateAiProviderProperties = (args: {
@@ -171,10 +166,10 @@ export const aiProvidersFormationModule: FormationModule = {
       return {
         name: provider.name,
         provider: provider.provider,
-        default_model: provider.defaultModel,
-        base_url: provider.baseUrl,
+        default_model: provider.default_model,
+        base_url: provider.base_url,
         config: provider.config,
-        secret_id: provider.secretId,
+        secret_id: provider.secret_id,
       };
     } catch {
       return null;

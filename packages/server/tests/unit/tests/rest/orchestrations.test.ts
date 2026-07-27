@@ -985,13 +985,17 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
-      // Response keys are snake_cased by the outbound caseTransform middleware.
+      // `input_mapping` keys are author-authored: whatever the graph declares is
+      // what the resolved context carries back, verbatim. This assertion used to
+      // expect `document_id` / `is_long` because the outbound transform rewrote
+      // the author's own keys — the #737 bug class. `context` is an opaque bag
+      // now, so `documentId` in means `documentId` out.
       expect(runRes.body.required_action.context).toEqual({
         language: 'pt-BR',
         threshold: 0.8,
-        document_id: 'ood_123',
+        documentId: 'ood_123',
         label: 'Tema: Verão',
-        is_long: true,
+        isLong: true,
       });
     });
 

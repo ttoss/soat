@@ -12,15 +12,15 @@ export type MemoryQueryConfig = {
 };
 
 export type MemoryKnowledgeResult = {
-  sourceType: 'memory';
-  entryId: string;
-  memoryId: string;
-  memoryName: string;
+  source_type: 'memory';
+  entry_id: string;
+  memory_id: string;
+  memory_name: string;
   content: string;
   tags: string[] | null;
-  similarityScore?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  similarity_score?: number;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const globToLikePattern = (tag: string): string => {
@@ -94,15 +94,17 @@ const mapEntry = (
 ): MemoryKnowledgeResult => {
   const memory = entry.memory;
   return {
-    sourceType: 'memory' as const,
-    entryId: entry.publicId,
-    memoryId: memory.publicId,
-    memoryName: memory.name,
+    source_type: 'memory' as const,
+    entry_id: entry.publicId,
+    memory_id: memory.publicId,
+    memory_name: memory.name,
     content: entry.content,
     tags: entry.tags ?? null,
-    ...(similarityScore === undefined ? {} : { similarityScore }),
-    createdAt: entry.createdAt,
-    updatedAt: entry.updatedAt,
+    ...(similarityScore === undefined
+      ? {}
+      : { similarity_score: similarityScore }),
+    created_at: entry.createdAt,
+    updated_at: entry.updatedAt,
   };
 };
 
@@ -147,7 +149,7 @@ const resolveMemorySearchBySemantic = async (args: {
   if (args.minScore === undefined) return results;
   const { minScore } = args;
   return results.filter((r) => {
-    return (r.similarityScore ?? 0) >= minScore;
+    return (r.similarity_score ?? 0) >= minScore;
   });
 };
 

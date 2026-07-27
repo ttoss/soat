@@ -35,7 +35,7 @@ describe('Secrets', () => {
     test('authenticated user can list secrets', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/secrets')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -49,7 +49,7 @@ describe('Secrets', () => {
     test('user without access to project returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/secrets')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -370,7 +370,7 @@ describe('Secrets', () => {
 
       const listRes = await authenticatedTestClient(scopedToken)
         .get('/api/v1/secrets')
-        .query({ projectId });
+        .query({ project_id: projectId });
       expect(listRes.status).toBe(200);
 
       const getRes = await authenticatedTestClient(scopedToken).get(

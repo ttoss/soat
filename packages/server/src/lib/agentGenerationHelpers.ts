@@ -83,6 +83,60 @@ export type GenerationResult = {
   };
 };
 
+/**
+ * The wire projection of a `GenerationResult`, matching the generate response
+ * schema in `openapi/v1/agents.yaml`. The type itself stays camelCase because it
+ * is threaded through the session, conversation, and orchestration paths
+ * internally; only the routes that put it on the wire map it.
+ *
+ * `object` and each `args` are caller-owned payloads (a structured output shaped
+ * by the agent's `output_schema`, and the model's tool arguments), so they are
+ * copied as values — their inner keys are never inspected. Same for
+ * `response_messages`, which is the AI SDK's own message format.
+ */
+/** Wire projection of a generation's pending client tool calls. */
+export const mapGenerationRequiredAction = (
+  action: NonNullable<GenerationResult['requiredAction']>
+) => {
+  return {
+    type: action.type,
+    tool_calls: action.toolCalls.map((call) => {
+      return {
+        id: call.id,
+        tool_name: call.toolName,
+        // The model's own arguments — copied as a value, keys untouched.
+        args: call.args,
+      };
+    }),
+  };
+};
+
+export const mapGenerationResult = (result: GenerationResult) => {
+  return {
+    id: result.id,
+    trace_id: result.traceId,
+    status: result.status,
+    ...(result.output
+      ? {
+          output: {
+            model: result.output.model,
+            content: result.output.content,
+            finish_reason: result.output.finishReason,
+            ...(result.output.responseMessages
+              ? { response_messages: result.output.responseMessages }
+              : {}),
+            ...('object' in result.output
+              ? { object: result.output.object }
+              : {}),
+          },
+        }
+      : {}),
+    ...(result.requiredAction
+      ? { required_action: mapGenerationRequiredAction(result.requiredAction) }
+      : {}),
+  };
+};
+
 export type TypedAgent = {
   instructions: string | null;
   model: string | null;

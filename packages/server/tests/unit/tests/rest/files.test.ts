@@ -520,7 +520,7 @@ describe('Files', () => {
       // Legacy plain-string body from the shared `resolveWriteProjectId`
       // helper (rest/v1/helpers.ts), used across ~13 route files — not
       // migrated to DomainError here to avoid a cross-cutting route change.
-      expect(response.body.error).toMatch(/projectId is required/i);
+      expect(response.body.error).toMatch(/project_id is required/i);
     });
 
     test('returns 403 when user has no upload permission', async () => {
@@ -618,7 +618,7 @@ describe('Files', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/projectId/);
+      expect(response.body.error.message).toMatch(/project_id/);
     });
 
     test('returns 403 when user has no upload permission', async () => {

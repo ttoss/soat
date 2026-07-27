@@ -3,12 +3,15 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
   deriveLegacyToolFields,
   readAgentToolBindings,
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
+  toWireToolBinding,
+  type WireAgentToolBinding,
 } from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
@@ -32,28 +35,28 @@ export { resolveUrlPathParams } from './agentToolResolver';
 
 export type MappedAgent = {
   id: string;
-  projectId: string;
-  aiProviderId: string;
+  project_id: string;
+  ai_provider_id: string;
   name: string | null;
   instructions: string | null;
   model: string | null;
-  toolBindings: AgentToolBinding[] | null;
-  toolIds: string[] | null;
+  tool_bindings: WireAgentToolBinding[] | null;
+  tool_ids: string[] | null;
   tools: InlineToolDefinition[] | null;
-  maxSteps: number | null;
-  toolChoice: string | object | null;
-  stopConditions: object[] | null;
-  activeToolIds: string[] | null;
-  stepRules: object[] | null;
-  boundaryPolicy: object | null;
+  max_steps: number | null;
+  tool_choice: string | object | null;
+  stop_conditions: object[] | null;
+  active_tool_ids: string[] | null;
+  step_rules: object[] | null;
+  boundary_policy: object | null;
   temperature: number | null;
-  knowledgeConfig: object | null;
-  outputSchema: object | null;
-  maxContextMessages: number | null;
-  singleSessionPerActor: boolean;
-  guardrailIds: string[] | null;
-  createdAt: Date;
-  updatedAt: Date;
+  knowledge_config: object | null;
+  output_schema: object | null;
+  max_context_messages: number | null;
+  single_session_per_actor: boolean;
+  guardrail_ids: string[] | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Functions ────────────────────────────────────────────────────────
@@ -78,28 +81,28 @@ const mapAgent = (
 
   return {
     id: agent.publicId,
-    projectId: agent.project.publicId,
-    aiProviderId: agent.aiProvider.publicId,
+    project_id: agent.project.publicId,
+    ai_provider_id: agent.aiProvider.publicId,
     name: agent.name,
     instructions: agent.instructions,
     model: agent.model,
-    toolBindings,
-    toolIds: legacyViews.toolIds,
+    tool_bindings: toolBindings ? toolBindings.map(toWireToolBinding) : null,
+    tool_ids: legacyViews.toolIds,
     tools: legacyViews.tools,
-    maxSteps: agent.maxSteps,
-    toolChoice: agent.toolChoice,
-    stopConditions: agent.stopConditions,
-    activeToolIds: agent.activeToolIds,
-    stepRules: agent.stepRules,
-    boundaryPolicy: agent.boundaryPolicy,
+    max_steps: agent.maxSteps,
+    tool_choice: agent.toolChoice,
+    stop_conditions: agent.stopConditions,
+    active_tool_ids: agent.activeToolIds,
+    step_rules: agent.stepRules,
+    boundary_policy: agent.boundaryPolicy,
     temperature: agent.temperature,
-    knowledgeConfig: agent.knowledgeConfig,
-    outputSchema: agent.outputSchema,
-    maxContextMessages: agent.maxContextMessages,
-    singleSessionPerActor: agent.singleSessionPerActor,
-    guardrailIds: agent.guardrailIds,
-    createdAt: agent.createdAt,
-    updatedAt: agent.updatedAt,
+    knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig) ?? null,
+    output_schema: agent.outputSchema,
+    max_context_messages: agent.maxContextMessages,
+    single_session_per_actor: agent.singleSessionPerActor,
+    guardrail_ids: agent.guardrailIds,
+    created_at: agent.createdAt,
+    updated_at: agent.updatedAt,
   };
 };
 

@@ -24,12 +24,12 @@ const mapMemory = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     name: instance.name,
     description: instance.description ?? undefined,
     tags: instance.tags ?? undefined,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

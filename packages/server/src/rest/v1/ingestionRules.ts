@@ -20,17 +20,17 @@ import {
 const ingestionRulesRouter = new Router<Context>();
 
 type CreateBody = {
-  projectId?: string;
-  contentTypeGlob: string;
-  toolId?: string | null;
-  agentId?: string | null;
+  project_id?: string;
+  content_type_glob: string;
+  tool_id?: string | null;
+  agent_id?: string | null;
   action?: string | null;
-  presetParameters?: object | null;
-  nativeExtraction?: 'first' | 'skip';
-  fileDelivery?: 'base64' | 'download_url';
-  chunkStrategy?: string | null;
-  chunkSize?: number | null;
-  chunkOverlap?: number | null;
+  preset_parameters?: object | null;
+  native_extraction?: 'first' | 'skip';
+  file_delivery?: 'base64' | 'download_url';
+  chunk_strategy?: string | null;
+  chunk_size?: number | null;
+  chunk_overlap?: number | null;
   metadata?: object | null;
 };
 
@@ -41,7 +41,7 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -90,7 +90,7 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'ingestion-rules:CreateIngestionRule',
     resourceType: 'ingestionRule',
   });
@@ -98,22 +98,22 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
 
   const refs = await resolveConverterRefs({
     projectIds: [Number(targetProjectId)],
-    toolId: body.toolId,
-    agentId: body.agentId,
+    toolId: body.tool_id,
+    agentId: body.agent_id,
   });
 
   const rule = await createIngestionRule({
     projectId: Number(targetProjectId),
-    contentTypeGlob: body.contentTypeGlob,
+    contentTypeGlob: body.content_type_glob,
     toolId: refs.toolId,
     agentId: refs.agentId,
     action: body.action,
-    presetParameters: body.presetParameters,
-    nativeExtraction: body.nativeExtraction,
-    fileDelivery: body.fileDelivery,
-    chunkStrategy: body.chunkStrategy,
-    chunkSize: body.chunkSize,
-    chunkOverlap: body.chunkOverlap,
+    presetParameters: body.preset_parameters,
+    nativeExtraction: body.native_extraction,
+    fileDelivery: body.file_delivery,
+    chunkStrategy: body.chunk_strategy,
+    chunkSize: body.chunk_size,
+    chunkOverlap: body.chunk_overlap,
     metadata: body.metadata,
   });
 
@@ -137,23 +137,23 @@ ingestionRulesRouter.patch(
 
     const refs = await resolveConverterRefs({
       projectIds,
-      toolId: body.toolId,
-      agentId: body.agentId,
+      toolId: body.tool_id,
+      agentId: body.agent_id,
     });
 
     ctx.body = await updateIngestionRule({
       id: ctx.params.ingestion_rule_id,
       projectIds,
-      contentTypeGlob: body.contentTypeGlob,
+      contentTypeGlob: body.content_type_glob,
       toolId: refs.toolId,
       agentId: refs.agentId,
       action: body.action,
-      presetParameters: body.presetParameters,
-      nativeExtraction: body.nativeExtraction,
-      fileDelivery: body.fileDelivery,
-      chunkStrategy: body.chunkStrategy,
-      chunkSize: body.chunkSize,
-      chunkOverlap: body.chunkOverlap,
+      presetParameters: body.preset_parameters,
+      nativeExtraction: body.native_extraction,
+      fileDelivery: body.file_delivery,
+      chunkStrategy: body.chunk_strategy,
+      chunkSize: body.chunk_size,
+      chunkOverlap: body.chunk_overlap,
       metadata: body.metadata,
     });
   }
@@ -178,11 +178,11 @@ ingestionRulesRouter.delete(
       id: ctx.params.ingestion_rule_id,
       projectIds,
     });
-    if (rule.projectId) {
+    if (rule.project_id) {
       setAuditResourceHint(ctx, {
-        projectPublicId: rule.projectId,
+        projectPublicId: rule.project_id,
         resourceSrn: buildSrn({
-          projectPublicId: rule.projectId,
+          projectPublicId: rule.project_id,
           resourceType: 'ingestionRule',
           resourceId: rule.id,
         }),

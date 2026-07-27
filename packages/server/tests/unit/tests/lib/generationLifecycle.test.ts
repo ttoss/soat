@@ -104,8 +104,8 @@ describe('generationLifecycle', () => {
 
     const updated = await getGeneration({ publicId: 'gen_lifecycle_001' });
     expect(updated?.status).toBe('completed');
-    expect(updated?.stopReason).toBe('stop');
-    expect(updated?.completedAt).not.toBeNull();
+    expect(updated?.stop_reason).toBe('stop');
+    expect(updated?.completed_at).not.toBeNull();
   });
 
   test('fireCompletionSideEffects tolerates trace save failures (fire-and-forget)', async () => {
@@ -153,7 +153,7 @@ describe('generationLifecycle', () => {
 
     const failed = await getGeneration({ publicId: 'gen_lifecycle_fail01' });
     expect(failed?.status).toBe('failed');
-    expect(failed?.stopReason).toBe('error');
+    expect(failed?.stop_reason).toBe('error');
     expect(failed?.error?.message).toBe('provider exploded');
   });
 

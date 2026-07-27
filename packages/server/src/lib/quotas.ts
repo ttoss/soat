@@ -52,22 +52,22 @@ export type CurrentUsage = {
 export const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
   return {
     id: quota.publicId,
-    projectId: quota.project.publicId,
+    project_id: quota.project.publicId,
     scope: quota.scope,
-    scopeRef: quota.scopeRef,
+    scope_ref: quota.scopeRef,
     metric: quota.metric,
     window: quota.window,
     limit: Number(quota.limit),
     mode: quota.mode,
-    currentUsage: currentUsage
+    current_usage: currentUsage
       ? {
-          windowKey: currentUsage.windowKey,
+          window_key: currentUsage.windowKey,
           count: currentUsage.count,
-          resetsAt: currentUsage.resetsAt,
+          resets_at: currentUsage.resetsAt,
         }
       : null,
-    createdAt: quota.createdAt,
-    updatedAt: quota.updatedAt,
+    created_at: quota.createdAt,
+    updated_at: quota.updatedAt,
   };
 };
 

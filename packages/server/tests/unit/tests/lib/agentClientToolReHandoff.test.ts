@@ -135,7 +135,7 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
       { editedArguments: { path: '/tmp/edited' } },
       { where: { publicId: item.id } }
     );
-    const reloaded = { ...item, editedArguments: { path: '/tmp/edited' } };
+    const reloaded = { ...item, edited_arguments: { path: '/tmp/edited' } };
 
     const handled = await emitClientToolReHandoff({
       item: reloaded,
@@ -193,7 +193,7 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
   test('an approval with no agent is not re-handed-off', async () => {
     const approval = await fileClientApproval();
     const handled = await emitClientToolReHandoff({
-      item: { ...approval, agentId: null },
+      item: { ...approval, agent_id: null },
       projectInternalId: projectId,
     });
     expect(handled).toBe(false);
@@ -204,8 +204,8 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
     const handled = await emitClientToolReHandoff({
       item: {
         ...approval,
-        proposedAction: {
-          toolId: 'tool_missing000000',
+        proposed_action: {
+          tool_id: 'tool_missing000000',
           action: 'x',
           arguments: {},
         },
@@ -220,7 +220,7 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
     const handled = await emitClientToolReHandoff({
       // sessionId is read from the in-memory item (provenance / toolContext); it
       // need not be a persisted session for the re-handoff to be seeded.
-      item: { ...approval, sessionId: 'sess_rehandoff' },
+      item: { ...approval, session_id: 'sess_rehandoff' },
       projectInternalId: projectId,
     });
     expect(handled).toBe(true);

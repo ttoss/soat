@@ -12,6 +12,7 @@ import {
   listFormations,
   parseFormationTemplateInput,
   planFormation,
+  planResultToWire,
   updateFormation,
   validateFormationTemplate,
 } from 'src/lib/formations';
@@ -98,15 +99,15 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
-    formationId?: string;
+    project_id?: string;
+    formation_id?: string;
     template?: unknown;
     parameters?: Record<string, string>;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'formations:PlanFormation',
     resourceType: 'formation',
   });
@@ -120,19 +121,20 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     return;
   }
 
-  ctx.body = await planFormation({
+  const plan = await planFormation({
     projectId: Number(targetProjectId),
     template: parsedTemplate as FormationTemplate,
-    formationId: body.formationId,
+    formationId: body.formation_id,
     parameters: body.parameters,
   });
+  ctx.body = planResultToWire(plan);
 });
 
 formationsRouter.post('/formations', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     template?: unknown;
     metadata?: Record<string, unknown>;
@@ -141,7 +143,7 @@ formationsRouter.post('/formations', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'formations:CreateFormation',
     resourceType: 'formation',
   });
@@ -177,7 +179,7 @@ formationsRouter.get('/formations', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -207,10 +209,10 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:GetFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -234,10 +236,10 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:UpdateFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -293,10 +295,10 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
   const formation = await getFormation({ id: ctx.params.formation_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: formation.projectId,
+    projectPublicId: formation.project_id,
     action: 'formations:DeleteFormation',
     resource: buildSrn({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       resourceType: 'formation',
       resourceId: formation.id,
     }),
@@ -324,10 +326,10 @@ formationsRouter.get(
     const formation = await getFormation({ id: ctx.params.formation_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: formation.projectId,
+      projectPublicId: formation.project_id,
       action: 'formations:ListFormationEvents',
       resource: buildSrn({
-        projectPublicId: formation.projectId,
+        projectPublicId: formation.project_id,
         resourceType: 'formation',
         resourceId: formation.id,
       }),

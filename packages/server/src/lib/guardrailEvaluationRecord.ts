@@ -35,7 +35,7 @@ const isAuditWorthyDecision = (decision: GuardrailDecision): boolean => {
  * The `guardrail_evaluation` record — the shape both persisted at dispatch time
  * (task 2.6) and returned by the dry-run endpoint (task 2.9). Mirrors the
  * documented JSON (guardrails.md — Evaluation Audit Record); snake_case is
- * applied by the caseTransform middleware on the way out.
+ * applied by the lib mapper on the way out.
  */
 export type GuardrailEvaluationRecord = {
   kind: 'guardrail_evaluation';
@@ -52,6 +52,31 @@ export type GuardrailEvaluationRecord = {
   agentId: string | null;
   runId: string | null;
   generationId: string | null;
+};
+
+/**
+ * The wire projection of an evaluation record, matching the `GuardrailEvaluation`
+ * schema in `openapi/v1/guardrails.yaml`. `context_snapshot` is an opaque,
+ * author-owned bag — copied as a value, so its inner keys keep the casing the
+ * guardrail's `var` paths are written against.
+ */
+export const mapGuardrailEvaluation = (record: GuardrailEvaluationRecord) => {
+  return {
+    kind: record.kind,
+    guardrail_id: record.guardrailId,
+    guardrail_version: record.guardrailVersion,
+    scope: record.scope,
+    tool: record.tool,
+    action: record.action,
+    class: record.class,
+    decision: record.decision,
+    guard_result: record.guardResult,
+    context_source: record.contextSource,
+    context_snapshot: record.contextSnapshot,
+    agent_id: record.agentId,
+    run_id: record.runId,
+    generation_id: record.generationId,
+  };
 };
 
 /**

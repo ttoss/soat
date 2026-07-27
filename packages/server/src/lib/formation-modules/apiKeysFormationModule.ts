@@ -28,11 +28,6 @@ const log = createDebug('soat:formations:apiKeys');
 const SCHEMA_NAME = 'ApiKeyResourceProperties';
 const RESOURCE_LABEL = 'api_key';
 
-// ── Key normalization ────────────────────────────────────────────────────
-// caseTransform middleware converts all nested request body keys to camelCase.
-// Formation templates are stored with those camelCase keys. Normalize back to
-// snake_case so the spec validators and property accessors work correctly.
-
 // ── Property validation ──────────────────────────────────────────────────
 
 const validateApiKeyProperties = (args: {
@@ -159,7 +154,7 @@ export const apiKeysFormationModule: FormationModule = {
       if (!key) return null;
       return {
         name: key.name,
-        policy_ids: key.policyIds,
+        policy_ids: key.policy_ids,
       };
     } catch {
       return null;

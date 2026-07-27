@@ -22,12 +22,12 @@ export const checkConversationAccess = async (
   action: string
 ): Promise<boolean> => {
   const srn = buildSrn({
-    projectPublicId: conversation.projectId!,
+    projectPublicId: conversation.project_id!,
     resourceType: 'conversation',
     resourceId: conversation.id,
   });
   return authUser.isAllowed({
-    projectPublicId: conversation.projectId!,
+    projectPublicId: conversation.project_id!,
     action,
     resource: srn,
     context: buildConversationContext(conversation),

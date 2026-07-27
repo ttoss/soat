@@ -105,10 +105,14 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
     return;
   }
 
-  const { name, projectId, policyIds } = ctx.request.body as {
+  const {
+    name,
+    project_id: projectId,
+    policy_ids: policyIds,
+  } = ctx.request.body as {
     name: string;
-    projectId?: string | null;
-    policyIds?: string[];
+    project_id?: string | null;
+    policy_ids?: string[];
   };
 
   // project_id is optional: an omitted or null value creates an unscoped key.
@@ -152,7 +156,7 @@ apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    apiKey.userId !== ctx.authUser.publicId &&
+    apiKey.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;
@@ -170,10 +174,14 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     return;
   }
 
-  const { name, projectId, policyIds } = ctx.request.body as {
+  const {
+    name,
+    project_id: projectId,
+    policy_ids: policyIds,
+  } = ctx.request.body as {
     name?: string;
-    projectId?: string | null;
-    policyIds?: string[];
+    project_id?: string | null;
+    policy_ids?: string[];
   };
 
   const existing = await getApiKey({ id: ctx.params.api_key_id });
@@ -184,7 +192,7 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    existing.userId !== ctx.authUser.publicId &&
+    existing.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;
@@ -233,7 +241,7 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    existing.userId !== ctx.authUser.publicId &&
+    existing.user_id !== ctx.authUser.publicId &&
     ctx.authUser.role !== 'admin'
   ) {
     ctx.status = 403;

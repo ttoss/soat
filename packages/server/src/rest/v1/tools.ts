@@ -63,9 +63,9 @@ const coerceToolJsonFields = (body: Record<string, unknown>) => {
     parameters: coerceToJsonObject(body.parameters) ?? undefined,
     execute: coerceToJsonObject(body.execute) ?? undefined,
     mcp: coerceToJsonObject(body.mcp) ?? undefined,
-    presetParameters: coerceToJsonObject(body.presetParameters) ?? undefined,
+    presetParameters: coerceToJsonObject(body.preset_parameters) ?? undefined,
     pipeline: coerceToJsonObject(body.pipeline) ?? undefined,
-    outputMapping: coerceToJsonObject(body.outputMapping) ?? undefined,
+    outputMapping: coerceToJsonObject(body.output_mapping) ?? undefined,
   };
 };
 
@@ -102,7 +102,7 @@ const resolveToolProjectId = async (
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return null;
   }
   return targetProjectId!;
@@ -137,9 +137,10 @@ const checkToolsAccess = async (
  */
 toolsRouter.post('/tools', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
-  const { name, type, description, actions, deniedActions } = body;
-  const projectPublicId = body.projectId as string | undefined;
-  const discussionId = body.discussionId as string | undefined;
+  const { name, type, description, actions } = body;
+  const deniedActions = body.denied_actions;
+  const projectPublicId = body.project_id as string | undefined;
+  const discussionId = body.discussion_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
     ctx.status = 400;
@@ -171,7 +172,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
       ? (deniedActions as string[])
       : undefined,
     discussionId,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
     ...jsonFields,
   });
 
@@ -192,7 +193,7 @@ toolsRouter.get('/tools', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -251,6 +252,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   const projectIds = await checkToolsAccess(ctx, 'tools:UpdateTool');
   if (projectIds === null) return;
 
+  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
   const {
     name,
     type,
@@ -259,15 +261,14 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     execute,
     mcp,
     actions,
-    deniedActions,
-    presetParameters,
     pipeline,
-    discussionId,
-    outputMapping,
-    guardrailIds,
-  } = (ctx.request.body ?? {}) as Record<string, unknown>;
+  } = body;
+  const deniedActions = body.denied_actions;
+  const presetParameters = body.preset_parameters;
+  const discussionId = body.discussion_id;
+  const outputMapping = body.output_mapping;
 
-  const nextGuardrailIds = parseGuardrailIds(guardrailIds);
+  const nextGuardrailIds = parseGuardrailIds(body.guardrail_ids);
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
@@ -293,8 +294,8 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     const current = await getTool({ projectIds, id: ctx.params.tool_id });
     await assertGuardrailDetachAllowed({
       ctx,
-      projectPublicId: current.projectId,
-      current: current.guardrailIds,
+      projectPublicId: current.project_id,
+      current: current.guardrail_ids,
       next: nextGuardrailIds,
     });
   }
@@ -349,9 +350,9 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const tool = await getTool({ projectIds, id: ctx.params.tool_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: tool.projectId,
+    projectPublicId: tool.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: tool.projectId,
+      projectPublicId: tool.project_id,
       resourceType: 'tool',
       resourceId: tool.id,
     }),
@@ -371,8 +372,8 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
  * extracted via `{ var: "output.text" }`). Koa infers a `text/plain` content
  * type for raw string/number/boolean bodies, so those are explicitly
  * serialized as JSON to honor the endpoint's declared `application/json`
- * contract. Object/array results are left as-is so the caseTransform
- * middleware can still convert their keys to snake_case.
+ * contract. Object/array results are left as-is: a tool result is caller-owned
+ * data, so its keys are passed through untouched.
  */
 const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
   if (result !== null && typeof result === 'object') {

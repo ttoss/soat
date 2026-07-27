@@ -8,7 +8,6 @@ import {
   isObjectRecord,
 } from './openapiSchemaFields';
 import { getRouteRequestSchema, resolveSchemaRef } from './openapiSpec';
-import { snakeToCamel } from './soatToolsHelpers';
 
 const log = createDebug('soat:requestValidation');
 
@@ -49,13 +48,13 @@ const childFrames = (
 ): WalkFrame[] => {
   const frames: WalkFrame[] = [];
   for (const [propName, rawProp] of Object.entries(schema.properties)) {
-    const childValue = value[snakeToCamel(propName)];
+    const childValue = value[propName];
     if (childValue === undefined || childValue === null) continue;
 
     const propSchema = resolveSchemaRef(rawProp);
     if (!isObjectRecord(propSchema)) continue;
 
-    const childPath = joinPath(path, snakeToCamel(propName));
+    const childPath = joinPath(path, propName);
     const itemSchema = resolveSchemaRef(propSchema.items);
     if (Array.isArray(childValue) && isObjectRecord(itemSchema)) {
       for (const [index, element] of childValue.entries()) {
@@ -96,10 +95,7 @@ const collectUnknownFields = (
     if (!isObjectRecord(schema) || !isObjectRecord(frame.value)) continue;
     if (isOpenOrAmbiguous(schema) || !hasProperties(schema)) continue;
 
-    const { allowedFields } = deriveSchemaFields({
-      schema,
-      transformKey: snakeToCamel,
-    });
+    const { allowedFields } = deriveSchemaFields({ schema });
     for (const key of Object.keys(frame.value)) {
       if (!allowedFields.has(key)) out.push(joinPath(frame.path, key));
     }
@@ -130,7 +126,8 @@ const isMissing = (
  *
  * `path` is the route as registered on the router (e.g. `/agents/:agent_id`);
  * it is normalized to the OpenAPI path key internally. Field names are compared
- * in camelCase, matching the body after the caseTransform middleware has run.
+ * against the spec's own snake_case names, matching the body as the client sent
+ * it — nothing rewrites keys in between.
  *
  * No-ops when the route has no property-based JSON body schema.
  *
@@ -154,10 +151,7 @@ export const validateRequestBody = (args: {
   const unknownFields: string[] = [];
   collectUnknownFields(schema, body, unknownFields);
 
-  const { requiredFields, fieldSpecs } = deriveSchemaFields({
-    schema,
-    transformKey: snakeToCamel,
-  });
+  const { requiredFields, fieldSpecs } = deriveSchemaFields({ schema });
   const missingFields = [...requiredFields].filter((field) => {
     return isMissing(body[field], fieldSpecs[field]);
   });

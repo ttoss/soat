@@ -22,14 +22,16 @@ import {
   computeOrphanedPlanChanges,
   planResourceChange,
 } from './formationsPlanHelpers';
-import type {
-  FormationEvent,
-  FormationTemplate,
-  MappedFormation,
-  MappedFormationOperation,
-  MappedFormationResource,
-  PlanChange,
-  PlanResult,
+import {
+  type FormationEvent,
+  formationEventToWire,
+  type FormationTemplate,
+  type MappedFormation,
+  type MappedFormationOperation,
+  type MappedFormationResource,
+  type PlanChange,
+  type PlanResult,
+  planResultToWire,
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
@@ -45,6 +47,7 @@ export type {
   PlanChange,
   PlanResult,
 } from './formationsTypes';
+export { planResultToWire } from './formationsTypes';
 export {
   parseFormationTemplateInput,
   validateFormationTemplate,
@@ -63,9 +66,9 @@ const mapFormation = (
     ? (instance.formationResources ?? []).map((r) => {
         return {
           id: r.publicId,
-          logicalId: r.logicalId,
-          resourceType: r.resourceType,
-          physicalResourceId: r.physicalResourceId,
+          logical_id: r.logicalId,
+          resource_type: r.resourceType,
+          physical_resource_id: r.physicalResourceId,
           status: r.status,
         };
       })
@@ -73,17 +76,17 @@ const mapFormation = (
 
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId ?? '',
+    project_id: instance.project?.publicId ?? '',
     name: instance.name,
     template: instance.template as FormationTemplate | null,
     outputs: instance.outputs,
     status: instance.status,
     metadata: instance.metadata,
-    resolvedMetadata: instance.resolvedMetadata,
-    resolvedParameters: instance.resolvedParameters,
+    resolved_metadata: instance.resolvedMetadata,
+    resolved_parameters: instance.resolvedParameters,
     ...(resources !== undefined ? { resources } : {}),
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 
@@ -427,15 +430,17 @@ export const listFormationEvents = async (args: {
       });
     },
     map: (op) => {
+      const events = op.events as FormationEvent[] | null;
+      const plan = op.plan as PlanResult | null;
       return {
         id: op.publicId,
-        operationType: op.operationType,
+        operation_type: op.operationType,
         status: op.status,
-        events: op.events as FormationEvent[] | null,
-        plan: op.plan as PlanResult | null,
+        events: events ? events.map(formationEventToWire) : null,
+        plan: plan ? planResultToWire(plan) : null,
         error: op.error,
-        createdAt: op.createdAt,
-        updatedAt: op.updatedAt,
+        created_at: op.createdAt,
+        updated_at: op.updatedAt,
       };
     },
   });

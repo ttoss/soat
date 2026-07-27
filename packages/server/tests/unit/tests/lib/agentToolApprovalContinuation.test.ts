@@ -142,33 +142,33 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   ): MappedApproval => {
     return {
       id: 'apr_variant_test',
-      projectId: projectPublicId,
+      project_id: projectPublicId,
       origin: 'tool_call',
       status: 'approved',
-      proposedAction: {
-        toolId: httpToolId,
+      proposed_action: {
+        tool_id: httpToolId,
         action: 'refund',
         arguments: { amount: 5 },
       },
       reasoning: null,
       evidence: null,
-      predictedImpact: null,
-      expiresAt: new Date(Date.now() + 3600_000),
-      dedupKey: null,
-      runId: null,
-      nodeId: null,
-      generationId: null,
-      sessionId: null,
-      agentId: agentPublicId,
-      taskId: null,
-      taskTransition: null,
-      policyVersion: null,
-      previousItemId: null,
-      resolvedBy: null,
-      resolutionReason: null,
-      editedArguments: null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      predicted_impact: null,
+      expires_at: new Date(Date.now() + 3600_000),
+      dedup_key: null,
+      run_id: null,
+      node_id: null,
+      generation_id: null,
+      session_id: null,
+      agent_id: agentPublicId,
+      task_id: null,
+      task_transition: null,
+      policy_version: null,
+      previous_item_id: null,
+      resolved_by: null,
+      resolution_reason: null,
+      edited_arguments: null,
+      created_at: new Date(),
+      updated_at: new Date(),
       ...overrides,
     };
   };
@@ -194,12 +194,12 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
 
     const item = buildToolCallItem({
       id: 'apr_cont_test',
-      proposedAction: {
-        toolId: httpToolId,
+      proposed_action: {
+        tool_id: httpToolId,
         action: 'refund',
         arguments: { amount: 25 },
       },
-      generationId: initiator.publicId,
+      generation_id: initiator.publicId,
     });
     const decision: DecisionOutput = {
       decision: 'approved',
@@ -238,7 +238,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   });
 
   test('an expired item fires the continuation without executing', async () => {
-    const item = buildToolCallItem({ status: 'expired', agentId: null });
+    const item = buildToolCallItem({ status: 'expired', agent_id: null });
     const decision: DecisionOutput = {
       decision: 'expired',
       approvalId: item.id,
@@ -253,7 +253,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
 
   test('an inline-tool proposal reports a non-executable result', async () => {
     const item = buildToolCallItem({
-      proposedAction: { toolId: '', arguments: {} },
+      proposed_action: { tool_id: '', arguments: {} },
     });
     const decision: DecisionOutput = {
       decision: 'approved',
@@ -269,7 +269,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   });
 
   test('a missing project is a no-op', async () => {
-    const item = buildToolCallItem({ projectId: 'prj_doesnotexist0' });
+    const item = buildToolCallItem({ project_id: 'prj_doesnotexist0' });
     const decision: DecisionOutput = {
       decision: 'approved',
       approvalId: item.id,
@@ -297,8 +297,8 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
     });
 
     const item = buildToolCallItem({
-      sessionId: session.publicId,
-      editedArguments: { amount: 9 },
+      session_id: session.publicId,
+      edited_arguments: { amount: 9 },
     });
     const decision: DecisionOutput = {
       decision: 'approved',
@@ -322,7 +322,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
 
   test('a failed execution is captured, and the continuation still fires', async () => {
     const item = buildToolCallItem({
-      proposedAction: { toolId: 'tool_bogus0000000', arguments: {} },
+      proposed_action: { tool_id: 'tool_bogus0000000', arguments: {} },
     });
     const decision: DecisionOutput = {
       decision: 'approved',
@@ -342,7 +342,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
     // The approved action executes, but the proposing agent no longer exists,
     // so firing the continuation generation throws — runToolCallContinuation
     // must swallow it (the decision is already persisted).
-    const item = buildToolCallItem({ agentId: 'agent_deleted00000' });
+    const item = buildToolCallItem({ agent_id: 'agent_deleted00000' });
     const decision: DecisionOutput = {
       decision: 'approved',
       approvalId: item.id,
@@ -358,7 +358,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
   });
 
   test('the resume handler forwards a tool_call item to the continuation', async () => {
-    const item = buildToolCallItem({ agentId: 'agent_deleted00000' });
+    const item = buildToolCallItem({ agent_id: 'agent_deleted00000' });
     const decision: DecisionOutput = {
       decision: 'approved',
       approvalId: item.id,

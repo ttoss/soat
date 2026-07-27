@@ -153,7 +153,7 @@ describe('resolveMessageContent', () => {
 
     const result = await resolveMessageContent({
       authUser,
-      content: { type: 'document', documentId: doc.id },
+      content: { type: 'document', document_id: doc.id },
     });
 
     expect(result).toEqual({
@@ -192,9 +192,9 @@ describe('resolveMessageContent', () => {
       allowedToolIds: [audioToolId],
       content: {
         type: 'tool_output',
-        toolId: audioToolId,
+        tool_id: audioToolId,
         input: { url: 'https://example.com/audio.mp3' },
-        outputPath: 'data.transcription.text',
+        output_path: 'data.transcription.text',
       },
     });
 
@@ -213,9 +213,9 @@ describe('resolveMessageContent', () => {
       allowedToolIds: [counterToolId],
       content: {
         type: 'tool_output',
-        toolId: counterToolId,
+        tool_id: counterToolId,
         input: {},
-        outputPath: 'data.count',
+        output_path: 'data.count',
       },
     });
 
@@ -230,9 +230,9 @@ describe('resolveMessageContent', () => {
       allowedToolIds: [listToolId],
       content: {
         type: 'tool_output',
-        toolId: listToolId,
+        tool_id: listToolId,
         input: {},
-        outputPath: 'data.items.1',
+        output_path: 'data.items.1',
       },
     });
 
@@ -252,7 +252,7 @@ describe('resolveMessageContent', () => {
     await expect(
       resolveMessageContent({
         authUser,
-        content: { type: 'document', documentId: doc.id },
+        content: { type: 'document', document_id: doc.id },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -277,7 +277,7 @@ describe('resolveMessageContent', () => {
             },
           ],
         },
-        content: { type: 'document', documentId: doc.id },
+        content: { type: 'document', document_id: doc.id },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
@@ -292,7 +292,7 @@ describe('resolveMessageContent', () => {
         allowedToolIds: ['tool_other'],
         content: {
           type: 'tool_output',
-          toolId: audioToolId,
+          tool_id: audioToolId,
         },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -310,7 +310,7 @@ describe('resolveMessageContent', () => {
         allowedToolIds: [audioToolId],
         content: {
           type: 'tool_output',
-          toolId: audioToolId,
+          tool_id: audioToolId,
         },
       })
     ).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -335,7 +335,7 @@ describe('resolveMessageContent', () => {
         },
         content: {
           type: 'tool_output',
-          toolId: soatToolId,
+          tool_id: soatToolId,
           action: 'list-tools',
         },
       })

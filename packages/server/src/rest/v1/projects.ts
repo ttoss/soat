@@ -17,13 +17,13 @@ import {
 const projectsRouter = new Router<Context>();
 
 type ProjectPriceBody = {
-  meterType?: string;
+  meter_type?: string;
   provider?: string;
   model?: string;
   component?: string;
   unit?: string;
-  unitPrice?: number;
-  effectiveFrom?: string;
+  unit_price?: number;
+  effective_from?: string;
 };
 
 // Authorizes a project-scoped price request against the project itself.
@@ -117,19 +117,19 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
 const parseProjectPatchFields = (body: Record<string, unknown>) => {
   return {
     name: typeof body.name === 'string' ? body.name : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
     // An explicit `null` clears the limit. Any non-null, non-integer value is
     // forwarded so the lib rejects it with a 400 rather than being silently
     // dropped here.
     maxConcurrentRuns: Object.prototype.hasOwnProperty.call(
       body,
-      'maxConcurrentRuns'
+      'max_concurrent_runs'
     )
-      ? (body.maxConcurrentRuns as number | null)
+      ? (body.max_concurrent_runs as number | null)
       : undefined,
     auditReadsEnabled:
-      typeof body.auditReadsEnabled === 'boolean'
-        ? body.auditReadsEnabled
+      typeof body.audit_reads_enabled === 'boolean'
+        ? body.audit_reads_enabled
         : undefined,
   };
 };
@@ -172,7 +172,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     await assertGuardrailDetachAllowed({
       ctx,
       projectPublicId: current.id,
-      current: current.guardrailIds,
+      current: current.guardrail_ids,
       next: guardrailIds,
     });
   }
@@ -228,13 +228,13 @@ projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
   const body = ctx.request.body as { prices?: ProjectPriceBody[] };
   const prices = (body.prices ?? []).map((price) => {
     return {
-      meterType: price.meterType,
+      meterType: price.meter_type,
       provider: price.provider!,
       model: price.model!,
       component: price.component!,
       unit: price.unit!,
-      unitPrice: price.unitPrice!,
-      effectiveFrom: price.effectiveFrom!,
+      unitPrice: price.unit_price!,
+      effectiveFrom: price.effective_from!,
     };
   });
 

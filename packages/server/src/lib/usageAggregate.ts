@@ -30,11 +30,11 @@ const isGroupBy = (value: string): value is UsageGroupBy => {
 };
 
 export type UsageAggregateTotals = {
-  costUsd: number | null;
-  inputTokens: number;
-  outputTokens: number;
-  cachedTokens: number;
-  reasoningTokens: number;
+  cost_usd: number | null;
+  input_tokens: number;
+  output_tokens: number;
+  cached_tokens: number;
+  reasoning_tokens: number;
 };
 
 export type UsageAggregateGroup = UsageAggregateTotals & {
@@ -44,11 +44,12 @@ export type UsageAggregateGroup = UsageAggregateTotals & {
   key: string | null;
 };
 
+/** The wire shape of an aggregate — this value is a response body, not internal state. */
 export type UsageAggregate = {
-  projectId: string;
+  project_id: string;
   from: string | null;
   to: string | null;
-  groupBy: UsageGroupBy;
+  group_by: UsageGroupBy;
   groups: UsageAggregateGroup[];
   totals: UsageAggregateTotals;
 };
@@ -158,11 +159,11 @@ const addEvent = (acc: Accumulator, event: EventWithComponents): void => {
 const finalizeTotals = (acc: Accumulator): UsageAggregateTotals => {
   const summed = sumComponentCostUsd(acc.costs);
   return {
-    costUsd: summed === null ? null : Number(summed),
-    inputTokens: acc.inputTokens,
-    outputTokens: acc.outputTokens,
-    cachedTokens: acc.cachedTokens,
-    reasoningTokens: acc.reasoningTokens,
+    cost_usd: summed === null ? null : Number(summed),
+    input_tokens: acc.inputTokens,
+    output_tokens: acc.outputTokens,
+    cached_tokens: acc.cachedTokens,
+    reasoning_tokens: acc.reasoningTokens,
   };
 };
 
@@ -283,10 +284,10 @@ export const aggregateUsage = async (args: {
   const { groups, totals } = bucketEvents(events, groupBy);
 
   return {
-    projectId: args.projectPublicId,
+    project_id: args.projectPublicId,
     from: from ? from.toISOString() : null,
     to: to ? to.toISOString() : null,
-    groupBy,
+    group_by: groupBy,
     groups,
     totals,
   };

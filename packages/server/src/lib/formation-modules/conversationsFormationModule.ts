@@ -133,7 +133,7 @@ export const conversationsFormationModule: FormationModule = {
       return {
         name: conv.name,
         status: conv.status,
-        actor_id: conv.actorId,
+        actor_id: conv.actor_id,
       };
     } catch {
       return null;

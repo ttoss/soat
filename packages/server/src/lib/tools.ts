@@ -14,7 +14,11 @@ import {
   assertSecretRefsExist,
 } from './secrets';
 import { soatTools } from './soatTools';
-import { callResolvedTool, type InlineToolDefinition } from './toolsCall';
+import {
+  type CallableToolDefinition,
+  callResolvedTool,
+  type InlineToolDefinition,
+} from './toolsCall';
 
 const log = createDebug('soat:tools');
 
@@ -68,7 +72,7 @@ export const validateSoatActions = (actions: string[] | null | undefined) => {
 
 export type MappedTool = {
   id: string;
-  projectId: string;
+  project_id: string;
   type: string;
   name: string;
   description: string | null;
@@ -76,14 +80,14 @@ export type MappedTool = {
   execute: object | null;
   mcp: object | null;
   actions: string[] | null;
-  deniedActions: string[] | null;
-  presetParameters: object | null;
+  denied_actions: string[] | null;
+  preset_parameters: object | null;
   pipeline: object | null;
-  discussionId: string | null;
-  outputMapping: object | null;
-  guardrailIds: string[] | null;
-  createdAt: Date;
-  updatedAt: Date;
+  discussion_id: string | null;
+  output_mapping: object | null;
+  guardrail_ids: string[] | null;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Helpers ───────────────────────────────────────────────────────────
@@ -99,7 +103,7 @@ const mapTool = (
 ): MappedTool => {
   return {
     id: tool.publicId,
-    projectId: tool.project.publicId,
+    project_id: tool.project.publicId,
     type: tool.type,
     name: tool.name,
     description: tool.description,
@@ -107,16 +111,16 @@ const mapTool = (
     execute: tool.execute,
     mcp: tool.mcp,
     actions: tool.actions,
-    deniedActions: tool.deniedActions,
-    presetParameters: tool.presetParameters,
+    denied_actions: tool.deniedActions,
+    preset_parameters: tool.presetParameters,
     pipeline: tool.pipeline,
-    discussionId:
+    discussion_id:
       (tool.discussion as { discussionId?: string } | null)?.discussionId ??
       null,
-    outputMapping: tool.outputMapping,
-    guardrailIds: tool.guardrailIds,
-    createdAt: tool.createdAt,
-    updatedAt: tool.updatedAt,
+    output_mapping: tool.outputMapping,
+    guardrail_ids: tool.guardrailIds,
+    created_at: tool.createdAt,
+    updated_at: tool.updatedAt,
   };
 };
 
@@ -461,6 +465,28 @@ export const deleteTool = async (args: {
 
 // ── Call ──────────────────────────────────────────────────────────────────
 
+// `callResolvedTool` (and `InlineToolDefinition`, an agent's ephemeral inline
+// tool) reads camelCase fields, but `mapTool` is the wire mapper — it emits
+// the response's snake_case shape. Converts explicitly rather than passing
+// the wire object straight through, which would silently resolve every
+// camelCase field to undefined (deniedActions, presetParameters, ...).
+const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
+  return {
+    name: tool.name,
+    type: tool.type,
+    description: tool.description,
+    parameters: tool.parameters,
+    execute: tool.execute,
+    mcp: tool.mcp,
+    actions: tool.actions,
+    deniedActions: tool.denied_actions,
+    presetParameters: tool.preset_parameters,
+    pipeline: tool.pipeline,
+    discussionId: tool.discussion_id,
+    outputMapping: tool.output_mapping,
+  };
+};
+
 // A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
 // holds the actual per-type dispatch logic shared with `callEphemeralTool`.
 export const callTool = async (args: {
@@ -483,7 +509,7 @@ export const callTool = async (args: {
   );
 
   return callResolvedTool({
-    tool: foundTool,
+    tool: toCallableTool(foundTool),
     toolProjectId: toolInstance.projectId,
     action: args.action,
     input: args.input,

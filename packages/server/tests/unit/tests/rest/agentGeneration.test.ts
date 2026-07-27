@@ -38,7 +38,7 @@ describe('Agent Generation Routes', () => {
     const response = await testClient
       .post('/api/v1/agents/agent_test_id/generate/gen_test_id/tool-outputs')
       .send({
-        toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+        tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
       });
 
     expect(response.status).toBe(401);
@@ -227,7 +227,7 @@ describe('Agent Generation Routes', () => {
     test('tool-outputs returns 400 when payload is missing', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_x/tool-outputs`)
-        .send({ toolOutputs: [] });
+        .send({ tool_outputs: [] });
 
       expect(response.status).toBe(400);
     });
@@ -240,7 +240,7 @@ describe('Agent Generation Routes', () => {
         .post(
           `/api/v1/agents/${agentId}/generate/gen_never_existed/tool-outputs`
         )
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(404);
       expect(response.body.error.code).toBe('GENERATION_NOT_FOUND');
@@ -296,9 +296,9 @@ describe('Agent Generation Routes', () => {
               role: 'user',
               content: {
                 type: 'tool_output',
-                toolId: 'tool_audio_to_text',
+                tool_id: 'tool_audio_to_text',
                 input: { url: 'https://example.com/audio.mp3' },
-                outputPath: 'text',
+                output_path: 'text',
               },
             },
           ],
@@ -332,7 +332,7 @@ describe('Agent Generation Routes', () => {
           messages: [
             {
               role: 'user',
-              content: { type: 'document', documentId: 'doc_abc123' },
+              content: { type: 'document', document_id: 'doc_abc123' },
             },
           ],
         })
@@ -565,7 +565,7 @@ describe('Agent Generation Routes', () => {
         .post(
           `/api/v1/agents/${agentId}/generate/gen_stub_pending/tool-outputs`
         )
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe('gen_stub_pending');
@@ -605,7 +605,7 @@ describe('Agent Generation Routes', () => {
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_recovered/tool-outputs`)
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(200);
       expect(response.body.id).toBe('gen_recovered');
@@ -648,7 +648,7 @@ describe('Agent Generation Routes', () => {
         .post(
           `/api/v1/agents/${agentId}/generate/gen_usage_metered/tool-outputs`
         )
-        .send({ toolOutputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
 
       expect(response.status).toBe(200);
       expect(response.body.status).toBe('completed');

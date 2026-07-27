@@ -59,7 +59,7 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -76,9 +76,9 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
   ctx.body = await listAuditEntries({
     projectIds,
     action: ctx.query.action as string | undefined,
-    principalId: ctx.query.principalId as string | undefined,
-    resourcePublicId: ctx.query.resourcePublicId as string | undefined,
-    resourceSrn: ctx.query.resourceSrn as string | undefined,
+    principalId: ctx.query.principal_id as string | undefined,
+    resourcePublicId: ctx.query.resource_public_id as string | undefined,
+    resourceSrn: ctx.query.resource_srn as string | undefined,
     from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
     to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
     limit: parseIntParam({ value: ctx.query.limit, paramName: 'limit' }),
@@ -95,7 +95,7 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   // Export is deliberately per-project: an unbounded cross-project dump is a
   // different (and much larger) egress surface than this endpoint offers.
@@ -121,15 +121,14 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
   ctx.set('Content-Type', 'application/x-ndjson');
   ctx.set('Content-Disposition', `attachment; filename="${filename}"`);
   ctx.status = 200;
-  // A stream body is not a plain object, so `caseTransform` leaves it alone —
-  // the generator already emits the snake_case read contract.
+  // The generator emits the snake_case read contract directly.
   ctx.body = Readable.from(
     streamAuditEntriesNdjson({
       projectIds,
       action: ctx.query.action as string | undefined,
-      principalId: ctx.query.principalId as string | undefined,
-      resourcePublicId: ctx.query.resourcePublicId as string | undefined,
-      resourceSrn: ctx.query.resourceSrn as string | undefined,
+      principalId: ctx.query.principal_id as string | undefined,
+      resourcePublicId: ctx.query.resource_public_id as string | undefined,
+      resourceSrn: ctx.query.resource_srn as string | undefined,
       from: parseDateParam({ value: ctx.query.from, paramName: 'from' }),
       to: parseDateParam({ value: ctx.query.to, paramName: 'to' }),
     })

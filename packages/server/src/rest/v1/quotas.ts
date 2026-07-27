@@ -58,7 +58,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: parseStringOrUndefined(body.projectId),
+    projectPublicId: parseStringOrUndefined(body.project_id),
     action: 'quotas:CreateQuota',
     resourceType: 'quota',
   });
@@ -67,7 +67,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
   const result = await createQuota({
     projectId: Number(targetProjectId),
     scope: body.scope as string,
-    scopeRef: parseNullableString(body.scopeRef),
+    scopeRef: parseNullableString(body.scope_ref),
     metric: body.metric as string,
     window: body.window as string,
     limit: body.limit,
@@ -91,7 +91,7 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -156,9 +156,9 @@ quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const quota = await getQuota({ projectIds, id: ctx.params.quota_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: quota.projectId,
+    projectPublicId: quota.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: quota.projectId,
+      projectPublicId: quota.project_id,
       resourceType: 'quota',
       resourceId: quota.id,
     }),

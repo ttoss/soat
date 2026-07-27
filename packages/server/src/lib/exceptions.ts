@@ -5,6 +5,11 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { emitEvent, onEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
+import {
+  camelToSnakeKey,
+  convertKeys,
+  isPlainObject,
+} from './resource-inputs/normalizers';
 
 const log = createDebug('soat:exceptions');
 
@@ -67,6 +72,25 @@ const buildIncludes = () => {
 };
 
 /**
+ * Converts `detail`'s own top-level keys from camelCase to snake_case
+ * without recursing into nested values. Producers (fileApprovalExpiredException,
+ * fileGuardrailTripwireException, quotaEvents, guardrailEvaluationRecord's
+ * `route_to_approval` detail) build `detail` entirely from server-owned
+ * fields (`approvalId`, `toolId`, `toolName`, `guardrailVersion`, `quotaId`,
+ * ...), so the top level is always safe to rename. A *nested* bag like
+ * `contextSnapshot` (spread in verbatim from a guardrail evaluation record)
+ * is itself an author-authored value one level down — its own inner keys
+ * must never be touched, which is exactly what a shallow (non-recursive)
+ * conversion guarantees.
+ */
+const mapExceptionDetail = (
+  detail: unknown
+): Record<string, unknown> | null => {
+  if (!isPlainObject(detail)) return (detail as null) ?? null;
+  return convertKeys(detail, camelToSnakeKey);
+};
+
+/**
  * Maps a persisted exception item to the plain, publicId-only API shape. The
  * internal `id` and the `*ByUserId` FK columns are never exposed — resolver
  * identity is surfaced via public IDs only.
@@ -74,23 +98,23 @@ const buildIncludes = () => {
 export const mapException = (instance: ExceptionInstance) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     status: instance.status,
     severity: instance.severity,
     kind: instance.kind,
     title: instance.title,
-    detail: instance.detail,
-    occurrenceCount: instance.occurrenceCount,
-    lastSeenAt: instance.lastSeenAt,
-    runId: instance.runId,
-    nodeId: instance.nodeId,
-    agentId: instance.agentId,
-    guardrailVersion: instance.guardrailVersion,
-    acknowledgedBy: instance.acknowledgedByUser?.publicId ?? null,
-    resolvedBy: instance.resolvedByUser?.publicId ?? null,
-    resolutionNote: instance.resolutionNote,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    detail: mapExceptionDetail(instance.detail),
+    occurrence_count: instance.occurrenceCount,
+    last_seen_at: instance.lastSeenAt,
+    run_id: instance.runId,
+    node_id: instance.nodeId,
+    agent_id: instance.agentId,
+    guardrail_version: instance.guardrailVersion,
+    acknowledged_by: instance.acknowledgedByUser?.publicId ?? null,
+    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    resolution_note: instance.resolutionNote,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 
@@ -387,9 +411,12 @@ const fileApprovalExpiredException = async (
     projectId: event.projectId,
     kind: 'approval_expired',
     title: `Approval ${approvalId ?? '(unknown)'} expired without a decision`,
-    detail: { approvalId, toolId: asRecord(approval.proposedAction).toolId },
-    runId: asStringOrNull(approval.runId),
-    agentId: asStringOrNull(approval.agentId),
+    detail: {
+      approvalId,
+      toolId: asRecord(approval.proposed_action).tool_id,
+    },
+    runId: asStringOrNull(approval.run_id),
+    agentId: asStringOrNull(approval.agent_id),
     dedupKey: approvalId ? `approval_expired:${approvalId}` : null,
   });
 };

@@ -25,12 +25,12 @@ actorTagsRouter.get('/actors/:actor_id/tags', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srn = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:GetActor',
     resource: srn,
     context: buildActorTagContext(actor),
@@ -54,12 +54,12 @@ actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srn = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:UpdateActor',
     resource: srn,
     context: buildActorTagContext(actor),
@@ -88,12 +88,12 @@ actorTagsRouter.patch('/actors/:actor_id/tags', async (ctx: Context) => {
   const actor = await getActor({ id: ctx.params.actor_id });
 
   const srn = buildSrn({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     resourceType: 'actor',
     resourceId: actor.id,
   });
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: actor.projectId!,
+    projectPublicId: actor.project_id!,
     action: 'actors:UpdateActor',
     resource: srn,
     context: buildActorTagContext(actor),

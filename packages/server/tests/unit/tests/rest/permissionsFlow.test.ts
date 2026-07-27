@@ -1039,7 +1039,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
   test('listing files filtered by the allowed project returns results', async () => {
     // Exercises filterAccessibleProjects with a resource SRN
     const response = await authenticatedTestClient(userToken).get(
-      `/api/v1/files?projectId=${projectAId}`
+      `/api/v1/files?project_id=${projectAId}`
     );
 
     expect(response.status).toBe(200);
@@ -1052,7 +1052,7 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
 
   test('listing files filtered by the denied project returns 403', async () => {
     const response = await authenticatedTestClient(userToken).get(
-      `/api/v1/files?projectId=${projectBId}`
+      `/api/v1/files?project_id=${projectBId}`
     );
 
     expect(response.status).toBe(403);

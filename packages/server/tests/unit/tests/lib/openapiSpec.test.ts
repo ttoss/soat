@@ -196,24 +196,23 @@ describe('openapiSpec', () => {
       'src/lib/openapiSpec'
     ) as OpenapiSpecModule;
 
-    test('derives camelCase allowed and required fields from the real spec', () => {
+    test('derives allowed and required fields verbatim from the real spec', () => {
       const create = getRequestSchemaFields({
         schemaName: 'CreateAgentRequest',
       });
 
-      // snake_case spec properties are returned in camelCase
-      expect(create.allowedFields.has('aiProviderId')).toBe(true);
-      expect(create.allowedFields.has('maxSteps')).toBe(true);
-      expect(create.allowedFields.has('singleSessionPerActor')).toBe(true);
-      expect(create.allowedFields.has('knowledgeConfig')).toBe(true);
+      // properties are returned under the spec's own names — nothing is rewritten
+      expect(create.allowedFields.has('ai_provider_id')).toBe(true);
+      expect(create.allowedFields.has('max_steps')).toBe(true);
+      expect(create.allowedFields.has('single_session_per_actor')).toBe(true);
+      expect(create.allowedFields.has('knowledge_config')).toBe(true);
 
-      // conversion is exhaustive — no snake_case leaks through
-      for (const field of create.allowedFields) {
-        expect(field).not.toContain('_');
-      }
+      // the camelCase spellings are NOT allowed — a field name has one form
+      expect(create.allowedFields.has('aiProviderId')).toBe(false);
+      expect(create.allowedFields.has('maxSteps')).toBe(false);
 
       // required is derived from the schema's `required` array
-      expect([...create.requiredFields]).toEqual(['aiProviderId']);
+      expect([...create.requiredFields]).toEqual(['ai_provider_id']);
     });
 
     test('distinguishes create-only fields from updatable ones', () => {
@@ -224,10 +223,10 @@ describe('openapiSpec', () => {
         schemaName: 'UpdateAgentRequest',
       });
 
-      expect(create.allowedFields.has('projectId')).toBe(true);
-      // projectId is create-only — it must not be an updatable field
-      expect(update.allowedFields.has('projectId')).toBe(false);
-      expect(update.allowedFields.has('aiProviderId')).toBe(true);
+      expect(create.allowedFields.has('project_id')).toBe(true);
+      // project_id is create-only — it must not be an updatable field
+      expect(update.allowedFields.has('project_id')).toBe(false);
+      expect(update.allowedFields.has('ai_provider_id')).toBe(true);
       // UpdateAgentRequest has no required fields
       expect(update.requiredFields.size).toBe(0);
     });
@@ -250,7 +249,7 @@ describe('openapiSpec', () => {
         path: '/agents/:agent_id',
       });
       expect(fields).not.toBeNull();
-      expect(fields!.allowedFields.has('aiProviderId')).toBe(true);
+      expect(fields!.allowedFields.has('ai_provider_id')).toBe(true);
       // create-only field is absent from UpdateAgentRequest
       expect(fields!.allowedFields.has('projectId')).toBe(false);
     });
@@ -269,7 +268,7 @@ describe('openapiSpec', () => {
         method: 'POST',
         path: '/agents',
       });
-      expect(fields?.allowedFields.has('aiProviderId')).toBe(true);
+      expect(fields?.allowedFields.has('ai_provider_id')).toBe(true);
     });
 
     test('returns null for an open additionalProperties map (tags)', () => {

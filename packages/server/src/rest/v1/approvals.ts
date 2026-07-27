@@ -21,9 +21,9 @@ const approvalsRouter = new Router<Context>();
  * resource defaults to `*`, which such a policy cannot match, wrongly denying
  * get/approve/reject while `list` (already SRN-checked) succeeds.
  */
-const approvalSrn = (approval: { projectId?: string; id: string }): string => {
+const approvalSrn = (approval: { project_id?: string; id: string }): string => {
   return buildSrn({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     resourceType: 'approval',
     resourceId: approval.id,
   });
@@ -36,7 +36,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -50,7 +50,7 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
     return;
   }
 
-  const expiresBeforeRaw = ctx.query.expiresBefore as string | undefined;
+  const expiresBeforeRaw = ctx.query.expires_before as string | undefined;
 
   ctx.body = await listApprovals({
     projectIds: projectIds ?? [],
@@ -70,7 +70,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -84,7 +84,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
     return;
   }
 
-  const minCountRaw = ctx.query.minCount as string | undefined;
+  const minCountRaw = ctx.query.min_count as string | undefined;
   const minCount =
     minCountRaw != null ? Number.parseInt(minCountRaw, 10) : undefined;
 
@@ -106,7 +106,7 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
   const approval = await getApproval({ id: ctx.params.approval_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     action: 'approvals:GetApproval',
     resource: approvalSrn(approval),
   });
@@ -131,7 +131,7 @@ approvalsRouter.post(
     const approval = await getApproval({ id: ctx.params.approval_id });
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: approval.projectId!,
+      projectPublicId: approval.project_id!,
       action: 'approvals:ResolveApproval',
       resource: approvalSrn(approval),
     });
@@ -163,7 +163,7 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
   const approval = await getApproval({ id: ctx.params.approval_id });
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     action: 'approvals:ResolveApproval',
     resource: approvalSrn(approval),
   });

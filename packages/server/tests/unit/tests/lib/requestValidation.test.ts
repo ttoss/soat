@@ -29,7 +29,7 @@ describe('validateRequestBody', () => {
         return validateRequestBody({
           method: 'post',
           path: '/agents',
-          body: { aiProviderId: 'aip_1', name: 'Alpha', maxSteps: 5 },
+          body: { ai_provider_id: 'aip_1', name: 'Alpha', max_steps: 5 },
         });
       }).not.toThrow();
     });
@@ -39,7 +39,7 @@ describe('validateRequestBody', () => {
         return validateRequestBody({
           method: 'post',
           path: '/agents',
-          body: { aiProviderId: 'aip_1', prompt: 'oops', foo: 1 },
+          body: { ai_provider_id: 'aip_1', prompt: 'oops', foo: 1 },
         });
       });
       expect(error.code).toBe('VALIDATION_FAILED');
@@ -53,10 +53,10 @@ describe('validateRequestBody', () => {
         return validateRequestBody({
           method: 'post',
           path: '/agents',
-          body: { aiProviderId: 'aip_1', knowledgeConfig: { bogus: true } },
+          body: { ai_provider_id: 'aip_1', knowledge_config: { bogus: true } },
         });
       });
-      expect(error.meta).toEqual({ unknownFields: ['knowledgeConfig.bogus'] });
+      expect(error.meta).toEqual({ unknownFields: ['knowledge_config.bogus'] });
     });
 
     test('rejects an unknown field inside an array item with an indexed path', () => {
@@ -74,15 +74,15 @@ describe('validateRequestBody', () => {
       expect(error.meta).toEqual({ unknownFields: ['nodes.0.bogus'] });
     });
 
-    test('compares in camelCase (snake_case top-level key is unknown)', () => {
+    test('compares against spec names (a camelCase key is unknown)', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
           path: '/agents',
-          body: { ai_provider_id: 'aip_1' },
+          body: { aiProviderId: 'aip_1' },
         });
       });
-      expect(error.message).toMatch(/ai_provider_id/);
+      expect(error.message).toMatch(/aiProviderId/);
     });
   });
 
@@ -104,7 +104,7 @@ describe('validateRequestBody', () => {
           path: '/orchestrations',
           body: {
             name: 'flow',
-            nodes: [{ id: 'n1', type: 'agent', inputMapping: { any: 1 } }],
+            nodes: [{ id: 'n1', type: 'agent', input_mapping: { any: 1 } }],
             edges: [],
           },
         });
@@ -206,13 +206,16 @@ describe('validateRequestBody', () => {
         return validateRequestBody({
           method: 'post',
           path: '/agents',
-          body: { ai_provider_id: 'aip_1' },
+          body: { foo: 1 },
         });
       });
-      // snake_case key is unknown AND the camelCase required field is missing
+      // `foo` is not in the schema; `ai_provider_id` is required and absent.
+      // Under the old dual-casing kernel this case was self-contradictory —
+      // `ai_provider_id` counted as unknown *and* `aiProviderId` as missing,
+      // for a body that spelled the field exactly as the spec declares it.
       expect(error.meta).toEqual({
-        unknownFields: ['ai_provider_id'],
-        missingFields: ['aiProviderId'],
+        unknownFields: ['foo'],
+        missingFields: ['ai_provider_id'],
       });
     });
   });

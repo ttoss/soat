@@ -1,9 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import type {
-  OrchestrationEdge,
-  OrchestrationNode,
-} from 'src/lib/orchestrations';
+import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -25,6 +22,13 @@ import {
   resolveRunAuth,
   resolveStartRunScope,
 } from './orchestrationAuth';
+import {
+  parseRunInput,
+  parseUpdateBody,
+  type RawCreateBody,
+  type RawUpdateBody,
+  validateCreateBody,
+} from './orchestrationsRequestBody';
 
 export const orchestrationsRouter = new Router<Context>();
 const resolveAuth = async (
@@ -76,65 +80,6 @@ const resolveOrchestrationAccess = async (
   }
   return projectIds ?? undefined;
 };
-type RawCreateBody = {
-  projectId?: string;
-  name?: unknown;
-  description?: unknown;
-  nodes?: unknown;
-  edges?: unknown;
-  stateSchema?: unknown;
-  inputSchema?: unknown;
-};
-const validateCreateBody = (
-  body: RawCreateBody
-): { error: string } | { name: string; nodes: unknown[]; edges: unknown[] } => {
-  if (!body.name || typeof body.name !== 'string') {
-    return { error: 'name is required' };
-  }
-  if (!Array.isArray(body.nodes)) {
-    return { error: 'nodes must be an array' };
-  }
-  if (!Array.isArray(body.edges)) {
-    return { error: 'edges must be an array' };
-  }
-  return { name: body.name, nodes: body.nodes, edges: body.edges };
-};
-type RawUpdateBody = {
-  name?: unknown;
-  description?: unknown;
-  nodes?: unknown;
-  edges?: unknown;
-  stateSchema?: unknown;
-  inputSchema?: unknown;
-};
-
-const parseUpdateBody = (body: RawUpdateBody) => {
-  return {
-    name: typeof body.name === 'string' ? body.name : undefined,
-    description:
-      body.description !== undefined
-        ? body.description === null
-          ? null
-          : String(body.description)
-        : undefined,
-    nodes: Array.isArray(body.nodes) ? (body.nodes as never[]) : undefined,
-    edges: Array.isArray(body.edges) ? (body.edges as never[]) : undefined,
-    stateSchema:
-      body.stateSchema !== undefined
-        ? (body.stateSchema as object | null)
-        : undefined,
-    inputSchema:
-      body.inputSchema !== undefined
-        ? (body.inputSchema as object | null)
-        : undefined,
-  };
-};
-
-const parseRunInput = (raw: unknown): Record<string, unknown> | undefined => {
-  return raw != null && typeof raw === 'object' && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : undefined;
-};
 /**
  * @openapi
  * /api/v1/orchestrations:
@@ -154,24 +99,29 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
   const auth = await resolveAuth(
     ctx,
     'orchestrations:CreateOrchestration',
-    body.projectId
+    body.project_id
   );
   if (!auth) return;
+
+  const graph = parseOrchestrationGraph({
+    nodes: validated.nodes,
+    edges: validated.edges,
+  });
 
   const result = await createOrchestration({
     projectId: auth.primaryId,
     name: validated.name,
     description:
       typeof body.description === 'string' ? body.description : undefined,
-    nodes: validated.nodes as never[],
-    edges: validated.edges as never[],
+    nodes: graph.nodes as never[],
+    edges: graph.edges as never[],
     stateSchema:
-      body.stateSchema != null && typeof body.stateSchema === 'object'
-        ? body.stateSchema
+      body.state_schema != null && typeof body.state_schema === 'object'
+        ? body.state_schema
         : undefined,
     inputSchema:
-      body.inputSchema != null && typeof body.inputSchema === 'object'
-        ? body.inputSchema
+      body.input_schema != null && typeof body.input_schema === 'object'
+        ? body.input_schema
         : undefined,
   });
 
@@ -193,12 +143,11 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as {
     nodes?: unknown;
     edges?: unknown;
-    inputSchema?: unknown;
+    input_schema?: unknown;
   };
   ctx.body = validateOrchestrationGraph({
-    nodes: Array.isArray(body.nodes) ? (body.nodes as OrchestrationNode[]) : [],
-    edges: Array.isArray(body.edges) ? (body.edges as OrchestrationEdge[]) : [],
-    inputSchema: (body.inputSchema as object | null) ?? null,
+    ...parseOrchestrationGraph({ nodes: body.nodes, edges: body.edges }),
+    inputSchema: (body.input_schema as object | null) ?? null,
   });
   ctx.status = 200;
 });
@@ -215,7 +164,7 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -334,12 +283,14 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   }
 
   const body = (ctx.request.body ?? {}) as {
-    orchestrationId?: unknown;
+    orchestration_id?: unknown;
     input?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
-    typeof body.orchestrationId === 'string' ? body.orchestrationId : undefined;
+    typeof body.orchestration_id === 'string'
+      ? body.orchestration_id
+      : undefined;
   if (!orchestrationId) {
     ctx.status = 400;
     ctx.body = { error: 'orchestration_id is required' };
@@ -377,7 +328,7 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
     return;
   }
 
-  const orchestrationId = ctx.query['orchestrationId'] as string | undefined;
+  const orchestrationId = ctx.query['orchestration_id'] as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     action: 'orchestrations:ListRuns',
@@ -467,11 +418,11 @@ orchestrationsRouter.post(
     if (!auth) return;
 
     const body = (ctx.request.body ?? {}) as {
-      nodeId?: unknown;
+      node_id?: unknown;
       output?: unknown;
     };
 
-    const nodeId = typeof body.nodeId === 'string' ? body.nodeId : undefined;
+    const nodeId = typeof body.node_id === 'string' ? body.node_id : undefined;
     const output =
       typeof body.output === 'object' && body.output !== null
         ? (body.output as Record<string, unknown>)

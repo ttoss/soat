@@ -2,7 +2,8 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import type { AgentToolBinding, InlineToolDefinition } from 'src/lib/agents';
+import { normalizeKnowledgeConfig } from 'src/lib/agentKnowledge';
+import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
   deleteAgent,
@@ -10,6 +11,7 @@ import {
   listAgents,
   updateAgent,
 } from 'src/lib/agents';
+import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -26,26 +28,26 @@ export const agentsRouter = new Router<Context>();
 // ── Agents CRUD ──────────────────────────────────────────────────────────
 
 type CreateAgentBody = {
-  aiProviderId?: unknown;
+  ai_provider_id?: unknown;
   name?: unknown;
   instructions?: unknown;
   model?: unknown;
-  toolBindings?: unknown;
-  toolIds?: unknown;
+  tool_bindings?: unknown;
+  tool_ids?: unknown;
   tools?: unknown;
-  maxSteps?: unknown;
-  toolChoice?: unknown;
-  stopConditions?: unknown;
-  activeToolIds?: unknown;
-  stepRules?: unknown;
-  boundaryPolicy?: unknown;
+  max_steps?: unknown;
+  tool_choice?: unknown;
+  stop_conditions?: unknown;
+  active_tool_ids?: unknown;
+  step_rules?: unknown;
+  boundary_policy?: unknown;
   temperature?: unknown;
-  knowledgeConfig?: unknown;
-  outputSchema?: unknown;
-  maxContextMessages?: unknown;
-  singleSessionPerActor?: unknown;
-  guardrailIds?: unknown;
-  projectId?: string;
+  knowledge_config?: unknown;
+  output_schema?: unknown;
+  max_context_messages?: unknown;
+  single_session_per_actor?: unknown;
+  guardrail_ids?: unknown;
+  project_id?: string;
 };
 
 /**
@@ -68,9 +70,9 @@ const parseInlineToolDefinition = (
     execute,
     mcp,
     actions,
-    presetParameters,
+    preset_parameters: presetParameters,
     pipeline,
-    outputMapping,
+    output_mapping: outputMapping,
   } = value as Record<string, unknown>;
 
   if (!name || typeof name !== 'string') return null;
@@ -139,28 +141,31 @@ const parseUpdateAgentBody = (
 ) => {
   return {
     aiProviderId:
-      typeof body.aiProviderId === 'string' ? body.aiProviderId : undefined,
+      typeof body.ai_provider_id === 'string' ? body.ai_provider_id : undefined,
     name: parseNullableString(body.name),
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
-    toolIds: parseOptional<string[] | null>(body.toolIds),
+    toolBindings: parseWireToolBindings(body.tool_bindings),
+    toolIds: parseOptional<string[] | null>(body.tool_ids),
     tools,
-    maxSteps: parseOptional<number | null>(body.maxSteps),
-    toolChoice: parseOptional<string | object | null>(body.toolChoice),
-    stopConditions: parseOptional<object[] | null>(body.stopConditions),
-    activeToolIds: parseOptional<string[] | null>(body.activeToolIds),
-    stepRules: parseOptional<object[] | null>(body.stepRules),
-    boundaryPolicy: parseOptional<object | null>(body.boundaryPolicy),
+    maxSteps: parseOptional<number | null>(body.max_steps),
+    toolChoice: parseOptional<string | object | null>(body.tool_choice),
+    stopConditions: parseOptional<object[] | null>(body.stop_conditions),
+    activeToolIds: parseOptional<string[] | null>(body.active_tool_ids),
+    stepRules: parseOptional<object[] | null>(body.step_rules),
+    boundaryPolicy: parseOptional<object | null>(body.boundary_policy),
     temperature: parseOptional<number | null>(body.temperature),
-    knowledgeConfig: parseOptional<object | null>(body.knowledgeConfig),
-    outputSchema: parseOptional<object | null>(body.outputSchema),
-    maxContextMessages: parseOptional<number | null>(body.maxContextMessages),
+    knowledgeConfig:
+      body.knowledge_config === undefined
+        ? undefined
+        : normalizeKnowledgeConfig(body.knowledge_config),
+    outputSchema: parseOptional<object | null>(body.output_schema),
+    maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
-      typeof body.singleSessionPerActor === 'boolean'
-        ? body.singleSessionPerActor
+      typeof body.single_session_per_actor === 'boolean'
+        ? body.single_session_per_actor
         : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
   };
 };
 
@@ -194,33 +199,34 @@ const buildCreateAgentArgs = (
 ): Parameters<typeof createAgent>[0] => {
   return {
     projectId,
-    aiProviderId: body.aiProviderId as string,
+    aiProviderId: body.ai_provider_id as string,
     name: typeof body.name === 'string' ? body.name : undefined,
     instructions:
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
-    toolBindings: parseOptional<AgentToolBinding[] | null>(body.toolBindings),
-    toolIds: Array.isArray(body.toolIds) ? body.toolIds : undefined,
+    toolBindings: parseWireToolBindings(body.tool_bindings),
+    toolIds: Array.isArray(body.tool_ids) ? body.tool_ids : undefined,
     tools,
-    maxSteps: parseNumber(body.maxSteps),
-    toolChoice: body.toolChoice as string | object | undefined,
-    stopConditions: Array.isArray(body.stopConditions)
-      ? body.stopConditions
+    maxSteps: parseNumber(body.max_steps),
+    toolChoice: body.tool_choice as string | object | undefined,
+    stopConditions: Array.isArray(body.stop_conditions)
+      ? body.stop_conditions
       : undefined,
-    activeToolIds: Array.isArray(body.activeToolIds)
-      ? body.activeToolIds
+    activeToolIds: Array.isArray(body.active_tool_ids)
+      ? body.active_tool_ids
       : undefined,
-    stepRules: Array.isArray(body.stepRules) ? body.stepRules : undefined,
-    boundaryPolicy: body.boundaryPolicy as object | undefined,
+    stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
+    boundaryPolicy: body.boundary_policy as object | undefined,
     temperature: parseNumber(body.temperature),
-    knowledgeConfig: body.knowledgeConfig as object | undefined,
-    outputSchema: body.outputSchema as object | undefined,
-    maxContextMessages: parseNumber(body.maxContextMessages),
+    knowledgeConfig: normalizeKnowledgeConfig(body.knowledge_config) as
+      object | undefined,
+    outputSchema: body.output_schema as object | undefined,
+    maxContextMessages: parseNumber(body.max_context_messages),
     singleSessionPerActor:
-      typeof body.singleSessionPerActor === 'boolean'
-        ? body.singleSessionPerActor
+      typeof body.single_session_per_actor === 'boolean'
+        ? body.single_session_per_actor
         : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
   };
 };
 
@@ -245,8 +251,8 @@ const runAgentUpdate = async (args: {
     const current = await getAgent({ projectIds, id: ctx.params.agent_id });
     await assertGuardrailDetachAllowed({
       ctx,
-      projectPublicId: current.projectId,
-      current: current.guardrailIds,
+      projectPublicId: current.project_id,
+      current: current.guardrail_ids,
       next: parsed.guardrailIds,
     });
   }
@@ -263,9 +269,9 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  if (!reqBody.aiProviderId || typeof reqBody.aiProviderId !== 'string') {
+  if (!reqBody.ai_provider_id || typeof reqBody.ai_provider_id !== 'string') {
     ctx.status = 400;
-    ctx.body = { error: 'aiProviderId is required' };
+    ctx.body = { error: 'ai_provider_id is required' };
     return;
   }
 
@@ -276,7 +282,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const targetProjectId = await resolveAgentProjectId(
     ctx.authUser,
-    reqBody.projectId
+    reqBody.project_id
   );
 
   if (targetProjectId === 403) {
@@ -288,7 +294,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   /* istanbul ignore next */
   if (targetProjectId === 400) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return;
   }
 
@@ -307,7 +313,7 @@ agentsRouter.get('/agents', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -419,9 +425,9 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
   // before the delete runs (see `setAuditResourceHint`).
   const agent = await getAgent({ projectIds, id: ctx.params.agent_id });
   setAuditResourceHint(ctx, {
-    projectPublicId: agent.projectId,
+    projectPublicId: agent.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: agent.projectId,
+      projectPublicId: agent.project_id,
       resourceType: 'agent',
       resourceId: agent.id,
     }),

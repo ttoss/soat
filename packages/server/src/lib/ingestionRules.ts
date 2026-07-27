@@ -21,20 +21,20 @@ export type FileDelivery = 'base64' | 'download_url';
 
 export type MappedIngestionRule = {
   id: string;
-  projectId: string;
-  contentTypeGlob: string;
-  toolId: string | null;
-  agentId: string | null;
+  project_id: string;
+  content_type_glob: string;
+  tool_id: string | null;
+  agent_id: string | null;
   action: string | null;
-  presetParameters: object | null;
-  nativeExtraction: string;
-  fileDelivery: string;
-  chunkStrategy: string | null;
-  chunkSize: number | null;
-  chunkOverlap: number | null;
+  preset_parameters: object | null;
+  native_extraction: string;
+  file_delivery: string;
+  chunk_strategy: string | null;
+  chunk_size: number | null;
+  chunk_overlap: number | null;
   metadata: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Map Helpers ───────────────────────────────────────────────────────────────
@@ -56,20 +56,20 @@ const mapIngestionRule = (
 ): MappedIngestionRule => {
   return {
     id: rule.publicId,
-    projectId: rule.project?.publicId ?? '',
-    contentTypeGlob: rule.contentTypeGlob,
-    toolId: rule.tool?.publicId ?? null,
-    agentId: rule.agent?.publicId ?? null,
+    project_id: rule.project?.publicId ?? '',
+    content_type_glob: rule.contentTypeGlob,
+    tool_id: rule.tool?.publicId ?? null,
+    agent_id: rule.agent?.publicId ?? null,
     action: rule.action,
-    presetParameters: rule.presetParameters,
-    nativeExtraction: rule.nativeExtraction,
-    fileDelivery: rule.fileDelivery,
-    chunkStrategy: rule.chunkStrategy,
-    chunkSize: rule.chunkSize,
-    chunkOverlap: rule.chunkOverlap,
+    preset_parameters: rule.presetParameters,
+    native_extraction: rule.nativeExtraction,
+    file_delivery: rule.fileDelivery,
+    chunk_strategy: rule.chunkStrategy,
+    chunk_size: rule.chunkSize,
+    chunk_overlap: rule.chunkOverlap,
     metadata: rule.metadata,
-    createdAt: rule.createdAt,
-    updatedAt: rule.updatedAt,
+    created_at: rule.createdAt,
+    updated_at: rule.updatedAt,
   };
 };
 
@@ -433,12 +433,12 @@ export const resolveIngestionRule = async (args: {
     })
     .filter((rule) => {
       return matchesContentTypeGlob({
-        glob: rule.contentTypeGlob,
+        glob: rule.content_type_glob,
         contentType: args.contentType,
       });
     })
     .sort((a, b) => {
-      return compareGlobSpecificity(a.contentTypeGlob, b.contentTypeGlob);
+      return compareGlobSpecificity(a.content_type_glob, b.content_type_glob);
     });
 
   return matches[0] ?? null;

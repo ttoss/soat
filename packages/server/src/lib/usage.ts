@@ -43,30 +43,30 @@ export type PersistedUsageComponent = {
   quantity: number;
   unit: string;
   billable: boolean;
-  unitPrice: number | null;
-  costUsd: number | null;
-  priceId: string | null;
+  unit_price: number | null;
+  cost_usd: number | null;
+  price_id: string | null;
 };
 
 export type PersistedUsageEvent = {
   id: string;
-  projectId: string;
-  runId: string | null;
-  nodeId: string | null;
-  agentId: string | null;
-  generationId: string | null;
-  traceId: string | null;
-  actorId: string | null;
-  sessionId: string | null;
-  aiProviderId: string | null;
-  triggerId: string | null;
-  actionId: string | null;
-  meterType: string;
+  project_id: string;
+  run_id: string | null;
+  node_id: string | null;
+  agent_id: string | null;
+  generation_id: string | null;
+  trace_id: string | null;
+  actor_id: string | null;
+  session_id: string | null;
+  ai_provider_id: string | null;
+  trigger_id: string | null;
+  action_id: string | null;
+  meter_type: string;
   provider: string;
   model: string;
-  costUsd: number | null;
+  cost_usd: number | null;
   components: PersistedUsageComponent[];
-  createdAt: Date;
+  created_at: Date;
 };
 
 const assocPublicId = (
@@ -85,10 +85,10 @@ const mapComponent = (
     quantity: Number(component.quantity),
     unit: component.unit,
     billable: component.billable,
-    unitPrice:
+    unit_price:
       component.unitPrice === null ? null : Number(component.unitPrice),
-    costUsd: component.costUsd === null ? null : Number(component.costUsd),
-    priceId: assocPublicId(component.price),
+    cost_usd: component.costUsd === null ? null : Number(component.costUsd),
+    price_id: assocPublicId(component.price),
   };
 };
 
@@ -110,23 +110,23 @@ const mapUsageEvent = (
   }
   return {
     id: event.publicId,
-    projectId: event.project.publicId,
-    runId: assocPublicId(event.run),
-    nodeId: event.nodeId,
-    agentId: assocPublicId(event.agent),
-    generationId: assocPublicId(event.generation),
-    traceId: assocPublicId(event.trace),
-    actorId: assocPublicId(event.actor),
-    sessionId: assocPublicId(event.session),
-    aiProviderId: assocPublicId(event.aiProvider),
-    triggerId: event.triggerId,
-    actionId: event.actionId,
-    meterType: event.meterType,
+    project_id: event.project.publicId,
+    run_id: assocPublicId(event.run),
+    node_id: event.nodeId,
+    agent_id: assocPublicId(event.agent),
+    generation_id: assocPublicId(event.generation),
+    trace_id: assocPublicId(event.trace),
+    actor_id: assocPublicId(event.actor),
+    session_id: assocPublicId(event.session),
+    ai_provider_id: assocPublicId(event.aiProvider),
+    trigger_id: event.triggerId,
+    action_id: event.actionId,
+    meter_type: event.meterType,
     provider: event.provider,
     model: event.model,
-    costUsd: event.costUsd === null ? null : Number(event.costUsd),
+    cost_usd: event.costUsd === null ? null : Number(event.costUsd),
     components: (event.components ?? []).map(mapComponent),
-    createdAt: event.createdAt,
+    created_at: event.createdAt,
   };
 };
 

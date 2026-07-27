@@ -698,7 +698,7 @@ KNOWLEDGE_TOOL_ID=$(soat create-tool \
   --type soat \
   --description "Searches the ingested product manuals for relevant passages" \
   --actions '["search-knowledge"]' \
-  --preset-parameters '{"projectId": "'"$PROJECT_ID"'", "documentPaths": ["/manuals/"]}' \
+  --preset-parameters '{"project_id": "'"$PROJECT_ID"'", "document_paths": ["/manuals/"]}' \
   | jq -r '.id')
 echo "KNOWLEDGE_TOOL_ID: $KNOWLEDGE_TOOL_ID"
 ```

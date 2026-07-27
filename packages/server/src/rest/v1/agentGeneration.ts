@@ -7,6 +7,7 @@ import type { ServerResponse } from 'node:http';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import type { GenerationResult } from 'src/lib/agentGeneration';
+import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateGenerationMetadata } from 'src/lib/generations';
@@ -63,7 +64,7 @@ const handleGenerationResult = async (
     await sendStreamResponse(ctx, result as ReadableStream);
     return;
   }
-  ctx.body = result;
+  ctx.body = mapGenerationResult(result as GenerationResult);
 };
 
 const fireExtractionForCompletedResult = (args: {
@@ -138,29 +139,29 @@ agentGenerationRouter.post(
     const {
       messages,
       stream,
-      traceId,
-      parentTraceId,
-      rootTraceId,
-      maxCallDepth,
-      toolContext,
-      knowledgeConfig,
-      actionId,
+      trace_id: traceId,
+      parent_trace_id: parentTraceId,
+      root_trace_id: rootTraceId,
+      max_call_depth: maxCallDepth,
+      tool_context: toolContext,
+      knowledge_config: knowledgeConfig,
+      action_id: actionId,
       extract,
       metadata,
-      guardrailContext,
+      guardrail_context: guardrailContext,
     } = ctx.request.body as {
       messages?: unknown;
       stream?: boolean;
-      traceId?: string;
-      parentTraceId?: string;
-      rootTraceId?: string;
-      maxCallDepth?: unknown;
-      toolContext?: Record<string, string>;
-      knowledgeConfig?: object;
-      actionId?: string;
+      trace_id?: string;
+      parent_trace_id?: string;
+      root_trace_id?: string;
+      max_call_depth?: unknown;
+      tool_context?: Record<string, string>;
+      knowledge_config?: object;
+      action_id?: string;
       extract?: boolean;
       metadata?: unknown;
-      guardrailContext?: unknown;
+      guardrail_context?: unknown;
     };
 
     const bodyError = validateGenerateBody({ messages, metadata });
@@ -223,8 +224,8 @@ agentGenerationRouter.post(
       return;
     }
 
-    const { toolOutputs } = ctx.request.body as {
-      toolOutputs?: unknown;
+    const { tool_outputs: toolOutputs } = ctx.request.body as {
+      tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
 
     if (!Array.isArray(toolOutputs) || toolOutputs.length === 0) {
@@ -239,13 +240,15 @@ agentGenerationRouter.post(
       projectIds,
       agentId: ctx.params.agent_id,
       generationId: ctx.params.generation_id,
-      toolOutputs: toolOutputs as Array<{
-        toolCallId: string;
-        output: unknown;
-      }>,
+      toolOutputs: toolOutputs.map((toolOutput) => {
+        return {
+          toolCallId: toolOutput.tool_call_id,
+          output: toolOutput.output,
+        };
+      }),
       authHeader: (ctx.headers.authorization as string) ?? undefined,
     });
 
-    ctx.body = result;
+    ctx.body = mapGenerationResult(result);
   }
 );

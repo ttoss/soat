@@ -18,12 +18,12 @@ import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
 const aiProvidersRouter = new Router<Context>();
 
 type CreateAiProviderBody = {
-  projectId?: string;
-  secretId?: string;
+  project_id?: string;
+  secret_id?: string;
   name?: string;
   provider?: string;
-  defaultModel?: string;
-  baseUrl?: string;
+  default_model?: string;
+  base_url?: string;
   config?: Record<string, unknown>;
 };
 
@@ -46,7 +46,7 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -81,10 +81,10 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.projectId!,
+    projectPublicId: provider.project_id!,
     action: 'ai-providers:GetAiProvider',
     resource: buildSrn({
-      projectPublicId: provider.projectId!,
+      projectPublicId: provider.project_id!,
       resourceType: 'aiProvider',
       resourceId: provider.id,
     }),
@@ -99,12 +99,12 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 });
 
 type ProviderPriceBody = {
-  meterType?: string;
+  meter_type?: string;
   model?: string;
   component?: string;
   unit?: string;
-  unitPrice?: number;
-  effectiveFrom?: string;
+  unit_price?: number;
+  effective_from?: string;
 };
 
 // Authorizes a per-provider price request against the provider's own project.
@@ -129,10 +129,10 @@ const authorizeProviderPrices = async (args: {
   }
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: provider.projectId!,
+    projectPublicId: provider.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: provider.projectId!,
+      projectPublicId: provider.project_id!,
       resourceType: 'aiProvider',
       resourceId: provider.id,
     }),
@@ -171,12 +171,12 @@ aiProvidersRouter.put(
     const body = ctx.request.body as { prices?: ProviderPriceBody[] };
     const prices = (body.prices ?? []).map((price) => {
       return {
-        meterType: price.meterType,
+        meterType: price.meter_type,
         model: price.model!,
         component: price.component!,
         unit: price.unit!,
-        unitPrice: price.unitPrice!,
-        effectiveFrom: price.effectiveFrom!,
+        unitPrice: price.unit_price!,
+        effectiveFrom: price.effective_from!,
       };
     });
 
@@ -201,16 +201,16 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'ai-providers:CreateAiProvider',
     resourceType: 'aiProvider',
   });
   if (targetProjectId === null) return;
 
   let resolvedSecretId: number | undefined;
-  if (body.secretId) {
+  if (body.secret_id) {
     const secret = await db.Secret.findOne({
-      where: { publicId: body.secretId, projectId: Number(targetProjectId) },
+      where: { publicId: body.secret_id, projectId: Number(targetProjectId) },
     });
     if (!secret) {
       ctx.status = 400;
@@ -225,8 +225,8 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     secretId: resolvedSecretId,
     name: body.name!,
     provider: body.provider as AiProviderSlug,
-    defaultModel: body.defaultModel!,
-    baseUrl: body.baseUrl,
+    defaultModel: body.default_model!,
+    baseUrl: body.base_url,
     config: body.config,
   });
 
@@ -251,10 +251,10 @@ aiProvidersRouter.patch(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.projectId!,
+      projectPublicId: existing.project_id!,
       action: 'ai-providers:UpdateAiProvider',
       resource: buildSrn({
-        projectPublicId: existing.projectId!,
+        projectPublicId: existing.project_id!,
         resourceType: 'aiProvider',
         resourceId: existing.id,
       }),
@@ -266,21 +266,21 @@ aiProvidersRouter.patch(
     }
 
     const body = ctx.request.body as {
-      secretId?: string;
+      secret_id?: string;
       name?: string;
       provider?: string;
-      defaultModel?: string;
-      baseUrl?: string | null;
+      default_model?: string;
+      base_url?: string | null;
       config?: Record<string, unknown> | null;
     };
 
     let resolvedSecretId: number | undefined;
-    if (body.secretId !== undefined) {
+    if (body.secret_id !== undefined) {
       const project = await db.Project.findOne({
-        where: { publicId: existing.projectId! },
+        where: { publicId: existing.project_id! },
       });
       const secret = await db.Secret.findOne({
-        where: { publicId: body.secretId, projectId: project!.id },
+        where: { publicId: body.secret_id, projectId: project!.id },
       });
       if (!secret) {
         ctx.status = 400;
@@ -295,8 +295,8 @@ aiProvidersRouter.patch(
       secretId: resolvedSecretId,
       name: body.name,
       provider: body.provider as AiProviderSlug | undefined,
-      defaultModel: body.defaultModel,
-      baseUrl: body.baseUrl,
+      defaultModel: body.default_model,
+      baseUrl: body.base_url,
       config: body.config,
     });
 
@@ -321,10 +321,10 @@ aiProvidersRouter.delete(
     }
 
     const allowed = await ctx.authUser.isAllowed({
-      projectPublicId: existing.projectId!,
+      projectPublicId: existing.project_id!,
       action: 'ai-providers:DeleteAiProvider',
       resource: buildSrn({
-        projectPublicId: existing.projectId!,
+        projectPublicId: existing.project_id!,
         resourceType: 'aiProvider',
         resourceId: existing.id,
       }),

@@ -17,24 +17,24 @@ const sessionSubResourcesRouter = new Router<Context>();
 
 const validateAddMessageBody = (body: {
   message?: string;
-  documentId?: string;
+  document_id?: string;
 }) => {
   if (body.message !== undefined && typeof body.message !== 'string') {
     throw new DomainError('VALIDATION_FAILED', 'message must be a string');
   }
-  if (body.documentId !== undefined && typeof body.documentId !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
+  if (body.document_id !== undefined && typeof body.document_id !== 'string') {
+    throw new DomainError('VALIDATION_FAILED', 'document_id must be a string');
   }
-  if (!body.message && !body.documentId) {
+  if (!body.message && !body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'either message or documentId is required'
+      'either message or document_id is required'
     );
   }
-  if (body.message && body.documentId) {
+  if (body.message && body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'message and documentId are mutually exclusive'
+      'message and document_id are mutually exclusive'
     );
   }
 };
@@ -49,9 +49,9 @@ sessionSubResourcesRouter.post(
 
     const body = ctx.request.body as {
       message?: string;
-      documentId?: string;
-      toolContext?: Record<string, string>;
-      idempotencyKey?: string;
+      document_id?: string;
+      tool_context?: Record<string, string>;
+      idempotency_key?: string;
     };
 
     validateAddMessageBody(body);
@@ -60,10 +60,10 @@ sessionSubResourcesRouter.post(
       agentId,
       sessionId: ctx.params.session_id,
       message: body.message,
-      documentId: body.documentId,
-      toolContext: body.toolContext,
+      documentId: body.document_id,
+      toolContext: body.tool_context,
       authUser: ctx.authUser,
-      idempotencyKey: body.idempotencyKey,
+      idempotencyKey: body.idempotency_key,
     });
 
     const resultObj = result as Record<string, unknown>;
@@ -89,7 +89,7 @@ sessionSubResourcesRouter.post(
     const body =
       (ctx.request.body as {
         model?: string;
-        toolContext?: Record<string, string>;
+        tool_context?: Record<string, string>;
       }) ?? {};
     const isAsync = ctx.query['async'] === 'true';
 
@@ -98,12 +98,12 @@ sessionSubResourcesRouter.post(
         agentId,
         sessionId: ctx.params.session_id,
         model: body.model,
-        toolContext: body.toolContext,
+        toolContext: body.tool_context,
       }).catch(() => {
         // Fire-and-forget: errors are emitted via event bus
       });
       ctx.status = 202;
-      ctx.body = { status: 'accepted', sessionId: ctx.params.session_id };
+      ctx.body = { status: 'accepted', session_id: ctx.params.session_id };
       return;
     }
 
@@ -111,7 +111,7 @@ sessionSubResourcesRouter.post(
       agentId,
       sessionId: ctx.params.session_id,
       model: body.model,
-      toolContext: body.toolContext,
+      toolContext: body.tool_context,
     });
 
     ctx.body = result;
@@ -129,18 +129,18 @@ sessionSubResourcesRouter.post(
     );
 
     const body = ctx.request.body as {
-      generationId?: string;
-      toolOutputs?: Array<{ toolCallId: string; output: unknown }>;
+      generation_id?: string;
+      tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
 
-    if (!body.generationId || typeof body.generationId !== 'string') {
+    if (!body.generation_id || typeof body.generation_id !== 'string') {
       throw new DomainError('VALIDATION_FAILED', 'generationId is required');
     }
 
-    if (!Array.isArray(body.toolOutputs) || body.toolOutputs.length === 0) {
+    if (!Array.isArray(body.tool_outputs) || body.tool_outputs.length === 0) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        'toolOutputs is required and must be a non-empty array'
+        'tool_outputs is required and must be a non-empty array'
       );
     }
 
@@ -148,8 +148,13 @@ sessionSubResourcesRouter.post(
       agentId,
       agentPublicId,
       sessionId: ctx.params.session_id,
-      generationId: body.generationId,
-      toolOutputs: body.toolOutputs,
+      generationId: body.generation_id,
+      toolOutputs: body.tool_outputs.map((toolOutput) => {
+        return {
+          toolCallId: toolOutput.tool_call_id,
+          output: toolOutput.output,
+        };
+      }),
     });
 
     ctx.body = result;

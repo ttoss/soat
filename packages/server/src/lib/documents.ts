@@ -243,9 +243,9 @@ export const getDocumentStatus = async (args: { id: string }) => {
   return {
     id: mapped.id,
     status: doc.status,
-    chunkCount,
-    totalChunks: totalChunks ?? null,
-    totalPages,
+    chunk_count: chunkCount,
+    total_chunks: totalChunks ?? null,
+    total_pages: totalPages,
     progress: computeIngestionProgress({
       status: doc.status,
       chunkCount,
@@ -254,7 +254,7 @@ export const getDocumentStatus = async (args: { id: string }) => {
     error: doc.status === 'failed' ? failureReason : undefined,
     // Context for the route's permission check — not part of the public
     // status response shape.
-    projectId: mapped.projectId,
+    projectId: mapped.project_id,
     path: mapped.path,
     tags: mapped.tags,
   };

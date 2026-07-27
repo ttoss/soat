@@ -116,36 +116,36 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
   }
 
   const body = (ctx.request.body ?? {}) as {
-    projectId?: string;
+    project_id?: string;
     selection?: unknown;
-    authorizeQuery?: string;
+    authorize_query?: string;
   };
 
-  if (!body.projectId || typeof body.projectId !== 'string') {
+  if (!body.project_id || typeof body.project_id !== 'string') {
     throw new DomainError('VALIDATION_FAILED', 'project_id is required.');
   }
 
   // getProject enforces access — throws RESOURCE_NOT_FOUND (404) or FORBIDDEN (403)
-  await getProject({ id: body.projectId, authUser: ctx.authUser });
+  await getProject({ id: body.project_id, authUser: ctx.authUser });
 
   const selection = parseSelection(body.selection);
   const granted = buildConsentScopes(selection);
   const policy = buildConsentPolicy({
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     selection,
   });
 
   const result: {
-    projectId: string;
+    project_id: string;
     scopes: string[];
     policy: typeof policy;
-    authorizeUrl?: string;
-  } = { projectId: body.projectId, scopes: granted, policy };
+    authorize_url?: string;
+  } = { project_id: body.project_id, scopes: granted, policy };
 
   // When completing an OAuth flow, store the grant keyed by PKCE code_challenge
   // and hand the app the URL to navigate back to so /authorize can issue a code.
-  if (typeof body.authorizeQuery === 'string' && body.authorizeQuery.length) {
-    const params = new URLSearchParams(body.authorizeQuery);
+  if (typeof body.authorize_query === 'string' && body.authorize_query.length) {
+    const params = new URLSearchParams(body.authorize_query);
     const codeChallenge = params.get('code_challenge');
     const clientId = params.get('client_id');
     if (!codeChallenge) {
@@ -164,7 +164,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
     const scopes = [
       ...granted,
       MCP_ACCESS_SCOPE,
-      `${PROJECT_SCOPE_PREFIX}${body.projectId}`,
+      `${PROJECT_SCOPE_PREFIX}${body.project_id}`,
     ];
     await saveConsentGrant({
       codeChallenge,
@@ -172,7 +172,7 @@ oauthRouter.post('/oauth/consent', async (ctx: Context) => {
       subject: ctx.authUser.publicId,
       scopes,
     });
-    result.authorizeUrl = `/authorize?${body.authorizeQuery}`;
+    result.authorize_url = `/authorize?${body.authorize_query}`;
   }
 
   ctx.status = 200;

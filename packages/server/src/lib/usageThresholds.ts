@@ -34,13 +34,13 @@ const REARM_FRACTION = 0.9;
 
 export type PersistedUsageThreshold = {
   id: string;
-  projectId: string;
+  project_id: string;
   metric: string;
   window: string;
   threshold: number;
-  lastFiredAt: Date | null;
-  firedWindowKey: string | null;
-  createdAt: Date;
+  last_fired_at: Date | null;
+  fired_window_key: string | null;
+  created_at: Date;
 };
 
 const mapThreshold = (
@@ -50,13 +50,13 @@ const mapThreshold = (
 ): PersistedUsageThreshold => {
   return {
     id: threshold.publicId,
-    projectId: threshold.project?.publicId ?? '',
+    project_id: threshold.project?.publicId ?? '',
     metric: threshold.metric,
     window: threshold.window,
     threshold: Number(threshold.threshold),
-    lastFiredAt: threshold.lastFiredAt,
-    firedWindowKey: threshold.firedWindowKey,
-    createdAt: threshold.createdAt,
+    last_fired_at: threshold.lastFiredAt,
+    fired_window_key: threshold.firedWindowKey,
+    created_at: threshold.createdAt,
   };
 };
 

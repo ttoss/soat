@@ -30,13 +30,13 @@ export type ChatMessageInput =
 
 export type MappedChat = {
   id: string;
-  projectId: string;
-  aiProviderId: string;
+  project_id: string;
+  ai_provider_id: string;
   name: string | null;
-  systemMessage: string | null;
+  system_message: string | null;
   model: string | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 const mapChat = (
@@ -47,13 +47,13 @@ const mapChat = (
 ): MappedChat => {
   return {
     id: chat.publicId,
-    projectId: chat.project.publicId,
-    aiProviderId: chat.aiProvider.publicId,
+    project_id: chat.project.publicId,
+    ai_provider_id: chat.aiProvider.publicId,
     name: chat.name,
-    systemMessage: chat.systemMessage,
+    system_message: chat.systemMessage,
     model: chat.model,
-    createdAt: chat.createdAt,
-    updatedAt: chat.updatedAt,
+    created_at: chat.createdAt,
+    updated_at: chat.updatedAt,
   };
 };
 
@@ -172,7 +172,7 @@ const resolveMessages = async (args: {
       const resolvedContent = await resolveMessageContent({
         content:
           'documentId' in message
-            ? { type: 'document' as const, documentId: message.documentId }
+            ? { type: 'document' as const, document_id: message.documentId }
             : message.content,
         authUser: args.authUser,
       });

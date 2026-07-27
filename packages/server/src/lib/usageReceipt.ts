@@ -12,17 +12,17 @@ export type UsageReceiptComponent = {
   quantity: number;
   unit: string;
   billable: boolean;
-  unitPrice: number | null;
-  priceId: string | null;
-  costUsd: number | null;
+  unit_price: number | null;
+  price_id: string | null;
+  cost_usd: number | null;
 };
 
 export type UsageReceiptLine = {
-  eventId: string;
-  meterType: string;
+  event_id: string;
+  meter_type: string;
   provider: string;
   model: string;
-  costUsd: number | null;
+  cost_usd: number | null;
   components: UsageReceiptComponent[];
 };
 
@@ -31,24 +31,25 @@ export type UsageReceiptLine = {
 // single-type receipt (today's generations are all `llm_tokens`) has exactly
 // one entry whose cost equals the receipt total.
 export type UsageReceiptMeterTypeTotal = {
-  meterType: string;
-  costUsd: number | null;
+  meter_type: string;
+  cost_usd: number | null;
 };
 
+/** A receipt is a response body, so the type is the wire shape. */
 export type UsageReceipt = {
   // Present on a per-generation receipt; absent on a per-run receipt.
-  generationId?: string;
+  generation_id?: string;
   // Present on a per-run receipt (summed across the run's meters); absent on a
   // per-generation receipt.
-  runId?: string;
+  run_id?: string;
   currency: string;
-  lineItems: UsageReceiptLine[];
-  byMeterType: UsageReceiptMeterTypeTotal[];
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalCachedTokens: number;
-  totalReasoningTokens: number;
-  totalCostUsd: number | null;
+  line_items: UsageReceiptLine[];
+  by_meter_type: UsageReceiptMeterTypeTotal[];
+  total_input_tokens: number;
+  total_output_tokens: number;
+  total_cached_tokens: number;
+  total_reasoning_tokens: number;
+  total_cost_usd: number | null;
 };
 
 // The token/cost roll-up of a receipt without its line items — surfaced on the
@@ -92,7 +93,7 @@ const sumLineCosts = (lines: UsageReceiptLine[]): number | null => {
   return numberOrNull(
     sumComponentCostUsd(
       lines.map((l) => {
-        return stringOrNull(l.costUsd);
+        return stringOrNull(l.cost_usd);
       })
     )
   );
@@ -106,15 +107,15 @@ const groupByMeterType = (
 ): UsageReceiptMeterTypeTotal[] => {
   const linesByType = new Map<string, UsageReceiptLine[]>();
   for (const line of lines) {
-    const group = linesByType.get(line.meterType);
+    const group = linesByType.get(line.meter_type);
     if (group) {
       group.push(line);
     } else {
-      linesByType.set(line.meterType, [line]);
+      linesByType.set(line.meter_type, [line]);
     }
   }
   return [...linesByType.entries()].map(([meterType, group]) => {
-    return { meterType, costUsd: sumLineCosts(group) };
+    return { meter_type: meterType, cost_usd: sumLineCosts(group) };
   });
 };
 
@@ -142,18 +143,18 @@ const loadLineItems = async (
         quantity: Number(component.quantity),
         unit: component.unit,
         billable: component.billable,
-        unitPrice:
+        unit_price:
           component.unitPrice === null ? null : Number(component.unitPrice),
-        priceId: assocPublicId(component.price),
-        costUsd: component.costUsd === null ? null : Number(component.costUsd),
+        price_id: assocPublicId(component.price),
+        cost_usd: component.costUsd === null ? null : Number(component.costUsd),
       };
     });
     return {
-      eventId: event.publicId,
-      meterType: event.meterType,
+      event_id: event.publicId,
+      meter_type: event.meterType,
       provider: event.provider,
       model: event.model,
-      costUsd: event.costUsd === null ? null : Number(event.costUsd),
+      cost_usd: event.costUsd === null ? null : Number(event.costUsd),
       components,
     };
   });
@@ -164,7 +165,7 @@ const loadLineItems = async (
 // runId (never both).
 const assembleReceipt = (
   lineItems: UsageReceiptLine[],
-  identity: { generationId?: string; runId?: string }
+  identity: { generation_id?: string; run_id?: string }
 ): UsageReceipt => {
   // Reconstruct the provider's reported counts: `input_tokens` components hold
   // the uncached input, so full prompt tokens = input + cached.
@@ -172,13 +173,13 @@ const assembleReceipt = (
   return {
     ...identity,
     currency: 'USD',
-    lineItems,
-    byMeterType: groupByMeterType(lineItems),
-    totalInputTokens: sumQuantity(lineItems, 'input_tokens') + cached,
-    totalOutputTokens: sumQuantity(lineItems, 'output_tokens'),
-    totalCachedTokens: cached,
-    totalReasoningTokens: sumQuantity(lineItems, 'reasoning_tokens'),
-    totalCostUsd: sumLineCosts(lineItems),
+    line_items: lineItems,
+    by_meter_type: groupByMeterType(lineItems),
+    total_input_tokens: sumQuantity(lineItems, 'input_tokens') + cached,
+    total_output_tokens: sumQuantity(lineItems, 'output_tokens'),
+    total_cached_tokens: cached,
+    total_reasoning_tokens: sumQuantity(lineItems, 'reasoning_tokens'),
+    total_cost_usd: sumLineCosts(lineItems),
   };
 };
 
@@ -202,7 +203,7 @@ export const getReceipt = async (args: {
   if (!generation) return null;
 
   const lineItems = await loadLineItems({ generationId: generation.id });
-  return assembleReceipt(lineItems, { generationId: args.generationId });
+  return assembleReceipt(lineItems, { generation_id: args.generationId });
 };
 
 // Resolves an orchestration run's public id to its internal id within scope.
@@ -234,7 +235,7 @@ export const getRunReceipt = async (args: {
   if (runInternalId === null) return null;
 
   const lineItems = await loadLineItems({ runId: runInternalId });
-  return assembleReceipt(lineItems, { runId: args.runId });
+  return assembleReceipt(lineItems, { run_id: args.runId });
 };
 
 /**
@@ -248,10 +249,10 @@ export const getRunUsageTotals = async (args: {
   const lineItems = await loadLineItems({ runId: args.runInternalId });
   const receipt = assembleReceipt(lineItems, {});
   return {
-    totalInputTokens: receipt.totalInputTokens,
-    totalOutputTokens: receipt.totalOutputTokens,
-    totalCachedTokens: receipt.totalCachedTokens,
-    totalReasoningTokens: receipt.totalReasoningTokens,
-    totalCostUsd: receipt.totalCostUsd,
+    totalInputTokens: receipt.total_input_tokens,
+    totalOutputTokens: receipt.total_output_tokens,
+    totalCachedTokens: receipt.total_cached_tokens,
+    totalReasoningTokens: receipt.total_reasoning_tokens,
+    totalCostUsd: receipt.total_cost_usd,
   };
 };

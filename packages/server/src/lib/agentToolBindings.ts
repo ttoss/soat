@@ -154,6 +154,124 @@ const validateBindingEntry = async (args: {
   return clean;
 };
 
+/** The wire shape of an inline tool definition — snake_case, as documented in agents.yaml. */
+type WireInlineToolDefinition = {
+  type?: string;
+  name: string;
+  description?: string;
+  parameters?: object;
+  execute?: object;
+  mcp?: object;
+  actions?: string[];
+  denied_actions?: string[];
+  preset_parameters?: object;
+  pipeline?: object;
+  discussion_id?: string;
+  output_mapping?: object;
+};
+
+// Field pairs shared by name/type between the wire (snake_case) and
+// canonical (camelCase) inline tool shapes — `name` and single-word fields
+// (`type`, `description`, `parameters`, `execute`, `mcp`, `actions`,
+// `pipeline`) are identical in both spellings and copied separately below.
+const INLINE_TOOL_FIELD_PAIRS: Array<
+  [keyof InlineToolDefinition, keyof WireInlineToolDefinition]
+> = [
+  ['deniedActions', 'denied_actions'],
+  ['presetParameters', 'preset_parameters'],
+  ['discussionId', 'discussion_id'],
+  ['outputMapping', 'output_mapping'],
+];
+
+const SAME_SPELLING_FIELDS = [
+  'type',
+  'description',
+  'parameters',
+  'execute',
+  'mcp',
+  'actions',
+  'pipeline',
+] as const;
+
+/**
+ * Converts one inline tool definition from its wire (snake_case) shape to the
+ * canonical `InlineToolDefinition` (camelCase). Every consumer of a
+ * `tool_bindings` entry's inline `tool` — `toolsCall.ts`'s deny-list/preset-
+ * parameter handling, `agentToolResolver.ts` — reads the camelCase fields, so
+ * storing the wire object verbatim silently drops `denied_actions`/
+ * `preset_parameters`/`output_mapping` (a deny-list that never denies).
+ */
+const fromWireInlineTool = (value: unknown): InlineToolDefinition | unknown => {
+  if (!isPlainObject(value)) return value;
+  const wire = value as WireInlineToolDefinition;
+  const tool: InlineToolDefinition = { name: wire.name };
+  for (const field of SAME_SPELLING_FIELDS) {
+    if (wire[field] !== undefined)
+      (tool as Record<string, unknown>)[field] = wire[field];
+  }
+  for (const [camelKey, snakeKey] of INLINE_TOOL_FIELD_PAIRS) {
+    if (wire[snakeKey] !== undefined) {
+      (tool as Record<string, unknown>)[camelKey] = wire[snakeKey];
+    }
+  }
+  return tool;
+};
+
+/** Reverses {@link fromWireInlineTool} for a response body. */
+const toWireInlineTool = (
+  tool: InlineToolDefinition
+): WireInlineToolDefinition => {
+  const wire: WireInlineToolDefinition = { name: tool.name };
+  for (const field of SAME_SPELLING_FIELDS) {
+    if (tool[field] !== undefined)
+      (wire as Record<string, unknown>)[field] = tool[field];
+  }
+  for (const [camelKey, snakeKey] of INLINE_TOOL_FIELD_PAIRS) {
+    if (tool[camelKey] !== undefined) {
+      (wire as Record<string, unknown>)[snakeKey] = tool[camelKey];
+    }
+  }
+  return wire;
+};
+
+/** Parses one wire `tool_bindings` entry (snake_case `tool_id`) into the canonical internal shape. */
+const fromWireBindingEntry = (entry: unknown): unknown => {
+  if (!isPlainObject(entry)) return entry;
+  const wire = entry as { tool_id?: string; tool?: unknown };
+  const converted: AgentToolBinding = {};
+  if (wire.tool_id !== undefined) converted.toolId = wire.tool_id;
+  if (wire.tool !== undefined) {
+    converted.tool = fromWireInlineTool(wire.tool) as InlineToolDefinition;
+  }
+  return converted;
+};
+
+/** Parses a raw wire `tool_bindings` array into canonical (camelCase) bindings, ready for validation. */
+export const parseWireToolBindings = (
+  value: unknown
+): AgentToolBinding[] | null | undefined => {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Array.isArray(value)) return value as never;
+  return value.map(fromWireBindingEntry) as AgentToolBinding[];
+};
+
+/** The wire shape of one `tool_bindings` entry — snake_case, as documented in agents.yaml. */
+export type WireAgentToolBinding = {
+  tool_id?: string;
+  tool?: WireInlineToolDefinition;
+};
+
+/** Serializes one canonical binding to its wire shape for a response. */
+export const toWireToolBinding = (
+  binding: AgentToolBinding
+): WireAgentToolBinding => {
+  const wire: WireAgentToolBinding = {};
+  if (binding.toolId !== undefined) wire.tool_id = binding.toolId;
+  if (binding.tool !== undefined) wire.tool = toWireInlineTool(binding.tool);
+  return wire;
+};
+
 /**
  * Validates newly provided `tool_bindings` entries: entry shape (exactly one
  * of `tool_id` / `tool`) and inline definitions (same rules as the deprecated

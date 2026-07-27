@@ -170,7 +170,7 @@ describe('Tools', () => {
         .post('/api/v1/tools')
         .send({ name: 'No Project Tool' });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('projectId is required');
+      expect(response.body.error).toBe('project_id is required');
     });
   });
 

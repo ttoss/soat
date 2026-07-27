@@ -22,13 +22,13 @@ const mapConversation = (
 ) => {
   return {
     id: conversation.publicId,
-    projectId: conversation.project?.publicId,
-    actorId: conversation.actor?.publicId ?? null,
+    project_id: conversation.project?.publicId,
+    actor_id: conversation.actor?.publicId ?? null,
     name: conversation.name ?? null,
     status: conversation.status,
     tags: conversation.tags ?? undefined,
-    createdAt: conversation.createdAt,
-    updatedAt: conversation.updatedAt,
+    created_at: conversation.createdAt,
+    updated_at: conversation.updatedAt,
   };
 };
 
@@ -129,7 +129,7 @@ export const createConversation = async (args: {
   emitEvent({
     type: 'conversations.created',
     projectId: conversationWithAssociations!.projectId,
-    projectPublicId: mapped.projectId!,
+    projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
     data: mapped as unknown as Record<string, unknown>,
@@ -172,7 +172,7 @@ export const updateConversation = async (args: {
   emitEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
-    projectPublicId: mapped.projectId!,
+    projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
     data: mapped as unknown as Record<string, unknown>,
@@ -206,7 +206,7 @@ export const updateConversationStatus = async (args: {
   emitEvent({
     type: 'conversations.updated',
     projectId: updatedConversation!.projectId,
-    projectPublicId: mapped.projectId!,
+    projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
     data: mapped as unknown as Record<string, unknown>,
@@ -284,7 +284,7 @@ export const updateConversationTags = async (args: {
   emitEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
-    projectPublicId: mapped.projectId!,
+    projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
     data: mapped as unknown as Record<string, unknown>,

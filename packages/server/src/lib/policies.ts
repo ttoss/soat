@@ -20,8 +20,8 @@ export const mapPolicy = (policy: InstanceType<(typeof db)['Policy']>) => {
     name: policy.name,
     description: policy.description,
     document: policy.document as PolicyDocument | undefined,
-    createdAt: policy.createdAt,
-    updatedAt: policy.updatedAt,
+    created_at: policy.createdAt,
+    updated_at: policy.updatedAt,
   };
 };
 

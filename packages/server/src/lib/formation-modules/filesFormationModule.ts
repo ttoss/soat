@@ -131,7 +131,7 @@ export const filesFormationModule: FormationModule = {
       return {
         prefix: file.prefix,
         filename: file.filename,
-        content_type: file.contentType,
+        content_type: file.content_type,
         size: file.size,
         metadata: file.metadata,
       };

@@ -137,40 +137,111 @@ export type FormationEvent = {
   error?: string;
 };
 
+// ── Wire Types ────────────────────────────────────────────────────────────
+//
+// `PlanChange`/`FormationEvent` carry structural keys in camelCase
+// internally, but are documented (and specced in `formations.yaml`) as
+// snake_case on the wire — both in the `POST /formations/plan` response and
+// embedded in a `FormationOperation`'s `events`/`plan`. `diff.desired` /
+// `diff.current` are the resource's own template properties (already
+// snake_case, author-authored) and round-trip verbatim, unlike the
+// structural fields around them.
+
+export type PlanChangeWire = {
+  logical_id: string;
+  resource_type: string;
+  action: 'create' | 'update' | 'delete' | 'no-op';
+  physical_resource_id?: string;
+  diff?: {
+    desired: Record<string, unknown>;
+    current: Record<string, unknown> | null;
+  };
+};
+
+export type PlanResultWire = {
+  changes: PlanChangeWire[];
+};
+
+export type FormationEventWire = {
+  timestamp: string;
+  logical_id: string;
+  resource_type: string;
+  action: string;
+  status: 'succeeded' | 'failed';
+  physical_resource_id?: string;
+  error?: string;
+};
+
+/** Converts an internal `PlanChange` to its snake_case wire shape. */
+export const planChangeToWire = (change: PlanChange): PlanChangeWire => {
+  return {
+    logical_id: change.logicalId,
+    resource_type: change.resourceType,
+    action: change.action,
+    ...(change.physicalResourceId !== undefined
+      ? { physical_resource_id: change.physicalResourceId }
+      : {}),
+    ...(change.diff !== undefined ? { diff: change.diff } : {}),
+  };
+};
+
+/** Converts an internal `PlanResult` to its snake_case wire shape. */
+export const planResultToWire = (plan: PlanResult): PlanResultWire => {
+  return { changes: plan.changes.map(planChangeToWire) };
+};
+
+/** Converts an internal `FormationEvent` to its snake_case wire shape. */
+export const formationEventToWire = (
+  event: FormationEvent
+): FormationEventWire => {
+  return {
+    timestamp: event.timestamp,
+    logical_id: event.logicalId,
+    resource_type: event.resourceType,
+    action: event.action,
+    status: event.status,
+    ...(event.physicalResourceId !== undefined
+      ? { physical_resource_id: event.physicalResourceId }
+      : {}),
+    ...(event.error !== undefined ? { error: event.error } : {}),
+  };
+};
+
 // ── Mapped Types ──────────────────────────────────────────────────────────
 
 export type MappedFormationResource = {
   id: string;
-  logicalId: string;
-  resourceType: string;
-  physicalResourceId: string | null;
+  logical_id: string;
+  resource_type: string;
+  physical_resource_id: string | null;
   status: string;
 };
 
 export type MappedFormation = {
   id: string;
-  projectId: string;
+  project_id: string;
   name: string;
   template: FormationTemplate | null;
   outputs: Record<string, string> | null;
   status: string;
   metadata: Record<string, unknown> | null;
-  resolvedMetadata: Record<string, unknown> | null;
-  resolvedParameters: Record<string, string> | null;
+  resolved_metadata: Record<string, unknown> | null;
+  resolved_parameters: Record<string, string> | null;
   resources?: MappedFormationResource[];
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
+/** A formation operation is a response body, so the type is the wire shape. */
 export type MappedFormationOperation = {
   id: string;
-  operationType: string;
+  operation_type: string;
   status: string;
-  events: FormationEvent[] | null;
-  plan: PlanResult | null;
+  events: FormationEventWire[] | null;
+  plan: PlanResultWire | null;
   error: object | null;
-  createdAt: Date;
-  updatedAt: Date;
+  created_at: Date;
+  updated_at: Date;
 };
 
 // ── Supported Resource Types ──────────────────────────────────────────────

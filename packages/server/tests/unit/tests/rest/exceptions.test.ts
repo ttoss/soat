@@ -3,7 +3,7 @@ import { emitEvent } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 // The Exceptions module (G3 Phase 3). Items have no public create endpoint —
 // they are auto-filed by producers (run failures, guardrail tripwires, expired
@@ -13,6 +13,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // and approval entry points.
 
 describe('Exceptions', () => {
+  let adminToken: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -55,6 +56,7 @@ describe('Exceptions', () => {
         'tools:CreateTool',
       ],
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken!;
     projectId = setup.projectId;
@@ -75,7 +77,7 @@ describe('Exceptions', () => {
       expect(filed.id).toMatch(/^exc_/);
       expect(filed.status).toBe('open');
       expect(filed.severity).toBe('warning'); // manual default
-      expect(filed.occurrenceCount).toBe(1);
+      expect(filed.occurrence_count).toBe(1);
 
       const list = await listExceptions('');
       expect(list.status).toBe(200);
@@ -136,6 +138,16 @@ describe('Exceptions', () => {
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('EXCEPTION_NOT_FOUND');
     });
+
+    // parsePagination's toInt (rest/v1/helpers.ts) falls back to `undefined`
+    // (the shared lib default) when a query param doesn't parse to a finite
+    // number — every list route shares this helper, but nothing in this
+    // codebase sent a malformed limit/offset before.
+    test('a non-numeric limit falls back to the default page size', async () => {
+      const res = await listExceptions('&limit=not-a-number');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
   });
 
   describe('authorization on get / acknowledge / resolve', () => {
@@ -187,6 +199,41 @@ describe('Exceptions', () => {
           .status
       ).toBe(403);
     });
+
+    // Regression: exceptionSrn() built the item SRN from `exception.projectId`,
+    // but the mapper's wire field is `project_id` — the SRN resource resolved
+    // to `soat:undefined:exception:<id>` and never matched an SRN-scoped
+    // policy. An action-only policy (like the rest of this describe block)
+    // never exercises the resource-matching path, so it slipped through.
+    test('a user with an SRN-scoped (not action-only) policy can get the item', async () => {
+      const scopedUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'exc-srn-scoped', password: 'excSrnPass123' });
+      const scopedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['exceptions:GetException'],
+                resource: [`soat:${projectId}:exception:${targetId}`],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${scopedUserRes.body.id}/policies`)
+        .send({ policy_ids: [scopedPolicyRes.body.id] });
+      const scopedToken = await loginAs('exc-srn-scoped', 'excSrnPass123');
+
+      const response = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/exceptions/${targetId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(targetId);
+    });
   });
 
   describe('dedup and severity', () => {
@@ -205,7 +252,7 @@ describe('Exceptions', () => {
         dedupKey,
       });
       expect(second.id).toBe(first.id);
-      expect(second.occurrenceCount).toBe(2);
+      expect(second.occurrence_count).toBe(2);
 
       const list = await listExceptions('&kind=guardrail_tripwire');
       const matches = list.body.data.filter((e: { id: string }) => {
@@ -326,7 +373,9 @@ describe('Exceptions', () => {
     ): Promise<Record<string, unknown> | null> => {
       for (let i = 0; i < 100; i += 1) {
         const res = await listExceptions('');
-        const match = (res.body.data as Record<string, unknown>[]).find(predicate);
+        const match = (res.body.data as Record<string, unknown>[]).find(
+          predicate
+        );
         if (match) return match;
         await new Promise((resolve) => {
           return setTimeout(resolve, 20);
@@ -355,9 +404,9 @@ describe('Exceptions', () => {
       emit('approvals.expired', 'apr_full_1', {
         approval: {
           id: 'apr_full_1',
-          proposedAction: { toolId: 'tool_x' },
-          runId: 'run_exp_1',
-          agentId: 'agent_exp_1',
+          proposed_action: { tool_id: 'tool_x' },
+          run_id: 'run_exp_1',
+          agent_id: 'agent_exp_1',
         },
       });
       const match = await pollException((e) => {
@@ -443,7 +492,7 @@ describe('Exceptions', () => {
       // The partial unique index on (dedup_key WHERE status = 'open') guarantees
       // one insert wins and the other folds into it — same item, occurrence 2.
       expect(a.id).toBe(b.id);
-      expect([a.occurrenceCount, b.occurrenceCount].sort()).toEqual([1, 2]);
+      expect([a.occurrence_count, b.occurrence_count].sort()).toEqual([1, 2]);
     });
   });
 });

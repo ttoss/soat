@@ -222,13 +222,13 @@ export const triggersFormationModule: FormationModule = {
       name: trigger.name,
       description: trigger.description,
       type: trigger.type,
-      target_type: trigger.targetType,
-      target_id: trigger.targetId,
+      target_type: trigger.target_type,
+      target_id: trigger.target_id,
       action: trigger.action,
       input: trigger.input,
       cron: trigger.cron,
       active: trigger.active,
-      policy_id: trigger.policyId,
+      policy_id: trigger.policy_id,
     };
   },
 

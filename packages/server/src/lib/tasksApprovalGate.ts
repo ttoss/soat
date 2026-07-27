@@ -231,17 +231,17 @@ const applyApprovedTransition = async (args: {
   decision: DecisionOutput;
 }): Promise<void> => {
   const { item, decision } = args;
-  if (!item.taskId || !item.taskTransition) return;
+  if (!item.task_id || !item.task_transition) return;
 
   // Only fire while this item is still the task's active gate (a superseding
   // move or a competing resolution may have cleared it first).
-  const task = await db.Task.findOne({ where: { publicId: item.taskId } });
+  const task = await db.Task.findOne({ where: { publicId: item.task_id } });
   if (!task || task.pendingApprovalId !== item.id) return;
 
   try {
     await transitionTask({
-      id: item.taskId,
-      transition: item.taskTransition,
+      id: item.task_id,
+      transition: item.task_transition,
       actor: { kind: 'approval', id: decision.resolvedBy },
       note: `Approved via approval ${item.id}.`,
     });
@@ -249,18 +249,18 @@ const applyApprovedTransition = async (args: {
     if (error instanceof DomainError && REJECTION_CODES.has(error.code)) {
       log(
         'applyApprovedTransition: transition=%s rejected (%s) task=%s',
-        item.taskTransition,
+        item.task_transition,
         error.code,
-        item.taskId
+        item.task_id
       );
-      await clearGate({ taskPublicId: item.taskId, approvalId: item.id });
-      const refreshed = await findTaskInstance({ id: item.taskId });
+      await clearGate({ taskPublicId: item.task_id, approvalId: item.id });
+      const refreshed = await findTaskInstance({ id: item.task_id });
       if (refreshed) {
         await emitTaskEvent({
           type: 'tasks.approval_failed',
           projectId: refreshed.projectId as number,
           task: mapTask(refreshed),
-          extra: { transition: item.taskTransition, errorCode: error.code },
+          extra: { transition: item.task_transition, errorCode: error.code },
         });
       }
       return;
@@ -279,16 +279,16 @@ export const resumeTaskTransitionApproval: ApprovalResumeHandler = async ({
   item,
   decision,
 }) => {
-  if (item.origin !== 'task_transition' || !item.taskId) return;
+  if (item.origin !== 'task_transition' || !item.task_id) return;
 
   if (decision.decision === 'approved') {
     await applyApprovedTransition({ item, decision });
     return;
   }
 
-  await clearGate({ taskPublicId: item.taskId, approvalId: item.id });
+  await clearGate({ taskPublicId: item.task_id, approvalId: item.id });
   await appendResolutionNote({
-    taskPublicId: item.taskId,
+    taskPublicId: item.task_id,
     decision: decision.decision,
     resolvedBy: decision.resolvedBy,
     reason: decision.reason,

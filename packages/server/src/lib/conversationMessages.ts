@@ -25,9 +25,9 @@ export const mapMessage = async (
 ) => {
   return {
     role: message.role,
-    documentId: message.document?.publicId,
-    actorId: message.actor?.publicId ?? null,
-    agentId: message.agent?.publicId ?? null,
+    document_id: message.document?.publicId,
+    actor_id: message.actor?.publicId ?? null,
+    agent_id: message.agent?.publicId ?? null,
     position: message.position,
     content: await readStoredFileContent(message.document?.file),
     metadata: message.metadata ?? null,
@@ -212,7 +212,7 @@ export const addConversationMessage = async (args: {
         projectId: conversation.projectId,
         projectPublicId,
         resourceType: 'conversation_message',
-        resourceId: mapped.documentId,
+        resourceId: mapped.document_id,
         data: {
           ...mapped,
           conversationId: args.conversationId,
@@ -293,7 +293,7 @@ export const addConversationDocumentMessage = async (args: {
         projectId: conversation.projectId,
         projectPublicId,
         resourceType: 'conversation_message',
-        resourceId: mapped.documentId,
+        resourceId: mapped.document_id,
         data: {
           ...mapped,
           conversationId: args.conversationId,

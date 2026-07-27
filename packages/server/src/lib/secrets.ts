@@ -60,11 +60,11 @@ const mapSecret = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     name: instance.name,
-    hasValue: instance.encryptedValue !== null,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    has_value: instance.encryptedValue !== null,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 

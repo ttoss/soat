@@ -34,26 +34,26 @@ const sessionIncludes = () => {
 
 const extractSessionIds = (session: Parameters<typeof mapSession>[0]) => {
   return {
-    agentId: session.agent?.publicId ?? null,
-    conversationId: session.conversation?.publicId ?? null,
-    actorId: session.actor?.publicId ?? null,
+    agent_id: session.agent?.publicId ?? null,
+    conversation_id: session.conversation?.publicId ?? null,
+    actor_id: session.actor?.publicId ?? null,
   };
 };
 
 const extractSessionFlags = (session: Parameters<typeof mapSession>[0]) => {
   return {
-    autoGenerate: session.autoGenerate ?? false,
+    auto_generate: session.autoGenerate ?? false,
   };
 };
 
 const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
   return {
     tags: session.tags ?? undefined,
-    toolContext: session.toolContext ?? null,
-    generatingAt: session.generatingAt ?? null,
-    inactivityTtlSeconds: session.inactivityTtlSeconds ?? 0,
-    lastActivityAt: session.lastActivityAt ?? null,
-    messageDelaySeconds: session.messageDelaySeconds ?? null,
+    tool_context: session.toolContext ?? null,
+    generating_at: session.generatingAt ?? null,
+    inactivity_ttl_seconds: session.inactivityTtlSeconds ?? 0,
+    last_activity_at: session.lastActivityAt ?? null,
+    message_delay_seconds: session.messageDelaySeconds ?? null,
   };
 };
 
@@ -72,8 +72,8 @@ const mapSession = (
     name: session.name ?? null,
     ...extractSessionFlags(session),
     ...extractSessionOptional(session),
-    createdAt: session.createdAt,
-    updatedAt: session.updatedAt,
+    created_at: session.createdAt,
+    updated_at: session.updatedAt,
   };
 };
 

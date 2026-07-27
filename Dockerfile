@@ -90,6 +90,12 @@ COPY --from=builder /app/packages/postgresdb/dist ./packages/postgresdb/dist
 # Directory where uploaded files are persisted
 ENV FILES_STORAGE_DIR=/data/files
 
+# responseContract (packages/server/src/middleware/responseContract.ts) only
+# pays its per-request path-match + key-walk cost outside production; without
+# this, the default deployment never gets that "production never pays the
+# cost" guarantee.
+ENV NODE_ENV=production
+
 # Create the default storage directory
 RUN mkdir -p /data/files
 

@@ -21,9 +21,9 @@ export type DocumentQueryConfig = {
 
 export type QueryDocumentResult = {
   id: string;
-  chunkId: string;
-  fileId?: string;
-  projectId?: string;
+  chunk_id: string;
+  file_id?: string;
+  project_id?: string;
   path?: string;
   filename?: string;
   size?: number;
@@ -32,18 +32,18 @@ export type QueryDocumentResult = {
   tags?: Record<string, string>;
   content: string | null;
   page?: number;
-  similarityScore?: number;
-  createdAt: Date;
-  updatedAt: Date;
+  similarity_score?: number;
+  created_at: Date;
+  updated_at: Date;
 };
 
 export type KnowledgeResult =
   | {
-      sourceType: 'document';
-      documentId: string;
-      chunkId: string;
-      fileId?: string;
-      projectId?: string;
+      source_type: 'document';
+      document_id: string;
+      chunk_id: string;
+      file_id?: string;
+      project_id?: string;
       path?: string;
       filename?: string;
       size?: number;
@@ -52,9 +52,9 @@ export type KnowledgeResult =
       tags?: Record<string, string>;
       content: string | null;
       page?: number;
-      similarityScore?: number;
-      createdAt: Date;
-      updatedAt: Date;
+      similarity_score?: number;
+      created_at: Date;
+      updated_at: Date;
     }
   | MemoryKnowledgeResult;
 
@@ -131,8 +131,8 @@ const pickDocumentFields = (
   base: DocumentBase | null
 ): Pick<
   QueryDocumentResult,
-  | 'fileId'
-  | 'projectId'
+  | 'file_id'
+  | 'project_id'
   | 'path'
   | 'filename'
   | 'size'
@@ -142,8 +142,8 @@ const pickDocumentFields = (
 > => {
   if (!base) {
     return {
-      fileId: undefined,
-      projectId: undefined,
+      file_id: undefined,
+      project_id: undefined,
       path: undefined,
       filename: undefined,
       size: undefined,
@@ -153,8 +153,8 @@ const pickDocumentFields = (
     };
   }
   return {
-    fileId: base.fileId,
-    projectId: base.projectId,
+    file_id: base.file_id,
+    project_id: base.project_id,
     path: base.path,
     filename: base.filename,
     size: base.size,
@@ -174,13 +174,13 @@ const mapChunkResult = (
 
   return {
     id: doc ? doc.publicId : '',
-    chunkId: chunk.publicId,
+    chunk_id: chunk.publicId,
     ...pickDocumentFields(base),
     content: chunk.content,
     page: chunk.pageNumber ?? undefined,
-    similarityScore,
-    createdAt: chunk.createdAt,
-    updatedAt: chunk.updatedAt,
+    similarity_score: similarityScore,
+    created_at: chunk.createdAt,
+    updated_at: chunk.updatedAt,
   };
 };
 
@@ -334,7 +334,7 @@ export const resolveDocumentSearch = async (args: {
   if (!config.search || config.minScore === undefined) return mapped;
   const minScore = config.minScore;
   return mapped.filter((r) => {
-    return (r.similarityScore ?? -1) >= minScore;
+    return (r.similarity_score ?? -1) >= minScore;
   });
 };
 
@@ -409,11 +409,11 @@ export const searchKnowledge = async (
 
   const docResults: KnowledgeResult[] = docs.map((doc) => {
     return {
-      sourceType: 'document' as const,
-      documentId: doc.id,
-      chunkId: doc.chunkId,
-      fileId: doc.fileId,
-      projectId: doc.projectId,
+      source_type: 'document' as const,
+      document_id: doc.id,
+      chunk_id: doc.chunk_id,
+      file_id: doc.file_id,
+      project_id: doc.project_id,
       path: doc.path,
       filename: doc.filename,
       size: doc.size,
@@ -422,9 +422,9 @@ export const searchKnowledge = async (
       tags: doc.tags,
       content: doc.content,
       page: doc.page,
-      similarityScore: doc.similarityScore,
-      createdAt: doc.createdAt,
-      updatedAt: doc.updatedAt,
+      similarity_score: doc.similarity_score,
+      created_at: doc.created_at,
+      updated_at: doc.updated_at,
     };
   });
 
@@ -432,8 +432,8 @@ export const searchKnowledge = async (
 
   if (args.query) {
     allResults.sort((a, b) => {
-      const aScore = a.similarityScore ?? 0;
-      const bScore = b.similarityScore ?? 0;
+      const aScore = a.similarity_score ?? 0;
+      const bScore = b.similarity_score ?? 0;
       return bScore - aScore;
     });
   }

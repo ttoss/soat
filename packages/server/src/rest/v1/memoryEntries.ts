@@ -90,10 +90,10 @@ const resolveMemoryForAction = async (
     return null;
   }
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memory',
       resourceId: memory.id,
     }),
@@ -125,17 +125,17 @@ const resolveEntryForAction = async (
     ctx.body = { error: 'Memory entry not found' };
     return null;
   }
-  const memory = await getMemory({ id: entry.memoryId! });
+  const memory = await getMemory({ id: entry.memory_id! });
   if (!memory) {
     ctx.status = 404;
     ctx.body = { error: 'Memory entry not found' };
     return null;
   }
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: memory.projectId!,
+    projectPublicId: memory.project_id!,
     action,
     resource: buildSrn({
-      projectPublicId: memory.projectId!,
+      projectPublicId: memory.project_id!,
       resourceType: 'memoryEntry',
       resourceId: entry.id,
     }),
@@ -157,7 +157,7 @@ memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
 
   const memoryRowId = await resolveMemoryForAction(
     ctx,
-    ctx.query.memoryId as string | undefined,
+    ctx.query.memory_id as string | undefined,
     'memories:ListMemoryEntries'
   );
   if (memoryRowId === null) return;
@@ -176,13 +176,13 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    memoryId?: string;
+    memory_id?: string;
     content: string;
-    sourceType?: string;
+    source_type?: string;
     tags?: unknown;
     metadata?: unknown;
-    duplicateThreshold?: number;
-    updateThreshold?: number;
+    duplicate_threshold?: number;
+    update_threshold?: number;
   };
 
   const validationError = validateTagsMetadata(body, { allowNull: false });
@@ -194,7 +194,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
 
   const memoryRowId = await resolveMemoryForAction(
     ctx,
-    body.memoryId,
+    body.memory_id,
     'memories:CreateMemoryEntry'
   );
   if (memoryRowId === null) return;
@@ -202,11 +202,11 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
   const result = await writeMemoryEntry({
     memoryId: memoryRowId,
     content: body.content,
-    sourceType: normalizeSourceType(body.sourceType) ?? 'manual',
+    sourceType: normalizeSourceType(body.source_type) ?? 'manual',
     tags: isStringArray(body.tags) ? body.tags : undefined,
     metadata: isPlainObject(body.metadata) ? body.metadata : undefined,
-    duplicateThreshold: body.duplicateThreshold,
-    updateThreshold: body.updateThreshold,
+    duplicateThreshold: body.duplicate_threshold,
+    updateThreshold: body.update_threshold,
   });
 
   ctx.status = result.action === 'created' ? 201 : 200;

@@ -53,7 +53,7 @@ const resolveGuardrailProjectId = async (
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return null;
   }
   return targetProjectId;
@@ -89,7 +89,7 @@ const checkGuardrailsAccess = async (
 guardrailsRouter.post('/guardrails', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
   const { name, description } = body;
-  const projectPublicId = body.projectId as string | undefined;
+  const projectPublicId = body.project_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
     ctx.status = 400;
@@ -119,8 +119,8 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
     name,
     description: parseStringOrUndefined(description),
     document,
-    contextToolId: parseNullableString(body.contextToolId),
-    contextMode: parseNullableString(body.contextMode),
+    contextToolId: parseNullableString(body.context_tool_id),
+    contextMode: parseNullableString(body.context_mode),
   });
 
   ctx.status = 201;
@@ -140,7 +140,7 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -204,8 +204,8 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     name: parseStringOrUndefined(body.name),
     description: parseNullableString(body.description),
     document: document ?? undefined,
-    contextToolId: parseNullableString(body.contextToolId),
-    contextMode: parseNullableString(body.contextMode),
+    contextToolId: parseNullableString(body.context_tool_id),
+    contextMode: parseNullableString(body.context_mode),
   });
 });
 
@@ -230,9 +230,9 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
     id: ctx.params.guardrail_id,
   });
   setAuditResourceHint(ctx, {
-    projectPublicId: guardrail.projectId,
+    projectPublicId: guardrail.project_id,
     resourceSrn: buildSrn({
-      projectPublicId: guardrail.projectId,
+      projectPublicId: guardrail.project_id,
       resourceType: 'guardrail',
       resourceId: guardrail.id,
     }),
@@ -265,14 +265,14 @@ guardrailsRouter.post(
     const body = (ctx.request.body ?? {}) as Record<string, unknown>;
     const args = coerceToJsonObject(body.args) ?? undefined;
     const guardrailContext =
-      coerceToJsonObject(body.guardrailContext) ?? undefined;
+      coerceToJsonObject(body.guardrail_context) ?? undefined;
 
     ctx.body = await evaluateGuardrailDryRun({
       projectIds,
       guardrailId: ctx.params.guardrail_id,
       args,
       guardrailContext,
-      toolId: parseStringOrUndefined(body.toolId),
+      toolId: parseStringOrUndefined(body.tool_id),
       authHeader: (ctx.headers.authorization as string) ?? '',
     });
   }

@@ -884,6 +884,65 @@ describe('Conversations', () => {
       // agent_id does not exist, so 404
       expect(res.status).toBe(404);
     });
+
+    // Regression: this route used to put generateConversationMessage's
+    // internal result straight on the wire (camelCase generationId/traceId/
+    // requiredAction.toolCalls[].toolName). Both the `completed` and
+    // `requires_action` branches of the mapping need coverage; the rest of
+    // this describe block only exercises `completed` responses.
+    test('maps a requires_action result to the documented snake_case shape', async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'RequiresActionProvider',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProvRes.body.id,
+          name: 'RequiresActionAgent',
+        });
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_reqaction_1',
+        traceId: 'trc_reqaction_1',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs' as const,
+          toolCalls: [
+            {
+              id: 'tc_reqaction_1',
+              toolName: 'lookupWeather',
+              args: { city: 'Paris' },
+            },
+          ],
+        },
+      });
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentRes.body.id });
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('requires_action');
+      expect(res.body.generation_id).toBe('gen_reqaction_1');
+      expect(res.body.trace_id).toBe('trc_reqaction_1');
+      expect(res.body.required_action.type).toBe('submit_tool_outputs');
+      expect(res.body.required_action.tool_calls[0].id).toBe('tc_reqaction_1');
+      expect(res.body.required_action.tool_calls[0].tool_name).toBe(
+        'lookupWeather'
+      );
+      // The camelCase internal field names must never leak onto the wire.
+      expect(res.body.generationId).toBeUndefined();
+      expect(res.body.traceId).toBeUndefined();
+
+      jest.clearAllMocks();
+    });
   });
 
   describe('Actor agent/chat mutual exclusion', () => {

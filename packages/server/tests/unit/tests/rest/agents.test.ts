@@ -199,7 +199,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/tools')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -207,7 +207,7 @@ describe('Agents', () => {
     test('authenticated user can list agent tools', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/tools')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -619,7 +619,7 @@ describe('Agents', () => {
     test('user without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/agents')
-        .query({ projectId: otherProjectId });
+        .query({ project_id: otherProjectId });
 
       expect(response.status).toBe(403);
     });
@@ -627,7 +627,7 @@ describe('Agents', () => {
     test('authenticated user can list agents', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/agents')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(200);
       expect(Array.isArray(response.body.data)).toBe(true);
@@ -1264,6 +1264,45 @@ describe('Agents', () => {
       expect(res.body.tools[0].name).toBe('inline-lookup');
     });
 
+    // Regression: fromWireInlineTool/toWireInlineTool convert an inline
+    // binding's tool between the wire's snake_case fields and the camelCase
+    // fields every consumer (toolsCall.ts's deny-list/preset-parameter
+    // handling) actually reads. Storing the wire object verbatim (the bug)
+    // made denied_actions a deny-list that never denied anything and dropped
+    // preset_parameters/output_mapping silently.
+    test('an inline binding tool round-trips denied_actions/preset_parameters/output_mapping', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [
+          {
+            tool: {
+              name: 'inline-gated',
+              type: 'soat',
+              actions: ['list-documents', 'get-document'],
+              denied_actions: ['get-document'],
+              preset_parameters: { project_id: projectId },
+              output_mapping: { result: '$.data' },
+            },
+          },
+        ],
+      });
+
+      expect(res.status).toBe(201);
+      const tool = res.body.tool_bindings[0].tool;
+      expect(tool.denied_actions).toEqual(['get-document']);
+      expect(tool.preset_parameters).toEqual({ project_id: projectId });
+      expect(tool.output_mapping).toEqual({ result: '$.data' });
+
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${res.body.id}`
+      );
+      const roundTripped = getRes.body.tool_bindings[0].tool;
+      expect(roundTripped.denied_actions).toEqual(['get-document']);
+      expect(roundTripped.preset_parameters).toEqual({
+        project_id: projectId,
+      });
+      expect(roundTripped.output_mapping).toEqual({ result: '$.data' });
+    });
+
     test('an unknown field on a binding is rejected', async () => {
       // A binding carries only tool_id / tool; the strict-fields validator
       // rejects any unknown field at the binding level.
@@ -1273,6 +1312,32 @@ describe('Agents', () => {
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    // fromWireInlineTool (agentToolBindings.ts) converts a binding's inline
+    // `tool` before validation runs, so a non-object `tool` must pass through
+    // untouched instead of throwing — validateInlineBindingTool's own
+    // isPlainObject check is what actually rejects it with a clear message.
+    test('a non-object inline tool is rejected by validation, not the converter', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [{ tool: 'not-an-object' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an explicit null tool_bindings clears any existing bindings', async () => {
+      const created = await createAgentWith({
+        tool_bindings: [{ tool_id: httpToolId }],
+      });
+
+      const updateRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_bindings: null });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.tool_bindings).toBeNull();
     });
 
     test('mixing tool_bindings with tool_ids returns 400', async () => {
@@ -1698,7 +1763,7 @@ describe('Agents', () => {
           `/api/v1/agents/${agentId}/generate/gen_doesnotexist000/tool-outputs`
         )
         .send({
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       expect(response.status).toBe(404);
@@ -1714,7 +1779,7 @@ describe('Agents', () => {
       const response = await authenticatedTestClient(noPermToken)
         .post(`/api/v1/agents/${agentId}/generate/gen_fake/tool-outputs`)
         .send({
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope

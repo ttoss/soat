@@ -534,7 +534,7 @@ describe('Webhooks', () => {
     test('GET /webhooks without project access returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/webhooks')
-        .query({ projectId });
+        .query({ project_id: projectId });
 
       expect(response.status).toBe(403);
     });
@@ -599,7 +599,7 @@ describe('Webhooks', () => {
     test('GET /webhook-deliveries with a non-existent webhook returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
         .get('/api/v1/webhook-deliveries')
-        .query({ webhookId: 'wh_nonexistent' });
+        .query({ webhook_id: 'wh_nonexistent' });
 
       expect(response.status).toBe(404);
     });
@@ -607,7 +607,7 @@ describe('Webhooks', () => {
     test('GET /webhook-deliveries without permission returns 403', async () => {
       const response = await authenticatedTestClient(noPermToken)
         .get('/api/v1/webhook-deliveries')
-        .query({ webhookId: targetWebhookId });
+        .query({ webhook_id: targetWebhookId });
 
       expect(response.status).toBe(403);
     });

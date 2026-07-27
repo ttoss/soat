@@ -44,7 +44,7 @@ filesRouter.get('/files', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = (ctx.query as Record<string, string>).projectId;
+  const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
@@ -91,17 +91,17 @@ filesRouter.post('/files', async (ctx: Context) => {
   // validation. See the strict-field-validation PRD.
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     prefix?: string;
     filename?: string;
-    contentType?: string;
+    content_type?: string;
     size?: number;
     metadata?: string;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'files:CreateFile',
     resourceType: 'file',
   });
@@ -114,7 +114,7 @@ filesRouter.post('/files', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     prefix: body.prefix,
     filename: body.filename,
-    contentType: body.contentType,
+    contentType: body.content_type,
     size: body.size,
     metadata: body.metadata,
   });
@@ -129,14 +129,16 @@ filesRouter.post(
     if (!checkAuth(ctx)) return;
 
     const body = ctx.request.body as {
-      projectId?: string;
       project_id?: string;
       metadata?: string;
       prefix?: string;
       filename?: string;
     };
     const file = ctx.file as MulterFile | undefined;
-    const projectId = body.projectId ?? body.project_id;
+    // Multipart fields were the one surface the deleted caseTransform never
+    // reached, so this route used to accept `projectId` as well as `project_id`.
+    // With a single casing everywhere, the spec's `project_id` is the only name.
+    const projectId = body.project_id;
 
     if (!file) {
       ctx.status = 400;
@@ -171,17 +173,17 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     content: string;
     prefix?: string;
     filename?: string;
-    contentType?: string;
+    content_type?: string;
     metadata?: string;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'files:UploadFile',
     resourceType: 'file',
   });
@@ -194,7 +196,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     fileBuffer,
     prefix: body.prefix,
     filename: body.filename,
-    contentType: body.contentType,
+    contentType: body.content_type,
     metadata: body.metadata,
   });
 
@@ -210,17 +212,17 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as {
-    projectId: string;
+    project_id: string;
     prefix?: string;
     filename?: string;
-    contentType?: string;
+    content_type?: string;
   };
 
   const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'files:UploadFile',
     resource: buildSrn({
-      projectPublicId: body.projectId,
+      projectPublicId: body.project_id,
       resourceType: 'file',
       resourceId: '*',
     }),
@@ -232,7 +234,7 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
   }
 
   const project = await db.Project.findOne({
-    where: { publicId: body.projectId },
+    where: { publicId: body.project_id },
   });
   if (!project) {
     ctx.status = 400;
@@ -244,7 +246,7 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     projectId: project.id,
     prefix: body.prefix,
     filename: body.filename,
-    contentType: body.contentType,
+    contentType: body.content_type,
   });
 
   ctx.status = 201;
@@ -266,7 +268,7 @@ filesRouter.post(
     const body = ctx.request.body as {
       content?: string;
       filename?: string;
-      contentType?: string;
+      content_type?: string;
       metadata?: string;
     };
 
@@ -293,7 +295,7 @@ filesRouter.post(
       filename:
         tokenData.filename ?? multipartFile?.originalname ?? body.filename,
       contentType:
-        multipartFile?.mimetype ?? body.contentType ?? tokenData.contentType,
+        multipartFile?.mimetype ?? body.content_type ?? tokenData.contentType,
       metadata: body.metadata,
     });
 

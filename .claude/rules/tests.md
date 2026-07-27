@@ -271,25 +271,13 @@ expect(response.body.password).toBeUndefined(); // sensitive fields must be abse
 
 Internal database IDs must never appear in responses — assert `id` maps to `publicId`.
 
-### Beware vacuous (always-passing) assertions
+Request and response bodies are **snake_case** everywhere — REST, MCP, webhooks, the
+audit export — so a test names each field exactly as the OpenAPI spec does. There is no
+second casing to reconcile and no middleware rewriting keys, which is why these
+assertions survive refactors: they name the contract.
 
-Response bodies are **snake_case** — the `caseTransform` middleware converts every
-outbound `/api/v1` body. Asserting on a **camelCase** field of a response body therefore
-reads `undefined` and the assertion silently passes no matter what the route does:
-
-```ts
-// ❌ vacuous — `documentId` is always undefined on a snake_case body, so this
-// passes whether or not the message was actually deleted
-expect(res.body.data.some((m) => m.documentId === id)).toBe(false);
-
-// ✅ assert the real (snake_case) field
-expect(res.body.data.some((m) => m.document_id === id)).toBe(false);
-```
-
-The only response body that legitimately stays camelCase is the OpenAPI spec endpoint
-(`/openapi.json`), which bypasses `caseTransform`. Whenever an assertion looks like it
-"can never fail," prove it can: break the production path locally and confirm the test
-goes red before trusting it (red/green).
+Whenever an assertion looks like it "can never fail," prove it can: break the production
+path locally and confirm the test goes red before trusting it (red/green).
 
 ### Pin status codes
 

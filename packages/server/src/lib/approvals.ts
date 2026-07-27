@@ -54,6 +54,31 @@ const buildIncludes = () => {
   ];
 };
 
+/** The internal shape of an approval's frozen proposal — `toolId` is camelCase, stored as-is. */
+export type ProposedAction = {
+  toolId: string;
+  action?: string;
+  arguments: object;
+} | null;
+
+/** The wire shape of a proposed action (`tool_id`, per approvals.yaml). */
+export type WireProposedAction = {
+  tool_id: string;
+  action?: string;
+  arguments: object;
+} | null;
+
+const toWireProposedAction = (
+  proposed: ProposedAction | undefined
+): WireProposedAction => {
+  if (!proposed) return null;
+  return {
+    tool_id: proposed.toolId,
+    ...(proposed.action !== undefined ? { action: proposed.action } : {}),
+    arguments: proposed.arguments,
+  };
+};
+
 /**
  * Maps a persisted approval item to the plain, publicId-only shape returned by
  * the API. The internal `id`, `orchestrationRunId`, and `resolvedByUserId`
@@ -62,29 +87,31 @@ const buildIncludes = () => {
 export const mapApproval = (instance: ApprovalInstance) => {
   return {
     id: instance.publicId,
-    projectId: instance.project?.publicId,
+    project_id: instance.project?.publicId,
     origin: instance.origin,
     status: instance.status,
-    proposedAction: instance.proposedAction,
+    proposed_action: toWireProposedAction(
+      instance.proposedAction as ProposedAction | undefined
+    ),
     reasoning: instance.reasoning,
     evidence: instance.evidence,
-    predictedImpact: instance.predictedImpact,
-    expiresAt: instance.expiresAt,
-    dedupKey: instance.dedupKey,
-    runId: instance.orchestrationRun?.publicId ?? null,
-    nodeId: instance.nodeId,
-    generationId: instance.generationId,
-    sessionId: instance.sessionId,
-    agentId: instance.agentId,
-    taskId: instance.taskId,
-    taskTransition: instance.taskTransition,
-    policyVersion: instance.policyVersion,
-    previousItemId: instance.previousItemId,
-    resolvedBy: instance.resolvedByUser?.publicId ?? null,
-    resolutionReason: instance.resolutionReason,
-    editedArguments: instance.editedArguments,
-    createdAt: instance.createdAt,
-    updatedAt: instance.updatedAt,
+    predicted_impact: instance.predictedImpact,
+    expires_at: instance.expiresAt,
+    dedup_key: instance.dedupKey,
+    run_id: instance.orchestrationRun?.publicId ?? null,
+    node_id: instance.nodeId,
+    generation_id: instance.generationId,
+    session_id: instance.sessionId,
+    agent_id: instance.agentId,
+    task_id: instance.taskId,
+    task_transition: instance.taskTransition,
+    policy_version: instance.policyVersion,
+    previous_item_id: instance.previousItemId,
+    resolved_by: instance.resolvedByUser?.publicId ?? null,
+    resolution_reason: instance.resolutionReason,
+    edited_arguments: instance.editedArguments,
+    created_at: instance.createdAt,
+    updated_at: instance.updatedAt,
   };
 };
 
@@ -109,13 +136,13 @@ const buildDecisionOutput = (item: MappedApproval): DecisionOutput => {
   return {
     decision: item.status as 'approved' | 'rejected' | 'expired',
     approvalId: item.id,
-    resolvedBy: item.resolvedBy,
-    editedArgs: item.editedArguments ?? null,
+    resolvedBy: item.resolved_by,
+    editedArgs: item.edited_arguments ?? null,
     // On approval the executed tool output belongs here. Actual execution of
     // the (frozen or edited) action at resolution time is wired in with the
     // producer that consumes it; until then the decision carries no result.
     result: null,
-    reason: item.resolutionReason,
+    reason: item.resolution_reason,
   };
 };
 
@@ -248,7 +275,7 @@ const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
 type EmitApprovalArgs = {
   projectId: number;
   origin?: 'node' | 'tool_call' | 'task_transition';
-  proposedAction: { toolId: string; action?: string; arguments: object } | null;
+  proposedAction: ProposedAction;
   reasoning?: string | null;
   evidence?: object | null;
   predictedImpact?: string | null;
@@ -408,14 +435,14 @@ const RECURRENCE_DEFAULT_MIN_COUNT = 2;
 export type ApprovalRecurrenceChainItem = {
   id: string;
   status: ApprovalInstance['status'];
-  resolutionReason: string | null;
-  createdAt: Date;
+  resolution_reason: string | null;
+  created_at: Date;
 };
 
 export type ApprovalRecurrenceGroup = {
-  dedupKey: string;
-  agentId: string | null;
-  toolId: string | null;
+  dedup_key: string;
+  agent_id: string | null;
+  tool_id: string | null;
   count: number;
   // Oldest → newest, i.e. the `previous_item_id` chain in the order it accrued.
   chain: ApprovalRecurrenceChainItem[];
@@ -441,16 +468,16 @@ const mapRecurrenceGroup = (args: {
   // args, so any item carries the group's agent/tool; take the most recent.
   const latest = chain[chain.length - 1];
   return {
-    dedupKey,
-    agentId: latest.agentId,
-    toolId: latest.proposedAction?.toolId ?? null,
+    dedup_key: dedupKey,
+    agent_id: latest.agentId,
+    tool_id: latest.proposedAction?.toolId ?? null,
     count: chain.length,
     chain: chain.map((item) => {
       return {
         id: item.publicId,
         status: item.status,
-        resolutionReason: item.resolutionReason,
-        createdAt: item.createdAt,
+        resolution_reason: item.resolutionReason,
+        created_at: item.createdAt,
       };
     }),
     reasons: chain
@@ -529,8 +556,8 @@ export const listApprovalRecurrences = async (args: {
     // recurring pattern surfaces above a stale one with the same count.
     .sort((a, b) => {
       if (b.count !== a.count) return b.count - a.count;
-      const aLast = a.chain[a.chain.length - 1].createdAt.getTime();
-      const bLast = b.chain[b.chain.length - 1].createdAt.getTime();
+      const aLast = a.chain[a.chain.length - 1].created_at.getTime();
+      const bLast = b.chain[b.chain.length - 1].created_at.getTime();
       return bLast - aLast;
     });
 

@@ -10,6 +10,7 @@ import {
   type WorkflowState,
   type WorkflowTransition,
 } from 'src/lib/workflows';
+import { workflowCollectionToCamel } from 'src/lib/workflowsValidation';
 
 import {
   checkAuth,
@@ -27,7 +28,7 @@ const workflowsRouter = new Router<Context>();
 workflowsRouter.get('/workflows', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const projectIds = await resolveProjectIdsWithAction({
     ctx,
     projectPublicId,
@@ -48,10 +49,10 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:GetWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),
@@ -69,17 +70,17 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     description?: string | null;
-    states: WorkflowState[];
-    transitions: WorkflowTransition[];
-    payloadSchema?: object | null;
+    states: unknown;
+    transitions: unknown;
+    payload_schema?: object | null;
   };
 
   const projectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'workflows:CreateWorkflow',
     resourceType: 'workflow',
   });
@@ -89,9 +90,10 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     projectId,
     name: body.name,
     description: body.description,
-    states: body.states,
-    transitions: body.transitions,
-    payloadSchema: body.payloadSchema,
+    states: workflowCollectionToCamel<WorkflowState>(body.states) ?? [],
+    transitions:
+      workflowCollectionToCamel<WorkflowTransition>(body.transitions) ?? [],
+    payloadSchema: body.payload_schema,
   });
 
   ctx.status = 201;
@@ -104,10 +106,10 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:UpdateWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),
@@ -121,18 +123,20 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     description?: string | null;
-    states?: WorkflowState[];
-    transitions?: WorkflowTransition[];
-    payloadSchema?: object | null;
+    states?: unknown;
+    transitions?: unknown;
+    payload_schema?: object | null;
   };
 
   ctx.body = await updateWorkflow({
     id: ctx.params.workflow_id,
     name: body.name,
     description: body.description,
-    states: body.states,
-    transitions: body.transitions,
-    payloadSchema: body.payloadSchema,
+    states: workflowCollectionToCamel<WorkflowState>(body.states),
+    transitions: workflowCollectionToCamel<WorkflowTransition>(
+      body.transitions
+    ),
+    payloadSchema: body.payload_schema,
   });
 });
 
@@ -142,10 +146,10 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: workflow.projectId!,
+    projectPublicId: workflow.project_id!,
     action: 'workflows:DeleteWorkflow',
     resource: buildSrn({
-      projectPublicId: workflow.projectId!,
+      projectPublicId: workflow.project_id!,
       resourceType: 'workflow',
       resourceId: workflow.id,
     }),

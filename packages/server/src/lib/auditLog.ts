@@ -3,7 +3,8 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 import {
   camelToSnakeKey,
-  convertKeysDeep,
+  convertKeys,
+  isPlainObject,
 } from 'src/lib/resource-inputs/normalizers';
 
 import { DomainError } from '../errors';
@@ -39,18 +40,31 @@ const mapAuditEntry = (
 ) => {
   return {
     id: instance.publicId,
-    projectId: projectPublicId ?? instance.project?.publicId ?? null,
-    principalType: instance.principalType,
-    principalId: instance.principalId,
+    project_id: projectPublicId ?? instance.project?.publicId ?? null,
+    principal_type: instance.principalType,
+    principal_id: instance.principalId,
     action: instance.action,
-    resourceSrn: instance.resourceSrn,
-    resourcePublicId: instance.resourcePublicId,
+    resource_srn: instance.resourceSrn,
+    resource_public_id: instance.resourcePublicId,
     status: instance.status,
-    requestId: instance.requestId,
+    request_id: instance.requestId,
     ip: instance.ip,
-    userAgent: instance.userAgent,
-    detail: instance.detail,
-    createdAt: instance.createdAt,
+    user_agent: instance.userAgent,
+    // `detail` is still written camelCase by its producers (e.g. the audit
+    // middleware's `additionalChecks`, guardrail evaluation records). Every
+    // surface that reads an entry — this mapper's direct callers
+    // (`listAuditEntries`/`getAuditEntry`), the export stream, and the
+    // `audit.entry_created` webhook — documents the same snake_case read
+    // contract, so the conversion belongs here rather than being duplicated
+    // (and previously missed) in each of those surfaces individually.
+    // Shallow only: a guardrail_evaluation record's `contextSnapshot` is
+    // spread into `detail` verbatim and is itself an author/runtime-owned
+    // bag one level down — a deep transform would recurse into it and
+    // rename keys SOAT does not own (the #690 class).
+    detail: isPlainObject(instance.detail)
+      ? convertKeys(instance.detail, camelToSnakeKey)
+      : ((instance.detail as null) ?? null),
+    created_at: instance.createdAt,
   };
 };
 
@@ -117,34 +131,34 @@ const resolveAuditProject = async (
 
 /** The snake_case projection of an entry — the read contract, shared by the
  * export stream and the `audit.entry_created` webhook payload so all three
- * surfaces expose the same field names.
+ * surfaces (these two, plus the plain list/get REST routes which return
+ * `mapAuditEntry`'s result directly) expose the same field names.
  *
- * `detail` is written camelCase and, on the read endpoints, snake-cased by
- * the `caseTransform` middleware — which the export stream and the webhook
- * both bypass (the export sets a stream body deliberately excluded from
- * `caseTransform`; the webhook payload never passes through HTTP middleware
- * at all). `convertKeysDeep` reproduces that same recursive transform here so
- * all three surfaces agree on `detail`'s inner key casing too. */
+ * `detail` is already snake-cased by {@link mapAuditEntry} — its producers
+ * (e.g. the audit middleware's `additionalChecks`, guardrail evaluation
+ * records) still write it camelCase, so the conversion happens once, in the
+ * mapper every entry passes through, rather than being duplicated per
+ * surface. */
 const toSnakeAuditEntry = (
   entry: ReturnType<typeof mapAuditEntry>
 ): Record<string, unknown> => {
   return {
     id: entry.id,
-    project_id: entry.projectId,
-    principal_type: entry.principalType,
-    principal_id: entry.principalId,
+    project_id: entry.project_id,
+    principal_type: entry.principal_type,
+    principal_id: entry.principal_id,
     action: entry.action,
-    resource_srn: entry.resourceSrn,
-    resource_public_id: entry.resourcePublicId,
+    resource_srn: entry.resource_srn,
+    resource_public_id: entry.resource_public_id,
     status: entry.status,
-    request_id: entry.requestId,
+    request_id: entry.request_id,
     ip: entry.ip,
-    user_agent: entry.userAgent,
-    detail: convertKeysDeep(entry.detail, camelToSnakeKey),
+    user_agent: entry.user_agent,
+    detail: entry.detail,
     created_at:
-      entry.createdAt instanceof Date
-        ? entry.createdAt.toISOString()
-        : entry.createdAt,
+      entry.created_at instanceof Date
+        ? entry.created_at.toISOString()
+        : entry.created_at,
   };
 };
 

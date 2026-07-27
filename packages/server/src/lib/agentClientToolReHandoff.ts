@@ -87,15 +87,15 @@ export const emitClientToolReHandoff = async (args: {
   item: MappedApproval;
   projectInternalId: number;
 }): Promise<boolean> => {
-  const proposed = args.item.proposedAction;
-  const agentId = args.item.agentId;
+  const proposed = args.item.proposed_action;
+  const agentId = args.item.agent_id;
   // Inline-tool proposals carry no persisted id to re-resolve the tool surface.
-  if (!proposed?.toolId || !agentId) return false;
+  if (!proposed?.tool_id || !agentId) return false;
 
-  const tool = await db.Tool.findOne({ where: { publicId: proposed.toolId } });
+  const tool = await db.Tool.findOne({ where: { publicId: proposed.tool_id } });
   if (!tool || tool.type !== 'client') return false;
 
-  const frozenArgs = (args.item.editedArguments ??
+  const frozenArgs = (args.item.edited_arguments ??
     proposed.arguments ??
     {}) as Record<string, unknown>;
 
@@ -117,8 +117,8 @@ export const emitClientToolReHandoff = async (args: {
     agentId,
     projectIds: [args.projectInternalId],
     messages: [{ role: 'user', content: note }],
-    toolContext: args.item.sessionId
-      ? { sessionId: args.item.sessionId }
+    toolContext: args.item.session_id
+      ? { sessionId: args.item.session_id }
       : undefined,
   });
 
@@ -132,12 +132,12 @@ export const emitClientToolReHandoff = async (args: {
     projectId: args.projectInternalId,
     agentId,
     traceId,
-    initiatorGenerationId: args.item.generationId ?? null,
+    initiatorGenerationId: args.item.generation_id ?? null,
     startedByPrincipalType: null,
     startedByPrincipalId: null,
     // Keeps the continuation's usage attributed to the same end user as the
     // turn that produced the approval; the actor is derived from the session.
-    sessionId: args.item.sessionId,
+    sessionId: args.item.session_id,
   });
 
   seedReHandoffPending({

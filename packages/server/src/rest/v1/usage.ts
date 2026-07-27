@@ -21,14 +21,14 @@ export const usageRouter = new Router<Context>();
 
 type UpsertPricesBody = {
   prices?: Array<{
-    aiProviderId?: string | null;
-    meterType?: string;
+    ai_provider_id?: string | null;
+    meter_type?: string;
     provider: string;
     model: string;
     component: string;
     unit: string;
-    unitPrice: number;
-    effectiveFrom: string;
+    unit_price: number;
+    effective_from: string;
   }>;
 };
 
@@ -63,14 +63,14 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
   }
 
   const {
-    agentId,
-    generationId,
-    traceId,
-    actorId,
-    sessionId,
-    triggerId,
-    actionId,
-    meterType,
+    agent_id: agentId,
+    generation_id: generationId,
+    trace_id: traceId,
+    actor_id: actorId,
+    session_id: sessionId,
+    trigger_id: triggerId,
+    action_id: actionId,
+    meter_type: meterType,
     limit,
     offset,
   } = ctx.query as Record<string, string | undefined>;
@@ -107,13 +107,11 @@ usageRouter.get('/usage', async (ctx: Context) => {
     throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
 
-  // The caseTransform middleware camelCases query keys, so `project_id` and
-  // `group_by` arrive as `projectId` / `groupBy`.
   const {
-    projectId: projectPublicId,
+    project_id: projectPublicId,
     from,
     to,
-    groupBy,
+    group_by: groupBy,
   } = ctx.query as Record<string, string | undefined>;
 
   if (!projectPublicId) {
@@ -172,7 +170,10 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
     throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const { projectId } = ctx.query as Record<string, string | undefined>;
+  const { project_id: projectId } = ctx.query as Record<
+    string,
+    string | undefined
+  >;
 
   ctx.body = await listThresholds({
     projectIds: projectIds ?? undefined,
@@ -193,7 +194,7 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     metric?: string;
     window?: string;
     threshold?: number;
@@ -201,7 +202,7 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'usage:ManageThresholds',
     resourceType: 'usage',
   });
@@ -258,11 +259,11 @@ usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
     id: ctx.params.threshold_id,
     projectIds: projectIds ?? undefined,
   });
-  if (threshold.projectId) {
+  if (threshold.project_id) {
     setAuditResourceHint(ctx, {
-      projectPublicId: threshold.projectId,
+      projectPublicId: threshold.project_id,
       resourceSrn: buildSrn({
-        projectPublicId: threshold.projectId,
+        projectPublicId: threshold.project_id,
         resourceType: 'usage',
         resourceId: threshold.id,
       }),
@@ -356,7 +357,7 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
     return;
   }
 
-  const { generationId, runId } = ctx.query as Record<
+  const { generation_id: generationId, run_id: runId } = ctx.query as Record<
     string,
     string | undefined
   >;
@@ -407,5 +408,18 @@ usageRouter.put('/usage/prices', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as UpsertPricesBody;
-  ctx.body = await upsertPrices({ prices: body.prices ?? [] });
+  ctx.body = await upsertPrices({
+    prices: (body.prices ?? []).map((price) => {
+      return {
+        aiProviderId: price.ai_provider_id,
+        meterType: price.meter_type,
+        provider: price.provider,
+        model: price.model,
+        component: price.component,
+        unit: price.unit,
+        unitPrice: price.unit_price,
+        effectiveFrom: price.effective_from,
+      };
+    }),
+  });
 });

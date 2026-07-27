@@ -202,7 +202,7 @@ describe('Traces REST API', () => {
     test('authenticated user with permission can list traces', async () => {
       const res = await authenticatedTestClient(userToken)
         .get('/api/v1/traces')
-        .query({ projectId });
+        .query({ project_id: projectId });
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
       expect(typeof res.body.total).toBe('number');
@@ -213,7 +213,7 @@ describe('Traces REST API', () => {
     test('returns seeded trace in results', async () => {
       const res = await authenticatedTestClient(userToken)
         .get('/api/v1/traces')
-        .query({ projectId });
+        .query({ project_id: projectId });
       expect(res.status).toBe(200);
       const ids = res.body.data.map((t: { id: string }) => {
         return t.id;
@@ -224,14 +224,14 @@ describe('Traces REST API', () => {
     test('user without permission cannot list traces', async () => {
       const res = await authenticatedTestClient(noPermToken)
         .get('/api/v1/traces')
-        .query({ projectId });
+        .query({ project_id: projectId });
       expect(res.status).toBe(403);
     });
 
     test('accepts limit and offset query params', async () => {
       const res = await authenticatedTestClient(userToken)
         .get('/api/v1/traces')
-        .query({ projectId, limit: 1, offset: 0 });
+        .query({ project_id: projectId, limit: 1, offset: 0 });
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.data)).toBe(true);
     });

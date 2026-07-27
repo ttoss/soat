@@ -11,6 +11,7 @@ import {
   buildKnowledgeMessages,
   buildKnowledgeTools,
   mergeKnowledgeConfig,
+  normalizeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
 import {
@@ -77,8 +78,8 @@ const assembleContextMessages = async (args: {
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const knowledgeMessages = await buildKnowledgeMessages({
     knowledgeConfig: mergeKnowledgeConfig({
-      base: args.typedAgent.knowledgeConfig,
-      override: args.knowledgeConfig,
+      base: normalizeKnowledgeConfig(args.typedAgent.knowledgeConfig),
+      override: normalizeKnowledgeConfig(args.knowledgeConfig),
     }),
     projectIds: args.projectIds,
     messages: args.resolvedMessages,

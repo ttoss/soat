@@ -129,17 +129,6 @@ const parseFormationToolBindings = (
   });
 };
 
-const readFormationToolBindings = (
-  bindings: AgentToolBinding[] | null
-): Record<string, unknown>[] | null => {
-  if (!bindings) return null;
-  return bindings.map((binding) => {
-    return {
-      ...(binding.toolId !== undefined ? { tool_id: binding.toolId } : {}),
-    };
-  });
-};
-
 // A formation declares the agent's full desired state, so the binding list is
 // always driven through the canonical `toolBindings` replace: an explicit
 // `tool_bindings` wins, a declared `tool_ids` shorthand maps to bare bindings,
@@ -278,26 +267,26 @@ export const agentsFormationModule: FormationModule = {
     try {
       const agent = await getAgent({ id: physicalResourceId });
       return {
-        ai_provider_id: agent.aiProviderId,
+        ai_provider_id: agent.ai_provider_id,
         name: agent.name,
         instructions: agent.instructions,
         model: agent.model,
         // Both views: the diff only compares keys the template declares, so a
         // template using either form converges against its own key.
-        tool_bindings: readFormationToolBindings(agent.toolBindings),
-        tool_ids: agent.toolIds,
-        max_steps: agent.maxSteps,
-        tool_choice: agent.toolChoice,
-        stop_conditions: agent.stopConditions,
-        active_tool_ids: agent.activeToolIds,
-        guardrail_ids: agent.guardrailIds,
-        step_rules: agent.stepRules,
-        boundary_policy: agent.boundaryPolicy,
+        tool_bindings: agent.tool_bindings,
+        tool_ids: agent.tool_ids,
+        max_steps: agent.max_steps,
+        tool_choice: agent.tool_choice,
+        stop_conditions: agent.stop_conditions,
+        active_tool_ids: agent.active_tool_ids,
+        guardrail_ids: agent.guardrail_ids,
+        step_rules: agent.step_rules,
+        boundary_policy: agent.boundary_policy,
         temperature: agent.temperature,
-        max_context_messages: agent.maxContextMessages,
-        single_session_per_actor: agent.singleSessionPerActor,
-        knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig),
-        output_schema: agent.outputSchema,
+        max_context_messages: agent.max_context_messages,
+        single_session_per_actor: agent.single_session_per_actor,
+        knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
+        output_schema: agent.output_schema,
       };
     } catch {
       return null;

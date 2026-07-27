@@ -34,6 +34,27 @@ export {
 
 // ── Mapping ──────────────────────────────────────────────────────────────────
 
+/**
+ * The discussion's `synthesis` config is stored as a raw JSON blob (no DB
+ * columns to convert case for us), and its `aiProviderId` is read internally
+ * as camelCase (see `assertSynthesisProvider`). The wire contract
+ * (`SynthesisConfig` in discussions.yaml) is snake_case, so the stored
+ * camelCase config must be converted back on the way out — mirrors
+ * `discussionsFormationModule.ts`'s `toSynthesis`, which does the same
+ * conversion in reverse for formation templates.
+ */
+const toWireSynthesis = (
+  synthesis: SynthesisConfig | null | undefined
+): Record<string, unknown> | null => {
+  if (!synthesis) return null;
+  return {
+    ai_provider_id: synthesis.aiProviderId ?? null,
+    model: synthesis.model ?? null,
+    prompt: synthesis.prompt ?? null,
+    effort: synthesis.effort ?? null,
+  };
+};
+
 const mapParticipant = (
   participant: NonNullable<DiscussionModel['participants']>[number]
 ) => {
@@ -42,8 +63,8 @@ const mapParticipant = (
     name: participant.name ?? null,
     prompt: participant.prompt ?? null,
     position: participant.position,
-    actorId: participant.actor?.publicId ?? null,
-    aiProviderId: participant.aiProvider?.publicId ?? null,
+    actor_id: participant.actor?.publicId ?? null,
+    ai_provider_id: participant.aiProvider?.publicId ?? null,
     model: participant.model ?? null,
     temperature: participant.temperature ?? null,
     effort: participant.effort ?? null,
@@ -59,21 +80,21 @@ export const mapDiscussion = (discussion: DiscussionModel) => {
     .map(mapParticipant);
   return {
     id: discussion.publicId,
-    projectId: discussion.project?.publicId,
+    project_id: discussion.project?.publicId,
     name: discussion.name,
     description: discussion.description ?? null,
-    maxRounds: discussion.maxRounds,
-    aiProviderId: discussion.aiProvider?.publicId ?? null,
+    max_rounds: discussion.maxRounds,
+    ai_provider_id: discussion.aiProvider?.publicId ?? null,
     model: discussion.model ?? null,
-    synthesis: discussion.synthesis ?? null,
+    synthesis: toWireSynthesis(discussion.synthesis as SynthesisConfig | null),
     tags: discussion.tags ?? undefined,
     participants,
-    templateWarnings: findDiscussionTemplateWarnings({
+    template_warnings: findDiscussionTemplateWarnings({
       participants,
       synthesis: discussion.synthesis as SynthesisConfig | null,
     }),
-    createdAt: discussion.createdAt,
-    updatedAt: discussion.updatedAt,
+    created_at: discussion.createdAt,
+    updated_at: discussion.updatedAt,
   };
 };
 
