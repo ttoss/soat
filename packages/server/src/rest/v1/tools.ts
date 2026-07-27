@@ -264,10 +264,11 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline,
     discussionId,
     outputMapping,
-    guardrailIds,
   } = (ctx.request.body ?? {}) as Record<string, unknown>;
 
-  const nextGuardrailIds = parseGuardrailIds(guardrailIds);
+  const nextGuardrailIds = parseGuardrailIds(
+    (ctx.request.body as Record<string, unknown> | undefined)?.guardrail_ids
+  );
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;
