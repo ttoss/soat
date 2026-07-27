@@ -34,7 +34,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 
 ## State is never directly writable
 
-- [x] `PATCH` with a `state` field is rejected and state is unchanged — **but** the error is a generic `VALIDATION_FAILED` / "Unknown field(s): state" rather than the documented `TASK_STATE_NOT_WRITABLE`. That code is registered in `errors/codes.ts` and never thrown anywhere. Behavior is safe; it is a code/docs mismatch, filed as [#605](https://github.com/ttoss/soat/issues/605)
+- [x] `PATCH` with a `state` field is rejected by strict-field validation with `VALIDATION_FAILED` / "Unknown field(s): state", before the handler runs, and state is unchanged. The 2026-07-18 pass flagged this as a mismatch against a documented `TASK_STATE_NOT_WRITABLE` ([#605](https://github.com/ttoss/soat/issues/605)); that was resolved by [#613](https://github.com/ttoss/soat/pull/613), which deleted the unreachable code and documented the real behavior. Re-confirmed 2026-07-27: `TASK_STATE_NOT_WRITABLE` no longer appears anywhere in `packages/server/src`
 - [x] `update-task` for `title`, `assignee`, `payload` each individually → `200`, only that field changes
 - [x] `payload` shallow-merges (other keys preserved) and is re-validated against `payload_schema` (type mismatch → `400 TASK_PAYLOAD_INVALID`)
 
