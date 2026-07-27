@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
   deriveLegacyToolFields,
@@ -95,7 +96,7 @@ const mapAgent = (
     step_rules: agent.stepRules,
     boundary_policy: agent.boundaryPolicy,
     temperature: agent.temperature,
-    knowledge_config: agent.knowledgeConfig,
+    knowledge_config: denormalizeKnowledgeConfig(agent.knowledgeConfig) ?? null,
     output_schema: agent.outputSchema,
     max_context_messages: agent.maxContextMessages,
     single_session_per_actor: agent.singleSessionPerActor,

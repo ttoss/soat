@@ -2,6 +2,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { normalizeKnowledgeConfig } from 'src/lib/agentKnowledge';
 import type { InlineToolDefinition } from 'src/lib/agents';
 import {
   createAgent,
@@ -154,7 +155,10 @@ const parseUpdateAgentBody = (
     stepRules: parseOptional<object[] | null>(body.step_rules),
     boundaryPolicy: parseOptional<object | null>(body.boundary_policy),
     temperature: parseOptional<number | null>(body.temperature),
-    knowledgeConfig: parseOptional<object | null>(body.knowledge_config),
+    knowledgeConfig:
+      body.knowledge_config === undefined
+        ? undefined
+        : normalizeKnowledgeConfig(body.knowledge_config),
     outputSchema: parseOptional<object | null>(body.output_schema),
     maxContextMessages: parseOptional<number | null>(body.max_context_messages),
     singleSessionPerActor:
@@ -214,7 +218,8 @@ const buildCreateAgentArgs = (
     stepRules: Array.isArray(body.step_rules) ? body.step_rules : undefined,
     boundaryPolicy: body.boundary_policy as object | undefined,
     temperature: parseNumber(body.temperature),
-    knowledgeConfig: body.knowledge_config as object | undefined,
+    knowledgeConfig: normalizeKnowledgeConfig(body.knowledge_config) as
+      object | undefined,
     outputSchema: body.output_schema as object | undefined,
     maxContextMessages: parseNumber(body.max_context_messages),
     singleSessionPerActor:
