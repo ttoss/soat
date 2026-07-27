@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { mapGenerationRequiredAction } from 'src/lib/agentGenerationHelpers';
 import { generateConversationMessage } from 'src/lib/conversationGeneration';
 import {
   addConversationMessage,
@@ -333,7 +334,22 @@ conversationSubResourcesRouter.post(
     });
 
     ctx.status = 200;
-    ctx.body = result;
+    ctx.body =
+      result.status === 'completed'
+        ? {
+            status: result.status,
+            content: result.content,
+            message: result.message,
+            generation_id: result.generationId,
+            trace_id: result.traceId,
+            model: result.model,
+          }
+        : {
+            status: result.status,
+            generation_id: result.generationId,
+            trace_id: result.traceId,
+            required_action: mapGenerationRequiredAction(result.requiredAction),
+          };
   }
 );
 

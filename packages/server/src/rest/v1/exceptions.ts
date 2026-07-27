@@ -16,11 +16,11 @@ const exceptionsRouter = new Router<Context>();
 // pattern, never the bare `*`) is authorized on get/acknowledge/resolve — see
 // the equivalent note in approvals.ts.
 const exceptionSrn = (exception: {
-  projectId?: string;
+  project_id?: string;
   id: string;
 }): string => {
   return buildSrn({
-    projectPublicId: exception.projectId!,
+    projectPublicId: exception.project_id!,
     resourceType: 'exception',
     resourceId: exception.id,
   });

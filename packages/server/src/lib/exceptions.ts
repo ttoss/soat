@@ -5,6 +5,11 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { emitEvent, onEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
+import {
+  camelToSnakeKey,
+  convertKeys,
+  isPlainObject,
+} from './resource-inputs/normalizers';
 
 const log = createDebug('soat:exceptions');
 
@@ -67,6 +72,25 @@ const buildIncludes = () => {
 };
 
 /**
+ * Converts `detail`'s own top-level keys from camelCase to snake_case
+ * without recursing into nested values. Producers (fileApprovalExpiredException,
+ * fileGuardrailTripwireException, quotaEvents, guardrailEvaluationRecord's
+ * `route_to_approval` detail) build `detail` entirely from server-owned
+ * fields (`approvalId`, `toolId`, `toolName`, `guardrailVersion`, `quotaId`,
+ * ...), so the top level is always safe to rename. A *nested* bag like
+ * `contextSnapshot` (spread in verbatim from a guardrail evaluation record)
+ * is itself an author-authored value one level down — its own inner keys
+ * must never be touched, which is exactly what a shallow (non-recursive)
+ * conversion guarantees.
+ */
+const mapExceptionDetail = (
+  detail: unknown
+): Record<string, unknown> | null => {
+  if (!isPlainObject(detail)) return (detail as null) ?? null;
+  return convertKeys(detail, camelToSnakeKey);
+};
+
+/**
  * Maps a persisted exception item to the plain, publicId-only API shape. The
  * internal `id` and the `*ByUserId` FK columns are never exposed — resolver
  * identity is surfaced via public IDs only.
@@ -79,7 +103,7 @@ export const mapException = (instance: ExceptionInstance) => {
     severity: instance.severity,
     kind: instance.kind,
     title: instance.title,
-    detail: instance.detail,
+    detail: mapExceptionDetail(instance.detail),
     occurrence_count: instance.occurrenceCount,
     last_seen_at: instance.lastSeenAt,
     run_id: instance.runId,

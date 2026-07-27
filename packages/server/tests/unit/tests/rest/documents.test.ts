@@ -229,6 +229,42 @@ describe('Documents', () => {
 
       expect(response.status).toBe(403);
     });
+
+    // Regression: checkDocumentPermission built the SRN and isAllowed check
+    // from `doc.projectId`, but getDocument's mapped shape only has
+    // `project_id` — the SRN resolved to `soat:undefined:document:<id>` and
+    // never matched an SRN-scoped policy. The rest of this describe block
+    // only uses `userToken`'s action-only policy, which never exercises
+    // resource matching, so it never caught this.
+    test('a user with an SRN-scoped (not action-only) policy can get the document', async () => {
+      const scopedUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'docs-srn-scoped', password: 'docsSrnPass123' });
+      const scopedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['documents:GetDocument'],
+                resource: [`soat:${projectId}:document:${documentId}`],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${scopedUserRes.body.id}/policies`)
+        .send({ policy_ids: [scopedPolicyRes.body.id] });
+      const scopedToken = await loginAs('docs-srn-scoped', 'docsSrnPass123');
+
+      const response = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/documents/${documentId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(documentId);
+    });
   });
 
   describe('DELETE /api/v1/documents/:id', () => {

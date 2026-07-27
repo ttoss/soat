@@ -53,7 +53,7 @@ const resolveGuardrailProjectId = async (
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return null;
   }
   return targetProjectId;

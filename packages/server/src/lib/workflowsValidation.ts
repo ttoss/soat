@@ -55,13 +55,21 @@ export type WorkflowTransition = {
 // A workflow's `states`/`transitions` carry structural keys in camelCase
 // internally (`stalledAfter`, `onEnter`, `onComplete`, `requiresApproval`,
 // `agentId`) but are authored and read back snake_case on the wire — REST and
-// formation templates alike. Deep-convert every key while leaving the raw
-// JSON-Logic bodies (a transition's `guard`, an on_complete rule's `when`)
-// verbatim, since their inner keys are author-authored data, not SOAT field
-// names. Shared by `rest/v1/workflows.ts` and
-// `formation-modules/workflowsFormationModule.ts` — both boundaries face the
-// identical shape.
-const JSON_LOGIC_KEYS = new Set(['guard', 'when']);
+// formation templates alike. Deep-convert every key while leaving opaque,
+// author-authored bags verbatim: a transition's `guard`, an on_complete
+// rule's `when` (JSON Logic bodies — a JSON-Logic operator like
+// `missing_some` is not a SOAT field name), and a dispatch's `input_mapping`
+// (its keys are the *target* orchestration/agent's own input field names,
+// chosen by the workflow author, not SOAT's — renaming them would silently
+// change which input key the dispatched run receives). Shared by
+// `rest/v1/workflows.ts` and `formation-modules/workflowsFormationModule.ts`
+// — both boundaries face the identical shape.
+const OPAQUE_BAG_KEYS = new Set([
+  'guard',
+  'when',
+  'inputMapping',
+  'input_mapping',
+]);
 
 const deepConvertKeys = (
   value: unknown,
@@ -76,7 +84,7 @@ const deepConvertKeys = (
     return Object.fromEntries(
       Object.entries(value).map(([key, val]) => {
         const newKey = transform(key);
-        if (JSON_LOGIC_KEYS.has(newKey)) {
+        if (OPAQUE_BAG_KEYS.has(newKey)) {
           return [newKey, val];
         }
         return [newKey, deepConvertKeys(val, transform)];

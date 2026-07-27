@@ -84,7 +84,7 @@ export const processToolOutputResult = async (args: {
       agentId: args.agentPublicId,
       metadata:
         responseMessages && responseMessages.length > 0
-          ? { response_messages: responseMessages }
+          ? { responseMessages }
           : undefined,
     });
   }

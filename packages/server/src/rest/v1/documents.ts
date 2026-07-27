@@ -42,7 +42,7 @@ const buildDocumentResources = (
   doc: {
     id: string;
     path?: string;
-    projectId?: string;
+    project_id?: string;
   },
   projectPublicId: string
 ): string[] => {
@@ -73,15 +73,15 @@ const checkDocumentPermission = async (
   doc: {
     id: string;
     path?: string;
-    projectId?: string;
+    project_id?: string;
     tags?: Record<string, unknown>;
   },
   action: string
 ): Promise<boolean> => {
   const context = buildDocumentContext(doc);
-  const resources = buildDocumentResources(doc, doc.projectId!);
+  const resources = buildDocumentResources(doc, doc.project_id!);
   const allowed = await ctx.authUser!.isAllowed({
-    projectPublicId: doc.projectId!,
+    projectPublicId: doc.project_id!,
     action,
     resources,
     context,

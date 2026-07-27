@@ -1756,8 +1756,12 @@ describe('Sessions', () => {
       );
       expect(assistantMsg).toBeDefined();
       expect(assistantMsg.metadata).not.toBeNull();
-      expect(assistantMsg.metadata.response_messages).toBeDefined();
-      expect(assistantMsg.metadata.response_messages).toHaveLength(3);
+      // metadata is an opaque bag (conversationMessages.ts passes it through
+      // verbatim, uncased) — responseMessages is the spelling the sibling
+      // conversationGeneration.ts writer and its only reader
+      // (conversationGeneration.ts's history builder) both use.
+      expect(assistantMsg.metadata.responseMessages).toBeDefined();
+      expect(assistantMsg.metadata.responseMessages).toHaveLength(3);
     });
 
     test('returns requires_action result when more tool outputs are needed', async () => {
@@ -1781,7 +1785,9 @@ describe('Sessions', () => {
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
           generation_id: 'gen_submit_req_01',
-          tool_outputs: [{ tool_call_id: 'tc_req_01', output: 'partial result' }],
+          tool_outputs: [
+            { tool_call_id: 'tc_req_01', output: 'partial result' },
+          ],
         });
 
       expect(response.status).toBe(200);

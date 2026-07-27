@@ -71,7 +71,7 @@ export const triggerOrScheduleGeneration = (args: {
     return {
       role: 'user' as const,
       content: args.savedContent,
-      documentId: args.savedDocumentId,
+      document_id: args.savedDocumentId,
     };
   }
 

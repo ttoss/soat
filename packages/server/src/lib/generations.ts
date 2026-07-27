@@ -69,14 +69,21 @@ const INTERNAL_METADATA_KEYS = ['pendingState'];
 // summary written on completion. Writes that include any of these are rejected
 // so caller metadata can never corrupt system bookkeeping or usage rollups.
 // Reserved-key validation runs against the raw wire request body (there is no
-// recursive case-transform middleware anymore), so the wire (snake_case) names
-// are what must be checked here, not the internal camelCase storage keys.
+// recursive case-transform middleware anymore), so both the wire (snake_case)
+// names AND the internal camelCase storage names must be blocked here —
+// updateGenerationMetadata shallow-merges caller metadata directly over the
+// stored object, so a caller sending the camelCase spelling verbatim would
+// otherwise overwrite real attribution with a forged one.
 export const RESERVED_GENERATION_METADATA_KEYS = [
   'pendingState',
   'action_id',
+  'actionId',
   'trigger_id',
+  'triggerId',
   'run_id',
+  'runId',
   'node_id',
+  'nodeId',
   'extraction',
 ];
 

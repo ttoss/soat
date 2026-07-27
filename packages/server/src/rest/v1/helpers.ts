@@ -147,7 +147,7 @@ export const resolveWriteProjectId = async (args: {
 
   if (!projectPublicId) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return null;
   }
 

@@ -3,7 +3,8 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 import {
   camelToSnakeKey,
-  convertKeysDeep,
+  convertKeys,
+  isPlainObject,
 } from 'src/lib/resource-inputs/normalizers';
 
 import { DomainError } from '../errors';
@@ -56,10 +57,13 @@ const mapAuditEntry = (
     // `audit.entry_created` webhook — documents the same snake_case read
     // contract, so the conversion belongs here rather than being duplicated
     // (and previously missed) in each of those surfaces individually.
-    detail: convertKeysDeep(instance.detail, camelToSnakeKey) as Record<
-      string,
-      unknown
-    > | null,
+    // Shallow only: a guardrail_evaluation record's `contextSnapshot` is
+    // spread into `detail` verbatim and is itself an author/runtime-owned
+    // bag one level down — a deep transform would recurse into it and
+    // rename keys SOAT does not own (the #690 class).
+    detail: isPlainObject(instance.detail)
+      ? convertKeys(instance.detail, camelToSnakeKey)
+      : ((instance.detail as null) ?? null),
     created_at: instance.createdAt,
   };
 };

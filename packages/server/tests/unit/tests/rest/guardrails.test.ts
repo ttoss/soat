@@ -220,7 +220,7 @@ describe('Guardrails', () => {
         .post('/api/v1/guardrails')
         .send({ name: 'No Project', document: { class: 'C' } });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('projectId is required');
+      expect(response.body.error).toBe('project_id is required');
     });
   });
 

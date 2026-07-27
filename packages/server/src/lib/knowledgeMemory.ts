@@ -100,7 +100,9 @@ const mapEntry = (
     memory_name: memory.name,
     content: entry.content,
     tags: entry.tags ?? null,
-    ...(similarityScore === undefined ? {} : { similarityScore }),
+    ...(similarityScore === undefined
+      ? {}
+      : { similarity_score: similarityScore }),
     created_at: entry.createdAt,
     updated_at: entry.updatedAt,
   };

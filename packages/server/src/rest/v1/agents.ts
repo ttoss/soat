@@ -271,7 +271,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   if (!reqBody.ai_provider_id || typeof reqBody.ai_provider_id !== 'string') {
     ctx.status = 400;
-    ctx.body = { error: 'aiProviderId is required' };
+    ctx.body = { error: 'ai_provider_id is required' };
     return;
   }
 
@@ -294,7 +294,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   /* istanbul ignore next */
   if (targetProjectId === 400) {
     ctx.status = 400;
-    ctx.body = { error: 'projectId is required' };
+    ctx.body = { error: 'project_id is required' };
     return;
   }
 

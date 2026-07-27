@@ -520,7 +520,7 @@ describe('Files', () => {
       // Legacy plain-string body from the shared `resolveWriteProjectId`
       // helper (rest/v1/helpers.ts), used across ~13 route files — not
       // migrated to DomainError here to avoid a cross-cutting route change.
-      expect(response.body.error).toMatch(/projectId is required/i);
+      expect(response.body.error).toMatch(/project_id is required/i);
     });
 
     test('returns 403 when user has no upload permission', async () => {

@@ -23,18 +23,18 @@ const validateAddMessageBody = (body: {
     throw new DomainError('VALIDATION_FAILED', 'message must be a string');
   }
   if (body.document_id !== undefined && typeof body.document_id !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'documentId must be a string');
+    throw new DomainError('VALIDATION_FAILED', 'document_id must be a string');
   }
   if (!body.message && !body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'either message or documentId is required'
+      'either message or document_id is required'
     );
   }
   if (body.message && body.document_id) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'message and documentId are mutually exclusive'
+      'message and document_id are mutually exclusive'
     );
   }
 };
@@ -140,7 +140,7 @@ sessionSubResourcesRouter.post(
     if (!Array.isArray(body.tool_outputs) || body.tool_outputs.length === 0) {
       throw new DomainError(
         'VALIDATION_FAILED',
-        'toolOutputs is required and must be a non-empty array'
+        'tool_outputs is required and must be a non-empty array'
       );
     }
 

@@ -3,7 +3,7 @@ import { emitEvent } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
-import { authenticatedTestClient, testClient } from '../../testClient';
+import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 // The Exceptions module (G3 Phase 3). Items have no public create endpoint —
 // they are auto-filed by producers (run failures, guardrail tripwires, expired
@@ -13,6 +13,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // and approval entry points.
 
 describe('Exceptions', () => {
+  let adminToken: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -55,6 +56,7 @@ describe('Exceptions', () => {
         'tools:CreateTool',
       ],
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken!;
     projectId = setup.projectId;
@@ -186,6 +188,41 @@ describe('Exceptions', () => {
         (await client.post(`/api/v1/exceptions/${targetId}/resolve`).send({}))
           .status
       ).toBe(403);
+    });
+
+    // Regression: exceptionSrn() built the item SRN from `exception.projectId`,
+    // but the mapper's wire field is `project_id` — the SRN resource resolved
+    // to `soat:undefined:exception:<id>` and never matched an SRN-scoped
+    // policy. An action-only policy (like the rest of this describe block)
+    // never exercises the resource-matching path, so it slipped through.
+    test('a user with an SRN-scoped (not action-only) policy can get the item', async () => {
+      const scopedUserRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/users')
+        .send({ username: 'exc-srn-scoped', password: 'excSrnPass123' });
+      const scopedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['exceptions:GetException'],
+                resource: [`soat:${projectId}:exception:${targetId}`],
+              },
+            ],
+          },
+        });
+      await authenticatedTestClient(adminToken)
+        .put(`/api/v1/users/${scopedUserRes.body.id}/policies`)
+        .send({ policy_ids: [scopedPolicyRes.body.id] });
+      const scopedToken = await loginAs('exc-srn-scoped', 'excSrnPass123');
+
+      const response = await authenticatedTestClient(scopedToken).get(
+        `/api/v1/exceptions/${targetId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(targetId);
     });
   });
 
@@ -326,7 +363,9 @@ describe('Exceptions', () => {
     ): Promise<Record<string, unknown> | null> => {
       for (let i = 0; i < 100; i += 1) {
         const res = await listExceptions('');
-        const match = (res.body.data as Record<string, unknown>[]).find(predicate);
+        const match = (res.body.data as Record<string, unknown>[]).find(
+          predicate
+        );
         if (match) return match;
         await new Promise((resolve) => {
           return setTimeout(resolve, 20);
