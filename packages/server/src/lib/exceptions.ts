@@ -387,9 +387,12 @@ const fileApprovalExpiredException = async (
     projectId: event.projectId,
     kind: 'approval_expired',
     title: `Approval ${approvalId ?? '(unknown)'} expired without a decision`,
-    detail: { approvalId, toolId: asRecord(approval.proposedAction).toolId },
-    runId: asStringOrNull(approval.runId),
-    agentId: asStringOrNull(approval.agentId),
+    detail: {
+      approvalId,
+      toolId: asRecord(approval.proposed_action).tool_id,
+    },
+    runId: asStringOrNull(approval.run_id),
+    agentId: asStringOrNull(approval.agent_id),
     dedupKey: approvalId ? `approval_expired:${approvalId}` : null,
   });
 };

@@ -205,7 +205,7 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
       item: {
         ...approval,
         proposed_action: {
-          toolId: 'tool_missing000000',
+          tool_id: 'tool_missing000000',
           action: 'x',
           arguments: {},
         },

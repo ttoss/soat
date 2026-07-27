@@ -355,9 +355,9 @@ describe('Exceptions', () => {
       emit('approvals.expired', 'apr_full_1', {
         approval: {
           id: 'apr_full_1',
-          proposedAction: { toolId: 'tool_x' },
-          runId: 'run_exp_1',
-          agentId: 'agent_exp_1',
+          proposed_action: { tool_id: 'tool_x' },
+          run_id: 'run_exp_1',
+          agent_id: 'agent_exp_1',
         },
       });
       const match = await pollException((e) => {

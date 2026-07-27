@@ -146,7 +146,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
       origin: 'tool_call',
       status: 'approved',
       proposed_action: {
-        toolId: httpToolId,
+        tool_id: httpToolId,
         action: 'refund',
         arguments: { amount: 5 },
       },
@@ -195,7 +195,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
     const item = buildToolCallItem({
       id: 'apr_cont_test',
       proposed_action: {
-        toolId: httpToolId,
+        tool_id: httpToolId,
         action: 'refund',
         arguments: { amount: 25 },
       },
@@ -253,7 +253,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
 
   test('an inline-tool proposal reports a non-executable result', async () => {
     const item = buildToolCallItem({
-      proposed_action: { toolId: '', arguments: {} },
+      proposed_action: { tool_id: '', arguments: {} },
     });
     const decision: DecisionOutput = {
       decision: 'approved',
@@ -322,7 +322,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
 
   test('a failed execution is captured, and the continuation still fires', async () => {
     const item = buildToolCallItem({
-      proposed_action: { toolId: 'tool_bogus0000000', arguments: {} },
+      proposed_action: { tool_id: 'tool_bogus0000000', arguments: {} },
     });
     const decision: DecisionOutput = {
       decision: 'approved',

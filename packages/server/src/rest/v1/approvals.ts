@@ -21,9 +21,9 @@ const approvalsRouter = new Router<Context>();
  * resource defaults to `*`, which such a policy cannot match, wrongly denying
  * get/approve/reject while `list` (already SRN-checked) succeeds.
  */
-const approvalSrn = (approval: { projectId?: string; id: string }): string => {
+const approvalSrn = (approval: { project_id?: string; id: string }): string => {
   return buildSrn({
-    projectPublicId: approval.projectId!,
+    projectPublicId: approval.project_id!,
     resourceType: 'approval',
     resourceId: approval.id,
   });

@@ -34,7 +34,7 @@ const executeApprovedAction = async (args: {
   projectInternalId: number;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
-  if (!proposed?.toolId) {
+  if (!proposed?.tool_id) {
     return {
       error:
         'The approved action targets an inline tool and cannot be executed at resolution time.',
@@ -47,13 +47,13 @@ const executeApprovedAction = async (args: {
   log(
     'executeApprovedAction: id=%s toolId=%s action=%s',
     args.item.id,
-    proposed.toolId,
+    proposed.tool_id,
     proposed.action ?? '(none)'
   );
 
   const rawResult = await callTool({
     projectIds: [args.projectInternalId],
-    id: proposed.toolId,
+    id: proposed.tool_id,
     action: proposed.action,
     input,
   });
@@ -76,8 +76,8 @@ const buildContinuationMessage = (args: {
   // fall back defensively rather than asserting.
   const proposed = item.proposed_action;
   const toolRef = proposed?.action
-    ? `${proposed.toolId} (${proposed.action})`
-    : (proposed?.toolId ?? 'the requested tool');
+    ? `${proposed.tool_id} (${proposed.action})`
+    : (proposed?.tool_id ?? 'the requested tool');
   const parts = [
     `Approval ${decision.approvalId} for your proposed call to tool ${toolRef} was ${decision.decision}.`,
   ];

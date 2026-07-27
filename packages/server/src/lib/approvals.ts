@@ -54,6 +54,31 @@ const buildIncludes = () => {
   ];
 };
 
+/** The internal shape of an approval's frozen proposal — `toolId` is camelCase, stored as-is. */
+export type ProposedAction = {
+  toolId: string;
+  action?: string;
+  arguments: object;
+} | null;
+
+/** The wire shape of a proposed action (`tool_id`, per approvals.yaml). */
+export type WireProposedAction = {
+  tool_id: string;
+  action?: string;
+  arguments: object;
+} | null;
+
+const toWireProposedAction = (
+  proposed: ProposedAction | undefined
+): WireProposedAction => {
+  if (!proposed) return null;
+  return {
+    tool_id: proposed.toolId,
+    ...(proposed.action !== undefined ? { action: proposed.action } : {}),
+    arguments: proposed.arguments,
+  };
+};
+
 /**
  * Maps a persisted approval item to the plain, publicId-only shape returned by
  * the API. The internal `id`, `orchestrationRunId`, and `resolvedByUserId`
@@ -65,7 +90,9 @@ export const mapApproval = (instance: ApprovalInstance) => {
     project_id: instance.project?.publicId,
     origin: instance.origin,
     status: instance.status,
-    proposed_action: instance.proposedAction,
+    proposed_action: toWireProposedAction(
+      instance.proposedAction as ProposedAction | undefined
+    ),
     reasoning: instance.reasoning,
     evidence: instance.evidence,
     predicted_impact: instance.predictedImpact,
@@ -248,7 +275,7 @@ const findApprovalOrThrow = async (id: string): Promise<ApprovalInstance> => {
 type EmitApprovalArgs = {
   projectId: number;
   origin?: 'node' | 'tool_call' | 'task_transition';
-  proposedAction: { toolId: string; action?: string; arguments: object } | null;
+  proposedAction: ProposedAction;
   reasoning?: string | null;
   evidence?: object | null;
   predictedImpact?: string | null;

@@ -90,9 +90,9 @@ export const emitClientToolReHandoff = async (args: {
   const proposed = args.item.proposed_action;
   const agentId = args.item.agent_id;
   // Inline-tool proposals carry no persisted id to re-resolve the tool surface.
-  if (!proposed?.toolId || !agentId) return false;
+  if (!proposed?.tool_id || !agentId) return false;
 
-  const tool = await db.Tool.findOne({ where: { publicId: proposed.toolId } });
+  const tool = await db.Tool.findOne({ where: { publicId: proposed.tool_id } });
   if (!tool || tool.type !== 'client') return false;
 
   const frozenArgs = (args.item.edited_arguments ??
