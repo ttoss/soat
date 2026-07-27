@@ -177,13 +177,15 @@ export const sessionsFormationModule: FormationModule = {
         agentId,
         sessionId: physicalResourceId,
       });
+      // `getSession` already returns the snake_case read contract, so the
+      // formation view is a subset of it rather than a second transcription.
       return {
-        agent_id: session.agentId,
+        agent_id: session.agent_id,
         name: session.name,
-        actor_id: session.actorId,
-        auto_generate: session.autoGenerate,
-        inactivity_ttl_seconds: session.inactivityTtlSeconds,
-        tool_context: session.toolContext,
+        actor_id: session.actor_id,
+        auto_generate: session.auto_generate,
+        inactivity_ttl_seconds: session.inactivity_ttl_seconds,
+        tool_context: session.tool_context,
       };
     } catch {
       return null;

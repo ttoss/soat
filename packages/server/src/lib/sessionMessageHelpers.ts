@@ -89,6 +89,6 @@ export const triggerOrReturnMessage = (args: {
   return {
     role: 'user' as const,
     content: args.savedContent,
-    documentId: args.savedDocumentId,
+    document_id: args.savedDocumentId,
   };
 };
