@@ -10,6 +10,7 @@ import {
   type WorkflowState,
   type WorkflowTransition,
 } from 'src/lib/workflows';
+import { workflowCollectionToCamel } from 'src/lib/workflowsValidation';
 
 import {
   checkAuth,
@@ -72,8 +73,8 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     project_id?: string;
     name: string;
     description?: string | null;
-    states: WorkflowState[];
-    transitions: WorkflowTransition[];
+    states: unknown;
+    transitions: unknown;
     payload_schema?: object | null;
   };
 
@@ -89,8 +90,9 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     projectId,
     name: body.name,
     description: body.description,
-    states: body.states,
-    transitions: body.transitions,
+    states: workflowCollectionToCamel<WorkflowState>(body.states) ?? [],
+    transitions:
+      workflowCollectionToCamel<WorkflowTransition>(body.transitions) ?? [],
     payloadSchema: body.payload_schema,
   });
 
@@ -121,8 +123,8 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     description?: string | null;
-    states?: WorkflowState[];
-    transitions?: WorkflowTransition[];
+    states?: unknown;
+    transitions?: unknown;
     payload_schema?: object | null;
   };
 
@@ -130,8 +132,10 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     id: ctx.params.workflow_id,
     name: body.name,
     description: body.description,
-    states: body.states,
-    transitions: body.transitions,
+    states: workflowCollectionToCamel<WorkflowState>(body.states),
+    transitions: workflowCollectionToCamel<WorkflowTransition>(
+      body.transitions
+    ),
     payloadSchema: body.payload_schema,
   });
 });

@@ -2,10 +2,7 @@ import createDebug from 'debug';
 
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  camelToSnakeKey,
-  isPlainObject,
   normalizePropertyKeys,
-  snakeToCamelKey,
   toNullableObject,
   toNullableString,
   toOptionalString,
@@ -18,6 +15,10 @@ import {
   type WorkflowState,
   type WorkflowTransition,
 } from '../workflows';
+import {
+  workflowCollectionToCamel as toCamelCollection,
+  workflowCollectionToSnake as toSnakeCollection,
+} from '../workflowsValidation';
 import {
   isObjectRecord,
   loadModuleSpec,
@@ -32,52 +33,11 @@ const SCHEMA_NAME = 'WorkflowResourceProperties';
 const RESOURCE_LABEL = 'workflow';
 
 // ── Key normalization ────────────────────────────────────────────────────
-
+//
 // A workflow's `states` and `transitions` are stored (and read by the engine)
-// with camelCase structural keys (`stalledAfter`, `onEnter`, `onComplete`,
-// `requiresApproval`, `agentId`) — the case-transform middleware converts the
-// snake_case REST contract inbound. Formation templates author the same
-// snake_case contract, but the property bag is only shallow-normalized, so the
-// nested state/transition keys arrive snake_cased. Mirror caseTransform exactly:
-// deep-convert every key while leaving the raw JSON-Logic bodies (`guard` on a
-// transition, `when` on an on_complete rule) verbatim — their inner keys are
-// author-authored data, not SOAT field names.
-const JSON_LOGIC_KEYS = new Set(['guard', 'when']);
-
-const deepConvertKeys = (
-  value: unknown,
-  transform: (key: string) => string
-): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => {
-      return deepConvertKeys(item, transform);
-    });
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, val]) => {
-        const newKey = transform(key);
-        if (JSON_LOGIC_KEYS.has(newKey)) {
-          // Pass-through: a guard/when body round-trips with its author-authored
-          // inner keys intact, exactly like caseTransform's skip list.
-          return [newKey, val];
-        }
-        return [newKey, deepConvertKeys(val, transform)];
-      })
-    );
-  }
-  return value;
-};
-
-const toCamelCollection = <T>(value: unknown): T[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  return deepConvertKeys(value, snakeToCamelKey) as T[];
-};
-
-const toSnakeCollection = (value: unknown): unknown[] => {
-  if (!Array.isArray(value)) return [];
-  return deepConvertKeys(value, camelToSnakeKey) as unknown[];
-};
+// with camelCase structural keys, but authored and read back snake_case on
+// the wire. The deep conversion (leaving JSON-Logic `guard`/`when` bodies
+// verbatim) lives in `workflowsValidation.ts`, shared with `rest/v1/workflows.ts`.
 
 // ── Property validation ──────────────────────────────────────────────────
 

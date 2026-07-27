@@ -1,6 +1,11 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import {
+  camelToSnakeKey,
+  isPlainObject,
+  snakeToCamelKey,
+} from './resource-inputs/normalizers';
 
 /**
  * Types describing a workflow definition as it is stored (structural keys in
@@ -43,6 +48,56 @@ export type WorkflowTransition = {
   to: string;
   guard?: unknown;
   requiresApproval?: boolean;
+};
+
+// ── Wire <-> internal conversion ─────────────────────────────────────────
+//
+// A workflow's `states`/`transitions` carry structural keys in camelCase
+// internally (`stalledAfter`, `onEnter`, `onComplete`, `requiresApproval`,
+// `agentId`) but are authored and read back snake_case on the wire — REST and
+// formation templates alike. Deep-convert every key while leaving the raw
+// JSON-Logic bodies (a transition's `guard`, an on_complete rule's `when`)
+// verbatim, since their inner keys are author-authored data, not SOAT field
+// names. Shared by `rest/v1/workflows.ts` and
+// `formation-modules/workflowsFormationModule.ts` — both boundaries face the
+// identical shape.
+const JSON_LOGIC_KEYS = new Set(['guard', 'when']);
+
+const deepConvertKeys = (
+  value: unknown,
+  transform: (key: string) => string
+): unknown => {
+  if (Array.isArray(value)) {
+    return value.map((item) => {
+      return deepConvertKeys(item, transform);
+    });
+  }
+  if (isPlainObject(value)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => {
+        const newKey = transform(key);
+        if (JSON_LOGIC_KEYS.has(newKey)) {
+          return [newKey, val];
+        }
+        return [newKey, deepConvertKeys(val, transform)];
+      })
+    );
+  }
+  return value;
+};
+
+/** Converts a raw wire `states`/`transitions` array (snake_case) to the internal camelCase shape. */
+export const workflowCollectionToCamel = <T>(
+  value: unknown
+): T[] | undefined => {
+  if (!Array.isArray(value)) return undefined;
+  return deepConvertKeys(value, snakeToCamelKey) as T[];
+};
+
+/** Reverses {@link workflowCollectionToCamel} for a response body. */
+export const workflowCollectionToSnake = (value: unknown): unknown[] => {
+  if (!Array.isArray(value)) return [];
+  return deepConvertKeys(value, camelToSnakeKey) as unknown[];
 };
 
 const fail = (message: string, meta?: Record<string, unknown>): never => {
