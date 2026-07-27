@@ -28,6 +28,13 @@ const WIRE_NAMES: Record<(typeof QUOTA_IMMUTABLE_FIELDS)[number], string> = {
   window: 'window',
 };
 
+// `null` is a materially different scope_ref than `""` (see the per-actor
+// tests in quotas.test.ts), so it must render as the word "null" rather than
+// collapsing into an empty-quoted string in the error message.
+const display = (value: string | null): string => {
+  return value === null ? 'null' : `"${value}"`;
+};
+
 /**
  * Rejects an attempt to change an immutable field, returning the message on the
  * first offender or `null` when the update is allowed.
@@ -63,10 +70,12 @@ export const validateQuotaImmutableFields = (args: {
     const nextValue = next === null ? '' : String(next);
     const currentValue = args.current[field] ?? '';
     if (nextValue !== currentValue) {
+      const nextDisplay = next === null ? null : String(next);
+      const currentDisplay = args.current[field];
       return (
         `${WIRE_NAMES[field]} is immutable and cannot be changed after ` +
-        `creation (declared "${nextValue}", current "${currentValue}"). ` +
-        `Replace the quota instead.`
+        `creation (declared ${display(nextDisplay)}, current ` +
+        `${display(currentDisplay)}). Replace the quota instead.`
       );
     }
   }
