@@ -811,6 +811,43 @@ describe('Quotas', () => {
       }
     });
 
+    // Pins the documented exemption (see #742): a `requests` quota is always
+    // project-scoped, and an unscoped key (no bound project) has no single
+    // project to count or block against — the same reasoning that exempts
+    // JWT-user requests above. This is a deliberate, symmetric design with
+    // usageRequestMiddleware's identical exemption, not a bug; the test exists
+    // so the behavior can't silently drift without a test failing.
+    test('unscoped API key requests are never counted or blocked', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-exempt'
+      );
+
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+
+      const unscopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'quotas-unscoped-exempt key', policy_ids: [policyId] });
+      expect(unscopedKeyRes.status).toBe(201);
+      const rawUnscopedKey = unscopedKeyRes.body.key as string;
+
+      // Far more than the limit; an unscoped key is exempt from counting.
+      for (let i = 0; i < 5; i += 1) {
+        const res = await authenticatedTestClient(rawUnscopedKey).get(
+          `/api/v1/quotas?project_id=${enfProjectId}`
+        );
+        expect(res.status).toBe(200);
+      }
+    });
+
     test('an API key in a project with no requests quota is never blocked', async () => {
       const { enfProjectId, rawKey } =
         await setupEnforcementProject('quotas-no-match');
