@@ -187,7 +187,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Read the shared poem document",
         "actions": ["get-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "poemWriteTool": {
@@ -197,7 +197,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Update the shared poem document",
         "actions": ["update-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "stanza1Agent": {
@@ -264,7 +264,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 1 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza1Agent" },
+          "agent_id": { "ref": "stanza1Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain." }]
         }
       }
@@ -277,7 +277,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 2 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza2Agent" },
+          "agent_id": { "ref": "stanza2Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)." }]
         }
       }
@@ -290,7 +290,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 3 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza3Agent" },
+          "agent_id": { "ref": "stanza3Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)." }]
         }
       }
@@ -303,7 +303,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 4 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza4Agent" },
+          "agent_id": { "ref": "stanza4Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)." }]
         }
       }
@@ -315,7 +315,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Read the final poem from the shared document",
         "actions": ["get-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "orchestrator": {
@@ -665,7 +665,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Read the shared poem document",
         "actions": ["get-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "poemWriteTool": {
@@ -675,7 +675,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Update the shared poem document",
         "actions": ["update-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "stanza1Agent": {
@@ -742,7 +742,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 1 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza1Agent" },
+          "agent_id": { "ref": "stanza1Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain." }]
         }
       }
@@ -755,7 +755,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 2 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza2Agent" },
+          "agent_id": { "ref": "stanza2Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)." }]
         }
       }
@@ -768,7 +768,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 3 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza3Agent" },
+          "agent_id": { "ref": "stanza3Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)." }]
         }
       }
@@ -781,7 +781,7 @@ cat > formation.json << 'EOF'
         "description": "Call stanza 4 agent",
         "actions": ["create-agent-generation"],
         "preset_parameters": {
-          "agentId": { "ref": "stanza4Agent" },
+          "agent_id": { "ref": "stanza4Agent" },
           "messages": [{ "role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)." }]
         }
       }
@@ -793,7 +793,7 @@ cat > formation.json << 'EOF'
         "type": "soat",
         "description": "Read the final poem from the shared document",
         "actions": ["get-document"],
-        "preset_parameters": { "documentId": { "ref": "poemDoc" } }
+        "preset_parameters": { "document_id": { "ref": "poemDoc" } }
       }
     },
     "orchestrator": {

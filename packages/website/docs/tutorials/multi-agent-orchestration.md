@@ -257,7 +257,7 @@ READ_POEM_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Read the shared poem document" \
   --actions '["get-document"]' \
-  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "READ_POEM_TOOL_ID: $READ_POEM_TOOL_ID"
 
 WRITE_STANZA_TOOL_ID=$(soat create-tool \
@@ -266,7 +266,7 @@ WRITE_STANZA_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Update the shared poem document" \
   --actions '["update-document"]' \
-  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 echo "WRITE_STANZA_TOOL_ID: $WRITE_STANZA_TOOL_ID"
 ```
 
@@ -488,7 +488,7 @@ CALL_STANZA1_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Call stanza 1 agent" \
   --actions '["create-agent-generation"]' \
-  --preset-parameters '{"agentId": "'"$STANZA1_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain."}]}' | jq -r '.id')
+  --preset-parameters '{"agent_id": "'"$STANZA1_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 1 with title + first quatrain."}]}' | jq -r '.id')
 
 CALL_STANZA2_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
@@ -496,7 +496,7 @@ CALL_STANZA2_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Call stanza 2 agent" \
   --actions '["create-agent-generation"]' \
-  --preset-parameters '{"agentId": "'"$STANZA2_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)."}]}' | jq -r '.id')
+  --preset-parameters '{"agent_id": "'"$STANZA2_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 2 (second quatrain)."}]}' | jq -r '.id')
 
 CALL_STANZA3_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
@@ -504,7 +504,7 @@ CALL_STANZA3_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Call stanza 3 agent" \
   --actions '["create-agent-generation"]' \
-  --preset-parameters '{"agentId": "'"$STANZA3_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)."}]}' | jq -r '.id')
+  --preset-parameters '{"agent_id": "'"$STANZA3_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 3 (third quatrain)."}]}' | jq -r '.id')
 
 CALL_STANZA4_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
@@ -512,7 +512,7 @@ CALL_STANZA4_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Call stanza 4 agent" \
   --actions '["create-agent-generation"]' \
-  --preset-parameters '{"agentId": "'"$STANZA4_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)."}]}' | jq -r '.id')
+  --preset-parameters '{"agent_id": "'"$STANZA4_AGENT_ID"'", "messages": [{"role": "user", "content": "Theme: artificial intelligence. Write stanza 4 (final couplet)."}]}' | jq -r '.id')
 
 READ_FINAL_POEM_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
@@ -520,7 +520,7 @@ READ_FINAL_POEM_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Read the final poem from the shared document" \
   --actions '["get-document"]' \
-  --preset-parameters '{"documentId": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"document_id": "'"$POEM_DOC_ID"'"}' | jq -r '.id')
 
 echo "CALL_STANZA1_TOOL_ID: $CALL_STANZA1_TOOL_ID"
 echo "CALL_STANZA2_TOOL_ID: $CALL_STANZA2_TOOL_ID"

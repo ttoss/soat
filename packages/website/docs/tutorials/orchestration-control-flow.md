@@ -203,7 +203,7 @@ CHECK_TOOL_ID=$(soat create-tool \
   --type "soat" \
   --description "Read this project so the poll node can check readiness" \
   --actions '["get-project"]' \
-  --preset-parameters '{"projectId": "'"$PROJECT_ID"'"}' | jq -r '.id')
+  --preset-parameters '{"project_id": "'"$PROJECT_ID"'"}' | jq -r '.id')
 echo "CHECK_TOOL_ID: $CHECK_TOOL_ID"
 ```
 
