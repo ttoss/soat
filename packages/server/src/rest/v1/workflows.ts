@@ -27,7 +27,7 @@ const workflowsRouter = new Router<Context>();
 workflowsRouter.get('/workflows', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const projectIds = await resolveProjectIdsWithAction({
     ctx,
     projectPublicId,
@@ -69,17 +69,17 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     description?: string | null;
     states: WorkflowState[];
     transitions: WorkflowTransition[];
-    payloadSchema?: object | null;
+    payload_schema?: object | null;
   };
 
   const projectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'workflows:CreateWorkflow',
     resourceType: 'workflow',
   });
@@ -91,7 +91,7 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     description: body.description,
     states: body.states,
     transitions: body.transitions,
-    payloadSchema: body.payloadSchema,
+    payloadSchema: body.payload_schema,
   });
 
   ctx.status = 201;
@@ -123,7 +123,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     description?: string | null;
     states?: WorkflowState[];
     transitions?: WorkflowTransition[];
-    payloadSchema?: object | null;
+    payload_schema?: object | null;
   };
 
   ctx.body = await updateWorkflow({
@@ -132,7 +132,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     description: body.description,
     states: body.states,
     transitions: body.transitions,
-    payloadSchema: body.payloadSchema,
+    payloadSchema: body.payload_schema,
   });
 });
 

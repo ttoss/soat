@@ -21,14 +21,14 @@ export const usageRouter = new Router<Context>();
 
 type UpsertPricesBody = {
   prices?: Array<{
-    aiProviderId?: string | null;
-    meterType?: string;
+    ai_provider_id?: string | null;
+    meter_type?: string;
     provider: string;
     model: string;
     component: string;
     unit: string;
-    unitPrice: number;
-    effectiveFrom: string;
+    unit_price: number;
+    effective_from: string;
   }>;
 };
 
@@ -193,7 +193,7 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     metric?: string;
     window?: string;
     threshold?: number;
@@ -201,7 +201,7 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'usage:ManageThresholds',
     resourceType: 'usage',
   });
@@ -407,5 +407,18 @@ usageRouter.put('/usage/prices', async (ctx: Context) => {
   }
 
   const body = ctx.request.body as UpsertPricesBody;
-  ctx.body = await upsertPrices({ prices: body.prices ?? [] });
+  ctx.body = await upsertPrices({
+    prices: (body.prices ?? []).map((price) => {
+      return {
+        aiProviderId: price.ai_provider_id,
+        meterType: price.meter_type,
+        provider: price.provider,
+        model: price.model,
+        component: price.component,
+        unit: price.unit,
+        unitPrice: price.unit_price,
+        effectiveFrom: price.effective_from,
+      };
+    }),
+  });
 });

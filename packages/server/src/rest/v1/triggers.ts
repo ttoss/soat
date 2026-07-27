@@ -43,9 +43,9 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const type = ctx.query.type as string | undefined;
-  const targetType = ctx.query.targetType as string | undefined;
+  const targetType = ctx.query.target_type as string | undefined;
 
   const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
@@ -97,36 +97,36 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
   const body = ctx.request.body as {
-    projectId?: string;
+    project_id?: string;
     name: string;
     description?: string;
     type: string;
-    targetType: string;
-    targetId: string;
+    target_type: string;
+    target_id: string;
     action?: string;
     input?: Record<string, unknown>;
     cron?: string;
     active?: boolean;
-    policyId?: string;
+    policy_id?: string;
   };
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'triggers:CreateTrigger',
     resourceType: 'trigger',
   });
   if (targetProjectId === null) return;
 
   // No privilege escalation: the caller must also hold the target-start action.
-  const projectPublicId = body.projectId ?? ctx.authUser!.apiKeyProjectPublicId;
+  const projectPublicId = body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
   const canStartTarget = await ctx.authUser!.isAllowed({
     projectPublicId: projectPublicId!,
-    action: targetStartAction(body.targetType),
+    action: targetStartAction(body.target_type),
     resource: buildSrn({
       projectPublicId: projectPublicId!,
-      resourceType: body.targetType,
-      resourceId: body.targetId,
+      resourceType: body.target_type,
+      resourceId: body.target_id,
     }),
   });
   if (!canStartTarget) {
@@ -135,7 +135,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     return;
   }
 
-  const policyId = await resolvePolicyId(body.policyId);
+  const policyId = await resolvePolicyId(body.policy_id);
 
   const trigger = await createTrigger({
     projectId: Number(targetProjectId),
@@ -144,8 +144,8 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     name: body.name,
     description: body.description,
     type: body.type,
-    targetType: body.targetType,
-    targetId: body.targetId,
+    targetType: body.target_type,
+    targetId: body.target_id,
     action: body.action,
     input: body.input,
     cron: body.cron,
@@ -183,24 +183,24 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   const body = ctx.request.body as {
     name?: string;
     description?: string | null;
-    targetType?: string;
-    targetId?: string;
+    target_type?: string;
+    target_id?: string;
     action?: string | null;
     input?: Record<string, unknown> | null;
     cron?: string | null;
     active?: boolean;
-    policyId?: string | null;
+    policy_id?: string | null;
   };
 
   // Re-check the target-start action when the target type changes.
-  if (body.targetType !== undefined && body.targetType !== trigger.target_type) {
+  if (body.target_type !== undefined && body.target_type !== trigger.target_type) {
     const canStartTarget = await ctx.authUser.isAllowed({
       projectPublicId: trigger.project_id!,
-      action: targetStartAction(body.targetType),
+      action: targetStartAction(body.target_type),
       resource: buildSrn({
         projectPublicId: trigger.project_id!,
-        resourceType: body.targetType,
-        resourceId: body.targetId ?? (trigger.target_id as string),
+        resourceType: body.target_type,
+        resourceId: body.target_id ?? (trigger.target_id as string),
       }),
     });
     if (!canStartTarget) {
@@ -211,21 +211,21 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
   }
 
   const policyId =
-    body.policyId === undefined
+    body.policy_id === undefined
       ? undefined
-      : await resolvePolicyId(body.policyId ?? undefined);
+      : await resolvePolicyId(body.policy_id ?? undefined);
 
   const updated = await updateTrigger({
     id: ctx.params.trigger_id,
     name: body.name,
     description: body.description,
-    targetType: body.targetType,
-    targetId: body.targetId,
+    targetType: body.target_type,
+    targetId: body.target_id,
     action: body.action,
     input: body.input,
     cron: body.cron,
     active: body.active,
-    policyId: body.policyId === null ? null : policyId,
+    policyId: body.policy_id === null ? null : policyId,
   });
 
   ctx.body = updated;
@@ -312,7 +312,7 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
     return;
   }
 
-  const triggerPublicId = ctx.query.triggerId as string | undefined;
+  const triggerPublicId = ctx.query.trigger_id as string | undefined;
   if (!triggerPublicId) {
     throw new DomainError('VALIDATION_FAILED', 'trigger_id is required.');
   }

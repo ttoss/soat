@@ -114,7 +114,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
 chatsRouter.get('/chats', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
 
   const projectIds = await resolveProjectIdsWithAction({
     ctx,
@@ -317,8 +317,13 @@ const handleStatelessStreamingCompletion = async (args: {
 chatsRouter.post('/chat/completions', async (ctx: Context) => {
   if (!checkAuth(ctx)) return;
 
-  const { aiProviderId, model, messages, stream } = ctx.request.body as {
-    aiProviderId?: string;
+  const {
+    ai_provider_id: aiProviderId,
+    model,
+    messages,
+    stream,
+  } = ctx.request.body as {
+    ai_provider_id?: string;
     model?: string;
     messages?: unknown;
     stream?: boolean;

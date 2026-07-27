@@ -22,11 +22,11 @@ import { checkAuth, resolveWriteProjectId } from './helpers';
 const discussionsRouter = new Router<Context>();
 
 type CreateDiscussionBody = {
-  projectId?: string;
+  project_id?: string;
   name: string;
-  aiProviderId: string;
+  ai_provider_id: string;
   description?: string | null;
-  maxRounds?: number | null;
+  max_rounds?: number | null;
   model?: string | null;
   synthesis?: SynthesisConfig | null;
   tags?: Record<string, string> | null;
@@ -36,8 +36,8 @@ type CreateDiscussionBody = {
 type UpdateDiscussionBody = {
   name?: string;
   description?: string | null;
-  maxRounds?: number | null;
-  aiProviderId?: string;
+  max_rounds?: number | null;
+  ai_provider_id?: string;
   model?: string | null;
   synthesis?: SynthesisConfig | null;
   tags?: Record<string, string> | null;
@@ -73,7 +73,7 @@ discussionsRouter.get('/discussions', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = ctx.query.projectId as string | undefined;
+  const projectPublicId = ctx.query.project_id as string | undefined;
   const { limit, offset } = parsePage(ctx);
 
   const projectIds = await ctx.authUser.resolveProjectIds({
@@ -118,7 +118,7 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: body.projectId,
+    projectPublicId: body.project_id,
     action: 'discussions:CreateDiscussion',
     resourceType: 'discussion',
   });
@@ -127,9 +127,9 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
   const discussion = await createDiscussion({
     projectId: Number(targetProjectId),
     name: body.name,
-    aiProviderId: body.aiProviderId,
+    aiProviderId: body.ai_provider_id,
     description: body.description,
-    maxRounds: body.maxRounds,
+    maxRounds: body.max_rounds,
     model: body.model,
     synthesis: body.synthesis,
     tags: body.tags,
@@ -225,8 +225,8 @@ discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
     id: ctx.params.discussion_id,
     name: body.name,
     description: body.description,
-    maxRounds: body.maxRounds,
-    aiProviderId: body.aiProviderId,
+    maxRounds: body.max_rounds,
+    aiProviderId: body.ai_provider_id,
     model: body.model,
     synthesis: body.synthesis,
     tags: body.tags,
