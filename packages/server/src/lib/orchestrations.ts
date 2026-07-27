@@ -3,6 +3,11 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import type {
+  mapOrchestrationEdge,
+  mapOrchestrationNode,
+} from './orchestrationGraphWire';
+import { mapOrchestrationGraph } from './orchestrationGraphWire';
 import {
   assertOrchestrationUpdateValid,
   assertOrchestrationValid,
@@ -132,8 +137,8 @@ export type MappedOrchestration = {
   project_id: string;
   name: string;
   description: string | null;
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
+  nodes: ReturnType<typeof mapOrchestrationNode>[];
+  edges: ReturnType<typeof mapOrchestrationEdge>[];
   state_schema: object | null;
   input_schema: object | null;
   created_at: Date;
@@ -196,8 +201,10 @@ const mapOrchestration = (
     project_id: orch.project.publicId,
     name: orch.name,
     description: orch.description,
-    nodes: orch.nodes as OrchestrationNode[],
-    edges: orch.edges as OrchestrationEdge[],
+    ...mapOrchestrationGraph({
+      nodes: orch.nodes as OrchestrationNode[],
+      edges: orch.edges as OrchestrationEdge[],
+    }),
     state_schema: orch.stateSchema,
     input_schema: orch.inputSchema,
     created_at: orch.createdAt,
@@ -222,6 +229,42 @@ export const mapNodeExecution = (
   };
 };
 
+/**
+ * The wire projection of a `RequiredAction`, used for both the freshly-built
+ * action and the one persisted on the run row (stored camelCase, so it is read
+ * loosely here). `context` is the input-mapped payload the graph author shaped
+ * and `approval_spec` is the frozen tool proposal — both copied as values, so
+ * their inner keys stay exactly as authored.
+ */
+export const mapRequiredAction = (raw: unknown): object | null => {
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw))
+    return null;
+
+  const action = raw as Record<string, unknown>;
+
+  /** Reads a field under either spelling — persisted rows carry the camelCase one. */
+  const field = (camel: string, snake: string): unknown => {
+    return action[camel] ?? action[snake];
+  };
+
+  const optional = Object.entries({
+    options: action.options,
+    approval_spec: field('approvalSpec', 'approval_spec'),
+    approval_id: field('approvalId', 'approval_id'),
+    expires_at: field('expiresAt', 'expires_at'),
+  }).filter(([, value]) => {
+    return value !== undefined && value !== null;
+  });
+
+  return {
+    type: action.type,
+    node_id: field('nodeId', 'node_id'),
+    prompt: action.prompt,
+    context: action.context,
+    ...Object.fromEntries(optional),
+  };
+};
+
 export const mapOrchestrationRun = (
   run: InstanceType<typeof db.OrchestrationRun> & {
     orchestration: InstanceType<typeof db.Orchestration>;
@@ -239,7 +282,7 @@ export const mapOrchestrationRun = (
     active_nodes: run.activeNodes as string[],
     artifacts: run.artifacts as Record<string, unknown>,
     error: run.error,
-    required_action: run.requiredAction as object | null,
+    required_action: mapRequiredAction(run.requiredAction),
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,

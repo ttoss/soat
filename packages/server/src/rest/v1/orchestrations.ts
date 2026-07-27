@@ -1,9 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
-import type {
-  OrchestrationEdge,
-  OrchestrationNode,
-} from 'src/lib/orchestrations';
+import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
   createOrchestration,
@@ -25,6 +22,13 @@ import {
   resolveRunAuth,
   resolveStartRunScope,
 } from './orchestrationAuth';
+import {
+  parseRunInput,
+  parseUpdateBody,
+  type RawCreateBody,
+  type RawUpdateBody,
+  validateCreateBody,
+} from './orchestrationsRequestBody';
 
 export const orchestrationsRouter = new Router<Context>();
 const resolveAuth = async (
@@ -76,65 +80,6 @@ const resolveOrchestrationAccess = async (
   }
   return projectIds ?? undefined;
 };
-type RawCreateBody = {
-  project_id?: string;
-  name?: unknown;
-  description?: unknown;
-  nodes?: unknown;
-  edges?: unknown;
-  state_schema?: unknown;
-  input_schema?: unknown;
-};
-const validateCreateBody = (
-  body: RawCreateBody
-): { error: string } | { name: string; nodes: unknown[]; edges: unknown[] } => {
-  if (!body.name || typeof body.name !== 'string') {
-    return { error: 'name is required' };
-  }
-  if (!Array.isArray(body.nodes)) {
-    return { error: 'nodes must be an array' };
-  }
-  if (!Array.isArray(body.edges)) {
-    return { error: 'edges must be an array' };
-  }
-  return { name: body.name, nodes: body.nodes, edges: body.edges };
-};
-type RawUpdateBody = {
-  name?: unknown;
-  description?: unknown;
-  nodes?: unknown;
-  edges?: unknown;
-  state_schema?: unknown;
-  input_schema?: unknown;
-};
-
-const parseUpdateBody = (body: RawUpdateBody) => {
-  return {
-    name: typeof body.name === 'string' ? body.name : undefined,
-    description:
-      body.description !== undefined
-        ? body.description === null
-          ? null
-          : String(body.description)
-        : undefined,
-    nodes: Array.isArray(body.nodes) ? (body.nodes as never[]) : undefined,
-    edges: Array.isArray(body.edges) ? (body.edges as never[]) : undefined,
-    stateSchema:
-      body.state_schema !== undefined
-        ? (body.state_schema as object | null)
-        : undefined,
-    inputSchema:
-      body.input_schema !== undefined
-        ? (body.input_schema as object | null)
-        : undefined,
-  };
-};
-
-const parseRunInput = (raw: unknown): Record<string, unknown> | undefined => {
-  return raw != null && typeof raw === 'object' && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : undefined;
-};
 /**
  * @openapi
  * /api/v1/orchestrations:
@@ -158,13 +103,18 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
   );
   if (!auth) return;
 
+  const graph = parseOrchestrationGraph({
+    nodes: validated.nodes,
+    edges: validated.edges,
+  });
+
   const result = await createOrchestration({
     projectId: auth.primaryId,
     name: validated.name,
     description:
       typeof body.description === 'string' ? body.description : undefined,
-    nodes: validated.nodes as never[],
-    edges: validated.edges as never[],
+    nodes: graph.nodes as never[],
+    edges: graph.edges as never[],
     stateSchema:
       body.state_schema != null && typeof body.state_schema === 'object'
         ? body.state_schema
@@ -196,8 +146,7 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
     input_schema?: unknown;
   };
   ctx.body = validateOrchestrationGraph({
-    nodes: Array.isArray(body.nodes) ? (body.nodes as OrchestrationNode[]) : [],
-    edges: Array.isArray(body.edges) ? (body.edges as OrchestrationEdge[]) : [],
+    ...parseOrchestrationGraph({ nodes: body.nodes, edges: body.edges }),
     inputSchema: (body.input_schema as object | null) ?? null,
   });
   ctx.status = 200;
