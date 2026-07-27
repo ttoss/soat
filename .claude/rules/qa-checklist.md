@@ -1,72 +1,67 @@
-# QA Checklist Rule
+# Live QA Rule
 
 Unit tests prove the code does what the code says. They cannot prove the
-**product does what the docs promise** — that gap is closed by live QA passes,
-recorded as per-module coverage checklists in [`docs/qa/`](../../docs/qa/README.md).
+**product does what the docs promise** — that gap is closed by live QA passes
+against a running server.
 
-This rule says when those checklists must be touched. It is separate from
-`quality-assurance.md` (which governs the automated Definition of Done) and from
-`tests.md` (which governs where unit tests live).
+Those passes are tracked as **issues**, indexed by the tracker
+[#748](https://github.com/ttoss/soat/issues/748). There is no per-module
+checklist file, and one must not be reintroduced.
 
-## When a checklist must be updated
+This rule is separate from `quality-assurance.md` (which governs the automated
+Definition of Done) and from `tests.md` (which governs where unit tests live).
 
-| Change | Checklist action |
+## Why issues, not files
+
+A checklist file records "verified on date X" and then keeps asserting it. The
+code moves, the file does not, and nothing forces a re-run — so it degrades from
+a coverage map into a claim nobody has standing to trust. The failure is silent:
+a stale `[x]` is indistinguishable from a fresh one.
+
+An issue cannot go stale that way. It is open or it is closed, and closing it
+takes a deliberate act by someone who looked.
+
+The cost is real and worth naming: deleting the checklists gave up the
+**enumeration** of what should be verified per module. #748 carries that
+inventory forward — the unverified surface, why each item is unreachable, and the
+procedure for a pass. Keep it current, because it is now the only such record.
+
+## When to act
+
+| Change | Action |
 |---|---|
-| New module (new `openapi/v1/<module>.yaml`) | Create `docs/qa/<module>.md`, **or** add the module to the "Pending a first pass" list in `docs/qa/README.md` |
-| New documented behavior on an existing module | Add the corresponding checklist item, unchecked, with a reason annotation |
-| A behavior's contract changes (status code, field, error code) | Update the affected item so it describes the new contract |
-| A defect found by a live pass | File an issue labeled `qa`, and leave the item unchecked linking that issue |
-| A defect fixed | Tick the item and reference the issue it was (`was #NNN`) |
-| A live pass run | Add a Run history row, tick what was verified, refresh the coverage count in `docs/qa/README.md` |
+| A live pass finds a deviation | File an issue labeled `qa`, link it in #748 |
+| A live pass confirms a documented behavior works | Nothing to file. Note it in #748 only if it closes a gap that issue lists |
+| A defect is fixed | Close its issue; #748's index reflects it |
+| A behavior turns out unreachable on this infrastructure | Record it under "Not verifiable here" in #748 with the reason — never as an issue |
+| A new module ships | Add it to the never-passed list in #748 |
 
-Nothing enforces any of this automatically. There is no test asserting a module
-has a checklist, that its items still match the docs, or that unchecked boxes
-carry a reason — all of it rests on the change author and on review. That makes
-the table above the whole mechanism, so treat it as binding rather than advisory.
-
-The two failure modes to watch for, since no test will catch them:
-
-- A new module ships with neither a checklist nor a pending-list entry, so its
-  unverified state is invisible rather than tracked.
-- An unchecked box is left bare. `[ ]` with no annotation is indistinguishable
-  from an item someone forgot to tick, which silently converts a known gap into
-  apparent coverage.
-
-## Checkbox semantics
-
-- `[x]` — verified against a live server in at least one pass.
-- `[ ]` — not verified. Every unchecked box carries either an inline reason
-  (`— *not exercised, needs a context tool*`) or a linked issue.
-
-Never tick a box because a unit test covers the behavior. The whole point of the
-checklist is that it records observed product behavior, not test coverage. If a
-behavior is only provable by unit test (an internal seam, a 24h expiry sweeper),
-say so in the annotation and leave it unchecked.
-
-## Where the artifacts go
-
-Three homes, three lifetimes — do not collapse them:
-
-- **The checklist** → `docs/qa/<module>.md`. Lives as long as the module.
-- **A run report** (what one pass observed, in which environment, with what
-  fixtures and cleanup) → a `QA` **discussion** on `ttoss/soat`, linked from the
-  Run history table. Never an issue: a run report has nothing to close.
-- **A defect** → an **issue** labeled `qa`, referencing the checklist item.
+**Do not file an issue for a coverage gap.** An issue closes; a gap does not. An
+unbuilt feature, an environment limit, or a behavior nobody has attempted belongs
+in #748's inventory, not in a bug report.
 
 ## Running a pass
 
-The full procedure is in [`docs/qa/README.md`](../../docs/qa/README.md). The parts
-that are easy to get wrong:
-
-- **Prefer the CLI.** A pass driven through `soat` exercises the path a customer
-  uses. Drop to raw REST or MCP JSON-RPC only where there is no CLI equivalent —
-  and if a documented CLI command is missing, that is itself a defect to file.
-- **Never let a pass block a shared tenant.** When testing enforcement (quotas,
-  guardrails), scope it with a disposable "victim" principal rather than a
-  project-wide cap. The 2026-07-26 quotas pass lost one check to exactly this.
-- **Assert structure, never LLM output.** Status codes, `action` values, entry
-  counts, `source_type` — never generated text.
-- **Record what you could not reach.** "Needs a multi-replica deployment" is a
-  legitimate outcome and must be visible in the Not covered section. An item
-  that silently disappears reads as covered.
-- **Clean up fixtures**, and note anything that could not be deleted and why.
+1. Read `packages/website/docs/modules/<module>.md`. **Every claim it makes is a
+   test.** A promise with no test is the gap.
+2. Prefer the `soat` CLI, so the pass exercises the path a customer uses. Drop to
+   REST or MCP JSON-RPC only where there is no CLI equivalent — a missing CLI
+   command is itself a defect.
+3. **Never block a shared tenant.** Scope enforcement tests (quotas, guardrails)
+   to a disposable victim: a throwaway project, a victim API key, or a guardrail
+   expression keyed to a single agent id. A project-wide quota or guardrail on a
+   shared instance blocks other people's traffic.
+4. **Assert structure, never LLM output.** Status codes, `decision` values, entry
+   counts, `source_type` — never generated text. Where a model's prose is the
+   only visible signal, go find the underlying record; the prose is a summary of
+   the behavior, not evidence of it.
+5. **Use a positive control.** A `403` proves nothing unless the same principal
+   gets a `200` on an action it does hold. A fail-closed result proves nothing
+   unless the permissive branch was genuinely reachable.
+6. **Drive it; do not read it.** Every defect found on 2026-07-27 (#745, #746,
+   #747) sat behind an item that had been skipped for want of a fixture, and two
+   were previously recorded as "verified by source review". Source review is not
+   a pass.
+7. Clean up fixtures, and record what could not be removed. Agents and projects
+   that accrue generations or audit entries hit `AGENT_HAS_DEPENDENTS` /
+   `PROJECT_HAS_DEPENDENTS` and cannot be deleted.
