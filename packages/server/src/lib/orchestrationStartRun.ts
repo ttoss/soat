@@ -1,7 +1,10 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { RequiredAction } from './orchestrationExecutors';
-import type { MappedOrchestrationRun } from './orchestrations';
+import {
+  type MappedOrchestrationRun,
+  mapRequiredAction,
+} from './orchestrations';
 
 export const findOrchestrationForStartRun = async (args: {
   orchestrationPublicId: string;
@@ -48,9 +51,7 @@ export const attachRequiredActionToRun = (args: {
   const { mapped, runStatus, requiredAction } = args;
   if (runStatus !== 'awaiting_input' || !requiredAction) return mapped;
 
-  (
-    mapped as MappedOrchestrationRun & { requiredAction?: RequiredAction }
-  ).requiredAction = requiredAction;
+  mapped.required_action = mapRequiredAction(requiredAction);
 
   return mapped;
 };
