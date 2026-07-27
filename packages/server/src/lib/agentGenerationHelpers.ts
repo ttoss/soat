@@ -94,6 +94,23 @@ export type GenerationResult = {
  * copied as values — their inner keys are never inspected. Same for
  * `response_messages`, which is the AI SDK's own message format.
  */
+/** Wire projection of a generation's pending client tool calls. */
+export const mapGenerationRequiredAction = (
+  action: NonNullable<GenerationResult['requiredAction']>
+) => {
+  return {
+    type: action.type,
+    tool_calls: action.toolCalls.map((call) => {
+      return {
+        id: call.id,
+        tool_name: call.toolName,
+        // The model's own arguments — copied as a value, keys untouched.
+        args: call.args,
+      };
+    }),
+  };
+};
+
 export const mapGenerationResult = (result: GenerationResult) => {
   return {
     id: result.id,
@@ -115,18 +132,7 @@ export const mapGenerationResult = (result: GenerationResult) => {
         }
       : {}),
     ...(result.requiredAction
-      ? {
-          required_action: {
-            type: result.requiredAction.type,
-            tool_calls: result.requiredAction.toolCalls.map((call) => {
-              return {
-                id: call.id,
-                tool_name: call.toolName,
-                args: call.args,
-              };
-            }),
-          },
-        }
+      ? { required_action: mapGenerationRequiredAction(result.requiredAction) }
       : {}),
   };
 };

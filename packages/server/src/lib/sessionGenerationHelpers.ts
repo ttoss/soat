@@ -1,4 +1,5 @@
 import type { db } from '../db';
+import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import type { GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
@@ -91,9 +92,9 @@ export const processToolOutputResult = async (args: {
   if (args.result.status === 'requires_action') {
     return {
       status: 'requires_action' as const,
-      generationId: args.result.id,
-      traceId: args.result.traceId,
-      requiredAction: args.result.requiredAction!,
+      generation_id: args.result.id,
+      trace_id: args.result.traceId,
+      required_action: mapGenerationRequiredAction(args.result.requiredAction!),
     };
   }
 
@@ -104,7 +105,7 @@ export const processToolOutputResult = async (args: {
       content: args.result.output?.content ?? '',
       model: args.result.output?.model,
     },
-    generationId: args.result.id,
-    traceId: args.result.traceId,
+    generation_id: args.result.id,
+    trace_id: args.result.traceId,
   };
 };
