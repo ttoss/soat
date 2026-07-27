@@ -429,13 +429,13 @@ export const listFormationEvents = async (args: {
     map: (op) => {
       return {
         id: op.publicId,
-        operationType: op.operationType,
+        operation_type: op.operationType,
         status: op.status,
         events: op.events as FormationEvent[] | null,
         plan: op.plan as PlanResult | null,
         error: op.error,
-        createdAt: op.createdAt,
-        updatedAt: op.updatedAt,
+        created_at: op.createdAt,
+        updated_at: op.updatedAt,
       };
     },
   });
