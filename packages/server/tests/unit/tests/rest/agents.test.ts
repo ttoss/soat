@@ -1314,6 +1314,32 @@ describe('Agents', () => {
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    // fromWireInlineTool (agentToolBindings.ts) converts a binding's inline
+    // `tool` before validation runs, so a non-object `tool` must pass through
+    // untouched instead of throwing — validateInlineBindingTool's own
+    // isPlainObject check is what actually rejects it with a clear message.
+    test('a non-object inline tool is rejected by validation, not the converter', async () => {
+      const res = await createAgentWith({
+        tool_bindings: [{ tool: 'not-an-object' }],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('an explicit null tool_bindings clears any existing bindings', async () => {
+      const created = await createAgentWith({
+        tool_bindings: [{ tool_id: httpToolId }],
+      });
+
+      const updateRes = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ tool_bindings: null });
+
+      expect(updateRes.status).toBe(200);
+      expect(updateRes.body.tool_bindings).toBeNull();
+    });
+
     test('mixing tool_bindings with tool_ids returns 400', async () => {
       const res = await createAgentWith({
         tool_bindings: [{ tool_id: httpToolId }],
