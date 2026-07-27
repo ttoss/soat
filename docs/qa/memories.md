@@ -15,6 +15,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 | Date | Surface | Result | Defects filed |
 |---|---|---|---|
 | 2026-07-03 | `soat-tests` MCP project-key credential, project `proj_ElQRuVqixOmM9Qva`, AI provider `bedrock` / `deepseek.v3.2` — three runs | all in-scope reachable items pass | [#355](https://github.com/ttoss/soat/issues/355), [#357](https://github.com/ttoss/soat/issues/357), [#358](https://github.com/ttoss/soat/issues/358), [#359](https://github.com/ttoss/soat/issues/359), [#371](https://github.com/ttoss/soat/issues/371) — all fixed and verified ([#348](https://github.com/ttoss/soat/issues/348)) |
+| 2026-07-27 | live REST against `soat.naturali.ai` with a purpose-built limited principal | 22/27 — closed the AuthN/AuthZ gap; the four unimplemented-feature items re-confirmed still unbuilt | none |
 
 Run 1 found #355/#357/#358/#359. Run 2 confirmed three of them fixed and found
 #371 (a distinct bug still blocking self-retrieval behind the partial #358 fix).
@@ -67,13 +68,23 @@ concatenate for now.
 - [x] `tools/list` includes the memory tools
 - [x] `tools/call write-memory-entry` creates an entry visible via REST (was #355)
 
+## Auth
+
+- [x] **AuthN / AuthZ (`401` / `403`)** — closed on 2026-07-27 via REST. `GET /memories` with no `Authorization` header → `401`. `POST /memories` with a JWT for a principal holding `memories:ListMemories` / `GetMemory` but not `CreateMemory` → `403 Forbidden`. Positive control: the same principal got `200` on `GET /memories`, so the `403` is action-specific, not a blanket denial
+
 ## Not covered
 
-- [ ] **AuthN / AuthZ (`401` / `403`)** — the MCP interface used for this pass always authenticates with a fixed credential, so neither could be driven. Cover these via REST with a purpose-built no-permission principal on the next pass.
-- [ ] **Temporal invalidation / supersede** (`invalidated_at`, `superseded_by_entry_id`) — unimplemented at the time of the pass.
-- [ ] **Entry provenance** (`source_generation_id`, `source_conversation_id`) — unimplemented at the time of the pass.
-- [ ] **Entity graph** (entities, edges, `entity_ids` / `actor_ids` / `predicate` queries) — unimplemented at the time of the pass.
-- [ ] **Streaming and `requires_action` extraction coverage** — unimplemented at the time of the pass.
+The four items below were recorded as "unimplemented at the time of the pass" in
+2026-07-03. All four were **re-confirmed still unimplemented on 2026-07-27**
+(`grep -rn "invalidated_at\|supersededBy\|entity_ids\|predicate" packages/server/src/lib/`
+returns no matches). They are unbuilt features, not defects — the boxes stay
+unchecked because the behavior does not exist to verify, and they should be
+re-checked rather than re-investigated on the next pass.
+
+- [ ] **Temporal invalidation / supersede** (`invalidated_at`, `superseded_by_entry_id`) — unimplemented; re-confirmed 2026-07-27.
+- [ ] **Entry provenance** (`source_generation_id`, `source_conversation_id`) — unimplemented; re-confirmed 2026-07-27.
+- [ ] **Entity graph** (entities, edges, `entity_ids` / `actor_ids` / `predicate` queries) — unimplemented; re-confirmed 2026-07-27.
+- [ ] **Streaming and `requires_action` extraction coverage** — unimplemented; re-confirmed 2026-07-27.
 
 The four "unimplemented at the time of the pass" items are from the 2026-07-03
 scope statement. Re-check whether they have shipped before the next pass.

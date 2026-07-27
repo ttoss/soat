@@ -81,18 +81,37 @@ file's **Not covered** section — it is a gap list, not a failure count.
 
 | Module                                | Coverage | Last pass  | Source                                                                                                                                                                                                                                                   |
 | ------------------------------------- | -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [audit-log](./audit-log.md)           | 42/45    | 2026-07-25 | [#707](https://github.com/ttoss/soat/issues/707)                                                                                                                                                                                                         |
-| [guardrails](./guardrails.md)         | 26/37    | 2026-07-20 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
-| [knowledge](./knowledge.md)           | 14/17    | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
-| [memories](./memories.md)             | 21/27    | 2026-07-03 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
-| [orchestrations](./orchestrations.md) | 119/133  | 2026-07-26 | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724)                                                    |
+| [audit-log](./audit-log.md)           | 42/45    | 2026-07-27 | [#707](https://github.com/ttoss/soat/issues/707), [#745](https://github.com/ttoss/soat/issues/745)                                                                                                                                                       |
+| [guardrails](./guardrails.md)         | 31/35    | 2026-07-27 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
+| [knowledge](./knowledge.md)           | 15/17    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
+| [memories](./memories.md)             | 22/27    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
+| [orchestrations](./orchestrations.md) | 120/134  | 2026-07-27 | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724)                                                    |
 | [quotas](./quotas.md)                 | 102/108  | 2026-07-27 | [#705](https://github.com/ttoss/soat/issues/705), [#713](https://github.com/ttoss/soat/issues/713), [#742](https://github.com/ttoss/soat/issues/742), [#743](https://github.com/ttoss/soat/issues/743)                                                  |
 | [tasks](./tasks.md)                   | 20/20    | 2026-07-18 | [#595](https://github.com/ttoss/soat/issues/595)                                                                                                                                                                                                         |
 | [workflows](./workflows.md)           | 72/74    | 2026-07-19 | [#594](https://github.com/ttoss/soat/issues/594), [#596](https://github.com/ttoss/soat/issues/596), [#597](https://github.com/ttoss/soat/issues/597), [#616](https://github.com/ttoss/soat/issues/616), [#617](https://github.com/ttoss/soat/issues/617) |
 
-Guardrails is the thinnest coverage and the most consequential: its unverified
-items include stricter-wins composition across scopes, the only gap here that
-could silently _loosen_ enforcement if wrong.
+The 2026-07-27 pass worked the unchecked boxes across every existing checklist
+rather than opening a new module. What it changed:
+
+- **Everything reachable without a live generation is now closed.** A purpose-built
+  limited principal — a user carrying a deliberately narrow policy — unlocked the
+  `401`/`403` items that three earlier passes had to skip because they drove the
+  MCP interface with a single fixed credential (knowledge, memories,
+  `orchestrations:GetQueueStats`, guardrail detach isolation).
+- **One unreached item turned out to be a defect.** The audit-log global-entries
+  box was blocked only by credential scope; re-run with an admin token it showed
+  that identity and authorization mutations are never audited at all
+  ([#745](https://github.com/ttoss/soat/issues/745)).
+- **Nine "unimplemented at the time of the pass" items were re-confirmed**, not
+  re-investigated — they remain unbuilt features rather than defects.
+
+What is left is now sharply characterized. The largest remaining gap is still
+**stricter-wins composition across scopes** (guardrails): `/evaluate` cannot
+reach it, because it evaluates one guardrail while composition is by definition
+the interaction of several. It stays the only unverified behavior that could
+silently _loosen_ enforcement if wrong, and it needs an agent that actually
+emits a tool call. The rest of the backlog is environment-bound (multi-replica
+atomicity, a load harness, real time passing) rather than merely unattempted.
 
 ## Pending a first pass
 

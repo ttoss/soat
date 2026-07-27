@@ -229,7 +229,8 @@ All verified on the 2026-07-05 pass; not re-run on 2026-07-26.
 - [x] User without `orchestrations:*` actions → `403` on each action (source + per-route `403` unit tests + a real `sk_` key tested against `StartRun`)
 - [x] Cross-project isolation — built on the shared `resolveProjectIds`/`isAllowed` primitives that `permissionsFlow.test.ts` (Groups 6, 10, 11) proves reject cross-project access for both API keys and JWT-policy scoping
 - [x] API-key (`sk_`) auth for start-run / get-run — the 2026-07-03/05 passes authenticated entirely via a project-scoped API key
-- [ ] `orchestrations:GetQueueStats` denied for a caller without the action, and `per_project` scoped to a project-scoped caller's own projects — *the 2026-07-26 pass called it with an admin credential only*
+- [x] `orchestrations:GetQueueStats` denied for a caller without the action — closed 2026-07-27 with a purpose-built limited principal (the 07-26 pass had an admin credential only). No token → `401`; a JWT holding `orchestrations:ListOrchestrations` but not `GetQueueStats` → `403 Forbidden`; admin → `200` with the full `QueueStats` shape (`driver`, `queue_depth`, `claimed_tasks`, `oldest_queued_age_seconds`, `claim_latency_ms.{p50,p95,window_seconds}`, `per_project`)
+- [ ] `per_project` scoped to a project-scoped caller's own projects — *not discriminable on 2026-07-27: the queue was idle (`queue_depth: 0`), so `per_project` was `[]` for every credential and a scoped view is indistinguishable from an unscoped one. Needs live queued runs in **two** projects plus a caller scoped to one of them — this instance has a single project, so it needs a second one created first. Split out of the compound item above, whose denial half is now verified*
 
 Live identity-swapping through the MCP interface (to drive these as raw REST calls
 with different credentials per call) is not possible: the platform has no

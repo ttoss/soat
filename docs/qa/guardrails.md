@@ -9,13 +9,14 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 |---|---|---|---|
 | 2026-07-20 | deployed `soat-tests` MCP — create / update / evaluate / versions / delete + attach | 27/37 items verified; the rest unexercised, 2 findings | [#633](https://github.com/ttoss/soat/issues/633) — snake_case `args.*`/`context.*` var paths never resolve, breaking every documented example |
 | 2026-07-25 | (incidental, during the audit-log pass) | `guardrails:Evaluate` audit entry shape confirmed — see [`audit-log.md`](./audit-log.md) | none |
+| 2026-07-27 | live REST against `soat.naturali.ai`, admin + purpose-built limited principal | 32/37 — closed 5 of the 6 unchecked items (write-time validation, `context_mode`, `soat.activity.*` fail-closed, detach isolation, metadata-only version) | none |
 
 ## Write-time validation
 
 - [x] `var` outside `args.* / context.* / soat.*` → `400`
 - [x] Out-of-catalog `soat.*` key (e.g. `soat.usage.cost_usd_90d`) → `400`
 - [x] `class` literal must be `A`/`B`/`C`/`D`; a non-literal must be JSON Logic
-- [ ] `guard` must be a JSON Logic object; `escalate` must be boolean; unknown document keys rejected — *not exercised*
+- [x] `guard` must be a JSON Logic object (`"not-an-object"` → `400 VALIDATION_FAILED`, *"'guard' must be a JSON Logic expression"*); `escalate` must be boolean (`"yes"` → `400`); unknown document key → `400` naming the field and listing the allowlist (`class, default_class, guard, escalate, expires_in`). Also confirmed: invalid `default_class` → `400`, missing required `class` → `400`
 
 ## Classification
 
@@ -33,8 +34,8 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 - [x] Failing guard + `escalate: true` → `route_to_approval`
 - [x] Class B with no guard → fail-closed `tripwire`
 - [x] `soat.usage.*` resolves live at evaluation time
-- [ ] Context tool `merge` vs `replace` (`context_mode`) — *not exercised, needs a context tool*
-- [ ] `soat.activity.*` unresolvable → fail-closed — *documented, not exercised live*
+- [x] Context tool `merge` vs `replace` (`context_mode`) — driven behaviorally, not just by snapshot diff: one document classifying on a **caller**-supplied key, evaluated against the same context tool under both modes. `merge` → caller key survives (`context.callerKey: "callerValue"`), class **C** / `route_to_approval`, `context_source: "merged"`; `replace` → caller key dropped (`null`), class **A** / `execute`, `context_source: "tool"`
+- [x] `soat.activity.*` unresolvable → fail-closed — `soat.activity.actions_24h` is in the catalog (so it passes write-time validation) but resolves `null` at evaluation. A document reading `{"if":[{"<":[{"var":"soat.activity.actions_24h"},100]},"A","C"]}` with `default_class: "D"` returned class **D** / `blocked`, **not** the class `A` that a JSON Logic `null → 0` coercion would have produced — the permissive branch was not taken. `context_snapshot` shows the `null` explicitly. Matches the warning at `guardrails.md:140`
 
 ## Var-path resolution
 
@@ -48,7 +49,7 @@ so neither was a runtime-safety hole — but the primary adoption path was broke
 ## Composition / attachment
 
 - [x] Attach at agent scope with only `agents:UpdateAgent`
-- [ ] Detach requires `guardrails:DetachGuardrail` — *not isolated; the test user carried the permission*
+- [x] Detach requires `guardrails:DetachGuardrail` — isolated with a principal holding `agents:UpdateAgent` but **not** `DetachGuardrail`. Positive control: adding a guardrail id succeeded (`200`), proving the principal can update the agent. Removing one id → `403 FORBIDDEN`, *"Detaching a guardrail requires the guardrails:DetachGuardrail permission"*, with `meta.detached` naming the exact id; removing all → `403` naming both. (`guardrails:AttachGuardrail` is not an action — the policy validator rejects it, confirming attach rides on the carrying resource's update permission as documented)
 - [ ] Stricter-wins across project / agent / tool scopes on a live call — *needs a real generation*
 - [ ] Client-tool gating at the `requires_action` handoff — *not exercised*
 
@@ -56,7 +57,7 @@ so neither was a runtime-safety hole — but the primary adoption path was broke
 
 - [x] A `document` write increments `version`; prior docs archived
 - [x] `get-guardrail-version` returns the exact archived document
-- [ ] A metadata-only edit leaves `version` untouched — *not exercised*
+- [x] A metadata-only edit leaves `version` untouched — `name`-only, `description`-only and `context_mode`-only PATCHes each left `version` unchanged; the interleaved positive control (a `document` PATCH) bumped `1 → 2`, so version tracking was live throughout
 - [x] Delete while attached → `409`
 - [x] Delete after detach → success
 
@@ -72,14 +73,19 @@ so neither was a runtime-safety hole — but the primary adoption path was broke
 
 ## Not covered
 
-The unchecked boxes above are the gap list for the next pass. The largest ones,
-in priority order:
+The unchecked boxes above are the gap list for the next pass. Both remaining
+items need a **live generation** — the 2026-07-27 pass closed everything that
+`/evaluate` and the REST surface could reach on their own, and these two are
+what is left:
 
 - [ ] **Stricter-wins composition across scopes on a live generation** — the
   central promise of attachment, and the only item here that could silently
-  *loosen* enforcement if wrong.
+  *loosen* enforcement if wrong. `/evaluate` cannot reach it: it evaluates a
+  single guardrail, while composition is by definition the interaction of
+  several applying to one call. Needs an agent that actually emits a tool call,
+  with guardrails attached at two or more of the project / agent / tool scopes,
+  asserting one `guardrail_evaluation` record per guardrail and an effective
+  decision equal to the strictest (`blocked` > `tripwire` > `route_to_approval`
+  > `execute`).
 - [ ] **Client-tool gating at the `requires_action` handoff** — the client-side
   execution path is unverified end-to-end.
-- [ ] **Context tool `merge` vs `replace`** — needs a purpose-built context tool.
-- [ ] **Permission isolation for detach** — needs a principal that lacks
-  `guardrails:DetachGuardrail`.

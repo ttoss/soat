@@ -8,6 +8,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 | Date | Surface | Result | Defects filed |
 |---|---|---|---|
 | 2026-07-25 | live server `soat.naturali.ai`, project `proj_ck7jvYsjVKI9UHCG`, project-scoped API key, repo `main` @ `636a277` | 36/37 checks pass | [#707](https://github.com/ttoss/soat/issues/707) — non-numeric `limit`/`offset` → 500 (fixed) |
+| 2026-07-27 | live server `soat.naturali.ai`, **admin** credential (the 07-25 blocker) | 42/45 — the global-entries item is now a confirmed defect rather than an unreached one | [#745](https://github.com/ttoss/soat/issues/745) — identity/authz mutations are never audited; no global entry has ever been written |
 
 ## Read API — list
 
@@ -100,7 +101,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 
 ## Not covered
 
-- [ ] **Global entries** (`project_id: null`, e.g. `users:CreateUser`) — the eval token was a project-scoped API key, so global actions and their entries were out of reach.
+- [ ] **Global entries** (`project_id: null`, e.g. `users:CreateUser`) — [#745](https://github.com/ttoss/soat/issues/745). Re-run on 2026-07-27 with an admin credential, which removes the 07-25 blocker. The behavior does not exist: `users:CreateUser`, `api-keys:CreateApiKey` and `policies:CreatePolicy` each returned `201` and produced **zero** audit entries, and a full scan of the log's history (369 entries) contains **no** row with `project_id: null` and **no** `users:*` / `api-keys:*` / `policies:*` action. Root cause is `shouldRecord`'s `checks.length === 0` early return in `middleware/audit.ts`: those routes authorize with a direct `ctx.authUser.role !== 'admin'` comparison instead of `authUser.isAllowed`, so the instrumentation that populates `checks` never fires. Nine modules share the pattern. This is no longer a coverage gap — it is a defect, and the box stays unchecked until #745 closes.
 - [ ] **Retention sweep / `AUDIT_RETENTION_DAYS`** — needs server config plus time travel.
 - [ ] **`AUDIT_QUEUE_MAX_SIZE` overflow drop-and-count** — needs a load harness.
 

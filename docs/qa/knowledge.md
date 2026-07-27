@@ -16,6 +16,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 | Date | Surface | Result | Defects filed |
 |---|---|---|---|
 | 2026-07-03 | `soat-tests` MCP project-key credential, project `proj_ElQRuVqixOmM9Qva`, `bedrock` / `deepseek.v3.2`, real embedding provider — three runs | all in-scope reachable items pass | [#357](https://github.com/ttoss/soat/issues/357), [#358](https://github.com/ttoss/soat/issues/358), [#371](https://github.com/ttoss/soat/issues/371) — all fixed and verified ([#348](https://github.com/ttoss/soat/issues/348)) |
+| 2026-07-27 | live REST against `soat.naturali.ai` with a purpose-built limited principal | 15/17 — closed the AuthN/AuthZ gap the MCP-only pass could not reach | none |
 
 Semantic recall needs real embeddings — a pass against a server without a working
 embedding provider proves nothing here.
@@ -55,7 +56,10 @@ the server handled it gracefully to a `completed` status throughout.
 - [x] `tools/list` includes the knowledge tools
 - [x] `tools/call search-knowledge` matches REST semantics with camelCase fields
 
+## Auth
+
+- [x] **AuthN / AuthZ (`401` / `403`)** — closed on 2026-07-27 via REST. `POST /knowledge/search` with no `Authorization` header → `401`; with a malformed `sk_` bearer → `401`; with a JWT for a principal holding `memories:ListMemories` / `GetMemory` but **not** `knowledge:SearchKnowledge` → `403 Forbidden`. Positive control: the same principal got `200` on `GET /memories`, so the `403` is action-specific rather than a blanket denial
+
 ## Not covered
 
-- [ ] **AuthN / AuthZ (`401` / `403`)** — the MCP interface used for this pass always authenticates with a fixed credential. Cover via REST with a purpose-built no-permission principal on the next pass.
-- [ ] **Hybrid lexical+vector search, RRF fusion, rerank, recency weighting** — unimplemented at the time of the pass; re-check before the next one.
+- [ ] **Hybrid lexical+vector search, RRF fusion, rerank, recency weighting** — still unimplemented. Re-confirmed 2026-07-27: `grep -rni "rrf\|rerank\|hybrid\|recency" packages/server/src/lib/*.ts` returns no matches. Not a defect — an unbuilt feature; re-check before the next pass.
