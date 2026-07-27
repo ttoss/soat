@@ -95,7 +95,7 @@ export const getFile = async (args: { id: string }) => {
 
   return {
     ...mapFile(file),
-    projectId: file.project?.publicId,
+    project_id: file.project?.publicId,
   };
 };
 
