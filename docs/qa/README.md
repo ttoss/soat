@@ -85,7 +85,7 @@ file's **Not covered** section — it is a gap list, not a failure count.
 | [guardrails](./guardrails.md)         | 31/35    | 2026-07-27 | [#633](https://github.com/ttoss/soat/issues/633)                                                                                                                                                                                                         |
 | [knowledge](./knowledge.md)           | 15/17    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
 | [memories](./memories.md)             | 22/27    | 2026-07-27 | [#348](https://github.com/ttoss/soat/issues/348)                                                                                                                                                                                                         |
-| [orchestrations](./orchestrations.md) | 120/134  | 2026-07-27 | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724)                                                    |
+| [orchestrations](./orchestrations.md) | 125/135  | 2026-07-27 | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724), [#746](https://github.com/ttoss/soat/issues/746), [#747](https://github.com/ttoss/soat/issues/747) |
 | [quotas](./quotas.md)                 | 102/108  | 2026-07-27 | [#705](https://github.com/ttoss/soat/issues/705), [#713](https://github.com/ttoss/soat/issues/713), [#742](https://github.com/ttoss/soat/issues/742), [#743](https://github.com/ttoss/soat/issues/743)                                                  |
 | [tasks](./tasks.md)                   | 20/20    | 2026-07-18 | [#595](https://github.com/ttoss/soat/issues/595)                                                                                                                                                                                                         |
 | [workflows](./workflows.md)           | 72/74    | 2026-07-19 | [#594](https://github.com/ttoss/soat/issues/594), [#596](https://github.com/ttoss/soat/issues/596), [#597](https://github.com/ttoss/soat/issues/597), [#616](https://github.com/ttoss/soat/issues/616), [#617](https://github.com/ttoss/soat/issues/617) |
@@ -98,10 +98,19 @@ rather than opening a new module. What it changed:
   `401`/`403` items that three earlier passes had to skip because they drove the
   MCP interface with a single fixed credential (knowledge, memories,
   `orchestrations:GetQueueStats`, guardrail detach isolation).
-- **One unreached item turned out to be a defect.** The audit-log global-entries
-  box was blocked only by credential scope; re-run with an admin token it showed
-  that identity and authorization mutations are never audited at all
-  ([#745](https://github.com/ttoss/soat/issues/745)).
+- **Three unreached items turned out to be defects.** Boxes left unchecked for
+  want of a fixture are not neutral — they hide real behavior. The audit-log
+  global-entries box was blocked only by credential scope; re-run with an admin
+  token it showed identity and authorization mutations are never audited at all
+  ([#745](https://github.com/ttoss/soat/issues/745)). Building a deliberate `4xx`
+  target showed a terminal upstream error consumes the entire retry budget
+  ([#746](https://github.com/ttoss/soat/issues/746)). Driving an agent node's
+  `output_schema` for real showed it silently fails on markdown-fenced JSON —
+  the default way an LLM emits it ([#747](https://github.com/ttoss/soat/issues/747)).
+- **A second disposable project unlocked the contention tests.** `max_concurrent_runs`
+  and `per_project` scoping both need contended, differently-owned queue state.
+  Per this file's own rule, the cap went on a throwaway project rather than the
+  shared tenant.
 - **Nine "unimplemented at the time of the pass" items were re-confirmed**, not
   re-investigated — they remain unbuilt features rather than defects.
 

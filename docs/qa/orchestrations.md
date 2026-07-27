@@ -11,6 +11,7 @@ Checkbox semantics and how to run a pass: [`README.md`](./README.md)
 | 2026-07-03 | `soat-tests` MCP project-key credential (admin, project `proj_ElQRuVqixOmM9Qva`, full-access policy), AI provider `bedrock` / `deepseek.v3.2` | 6 defects found | [#375](https://github.com/ttoss/soat/issues/375), [#376](https://github.com/ttoss/soat/issues/376), [#377](https://github.com/ttoss/soat/issues/377), [#378](https://github.com/ttoss/soat/issues/378), [#379](https://github.com/ttoss/soat/issues/379), [#380](https://github.com/ttoss/soat/issues/380) — all fixed by [#381](https://github.com/ttoss/soat/pull/381) |
 | 2026-07-05 | same, re-validated post-#381 | all suites pass | [#397](https://github.com/ttoss/soat/issues/397) found while building the Suite 14 REST proxy — fixed and re-validated ([#370](https://github.com/ttoss/soat/issues/370)) |
 | 2026-07-26 | `soat.naturali.ai` via REST + CLI + `soat-tests` MCP (project `proj_ck7jvYsjVKI9UHCG`), AI provider `bedrock` / `deepseek.v3.2`, Postgres queue driver, in-API worker. ~35 graphs, ~40 runs | Re-baselined the whole checklist against the post-durable-execution contract (`queued`/`sleeping`/`awaiting_input`, `state_mapping`, `emit_event`). 3 doc defects + 1 code defect | [#721](https://github.com/ttoss/soat/issues/721), [#722](https://github.com/ttoss/soat/issues/722), [#723](https://github.com/ttoss/soat/issues/723), [#724](https://github.com/ttoss/soat/issues/724) — all fixed by [#727](https://github.com/ttoss/soat/pull/727) |
+| 2026-07-27 | `soat.naturali.ai` REST, admin + a limited principal + a **second disposable project** for the contention tests | Targeted pass over the unchecked items: 125/135. Closed queue-stats auth, `per_project` scoping, `max_concurrent_runs`, `Idempotency-Key`, exponential backoff, and `output_schema` on bare JSON. 2 code defects found | [#746](https://github.com/ttoss/soat/issues/746) — terminal 4xx consumes the whole retry budget; [#747](https://github.com/ttoss/soat/issues/747) — `output_schema` silently fails on fenced JSON |
 
 > **Vocabulary note.** The 2026-07-03/05 rows were run before durable execution
 > ([#366](https://github.com/ttoss/soat/issues/366) / [#407](https://github.com/ttoss/soat/issues/407)) and the
@@ -88,7 +89,8 @@ the basis of the module docs' **Node artifacts** table (added by [#721](https://
 - [x] `sub_orchestration` → the child run's `output` (`{terminalNodeId: terminalArtifact}`), **not** a flattened value
 - [x] `approval` → `{decision, approvalId, resolvedBy, reason, result, editedArgs}`
 - [x] `human` / `webhook(receive)` → the submitted payload verbatim
-- [ ] `agent` with an `output_schema` → the parsed JSON object replaces `{content}` — *not exercised this pass; verified only by reading `parseAgentOutput`*
+- [x] `agent` with an `output_schema` → the parsed JSON object replaces `{content}` — exercised live 2026-07-27. When the model emits bare JSON the artifact is `{"city": "Paris", "population": 2165423}`, i.e. the parsed object, with no `content` key
+- [ ] `output_schema` on **markdown-fenced** JSON — [#747](https://github.com/ttoss/soat/issues/747). The same node, same schema, prompted normally: the model returned ` ```json … ``` `, `parseAgentOutput`'s bare `JSON.parse` threw, and the artifact silently stayed `{"content": "```json\n…"}`. The run still reported `succeeded`, so a downstream `{"var": "output.city"}` resolves to `null` with nothing in the run record explaining why. Also observed: the schema is never validated (the fenced run returned `capital`, not the `required` `city`, and nothing objected) and `output_schema` is never sent to the provider to constrain generation
 
 ## Parallel fan-out & fan-in
 
@@ -169,9 +171,9 @@ the basis of the module docs' **Node artifacts** table (added by [#721](https://
 - [x] `wake_at` is **not** exposed on the run — `active_nodes` is a flat array of node-id strings. The troubleshooting docs pointed at `active_nodes[].wake_at` — was [#723](https://github.com/ttoss/soat/issues/723)
 - [x] Run lifecycle webhook events fire for all four documented types: `orchestration_runs.started`, `.awaiting_input`, `.succeeded`, `.failed` (verified via a real subscribed webhook's delivery records)
 - [x] `GET /orchestrations/queue/stats` → documented shape (`driver: "postgres"`, `queue_depth`, `claimed_tasks`, `oldest_queued_age_seconds`, rolling `claim_latency_ms` percentiles with `window_seconds: 300`, `per_project`)
-- [ ] Per-project `max_concurrent_runs` enforced at claim time — *not exercised; needs contended, actively-driven runs to observe a task staying `queued`*
+- [x] Per-project `max_concurrent_runs` enforced at claim time — closed 2026-07-27 on a **disposable** project (`max_concurrent_runs: 1`), never the shared tenant. Three runs of a worker-holding graph (an `http` node against a 10s-delay target — a `delay` node is unusable here, it parks and releases the worker) were fired simultaneously and all returned `queued`. Polling showed at most **one** `running` at any instant with the others still `queued` (`{queued: 2, succeeded: 1}` → `{queued: 1, running: 1, succeeded: 1}` → `{running: 1, succeeded: 2}`), and `claimed_tasks` never exceeded `1`
 - [ ] Reaper reclaims an expired-lease `running` run and re-drives from checkpoint — *not exercised; needs a killed worker mid-run*
-- [ ] `Idempotency-Key` forwarded by an `http` tool node — *not exercised; needs a request-echoing target that surfaces headers*
+- [x] `Idempotency-Key` forwarded by an `http` tool node — closed 2026-07-27 against a header-echoing target. The echoed request carried `Idempotency-Key: orch_run_hxHI8u7e8q3XkzM0:call:1`, i.e. `<run_id>:<node_id>:<attempt>`. Stable across a redelivery of the same attempt — which is the dedup window `orchestrations.md` describes — and deliberately distinct per retry, since a new attempt is a new execution
 - [ ] Redelivery of a completed keyed node reuses the stored output without re-invoking — *internal seam; covered by unit tests, not observable through a surface*
 - [ ] `sqs` queue driver, standalone `worker.js`, and the heartbeat healthcheck — *needs a different deployment topology than the single-process instance under test*
 
@@ -180,8 +182,8 @@ the basis of the module docs' **Node artifacts** table (added by [#721](https://
 - [x] A node with `retry.max_attempts: 3` against a transient failure (unreachable host) → run parks `sleeping` between attempts
 - [x] Each attempt writes its **own** `node_executions` record with an incrementing `attempt` (1, 2, 3)
 - [x] Exhausting the attempt budget fails the run
-- [ ] A terminal `4xx` fails immediately **without** consuming attempts — *not exercised; needs a target returning a deliberate 4xx*
-- [ ] `backoff.strategy: "exponential"` doubling and `max_delay_ms` capping — *not measured; only `fixed` was timed*
+- [ ] A terminal `4xx` fails immediately **without** consuming attempts — [#746](https://github.com/ttoss/soat/issues/746). Exercised 2026-07-27 against a deliberate `404` with `max_attempts: 3`: **all three attempts were consumed**, with backoff waits between them. `isRetriableError` classifies on the `DomainError`'s own `httpStatus`, and every failed http-tool call is `TOOL_HTTP_ERROR` = **502**, so `502 >= 500` marks every upstream failure transient regardless of what the target returned. The real status is already on the error (`meta.tool_status_code`) but is not consulted — and `buildRunError` drops `meta` entirely, so the surfaced run error reads `meta: null` and the status survives only as free text in `message`
+- [x] `backoff.strategy: "exponential"` doubling and `max_delay_ms` capping — measured 2026-07-27 from `node_executions` timestamps with `delay_ms: 2000, max_delay_ms: 5000, max_attempts: 4`. Inter-attempt gaps were **2.048s → 4.038s → 5.040s**: clean doubling (`2000`, `4000`), then `8000` correctly capped at `5000`
 
 ## Runs lifecycle & observability
 
@@ -230,7 +232,14 @@ All verified on the 2026-07-05 pass; not re-run on 2026-07-26.
 - [x] Cross-project isolation — built on the shared `resolveProjectIds`/`isAllowed` primitives that `permissionsFlow.test.ts` (Groups 6, 10, 11) proves reject cross-project access for both API keys and JWT-policy scoping
 - [x] API-key (`sk_`) auth for start-run / get-run — the 2026-07-03/05 passes authenticated entirely via a project-scoped API key
 - [x] `orchestrations:GetQueueStats` denied for a caller without the action — closed 2026-07-27 with a purpose-built limited principal (the 07-26 pass had an admin credential only). No token → `401`; a JWT holding `orchestrations:ListOrchestrations` but not `GetQueueStats` → `403 Forbidden`; admin → `200` with the full `QueueStats` shape (`driver`, `queue_depth`, `claimed_tasks`, `oldest_queued_age_seconds`, `claim_latency_ms.{p50,p95,window_seconds}`, `per_project`)
-- [ ] `per_project` scoped to a project-scoped caller's own projects — *not discriminable on 2026-07-27: the queue was idle (`queue_depth: 0`), so `per_project` was `[]` for every credential and a scoped view is indistinguishable from an unscoped one. Needs live queued runs in **two** projects plus a caller scoped to one of them — this instance has a single project, so it needs a second one created first. Split out of the compound item above, whose denial half is now verified*
+- [x] `per_project` scoped to a project-scoped caller's own projects — closed later the same day (2026-07-27) after a second, disposable project made it discriminable. With live queued runs in project B only, two differently-scoped callers were queried at the same instant:
+
+  | Caller scope | `per_project` |
+  |---|---|
+  | project B (owns the tasks) | `[{"project_id": "proj_7w1…", "queued": 2, "claimed": 1}]` |
+  | `soat-tests` (owns none of them) | `[]` |
+
+  Note that the **top-level** `queue_depth` / `claimed_tasks` were identical (`2` / `1`) for both callers — those counters are global and unscoped. That matches the docs, which promise scoping only for `per_project`, but it does mean a project-scoped caller can observe the platform-wide queue depth.
 
 Live identity-swapping through the MCP interface (to drive these as raw REST calls
 with different credentials per call) is not possible: the platform has no
