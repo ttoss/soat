@@ -1485,8 +1485,8 @@ describe('Sessions', () => {
       const response = await testClient
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
-          generationId: 'gen_1',
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          generation_id: 'gen_1',
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       expect(response.status).toBe(401);
@@ -1495,16 +1495,16 @@ describe('Sessions', () => {
     test('missing generationId returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({ toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }] });
+        .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }] });
 
       expect(response.status).toBe(400);
-      expect(response.body.error.message).toMatch(/generationId/);
+      expect(response.body.error.message).toMatch(/generation_id/);
     });
 
     test('missing toolOutputs returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({ generationId: 'gen_test_001' });
+        .send({ generation_id: 'gen_test_001' });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
@@ -1513,7 +1513,7 @@ describe('Sessions', () => {
     test('empty toolOutputs array returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
-        .send({ generationId: 'gen_test_001', toolOutputs: [] });
+        .send({ generation_id: 'gen_test_001', tool_outputs: [] });
 
       expect(response.status).toBe(400);
       expect(response.body.error).toBeDefined();
@@ -1640,8 +1640,8 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
-          generationId: 'gen_nonexistent_tooltest_001',
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'some result' }],
+          generation_id: 'gen_nonexistent_tooltest_001',
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'some result' }],
         });
 
       expect(response.status).toBe(404);
@@ -1652,8 +1652,8 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/sess_doesnotexist000/tool-outputs`)
         .send({
-          generationId: 'gen_any_001',
-          toolOutputs: [{ toolCallId: 'tc_1', output: 'result' }],
+          generation_id: 'gen_any_001',
+          tool_outputs: [{ tool_call_id: 'tc_1', output: 'result' }],
         });
 
       expect(response.status).toBe(404);
@@ -1675,9 +1675,9 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
-          generationId: 'gen_submit_done_01',
-          toolOutputs: [
-            { toolCallId: 'tc_done_01', output: { city: 'Paris' } },
+          generation_id: 'gen_submit_done_01',
+          tool_outputs: [
+            { tool_call_id: 'tc_done_01', output: { city: 'Paris' } },
           ],
         });
 
@@ -1739,8 +1739,8 @@ describe('Sessions', () => {
       await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
-          generationId: 'gen_meta_done_01',
-          toolOutputs: [{ toolCallId: 'tc_meta_01', output: '18C' }],
+          generation_id: 'gen_meta_done_01',
+          tool_outputs: [{ tool_call_id: 'tc_meta_01', output: '18C' }],
         });
 
       const messagesResponse = await listSessionMessages(userToken, sessionId);
@@ -1780,8 +1780,8 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/tool-outputs`)
         .send({
-          generationId: 'gen_submit_req_01',
-          toolOutputs: [{ toolCallId: 'tc_req_01', output: 'partial result' }],
+          generation_id: 'gen_submit_req_01',
+          tool_outputs: [{ tool_call_id: 'tc_req_01', output: 'partial result' }],
         });
 
       expect(response.status).toBe(200);
