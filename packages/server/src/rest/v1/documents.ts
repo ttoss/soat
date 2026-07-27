@@ -293,9 +293,9 @@ documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
   ctx.body = {
     id: status.id,
     status: status.status,
-    chunkCount: status.chunkCount,
-    totalChunks: status.totalChunks,
-    totalPages: status.totalPages,
+    chunk_count: status.chunk_count,
+    total_chunks: status.total_chunks,
+    total_pages: status.total_pages,
     progress: status.progress,
     error: status.error,
   };
