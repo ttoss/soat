@@ -182,7 +182,14 @@ export type MappedOrchestrationRun = {
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
   // run produced. Populated on the single-run read; omitted from list responses.
-  usage?: UsageTotals;
+  // `UsageTotals` is the internal camelCase shape; this is its wire projection.
+  usage?: {
+    total_input_tokens: number;
+    total_output_tokens: number;
+    total_cached_tokens: number;
+    total_reasoning_tokens: number;
+    total_cost_usd: number | null;
+  };
   started_at: Date | null;
   completed_at: Date | null;
   created_at: Date;
@@ -287,7 +294,17 @@ export const mapOrchestrationRun = (
     input: run.input as Record<string, unknown> | null,
     output: run.output as Record<string, unknown> | null,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
-    ...(usage ? { usage } : {}),
+    ...(usage
+      ? {
+          usage: {
+            total_input_tokens: usage.totalInputTokens,
+            total_output_tokens: usage.totalOutputTokens,
+            total_cached_tokens: usage.totalCachedTokens,
+            total_reasoning_tokens: usage.totalReasoningTokens,
+            total_cost_usd: usage.totalCostUsd,
+          },
+        }
+      : {}),
     started_at: run.startedAt,
     completed_at: run.completedAt,
     created_at: run.createdAt,
