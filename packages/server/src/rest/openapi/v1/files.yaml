@@ -496,7 +496,7 @@ paths:
                   filename:
                     type: string
                     description: Original filename
-                  contentType:
+                  content_type:
                     type: string
                     description: MIME type of the file
                   size:

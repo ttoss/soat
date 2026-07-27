@@ -618,7 +618,7 @@ describe('Files', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/projectId/);
+      expect(response.body.error.message).toMatch(/project_id/);
     });
 
     test('returns 403 when user has no upload permission', async () => {

@@ -212,7 +212,7 @@ const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
       ctx.body = {
         content: buffer.toString('base64'),
         filename: result.filename,
-        contentType: result.contentType,
+        content_type: result.contentType,
         size: result.size,
       };
     }

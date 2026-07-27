@@ -44,7 +44,7 @@ filesRouter.get('/files', async (ctx: Context) => {
     return;
   }
 
-  const projectPublicId = (ctx.query as Record<string, string>).projectId;
+  const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
     : undefined;
