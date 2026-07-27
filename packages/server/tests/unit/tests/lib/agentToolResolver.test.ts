@@ -1630,7 +1630,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
         name: 'myPresetExecTool',
         type: 'soat',
         actions: ['get-document'],
-        preset_parameters: { documentId: 'doc_injected' },
+        preset_parameters: { document_id: 'doc_injected' },
       });
 
     const fetchMock = jest

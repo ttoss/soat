@@ -135,7 +135,7 @@ describe('emitClientToolReHandoff (client-tool approval → requires_action)', (
       { editedArguments: { path: '/tmp/edited' } },
       { where: { publicId: item.id } }
     );
-    const reloaded = { ...item, editedArguments: { path: '/tmp/edited' } };
+    const reloaded = { ...item, edited_arguments: { path: '/tmp/edited' } };
 
     const handled = await emitClientToolReHandoff({
       item: reloaded,
