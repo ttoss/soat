@@ -49,7 +49,17 @@ const mapAuditEntry = (
     request_id: instance.requestId,
     ip: instance.ip,
     user_agent: instance.userAgent,
-    detail: instance.detail,
+    // `detail` is still written camelCase by its producers (e.g. the audit
+    // middleware's `additionalChecks`, guardrail evaluation records). Every
+    // surface that reads an entry — this mapper's direct callers
+    // (`listAuditEntries`/`getAuditEntry`), the export stream, and the
+    // `audit.entry_created` webhook — documents the same snake_case read
+    // contract, so the conversion belongs here rather than being duplicated
+    // (and previously missed) in each of those surfaces individually.
+    detail: convertKeysDeep(instance.detail, camelToSnakeKey) as Record<
+      string,
+      unknown
+    > | null,
     created_at: instance.createdAt,
   };
 };
@@ -117,15 +127,14 @@ const resolveAuditProject = async (
 
 /** The snake_case projection of an entry — the read contract, shared by the
  * export stream and the `audit.entry_created` webhook payload so all three
- * surfaces expose the same field names.
+ * surfaces (these two, plus the plain list/get REST routes which return
+ * `mapAuditEntry`'s result directly) expose the same field names.
  *
- * `detail` is still written camelCase by its producers, so `convertKeysDeep`
- * snake-cases it here — the one place all three surfaces share, which is what
- * makes them agree on its inner key casing.
- *
- * This recursion is the last one left on a read path and is scheduled for
- * removal: the fix is to have `detail`'s producers write snake_case at the
- * source, so the projection can copy the bag as a value like every other. */
+ * `detail` is already snake-cased by {@link mapAuditEntry} — its producers
+ * (e.g. the audit middleware's `additionalChecks`, guardrail evaluation
+ * records) still write it camelCase, so the conversion happens once, in the
+ * mapper every entry passes through, rather than being duplicated per
+ * surface. */
 const toSnakeAuditEntry = (
   entry: ReturnType<typeof mapAuditEntry>
 ): Record<string, unknown> => {
@@ -141,7 +150,7 @@ const toSnakeAuditEntry = (
     request_id: entry.request_id,
     ip: entry.ip,
     user_agent: entry.user_agent,
-    detail: convertKeysDeep(entry.detail, camelToSnakeKey),
+    detail: entry.detail,
     created_at:
       entry.created_at instanceof Date
         ? entry.created_at.toISOString()
