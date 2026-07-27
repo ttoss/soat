@@ -7,7 +7,7 @@ describe('buildConversationContext', () => {
   test('returns base context when conversation has no tags', () => {
     const conversation = {
       id: 'conv_1',
-      projectId: 'proj_1',
+      project_id: 'proj_1',
       tags: null,
     } as never;
     const ctx = buildConversationContext(conversation);
@@ -17,7 +17,7 @@ describe('buildConversationContext', () => {
   test('includes resource tags when conversation has tags', () => {
     const conversation = {
       id: 'conv_1',
-      projectId: 'proj_1',
+      project_id: 'proj_1',
       tags: { env: 'prod', team: 'backend' },
     } as never;
     const ctx = buildConversationContext(conversation);
@@ -34,7 +34,7 @@ describe('checkConversationAccess', () => {
     } as never;
     const conversation = {
       id: 'conv_1',
-      projectId: 'proj_1',
+      project_id: 'proj_1',
       tags: null,
     } as never;
 
@@ -61,7 +61,7 @@ describe('checkConversationAccess', () => {
     } as never;
     const conversation = {
       id: 'conv_2',
-      projectId: 'proj_2',
+      project_id: 'proj_2',
       tags: { type: 'private' },
     } as never;
 
