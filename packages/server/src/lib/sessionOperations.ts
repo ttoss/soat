@@ -1,6 +1,7 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
@@ -117,9 +118,9 @@ const buildGenerationResult = (
     });
     return {
       status: 'requires_action' as const,
-      generationId: result.generationId,
-      traceId: result.traceId,
-      requiredAction: result.requiredAction,
+      generation_id: result.generationId,
+      trace_id: result.traceId,
+      required_action: mapGenerationRequiredAction(result.requiredAction),
     };
   }
   emitGenerationCompleted({
@@ -134,8 +135,8 @@ const buildGenerationResult = (
       content: result.content,
       model: result.model,
     },
-    generationId: result.generationId,
-    traceId: result.traceId,
+    generation_id: result.generationId,
+    trace_id: result.traceId,
   };
 };
 
