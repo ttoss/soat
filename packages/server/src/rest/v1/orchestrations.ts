@@ -77,13 +77,13 @@ const resolveOrchestrationAccess = async (
   return projectIds ?? undefined;
 };
 type RawCreateBody = {
-  projectId?: string;
+  project_id?: string;
   name?: unknown;
   description?: unknown;
   nodes?: unknown;
   edges?: unknown;
-  stateSchema?: unknown;
-  inputSchema?: unknown;
+  state_schema?: unknown;
+  input_schema?: unknown;
 };
 const validateCreateBody = (
   body: RawCreateBody
@@ -104,8 +104,8 @@ type RawUpdateBody = {
   description?: unknown;
   nodes?: unknown;
   edges?: unknown;
-  stateSchema?: unknown;
-  inputSchema?: unknown;
+  state_schema?: unknown;
+  input_schema?: unknown;
 };
 
 const parseUpdateBody = (body: RawUpdateBody) => {
@@ -120,12 +120,12 @@ const parseUpdateBody = (body: RawUpdateBody) => {
     nodes: Array.isArray(body.nodes) ? (body.nodes as never[]) : undefined,
     edges: Array.isArray(body.edges) ? (body.edges as never[]) : undefined,
     stateSchema:
-      body.stateSchema !== undefined
-        ? (body.stateSchema as object | null)
+      body.state_schema !== undefined
+        ? (body.state_schema as object | null)
         : undefined,
     inputSchema:
-      body.inputSchema !== undefined
-        ? (body.inputSchema as object | null)
+      body.input_schema !== undefined
+        ? (body.input_schema as object | null)
         : undefined,
   };
 };
@@ -154,7 +154,7 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
   const auth = await resolveAuth(
     ctx,
     'orchestrations:CreateOrchestration',
-    body.projectId
+    body.project_id
   );
   if (!auth) return;
 
@@ -166,12 +166,12 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
     nodes: validated.nodes as never[],
     edges: validated.edges as never[],
     stateSchema:
-      body.stateSchema != null && typeof body.stateSchema === 'object'
-        ? body.stateSchema
+      body.state_schema != null && typeof body.state_schema === 'object'
+        ? body.state_schema
         : undefined,
     inputSchema:
-      body.inputSchema != null && typeof body.inputSchema === 'object'
-        ? body.inputSchema
+      body.input_schema != null && typeof body.input_schema === 'object'
+        ? body.input_schema
         : undefined,
   });
 
@@ -193,12 +193,12 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as {
     nodes?: unknown;
     edges?: unknown;
-    inputSchema?: unknown;
+    input_schema?: unknown;
   };
   ctx.body = validateOrchestrationGraph({
     nodes: Array.isArray(body.nodes) ? (body.nodes as OrchestrationNode[]) : [],
     edges: Array.isArray(body.edges) ? (body.edges as OrchestrationEdge[]) : [],
-    inputSchema: (body.inputSchema as object | null) ?? null,
+    inputSchema: (body.input_schema as object | null) ?? null,
   });
   ctx.status = 200;
 });
@@ -334,12 +334,14 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   }
 
   const body = (ctx.request.body ?? {}) as {
-    orchestrationId?: unknown;
+    orchestration_id?: unknown;
     input?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
-    typeof body.orchestrationId === 'string' ? body.orchestrationId : undefined;
+    typeof body.orchestration_id === 'string'
+      ? body.orchestration_id
+      : undefined;
   if (!orchestrationId) {
     ctx.status = 400;
     ctx.body = { error: 'orchestration_id is required' };
@@ -467,11 +469,11 @@ orchestrationsRouter.post(
     if (!auth) return;
 
     const body = (ctx.request.body ?? {}) as {
-      nodeId?: unknown;
+      node_id?: unknown;
       output?: unknown;
     };
 
-    const nodeId = typeof body.nodeId === 'string' ? body.nodeId : undefined;
+    const nodeId = typeof body.node_id === 'string' ? body.node_id : undefined;
     const output =
       typeof body.output === 'object' && body.output !== null
         ? (body.output as Record<string, unknown>)

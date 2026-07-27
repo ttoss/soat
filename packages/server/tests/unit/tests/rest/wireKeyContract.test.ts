@@ -3,17 +3,29 @@ import { join } from 'node:path';
 
 /**
  * Nothing rewrites request keys any more (see `.claude/rules/case-convention.md`).
- * A handler that destructures a camelCase key straight off `ctx.query` or
- * `ctx.request.body` is therefore reading a name no client ever sends: the value
- * is silently `undefined`, so the filter is ignored or the request 400s on a
- * field the caller did supply.
+ * A handler that reads a camelCase key off the request is therefore reading a
+ * name no client ever sends: the value is silently `undefined`, so the filter is
+ * ignored or the request 400s on a field the caller did supply.
+ *
+ * Two shapes count as reading the request, because the flip to single-casing
+ * left broken instances of both:
+ *
+ * 1. **Destructuring** it directly — `const { agentId } = ctx.query`.
+ * 2. **Member access** on a `body` / `query` binding — `body.maxConcurrentRuns`,
+ *    or the key named in a `hasOwnProperty.call(body, 'maxConcurrentRuns')`
+ *    presence check. `PATCH /projects/:project_id` broke exactly here: the read
+ *    happens inside a `parseProjectPatchFields(body)` helper, one call away from
+ *    `ctx.request.body`, so a check that only looked at direct destructuring
+ *    passed it.
  *
  * This is a static check on purpose. The failure it guards is a *missing* read,
  * which a per-route integration test only catches if someone remembers to
- * exercise that exact query param — the flip to single-casing left five such
- * reads behind (`usage`, `sessions`, `generations`), all of which typechecked
- * and passed the suite. Reading the source is the only way to catch the class
- * rather than the instances.
+ * exercise that exact field — all of these typechecked and most passed the
+ * suite. Reading the source is the only way to catch the class rather than the
+ * instances.
+ *
+ * A camelCase key inside an **opaque bag** is not a violation and is not
+ * checked: this looks only at the identifier a handler names, never at values.
  */
 
 const V1_DIR = join(__dirname, '../../../../src/rest/v1');
@@ -82,6 +94,42 @@ const collectWireKeys = (source: string) => {
   return found;
 };
 
+/**
+ * Member access and presence checks on a `body` / `query` binding. Those two
+ * names are this package's convention for the raw request, including when it is
+ * threaded one call deep into a `parse*` helper — which is why the check follows
+ * the identifier rather than only the `ctx.request.body` expression.
+ */
+const collectAccessKeys = (source: string) => {
+  const found: { key: string; line: number; surface: string }[] = [];
+
+  const patterns: { re: RegExp; group: number }[] = [
+    { re: /\b(body|query)\.([a-z][A-Za-z0-9]*)\b/g, group: 2 },
+    {
+      re: /hasOwnProperty\.call\(\s*(body|query)\s*,\s*'([^']+)'/g,
+      group: 2,
+    },
+  ];
+
+  for (const [index, text] of source.split('\n').entries()) {
+    for (const { re, group } of patterns) {
+      re.lastIndex = 0;
+
+      let match: RegExpExecArray | null;
+
+      while ((match = re.exec(text)) !== null) {
+        const key = match[group];
+
+        if (isCamelCase(key)) {
+          found.push({ key, line: index + 1, surface: `${match[1]}.*` });
+        }
+      }
+    }
+  }
+
+  return found;
+};
+
 describe('REST handlers read snake_case wire keys', () => {
   const files = readdirSync(V1_DIR).filter((f) => {
     return f.endsWith('.ts');
@@ -91,10 +139,13 @@ describe('REST handlers read snake_case wire keys', () => {
     expect(files.length).toBeGreaterThan(10);
   });
 
-  test.each(files)('%s destructures no camelCase wire key', (file) => {
-    const violations = collectWireKeys(
-      readFileSync(join(V1_DIR, file), 'utf8')
-    );
+  test.each(files)('%s reads no camelCase wire key', (file) => {
+    const source = readFileSync(join(V1_DIR, file), 'utf8');
+
+    const violations = [
+      ...collectWireKeys(source),
+      ...collectAccessKeys(source),
+    ];
 
     expect(
       violations.map((v) => {

@@ -117,19 +117,19 @@ projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
 const parseProjectPatchFields = (body: Record<string, unknown>) => {
   return {
     name: typeof body.name === 'string' ? body.name : undefined,
-    guardrailIds: parseGuardrailIds(body.guardrailIds),
+    guardrailIds: parseGuardrailIds(body.guardrail_ids),
     // An explicit `null` clears the limit. Any non-null, non-integer value is
     // forwarded so the lib rejects it with a 400 rather than being silently
     // dropped here.
     maxConcurrentRuns: Object.prototype.hasOwnProperty.call(
       body,
-      'maxConcurrentRuns'
+      'max_concurrent_runs'
     )
-      ? (body.maxConcurrentRuns as number | null)
+      ? (body.max_concurrent_runs as number | null)
       : undefined,
     auditReadsEnabled:
-      typeof body.auditReadsEnabled === 'boolean'
-        ? body.auditReadsEnabled
+      typeof body.audit_reads_enabled === 'boolean'
+        ? body.audit_reads_enabled
         : undefined,
   };
 };

@@ -11,7 +11,7 @@ import {
 import { evaluateGuardrail } from './guardrailEvaluation';
 import {
   buildEvaluationRecord,
-  type GuardrailEvaluationRecord,
+  mapGuardrailEvaluation,
 } from './guardrailEvaluationRecord';
 import { loadGuardrailForEvaluation } from './guardrails';
 
@@ -39,7 +39,7 @@ export const evaluateGuardrailDryRun = async (args: {
   guardrailContext?: object;
   toolId?: string;
   authHeader?: string;
-}): Promise<GuardrailEvaluationRecord> => {
+}): Promise<ReturnType<typeof mapGuardrailEvaluation>> => {
   log(
     'evaluateGuardrailDryRun: id=%s toolId=%s',
     args.guardrailId,
@@ -97,11 +97,13 @@ export const evaluateGuardrailDryRun = async (args: {
   };
   const result = evaluateGuardrail({ guardrail, context: evaluationContext });
 
-  return buildEvaluationRecord({
-    result,
-    contextSource: source,
-    contextSnapshot: buildContextSnapshot({ guardrail, evaluationContext }),
-    toolName,
-    action: toolName,
-  });
+  return mapGuardrailEvaluation(
+    buildEvaluationRecord({
+      result,
+      contextSource: source,
+      contextSnapshot: buildContextSnapshot({ guardrail, evaluationContext }),
+      toolName,
+      action: toolName,
+    })
+  );
 };

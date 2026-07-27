@@ -58,7 +58,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
-    projectPublicId: parseStringOrUndefined(body.projectId),
+    projectPublicId: parseStringOrUndefined(body.project_id),
     action: 'quotas:CreateQuota',
     resourceType: 'quota',
   });
@@ -67,7 +67,7 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
   const result = await createQuota({
     projectId: Number(targetProjectId),
     scope: body.scope as string,
-    scopeRef: parseNullableString(body.scopeRef),
+    scopeRef: parseNullableString(body.scope_ref),
     metric: body.metric as string,
     window: body.window as string,
     limit: body.limit,
