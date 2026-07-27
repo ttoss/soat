@@ -115,8 +115,11 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    Public id of the api key / agent the quota applies to. NULL
-                    means all entities of that scope type in the project.
+                    Public id of the api key / agent / actor the quota applies
+                    to. For `api_key` and `agent` scope, NULL means all entities
+                    of that scope type in the project. For `actor` scope, NULL
+                    means one budget *per* actor — each end user gets their own
+                    allowance — rather than a pooled total across all actors.
                   example: key_V1StGXR8Z5jdHi6B
                 metric:
                   type: string
@@ -272,6 +275,11 @@ components:
         scope_ref:
           type: string
           nullable: true
+          description: >-
+            Public id of the api key / agent / actor the quota applies to. For
+            `api_key` and `agent` scope, NULL means all entities of that scope
+            type in the project. For `actor` scope, NULL means one budget *per*
+            actor rather than a pooled total across all actors.
         metric:
           type: string
           enum: [requests, tokens, cost_usd]
