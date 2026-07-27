@@ -130,7 +130,7 @@ sessionSubResourcesRouter.post(
 
     const body = ctx.request.body as {
       generation_id?: string;
-      tool_outputs?: Array<{ toolCallId: string; output: unknown }>;
+      tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
 
     if (!body.generation_id || typeof body.generation_id !== 'string') {
@@ -149,7 +149,12 @@ sessionSubResourcesRouter.post(
       agentPublicId,
       sessionId: ctx.params.session_id,
       generationId: body.generation_id,
-      toolOutputs: body.tool_outputs,
+      toolOutputs: body.tool_outputs.map((toolOutput) => {
+        return {
+          toolCallId: toolOutput.tool_call_id,
+          output: toolOutput.output,
+        };
+      }),
     });
 
     ctx.body = result;

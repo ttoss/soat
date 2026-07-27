@@ -225,7 +225,7 @@ agentGenerationRouter.post(
     }
 
     const { tool_outputs: toolOutputs } = ctx.request.body as {
-      tool_outputs?: unknown;
+      tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
 
     if (!Array.isArray(toolOutputs) || toolOutputs.length === 0) {
@@ -240,10 +240,12 @@ agentGenerationRouter.post(
       projectIds,
       agentId: ctx.params.agent_id,
       generationId: ctx.params.generation_id,
-      toolOutputs: toolOutputs as Array<{
-        toolCallId: string;
-        output: unknown;
-      }>,
+      toolOutputs: toolOutputs.map((toolOutput) => {
+        return {
+          toolCallId: toolOutput.tool_call_id,
+          output: toolOutput.output,
+        };
+      }),
       authHeader: (ctx.headers.authorization as string) ?? undefined,
     });
 
