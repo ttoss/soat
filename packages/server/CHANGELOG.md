@@ -3,6 +3,100 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.17.0](https://127.0.0.1/41729/git/ttoss/compare/v0.16.3...v0.17.0) (2026-07-27)
+
+* fix(case-transform)!: stop case-converting tags, IAM conditions and mapping keys (#737) ([086dfa3](https://127.0.0.1/41729/git/ttoss/commits/086dfa382771642ef2fff4de6000098df5d87e1b)), closes [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#736](https://127.0.0.1/41729/git/ttoss/issues/736)
+* fix(tool-context)!: stop case-converting tool_context keys (#736) ([8351e0f](https://127.0.0.1/41729/git/ttoss/commits/8351e0ff4fcc387c37fbdc5add125a80fb7034d8)), closes [#736](https://127.0.0.1/41729/git/ttoss/issues/736) [#735](https://127.0.0.1/41729/git/ttoss/issues/735) [#729](https://127.0.0.1/41729/git/ttoss/issues/729)
+
+### Bug Fixes
+
+* **case:** find and fix the real bugs PR [#739](https://127.0.0.1/41729/git/ttoss/issues/739)'s refactor left behind, module by module ([#740](https://127.0.0.1/41729/git/ttoss/issues/740)) ([d957963](https://127.0.0.1/41729/git/ttoss/commits/d957963ee87f395e4bf2a199403e051441c2c57f)), closes [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#738](https://127.0.0.1/41729/git/ttoss/issues/738) [#738](https://127.0.0.1/41729/git/ttoss/issues/738) [#738](https://127.0.0.1/41729/git/ttoss/issues/738) [#738](https://127.0.0.1/41729/git/ttoss/issues/738) [#738](https://127.0.0.1/41729/git/ttoss/issues/738) [#690](https://127.0.0.1/41729/git/ttoss/issues/690)
+* **orchestrations:** dedupe re-entered pause records; correct orchestration docs ([#727](https://127.0.0.1/41729/git/ttoss/issues/727)) ([a70cb62](https://127.0.0.1/41729/git/ttoss/commits/a70cb62acaa3d6f2e2fd9f14ef287d67902ac5ac)), closes [#724](https://127.0.0.1/41729/git/ttoss/issues/724) [#721](https://127.0.0.1/41729/git/ttoss/issues/721) [#722](https://127.0.0.1/41729/git/ttoss/issues/722) [#723](https://127.0.0.1/41729/git/ttoss/issues/723)
+
+### BREAKING CHANGES
+
+* `tool_context` keys are no longer case-converted. A caller that
+  set a snake_case key and read the camelCase header must either rename the key to
+  camelCase or read the snake_case header. Session-auto-populated keys
+  (`sessionId` / `actorId` / `actorExternalId`) are unaffected — they are camelCase
+  at the source.
+* resource `tags`, IAM policy `condition`, orchestration
+  `input_mapping` and approval-node `arguments` keys are no longer case-converted.
+  A caller who wrote a snake_case tag key and relied on it matching a camelCase
+  `soat:ResourceTag/*` condition must now spell both the same way.
+* **case:** this continues #738's snake_case wire migration; the MCP
+  tool surface's field casing flip (camelCase -> snake_case) is an approved
+  break for #738 and needs a major version bump under the angular
+  conventional-commits preset used by lerna.json.
+
+  Fixes from the PR #740 code review, verified individually against the code
+  before changing anything:
+
+  Critical:
+  - documents.ts/exceptions.ts: checkDocumentPermission/exceptionSrn built the
+    authorization SRN and isAllowed() projectPublicId from `.projectId`, but
+    the mapped document/exception shape only has `project_id` — every
+    SRN-scoped policy or project-scoped API key resolved against
+    `soat:undefined:...` and was silently denied. The bug was invisible
+    because the shared test fixture's policies are action-only. Added an
+    SRN-scoped-policy regression test to each route's describe block.
+  - generations.ts: RESERVED_GENERATION_METADATA_KEYS only blocked the wire
+    (snake_case) spellings of the usage-attribution keys, but
+    updateGenerationMetadata shallow-merges caller metadata directly over the
+    stored object, which uses the camelCase spelling. A caller sending
+    `actionId`/`triggerId`/`runId`/`nodeId` directly bypassed validation and
+    overwrote real attribution, corrupting usage/billing rollups. Added both
+    spellings to the reserved list, with a regression test.
+
+  Major:
+  - workflowsValidation.ts: the wire<->internal deep key converter only
+    protected `guard`/`when` (JSON Logic bodies) from recursion; an
+    `on_enter.dispatch.input_mapping` — the *target* orchestration/agent's own
+    input field names, author-chosen — got its keys silently renamed on every
+    round-trip. Extended the opaque-bag skip-list to include it.
+  - agentToolBindings.ts: an inline `tool_bindings` entry's `tool` was stored
+    wire-verbatim (snake_case) while every consumer (toolsCall.ts's deny-list
+    and preset-parameter handling, agentToolResolver.ts) reads camelCase —
+    `denied_actions` never denied anything and `preset_parameters` were
+    dropped. Added explicit wire<->camelCase converters (matching the
+    legacy `tools` array's existing parseInlineToolDefinition pattern).
+  - sessionGenerationHelpers.ts: processToolOutputResult wrote
+    `response_messages` into a conversation message's metadata while its
+    sibling writer (conversationGeneration.ts) and the only reader both use
+    `responseMessages` — messages from the tool-output continuation path could
+    never be re-expanded on a later turn. Aligned the spelling.
+  - conversationSubResources.ts: POST /conversations/:id/generate put
+    generateConversationMessage's internal result straight on the wire
+    (`generationId`/`traceId`/camelCase requiredAction) instead of the
+    documented `generation_id`/`trace_id`/`required_action` shape. Mapped it,
+    reusing the existing mapGenerationRequiredAction helper.
+  - sessionDelayHelpers.ts: the delayed-generation branch of
+    triggerOrScheduleGeneration returned `documentId` while its sibling
+    (triggerOrReturnMessage) already returns `document_id`. Aligned it.
+  - knowledgeMemory.ts: mapEntry spread `{ similarityScore }` into a return
+    type declared with `similarity_score` — compiles silently via the spread,
+    bypassing excess-property checking. min_score filtering read
+    `similarity_score ?? 0`, so any positive min_score dropped all memory
+    results, and doc+memory relevance sort scored memory hits as 0. Fixed the
+    key.
+  - Dockerfile: responseContract's per-request path-match + key-walk cost is
+    gated on `NODE_ENV !== 'production'`, but the production image never set
+    NODE_ENV — every deployment paid the cost the file's own comment says
+    production never should. Added `ENV NODE_ENV=production`.
+  - exceptions.ts/auditLog.ts: `detail` is written camelCase by its producers
+    (fileApprovalExpiredException, fileGuardrailTripwireException,
+    quotaEvents, guardrailEvaluationRecord) and was returned verbatim in
+    exceptions.ts (regressed to camelCase on the wire), while auditLog.ts used
+    a *deep* recursive converter that would mangle a guardrail_evaluation
+    record's nested `contextSnapshot` — an author/runtime-owned bag one level
+    down (the #690 class). Both now do a shallow (top-level-only) conversion:
+    correct casing for the server-owned top level, untouched nested bags.
+
+  Verified not applicable: SDK/CLI regeneration after the files.yaml
+  `content_type` fix — `packages/sdk`/`packages/cli`'s `build` script always
+  runs `generate` first and the generated output is gitignored (not a
+  committed artifact), so there is nothing stale to regenerate in this repo.
+
 ## [0.16.3](https://127.0.0.1/41729/git/ttoss/compare/v0.16.2...v0.16.3) (2026-07-26)
 
 ### Bug Fixes
