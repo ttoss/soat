@@ -137,7 +137,8 @@ const checkToolsAccess = async (
  */
 toolsRouter.post('/tools', async (ctx: Context) => {
   const body = (ctx.request.body ?? {}) as Record<string, unknown>;
-  const { name, type, description, actions, deniedActions } = body;
+  const { name, type, description, actions } = body;
+  const deniedActions = body.denied_actions;
   const projectPublicId = body.project_id as string | undefined;
   const discussionId = body.discussion_id as string | undefined;
 
@@ -251,6 +252,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   const projectIds = await checkToolsAccess(ctx, 'tools:UpdateTool');
   if (projectIds === null) return;
 
+  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
   const {
     name,
     type,
@@ -259,16 +261,14 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     execute,
     mcp,
     actions,
-    deniedActions,
-    presetParameters,
     pipeline,
-    discussionId,
-    outputMapping,
-  } = (ctx.request.body ?? {}) as Record<string, unknown>;
+  } = body;
+  const deniedActions = body.denied_actions;
+  const presetParameters = body.preset_parameters;
+  const discussionId = body.discussion_id;
+  const outputMapping = body.output_mapping;
 
-  const nextGuardrailIds = parseGuardrailIds(
-    (ctx.request.body as Record<string, unknown> | undefined)?.guardrail_ids
-  );
+  const nextGuardrailIds = parseGuardrailIds(body.guardrail_ids);
 
   let parsedParameters: object | null | undefined;
   let parsedExecute: object | null | undefined;

@@ -69,9 +69,9 @@ const parseInlineToolDefinition = (
     execute,
     mcp,
     actions,
-    presetParameters,
+    preset_parameters: presetParameters,
     pipeline,
-    outputMapping,
+    output_mapping: outputMapping,
   } = value as Record<string, unknown>;
 
   if (!name || typeof name !== 'string') return null;

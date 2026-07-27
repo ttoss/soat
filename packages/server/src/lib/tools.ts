@@ -14,7 +14,11 @@ import {
   assertSecretRefsExist,
 } from './secrets';
 import { soatTools } from './soatTools';
-import { callResolvedTool, type InlineToolDefinition } from './toolsCall';
+import {
+  type CallableToolDefinition,
+  callResolvedTool,
+  type InlineToolDefinition,
+} from './toolsCall';
 
 const log = createDebug('soat:tools');
 
@@ -461,6 +465,28 @@ export const deleteTool = async (args: {
 
 // ── Call ──────────────────────────────────────────────────────────────────
 
+// `callResolvedTool` (and `InlineToolDefinition`, an agent's ephemeral inline
+// tool) reads camelCase fields, but `mapTool` is the wire mapper — it emits
+// the response's snake_case shape. Converts explicitly rather than passing
+// the wire object straight through, which would silently resolve every
+// camelCase field to undefined (deniedActions, presetParameters, ...).
+const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
+  return {
+    name: tool.name,
+    type: tool.type,
+    description: tool.description,
+    parameters: tool.parameters,
+    execute: tool.execute,
+    mcp: tool.mcp,
+    actions: tool.actions,
+    deniedActions: tool.denied_actions,
+    presetParameters: tool.preset_parameters,
+    pipeline: tool.pipeline,
+    discussionId: tool.discussion_id,
+    outputMapping: tool.output_mapping,
+  };
+};
+
 // A thin DB-backed wrapper around `callResolvedTool` (toolsCall.ts), which
 // holds the actual per-type dispatch logic shared with `callEphemeralTool`.
 export const callTool = async (args: {
@@ -483,7 +509,7 @@ export const callTool = async (args: {
   );
 
   return callResolvedTool({
-    tool: foundTool,
+    tool: toCallableTool(foundTool),
     toolProjectId: toolInstance.projectId,
     action: args.action,
     input: args.input,
