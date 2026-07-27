@@ -17,13 +17,13 @@ import {
 const projectsRouter = new Router<Context>();
 
 type ProjectPriceBody = {
-  meterType?: string;
+  meter_type?: string;
   provider?: string;
   model?: string;
   component?: string;
   unit?: string;
-  unitPrice?: number;
-  effectiveFrom?: string;
+  unit_price?: number;
+  effective_from?: string;
 };
 
 // Authorizes a project-scoped price request against the project itself.
@@ -228,13 +228,13 @@ projectsRouter.put('/projects/:project_id/prices', async (ctx: Context) => {
   const body = ctx.request.body as { prices?: ProjectPriceBody[] };
   const prices = (body.prices ?? []).map((price) => {
     return {
-      meterType: price.meterType,
+      meterType: price.meter_type,
       provider: price.provider!,
       model: price.model!,
       component: price.component!,
       unit: price.unit!,
-      unitPrice: price.unitPrice!,
-      effectiveFrom: price.effectiveFrom!,
+      unitPrice: price.unit_price!,
+      effectiveFrom: price.effective_from!,
     };
   });
 

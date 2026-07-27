@@ -99,12 +99,12 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
 });
 
 type ProviderPriceBody = {
-  meterType?: string;
+  meter_type?: string;
   model?: string;
   component?: string;
   unit?: string;
-  unitPrice?: number;
-  effectiveFrom?: string;
+  unit_price?: number;
+  effective_from?: string;
 };
 
 // Authorizes a per-provider price request against the provider's own project.
@@ -171,12 +171,12 @@ aiProvidersRouter.put(
     const body = ctx.request.body as { prices?: ProviderPriceBody[] };
     const prices = (body.prices ?? []).map((price) => {
       return {
-        meterType: price.meterType,
+        meterType: price.meter_type,
         model: price.model!,
         component: price.component!,
         unit: price.unit!,
-        unitPrice: price.unitPrice!,
-        effectiveFrom: price.effectiveFrom!,
+        unitPrice: price.unit_price!,
+        effectiveFrom: price.effective_from!,
       };
     });
 
