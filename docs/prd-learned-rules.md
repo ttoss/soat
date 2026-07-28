@@ -2,13 +2,13 @@
 
 > **Status: ⏭️ Deferred (2026-07).** The platform-unique slice — surfacing
 > recurring corrections — moved into the approvals module as the read-only
-> [recurrence view](./prd-approvals.md#recurrence-view--not-started). What
+> [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view). What
 > remains here (semantic clustering, promotion lifecycle, scoped rule listing)
 > builds only if the [build gates](#deferral-decision-2026-07) pass. See
 > [roadmap → Deferral: learned rules](./roadmap.md#deferral-learned-rules).
 >
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G6).
-> Captures from [prd-approvals.md](./prd-approvals.md) resolution paths and
+> Captures from [approvals](../packages/website/docs/modules/approvals.md) resolution paths and
 > reuses the embedding nearest-neighbor machinery from
 > [prd-memories.md](./prd-memories.md). SOAT exposes promoted rules through a
 > scoped listing API; **injecting them into agent context is the consuming
@@ -58,7 +58,7 @@ becomes a reviewable candidate rule with full context.
 - `CandidateRule` model (see [Data Model](#data-model))
 - Capture hooks:
   - **Rejected approval** — the mandatory rejection reason becomes the
-    candidate text ([prd-approvals.md](./prd-approvals.md))
+    candidate text ([approvals](../packages/website/docs/modules/approvals.md))
   - **Edit-then-approve** — the argument diff becomes the candidate ("human
     changed X to Y in this situation")
   - **Explicit correction** — `POST /api/v1/candidate-rules` (and the derived
@@ -78,7 +78,7 @@ start-now urgency.
 someone rereading the queue.
 
 > Exact-key recurrence (same `dedup_key`) is already covered by the approvals
-> [recurrence view](./prd-approvals.md#recurrence-view--not-started); what this
+> [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view); what this
 > phase adds is **semantic** clustering of *paraphrased* corrections across
 > different tools and arguments.
 
@@ -190,7 +190,7 @@ so the action is refused upstream and never reaches the approval queue again.
 Two signals feed that graduation decision:
 
 - **Recurring rejected re-proposals** from approvals (admitted with
-  `previous_item_id` per [prd-approvals.md](./prd-approvals.md) decision 2) —
+  `previous_item_id` per the [approvals dedup rule](../packages/website/docs/modules/approvals.md#duplicate-proposals-dedup)) —
   exact-key recurrence is surfaced by the approvals recurrence view; Phase 2
   clustering here would extend that to paraphrased corrections.
 - **Candidates auto-linking to an already-promoted rule** (Phase 2) — the
