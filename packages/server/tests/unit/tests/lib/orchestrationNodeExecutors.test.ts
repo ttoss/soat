@@ -431,6 +431,72 @@ describe('executeAgentNode', () => {
     });
     spy.mockRestore();
   });
+
+  test('falls back to { content } when parsed JSON is not an object (e.g. an array)', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_5',
+        traceId: 'trc_5',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: '[1,2,3]',
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object' },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { content: '[1,2,3]' },
+      traceId: 'trc_5',
+    });
+    spy.mockRestore();
+  });
+
+  test('a requires_action generation with outputSchema configured produces a null-content artifact', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_6',
+        traceId: 'trc_6',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs',
+          toolCalls: [{ id: 'call_1', toolName: 'some_tool', args: {} }],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object' },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { content: null },
+      traceId: 'trc_6',
+    });
+    spy.mockRestore();
+  });
 });
 
 // ── executeMemoryWriteNode ─────────────────────────────────────────────────
