@@ -15,6 +15,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 // end-to-end for wiring coverage.
 
 describe('Activity', () => {
+  let adminToken: string;
   let userToken: string;
   let noPermToken: string;
   let projectId: string;
@@ -55,6 +56,7 @@ describe('Activity', () => {
       ],
       createOtherProject: true,
     });
+    adminToken = setup.adminToken;
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
@@ -78,6 +80,17 @@ describe('Activity', () => {
         `/api/v1/activity?project_id=${projectId}`
       );
       expect(res.status).toBe(403);
+    });
+
+    // An admin JWT with no project_id resolves to `undefined` (no single
+    // project to scope to), which the route falls back to an empty project
+    // list for — rather than an unbounded cross-project query.
+    test('admin with no project_id sees an empty, not unbounded, list', async () => {
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/activity');
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual([]);
+      expect(res.body.next_cursor).toBeNull();
     });
 
     test('lists entries with the full shape', async () => {
@@ -108,6 +121,12 @@ describe('Activity', () => {
       expect(found.agent_id).toBe('agent_seed00000000');
       expect(found.ref_id).toBe('tool_abc');
       expect(found.created_at).toBeDefined();
+    });
+
+    test('a non-numeric limit falls back to the default rather than erroring', async () => {
+      const res = await listActivity('&limit=not-a-number');
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
     });
 
     test('filters by kind', async () => {
