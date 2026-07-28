@@ -3,7 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
 
-import { load } from 'js-yaml';
+import { mergeOpenApiSpecs } from '@ttoss/openapi-codegen';
 
 const __dirname = path.dirname(url.fileURLToPath(import.meta.url));
 
@@ -11,106 +11,17 @@ const SPECS_DIR = path.resolve(__dirname, '../../server/src/rest/openapi/v1');
 const MERGED_SPEC_FILE = path.resolve(__dirname, '../merged-spec.json');
 const SDK_ROOT = path.resolve(__dirname, '..');
 
-interface OpenApiSpec {
-  openapi: string;
-  info?: Record<string, unknown>;
-  servers?: unknown[];
-  paths?: Record<string, unknown>;
-  components?: {
-    schemas?: Record<string, unknown>;
-    responses?: Record<string, unknown>;
-    securitySchemes?: Record<string, unknown>;
-    parameters?: Record<string, unknown>;
-  };
-  security?: unknown[];
-}
-
-// eslint-disable-next-line complexity
 const main = async () => {
-  const specFiles = fs
-    .readdirSync(SPECS_DIR)
-    .filter((f) => {
-      return f.endsWith('.yaml');
-    })
-    .sort()
-    .map((f) => {
-      return path.join(SPECS_DIR, f);
-    });
-
-  const merged: OpenApiSpec = {
-    openapi: '3.0.3',
+  const merged = mergeOpenApiSpecs({
+    specsDir: SPECS_DIR,
     info: {
       title: 'SOAT API',
       version: '1.0.0',
       description: 'SOAT unified API',
     },
-    servers: [],
-    paths: {},
-    components: {
-      schemas: {},
-      responses: {},
-      securitySchemes: {},
-      parameters: {},
-    },
-  };
+  });
 
-  for (const file of specFiles) {
-    const content = fs.readFileSync(file, 'utf-8');
-    const spec = load(content) as OpenApiSpec;
-
-    if (merged.servers?.length === 0 && spec.servers?.length) {
-      merged.servers = spec.servers;
-    }
-
-    if (spec.paths) {
-      Object.assign(merged.paths!, spec.paths);
-    }
-
-    if (spec.components?.schemas) {
-      for (const [name, schema] of Object.entries(spec.components.schemas)) {
-        if (!(name in merged.components!.schemas!)) {
-          merged.components!.schemas![name] = schema;
-        }
-      }
-    }
-
-    if (spec.components?.responses) {
-      for (const [name, response] of Object.entries(
-        spec.components.responses
-      )) {
-        if (!(name in merged.components!.responses!)) {
-          merged.components!.responses![name] = response;
-        }
-      }
-    }
-
-    if (spec.components?.securitySchemes) {
-      Object.assign(
-        merged.components!.securitySchemes!,
-        spec.components.securitySchemes
-      );
-    }
-
-    if (spec.components?.parameters) {
-      for (const [name, parameter] of Object.entries(
-        spec.components.parameters
-      )) {
-        if (!(name in merged.components!.parameters!)) {
-          merged.components!.parameters![name] = parameter;
-        }
-      }
-    }
-  }
-  // Rewrite cross-file schema refs to local refs — all schemas from all spec
-  // files are collected into merged.components.schemas, so relative file refs
-  // (e.g. "./foo.yaml#/components/schemas/Bar") are no longer resolvable once
-  // the spec is written as a single flat JSON file.
-  let specJson = JSON.stringify(merged, null, 2);
-  specJson = specJson.replace(
-    /"(\$ref)":\s*"[^"]*\.yaml#\/components\/schemas\/(\w+)"/g,
-    '"$1": "#/components/schemas/$2"'
-  );
-  fs.writeFileSync(MERGED_SPEC_FILE, specJson);
+  fs.writeFileSync(MERGED_SPEC_FILE, JSON.stringify(merged, null, 2));
 
   // eslint-disable-next-line no-console
   console.log(`Merged spec written to: ${MERGED_SPEC_FILE}`);
