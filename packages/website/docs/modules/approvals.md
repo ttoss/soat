@@ -52,7 +52,7 @@ filtering only — the lifecycle never branches on it.
 | `project_id`         | string          | ID of the owning project                                           |
 | `origin`             | string          | `node` \| `tool_call` \| `task_transition` — producer origin (analytics/filtering only) |
 | `status`             | string          | `pending` \| `approved` \| `rejected` \| `expired`                 |
-| `proposed_action`    | object \| null  | Frozen `{ tool_id, action?, arguments }` the decision governs; `null` for `task_transition` items |
+| `proposed_action`    | object \| null  | Frozen `{ tool_id, action?, arguments }` the decision governs; `null` for `task_transition` items. `action` is present for `tool_call`-origin items (always, even for single-action tools) and omitted for `node`-origin items, whose downstream execution is wired by a separate `tool` node in the graph |
 | `reasoning`          | string \| null  | The proposing agent's rationale                                    |
 | `evidence`           | object \| null  | Structured supporting data                                         |
 | `predicted_impact`   | string \| null  | Expected execution effect                                          |

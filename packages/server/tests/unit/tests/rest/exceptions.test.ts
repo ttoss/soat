@@ -440,7 +440,7 @@ describe('Exceptions', () => {
       expect(match!.detail).toBeNull();
     });
 
-    test('guardrail.tripwire with a generation (no run) scopes by generation id and falls back to the resource id for the tool name', async () => {
+    test('guardrail.tripwire with a generation (no run) falls back to the resource id for the tool name', async () => {
       emit('guardrail.tripwire', 'tool_gen_1', {
         generationId: 'gen_trip_1',
         agentId: 'agent_trip_1',
@@ -453,10 +453,51 @@ describe('Exceptions', () => {
         );
       });
       expect(match).not.toBeNull();
-      // No runId on the event → the generation path; toolName fell back to the
+      // No runId on the event → the non-run path; toolName fell back to the
       // event resourceId (there was no toolName in the data).
       expect(match!.run_id).toBeNull();
       expect(match!.agent_id).toBe('agent_trip_1');
+    });
+
+    test('guardrail.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
+      emit('guardrail.tripwire', 'tool_loop_1', {
+        generationId: 'gen_loop_1',
+        agentId: 'agent_loop_1',
+      });
+      const first = await pollException((e) => {
+        return (
+          e.kind === 'guardrail_tripwire' &&
+          e.agent_id === 'agent_loop_1' &&
+          typeof e.title === 'string' &&
+          e.title.includes('tool_loop_1')
+        );
+      });
+      expect(first).not.toBeNull();
+      expect(first!.occurrence_count).toBe(1);
+
+      // Same agent/tool call site, but a brand-new generationId (as every real
+      // agent generation gets) — must fold into the same open item.
+      emit('guardrail.tripwire', 'tool_loop_1', {
+        generationId: 'gen_loop_2',
+        agentId: 'agent_loop_1',
+      });
+      const folded = await pollException((e) => {
+        return e.id === first!.id && e.occurrence_count === 2;
+      });
+      expect(folded).not.toBeNull();
+
+      const res = await listExceptions('');
+      const matches = (res.body.data as Record<string, unknown>[]).filter(
+        (e) => {
+          return (
+            e.kind === 'guardrail_tripwire' &&
+            e.agent_id === 'agent_loop_1' &&
+            typeof e.title === 'string' &&
+            e.title.includes('tool_loop_1')
+          );
+        }
+      );
+      expect(matches).toHaveLength(1);
     });
 
     test('an unmatched event type files no exception (handleEvent early return)', async () => {
