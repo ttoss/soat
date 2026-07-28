@@ -18,6 +18,7 @@ import {
   buildCompletedGenerationResult,
   findPendingClientTools,
   type GenerationResult,
+  normalizeToolChoice,
   type PendingGeneration,
   savePendingGeneration,
   type TypedAgent,
@@ -109,7 +110,8 @@ const log = createDebug('soat:generation');
 
 type StepRule = {
   step: number;
-  toolChoice?: { type: 'tool'; toolName: string };
+  tool_choice?: unknown;
+  toolChoice?: unknown;
 };
 
 export const buildPrepareStep = (args: {
@@ -142,16 +144,19 @@ export const buildPrepareStep = (args: {
       rule
     );
 
-    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
+    const ruleToolChoice = normalizeToolChoice(
+      rule?.tool_choice ?? rule?.toolChoice
+    );
+    if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
       log(
         'prepareStep (%s): forcing toolChoice=%s',
         args.logContext,
-        rule.toolChoice.toolName
+        ruleToolChoice.toolName
       );
 
       return {
-        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
-        activeTools: [rule.toolChoice.toolName],
+        toolChoice: ruleToolChoice,
+        activeTools: [ruleToolChoice.toolName],
       };
     }
 
@@ -177,12 +182,7 @@ const callGenerateText = async (args: {
       instructions: args.system,
       messages: args.nonSystemMessages as ModelMessage[],
       tools: hasTools ? args.resolvedTools : undefined,
-      toolChoice:
-        (args.typedAgent.toolChoice as
-          | 'auto'
-          | 'required'
-          | { type: 'tool'; toolName: string }
-          | undefined) ?? undefined,
+      toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
       prepareStep: args.prepareStep,
       stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
       temperature: (args.typedAgent.temperature as number) ?? undefined,

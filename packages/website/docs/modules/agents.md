@@ -160,6 +160,8 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 
 Using `"required"` is useful when combined with a tool that has no `execute` configuration (a "done" tool). The agent is forced to use tools at every step and stops when it calls the tool without an executor.
 
+The object form applies to the current model call only. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, the continuation runs with `"auto"` — the force is satisfied by the call that produced the pause, so the model is free to use the tool result instead of being forced to call the tool again.
+
 ### Step Rules
 
 The `step_rules` array lets you override `tool_choice` and `active_tool_ids` on specific steps. Each rule targets a step number (1-indexed).

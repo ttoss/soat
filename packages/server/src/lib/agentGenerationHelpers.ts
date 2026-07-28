@@ -169,11 +169,52 @@ export const buildAllMessages = (
   return [{ role: 'system', content: instructions }, ...messages];
 };
 
+// ── Tool Choice ───────────────────────────────────────────────────────────
+
+// `tool_choice` (agent-level and inside `step_rules`) is stored verbatim from
+// the request body, so the object form arrives wire-shaped:
+// { type: "tool", tool_name: "..." }. The AI SDK expects
+// { type: "tool", toolName: "..." } — this is the single translation point.
+// The legacy camelCase key is still accepted for agents stored before the
+// wire shape worked.
+export const normalizeToolChoice = (
+  value: unknown
+):
+  | 'auto'
+  | 'required'
+  | 'none'
+  | { type: 'tool'; toolName: string }
+  | undefined => {
+  if (value === 'auto' || value === 'required' || value === 'none') {
+    return value;
+  }
+  if (value && typeof value === 'object') {
+    const record = value as {
+      type?: unknown;
+      tool_name?: unknown;
+      toolName?: unknown;
+    };
+    if (record.type === 'tool') {
+      const toolName =
+        typeof record.tool_name === 'string'
+          ? record.tool_name
+          : typeof record.toolName === 'string'
+            ? record.toolName
+            : undefined;
+      if (toolName) {
+        return { type: 'tool', toolName };
+      }
+    }
+  }
+  return undefined;
+};
+
 // ── Step Rules ────────────────────────────────────────────────────────────
 
 type StepRule = {
   step: number;
-  toolChoice?: { type: 'tool'; toolName: string };
+  tool_choice?: unknown;
+  toolChoice?: unknown;
 };
 
 const buildPrepareStep = (
@@ -198,14 +239,17 @@ const buildPrepareStep = (
       stepNumber + 1,
       rule
     );
-    if (rule?.toolChoice?.type === 'tool' && rule.toolChoice.toolName) {
+    const ruleToolChoice = normalizeToolChoice(
+      rule?.tool_choice ?? rule?.toolChoice
+    );
+    if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
       log(
         'prepareStep (stream): forcing toolChoice=%s',
-        rule.toolChoice.toolName
+        ruleToolChoice.toolName
       );
       return {
-        toolChoice: { type: 'tool', toolName: rule.toolChoice.toolName },
-        activeTools: [rule.toolChoice.toolName],
+        toolChoice: ruleToolChoice,
+        activeTools: [ruleToolChoice.toolName],
       };
     }
     return {};
@@ -247,10 +291,7 @@ export const runStreamGeneration = (args: {
       Object.keys(args.resolvedTools).length > 0
         ? args.resolvedTools
         : undefined,
-    toolChoice:
-      (args.typedAgent.toolChoice as
-        'auto' | 'required' | { type: 'tool'; toolName: string } | undefined) ??
-      undefined,
+    toolChoice: normalizeToolChoice(args.typedAgent.toolChoice),
     prepareStep,
     stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,

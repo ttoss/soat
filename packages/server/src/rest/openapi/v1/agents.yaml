@@ -542,7 +542,7 @@ components:
           description: Maximum agent loop steps before stopping
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`).'
         stop_conditions:
           type: array
           nullable: true
@@ -719,7 +719,7 @@ components:
         max_steps:
           type: integer
         tool_choice:
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`).'
         stop_conditions:
           type: array
           items:
@@ -857,7 +857,7 @@ components:
           nullable: true
         tool_choice:
           nullable: true
-          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "name": "my_tool" }`).'
+          description: 'Tool choice strategy. Accepts a string (`"auto"`, `"required"`) or an object (`{ "type": "tool", "tool_name": "my_tool" }`).'
         stop_conditions:
           type: array
           nullable: true
