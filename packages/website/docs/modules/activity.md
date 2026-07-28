@@ -38,6 +38,33 @@ There is no public create endpoint — entries are platform-written by producers
 
 ## Key Concepts
 
+### Activity vs. the audit log vs. traces
+
+Three surfaces record "what happened," each answering a different question:
+
+| Surface | Question it answers | Subject |
+|---|---|---|
+| **Activity** (this module) | *What did the agents do?* | the [agent](./agents.md) / [orchestration run](./orchestrations.md) |
+| [**Audit log**](./audit-log.md) | *Who did what to the platform, and was it allowed?* | the principal — a [user](./users.md) or [API key](./api-keys.md) |
+| [**Traces**](./traces.md) | *How did one generation actually execute?* | a single [generation](./generations.md)'s step-by-step tree |
+
+Activity and the audit log are the pair most easily confused, because both describe things the platform did on its own. The field-level contrast:
+
+| | Activity | [Audit log](./audit-log.md) |
+|---|---|---|
+| Classifier | `kind` — one of four fixed values; never a permission string | `action` — **is** the [permission-action string](./iam.md#actions) that authorized the request |
+| Subject | `run_id`, `agent_id`, `ref_id` — no principal is recorded at all | `principal_type` / `principal_id` ([user](./users.md) / [API key](./api-keys.md)) |
+| Target | `ref_id` plus free-form `detail` | [`resource_srn`](./iam.md#soat-resource-names-srns) + `resource_public_id` |
+| Outcome | `severity` — records only what **happened** | `status` (HTTP), so **denied attempts are recorded too**, as `403` |
+| Request forensics | none | `request_id`, `ip`, `user_agent` |
+| Written by | four [producers](#producers) — two event subscriptions, two direct hooks | middleware, once per mutating `/api/v1` request that authorizes |
+| Immutability | no update path exists, but it is a convention — not enforced by model hooks | [hard-enforced append-only, with a retention sweep](./audit-log.md#append-only--retention) |
+| Reading | keyset [cursor pagination](#cursor-pagination), no export | offset pagination plus [NDJSON export](./audit-log.md#ndjson-export) |
+
+Because the audit log is the compliance surface and this feed is not, security-relevant events stay there even when they look activity-shaped: a [guardrail](./guardrails.md) evaluation that *changed* a call's outcome is mirrored into the audit log as a [system-originated entry](./audit-log.md#system-originated-entries) (`detail.kind: guardrail_evaluation`) — see [Evaluation Audit Record](./guardrails.md#evaluation-audit-record). Only autonomous-execution telemetry lands here.
+
+Neither surface is a superset of the other, and one tool call can legitimately appear in both. A call a guardrail blocked produces an audit record and **no** `action_executed` entry; a call that ran produces an `action_executed` entry, while the audit log separately records the principal authorized to trigger the enclosing request.
+
 ### Severity
 
 Severity defaults per kind, and a producer may override it:

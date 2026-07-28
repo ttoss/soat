@@ -195,11 +195,15 @@ external assistants get the same feed surface as product UIs.
    soft context rules stay deferred with the learned-rules module.
 
 3. **`deny` effect audit record — resolved: yes, on the audit substrate.** A
-   policy `deny` on a tool call writes an audit record with
-   `detail->>'kind' = 'action_denied'` on the shipped `AuditEntry` table
+   policy `deny` on a tool call writes an audit record on the shipped
+   `AuditEntry` table
    ([audit-log module docs](../packages/website/docs/modules/audit-log.md)) —
-   not on the pending
-   `ActivityEntry` model this PRD previously assumed. A deny is a
+   not on the pending `ActivityEntry` model this PRD previously assumed. The
+   denial is recorded as an ordinary entry whose `status` is `403` and whose
+   primary `action` is the check that failed (see `selectPrimaryIndex` in
+   `middleware/audit.ts`); there is **no** `detail.kind = 'action_denied'`
+   marker — earlier revisions of this decision and of the roadmap asserted one,
+   which was never implemented. A deny is a
    security-relevant event and belongs in the audit trail unconditionally;
    feed noise is a non-issue because the product activity surface filters by
    kind/severity. This is consistent with the roadmap's activity-feed

@@ -213,10 +213,11 @@ stays the source of truth:
   [`AuditEntry`](../packages/website/docs/modules/audit-log.md) (`detail` kinds)
   and [prd-approvals.md](./prd-approvals.md) (`ActivityEntry`, `acte_`) both
   described an activity substrate; settled as two distinct models with a firm
-  boundary rather than one. Audit-shaped kinds (a policy `deny`, a
-  decision-changing guardrail evaluation) stay on `AuditEntry`
-  (`detail->>'kind' = 'action_denied'` / `'guardrail_evaluation'`) — that part
-  was already narrowed. The remaining product-feed question (which model owns
+  boundary rather than one. Audit-shaped events stay on `AuditEntry` — that part
+  was already narrowed: a policy `deny` is recorded as an ordinary entry with
+  `status = 403` (there is no `detail.kind = 'action_denied'` marker, despite an
+  earlier revision of this line claiming one), and a decision-changing guardrail
+  evaluation is mirrored there as `detail->>'kind' = 'guardrail_evaluation'`. The remaining product-feed question (which model owns
   agent/run-centric autonomous-execution telemetry) is resolved: the PRD's own
   `ActivityEntry`, per [prd-approvals.md decision 4](./prd-approvals.md#decisions-formerly-open-questions) —
   `AuditEntry`'s `action` column is documented as the permission-action string
