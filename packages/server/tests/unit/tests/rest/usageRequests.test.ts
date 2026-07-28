@@ -111,6 +111,38 @@ describe('Usage — API-request metering', () => {
     expect(written).toBe(0);
   });
 
+  // #749: an unscoped key (no bound project) is counted against the project the
+  // route resolved and authorized — here the single project the key can reach.
+  test('unscoped API key requests are counted against the resolved project', async () => {
+    resetRequestCounters();
+
+    const keyRes = await authenticatedTestClient(userToken)
+      .post('/api/v1/api-keys')
+      .send({ name: 'unscoped metered key', policy_ids: [policyId] });
+    expect(keyRes.status).toBe(201);
+    const unscopedKeyId = keyRes.body.id as string;
+
+    const res = await authenticatedTestClient(keyRes.body.key).get(
+      '/api/v1/usage/meters?meter_type=api_request'
+    );
+    expect(res.status).toBe(200);
+
+    const written = await flushRequestCounters({ now: new Date() });
+    expect(written).toBeGreaterThanOrEqual(1);
+
+    // The idempotency key carries the counter's (project, api_key) identity, so
+    // it proves the count was attributed to this unscoped key, not merely that
+    // *something* flushed.
+    const events = await db.UsageEvent.findAll({
+      where: { meterType: 'api_request' },
+      attributes: ['idempotencyKey'],
+    });
+    const attributed = events.filter((event) => {
+      return event.idempotencyKey?.includes(unscopedKeyId);
+    });
+    expect(attributed).toHaveLength(1);
+  });
+
   test('prices the api_request event from an effective global soat/request SKU and flushes with the default window', async () => {
     await db.PriceBook.create({
       aiProviderId: null,
