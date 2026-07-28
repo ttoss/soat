@@ -1287,6 +1287,88 @@ describe('Orchestrations', () => {
       }
     });
 
+    // #747: an agent node's output_schema silently reverted to `{ content }`
+    // when the model wrapped its JSON in a markdown code fence — the standard
+    // shape a model returns structured JSON in, even when told to return it
+    // bare. End-to-end check that the fix survives the full run/node-
+    // execution-recording pipeline; the parsing/precedence edge cases
+    // themselves are covered directly in orchestrationNodeExecutors.test.ts.
+    test('an agent node with output_schema parses a markdown-fenced JSON response', async () => {
+      const aiProviderRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `Output Schema Provider ${Date.now()}`,
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProviderRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          name: `Output Schema Agent ${Date.now()}`,
+          ai_provider_id: aiProviderRes.body.id,
+        });
+      expect(agentRes.status).toBe(201);
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/orchestrations')
+        .send({
+          name: `Output Schema Test ${Date.now()}`,
+          nodes: [
+            {
+              id: 'ask',
+              type: 'agent',
+              agent_id: agentRes.body.id,
+              input_mapping: { prompt: { var: 'question' } },
+              output_schema: {
+                type: 'object',
+                properties: { city: { type: 'string' } },
+                required: ['city'],
+              },
+            },
+          ],
+          edges: [],
+          project_id: projectId,
+        });
+      expect(createRes.status).toBe(201);
+
+      const generationSpy = jest
+        .spyOn(agentGenerationModule, 'createGeneration')
+        .mockResolvedValue({
+          id: 'gen_outputschema01',
+          traceId: 'trc_outputschema01',
+          status: 'completed',
+          output: {
+            model: 'llama3.2',
+            content: '```json\n{"city": "Paris"}\n```',
+            finishReason: 'stop',
+          },
+        });
+
+      try {
+        const runRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: createRes.body.id,
+            input: { question: 'What is the capital of France?' },
+          });
+        expect(runRes.status).toBe(201);
+        expect(runRes.body.status).toBe('succeeded');
+        const nodeExec = runRes.body.node_executions.find(
+          (e: { node_id: string }) => {
+            return e.node_id === 'ask';
+          }
+        );
+        expect(nodeExec.output).toEqual({ city: 'Paris' });
+      } finally {
+        generationSpy.mockRestore();
+      }
+    });
+
     test('records the failing node with its input and error', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')

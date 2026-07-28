@@ -13,6 +13,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
+import { requireAdmin } from './helpers';
 
 const projectsRouter = new Router<Context>();
 
@@ -59,17 +60,7 @@ const authorizeProjectPrices = async (args: {
 };
 
 projectsRouter.post('/projects', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'projects:CreateProject')) return;
 
   const { name } = ctx.request.body as { name?: string };
 
@@ -135,17 +126,7 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
 };
 
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'projects:UpdateProject')) return;
 
   const { name, guardrailIds, maxConcurrentRuns, auditReadsEnabled } =
     parseProjectPatchFields(ctx.request.body as Record<string, unknown>);
@@ -167,7 +148,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   if (guardrailIds !== undefined) {
     const current = await getProject({
       id: ctx.params.project_id,
-      authUser: ctx.authUser,
+      authUser: ctx.authUser!,
     });
     await assertGuardrailDetachAllowed({
       ctx,
@@ -189,17 +170,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
 });
 
 projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'projects:DeleteProject')) return;
 
   const force = ctx.query.force === 'true';
 

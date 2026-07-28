@@ -15,7 +15,12 @@ import {
 } from 'src/lib/usage';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  requireAdmin,
+  resolveWriteProjectId,
+} from './helpers';
 
 export const usageRouter = new Router<Context>();
 
@@ -395,17 +400,7 @@ usageRouter.get('/usage/prices', async (ctx: Context) => {
  * costs stay explainable.
  */
 usageRouter.put('/usage/prices', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'usage:ManagePriceBook')) return;
 
   const body = ctx.request.body as UpsertPricesBody;
   ctx.body = await upsertPrices({

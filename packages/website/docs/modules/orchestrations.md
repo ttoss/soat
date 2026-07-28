@@ -125,7 +125,7 @@ Every completed node produces an **artifact** — the object that `state_mapping
 
 | Type | Artifact |
 | ---- | -------- |
-| `agent` | `{ content }`. With an `output_schema`, a response that parses as a JSON object becomes **that object** instead (so its own fields are read directly). |
+| `agent` | `{ content }`. With an `output_schema`, the artifact becomes **that object** instead (so its own fields are read directly) — see [Agent node output_schema](#agent-node-output_schema). |
 | `tool` | **The tool's result object itself**, not a wrapper — a tool returning `{"status":"ok"}` yields `{"status":"ok"}`, read as `{"var": "output.status"}`. Only a **non-object** result (string, number) is wrapped as `{ result }`. A guardrail-blocked call yields `{ status: "blocked", reason }` instead — see [Guardrail interception](#guardrail-interception-on-tool-nodes). |
 | `transform` | `{ result }` — the evaluated `expression`. |
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
@@ -140,6 +140,16 @@ Every completed node produces an **artifact** — the object that `state_mapping
 | `sub_orchestration` | The child run's `output`, i.e. `{ terminalNodeId: terminalArtifact }`. |
 
 The common trap is `tool`: because the artifact is the tool's result verbatim, `{"var": "output.result"}` resolves to `null` for any tool returning a JSON object. Map the field the tool actually returns.
+
+#### Agent node `output_schema`
+
+When an `agent` node declares an `output_schema`, the engine resolves the artifact in order:
+
+1. **The model provider's own structured output**, when the agent's own configured `output_schema` reaches it as a generation-time constraint (see [Agents](./agents.md)) and the provider honors it — already a parsed object, used as-is.
+2. Otherwise, the model's raw text response, **parsed as JSON** — stripping a single markdown code fence (` ```json ... ``` ` or plain ` ``` ... ``` `) first, since a model instructed to return bare JSON commonly wraps it in one anyway.
+3. If neither produces a JSON object (the response is genuinely non-JSON prose), the artifact falls back to `{ content }` and the node still completes — an `output_schema` mismatch never fails the run. The fallback is not silent operationally: a `soat:orchestrations` debug log records the parse failure.
+
+`output_schema` is currently a **best-effort parsing aid**, not a hard validation gate: a parsed object is accepted whether or not its fields actually satisfy the schema. It is enforced as a real generation-time constraint only when it matches the schema already configured on the node's own agent — a node-level `output_schema` that differs from its agent's is not itself forwarded to the model.
 
 > **Tip:** a `state_mapping` that writes `null` usually means the mapping read a field the artifact does not have. Every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`, so check there for the real shape.
 

@@ -270,6 +270,27 @@ describe('validateQuotaImmutableFields', () => {
     ).toMatch(/scope_ref/);
   });
 
+  // `null` and `""` are materially different scope_ref values (see the
+  // per-actor-budget tests below), so the message must never collapse one
+  // into the other — a declared/stored null must read as the word "null".
+  test('renders a declared null scope_ref as the word null, not an empty string', () => {
+    const error = validateQuotaImmutableFields({
+      next: { scopeRef: null },
+      current,
+    });
+    expect(error).toMatch(/declared null/);
+    expect(error).not.toMatch(/declared ""/);
+  });
+
+  test('renders a stored null scope_ref as the word null, not an empty string', () => {
+    const error = validateQuotaImmutableFields({
+      next: { scopeRef: 'key_abc' },
+      current: { ...current, scope: 'project', scopeRef: null },
+    });
+    expect(error).toMatch(/current null/);
+    expect(error).not.toMatch(/current ""/);
+  });
+
   test('treats a null scope_ref as unchanged when it is already null', () => {
     expect(
       validateQuotaImmutableFields({

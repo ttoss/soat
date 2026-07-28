@@ -3,6 +3,7 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
  * Throws an actionable `API_KEY_PROJECT_SCOPE` error when a project-scoped
@@ -71,6 +72,32 @@ export const checkAuth = (ctx: Context): boolean => {
   if (!ctx.authUser) {
     ctx.status = 401;
     ctx.body = { error: 'Unauthorized' };
+    return false;
+  }
+  return true;
+};
+
+/**
+ * Gates a route on the caller's role being `admin` — the hard, non-IAM gate
+ * used by global (non-project-scoped) admin operations (users, policies,
+ * projects, the price book) where no policy can grant access; only the
+ * `admin` role itself can. Sets `401`/`403` and returns `false` when the
+ * caller should stop; the route should `return` immediately in that case.
+ *
+ * Records the decision for the audit log via `recordAuthorizationDecision` —
+ * this comparison bypasses `isAllowed`/`resolveProjectIds` entirely, so
+ * without this call the request produces no audit entry at all, even on a
+ * successful mutation (see #745).
+ */
+export const requireAdmin = (ctx: Context, action: string): boolean => {
+  if (!checkAuth(ctx)) return false;
+
+  const allowed = ctx.authUser!.role === 'admin';
+  recordAuthorizationDecision(ctx, { action, allowed });
+
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
     return false;
   }
   return true;

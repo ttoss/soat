@@ -2,8 +2,26 @@ import { jsonSchema, Output } from 'ai';
 
 import { DomainError } from '../errors';
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+export const isPlainObject = (
+  value: unknown
+): value is Record<string, unknown> => {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const MARKDOWN_JSON_FENCE = /^\s*```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/i;
+
+/**
+ * Strips a single markdown code fence (` ```json ... ``` ` or plain
+ * ` ``` ... ``` `) wrapping the entire string — the shape a model commonly
+ * returns structured JSON in even when instructed to return bare JSON, which
+ * a plain `JSON.parse` rejects outright. Returns the input unchanged when no
+ * fence wraps the whole string, so a genuinely bare JSON response (or
+ * genuinely non-JSON prose) is left untouched for the caller to parse or
+ * reject on its own.
+ */
+export const stripMarkdownJsonFence = (content: string): string => {
+  const match = content.match(MARKDOWN_JSON_FENCE);
+  return match ? match[1] : content;
 };
 
 /**

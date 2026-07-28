@@ -346,6 +346,157 @@ describe('executeAgentNode', () => {
     });
     spy.mockRestore();
   });
+
+  // #747: a model commonly wraps structured JSON in a markdown code fence even
+  // when told to return it bare — a plain JSON.parse rejects that outright and
+  // silently fell back to { content }, discarding the schema's own fields.
+  test('strips a markdown code fence before parsing JSON content', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_3',
+        traceId: 'trc_3',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: '```json\n{"city":"Paris"}\n```',
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: {
+          type: 'object',
+          properties: { city: { type: 'string' } },
+          required: ['city'],
+        },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { city: 'Paris' },
+      traceId: 'trc_3',
+    });
+    spy.mockRestore();
+  });
+
+  // The AI SDK's own structured output (produced by buildStructuredOutput when
+  // the provider honors it) is already a parsed, schema-validated object —
+  // prefer it over re-deriving JSON from the raw text response.
+  test("prefers the AI SDK's structured object over re-parsing content", async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_4',
+        traceId: 'trc_4',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          // Deliberately mismatched text — proves `object` wins, not a
+          // coincidental re-parse of `content`.
+          content: 'The capital is Paris, but this text is not JSON.',
+          object: { city: 'Paris' },
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: {
+          type: 'object',
+          properties: { city: { type: 'string' } },
+          required: ['city'],
+        },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { city: 'Paris' },
+      traceId: 'trc_4',
+    });
+    spy.mockRestore();
+  });
+
+  test('falls back to { content } when parsed JSON is not an object (e.g. an array)', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_5',
+        traceId: 'trc_5',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: '[1,2,3]',
+          finishReason: 'stop',
+          responseMessages: [],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object' },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { content: '[1,2,3]' },
+      traceId: 'trc_5',
+    });
+    spy.mockRestore();
+  });
+
+  test('a requires_action generation with outputSchema configured produces a null-content artifact', async () => {
+    const spy = jest
+      .spyOn(agentGenerationModule, 'createGeneration')
+      .mockResolvedValueOnce({
+        id: 'gen_6',
+        traceId: 'trc_6',
+        status: 'requires_action',
+        requiredAction: {
+          type: 'submit_tool_outputs',
+          toolCalls: [{ id: 'call_1', toolName: 'some_tool', args: {} }],
+        },
+      } as Awaited<ReturnType<typeof agentGenerationModule.createGeneration>>);
+
+    const result = await executeAgentNode({
+      node: makeNode({
+        type: 'agent',
+        agentId: 'agt_test',
+        outputSchema: { type: 'object' },
+      }),
+      state: {},
+      projectIds: [1],
+      traceId: null,
+    });
+
+    expect(result).toEqual({
+      kind: 'artifact',
+      artifact: { content: null },
+      traceId: 'trc_6',
+    });
+    spy.mockRestore();
+  });
 });
 
 // ── executeMemoryWriteNode ─────────────────────────────────────────────────
