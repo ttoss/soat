@@ -691,7 +691,7 @@ Expected output:
 
 ```ts
 const { data: resumed } = await authClient.orchestrations.submitHumanInput({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
   body: { node_id: 'approve', output: { approved: true } },
 });
 console.log('Status:', resumed.status);
@@ -725,7 +725,7 @@ soat get-orchestration-run --run-id "$RUN_ID" | jq '.node_executions[] | {node_i
 
 ```ts
 const { data: finished } = await authClient.orchestrations.getOrchestrationRun({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
 });
 for (const exec of finished.node_executions) {
   console.log(exec.node_id, exec.node_type, exec.status);

@@ -234,7 +234,7 @@ components:
           type: string
           format: date-time
           description: Timestamp of the most recent occurrence
-        run_id:
+        orchestration_run_id:
           type: string
           nullable: true
           description: Originating orchestration run

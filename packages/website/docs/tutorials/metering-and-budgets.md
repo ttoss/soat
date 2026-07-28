@@ -265,7 +265,7 @@ curl -s "$SOAT_URL/api/v1/usage/meters?generation_id=$GENERATION_ID" \
 
 A **receipt** rolls a generation's events into per-model line items with a
 `by_meter_type` split and reconstructed token totals — the shape you reconcile
-against a provider invoice. Pass `run_id` instead of `generation_id` to get the
+against a provider invoice. Pass `orchestration_run_id` instead of `generation_id` to get the
 same shape summed across an orchestration run.
 
 <Tabs groupId="client">

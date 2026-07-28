@@ -50,7 +50,7 @@ export type GuardrailEvaluationRecord = {
   contextSource: GuardrailContextSource;
   contextSnapshot: Record<string, unknown>;
   agentId: string | null;
-  runId: string | null;
+  orchestrationRunId: string | null;
   generationId: string | null;
 };
 
@@ -74,7 +74,7 @@ export const mapGuardrailEvaluation = (record: GuardrailEvaluationRecord) => {
     context_source: record.contextSource,
     context_snapshot: record.contextSnapshot,
     agent_id: record.agentId,
-    run_id: record.runId,
+    orchestration_run_id: record.orchestrationRunId,
     generation_id: record.generationId,
   };
 };
@@ -91,7 +91,7 @@ export const buildEvaluationRecord = (args: {
   toolName?: string | null;
   action?: string | null;
   agentId?: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   generationId?: string | null;
 }): GuardrailEvaluationRecord => {
   return {
@@ -107,7 +107,7 @@ export const buildEvaluationRecord = (args: {
     contextSource: args.contextSource,
     contextSnapshot: args.contextSnapshot,
     agentId: args.agentId ?? null,
-    runId: args.runId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
     generationId: args.generationId ?? null,
   };
 };
@@ -196,7 +196,7 @@ export const persistGuardrailEvaluations = async (args: {
           contextSource: record.contextSource,
           contextSnapshot: record.contextSnapshot,
           agentId: record.agentId,
-          runId: record.runId,
+          orchestrationRunId: record.orchestrationRunId,
           generationId: record.generationId,
           approvalId: args.approvalId ?? null,
         };

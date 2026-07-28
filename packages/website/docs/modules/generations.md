@@ -103,7 +103,7 @@ Server-owned keys are **reserved** and cannot be set or overwritten by callers â
 | -------------- | ----------------------------------------------------------------- |
 | `action_id`    | The logical action label supplied on the generate request          |
 | `trigger_id`   | Set when a trigger initiated the generation                        |
-| `run_id`       | Orchestration run attribution (usage rollup)                       |
+| `orchestration_run_id`       | Orchestration run attribution (usage rollup)                       |
 | `node_id`      | Orchestration node attribution (usage rollup)                      |
 | `extraction`   | The memory-extraction summary (see below)                          |
 

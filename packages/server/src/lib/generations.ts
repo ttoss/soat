@@ -62,10 +62,10 @@ const INTERNAL_METADATA_KEYS = ['pendingState'];
 
 // Keys the server owns inside the metadata bag. Callers may attach arbitrary
 // key/value metadata for their own auditing (F-15), but must not clobber these:
-// `pendingState` is internal recovery state; `action_id`/`trigger_id`/`run_id`/
+// `pendingState` is internal recovery state; `action_id`/`trigger_id`/`orchestration_run_id`/
 // `node_id` are the wire names (see generations.yaml) for the usage-attribution
 // keys read back by usageRecording.ts (stored internally as `actionId`/
-// `triggerId`/`runId`/`nodeId`); and `extraction` is the memory-extraction
+// `triggerId`/`orchestrationRunId`/`nodeId`); and `extraction` is the memory-extraction
 // summary written on completion. Writes that include any of these are rejected
 // so caller metadata can never corrupt system bookkeeping or usage rollups.
 // Reserved-key validation runs against the raw wire request body (there is no
@@ -80,8 +80,8 @@ export const RESERVED_GENERATION_METADATA_KEYS = [
   'actionId',
   'trigger_id',
   'triggerId',
-  'run_id',
-  'runId',
+  'orchestration_run_id',
+  'orchestrationRunId',
   'node_id',
   'nodeId',
   'extraction',

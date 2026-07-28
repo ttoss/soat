@@ -546,14 +546,14 @@ The item records exactly which guardrail — and which **version** of it — sen
 
 ```bash
 soat get-approval --approval-id "$APPROVAL_ID" \
-  | jq '{status, origin, run_id, node_id, proposed_action, policy_version}'
+  | jq '{status, origin, orchestration_run_id, node_id, proposed_action, policy_version}'
 ```
 
 ```json
 {
   "status": "pending",
   "origin": "node",
-  "run_id": "orch_run_...",
+  "orchestration_run_id": "orch_run_...",
   "node_id": "apply",
   "proposed_action": { "tool_id": "tool_...", "arguments": { "amount": 900 } },
   "policy_version": "guard_...@1"
@@ -596,7 +596,7 @@ await adminSoat.approvals.approveApproval({
 });
 
 const { data: resumed } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: run2.id },
+  path: { orchestration_run_id: run2.id },
 });
 console.log(resumed.status, resumed.state.outcome); // succeeded Budget updated.
 ```
@@ -688,7 +688,7 @@ const { data: run3 } = await adminSoat.orchestrations.startOrchestrationRun({
 });
 
 const { data: settled } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: run3.id },
+  path: { orchestration_run_id: run3.id },
 });
 console.log(settled.state.outcome); // Stopped by a guardrail.
 console.log(settled.artifacts.apply); // { status: 'tripwire', reason: '...' }

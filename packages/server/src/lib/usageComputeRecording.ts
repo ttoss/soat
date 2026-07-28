@@ -22,7 +22,7 @@ const COMPUTE_COMPONENT = 'compute_second';
 // collide on the shared unique `idempotency_key`.
 const persistComputeEvent = async (args: {
   projectId: number;
-  runId: number | null;
+  orchestrationRunId: number | null;
   nodeId: string;
   idempotencyKey: string;
   quantitySeconds: number;
@@ -36,7 +36,7 @@ const persistComputeEvent = async (args: {
       defaults: {
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: args.projectId,
-        runId: args.runId,
+        orchestrationRunId: args.orchestrationRunId,
         nodeId: args.nodeId,
         agentId: null,
         generationId: null,
@@ -89,7 +89,7 @@ const persistComputeEvent = async (args: {
  */
 export const recordComputeUsage = async (args: {
   projectId: number;
-  runId: number | null;
+  orchestrationRunId: number | null;
   runPublicId: string;
   nodeId: string;
   attempt: number;
@@ -118,7 +118,7 @@ export const recordComputeUsage = async (args: {
 
     const created = await persistComputeEvent({
       projectId: args.projectId,
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       nodeId: args.nodeId,
       idempotencyKey,
       quantitySeconds,

@@ -56,7 +56,7 @@ export const mapActivityEntry = (instance: ActivityInstance) => {
     severity: instance.severity,
     summary: instance.summary,
     detail: mapActivityDetail(instance.detail),
-    run_id: instance.runId,
+    orchestration_run_id: instance.orchestrationRunId,
     agent_id: instance.agentId,
     ref_id: instance.refId,
     created_at: instance.createdAt,
@@ -83,7 +83,7 @@ export type EmitActivityEntryArgs = {
   summary: string;
   detail?: object | null;
   severity?: ActivitySeverity;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   agentId?: string | null;
   refId?: string | null;
 };
@@ -105,7 +105,7 @@ export const emitActivityEntry = async (
       severity: args.severity ?? DEFAULT_SEVERITY_BY_KIND[args.kind],
       summary: args.summary,
       detail: args.detail,
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       agentId: args.agentId,
       refId: args.refId,
     });
@@ -297,7 +297,7 @@ const fileApprovalResolvedActivity = async (
       toolId: asRecord(record.proposed_action).tool_id,
       policyVersion: record.policy_version,
     },
-    runId: asStringOrNull(record.run_id),
+    orchestrationRunId: asStringOrNull(record.orchestration_run_id),
     agentId: asStringOrNull(record.agent_id),
     refId: approvalId,
   });
@@ -320,7 +320,7 @@ const fileExceptionCreatedActivity = async (
       exceptionKind: record.kind,
       severity: record.severity,
     },
-    runId: asStringOrNull(record.run_id),
+    orchestrationRunId: asStringOrNull(record.orchestration_run_id),
     agentId: asStringOrNull(record.agent_id),
     refId: exceptionId,
   });

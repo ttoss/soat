@@ -140,7 +140,7 @@ contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
 | `actor_kind`    | string          | `user` \| `api_key` \| `automation` \| `approval`                 |
 | `actor_id`      | string \| null  | Principal or automation provenance. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted; for automation it is the causing generation/run id |
 | `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
-| `run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
+| `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
 | `created_at`    | string          | ISO 8601 timestamp                                                |
 

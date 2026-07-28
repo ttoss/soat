@@ -79,7 +79,7 @@ export class TaskTransition extends Model {
   declare generationId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
-  declare runId: string | null;
+  declare orchestrationRunId: string | null;
 
   @Column({ type: DataType.TEXT, allowNull: true })
   declare note: string | null;

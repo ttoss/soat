@@ -169,14 +169,16 @@ const createRunWithMalformedOrchestration = async (
 // works under both real and fake timers; each real DB round-trip yields to the
 // event loop, letting the scheduler's detached wake/redrive work progress.
 const waitForRunStatus = async (
-  runId: number,
+  orchestrationRunId: number,
   statuses: string[]
 ): Promise<InstanceType<typeof db.OrchestrationRun>> => {
   for (let i = 0; i < 3000; i += 1) {
-    const run = await db.OrchestrationRun.findByPk(runId);
+    const run = await db.OrchestrationRun.findByPk(orchestrationRunId);
     if (run && statuses.includes(run.status)) return run;
   }
-  throw new Error(`run ${runId} never reached ${statuses.join('/')}`);
+  throw new Error(
+    `run ${orchestrationRunId} never reached ${statuses.join('/')}`
+  );
 };
 
 beforeAll(async () => {

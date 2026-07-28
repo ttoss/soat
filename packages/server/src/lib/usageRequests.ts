@@ -85,7 +85,7 @@ const persistRequestEvent = async (args: {
       defaults: {
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: args.projectId,
-        runId: null,
+        orchestrationRunId: null,
         nodeId: null,
         agentId: null,
         generationId: null,

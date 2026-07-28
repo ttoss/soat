@@ -320,7 +320,7 @@ worker:
 
 #### Idempotency of node execution
 
-At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{run_id}:{node_id}:{attempt}`, where `attempt` is the node **retry** attempt (not the queue delivery counter). The keyed `node_executions` record is inserted `running` **before** the side effect runs and updated in place afterward:
+At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, where `attempt` is the node **retry** attempt (not the queue delivery counter). The keyed `node_executions` record is inserted `running` **before** the side effect runs and updated in place afterward:
 
 - A **redelivery** of the same task replays the same `(run, node, attempt)` → the key already exists as `completed` → the stored output is reused and the executor is **not** re-invoked. So a redeploy mid-run neither loses the run nor repeats a completed side effect.
 - A **retry** (attempt N failed; the policy schedules attempt N+1) is a *new* key → the executor runs for real, which is what a retry means.
@@ -527,7 +527,7 @@ Records are returned by both `get-orchestration-run` and `list-orchestration-run
 
 ### Run usage
 
-Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across the run's generations — "one operating cycle → one action" cost, without a second request. For the full per-event breakdown (line items, price rows, `by_meter_type` split), fetch the run receipt at `GET /api/v1/usage/receipt?run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation).
+Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across the run's generations — "one operating cycle → one action" cost, without a second request. For the full per-event breakdown (line items, price rows, `by_meter_type` split), fetch the run receipt at `GET /api/v1/usage/receipt?orchestration_run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation).
 
 When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger via the [usage](./usage.md) event list (`?trigger_id=`).
 

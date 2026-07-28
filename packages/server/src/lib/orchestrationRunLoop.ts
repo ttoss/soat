@@ -47,7 +47,7 @@ const writeRunCheckpoint = async (args: {
   artifacts: Record<string, unknown>;
 }): Promise<void> => {
   await db.OrchestrationCheckpoint.create({
-    runId: args.runRecord.id as number,
+    orchestrationRunId: args.runRecord.id as number,
     nodeId: args.nodeId,
     state: { ...args.state },
     artifacts: { ...args.artifacts },

@@ -576,7 +576,7 @@ components:
         agent_id:
           type: string
           nullable: true
-        run_id:
+        orchestration_run_id:
           type: string
           nullable: true
         generation_id:

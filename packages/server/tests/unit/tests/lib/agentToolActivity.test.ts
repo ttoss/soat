@@ -183,14 +183,14 @@ describe('agent-generation tool activity (resolver dispatch path)', () => {
       detail: Record<string, unknown> | null;
       agentId: string | null;
       refId: string | null;
-      runId: string | null;
+      orchestrationRunId: string | null;
     }>;
     expect(rows).toHaveLength(1);
     expect(rows[0].kind).toBe('action_executed');
     expect(rows[0].severity).toBe('info');
     expect(rows[0].agentId).toBe(agentPublicId);
     expect(rows[0].refId).toBe(httpToolId);
-    expect(rows[0].runId).toBeNull();
+    expect(rows[0].orchestrationRunId).toBeNull();
     expect(rows[0].summary).toContain('refund');
     expect(rows[0].detail).toMatchObject({
       action: 'refund',

@@ -212,7 +212,7 @@ describe('Usage', () => {
       expect(event.meter_type).toBe('llm_tokens');
       expect(event.provider).toBe('ollama');
       expect(event.model).toBe('stub-model');
-      expect(event.run_id).toBeNull();
+      expect(event.orchestration_run_id).toBeNull();
       expect(event.trigger_id).toBeNull();
       expect(event.action_id).toBeNull();
 
@@ -567,7 +567,7 @@ describe('Usage', () => {
       const event = await db.UsageEvent.create({
         publicId: eventPublicId,
         projectId: project?.id as number,
-        runId: null,
+        orchestrationRunId: null,
         nodeId: null,
         agentId: null,
         generationId: null,
@@ -605,7 +605,7 @@ describe('Usage', () => {
       expect(seeded.generation_id).toBeNull();
       expect(seeded.trace_id).toBeNull();
       expect(seeded.ai_provider_id).toBeNull();
-      expect(seeded.run_id).toBeNull();
+      expect(seeded.orchestration_run_id).toBeNull();
       expect(seeded.cost_usd).toBe(2.5);
       expect(seeded.components[0].component).toBe('output_tokens');
       expect(seeded.components[0].cost_usd).toBe(2.5);
@@ -1643,11 +1643,11 @@ describe('Usage', () => {
   });
 
   describe('orchestration run attribution and receipt', () => {
-    let runId: string;
+    let orchestrationRunId: string;
     const nodeId = 'metered-agent';
 
     // Runs a one-agent-node orchestration to completion so its node dispatches a
-    // real (stubbed) generation, which meters with the run's run_id + node_id.
+    // real (stubbed) generation, which meters with the run's orchestration_run_id + node_id.
     const runSingleAgentOrchestration = async (): Promise<string> => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
@@ -1668,10 +1668,10 @@ describe('Usage', () => {
     };
 
     beforeAll(async () => {
-      runId = await runSingleAgentOrchestration();
+      orchestrationRunId = await runSingleAgentOrchestration();
     }, 60000);
 
-    test('the run node meters with run_id and node_id', async () => {
+    test('the run node meters with orchestration_run_id and node_id', async () => {
       const res = await authenticatedTestClient(adminToken).get(
         '/api/v1/usage/meters'
       );
@@ -1679,8 +1679,11 @@ describe('Usage', () => {
       // The agent node now emits two events: the llm_tokens meter and a
       // compute_execution meter (P4). This assertion is about the token meter.
       const llmEvents = res.body.data.filter(
-        (e: { run_id: string | null; meter_type: string }) => {
-          return e.run_id === runId && e.meter_type === 'llm_tokens';
+        (e: { orchestration_run_id: string | null; meter_type: string }) => {
+          return (
+            e.orchestration_run_id === orchestrationRunId &&
+            e.meter_type === 'llm_tokens'
+          );
         }
       );
       expect(llmEvents).toHaveLength(1);
@@ -1694,7 +1697,7 @@ describe('Usage', () => {
       expect(res.status).toBe(200);
       expect(res.body.group_by).toBe('run');
       const byRun = res.body.groups.find((g: { key: string | null }) => {
-        return g.key === runId;
+        return g.key === orchestrationRunId;
       });
       expect(byRun).toBeDefined();
       expect(byRun.output_tokens).toBeGreaterThanOrEqual(20);
@@ -1705,12 +1708,12 @@ describe('Usage', () => {
       expect(standalone).toBeDefined();
     });
 
-    test('GET /usage/receipt?run_id returns a receipt summed across the run', async () => {
+    test('GET /usage/receipt?orchestration_run_id returns a receipt summed across the run', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/receipt?run_id=${runId}`
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
       );
       expect(res.status).toBe(200);
-      expect(res.body.run_id).toBe(runId);
+      expect(res.body.orchestration_run_id).toBe(orchestrationRunId);
       expect(res.body.generation_id).toBeUndefined();
       expect(res.body.currency).toBe('USD');
       expect(res.body.line_items.length).toBeGreaterThanOrEqual(1);
@@ -1729,17 +1732,17 @@ describe('Usage', () => {
       expect(llmRollup).toBeDefined();
     });
 
-    test('GET /usage/receipt?run_id for an unknown run returns 404', async () => {
+    test('GET /usage/receipt?orchestration_run_id for an unknown run returns 404', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        '/api/v1/usage/receipt?run_id=run_doesNotExist01'
+        '/api/v1/usage/receipt?orchestration_run_id=run_doesNotExist01'
       );
       expect(res.status).toBe(404);
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
-    test('GET /usage/receipt with both generation_id and run_id returns 400 instead of silently resolving the run', async () => {
+    test('GET /usage/receipt with both generation_id and orchestration_run_id returns 400 instead of silently resolving the run', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/receipt?generation_id=gen_doesNotExist01&run_id=${runId}`
+        `/api/v1/usage/receipt?generation_id=gen_doesNotExist01&orchestration_run_id=${orchestrationRunId}`
       );
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
@@ -1747,7 +1750,7 @@ describe('Usage', () => {
 
     test('the orchestration-run response surfaces usage totals', async () => {
       const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runId}`
+        `/api/v1/orchestration-runs/${orchestrationRunId}`
       );
       expect(res.status).toBe(200);
       expect(res.body.usage).toBeDefined();
@@ -1762,7 +1765,7 @@ describe('Usage', () => {
 
     test('a replayed node upserts into a no-op (idempotent by run:node)', async () => {
       const before = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/receipt?run_id=${runId}`
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
       );
       const beforeCount = before.body.line_items.length;
 
@@ -1778,12 +1781,12 @@ describe('Usage', () => {
         messages: [{ role: 'user', content: 'replayed node' }],
         stream: false,
         authHeader: `Bearer ${userToken}`,
-        runId,
+        orchestrationRunId,
         nodeId,
       });
 
       const after = await authenticatedTestClient(userToken).get(
-        `/api/v1/usage/receipt?run_id=${runId}`
+        `/api/v1/usage/receipt?orchestration_run_id=${orchestrationRunId}`
       );
       expect(after.body.line_items.length).toBe(beforeCount);
     });
@@ -1820,7 +1823,7 @@ describe('Usage', () => {
       );
       expect(res.status).toBe(200);
       expect(res.body.total).toBe(1);
-      expect(res.body.data[0].run_id).toBe(run.id);
+      expect(res.body.data[0].orchestration_run_id).toBe(run.id);
       expect(res.body.data[0].node_id).toBe('triggered-agent');
       expect(res.body.data[0].trigger_id).toBe(triggerPublicId);
     });
@@ -1868,9 +1871,11 @@ describe('Usage', () => {
         `/api/v1/usage/meters?meter_type=compute_execution`
       );
       expect(res.status).toBe(200);
-      return res.body.data.filter((e: { run_id: string | null }) => {
-        return e.run_id === runIdValue;
-      });
+      return res.body.data.filter(
+        (e: { orchestration_run_id: string | null }) => {
+          return e.orchestration_run_id === runIdValue;
+        }
+      );
     };
 
     beforeAll(async () => {
@@ -1915,7 +1920,7 @@ describe('Usage', () => {
       expect(event.provider).toBe('soat');
       expect(event.model).toBe('compute-second');
       expect(event.node_id).toBe('xf');
-      expect(event.run_id).toBe(pricedTransformRunId);
+      expect(event.orchestration_run_id).toBe(pricedTransformRunId);
       // Compute is attributed at run/node level, not to a generation/agent.
       expect(event.generation_id).toBeNull();
 
@@ -1934,9 +1939,11 @@ describe('Usage', () => {
         '/api/v1/usage/meters?meter_type=llm_tokens'
       );
       expect(res.status).toBe(200);
-      const llm = res.body.data.filter((e: { run_id: string | null }) => {
-        return e.run_id === pricedTransformRunId;
-      });
+      const llm = res.body.data.filter(
+        (e: { orchestration_run_id: string | null }) => {
+          return e.orchestration_run_id === pricedTransformRunId;
+        }
+      );
       expect(llm).toHaveLength(0);
     });
 
@@ -1971,9 +1978,11 @@ describe('Usage', () => {
         '/api/v1/usage/meters'
       );
       expect(res.status).toBe(200);
-      const forRun = res.body.data.filter((e: { run_id: string | null }) => {
-        return e.run_id === computeAgentRunId;
-      });
+      const forRun = res.body.data.filter(
+        (e: { orchestration_run_id: string | null }) => {
+          return e.orchestration_run_id === computeAgentRunId;
+        }
+      );
       const byType = (t: string) => {
         return forRun.filter((e: { meter_type: string }) => {
           return e.meter_type === t;

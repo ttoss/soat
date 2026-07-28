@@ -37,7 +37,7 @@ Exceptions are **auto-filed by the platform** (or filed explicitly as `manual`);
 | `detail` | object \| null | Structured context (tool, error, guardrail version) |
 | `occurrence_count` | integer | Times this exact failure was observed while open |
 | `last_seen_at` | string | Timestamp of the most recent occurrence |
-| `run_id` | string \| null | Originating orchestration run |
+| `orchestration_run_id` | string \| null | Originating orchestration run |
 | `node_id` | string \| null | Originating node id within the run's graph |
 | `agent_id` | string \| null | Associated agent |
 | `guardrail_version` | string \| null | `<guardrailId>@<version>` for a `guardrail_tripwire` item |

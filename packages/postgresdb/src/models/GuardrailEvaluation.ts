@@ -103,7 +103,7 @@ export class GuardrailEvaluation extends Model {
   declare agentId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
-  declare runId: string | null;
+  declare orchestrationRunId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare generationId: string | null;

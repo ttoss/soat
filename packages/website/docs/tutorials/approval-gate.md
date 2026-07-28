@@ -359,10 +359,10 @@ The item is now in the [Approvals](/docs/modules/approvals#data-model) queue wit
 
 ```bash
 soat list-approvals --project-id "$PROJECT_ID" --status pending \
-  | jq '.data[] | {id, status, origin, run_id, node_id, proposed_action}'
+  | jq '.data[] | {id, status, origin, orchestration_run_id, node_id, proposed_action}'
 ```
 
-Look for `origin: "node"`, `run_id` matching your run, and `proposed_action.arguments` equal to `{ "amount": 500 }`.
+Look for `origin: "node"`, `orchestration_run_id` matching your run, and `proposed_action.arguments` equal to `{ "amount": 500 }`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -380,7 +380,7 @@ console.log(pending);
 ```bash
 curl -s "$SOAT_BASE_URL/api/v1/approvals?project_id=$PROJECT_ID&status=pending" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq '.data[] | {id, status, origin, run_id, node_id, proposed_action}'
+  | jq '.data[] | {id, status, origin, orchestration_run_id, node_id, proposed_action}'
 ```
 
 </TabItem>
@@ -422,7 +422,7 @@ await adminSoat.approvals.approveApproval({
 });
 
 const { data: resumed } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
 });
 console.log('Status:', resumed.status);
 console.log('Outcome:', resumed.state.outcome);
@@ -492,7 +492,7 @@ await adminSoat.approvals.rejectApproval({
 });
 
 const { data: rejected } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: run2.id },
+  path: { orchestration_run_id: run2.id },
 });
 console.log('Status:', rejected.status);
 console.log('Outcome:', rejected.state.outcome);

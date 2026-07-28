@@ -375,7 +375,7 @@ export const startOrchestrationRun = async (args: {
   // any (in `wait` mode, blocking) execution begins. Lets a caller persist the
   // run id immediately — e.g. a workflow task recording `active_dispatch.id` so
   // cancellation-on-exit can reach a still-running run (#606).
-  onRunCreated?: (args: { runId: string }) => Promise<void> | void;
+  onRunCreated?: (args: { orchestrationRunId: string }) => Promise<void> | void;
 }): Promise<MappedOrchestrationRun> => {
   log('startOrchestrationRun %o', {
     orchestrationPublicId: args.orchestrationPublicId,
@@ -432,7 +432,9 @@ export const startOrchestrationRun = async (args: {
   // Surface the run id before any (blocking, in `wait` mode) execution begins,
   // so a caller can record it while the run is still in flight (#606).
   if (args.onRunCreated) {
-    await args.onRunCreated({ runId: runRecord.publicId as string });
+    await args.onRunCreated({
+      orchestrationRunId: runRecord.publicId as string,
+    });
   }
 
   // Synchronous (compatibility) mode: block until the run reaches a terminal or
@@ -457,7 +459,7 @@ export const startOrchestrationRun = async (args: {
   // single-process deployment (the API process is itself a valid worker) start
   // draining right away without a separate worker process.
   await getOrchestrationQueueDriver().enqueue({
-    runId: runRecord.id as number,
+    orchestrationRunId: runRecord.id as number,
     kind: 'continue',
   });
   kickWorker();
@@ -476,7 +478,7 @@ export const driveQueuedRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
-  log('driveQueuedRun %o', { runId: run.id });
+  log('driveQueuedRun %o', { orchestrationRunId: run.id });
 
   const orch = await db.Orchestration.findOne({
     where: { id: run.orchestrationId as number },
@@ -520,7 +522,7 @@ export const wakeRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
-  log('wakeRun %o', { runId: run.id });
+  log('wakeRun %o', { orchestrationRunId: run.id });
 
   const wakeContext = run.wakeContext as PersistedWakeContext | null;
   if (!wakeContext) {
@@ -549,7 +551,11 @@ export const wakeRun = async (args: {
   // run.state directly can cause the final update to skip persisting it.
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
-  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
+  await restoreRunFromCheckpoint({
+    orchestrationRunId: run.id as number,
+    state,
+    artifacts,
+  });
 
   const entry = await buildResumeEntry({
     runRecord: run,
@@ -600,7 +606,7 @@ const applyResumeNodeOutcome = async (args: {
       state: args.state,
       projectIds: [run.projectId as number],
       projectId: run.projectId as number,
-      runId: run.publicId as string,
+      orchestrationRunId: run.publicId as string,
       approvedArguments: args.approvedArguments ?? {},
     });
     const toolArtifact =
@@ -751,7 +757,7 @@ export const resumeOrchestrationRunExecution = async (args: {
 }): Promise<MappedOrchestrationRun> => {
   const { run, humanNodeId, humanOutput, decisionLabel } = args;
   log('resumeOrchestrationRunExecution %o', {
-    runId: run.id,
+    orchestrationRunId: run.id,
     humanNodeId,
     decisionLabel,
   });
@@ -771,7 +777,8 @@ export const resumeOrchestrationRunExecution = async (args: {
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
 
-  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
+  const orchestrationRunId = run.id as number;
+  await restoreRunFromCheckpoint({ orchestrationRunId, state, artifacts });
 
   const resumedNode = humanNodeId
     ? nodes.find((n) => {
@@ -885,7 +892,7 @@ export const redriveRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
-  log('redriveRun %o', { runId: run.id });
+  log('redriveRun %o', { orchestrationRunId: run.id });
 
   const orch = await db.Orchestration.findOne({
     where: { id: run.orchestrationId as number },
@@ -907,7 +914,11 @@ export const redriveRun = async (args: {
   // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
-  await restoreRunFromCheckpoint({ runId: run.id as number, state, artifacts });
+  await restoreRunFromCheckpoint({
+    orchestrationRunId: run.id as number,
+    state,
+    artifacts,
+  });
 
   const entry = buildRedriveEntry({ nodes, edges, artifacts });
 
@@ -937,10 +948,11 @@ const resumeRunForApproval = async (args: {
   decision: DecisionOutput;
 }): Promise<void> => {
   const { item, decision } = args;
-  if (item.origin !== 'node' || !item.run_id || !item.node_id) return;
+  if (item.origin !== 'node' || !item.orchestration_run_id || !item.node_id)
+    return;
 
   const run = await db.OrchestrationRun.findOne({
-    where: { publicId: item.run_id },
+    where: { publicId: item.orchestration_run_id },
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
@@ -952,7 +964,7 @@ const resumeRunForApproval = async (args: {
   if (!activeNodes.includes(item.node_id)) return;
 
   log('resumeRunForApproval %o', {
-    runId: run.id,
+    orchestrationRunId: run.id,
     nodeId: item.node_id,
     decision: decision.decision,
   });

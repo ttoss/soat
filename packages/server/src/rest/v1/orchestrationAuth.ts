@@ -32,9 +32,9 @@ export const hintAuditResourceForOrchestration = async (args: {
 };
 
 // Run-scoped actions (cancel/human-input/resume) address an existing run by
-// run_id, so unlike create they never need a single "primary" project to
+// orchestration_run_id, so unlike create they never need a single "primary" project to
 // create into — projectIds is only used as an optional scoping filter, same
-// as GET /orchestration-runs/:run_id. Requiring a resolvable primaryId here
+// as GET /orchestration-runs/:orchestration_run_id. Requiring a resolvable primaryId here
 // broke the unrestricted admin JWT case, where resolveProjectIds()
 // legitimately returns `undefined` ("no filter — all projects").
 export const resolveRunAuth = async (

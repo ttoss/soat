@@ -35,13 +35,17 @@ export type RunTaskInstance = InstanceType<typeof db.OrchestrationRunTask>;
  * immediately. Returns the created task row.
  */
 export const enqueueRunTask = async (args: {
-  runId: number;
+  orchestrationRunId: number;
   kind: RunTaskKind;
   availableAt?: Date;
 }): Promise<RunTaskInstance> => {
-  log('enqueueRunTask: runId=%d kind=%s', args.runId, args.kind);
+  log(
+    'enqueueRunTask: orchestrationRunId=%d kind=%s',
+    args.orchestrationRunId,
+    args.kind
+  );
   return db.OrchestrationRunTask.create({
-    runId: args.runId,
+    orchestrationRunId: args.orchestrationRunId,
     kind: args.kind,
     availableAt: args.availableAt ?? new Date(),
     attempts: 0,
@@ -50,7 +54,7 @@ export const enqueueRunTask = async (args: {
 
 type CandidateRow = {
   id: number;
-  run_id: number;
+  orchestration_run_id: number;
   project_id: number;
   available_at: Date;
   max_concurrent_runs: number | null;
@@ -88,13 +92,13 @@ const selectClaimableUnderLimit = (args: {
       grantedRunsByProject.set(row.project_id, granted);
     }
     // A run already granted a slot in this batch takes no additional slot.
-    if (granted.has(row.run_id)) {
+    if (granted.has(row.orchestration_run_id)) {
       chosen.push(row.id);
       continue;
     }
     const inUse = (args.occupancy.get(row.project_id) ?? 0) + granted.size;
     if (inUse < limit) {
-      granted.add(row.run_id);
+      granted.add(row.orchestration_run_id);
       chosen.push(row.id);
     }
     // else: no free slot — leave the task queued (its row lock releases when the
@@ -119,10 +123,10 @@ const selectDueCandidates = async (args: {
   limit: number;
 }): Promise<CandidateRow[]> => {
   const [rows] = await args.sequelize.query(
-    `SELECT t."id", t."run_id", t."available_at",
+    `SELECT t."id", t."orchestration_run_id", t."available_at",
             r."project_id", p."max_concurrent_runs"
        FROM "${RUN_TASK_TABLE}" t
-       JOIN "${RUN_TABLE}" r ON r."id" = t."run_id"
+       JOIN "${RUN_TABLE}" r ON r."id" = t."orchestration_run_id"
        JOIN "${PROJECT_TABLE}" p ON p."id" = r."project_id"
       WHERE t."available_at" <= :now
         AND (t."claimed_at" IS NULL OR t."lease_expires_at" < :now)
@@ -179,9 +183,9 @@ const loadProjectOccupancy = async (args: {
 
   const [occRows] = await args.sequelize.query(
     `SELECT r."project_id" AS project_id,
-            COUNT(DISTINCT t."run_id") AS cnt
+            COUNT(DISTINCT t."orchestration_run_id") AS cnt
        FROM "${RUN_TASK_TABLE}" t
-       JOIN "${RUN_TABLE}" r ON r."id" = t."run_id"
+       JOIN "${RUN_TABLE}" r ON r."id" = t."orchestration_run_id"
       WHERE t."claimed_at" IS NOT NULL
         AND t."lease_expires_at" > :now
         AND r."project_id" IN (:projectIds)

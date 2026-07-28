@@ -155,7 +155,7 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
       predicted_impact: null,
       expires_at: new Date(Date.now() + 3600_000),
       dedup_key: null,
-      run_id: null,
+      orchestration_run_id: null,
       node_id: null,
       generation_id: null,
       session_id: null,

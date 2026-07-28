@@ -64,7 +64,7 @@ export type ResolverGuardrailContext = {
   sessionId?: string | null;
   authHeader?: string;
   callerContext: Record<string, unknown>;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
   baseGuardrails: CollectedGuardrail[];
 };
@@ -85,7 +85,7 @@ export const buildResolverGuardrailContext = async (args: {
   sessionId?: string | null;
   authHeader?: string;
   guardrailContext?: Record<string, unknown> | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
 }): Promise<ResolverGuardrailContext> => {
   const baseGuardrails = await collectApplicableGuardrails({
@@ -104,7 +104,7 @@ export const buildResolverGuardrailContext = async (args: {
     callerContext: isPlainObject(args.guardrailContext)
       ? args.guardrailContext
       : {},
-    runId: args.runId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
     run: args.run ?? null,
     baseGuardrails,
   };
@@ -175,7 +175,7 @@ const evaluateAll = async (args: {
       toolName: args.identity.toolName,
       action: args.identity.action,
       agentId: args.context.agentId,
-      runId: args.context.runId,
+      orchestrationRunId: args.context.orchestrationRunId,
       generationId: args.context.generationId,
     });
     evaluated.push({ result, record });
@@ -397,7 +397,7 @@ export const classifyGuardrailCall = async (args: {
     toolId: args.toolId,
     toolName: args.toolName,
     action: args.action,
-    runId: args.context.runId,
+    orchestrationRunId: args.context.orchestrationRunId,
     run: args.context.run,
   };
 
@@ -495,7 +495,7 @@ export const evaluateAndRoute = async (args: {
       toolName: args.toolName,
       action: args.action,
       guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
-      runId: args.context.runId,
+      orchestrationRunId: args.context.orchestrationRunId,
       agentId: args.context.agentId,
       generationId: args.context.generationId,
     });

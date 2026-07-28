@@ -84,7 +84,7 @@ const dispatchGeneration = (args: {
 const buildGenerationMetadata = (args: {
   actionId?: string;
   triggerId?: string;
-  runId?: string;
+  orchestrationRunId?: string;
   nodeId?: string;
   metadata?: Record<string, unknown> | null;
 }): Record<string, unknown> | null => {
@@ -96,7 +96,8 @@ const buildGenerationMetadata = (args: {
   // Orchestration attribution: the public run id and the node id that
   // dispatched this generation, so its usage event can be rolled up per run and
   // per node. Read back off the generation metadata in `usageRecording.ts`.
-  if (args.runId !== undefined) metadata.runId = args.runId;
+  if (args.orchestrationRunId !== undefined)
+    metadata.orchestrationRunId = args.orchestrationRunId;
   if (args.nodeId !== undefined) metadata.nodeId = args.nodeId;
   return Object.keys(metadata).length > 0 ? metadata : null;
 };
@@ -116,7 +117,7 @@ const resolveContextAndRecord = async (args: {
   knowledgeConfig?: object;
   actionId?: string;
   triggerId?: string;
-  runId?: string;
+  orchestrationRunId?: string;
   nodeId?: string;
   sessionId?: string;
   metadata?: Record<string, unknown> | null;
@@ -155,7 +156,7 @@ const resolveContextAndRecord = async (args: {
     metadata: buildGenerationMetadata({
       actionId: args.actionId,
       triggerId: args.triggerId,
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       nodeId: args.nodeId,
       metadata: args.metadata,
     }),
@@ -221,7 +222,7 @@ export type CreateGenerationArgs = {
   knowledgeConfig?: object;
   actionId?: string;
   triggerId?: string;
-  runId?: string;
+  orchestrationRunId?: string;
   nodeId?: string;
   // End-user attribution: the session this generation runs in, from which the
   // actor is derived. Set by the session path; absent for direct API
@@ -284,7 +285,7 @@ export const createGeneration = async (
     knowledgeConfig: args.knowledgeConfig,
     actionId: args.actionId,
     triggerId: args.triggerId,
-    runId: args.runId,
+    orchestrationRunId: args.orchestrationRunId,
     nodeId: args.nodeId,
     sessionId: args.sessionId,
     metadata: args.metadata,

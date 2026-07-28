@@ -634,7 +634,7 @@ describe('Audit Log — guardrail_evaluation detail kind (audit-log P2)', () => 
       contextSource: 'none',
       contextSnapshot: {},
       agentId: null,
-      runId: null,
+      orchestrationRunId: null,
       generationId: null,
     };
   };
@@ -898,7 +898,7 @@ describe('Audit Log — audit.entry_created webhook (audit-log P3)', () => {
             contextSource: 'none',
             contextSnapshot: {},
             agentId: null,
-            runId: null,
+            orchestrationRunId: null,
             generationId: null,
           },
         ],
@@ -1038,7 +1038,7 @@ describe('Audit Log — NDJSON export (audit-log P3)', () => {
           contextSource: 'none',
           contextSnapshot: {},
           agentId: null,
-          runId: null,
+          orchestrationRunId: null,
           generationId: null,
         },
       ],

@@ -447,7 +447,7 @@ Look for:
 
 ```ts
 const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
 });
 console.log('results:', runState.state.results);
 console.log('summary:', runState.state.summary);

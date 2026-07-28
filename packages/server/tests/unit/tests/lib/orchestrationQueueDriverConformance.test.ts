@@ -181,13 +181,13 @@ describe('Orchestration queue driver conformance', () => {
     });
 
     test('an enqueued task is claimed with its run reference and kind', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       const [task] = await h().claim(10);
 
       expect(task).toBeDefined();
-      expect(task.runId).toBe(runId);
+      expect(task.orchestrationRunId).toBe(orchestrationRunId);
       expect(task.kind).toBe('continue');
       expect(task.attempts).toBe(1);
       expect(typeof task.id).toBe('string');
@@ -199,25 +199,25 @@ describe('Orchestration queue driver conformance', () => {
     });
 
     test('claim never returns more than the requested limit', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
-      await h().driver.enqueue({ runId, kind: 'continue' });
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       expect(await h().claim(2)).toHaveLength(2);
     });
 
     test('a claimed task is not handed out again while its lease is valid', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       expect(await h().claim(10)).toHaveLength(1);
       expect(await h().claim(10)).toHaveLength(0);
     });
 
     test('an unacked task is redelivered once its lease expires, with attempts bumped', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'wake' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'wake' });
 
       const [first] = await h().claim(10);
       expect(first.attempts).toBe(1);
@@ -226,14 +226,14 @@ describe('Orchestration queue driver conformance', () => {
 
       const [redelivered] = await h().claim(10);
       expect(redelivered).toBeDefined();
-      expect(redelivered.runId).toBe(runId);
+      expect(redelivered.orchestrationRunId).toBe(orchestrationRunId);
       expect(redelivered.kind).toBe('wake');
       expect(redelivered.attempts).toBe(2);
     });
 
     test('an acked task is never delivered again', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       const [task] = await h().claim(10);
       await h().driver.ack({ task });
@@ -243,9 +243,9 @@ describe('Orchestration queue driver conformance', () => {
     });
 
     test('a task enqueued for the future is not claimable until then', async () => {
-      const runId = await h().newRunId();
+      const orchestrationRunId = await h().newRunId();
       await h().driver.enqueue({
-        runId,
+        orchestrationRunId,
         kind: 'wake',
         availableAt: new Date(h().now().getTime() + 60_000),
       });
@@ -257,8 +257,8 @@ describe('Orchestration queue driver conformance', () => {
     });
 
     test('retry parks a delivered task and returns it after the backoff', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       const [task] = await h().claim(10);
       await h().driver.retry({
@@ -271,13 +271,13 @@ describe('Orchestration queue driver conformance', () => {
       h().advance(31_000);
       const [again] = await h().claim(10);
       expect(again).toBeDefined();
-      expect(again.runId).toBe(runId);
+      expect(again.orchestrationRunId).toBe(orchestrationRunId);
     });
 
     test('stats report the active driver and its queued/claimed depth', async () => {
-      const runId = await h().newRunId();
-      await h().driver.enqueue({ runId, kind: 'continue' });
-      await h().driver.enqueue({ runId, kind: 'continue' });
+      const orchestrationRunId = await h().newRunId();
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
+      await h().driver.enqueue({ orchestrationRunId, kind: 'continue' });
 
       const queued = await h().driver.stats();
       expect(queued.driver).toBe(h().name);
@@ -307,8 +307,14 @@ describe('Orchestration queue driver conformance', () => {
       ['not json', 'nope'],
       ['a json scalar', '3'],
       ['a missing run id', JSON.stringify({ kind: 'continue' })],
-      ['a non-numeric run id', JSON.stringify({ runId: 'x', kind: 'wake' })],
-      ['an unknown kind', JSON.stringify({ runId: 1, kind: 'explode' })],
+      [
+        'a non-numeric run id',
+        JSON.stringify({ orchestrationRunId: 'x', kind: 'wake' }),
+      ],
+      [
+        'an unknown kind',
+        JSON.stringify({ orchestrationRunId: 1, kind: 'explode' }),
+      ],
       ['an empty body', undefined],
     ])('rejects %s', (_label, raw) => {
       expect(parseSqsTaskBody(raw)).toBeNull();
@@ -316,8 +322,10 @@ describe('Orchestration queue driver conformance', () => {
 
     test('accepts a well-formed body', () => {
       expect(
-        parseSqsTaskBody(JSON.stringify({ runId: 7, kind: 'resume' }))
-      ).toEqual({ runId: 7, kind: 'resume' });
+        parseSqsTaskBody(
+          JSON.stringify({ orchestrationRunId: 7, kind: 'resume' })
+        )
+      ).toEqual({ orchestrationRunId: 7, kind: 'resume' });
     });
 
     test('an undecodable message is dropped rather than redelivered forever', async () => {
@@ -410,7 +418,10 @@ describe('Orchestration queue driver conformance', () => {
       delete process.env.ORCHESTRATION_QUEUE_SQS_QUEUE_URL;
       resetOrchestrationQueueDriver();
       await expect(
-        getOrchestrationQueueDriver().enqueue({ runId: 1, kind: 'continue' })
+        getOrchestrationQueueDriver().enqueue({
+          orchestrationRunId: 1,
+          kind: 'continue',
+        })
       ).rejects.toThrow(/ORCHESTRATION_QUEUE_SQS_QUEUE_URL/);
     });
   });

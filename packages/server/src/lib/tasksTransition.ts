@@ -86,7 +86,7 @@ type TransitionArgs = {
   note?: string | null;
   actor: TaskActor;
   generationId?: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
 };
 
 // Validates the just-locked task against the requested transition: not closed,
@@ -188,7 +188,7 @@ const performTransitionTxn = async (args: {
         actorKind: a.actor.kind,
         actorId: a.actor.id,
         generationId: a.generationId ?? null,
-        runId: a.runId ?? null,
+        orchestrationRunId: a.orchestrationRunId ?? null,
         note: a.note ?? null,
       },
       { transaction: t }

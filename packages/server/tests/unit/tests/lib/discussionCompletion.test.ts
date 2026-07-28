@@ -204,7 +204,7 @@ describe('discussionCompletion lib', () => {
       // A discussion turn has no Generation, agent, or run behind it.
       expect(event.generationId).toBeNull();
       expect(event.agentId).toBeNull();
-      expect(event.runId).toBeNull();
+      expect(event.orchestrationRunId).toBeNull();
 
       const components = await db.UsageComponent.findAll({
         where: { usageEventId: event.id as number },

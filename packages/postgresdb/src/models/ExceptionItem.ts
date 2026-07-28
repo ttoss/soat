@@ -121,7 +121,7 @@ export class ExceptionItem extends Model {
 
   // ── Provenance (producer-dependent, held as public ids) ──────────────────
   @Column({ type: DataType.STRING(32), allowNull: true })
-  declare runId: string | null;
+  declare orchestrationRunId: string | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeId: string | null;

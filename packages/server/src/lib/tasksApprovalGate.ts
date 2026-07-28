@@ -217,7 +217,7 @@ const appendResolutionNote = async (args: {
     actorKind: 'approval',
     actorId: args.resolvedBy,
     generationId: null,
-    runId: null,
+    orchestrationRunId: null,
     note,
   });
 };

@@ -644,7 +644,7 @@ describe('Orchestrations', () => {
   });
 
   describe('POST /api/v1/orchestration-runs', () => {
-    let runId: string;
+    let orchestrationRunId: string;
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
@@ -707,7 +707,7 @@ describe('Orchestrations', () => {
       expect(response.status).toBe(201);
       expect(response.body.id).toBeDefined();
       expect(response.body.status).toBe('succeeded');
-      runId = response.body.id;
+      orchestrationRunId = response.body.id;
     });
 
     test('admin can start a run without explicit project context', async () => {
@@ -915,7 +915,7 @@ describe('Orchestrations', () => {
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
 
-      // Check GET /runs/:run_id returns paused run
+      // Check GET /runs/:orchestration_run_id returns paused run
       const getRes = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${runRes.body.id}`
       );
@@ -1704,20 +1704,20 @@ describe('Orchestrations', () => {
       expect(createRes.body.error.code).toBe('ORCHESTRATION_VALIDATION_FAILED');
     });
 
-    describe('GET /api/v1/orchestration-runs/:run_id', () => {
+    describe('GET /api/v1/orchestration-runs/:orchestration_run_id', () => {
       test('authenticated user can get a specific run', async () => {
         const response = await authenticatedTestClient(userToken).get(
-          `/api/v1/orchestration-runs/${runId}`
+          `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
         expect(response.status).toBe(200);
-        expect(response.body.id).toBe(runId);
+        expect(response.body.id).toBe(orchestrationRunId);
         expect(response.body.status).toBe('succeeded');
         expect(response.body.orchestration_id).toBe(orchestrationId);
       });
 
       test('unauthenticated request returns 401', async () => {
         const response = await testClient.get(
-          `/api/v1/orchestration-runs/${runId}`
+          `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
         expect(response.status).toBe(401);
       });
@@ -1734,7 +1734,7 @@ describe('Orchestrations', () => {
       // array, which matches nothing, rather than a route-level 403.
       test('user without permission returns 404', async () => {
         const response = await authenticatedTestClient(noPermToken).get(
-          `/api/v1/orchestration-runs/${runId}`
+          `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
         expect(response.status).toBe(404);
       });
@@ -1742,17 +1742,17 @@ describe('Orchestrations', () => {
       test('project-scoped API key without GetRun permission returns 403', async () => {
         const rawKey = await createRestrictedApiKey('orchestrations:GetRun');
         const response = await authenticatedTestClient(rawKey).get(
-          `/api/v1/orchestration-runs/${runId}`
+          `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
         expect(response.status).toBe(403);
       });
 
       test('admin can get a run without project scoping', async () => {
         const response = await authenticatedTestClient(adminToken).get(
-          `/api/v1/orchestration-runs/${runId}`
+          `/api/v1/orchestration-runs/${orchestrationRunId}`
         );
         expect(response.status).toBe(200);
-        expect(response.body.id).toBe(runId);
+        expect(response.body.id).toBe(orchestrationRunId);
       });
     });
   });
@@ -1904,7 +1904,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  describe('POST /api/v1/orchestration-runs/:run_id/cancel', () => {
+  describe('POST /api/v1/orchestration-runs/:orchestration_run_id/cancel', () => {
     let cancelOrchId: string;
     let cancelRunId: string;
 
@@ -1957,7 +1957,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  describe('POST /api/v1/orchestration-runs/:run_id/human-input', () => {
+  describe('POST /api/v1/orchestration-runs/:orchestration_run_id/human-input', () => {
     let humanOrchId: string;
     let humanRunId: string;
 
@@ -2078,7 +2078,7 @@ describe('Orchestrations', () => {
     });
   });
 
-  describe('POST /api/v1/orchestration-runs/:run_id/resume', () => {
+  describe('POST /api/v1/orchestration-runs/:orchestration_run_id/resume', () => {
     // `orchestrationId` is an orchestration id, not a run id, so this never
     // matches a run — the genuine "resume a completed run" 409 case is
     // covered below by 'resuming a non-paused (completed) run returns 409'.
@@ -2876,7 +2876,7 @@ describe('Orchestrations', () => {
         });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
-      const runId = runRes.body.id;
+      const orchestrationRunId = runRes.body.id;
 
       const pausedExecs: Array<{ node_id: string; status: string }> =
         runRes.body.node_executions;
@@ -2886,13 +2886,13 @@ describe('Orchestrations', () => {
       expect(pausedReviewExec?.status).toBe('requires_action');
 
       const submitRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .post(`/api/v1/orchestration-runs/${orchestrationRunId}/human-input`)
         .send({ node_id: 'review', output: { decision: 'approve' } });
       expect(submitRes.status).toBe(200);
       expect(submitRes.body.status).toBe('succeeded');
 
       const finalRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runId}`
+        `/api/v1/orchestration-runs/${orchestrationRunId}`
       );
       expect(finalRes.status).toBe(200);
       expect(finalRes.body.status).toBe('succeeded');
@@ -2926,7 +2926,7 @@ describe('Orchestrations', () => {
         .send({ wait: true, orchestration_id: createRes.body.id, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('awaiting_input');
-      const runId = runRes.body.id;
+      const orchestrationRunId = runRes.body.id;
       const humanNodeId = runRes.body.required_action.node_id;
 
       const execsFor = (body: {
@@ -2945,7 +2945,7 @@ describe('Orchestrations', () => {
       // history grows by one row per (caller-triggerable) resume.
       for (let i = 0; i < 2; i++) {
         const resumeRes = await authenticatedTestClient(userToken).post(
-          `/api/v1/orchestration-runs/${runId}/resume`
+          `/api/v1/orchestration-runs/${orchestrationRunId}/resume`
         );
         expect(resumeRes.status).toBe(200);
         expect(resumeRes.body.status).toBe('awaiting_input');
@@ -2953,12 +2953,12 @@ describe('Orchestrations', () => {
       }
 
       const submitRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/orchestration-runs/${runId}/human-input`)
+        .post(`/api/v1/orchestration-runs/${orchestrationRunId}/human-input`)
         .send({ node_id: humanNodeId, output: { decision: 'approve' } });
       expect(submitRes.status).toBe(200);
 
       const finalRes = await authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runId}`
+        `/api/v1/orchestration-runs/${orchestrationRunId}`
       );
       expect(finalRes.status).toBe(200);
       const finalExecs = execsFor(finalRes.body);
@@ -2970,9 +2970,9 @@ describe('Orchestrations', () => {
   // ── Durable background execution ──────────────────────────────────────────
 
   describe('Durable background execution', () => {
-    const getRun = (runId: string) => {
+    const getRun = (orchestrationRunId: string) => {
       return authenticatedTestClient(userToken).get(
-        `/api/v1/orchestration-runs/${runId}`
+        `/api/v1/orchestration-runs/${orchestrationRunId}`
       );
     };
 
@@ -2984,28 +2984,30 @@ describe('Orchestrations', () => {
 
     // Polls the run until one of `statuses` is observed, or fails after a bound.
     const waitForStatus = async (
-      runId: string,
+      orchestrationRunId: string,
       statuses: string[]
     ): Promise<Record<string, unknown>> => {
       for (let i = 0; i < 100; i += 1) {
-        const res = await getRun(runId);
+        const res = await getRun(orchestrationRunId);
         if (statuses.includes(res.body.status as string)) {
           return res.body as Record<string, unknown>;
         }
         await sleep(20);
       }
-      throw new Error(`run ${runId} never reached ${statuses.join('/')}`);
+      throw new Error(
+        `run ${orchestrationRunId} never reached ${statuses.join('/')}`
+      );
     };
 
     // Polls the run until it is parked on the given node. A timer wait parks the
     // run as `sleeping`, a human node as `awaiting_input`; `running` covers the
     // brief transient window before it parks.
     const waitForActiveNode = async (
-      runId: string,
+      orchestrationRunId: string,
       nodeId: string
     ): Promise<void> => {
       for (let i = 0; i < 100; i += 1) {
-        const res = await getRun(runId);
+        const res = await getRun(orchestrationRunId);
         const active = (res.body.active_nodes ?? []) as string[];
         if (
           ['running', 'sleeping', 'awaiting_input'].includes(res.body.status) &&
@@ -3015,12 +3017,12 @@ describe('Orchestrations', () => {
         }
         if (['succeeded', 'failed', 'cancelled'].includes(res.body.status)) {
           throw new Error(
-            `run ${runId} settled as ${res.body.status} before waiting on ${nodeId}`
+            `run ${orchestrationRunId} settled as ${res.body.status} before waiting on ${nodeId}`
           );
         }
         await sleep(20);
       }
-      throw new Error(`run ${runId} never waited on ${nodeId}`);
+      throw new Error(`run ${orchestrationRunId} never waited on ${nodeId}`);
     };
 
     const createOrchestration = async (body: Record<string, unknown>) => {
@@ -3083,15 +3085,15 @@ describe('Orchestrations', () => {
         .send({ orchestration_id: orchId, input: {} });
       expect(runRes.status).toBe(201);
       expect(runRes.body.status).toBe('queued');
-      const runId = runRes.body.id as string;
+      const orchestrationRunId = runRes.body.id as string;
 
       // The run parks on the delay node with its wake persisted — no in-process
       // timer is holding it (simulating a fresh process after a restart, since
       // the scheduler interval is disabled under test).
-      await waitForActiveNode(runId, 'delay');
+      await waitForActiveNode(orchestrationRunId, 'delay');
 
       // A timer-parked run is `sleeping` (holds no worker), not `running`.
-      const parked = await getRun(runId);
+      const parked = await getRun(orchestrationRunId);
       expect(parked.body.status).toBe('sleeping');
 
       // Nothing wakes it until the scheduler picks up the due run.
@@ -3100,7 +3102,7 @@ describe('Orchestrations', () => {
       });
       expect(claimed).toBeGreaterThanOrEqual(1);
 
-      const settled = await waitForStatus(runId, ['succeeded']);
+      const settled = await waitForStatus(orchestrationRunId, ['succeeded']);
       expect((settled.state as Record<string, unknown>).waited).toBe('1s');
       expect((settled.state as Record<string, unknown>).after).toBe('done');
     });
@@ -3134,17 +3136,17 @@ describe('Orchestrations', () => {
           .send({ orchestration_id: orchId, input: {} });
         expect(runRes.status).toBe(201);
         expect(runRes.body.status).toBe('queued');
-        const runId = runRes.body.id as string;
+        const orchestrationRunId = runRes.body.id as string;
 
         // First attempt was pending, so the run parks between attempts instead
         // of blocking; only one tool call has happened so far.
-        await waitForActiveNode(runId, 'wait');
+        await waitForActiveNode(orchestrationRunId, 'wait');
         expect(spy).toHaveBeenCalledTimes(1);
 
         // The scheduler drives the next attempt, which meets the condition.
         await wakeDueRuns({ now: new Date(Date.now() + 5000) });
 
-        const settled = await waitForStatus(runId, ['succeeded']);
+        const settled = await waitForStatus(orchestrationRunId, ['succeeded']);
         expect((settled.state as Record<string, unknown>).done).toBe(true);
         expect(spy).toHaveBeenCalledTimes(2);
       } finally {
@@ -3175,16 +3177,16 @@ describe('Orchestrations', () => {
         const runRes = await authenticatedTestClient(userToken)
           .post('/api/v1/orchestration-runs')
           .send({ orchestration_id: orchId, input: {} });
-        const runId = runRes.body.id as string;
+        const orchestrationRunId = runRes.body.id as string;
 
-        await waitForStatus(runId, ['succeeded']);
+        await waitForStatus(orchestrationRunId, ['succeeded']);
 
         // Events resolve the project public ID asynchronously, so give them a
         // moment to flush.
         for (let i = 0; i < 50; i += 1) {
           const types = captured
             .filter((e) => {
-              return e.resourceId === runId;
+              return e.resourceId === orchestrationRunId;
             })
             .map((e) => {
               return e.type;
@@ -3200,7 +3202,7 @@ describe('Orchestrations', () => {
 
         const types = captured
           .filter((e) => {
-            return e.resourceId === runId;
+            return e.resourceId === orchestrationRunId;
           })
           .map((e) => {
             return e.type;
@@ -3340,15 +3342,15 @@ describe('Orchestrations', () => {
           ],
           edges: [],
         });
-        const runId = await startAsyncRun(orchId);
+        const orchestrationRunId = await startAsyncRun(orchId);
 
         // First attempt failed → the run parks as `sleeping` on the retry wait.
-        await waitForActiveNode(runId, 'call');
-        expect((await getRun(runId)).body.status).toBe('sleeping');
+        await waitForActiveNode(orchestrationRunId, 'call');
+        expect((await getRun(orchestrationRunId)).body.status).toBe('sleeping');
 
         // The scheduler drives the retry, which succeeds.
         await wakeDueRuns({ now: new Date(Date.now() + 5000) });
-        const settled = await waitForStatus(runId, ['succeeded']);
+        const settled = await waitForStatus(orchestrationRunId, ['succeeded']);
 
         const execs = callExecsOf(settled, 'call');
         expect(execs).toHaveLength(2);
@@ -3377,11 +3379,11 @@ describe('Orchestrations', () => {
           ],
           edges: [],
         });
-        const runId = await startAsyncRun(orchId);
+        const orchestrationRunId = await startAsyncRun(orchId);
 
-        await waitForActiveNode(runId, 'call');
+        await waitForActiveNode(orchestrationRunId, 'call');
         await wakeDueRuns({ now: new Date(Date.now() + 5000) });
-        const settled = await waitForStatus(runId, ['failed']);
+        const settled = await waitForStatus(orchestrationRunId, ['failed']);
 
         const execs = callExecsOf(settled, 'call');
         expect(execs).toHaveLength(2);

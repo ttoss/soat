@@ -33,7 +33,7 @@ export type GuardrailCallIdentity = {
   toolId?: string | null;
   toolName?: string | null;
   action?: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
 };
 
@@ -110,12 +110,15 @@ const memoizedRunResolver = (
   let cached: number | null | undefined;
   return async () => {
     if (cached !== undefined) return cached;
-    if (!identity.runId) {
+    if (!identity.orchestrationRunId) {
       cached = null;
       return cached;
     }
     const run = await db.OrchestrationRun.findOne({
-      where: { publicId: identity.runId, projectId: identity.projectId },
+      where: {
+        publicId: identity.orchestrationRunId,
+        projectId: identity.projectId,
+      },
       attributes: ['id'],
     });
     cached = (run?.id as number | undefined) ?? null;

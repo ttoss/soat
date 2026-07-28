@@ -98,7 +98,7 @@ export class ActivityEntry extends Model {
 
   // ── Provenance (producer-dependent, held as public ids — no FK) ──────────
   @Column({ type: DataType.STRING(32), allowNull: true })
-  declare runId: string | null;
+  declare orchestrationRunId: string | null;
 
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare agentId: string | null;

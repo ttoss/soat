@@ -21,7 +21,7 @@ const toClaimedTask = (task: RunTaskInstance): ClaimedTask => {
   return {
     id: task.publicId,
     handle: String(task.id as number),
-    runId: task.runId as number,
+    orchestrationRunId: task.orchestrationRunId as number,
     kind: task.kind as RunTaskKind,
     attempts: task.attempts as number,
   };

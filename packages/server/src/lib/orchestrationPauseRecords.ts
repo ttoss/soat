@@ -34,14 +34,14 @@ const log = createDebug('soat:orchestrations');
  * a pause is not new work, so it must not be metered again.
  */
 export const reuseRequiresActionRow = async (args: {
-  runId: number;
+  orchestrationRunId: number;
   nodeId: string;
   attempt: number;
   output: Record<string, unknown>;
 }): Promise<boolean> => {
   const existing = await db.OrchestrationNodeExecution.findOne({
     where: {
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       nodeId: args.nodeId,
       attempt: args.attempt,
       status: 'requires_action',
@@ -76,7 +76,7 @@ export const recordHumanInputResumption = async (args: {
     { status: 'completed', output: humanOutput, completedAt: new Date() },
     {
       where: {
-        runId: runRecord.id as number,
+        orchestrationRunId: runRecord.id as number,
         nodeId: humanNodeId,
         status: 'requires_action',
       },

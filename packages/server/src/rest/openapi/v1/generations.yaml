@@ -160,7 +160,7 @@ paths:
         per-run audit attribution (e.g. recording which knowledge-corpus version
         produced an AI action). The provided keys are shallow-merged over the
         existing metadata, so repeated patches accumulate and system-owned keys
-        are preserved. Reserved keys (`action_id`, `trigger_id`, `run_id`,
+        are preserved. Reserved keys (`action_id`, `trigger_id`, `orchestration_run_id`,
         `node_id`, `extraction`, and internal recovery state) cannot be set and
         are rejected with 400.
       operationId: updateGeneration
@@ -356,7 +356,7 @@ components:
           description: >
             Caller-supplied key/value metadata to shallow-merge into the
             generation record. Reserved server-owned keys (`action_id`,
-            `trigger_id`, `run_id`, `node_id`, `extraction`, and internal
+            `trigger_id`, `orchestration_run_id`, `node_id`, `extraction`, and internal
             recovery state) are rejected with 400.
           example:
             team: payments

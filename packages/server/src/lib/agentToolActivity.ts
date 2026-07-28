@@ -21,7 +21,7 @@ export type ActivityCallContext = {
   projectId: number;
   agentId: string;
   generationId?: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
 };
 
 /**
@@ -51,7 +51,7 @@ const buildRecordedExecute = (args: {
         toolId: args.toolId,
         generationId: args.activity.generationId ?? null,
       },
-      runId: args.activity.runId ?? null,
+      orchestrationRunId: args.activity.orchestrationRunId ?? null,
       agentId: args.activity.agentId,
       refId: args.toolId,
     });

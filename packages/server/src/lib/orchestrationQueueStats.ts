@@ -39,7 +39,7 @@ const loadPerProject = async (args: {
             SUM(CASE WHEN t."claimed_at" IS NOT NULL
                       AND t."lease_expires_at" > :now THEN 1 ELSE 0 END) AS claimed
        FROM "${RUN_TASK_TABLE}" t
-       JOIN "${RUN_TABLE}" r ON r."id" = t."run_id"
+       JOIN "${RUN_TABLE}" r ON r."id" = t."orchestration_run_id"
        JOIN "${PROJECT_TABLE}" p ON p."id" = r."project_id"
       ${restrictProjects ? 'WHERE r."project_id" IN (:projectIds)' : ''}
       GROUP BY p."public_id"

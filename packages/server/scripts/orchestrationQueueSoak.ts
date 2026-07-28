@@ -127,7 +127,7 @@ const runProducer = async (args: {
   while (Date.now() < args.deadline) {
     for (let i = 0; i < perTick; i += 1) {
       await args.driver.enqueue({
-        runId: args.pickRun(args.counters.produced + i),
+        orchestrationRunId: args.pickRun(args.counters.produced + i),
         kind: 'continue',
       });
     }
@@ -222,7 +222,7 @@ const main = async (): Promise<void> => {
 
   report(`seeding a backlog of ${config.backlog} task(s)…`);
   for (let i = 0; i < config.backlog; i += 1) {
-    await driver.enqueue({ runId: pickRun(i), kind: 'continue' });
+    await driver.enqueue({ orchestrationRunId: pickRun(i), kind: 'continue' });
   }
 
   const startedAt = Date.now();

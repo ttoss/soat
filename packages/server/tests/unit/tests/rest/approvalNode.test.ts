@@ -56,7 +56,10 @@ describe('Approval node (orchestration producer)', () => {
 
   let orchestrationId: string;
 
-  const startRun = async (): Promise<{ runId: string; approvalId: string }> => {
+  const startRun = async (): Promise<{
+    orchestrationRunId: string;
+    approvalId: string;
+  }> => {
     const runRes = await authenticatedTestClient(userToken)
       .post('/api/v1/orchestration-runs')
       .send({
@@ -69,14 +72,14 @@ describe('Approval node (orchestration producer)', () => {
     expect(runRes.body.required_action.type).toBe('approval');
     expect(runRes.body.required_action.node_id).toBe('gate');
     return {
-      runId: runRes.body.id,
+      orchestrationRunId: runRes.body.id,
       approvalId: runRes.body.required_action.approval_id,
     };
   };
 
-  const getRun = async (runId: string) => {
+  const getRun = async (orchestrationRunId: string) => {
     const res = await authenticatedTestClient(userToken).get(
-      `/api/v1/orchestration-runs/${runId}`
+      `/api/v1/orchestration-runs/${orchestrationRunId}`
     );
     expect(res.status).toBe(200);
     return res.body;
@@ -87,15 +90,15 @@ describe('Approval node (orchestration producer)', () => {
   // a bounded loop rather than reading once and racing the resume (which
   // transitions through a transient `running` state before it settles).
   const TERMINAL = ['succeeded', 'failed', 'cancelled', 'expired'];
-  const waitForRunSettled = async (runId: string) => {
+  const waitForRunSettled = async (orchestrationRunId: string) => {
     for (let i = 0; i < 100; i += 1) {
-      const run = await getRun(runId);
+      const run = await getRun(orchestrationRunId);
       if (TERMINAL.includes(run.status)) return run;
       await new Promise((resolve) => {
         return setTimeout(resolve, 20);
       });
     }
-    throw new Error(`run ${runId} did not settle`);
+    throw new Error(`run ${orchestrationRunId} did not settle`);
   };
 
   beforeAll(async () => {
@@ -121,7 +124,7 @@ describe('Approval node (orchestration producer)', () => {
   });
 
   test('starting a run parks on the node and files an approval item', async () => {
-    const { runId, approvalId } = await startRun();
+    const { orchestrationRunId, approvalId } = await startRun();
     expect(approvalId).toMatch(/^apr_/);
 
     const listRes = await authenticatedTestClient(userToken).get(
@@ -133,7 +136,7 @@ describe('Approval node (orchestration producer)', () => {
     });
     expect(item).toBeDefined();
     expect(item.origin).toBe('node');
-    expect(item.run_id).toBe(runId);
+    expect(item.orchestration_run_id).toBe(orchestrationRunId);
     expect(item.node_id).toBe('gate');
     expect(item.proposed_action.tool_id).toBe('tool_issuerefund0001');
     expect(item.proposed_action.arguments).toEqual({ amount: 500 });
@@ -141,7 +144,7 @@ describe('Approval node (orchestration producer)', () => {
   });
 
   test('approving resumes the run down the approved edge', async () => {
-    const { runId, approvalId } = await startRun();
+    const { orchestrationRunId, approvalId } = await startRun();
 
     const approveRes = await authenticatedTestClient(userToken)
       .post(`/api/v1/approvals/${approvalId}/approve`)
@@ -149,13 +152,13 @@ describe('Approval node (orchestration producer)', () => {
     expect(approveRes.status).toBe(200);
     expect(approveRes.body.status).toBe('approved');
 
-    const run = await getRun(runId);
+    const run = await getRun(orchestrationRunId);
     expect(run.status).toBe('succeeded');
     expect(run.state.result).toBe('approved!');
   });
 
   test('rejecting resumes the run down the rejected edge', async () => {
-    const { runId, approvalId } = await startRun();
+    const { orchestrationRunId, approvalId } = await startRun();
 
     const rejectRes = await authenticatedTestClient(userToken)
       .post(`/api/v1/approvals/${approvalId}/reject`)
@@ -163,13 +166,13 @@ describe('Approval node (orchestration producer)', () => {
     expect(rejectRes.status).toBe(200);
     expect(rejectRes.body.status).toBe('rejected');
 
-    const run = await getRun(runId);
+    const run = await getRun(orchestrationRunId);
     expect(run.status).toBe('succeeded');
     expect(run.state.result).toBe('rejected!');
   });
 
   test('expiry resumes the run down the on_expired edge', async () => {
-    const { runId, approvalId } = await startRun();
+    const { orchestrationRunId, approvalId } = await startRun();
 
     // Force the item past its expiry, then run the sweeper as the scheduler
     // would. The sweep flips it to expired and resumes the parked run.
@@ -180,7 +183,7 @@ describe('Approval node (orchestration producer)', () => {
     const claimed = await expireDueApprovals();
     expect(claimed).toBeGreaterThanOrEqual(1);
 
-    const run = await waitForRunSettled(runId);
+    const run = await waitForRunSettled(orchestrationRunId);
     expect(run.status).toBe('succeeded');
     expect(run.state.result).toBe('expired!');
   });

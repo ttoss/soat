@@ -228,7 +228,7 @@ export const executeAgentNode = async (args: {
     messages,
     parentTraceId: traceId,
     authHeader,
-    runId: runPublicId,
+    orchestrationRunId: runPublicId,
     nodeId: node.id,
     triggerId,
   });
@@ -257,7 +257,7 @@ export const executeToolNode = async (args: {
   idempotencyKey?: string;
   // The run's public id — threaded into the guardrail evaluation identity so a
   // guard can read `soat.run.*`.
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   // Set when re-dispatching after a class-C approval: the frozen (or edited)
   // arguments the human approved. Their presence bypasses the guardrail gate
   // entirely (the call was already adjudicated) and skips input mapping — the
@@ -288,7 +288,7 @@ export const executeToolNode = async (args: {
           inputs,
           projectId: scopeProjectId,
           authHeader,
-          runId: args.runId,
+          orchestrationRunId: args.orchestrationRunId,
         });
   if (gated.kind === 'result') return gated.result;
 
@@ -318,7 +318,7 @@ export const executeToolNode = async (args: {
       kind: 'action_executed',
       summary: `Tool '${node.toolId}' executed by node '${node.id}'`,
       detail: { nodeId: node.id, action: node.operationId },
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       refId: node.toolId,
     });
   }
