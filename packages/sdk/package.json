@@ -37,8 +37,8 @@
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.99.0",
     "@ttoss/config": "^1.37.17",
+    "@ttoss/openapi-codegen": "^0.2.0",
     "@types/node": "^26.1.1",
-    "js-yaml": "^5.2.1",
     "tsdown": "^0.22.7",
     "tsx": "^4.23.1",
     "typescript": "~6.0.3"
