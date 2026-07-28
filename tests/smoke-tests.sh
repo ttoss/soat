@@ -4207,9 +4207,27 @@ QUOTA_ENF_QUOTA_ID=$($SOAT_CLI create-quota \
 # the quota firing and not a missing permission.
 SOAT_TOKEN="$QUOTA_ENF_KEY" $SOAT_CLI list-quotas \
   --project-id "$QUOTA_ENF_PROJECT_ID" >/dev/null
-export SOAT_TOKEN="$QUOTA_ENF_KEY"
-expect_cli_error_status 429 list-quotas --project-id "$QUOTA_ENF_PROJECT_ID"
-unset SOAT_TOKEN
+
+# Asserted inline rather than through `expect_cli_error_status`: the admin token
+# is exported in SOAT_TOKEN (see the login step), so the key must be passed as a
+# command-substitution prefix — overwriting the exported value would strip admin
+# auth from the cleanup below and every step after it.
+set +e
+QUOTA_ENF_BLOCKED=$(SOAT_TOKEN="$QUOTA_ENF_KEY" $SOAT_CLI list-quotas \
+  --project-id "$QUOTA_ENF_PROJECT_ID" 2>&1)
+QUOTA_ENF_EXIT=$?
+set -e
+if [ "$QUOTA_ENF_EXIT" -eq 0 ]; then
+  echo "ERROR: Expected the second unscoped-key request to be blocked by the quota" >&2
+  printf '%s\n' "$QUOTA_ENF_BLOCKED" >&2
+  exit 1
+fi
+QUOTA_ENF_STATUS=$(printf '%s\n' "$QUOTA_ENF_BLOCKED" | jq -r '.status // empty' 2>/dev/null)
+if [ "$QUOTA_ENF_STATUS" != "429" ]; then
+  echo "ERROR: Expected 429 for the unscoped key over its requests quota, got '$QUOTA_ENF_STATUS'" >&2
+  printf '%s\n' "$QUOTA_ENF_BLOCKED" >&2
+  exit 1
+fi
 
 # The admin JWT is exempt, so cleanup is never blocked by the quota it deletes.
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ENF_QUOTA_ID"
