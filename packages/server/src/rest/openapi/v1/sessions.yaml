@@ -540,12 +540,12 @@ components:
             type: string
           nullable: true
           description: >-
-            Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. Each key's first
-            character is uppercased and the rest is used verbatim. Keys are never
-            case-converted — they round-trip exactly as sent. A key that is not a valid
-            HTTP header name, or two keys that map to the same header, are rejected with
-            `400 INVALID_TOOL_CONTEXT_KEY`.
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+            Keys are never case-converted — they round-trip exactly as sent.
+            A key that is not a valid HTTP header name, or two keys that map to
+            the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
         inactivity_ttl_seconds:
           type: integer
           default: 0
@@ -598,12 +598,12 @@ components:
             type: string
           nullable: true
           description: >-
-            Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. Each key's first
-            character is uppercased and the rest is used verbatim. Keys are never
-            case-converted — they round-trip exactly as sent. A key that is not a valid
-            HTTP header name, or two keys that map to the same header, are rejected with
-            `400 INVALID_TOOL_CONTEXT_KEY`.
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+            Keys are never case-converted — they round-trip exactly as sent.
+            A key that is not a valid HTTP header name, or two keys that map to
+            the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
         inactivity_ttl_seconds:
           type: integer
           default: 0
@@ -638,12 +638,12 @@ components:
             type: string
           nullable: true
           description: >-
-            Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-            `http`, `mcp` and `soat` tool call in this session. Each key's first
-            character is uppercased and the rest is used verbatim. Keys are never
-            case-converted — they round-trip exactly as sent. A key that is not a valid
-            HTTP header name, or two keys that map to the same header, are rejected with
-            `400 INVALID_TOOL_CONTEXT_KEY`.
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call in this session. The header name is
+            `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+            Keys are never case-converted — they round-trip exactly as sent.
+            A key that is not a valid HTTP header name, or two keys that map to
+            the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
         inactivity_ttl_seconds:
           type: integer
           description: >
@@ -676,11 +676,12 @@ components:
                 type: string
               nullable: true
               description: >-
-                Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-                `http`, `mcp` and `soat` tool call in this generation. Each key's first
-                character is uppercased and the rest is used verbatim. Keys are never
-                case-converted — they round-trip exactly as sent. An invalid or colliding
-                key is rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
+                Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+                `http`, `mcp` and `soat` tool call in this generation. The header name is
+                `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+                Keys are never case-converted — they round-trip exactly as
+                sent. An invalid or colliding key is rejected with
+                `400 INVALID_TOOL_CONTEXT_KEY`.
             idempotency_key:
               type: string
               description: >
@@ -704,11 +705,12 @@ components:
                 type: string
               nullable: true
               description: >-
-                Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-                `http`, `mcp` and `soat` tool call in this generation. Each key's first
-                character is uppercased and the rest is used verbatim. Keys are never
-                case-converted — they round-trip exactly as sent. An invalid or colliding
-                key is rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
+                Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+                `http`, `mcp` and `soat` tool call in this generation. The header name is
+                `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+                Keys are never case-converted — they round-trip exactly as
+                sent. An invalid or colliding key is rejected with
+                `400 INVALID_TOOL_CONTEXT_KEY`.
             idempotency_key:
               type: string
               description: >
@@ -749,11 +751,12 @@ components:
             type: string
           nullable: true
           description: >-
-            Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-            `http`, `mcp` and `soat` tool call in this generation. Each key's first
-            character is uppercased and the rest is used verbatim. Keys are never
-            case-converted — they round-trip exactly as sent. An invalid or colliding key
-            is rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call in this generation. The header name is
+            `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+            Keys are never case-converted — they round-trip exactly as sent.
+            An invalid or colliding key is rejected with
+            `400 INVALID_TOOL_CONTEXT_KEY`.
 
     GenerateSessionResponse:
       type: object

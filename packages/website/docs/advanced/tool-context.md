@@ -33,25 +33,44 @@ When a generation pauses with `status: "requires_action"`, the `tool_context` fr
 
 ## Key → header name
 
-The header name is your key with its **first character uppercased** and `X-Soat-Context-` prepended. The rest of the key is used **verbatim**:
+The header name is `X-Soat-Context-` followed by your key, **verbatim**. No character is re-cased and no separator is collapsed:
 
 | `tool_context` key | Forwarded header |
 | --- | --- |
-| `userId` | `X-Soat-Context-UserId` |
-| `tenantId` | `X-Soat-Context-TenantId` |
-| `actorExternalId` | `X-Soat-Context-ActorExternalId` |
-| `actor_external_id` | `X-Soat-Context-Actor_external_id` |
-| `actor-external-id` | `X-Soat-Context-Actor-external-id` |
-| `actor.external.id` | `X-Soat-Context-Actor.external.id` |
-| `env` | `X-Soat-Context-Env` |
+| `userId` | `X-Soat-Context-userId` |
+| `tenantId` | `X-Soat-Context-tenantId` |
+| `actorExternalId` | `X-Soat-Context-actorExternalId` |
+| `actor_external_id` | `X-Soat-Context-actor_external_id` |
+| `actor-external-id` | `X-Soat-Context-actor-external-id` |
+| `actor.external.id` | `X-Soat-Context-actor.external.id` |
+| `TenantId` | `X-Soat-Context-TenantId` |
+| `env` | `X-Soat-Context-env` |
 
-This is **not** title-casing: separators are not collapsed and later characters are never re-cased. `actor_external_id` yields `X-Soat-Context-Actor_external_id`, not `X-Soat-Context-ActorExternalId` — the two are different keys and produce different headers.
+The table is a formality — the rule is string concatenation. `actor_external_id` and `actorExternalId` are two different keys and produce two different headers.
 
-**Keys are never case-converted.** Unlike every other field in the REST API, `tool_context` keys are not rewritten between snake_case and camelCase: a key is an HTTP header name, not a SOAT field name, so it is stored, echoed in responses, and forwarded exactly as you wrote it — on REST, in formation templates, and over MCP alike. The one table above is enough to predict the header on any surface, and reading a session's `tool_context` and sending it back unchanged is lossless.
+**Keys are never case-converted.** Unlike every other field in the REST API, `tool_context` keys are not rewritten between snake_case and camelCase: a key is an HTTP header name, not a SOAT field name, so it is stored, echoed in responses, and forwarded exactly as you wrote it — on REST, in formation templates, and over MCP alike. Reading a session's `tool_context` and sending it back unchanged is lossless.
 
-:::note Changed in a recent release
+### Read the header case-insensitively
 
-`tool_context` keys used to be case-converted like any other body field, so a `actor_external_id` sent over REST was stored as `actorExternalId` and produced `X-Soat-Context-ActorExternalId`. If a tool endpoint of yours reads a camelCase context header that it receives from an explicitly-set snake_case key, either rename the key to camelCase or read the snake_case header. Session-auto-populated keys (`sessionId` / `actorId` / `actorExternalId`) are unaffected — they were and remain camelCase.
+HTTP field names are case-insensitive ([RFC 9110 §5.1](https://www.rfc-editor.org/rfc/rfc9110#section-5.1)), and HTTP/2 and HTTP/3 transmit them lowercased ([RFC 9113 §8.2.1](https://www.rfc-editor.org/rfc/rfc9113#section-8.2.1)). Your endpoint will usually see `x-soat-context-userid` no matter how you spelled the key, so the casing in the table above is presentational.
+
+Look the header up through your framework's normal accessor, which already handles this:
+
+```js
+// Node / Express / Koa — incoming header names are lowercased for you
+const userId = req.headers['x-soat-context-userid'];
+```
+
+Do not match `X-Soat-Context-userId` as an exact string, and make any gateway, WAF, or log-routing rule that references these headers case-insensitive.
+
+:::note Changed in recent releases
+
+Two changes to this rule landed in quick succession. If you are upgrading from before either, check both.
+
+1. **Keys are no longer case-converted.** A key used to be rewritten like any other body field, so `actor_external_id` sent over REST was stored as `actorExternalId` and produced `X-Soat-Context-ActorExternalId`. Keys are now stored, echoed, and forwarded exactly as sent. If a tool endpoint of yours reads a camelCase context header fed by an explicitly-set snake_case key, either rename the key to camelCase or read the snake_case header.
+2. **The first character is no longer uppercased.** `userId` produced `X-Soat-Context-UserId` and now produces `X-Soat-Context-userId`. This is invisible to any client that looks headers up the normal way, for the reasons above. It matters only if something on your side matches the header name as an exact string.
+
+Session-auto-populated keys (`sessionId` / `actorId` / `actorExternalId`) were and remain camelCase; only the emitted header's first character changed.
 
 :::
 
@@ -61,9 +80,9 @@ When a generation runs through a [session](../modules/sessions.md), the server i
 
 | Injected key | Forwarded header | Value |
 | --- | --- | --- |
-| `sessionId` | `X-Soat-Context-SessionId` | Public ID of the session; always present |
-| `actorId` | `X-Soat-Context-ActorId` | Public ID of the session's actor; omitted if not set |
-| `actorExternalId` | `X-Soat-Context-ActorExternalId` | `external_id` of the session's actor; omitted if not set |
+| `sessionId` | `X-Soat-Context-sessionId` | Public ID of the session; always present |
+| `actorId` | `X-Soat-Context-actorId` | Public ID of the session's actor; omitted if not set |
+| `actorExternalId` | `X-Soat-Context-actorExternalId` | `external_id` of the session's actor; omitted if not set |
 
 You do not need to set these yourself — a session-backed generation already carries them.
 
@@ -80,7 +99,7 @@ auto-populated  <  session tool_context  <  per-request tool_context
 A key becomes an HTTP header name, so it must be a valid one. A request whose `tool_context` violates either rule below is rejected with **`400 INVALID_TOOL_CONTEXT_KEY`** at write time (`create-session`, `update-session`) or before the provider call (generation endpoints):
 
 1. **Character set** — a key may contain only letters, digits and ``!#$%&'*+-.^_`|~``. A key with a space, colon, parenthesis, newline or non-ASCII character is rejected. (`meta.keys` lists the offending keys.)
-2. **No collisions** — two keys must not map to the same header name. Header names are case-insensitive, so `userId` and `UserId` both resolve to `X-Soat-Context-UserId`; one value would be silently dropped. (`meta.header` names the colliding header.)
+2. **No collisions** — two keys must not map to the same header field. Because header names are case-insensitive, `userId` and `UserId` produce two different header strings that HTTP folds into one, and one value would be silently dropped. (`meta.header` names the colliding header; `meta.keys` lists both keys.)
 
 There is no length or total-header-bytes limit enforced by SOAT; the receiving server's own header limits apply.
 
@@ -104,9 +123,9 @@ soat create-session \
 Every `http` tool call in that session then receives:
 
 ```http
-X-Soat-Context-SessionId: sess_01
-X-Soat-Context-ActorId: actor_01
-X-Soat-Context-ActorExternalId: +5511999999999
-X-Soat-Context-TenantId: acme
-X-Soat-Context-Plan: pro
+X-Soat-Context-sessionId: sess_01
+X-Soat-Context-actorId: actor_01
+X-Soat-Context-actorExternalId: +5511999999999
+X-Soat-Context-tenantId: acme
+X-Soat-Context-plan: pro
 ```
