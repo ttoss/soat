@@ -11,6 +11,10 @@ import {
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
+  type ActivityCallContext,
+  recordToolActivity,
+} from './agentToolActivity';
+import {
   gateResolvedToolsWithGuardrails,
   type ResolverGuardrailContext,
 } from './agentToolGuardrail';
@@ -894,13 +898,23 @@ export const resolveEphemeralAgentTool = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
   guardrail?: ResolverGuardrailContext;
+  activity?: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
   assertEphemeralTypeSupported(args.definition);
 
   const typedTool = ephemeralDefinitionToRow(args.definition, args.projectId);
 
   const tools = await resolveToolByType(typedTool, args);
-  const mapped = wrapToolsWithOutputMapping(tools, typedTool.outputMapping);
+  const mapped = wrapToolsWithOutputMapping(
+    recordToolActivity({
+      tools,
+      toolId: null,
+      toolType: typedTool.type,
+      toolName: typedTool.name,
+      activity: args.activity,
+    }),
+    typedTool.outputMapping
+  );
   const rawParameters =
     typedTool.type === 'http' ? (typedTool.parameters ?? {}) : undefined;
 
@@ -938,6 +952,7 @@ const resolveReferenceBinding = async (args: {
   projectIds?: number[];
   resolveArgs: ResolveToolByTypeArgs;
   guardrail?: ResolverGuardrailContext;
+  activity?: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
   const toolWhere: Record<string, unknown> = { publicId: args.toolPublicId };
   if (args.projectIds !== undefined) {
@@ -948,7 +963,16 @@ const resolveReferenceBinding = async (args: {
   if (!agentTool) return {};
 
   const typedTool = agentTool as unknown as AgentToolRow;
-  const tools = await resolveToolByType(typedTool, args.resolveArgs);
+  const resolved = await resolveToolByType(typedTool, args.resolveArgs);
+  // Activity recording sits innermost, so it only fires for a call that actually
+  // reached (and returned from) the tool — see `recordToolActivity`.
+  const tools = recordToolActivity({
+    tools: resolved,
+    toolId: typedTool.publicId,
+    toolType: typedTool.type,
+    toolName: typedTool.name,
+    activity: args.activity,
+  });
   // Pipeline tools delegate execution to `callTool` (tools.ts), which already
   // applies `outputMapping` to its return value — wrapping again here would
   // double-apply the mapping.
@@ -987,6 +1011,9 @@ export const resolveAgentTools = async (args: {
   // tool with the classify → route interceptor when a guardrail applies at the
   // project / agent / tool scope.
   guardrail?: ResolverGuardrailContext;
+  // Identity a successful tool call is attributed to on the activity feed
+  // (approvals PRD Phase 4). Omitted by callers with no agent in scope.
+  activity?: ActivityCallContext;
 }): Promise<Record<string, Tool>> => {
   const resolvedTools: Record<string, Tool> = {};
 
@@ -998,6 +1025,7 @@ export const resolveAgentTools = async (args: {
         projectIds: args.projectIds,
         resolveArgs: args,
         guardrail: args.guardrail,
+        activity: args.activity,
       })
     );
   }
@@ -1015,6 +1043,7 @@ export const resolveAgentTools = async (args: {
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
         guardrail: args.guardrail,
+        activity: args.activity,
       });
       Object.assign(resolvedTools, ephemeralTools);
     }

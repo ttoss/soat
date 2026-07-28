@@ -19,7 +19,14 @@ existing pending item, and a re-proposal matching a *rejected* item is admitted
 with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
 - [x] Recurrence view (`GET /api/v1/approvals/recurrences`) — folded in from the deferred learned-rules module (2026-07); shipped. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
-- [x] `ActivityEntry` feed (`acte_` prefix) — shipped (2026-07), with one documented v1 gap (decision 4). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md)
+- [x] `ActivityEntry` feed (`acte_` prefix) — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md)
+- [x] `action_executed` at agent-generation time — the v1 gap decision 4 recorded as follow-up; closed (2026-07). Live behavior in the [activity producers docs](../packages/website/docs/modules/activity.md#producers)
+- [x] `soat.activity.actions_1h` / `actions_24h` guard context — closed (2026-07); the keys were in the guardrail allowlist and documented but nothing populated them. Live behavior in [the feed as a guardrail signal](../packages/website/docs/modules/activity.md#the-feed-as-a-guardrail-signal)
+
+Every deliverable in this PRD has shipped. What remains is deferred by design,
+not outstanding: **Phase 5** (approver targeting and assignment) and
+**in-channel approval clients**, both gated on a demand signal that has not
+arrived — see the sections below.
 
 ---
 
@@ -95,13 +102,30 @@ Every autonomous execution visible, for auditability. Live behavior in the
 
 **Unlock:** the "what did agents do today" surface.
 
-**Known v1 gap:** `action_executed` is only instrumented at the orchestration
-tool-node executor. Agent-generation-time tool calls (conversation/session
-tool-call content blocks, the pipeline-tool resolver) are not yet wired — the
-agent identity isn't threaded through that call path today, and doing so
-touches a widely-shared low-level resolver used by every agent tool call.
-Scoped down deliberately rather than expanded into that surface in this pass;
-tracked as explicit follow-up, not silently dropped.
+**The v1 gap is closed (2026-07).** `action_executed` was originally instrumented
+only at the orchestration tool-node executor; agent-generation-time tool calls
+were not, because the agent identity was thought not to be threaded through that
+call path. It effectively already was: the resolver receives a
+`ResolverGuardrailContext` carrying `agentId` / `generationId` / `runId`, built at
+the generation entry point. Rather than overload that (a guardrail context the
+feed would then depend on), a sibling `ActivityCallContext` is threaded the same
+way, and the recording wrapper sits **innermost** — inside the guardrail
+interceptor and after the tool returns — so an entry means the action really ran:
+blocked, tripped, approval-routed, and failed calls record nothing. Callers with
+no agent in scope (the orchestration path) pass no context and never
+double-record. Client tools stay uninstrumented by design: with no server-side
+execution the platform cannot attest the action happened.
+
+**Activity as a guardrail signal (task 5.4, closed 2026-07).**
+`soat.activity.actions_1h` / `actions_24h` resolve from the feed at evaluation
+time — the count of this project's `action_executed` entries in the rolling
+window — so a guard can cap the autonomous-action rate. The keys had been in the
+guardrail var allowlist and the docs since Phase 4 with nothing populating them,
+which made any guard written against them fail closed permanently: not a security
+hole (fail-closed is the safe direction) but a dead feature. Only
+`action_executed` counts, and an empty feed reads as a real `0` rather than
+unresolved — "this project has taken no actions" is a meaningful zero, unlike the
+per-run usage keys read outside a run.
 
 ### Phase 5 — Approver targeting and assignment (future)
 
@@ -258,4 +282,10 @@ external assistants get the same feed surface as product UIs.
      resolver without a check on blast radius) to the one clean call site —
      the orchestration tool-node executor. Recorded as the "known v1 gap"
      above rather than left unshipped or forced into a wider, unverified
-     change.
+     change. **Resolved since (2026-07):** the answer was neither `callTool()`
+     nor its callers but the *resolver* — `resolveAgentTools`, the single seam
+     every agent-generation tool passes through on its way to becoming an
+     executable tool. Wrapping there (innermost, inside the guardrail gate)
+     reaches every agent tool call without touching `callTool`'s
+     guardrail-context and converter-evaluation callers at all, which is what
+     made the blast radius checkable.

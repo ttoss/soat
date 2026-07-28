@@ -138,6 +138,13 @@ const resolveRecoveryTools = async (args: {
       sessionId: args.pendingState.toolContext?.sessionId ?? null,
       authHeader: args.authHeader,
     }),
+    // A resumed generation's tool calls are as autonomous as a fresh one's, so
+    // they record on the activity feed under the same identity.
+    activity: {
+      projectId,
+      agentId: args.agentId,
+      generationId: args.generationId,
+    },
   });
 };
 

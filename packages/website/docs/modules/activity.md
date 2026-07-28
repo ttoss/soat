@@ -84,12 +84,30 @@ Severity defaults per kind, and a producer may override it:
 
 Each kind is written by a single, dedicated producer:
 
-- **`action_executed`** — emitted directly from the orchestration tool-node executor after a successful tool call. **Known v1 gap:** only orchestration tool nodes are instrumented; agent-generation-time tool calls (conversation/session tool-call content blocks, the pipeline-tool resolver used during agent generation) are not yet wired — the agent identity is not threaded through that call path today. Tracked as follow-up work, not silently dropped.
+- **`action_executed`** — emitted after a successful tool call, from two call sites: the orchestration tool-node executor (attributed to the run and node, `agent_id` null) and the agent tool resolver (attributed to the agent and generation, so a tool call an agent makes during a generation — in a [conversation](./conversations.md), a [session](./sessions.md), or a resumed generation — is recorded too). Each call is recorded by exactly one of them: the orchestration path threads no agent identity into the resolver, so a tool node never double-records.
+
+  Recording sits **inside** the [guardrail](./guardrails.md) interceptor and after the tool returns, which is what makes an entry mean the action really ran: a call that was blocked, tripped, or routed to approval never reaches it, and neither does one whose target threw. Two things are deliberately not recorded: [client tools](./tools.md) (no server-side execution, so the platform cannot attest the action happened) and the built-in knowledge-retrieval tools (a [knowledge](./knowledge.md) lookup reads, it does not act).
 - **`approval_resolved`** — subscribes to the existing `approvals.approved` / `approvals.rejected` events (see [Approvals](./approvals.md)); no change to that module.
 - **`exception_created`** — subscribes to the existing `exceptions.created` event (see [Exceptions](./exceptions.md#producers)); no change to that module.
 - **`schedule_fired`** — emitted directly from the trigger scheduler's due-firing sweep, filtered to `source === 'schedule'` only — a manually- or webhook-fired [trigger](./triggers.md) does not produce this kind.
 
 Every producer is fire-and-forget: a recording failure is logged and swallowed, and never disturbs the action it describes — the same "auditing never blocks the request it describes" principle the [audit log](./audit-log.md) follows.
+
+### The feed as a guardrail signal
+
+Because `action_executed` counts real executions, the feed doubles as the platform's autonomous-action **rate** signal: [guardrails](./guardrails.md#guards-and-guardrail-context) read it through `soat.activity.actions_1h` and `soat.activity.actions_24h`, the number of `action_executed` entries in this project over a rolling window ending at evaluation time. That is what lets a guard cap how many actions an agent may take per hour or per day:
+
+```json
+{
+  "class": "B",
+  "guard": { "<": [{ "var": "soat.activity.actions_24h" }, 200] }
+}
+```
+
+Two consequences of the counting rule are worth knowing when writing such a guard:
+
+- **Only `action_executed` counts.** The other three kinds record what the platform did *about* an action (an approval resolved, an exception filed, a schedule fired), not an action an agent took, so counting them would inflate the rate the ceiling is written against.
+- **An empty feed reads as `0`, not unresolved.** A project that has taken no actions yet passes a rate ceiling rather than failing closed on it — unlike the per-run usage keys, "no actions" is a real, meaningful zero. A query that *fails* still fails closed.
 
 ## Examples
 

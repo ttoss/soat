@@ -138,7 +138,8 @@ describe('guardrailEvaluation', () => {
           class: 'B',
           guard: { '<': [{ var: 'soat.activity.actions_24h' }, 100] },
         }),
-        // soat.activity.* is not yet populated (activity feed task 5.4).
+        // An empty `soat` bag stands in for any provider that could not resolve
+        // the key — the evaluator's invariant is independent of which one.
         context: { soat: {} },
       });
       expect(result.decision).toBe('tripwire');

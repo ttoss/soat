@@ -34,7 +34,7 @@ open refinement is kept in the [backlog](#g5--usage-metering) below.
 
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 all phases shipped; `5.4` (`soat.activity.*` guard context) is the one unbuilt piece. Phase 5 approver targeting and in-channel approval clients remain deferred, no demand signal yet |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | ✔ every deliverable shipped (`5.4` guard context and the `action_executed` agent-generation coverage closed 2026-07). Phase 5 approver targeting and in-channel approval clients remain deferred by design, no demand signal yet |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
 ### Adjacent / standalone module PRDs
@@ -121,8 +121,8 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 - [x] **Phase 4 / activity feed** — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md):
   - [x] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
   - [x] `5.2` cursor-paginated `GET /api/v1/activity` (kind / severity filters, per project)
-  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` coverage has a known v1 gap: only the orchestration tool-node executor is instrumented, not agent-generation-time tool calls (see [activity module docs](../packages/website/docs/modules/activity.md#producers))
-  - [ ] `5.4` write `soat.activity.actions_1h` / `actions_24h` guard context — **not started, and the only unbuilt piece of Phase 4.** Both keys are already in the guardrail allowlist (`guardrailDocument.ts`) and documented in [Guards and Guardrail Context](../packages/website/docs/modules/guardrails.md#guards-and-guardrail-context), but nothing populates them from `activity_entries` yet. Not a security hole — `hasUnsafeComparisonWithUnresolvedVar` makes a guard referencing an unresolvable `soat.*` var fail closed — but a guard written against these keys protects nothing until this lands
+  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` now covers both the orchestration tool-node executor and agent-generation-time tool calls (the v1 gap, closed 2026-07: the resolver is the single seam, wrapped innermost so blocked / tripped / approval-routed / failed calls record nothing; see [activity module docs](../packages/website/docs/modules/activity.md#producers))
+  - [x] `5.4` `soat.activity.actions_1h` / `actions_24h` guard context — shipped (2026-07). Counts the project's `action_executed` entries over the rolling window at evaluation time, so a guard can cap the autonomous-action rate; an empty feed reads as a real `0`, only a failing query falls back to fail-closed. Live behavior in [the feed as a guardrail signal](../packages/website/docs/modules/activity.md#the-feed-as-a-guardrail-signal)
 - [ ] **Phase 5** Approver targeting & assignment (route items to specific humans; deferred until demand)
 - [ ] In-channel approval clients (WhatsApp/Slack) over the queue
 

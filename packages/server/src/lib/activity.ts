@@ -118,6 +118,34 @@ export const emitActivityEntry = async (
   }
 };
 
+/**
+ * Counts the project's autonomously executed actions in a rolling window ending
+ * now — the value behind the guardrail `soat.activity.actions_1h` /
+ * `actions_24h` context keys, so a guard can cap how many actions an agent takes
+ * per window. Scoped to `action_executed`: the other kinds record what the
+ * platform did *about* an action (an approval resolved, an exception filed, a
+ * schedule fired), not an action an agent took, so counting them would inflate
+ * the rate a ceiling is written against. Exported for the guardrail context
+ * provider (`guardrailContext.ts`).
+ */
+export const windowedActionCount = async (args: {
+  projectId: number;
+  start: Date;
+}): Promise<number> => {
+  log(
+    'windowedActionCount: projectId=%d start=%s',
+    args.projectId,
+    args.start.toISOString()
+  );
+  return db.ActivityEntry.count({
+    where: {
+      projectId: args.projectId,
+      kind: 'action_executed',
+      createdAt: { [Op.gte]: args.start },
+    },
+  });
+};
+
 type ActivityCursor = { createdAt: string; publicId: string };
 
 /**
@@ -237,9 +265,10 @@ export const listActivity = async (args: {
 // approval_resolved and exception_created auto-record by subscribing to
 // events the platform already emits — no change to the approvals/exceptions
 // modules. schedule_fired is emitted directly from `triggerScheduler.ts`
-// (no existing event to subscribe to there). action_executed is emitted
-// directly from the orchestration tool-node executor. Every handler here is
-// fire-and-forget — a recording failure must never disturb the producer.
+// (no existing event to subscribe to there). action_executed is emitted from
+// two call sites: the orchestration tool-node executor (run-scoped) and the
+// agent tool resolver via `agentToolActivity.ts` (agent-scoped). Every handler
+// here is fire-and-forget — a recording failure must never disturb the producer.
 
 const asRecord = (value: unknown): Record<string, unknown> => {
   return typeof value === 'object' && value !== null
