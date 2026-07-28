@@ -262,7 +262,10 @@ describe('Sessions', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
-      expect(response.body.error.meta.header).toBe('X-Soat-Context-UserId');
+      // The reported header is the second key's, verbatim — header names are
+      // case-insensitive, so it folds onto the first key's field.
+      expect(response.body.error.meta.header).toBe('X-Soat-Context-userId');
+      expect(response.body.error.meta.keys).toEqual(['UserId', 'userId']);
     });
   });
 

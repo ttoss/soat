@@ -1009,11 +1009,12 @@ components:
             type: string
           nullable: true
           description: >-
-            Key-value pairs forwarded as `X-Soat-Context-<Key>` headers on every
-            `http`, `mcp` and `soat` tool call in this generation. Each key's first
-            character is uppercased and the rest is used verbatim. Keys are never
-            case-converted — they round-trip exactly as sent. An invalid or colliding key
-            is rejected with `400 INVALID_TOOL_CONTEXT_KEY`.
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call in this generation. The header name is
+            `X-Soat-Context-` plus the key verbatim — no character is re-cased.
+            Keys are never case-converted — they round-trip exactly as sent.
+            An invalid or colliding key is rejected with
+            `400 INVALID_TOOL_CONTEXT_KEY`.
         action_id:
           type: string
           description: Logical action label recorded on the generation's usage meter, so spend can be rolled up per action (e.g. an A/B/C/D operating action).

@@ -1,3 +1,4 @@
+import type { IncomingHttpHeaders } from 'node:http';
 import { createServer } from 'node:http';
 
 import { db } from 'src/db';
@@ -311,6 +312,74 @@ describe('resolveAgentTools', () => {
     expect(result.body).toContain('filename="file"');
     expect(result.body).toContain('Content-Type: text/plain');
     expect(result.body).toContain('AUDIO-BYTES-123');
+  });
+
+  // The wire is the real contract. `buildContextHeaders` is unit-tested above,
+  // but only a live request proves what a tool endpoint actually receives —
+  // and it makes the docs' central claim executable: Node lowercases incoming
+  // header names, so the casing a caller chose is NOT what they read back.
+  // A tool endpoint must match these case-insensitively.
+  test('http tool forwards tool_context to the endpoint as X-Soat-Context-<key>, which arrives lowercased', async () => {
+    let received: IncomingHttpHeaders | null = null;
+    const server = createServer((req, res) => {
+      req.on('data', () => {});
+      req.on('end', () => {
+        received = req.headers;
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      });
+    });
+    await new Promise<void>((resolve) => {
+      server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = server.address();
+    const port =
+      address && typeof address === 'object' ? address.port : undefined;
+
+    const contextToolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myContextHttpTool',
+        type: 'http',
+        description: 'Test context-header HTTP tool',
+        parameters: { type: 'object', properties: {} },
+        execute: { url: `http://127.0.0.1:${port}/v1/do`, method: 'POST' },
+      });
+
+    const tools = await resolveAgentTools({
+      toolIds: [contextToolRes.body.id],
+      toolContext: {
+        sessionId: 'ses_01',
+        actor_external_id: 'snake',
+        TenantId: 'pascal',
+      },
+    });
+    const contextTool = tools.myContextHttpTool;
+
+    if ('execute' in contextTool && typeof contextTool.execute === 'function') {
+      await contextTool.execute({}, {} as never);
+    }
+
+    await new Promise<void>((resolve) => {
+      server.close(() => {
+        return resolve();
+      });
+    });
+
+    const headers = received as IncomingHttpHeaders | null;
+    expect(headers).not.toBeNull();
+
+    // Every key reached the wire under `X-Soat-Context-` + itself, with its
+    // own spelling preserved through the prefix — and Node hands it back
+    // lowercased regardless of the case the caller chose.
+    expect(headers?.['x-soat-context-sessionid']).toBe('ses_01');
+    expect(headers?.['x-soat-context-actor_external_id']).toBe('snake');
+    expect(headers?.['x-soat-context-tenantid']).toBe('pascal');
+
+    // Separators are part of the key and are NOT collapsed: the snake_case key
+    // did not become `actorexternalid`.
+    expect(headers?.['x-soat-context-actorexternalid']).toBeUndefined();
   });
 
   test('http tool execute throws HttpToolError on non-OK response with JSON body', async () => {
@@ -908,22 +977,22 @@ describe('buildContextHeaders', () => {
     expect(buildContextHeaders()).toEqual({});
   });
 
-  test('converts toolContext keys to X-Soat-Context-* headers with title-case first letter', () => {
+  test('prefixes toolContext keys with X-Soat-Context- and nothing else', () => {
     const result = buildContextHeaders({
       environment: 'production',
       tenantId: 'abc-123',
     });
 
     expect(result).toEqual({
-      'X-Soat-Context-Environment': 'production',
-      'X-Soat-Context-TenantId': 'abc-123',
+      'X-Soat-Context-environment': 'production',
+      'X-Soat-Context-tenantId': 'abc-123',
     });
   });
 
   test('preserves header values unchanged', () => {
     const result = buildContextHeaders({ region: 'us-east-1' });
 
-    expect(result['X-Soat-Context-Region']).toBe('us-east-1');
+    expect(result['X-Soat-Context-region']).toBe('us-east-1');
   });
 
   test('handles multiple context entries', () => {
@@ -934,27 +1003,43 @@ describe('buildContextHeaders', () => {
     });
 
     expect(Object.keys(result)).toHaveLength(3);
-    expect(result['X-Soat-Context-A']).toBe('1');
-    expect(result['X-Soat-Context-B']).toBe('2');
-    expect(result['X-Soat-Context-C']).toBe('3');
+    expect(result['X-Soat-Context-a']).toBe('1');
+    expect(result['X-Soat-Context-b']).toBe('2');
+    expect(result['X-Soat-Context-c']).toBe('3');
   });
 
-  // Only the first character is uppercased — the rest of the key is used
-  // verbatim, so a snake_case key does NOT become `ActorExternalId`. Pinned
-  // because the docs previously called this "title-casing", which led callers
-  // to set snake_case keys and read a camelCase header that never arrived.
-  test('uppercases only the first character, leaving the rest verbatim', () => {
+  // The key is caller-owned and reaches the header name untouched: no
+  // separator collapsing, no re-casing of any character — including the
+  // first. Pinned as the whole contract, because every case-transform
+  // incident in this project started with a transform this small.
+  test('uses the key verbatim, transforming no character', () => {
     expect(
       buildContextHeaders({
         actor_external_id: 'snake',
         'actor-external-id': 'kebab',
         actorExternalId: 'camel',
+        ActorExternalId: 'pascal',
+        'actor.external.id': 'dotted',
       })
     ).toEqual({
-      'X-Soat-Context-Actor_external_id': 'snake',
-      'X-Soat-Context-Actor-external-id': 'kebab',
-      'X-Soat-Context-ActorExternalId': 'camel',
+      'X-Soat-Context-actor_external_id': 'snake',
+      'X-Soat-Context-actor-external-id': 'kebab',
+      'X-Soat-Context-actorExternalId': 'camel',
+      'X-Soat-Context-ActorExternalId': 'pascal',
+      'X-Soat-Context-actor.external.id': 'dotted',
     });
+  });
+
+  // The header name is exactly `X-Soat-Context-` + the key, so a caller can
+  // compute it with string concatenation and no knowledge of any rule.
+  test.each([
+    ['userId', 'X-Soat-Context-userId'],
+    ['user_id', 'X-Soat-Context-user_id'],
+    ['env', 'X-Soat-Context-env'],
+    ['ENV', 'X-Soat-Context-ENV'],
+    ['sessionId', 'X-Soat-Context-sessionId'],
+  ])('key %s maps to %s', (key, header) => {
+    expect(buildContextHeaders({ [key]: 'v' })).toEqual({ [header]: 'v' });
   });
 });
 
@@ -1045,7 +1130,10 @@ describe('assertValidToolContextKeys', () => {
     );
   });
 
-  test('rejects a collision caused by the first-character uppercase', () => {
+  // Keys are forwarded verbatim, so these two produce *different* header
+  // strings — but HTTP folds them onto the same field, so the collision is
+  // still real and must still be rejected rather than dropping a value.
+  test('rejects two keys differing only in the first character casing', () => {
     expect(() => {
       return assertValidToolContextKeys({ userId: '1', UserId: '2' });
     }).toThrow(expect.objectContaining({ code: 'INVALID_TOOL_CONTEXT_KEY' }));
@@ -1059,6 +1147,7 @@ describe('assertValidToolContextKeys', () => {
       const err = error as { message?: string; meta?: Record<string, unknown> };
       expect(err.message).toMatch(/X-Soat-Context-TenantId/);
       expect(err.meta?.header).toBe('X-Soat-Context-TenantId');
+      expect(err.meta?.keys).toEqual(['tenantId', 'TenantId']);
     }
   });
 

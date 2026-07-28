@@ -54,7 +54,7 @@ The module covers:
 
 :::warning Choose this value knowing it egresses
 
-`external_id` is not internal-only. Whenever a generation runs in a [session](./sessions.md) bound to this actor, the value is auto-populated into `tool_context` and transmitted as the `X-Soat-Context-ActorExternalId` request header to **every** `http` and `mcp` tool the agent calls — including endpoints you do not control.
+`external_id` is not internal-only. Whenever a generation runs in a [session](./sessions.md) bound to this actor, the value is auto-populated into `tool_context` and transmitted as the `X-Soat-Context-actorExternalId` request header to **every** `http` and `mcp` tool the agent calls — including endpoints you do not control.
 
 If the tool set includes third-party endpoints, prefer an opaque internal identifier here (and correlate to the phone number or email on your own side) rather than storing the PII directly. See the [Tool Context reference](../advanced/tool-context.md#security).
 

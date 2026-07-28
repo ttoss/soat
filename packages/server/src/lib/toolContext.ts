@@ -12,16 +12,24 @@ import { DomainError } from '../errors';
  */
 
 /**
- * The key → header-name rule: uppercase the first character and append the rest
- * of the key **verbatim**. This is deliberately not title-casing —
- * `actor_external_id` becomes `X-Soat-Context-Actor_external_id`, not
- * `X-Soat-Context-ActorExternalId`. Normalizing separators would silently
- * change which header an existing caller's key lands on, and caller-supplied
- * keys take precedence over the session's auto-populated ones, so it could
- * rewrite the identity an `http` tool authorizes against.
+ * The key → header-name rule: prepend `X-Soat-Context-`. That is the whole
+ * rule — the key is a caller-owned identifier and reaches the header name with
+ * **no character transformed**, so the header is a string concatenation the
+ * caller can compute without knowing anything about SOAT.
+ *
+ * Deliberately not title-casing, and deliberately not uppercasing the first
+ * character either. Normalizing separators would silently change which header
+ * an existing caller's key lands on, and caller keys take precedence over the
+ * session's auto-populated ones, so it could rewrite the identity an `http`
+ * tool authorizes against. Uppercasing just the first character avoided that
+ * but kept the shape of the transform — and this project has already paid for
+ * key-rewriting four times (#651, #690, #729, #737). The casing was also never
+ * observable: header names are case-insensitive (RFC 9110 §5.1) and HTTP/2
+ * lowercases them on the wire (RFC 9113 §8.2.1), so it bought presentation
+ * only, at the cost of a rule every reader had to be warned not to extend.
  */
 export const buildContextHeaderName = (key: string): string => {
-  return `X-Soat-Context-${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+  return `X-Soat-Context-${key}`;
 };
 
 /**

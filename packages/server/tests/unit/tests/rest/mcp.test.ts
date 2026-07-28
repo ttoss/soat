@@ -1326,7 +1326,7 @@ describe('MCP tools - happy path', () => {
       expect(result.tool_context).toEqual({ userId: 'u1' });
     });
 
-    // A `toolContext` key is an HTTP header name (`X-Soat-Context-<Key>`), not a
+    // A `toolContext` key is an HTTP header name (`X-Soat-Context-<key>`), not a
     // SOAT field name, so the MCP surface must preserve it verbatim exactly as
     // the REST caseTransform middleware does. `snakeToCamelDeep` would otherwise
     // rewrite `actor_external_id` to `actorExternalId` on read, breaking the

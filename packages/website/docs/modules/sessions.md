@@ -177,9 +177,9 @@ When a generation is triggered through a session, the server automatically injec
 
 | Injected key      | Forwarded header                 | Value                                                  |
 | ----------------- | -------------------------------- | ------------------------------------------------------ |
-| `actorId`         | `X-Soat-Context-ActorId`         | Public ID of the session's actor; omitted if not set   |
-| `actorExternalId` | `X-Soat-Context-ActorExternalId` | External ID of the session's actor; omitted if not set |
-| `sessionId`       | `X-Soat-Context-SessionId`       | Public ID of the session; always present               |
+| `actorId`         | `X-Soat-Context-actorId`         | Public ID of the session's actor; omitted if not set   |
+| `actorExternalId` | `X-Soat-Context-actorExternalId` | External ID of the session's actor; omitted if not set |
+| `sessionId`       | `X-Soat-Context-sessionId`       | Public ID of the session; always present               |
 
 Any values provided by the caller in `tool_context` take precedence over the auto-populated values — the session's own `tool_context` overrides the auto-populated keys, and a per-request `tool_context` overrides both.
 

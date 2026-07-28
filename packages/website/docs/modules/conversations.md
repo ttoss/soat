@@ -145,7 +145,7 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 }
 ```
 
-Keys are used verbatim, so the tool calls in that generation receive `X-Soat-Context-UserId` and `X-Soat-Context-TenantId`. A `user_id` key would instead produce `X-Soat-Context-User_id`.
+Keys are used verbatim, so the tool calls in that generation receive `X-Soat-Context-userId` and `X-Soat-Context-tenantId`. A `user_id` key would instead produce `X-Soat-Context-user_id`.
 
 ### Filtering by Actor
 
