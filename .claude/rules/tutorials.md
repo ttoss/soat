@@ -23,7 +23,7 @@ Tutorials demonstrate real SOAT workflows end-to-end. Every tutorial must be ful
 - **Prerequisites must reference the getting-started docs**. Always include:
   - [Quick Start](/docs/getting-started) — for readers who need to bring the stack up.
   - [Key Concepts](/docs/getting-started/concepts) — for readers new to SOAT's mental model.
-  - [Advanced Configuration](/docs/getting-started/advanced-config) — for readers who need production hardening (secrets, env vars).
+  - [Configuration](/docs/self-hosting/configuration) — for readers who need production hardening (secrets, env vars).
     Link to third-party installation docs (e.g. [Ollama](https://ollama.com), [Docker](https://docs.docker.com/get-docker/)) when the tutorial depends on external tooling.
 
 ## Reading the Docs Locally
