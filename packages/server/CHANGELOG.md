@@ -3,6 +3,40 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.3](https://127.0.0.1/41729/git/ttoss/compare/v0.17.1...v0.17.3) (2026-07-28)
+
+* refactor!: rename orchestration run_id to orchestration_run_id (#763) ([74b5171](https://127.0.0.1/41729/git/ttoss/commits/74b51711c725af1a959feb13d985924b56622cd2)), closes [#763](https://127.0.0.1/41729/git/ttoss/issues/763)
+
+### Bug Fixes
+
+* disambiguate action_executed activity poll in orchestrationNodeExecutors test ([#765](https://127.0.0.1/41729/git/ttoss/issues/765)) ([f339e28](https://127.0.0.1/41729/git/ttoss/commits/f339e28086acca3d3ac1117599b729a1dbaa0f38))
+* guardrail_tripwire dedup for non-run agent calls; usage receipt mutual exclusivity; approvals action doc ([#761](https://127.0.0.1/41729/git/ttoss/issues/761)) ([6c004d8](https://127.0.0.1/41729/git/ttoss/commits/6c004d8fc1053001fc5529229bdbcceafe1ad75c)), closes [#760](https://127.0.0.1/41729/git/ttoss/issues/760) [#759](https://127.0.0.1/41729/git/ttoss/issues/759) [#758](https://127.0.0.1/41729/git/ttoss/issues/758)
+
+### BREAKING CHANGES
+
+* run_id query/path params and response fields are
+  renamed to orchestration_run_id across usage, exceptions, approvals,
+  activity, tasks, and orchestration-runs endpoints. Discussion-run
+  endpoints are unaffected.
+
+  * fix(cli): update orchestrations.test.ts for --orchestration-run-id flag rename
+
+  Missed by the run_id -> orchestration_run_id rename since it lives
+  under packages/cli/tests, not packages/server/tests. CI caught it:
+  the old --run-id flag no longer exists on the regenerated CLI, so
+  these tests failed with a missing-required-param exit.
+
+  * docs: fix remaining --run-id CLI examples missed by the orchestration_run_id rename
+
+  The run_id rename covered code, OpenAPI specs, and most docs, but
+  several tutorial/module doc CLI examples calling
+  get-orchestration-run, submit-human-input, and get-usage-receipt
+  still showed the old --run-id flag. CI's tutorials-test job caught
+  one (create-an-agent-squad); a full repo sweep found the rest
+  (orchestration-control-flow, gate-a-tool-with-guardrails,
+  approval-gate, orchestrate-a-sonnet, usage.md). Discussion-run
+  --run-id usage (get-discussion-run) is untouched, correctly.
+
 ## [0.17.2](https://127.0.0.1/41729/git/ttoss/compare/v0.17.1...v0.17.2) (2026-07-28)
 
 * refactor!: rename orchestration run_id to orchestration_run_id (#763) ([74b5171](https://127.0.0.1/41729/git/ttoss/commits/74b51711c725af1a959feb13d985924b56622cd2)), closes [#763](https://127.0.0.1/41729/git/ttoss/issues/763)
