@@ -31,7 +31,7 @@ In this tutorial you build an order-support agent for a store. The order databas
 
 - SOAT running locally with Ollama. Follow the [Quick Start](/docs/getting-started) guide, and see [Key Concepts](/docs/getting-started/concepts) if you are new to SOAT's mental model.
 - An Ollama instance accessible at `http://ollama:11434` with model `qwen2.5:0.5b` pulled (`ollama pull qwen2.5:0.5b`). See [Ollama](https://ollama.com) for installation.
-- CLI, SDK, or curl available. The server is at `http://localhost:5047`. For production hardening see [Advanced Configuration](/docs/getting-started/advanced-config).
+- CLI, SDK, or curl available. The server is at `http://localhost:5047`. For production hardening see [Configuration](/docs/self-hosting/configuration).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -381,7 +381,7 @@ The response looks like this:
     "type": "submit_tool_outputs",
     "tool_calls": [
       {
-        "id": "call_edJp0OYVsiLKQ9WTGGeurBpc",
+        "id": "call_tohrsiy1",
         "tool_name": "get_order_status",
         "args": { "orderId": "ord_1042" }
       }
@@ -462,7 +462,7 @@ The status flips to `completed` and `output.content` holds the assistant's answe
 ```json
 {
   "status": "completed",
-  "content": "Order ord_1042 has shipped via DHL and is expected to arrive on 2026-08-02."
+  "content": "The order ord_1042 has been marked as shipped. The carrier is DHL and the delivery date is August 2, 2026."
 }
 ```
 
@@ -501,6 +501,17 @@ curl -s "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID" \
 
 </TabItem>
 </Tabs>
+
+```json
+{
+  "id": "trace_Yhm0QlF6MOa67Z0v",
+  "agent_id": "agent_AbpwfxbwiiweroDR",
+  "step_count": 2,
+  "file_id": "file_L0SMZw81UH0aZXnQ"
+}
+```
+
+Two steps: the model call that proposed `get_order_status`, and the resumed call that turned your output into the answer.
 
 ---
 
