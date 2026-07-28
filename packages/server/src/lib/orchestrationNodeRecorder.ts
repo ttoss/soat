@@ -38,7 +38,7 @@ const meterNodeCompute = async (args: {
   if (!args.startedAt || !args.completedAt) return;
   await recordComputeUsage({
     projectId: args.runRecord.projectId as number,
-    runId: args.runRecord.id as number,
+    orchestrationRunId: args.runRecord.id as number,
     runPublicId: args.runRecord.publicId as string,
     nodeId: args.nodeId,
     attempt: args.attempt,
@@ -89,7 +89,7 @@ const recordNodeExecution = async (args: {
 }): Promise<void> => {
   const completedAt = args.status === 'skipped' ? null : new Date();
   await db.OrchestrationNodeExecution.create({
-    runId: args.runRecord.id as number,
+    orchestrationRunId: args.runRecord.id as number,
     nodeId: args.nodeId,
     nodeType: args.nodeType,
     attempt: args.attempt ?? 1,
@@ -250,7 +250,7 @@ const recordNodeSuccess = async (args: {
   if (
     args.status === 'requires_action' &&
     (await reuseRequiresActionRow({
-      runId: args.runRecord.id as number,
+      orchestrationRunId: args.runRecord.id as number,
       nodeId: args.nodeId,
       attempt: args.attempt,
       output: args.output,
@@ -435,7 +435,7 @@ export const recordSkippedNodeExecutions = async (args: {
   nodes: OrchestrationNode[];
 }): Promise<void> => {
   const executed = await db.OrchestrationNodeExecution.findAll({
-    where: { runId: args.runRecord.id as number },
+    where: { orchestrationRunId: args.runRecord.id as number },
     attributes: ['nodeId'],
   });
   const executedIds = new Set(

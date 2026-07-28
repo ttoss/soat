@@ -330,7 +330,7 @@ paths:
         '403':
           description: Forbidden
 
-  /api/v1/orchestration-runs/{run_id}/cancel:
+  /api/v1/orchestration-runs/{orchestration_run_id}/cancel:
     post:
       tags:
         - Orchestrations
@@ -338,7 +338,7 @@ paths:
       description: Cancels a run that has not yet reached a terminal state.
       operationId: cancelOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/run_id'
+        - $ref: '#/components/parameters/orchestration_run_id'
       responses:
         '200':
           description: Cancelled run
@@ -355,7 +355,7 @@ paths:
         '409':
           description: Run is already in a terminal state
 
-  /api/v1/orchestration-runs/{run_id}/human-input:
+  /api/v1/orchestration-runs/{orchestration_run_id}/human-input:
     post:
       tags:
         - Orchestrations
@@ -363,7 +363,7 @@ paths:
       description: Provides human input to a run that is awaiting_input at a human node.
       operationId: submitHumanInput
       parameters:
-        - $ref: '#/components/parameters/run_id'
+        - $ref: '#/components/parameters/orchestration_run_id'
       requestBody:
         required: true
         content:
@@ -388,7 +388,7 @@ paths:
         '409':
           description: Run is not awaiting input
 
-  /api/v1/orchestration-runs/{run_id}/resume:
+  /api/v1/orchestration-runs/{orchestration_run_id}/resume:
     post:
       tags:
         - Orchestrations
@@ -401,7 +401,7 @@ paths:
         advance the run.
       operationId: resumeOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/run_id'
+        - $ref: '#/components/parameters/orchestration_run_id'
       responses:
         '200':
           description: Resumed run
@@ -418,7 +418,7 @@ paths:
         '409':
           description: Run is not awaiting input
 
-  /api/v1/orchestration-runs/{run_id}:
+  /api/v1/orchestration-runs/{orchestration_run_id}:
     get:
       tags:
         - Orchestrations
@@ -426,7 +426,7 @@ paths:
       description: Returns the status, state, and artifacts of a specific run.
       operationId: getOrchestrationRun
       parameters:
-        - $ref: '#/components/parameters/run_id'
+        - $ref: '#/components/parameters/orchestration_run_id'
       responses:
         '200':
           description: Run details
@@ -456,9 +456,9 @@ components:
       schema:
         type: string
       description: Public ID of the orchestration (orch_...)
-    run_id:
+    orchestration_run_id:
       in: path
-      name: run_id
+      name: orchestration_run_id
       required: true
       schema:
         type: string

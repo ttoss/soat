@@ -162,7 +162,7 @@ const routeOnComplete = async (args: {
   result: unknown;
   projectId: number;
   generationId: string | null;
-  runId: string | null;
+  orchestrationRunId: string | null;
 }): Promise<void> => {
   const rules = args.onEnter.onComplete ?? [];
   const matched = rules.find((rule) => {
@@ -183,10 +183,10 @@ const routeOnComplete = async (args: {
         transition: matched.transition,
         actor: {
           kind: 'automation',
-          id: args.generationId ?? args.runId ?? null,
+          id: args.generationId ?? args.orchestrationRunId ?? null,
         },
         generationId: args.generationId,
-        runId: args.runId,
+        orchestrationRunId: args.orchestrationRunId,
       });
     } catch (error) {
       // A matched rule whose transition is guard-rejected (or invalidated by a
@@ -236,8 +236,8 @@ const handleFailure = async (args: {
     args.taskPublicId,
     args.error
   );
-  const { generationId, runId } = failedDispatchIds(args.error);
-  const failedId = generationId ?? runId;
+  const { generationId, orchestrationRunId } = failedDispatchIds(args.error);
+  const failedId = generationId ?? orchestrationRunId;
   const task = await applyLocked({
     taskPublicId: args.taskPublicId,
     guard: (t) => {
@@ -264,7 +264,7 @@ const handleFailure = async (args: {
       transition: args.onEnter.onFailure,
       actor: { kind: 'automation', id: failedId },
       generationId,
-      runId,
+      orchestrationRunId,
     });
   }
 };
@@ -279,7 +279,7 @@ const persistRunningDispatchId = async (args: {
   token: number;
   dispatchKind: ActiveDispatch['kind'];
   generationId: string | null;
-  runId: string | null;
+  orchestrationRunId: string | null;
 }): Promise<void> => {
   await applyLocked({
     taskPublicId: args.taskPublicId,
@@ -293,7 +293,7 @@ const persistRunningDispatchId = async (args: {
     mutate: (t) => {
       t.activeDispatch = {
         kind: args.dispatchKind,
-        id: args.generationId ?? args.runId,
+        id: args.generationId ?? args.orchestrationRunId,
         status: 'running',
       };
     },
@@ -322,7 +322,7 @@ const commitCompletion = async (args: {
     mutate: (t) => {
       t.activeDispatch = {
         kind: args.dispatchKind,
-        id: args.dispatched.generationId ?? args.dispatched.runId,
+        id: args.dispatched.generationId ?? args.dispatched.orchestrationRunId,
         status: 'completed',
       };
       t.automationStatus = 'completed';
@@ -374,14 +374,14 @@ export const runStateAutomation = async (args: {
       inputs,
       // Persist the dispatch id the moment it is known — before the blocking
       // wait — so cancellation-on-exit can reach a genuinely in-flight run (#606).
-      onDispatchStarted: ({ generationId, runId }) => {
+      onDispatchStarted: ({ generationId, orchestrationRunId }) => {
         return persistRunningDispatchId({
           taskPublicId: args.taskPublicId,
           stateName: args.stateName,
           token,
           dispatchKind,
           generationId,
-          runId,
+          orchestrationRunId,
         });
       },
     });
@@ -422,6 +422,6 @@ export const runStateAutomation = async (args: {
     result: dispatched.result,
     projectId: args.projectId,
     generationId: dispatched.generationId,
-    runId: dispatched.runId,
+    orchestrationRunId: dispatched.orchestrationRunId,
   });
 };

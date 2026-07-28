@@ -27,7 +27,7 @@ export const GUARDRAIL_EVALUATION_DETAIL_KEYS_CAMEL = [
   'contextSource',
   'contextSnapshot',
   'agentId',
-  'runId',
+  'orchestrationRunId',
   'generationId',
 ] as const;
 
@@ -44,7 +44,7 @@ export const GUARDRAIL_EVALUATION_DETAIL_KEYS_SNAKE = [
   'context_source',
   'context_snapshot',
   'agent_id',
-  'run_id',
+  'orchestration_run_id',
   'generation_id',
 ] as const;
 

@@ -362,20 +362,20 @@ paths:
       summary: Get a generation or run billing receipt
       description: >
         Returns a billing receipt. Pass generation_id for a per-generation
-        receipt, or run_id for a per-run receipt summed across the orchestration
+        receipt, or orchestration_run_id for a per-run receipt summed across the orchestration
         run's meters — both share the same shape (per-model line items with
         tokens, the price-book version that priced them, and cost, plus totals).
-        Exactly one of generation_id or run_id must be supplied.
+        Exactly one of generation_id or orchestration_run_id must be supplied.
       operationId: getUsageReceipt
       parameters:
         - name: generation_id
           in: query
           required: false
           description: >
-            Generation public ID. Mutually exclusive with run_id.
+            Generation public ID. Mutually exclusive with orchestration_run_id.
           schema:
             type: string
-        - name: run_id
+        - name: orchestration_run_id
           in: query
           required: false
           description: >
@@ -534,7 +534,7 @@ components:
           x-soat-ref: projects
           type: string
           description: Public ID of the project the usage is attributed to
-        run_id:
+        orchestration_run_id:
           type: string
           nullable: true
           description: >
@@ -755,7 +755,7 @@ components:
             Present on a per-generation receipt; absent on a per-run receipt.
           x-soat-ref: generations
           type: string
-        run_id:
+        orchestration_run_id:
           description: >
             Present on a per-run receipt (summed across the run's meters); absent
             on a per-generation receipt.

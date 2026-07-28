@@ -433,7 +433,7 @@ echo "RUN_ID: $RUN_ID"
 ```bash
 soat get-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
-  --run-id "$RUN_ID" | jq '{status, state: {results: .state.results, summary: .state.summary}, nodes: [.node_executions[] | {node_id, node_type, status}]}'
+  --orchestration-run-id "$RUN_ID" | jq '{status, state: {results: .state.results, summary: .state.summary}, nodes: [.node_executions[] | {node_id, node_type, status}]}'
 ```
 
 Look for:
@@ -447,7 +447,7 @@ Look for:
 
 ```ts
 const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
 });
 console.log('results:', runState.state.results);
 console.log('summary:', runState.state.summary);

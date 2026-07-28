@@ -24,7 +24,7 @@ export class OrchestrationNodeExecution extends Model {
     return OrchestrationRun;
   })
   @Column({ type: DataType.INTEGER, allowNull: false })
-  declare runId: number;
+  declare orchestrationRunId: number;
 
   @BelongsTo(() => {
     return OrchestrationRun;
@@ -43,7 +43,7 @@ export class OrchestrationNodeExecution extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare attempt: number;
 
-  // Run-scoped idempotency key: `{run_id}:{node_id}:{attempt}` where `attempt`
+  // Run-scoped idempotency key: `{orchestration_run_id}:{node_id}:{attempt}` where `attempt`
   // is the node retry attempt (this row's `attempt`), NOT the queue delivery
   // counter. Written `running` before a side-effecting node dispatches, then
   // updated in place. A redelivered task that finds a `completed` row for the

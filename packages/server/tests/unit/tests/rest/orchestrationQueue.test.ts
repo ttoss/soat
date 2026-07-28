@@ -183,7 +183,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       });
       expect(runRow?.status).toBe('queued');
       const tasks = await db.OrchestrationRunTask.findAll({
-        where: { runId: runRow?.id as number },
+        where: { orchestrationRunId: runRow?.id as number },
       });
       expect(tasks).toHaveLength(1);
       expect(tasks[0].kind).toBe('continue');
@@ -204,7 +204,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const total = 12;
       const seeded = await Promise.all(
         Array.from({ length: total }, () => {
-          return enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+          return enqueueRunTask({
+            orchestrationRunId: run.id as number,
+            kind: 'continue',
+          });
         })
       );
       const seededIds = seeded.map((t) => {
@@ -278,7 +281,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // The side-effecting tool node ran exactly once across the redelivery.
       expect(requests).toHaveLength(1);
       const execs = await db.OrchestrationNodeExecution.findAll({
-        where: { runId: runPk, nodeId: 'call' },
+        where: { orchestrationRunId: runPk, nodeId: 'call' },
       });
       const keyed = execs.filter((e) => {
         return e.idempotencyKey === `${started.id}:call:1`;
@@ -327,7 +330,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       // Exactly one node-execution record exists for the key.
       const execs = await db.OrchestrationNodeExecution.findAll({
-        where: { runId: run.id as number, nodeId: 'call' },
+        where: { orchestrationRunId: run.id as number, nodeId: 'call' },
       });
       expect(execs).toHaveLength(1);
       expect(execs[0].idempotencyKey).toBe(`${run.publicId}:call:1`);
@@ -369,7 +372,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       const keys = (
         await db.OrchestrationNodeExecution.findAll({
-          where: { runId: run.id as number, nodeId: 'call' },
+          where: { orchestrationRunId: run.id as number, nodeId: 'call' },
         })
       )
         .map((e) => {
@@ -422,7 +425,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       // Simulate a worker that reserved the key and crashed before completing
       // (a `running` row left behind, no completed output yet).
       await db.OrchestrationNodeExecution.create({
-        runId: run.id as number,
+        orchestrationRunId: run.id as number,
         nodeId: 'call',
         nodeType: 'tool',
         attempt: 1,
@@ -451,7 +454,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       // Still exactly one row for the key, now completed.
       const execs = await db.OrchestrationNodeExecution.findAll({
-        where: { runId: run.id as number, nodeId: 'call' },
+        where: { orchestrationRunId: run.id as number, nodeId: 'call' },
       });
       expect(execs).toHaveLength(1);
       expect(execs[0].status).toBe('completed');
@@ -509,7 +512,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       );
       const run = await createRunRow(orchPk);
       const task = await enqueueRunTask({
-        runId: run.id as number,
+        orchestrationRunId: run.id as number,
         kind: 'continue',
       });
 
@@ -576,7 +579,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
 
       // The task was acked (deleted) on completion.
       const remaining = await db.OrchestrationRunTask.findAll({
-        where: { runId: runPk },
+        where: { orchestrationRunId: runPk },
       });
       expect(remaining).toHaveLength(0);
     });
@@ -620,7 +623,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
           resume: { kind: 'delay', artifact: { waited: '1s' } },
         },
       });
-      await enqueueRunTask({ runId: run.id as number, kind: 'wake' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'wake',
+      });
 
       const claimed = await drainQueueOnce();
       expect(claimed).toBeGreaterThanOrEqual(1);
@@ -647,7 +653,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       );
       // A `running` run whose driver crashed — the reaper enqueues a `continue`.
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       await drainQueueOnce();
 
@@ -675,7 +684,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         startedAt: new Date(),
         completedAt: new Date(),
       });
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       await drainQueueOnce();
 
@@ -683,7 +695,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
       const after = await db.OrchestrationRun.findByPk(run.id as number);
       expect(after?.status).toBe('cancelled');
       const remaining = await db.OrchestrationRunTask.findAll({
-        where: { runId: run.id as number },
+        where: { orchestrationRunId: run.id as number },
       });
       expect(remaining).toHaveLength(0);
     });
@@ -697,7 +709,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
     let simpleOrchPk: number;
 
     const seedQueuedRun = async (): Promise<{
-      runId: number;
+      orchestrationRunId: number;
       taskId: number;
     }> => {
       const run = await db.OrchestrationRun.create({
@@ -710,10 +722,13 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         input: {},
       });
       const task = await enqueueRunTask({
-        runId: run.id as number,
+        orchestrationRunId: run.id as number,
         kind: 'continue',
       });
-      return { runId: run.id as number, taskId: task.id as number };
+      return {
+        orchestrationRunId: run.id as number,
+        taskId: task.id as number,
+      };
     };
 
     beforeAll(async () => {
@@ -771,8 +786,14 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         artifacts: {},
         input: {},
       });
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       // One run takes one slot; its own second task is not blocked by itself.
       const claimed = await claimRunTasks({ limit: 10 });
@@ -837,7 +858,7 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         input: {},
       });
       await enqueueRunTask({
-        runId: otherRun.id as number,
+        orchestrationRunId: otherRun.id as number,
         kind: 'continue',
       });
 
@@ -866,7 +887,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         })
       );
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       await claimRunTasks({ limit: 5 });
 
@@ -955,7 +979,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         })
       );
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       const res = await authenticatedTestClient(adminToken).get(
         '/api/v1/orchestrations/queue/stats'
@@ -985,7 +1012,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         })
       );
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       const before = await getPostgresQueueStats();
       const beforeRow = before.perProject.find((r) => {
@@ -1011,7 +1041,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         })
       );
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       const stats = await getPostgresQueueStats({ projectIds: [projectPk] });
       expect(
@@ -1087,7 +1120,10 @@ describe('Orchestration queue (Postgres driver) + idempotency', () => {
         })
       );
       const run = await createRunRow(orchPk);
-      await enqueueRunTask({ runId: run.id as number, kind: 'continue' });
+      await enqueueRunTask({
+        orchestrationRunId: run.id as number,
+        kind: 'continue',
+      });
 
       expect(await drainQueueOnce()).toBeGreaterThanOrEqual(1);
       await publishWorkerHeartbeat();

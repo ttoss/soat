@@ -254,7 +254,7 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
 // ConversationMessage, WebhookDelivery, OrchestrationCheckpoint/
 // NodeExecution) are either DB-cascaded from their immediate parent or, when
 // the FK is RESTRICT, deleted explicitly by parent id (OrchestrationCheckpoint
-// /NodeExecution by runId, ConversationMessage by documentId so that
+// /NodeExecution by orchestrationRunId, ConversationMessage by documentId so that
 // project-owned Documents can be removed).
 const forceDeleteProjectWithDependents = async (args: {
   project: InstanceType<typeof db.Project>;
@@ -287,11 +287,11 @@ const forceDeleteProjectWithDependents = async (args: {
 
     if (orchestrationRunIds.length > 0) {
       await db.OrchestrationCheckpoint.destroy({
-        where: { runId: orchestrationRunIds },
+        where: { orchestrationRunId: orchestrationRunIds },
         transaction,
       });
       await db.OrchestrationNodeExecution.destroy({
-        where: { runId: orchestrationRunIds },
+        where: { orchestrationRunId: orchestrationRunIds },
         transaction,
       });
     }

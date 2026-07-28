@@ -313,7 +313,7 @@ export const runCostUsd = async (args: {
   runInternalId: number;
 }): Promise<number> => {
   const rows = await db.UsageEvent.findAll({
-    where: { runId: args.runInternalId },
+    where: { orchestrationRunId: args.runInternalId },
     attributes: [[Sequelize.fn('SUM', Sequelize.col('cost_usd')), 'total']],
   });
   return readTotal(rows[0]);
@@ -330,7 +330,7 @@ export const runTokens = async (args: {
   runInternalId: number;
 }): Promise<number> => {
   const events = await db.UsageEvent.findAll({
-    where: { runId: args.runInternalId },
+    where: { orchestrationRunId: args.runInternalId },
     attributes: ['id'],
   });
   const eventIds = events.map((event) => {

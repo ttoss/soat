@@ -29,12 +29,12 @@ There is no public create endpoint — entries are platform-written by producers
 | `severity` | string | `info`, `warning`, `critical` |
 | `summary` | string | Human-readable one-line description |
 | `detail` | object \| null | Kind-specific structured context (tool id, node id, generation id, guardrail policy version) |
-| `run_id` | string \| null | Originating orchestration run, if any |
+| `orchestration_run_id` | string \| null | Originating orchestration run, if any |
 | `agent_id` | string \| null | Associated agent, if any |
 | `ref_id` | string \| null | Producer-specific reference (the approval, exception, or trigger id the entry came from, or the executed tool's id) |
 | `created_at` | string | Append-only timestamp |
 
-`run_id` / `agent_id` / `guardrail_version` are held as bare public ids (not foreign keys), matching [Exceptions](./exceptions.md#exceptionitem)'s provenance convention: the feed has no resolution workflow that needs to join back to those rows. A node id, generation id, or guardrail policy version is carried in `detail` rather than as a dedicated column — only the fields every kind shares (`run_id`, `agent_id`, and the generic `ref_id`) are indexed top-level columns.
+`orchestration_run_id` / `agent_id` / `guardrail_version` are held as bare public ids (not foreign keys), matching [Exceptions](./exceptions.md#exceptionitem)'s provenance convention: the feed has no resolution workflow that needs to join back to those rows. A node id, generation id, or guardrail policy version is carried in `detail` rather than as a dedicated column — only the fields every kind shares (`orchestration_run_id`, `agent_id`, and the generic `ref_id`) are indexed top-level columns.
 
 ## Key Concepts
 
@@ -53,7 +53,7 @@ Activity and the audit log are the pair most easily confused, because both descr
 | | Activity | [Audit log](./audit-log.md) |
 |---|---|---|
 | Classifier | `kind` — one of four fixed values; never a permission string | `action` — **is** the [permission-action string](./iam.md#actions) that authorized the request |
-| Subject | `run_id`, `agent_id`, `ref_id` — no principal is recorded at all | `principal_type` / `principal_id` ([user](./users.md) / [API key](./api-keys.md)) |
+| Subject | `orchestration_run_id`, `agent_id`, `ref_id` — no principal is recorded at all | `principal_type` / `principal_id` ([user](./users.md) / [API key](./api-keys.md)) |
 | Target | `ref_id` plus free-form `detail` | [`resource_srn`](./iam.md#soat-resource-names-srns) + `resource_public_id` |
 | Outcome | `severity` — records only what **happened** | `status` (HTTP), so **denied attempts are recorded too**, as `403` |
 | Request forensics | none | `request_id`, `ip`, `user_agent` |

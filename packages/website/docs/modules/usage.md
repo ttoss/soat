@@ -32,7 +32,7 @@ Every event links back to the resources it attributes spend to: the [generation]
 | ---------------- | --------------- | -------------------------------------------------------------------------------------------- |
 | `id`             | string          | Public identifier for the usage event (`ue_` prefix)                                         |
 | `project_id`     | string          | Project the usage is attributed to                                                           |
-| `run_id`         | string \| null  | Orchestration run that initiated the occurrence, when it ran inside a run                    |
+| `orchestration_run_id`         | string \| null  | Orchestration run that initiated the occurrence, when it ran inside a run                    |
 | `node_id`        | string \| null  | Orchestration node within the run, when applicable                                           |
 | `agent_id`       | string \| null  | Agent that ran the generation                                                                |
 | `generation_id`  | string \| null  | Generation this usage was recorded for                                                       |
@@ -121,10 +121,10 @@ An LLM event's tokens are split into disjoint, additive components. `input_token
 
 | Path | Metered calls | Event attribution |
 | --- | --- | --- |
-| Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes — all run through the same agent-completion path | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `run_id`/`node_id` inside a run |
+| Agent generations | Agent generate (non-streaming, streaming, and the tool-outputs continuation), [conversations](./conversations.md), and [orchestration](./orchestrations.md) agent nodes — all run through the same agent-completion path | Full chain: `generation_id`, `agent_id`, `trace_id`, plus `orchestration_run_id`/`node_id` inside a run |
 | Standalone completions | [Chat](./chats.md) completions (stateless and chat-scoped, streaming and not), [discussion](./discussions.md) turns, and [memory](./memories.md) fact extraction and consolidation | `generation_id` and `trace_id` are always `null` — these calls create no generation. `agent_id` is set for memory extraction/consolidation (which are anchored to an agent) and `null` for chats and discussions |
 
-When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
+When a generation runs inside an orchestration [run](./orchestrations.md), its event carries the `orchestration_run_id` and `node_id` of the dispatching node; both are `null` for standalone generations. For events recorded inside a run, the idempotency key is scoped to the node execution (`run:<orchestration_run_id>:node:<node_id>`), so a replayed node upserts into a no-op instead of double counting.
 
 Standalone completions have no replay identity — nothing re-delivers them, and a retried request is a new provider call that must be billed — so their idempotency key is unique per call (`completion:<source>:<uuid>`, where `source` is `chat`, `discussion`, `memory_extraction`, or `memory_consolidation`).
 
@@ -132,11 +132,11 @@ A **streamed** completion is metered when the stream finishes, since token count
 
 ### Compute metering
 
-Every [orchestration](./orchestrations.md) node execution that actively ran writes one `compute_execution` event alongside any token metering, carrying a single `compute_second` component whose `quantity` is the node's wall-clock seconds (`completed_at − started_at`). This is independent of LLM tokens, so a non-agent node (a `transform`, `condition`, or `tool` node) still meters compute, and an agent node produces both an `llm_tokens` event and a `compute_execution` event. Compute is attributed at the run/node level (`run_id` + `node_id`); `generation_id`, `agent_id`, and `trace_id` are `null`. It is priced from a `soat`/`compute-second` price-book SKU when one is effective (`cost_usd = null` otherwise), and the event is idempotent on the node execution (`compute:<run_id>:node:<node_id>:attempt:<n>`) so a redelivered node is never double-counted. A skipped node (which never ran) is not metered.
+Every [orchestration](./orchestrations.md) node execution that actively ran writes one `compute_execution` event alongside any token metering, carrying a single `compute_second` component whose `quantity` is the node's wall-clock seconds (`completed_at − started_at`). This is independent of LLM tokens, so a non-agent node (a `transform`, `condition`, or `tool` node) still meters compute, and an agent node produces both an `llm_tokens` event and a `compute_execution` event. Compute is attributed at the run/node level (`orchestration_run_id` + `node_id`); `generation_id`, `agent_id`, and `trace_id` are `null`. It is priced from a `soat`/`compute-second` price-book SKU when one is effective (`cost_usd = null` otherwise), and the event is idempotent on the node execution (`compute:<orchestration_run_id>:node:<node_id>:attempt:<n>`) so a redelivered node is never double-counted. A skipped node (which never ran) is not metered.
 
 ### Storage metering
 
-A daily snapshot writes one `storage` event per project for each UTC day, carrying a single `gb_day` component whose `quantity` is the project's stored gigabytes (total bytes ÷ 1e9). Stored bytes = uploaded [file](./files.md) sizes plus the [document](./documents.md) chunk text held for retrieval, summed at snapshot time. The event has no principal/agent/run attribution (`generation_id`, `agent_id`, `run_id`, `trace_id` are `null`), is priced from a `soat`/`gb-day` SKU when one is effective (`cost_usd = null` otherwise), and is idempotent on `storage:<project>:<YYYY-MM-DD>` — a re-run for the same day is a no-op. The daily sample misses intra-day churn (a project that uploads and deletes between samples meters zero for that span); this is accepted for v1, bounded by the sampling interval and symmetric across projects.
+A daily snapshot writes one `storage` event per project for each UTC day, carrying a single `gb_day` component whose `quantity` is the project's stored gigabytes (total bytes ÷ 1e9). Stored bytes = uploaded [file](./files.md) sizes plus the [document](./documents.md) chunk text held for retrieval, summed at snapshot time. The event has no principal/agent/run attribution (`generation_id`, `agent_id`, `orchestration_run_id`, `trace_id` are `null`), is priced from a `soat`/`gb-day` SKU when one is effective (`cost_usd = null` otherwise), and is idempotent on `storage:<project>:<YYYY-MM-DD>` — a re-run for the same day is a no-op. The daily sample misses intra-day churn (a project that uploads and deletes between samples meters zero for that span); this is accepted for v1, bounded by the sampling interval and symmetric across projects.
 
 ### API-request metering
 
@@ -178,7 +178,7 @@ Prices can also be **declared in a formation** with the `project_price` resource
 
 `GET /api/v1/usage/receipt?generation_id=…` returns a billing **receipt** for a completed generation: one line item per usage event (its SKU, cost, and component breakdown), a `by_meter_type` cost split (the "tokens + infra" split — one entry per distinct meter type), reconstructed token totals (`total_input_tokens` is uncached input + cached), plus a grand total. A single-type receipt has one `by_meter_type` entry whose cost equals the receipt total. Because every component carries the exact price-book version and the cost is frozen at write time, receipts stay reproducible and are meant to reconcile against the provider's invoice within a small tolerance (target ±2%); investigate any project whose summed receipts drift beyond it.
 
-`GET /api/v1/usage/receipt?run_id=…` returns the same receipt shape for an entire [orchestration](./orchestrations.md) run — "one operating cycle → one action" billing — with one line item per usage event across every node of the run, summed for the totals and the `by_meter_type` split. The response carries `run_id` (and omits `generation_id`). The run's token/cost roll-up is also surfaced inline on the run itself as a `usage` object on `GET /api/v1/orchestration-runs/{run_id}`, so callers see run spend without a second request.
+`GET /api/v1/usage/receipt?orchestration_run_id=…` returns the same receipt shape for an entire [orchestration](./orchestrations.md) run — "one operating cycle → one action" billing — with one line item per usage event across every node of the run, summed for the totals and the `by_meter_type` split. The response carries `orchestration_run_id` (and omits `generation_id`). The run's token/cost roll-up is also surfaced inline on the run itself as a `usage` object on `GET /api/v1/orchestration-runs/{orchestration_run_id}`, so callers see run spend without a second request.
 
 ### Aggregation
 
@@ -296,7 +296,7 @@ Get a run's receipt (summed across every node of the run):
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage-receipt --run-id orch_run_V1StGXR8Z5jdHi6B
+soat get-usage-receipt --orchestration-run-id orch_run_V1StGXR8Z5jdHi6B
 ```
 
 </TabItem>
@@ -304,7 +304,7 @@ soat get-usage-receipt --run-id orch_run_V1StGXR8Z5jdHi6B
 
 ```ts
 const { data, error } = await soat.usage.getUsageReceipt({
-  query: { run_id: 'orch_run_V1StGXR8Z5jdHi6B' },
+  query: { orchestration_run_id: 'orch_run_V1StGXR8Z5jdHi6B' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -313,7 +313,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl "https://api.example.com/api/v1/usage/receipt?run_id=orch_run_V1StGXR8Z5jdHi6B" \
+curl "https://api.example.com/api/v1/usage/receipt?orchestration_run_id=orch_run_V1StGXR8Z5jdHi6B" \
   -H "Authorization: Bearer <token>"
 ```
 

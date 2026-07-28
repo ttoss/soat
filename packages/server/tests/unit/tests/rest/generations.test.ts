@@ -380,13 +380,13 @@ describe('Generations', () => {
     test('rejects reserved metadata keys with 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)
-        .send({ metadata: { run_id: 'run_hijack' } });
+        .send({ metadata: { orchestration_run_id: 'run_hijack' } });
       expect(response.status).toBe(400);
       expect(response.body.error).toMatch(/reserved/i);
     });
 
     // Regression: usage/billing attribution (usageRecording.ts) reads the
-    // *stored* camelCase keys (actionId/triggerId/runId/nodeId), but the
+    // *stored* camelCase keys (actionId/triggerId/orchestrationRunId/nodeId), but the
     // reserved-key guard only blocked the wire (snake_case) spellings. A
     // caller sending the camelCase spelling directly passed validation and
     // updateGenerationMetadata's shallow merge overwrote real attribution
@@ -394,7 +394,7 @@ describe('Generations', () => {
     test('rejects the stored camelCase spelling of a reserved key with 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)
-        .send({ metadata: { runId: 'run_hijack' } });
+        .send({ metadata: { orchestrationRunId: 'run_hijack' } });
       expect(response.status).toBe(400);
       expect(response.body.error).toMatch(/reserved/i);
     });

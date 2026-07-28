@@ -1036,7 +1036,7 @@ components:
             record for per-run audit attribution (e.g. the knowledge-corpus
             version that produced this action). Round-trips when the generation
             is fetched via the generations API. Reserved server-owned keys
-            (`action_id`, `trigger_id`, `run_id`, `node_id`, `extraction`, and
+            (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `extraction`, and
             internal recovery state) cannot be set here and are rejected with
             400.
         extract:

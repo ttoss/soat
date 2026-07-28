@@ -127,7 +127,7 @@ export const priceTokenComponents = (args: {
 // is behind the call, and frozen here at write time like `cost_usd`.
 export type TokenEventAttribution = {
   projectId: number;
-  runId: number | null;
+  orchestrationRunId: number | null;
   nodeId: string | null;
   agentId: number | null;
   generationId: number | null;
@@ -160,7 +160,7 @@ export const persistTokenEvent = async (args: {
       defaults: {
         publicId: generatePublicId(PUBLIC_ID_PREFIXES.usageEvent),
         projectId: attribution.projectId,
-        runId: attribution.runId,
+        orchestrationRunId: attribution.orchestrationRunId,
         nodeId: attribution.nodeId,
         agentId: attribution.agentId,
         generationId: attribution.generationId,

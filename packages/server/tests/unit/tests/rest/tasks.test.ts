@@ -926,7 +926,7 @@ describe('Tasks', () => {
         return h.transition === 'to_done';
       });
       expect(routed.actor_kind).toBe('automation');
-      expect(typeof routed.run_id).toBe('string');
+      expect(typeof routed.orchestration_run_id).toBe('string');
     });
 
     test('cancellation-on-exit cancels a genuinely in-flight orchestration run (#606)', async () => {
@@ -1012,7 +1012,8 @@ describe('Tasks', () => {
             );
           },
         });
-        const runId = (running.active_dispatch as { id: string }).id;
+        const orchestrationRunId = (running.active_dispatch as { id: string })
+          .id;
 
         // Fire a manual transition out of the state before the run finishes.
         const moved = await transition(taskId, 'manual_exit');
@@ -1020,7 +1021,7 @@ describe('Tasks', () => {
 
         // The still-running orchestration run must have been cancelled.
         const runRow = await db.OrchestrationRun.findOne({
-          where: { publicId: runId },
+          where: { publicId: orchestrationRunId },
         });
         expect(runRow!.status).toBe('cancelled');
       } finally {

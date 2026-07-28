@@ -292,7 +292,7 @@ export const createTask = async (args: {
     actorKind: args.actor.kind,
     actorId: args.actor.id,
     generationId: null,
-    runId: null,
+    orchestrationRunId: null,
     note: null,
   });
 
@@ -389,7 +389,7 @@ export const getTaskHistory = async (args: { id: string }) => {
       actor_kind: row.actorKind,
       actor_id: row.actorId,
       generation_id: row.generationId,
-      run_id: row.runId,
+      orchestration_run_id: row.orchestrationRunId,
       note: row.note,
       created_at: row.createdAt,
     };

@@ -10,10 +10,10 @@ import type {
 import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
 
 export const mapRunWithIncludes = async (
-  runId: number
+  orchestrationRunId: number
 ): Promise<MappedOrchestrationRun> => {
   const finalRun = await db.OrchestrationRun.findOne({
-    where: { id: runId },
+    where: { id: orchestrationRunId },
     include: [
       { model: db.Project, as: 'project' },
       { model: db.Orchestration, as: 'orchestration' },
@@ -142,12 +142,12 @@ export const persistScheduledWait = async (args: {
 };
 
 export const restoreRunFromCheckpoint = async (args: {
-  runId: number;
+  orchestrationRunId: number;
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
 }): Promise<void> => {
   const checkpoint = await db.OrchestrationCheckpoint.findOne({
-    where: { runId: args.runId },
+    where: { orchestrationRunId: args.orchestrationRunId },
     order: [['createdAt', 'DESC']],
   });
   if (checkpoint) {

@@ -32,7 +32,7 @@ const RUN_TASK_KINDS: readonly RunTaskKind[] = ['continue', 'wake', 'resume'];
 
 /** The message body the driver writes and reads back — the queue carries only
  * the run reference, never run state (state lives in Postgres). */
-type SqsTaskBody = { runId: number; kind: RunTaskKind };
+type SqsTaskBody = { orchestrationRunId: number; kind: RunTaskKind };
 
 const isRunTaskKind = (value: unknown): value is RunTaskKind => {
   return (
@@ -57,10 +57,14 @@ export const parseSqsTaskBody = (
     return null;
   }
   if (typeof parsed !== 'object' || parsed === null) return null;
-  const { runId, kind } = parsed as Record<string, unknown>;
-  if (typeof runId !== 'number' || !Number.isFinite(runId)) return null;
+  const { orchestrationRunId, kind } = parsed as Record<string, unknown>;
+  if (
+    typeof orchestrationRunId !== 'number' ||
+    !Number.isFinite(orchestrationRunId)
+  )
+    return null;
   if (!isRunTaskKind(kind)) return null;
-  return { runId, kind };
+  return { orchestrationRunId, kind };
 };
 
 /** Whole seconds of delay between `now` and `availableAt`, clamped to what SQS
@@ -109,16 +113,19 @@ type SqsContext = { client: () => SQSClient; queueUrl: () => string };
 
 const sqsEnqueue = async (
   ctx: SqsContext,
-  args: { runId: number; kind: RunTaskKind; availableAt?: Date }
+  args: { orchestrationRunId: number; kind: RunTaskKind; availableAt?: Date }
 ): Promise<void> => {
-  const body: SqsTaskBody = { runId: args.runId, kind: args.kind };
+  const body: SqsTaskBody = {
+    orchestrationRunId: args.orchestrationRunId,
+    kind: args.kind,
+  };
   const delaySeconds = sqsDelaySeconds({
     availableAt: args.availableAt,
     now: new Date(),
   });
   log(
-    'sqs.enqueue: runId=%d kind=%s delay=%ds',
-    args.runId,
+    'sqs.enqueue: orchestrationRunId=%d kind=%s delay=%ds',
+    args.orchestrationRunId,
     args.kind,
     delaySeconds
   );
@@ -153,7 +160,7 @@ const toClaimedTask = (args: {
   return {
     id: args.message.MessageId ?? 'unknown',
     handle: args.message.ReceiptHandle,
-    runId: body.runId,
+    orchestrationRunId: body.orchestrationRunId,
     kind: body.kind,
     attempts: Number(args.message.Attributes?.ApproximateReceiveCount ?? 1),
   };

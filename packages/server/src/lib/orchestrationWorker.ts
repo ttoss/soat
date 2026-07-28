@@ -106,9 +106,13 @@ export const handleRunTask = async (args: {
   task: ClaimedTask;
 }): Promise<void> => {
   const { task } = args;
-  const run = await db.OrchestrationRun.findByPk(task.runId);
+  const run = await db.OrchestrationRun.findByPk(task.orchestrationRunId);
   if (!run) {
-    log('handleRunTask: run %d gone, acking task %s', task.runId, task.id);
+    log(
+      'handleRunTask: run %d gone, acking task %s',
+      task.orchestrationRunId,
+      task.id
+    );
     return;
   }
   if (TERMINAL_STATUSES.has(run.status)) {

@@ -46,7 +46,7 @@ export const wakeDueRuns = createSweep({
   },
   handle: async ({ row: run }) => {
     await getOrchestrationQueueDriver().enqueue({
-      runId: run.id as number,
+      orchestrationRunId: run.id as number,
       kind: 'wake',
     });
     kickWorker();
@@ -95,7 +95,7 @@ export const reapOrphanedRuns = createSweep({
   },
   handle: async ({ row: run }) => {
     await getOrchestrationQueueDriver().enqueue({
-      runId: run.id as number,
+      orchestrationRunId: run.id as number,
       kind: 'continue',
     });
     kickWorker();

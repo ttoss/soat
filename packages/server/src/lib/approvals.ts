@@ -98,7 +98,7 @@ export const mapApproval = (instance: ApprovalInstance) => {
     predicted_impact: instance.predictedImpact,
     expires_at: instance.expiresAt,
     dedup_key: instance.dedupKey,
-    run_id: instance.orchestrationRun?.publicId ?? null,
+    orchestration_run_id: instance.orchestrationRun?.publicId ?? null,
     node_id: instance.nodeId,
     generation_id: instance.generationId,
     session_id: instance.sessionId,

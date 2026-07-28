@@ -235,7 +235,7 @@ Every evaluation — execute, route-to-approval, block, or tripwire — writes a
     "soat.usage.cost_usd_24h": 812.4
   },
   "agent_id": "agent_V1StGXR8Z5jdHi6B",
-  "run_id": "orch_run_V1StGXR8Z5jdHi6B",
+  "orchestration_run_id": "orch_run_V1StGXR8Z5jdHi6B",
   "generation_id": "gen_V1StGXR8Z5jdHi6B"
 }
 ```

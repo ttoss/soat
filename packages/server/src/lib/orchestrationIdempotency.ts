@@ -23,7 +23,7 @@ const SIDE_EFFECTING_NODE_TYPES = new Set([
 ]);
 
 /**
- * The run-scoped idempotency key for a node execution: `{run_id}:{node_id}:
+ * The run-scoped idempotency key for a node execution: `{orchestration_run_id}:{node_id}:
  * {attempt}` where `attempt` is the node **retry** attempt (D2). Null for pure /
  * non-keyed node types, so they keep record-after-execution behavior.
  */
@@ -102,7 +102,7 @@ const reserveKeyedRunningRow = async (args: {
 > => {
   try {
     const row = await db.OrchestrationNodeExecution.create({
-      runId: args.runRecord.id as number,
+      orchestrationRunId: args.runRecord.id as number,
       nodeId: args.nodeId,
       nodeType: args.nodeType,
       attempt: args.attempt,

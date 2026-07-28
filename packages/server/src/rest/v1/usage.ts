@@ -290,30 +290,30 @@ usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
   ctx.status = 204;
 });
 
-// Resolves the receipt for either addressing mode (run_id or generation_id, the
+// Resolves the receipt for either addressing mode (orchestration_run_id or generation_id, the
 // two mutually exclusive). Throws VALIDATION_FAILED when neither is supplied and
 // RESOURCE_NOT_FOUND when the addressed resource is not visible in scope.
 const resolveReceipt = async (args: {
   generationId?: string;
-  runId?: string;
+  orchestrationRunId?: string;
   projectIds?: number[];
 }) => {
-  if (args.runId && args.generationId) {
+  if (args.orchestrationRunId && args.generationId) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'generation_id and run_id are mutually exclusive — supply exactly one.'
+      'generation_id and orchestration_run_id are mutually exclusive — supply exactly one.'
     );
   }
 
-  if (args.runId) {
+  if (args.orchestrationRunId) {
     const receipt = await getRunReceipt({
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       projectIds: args.projectIds,
     });
     if (!receipt) {
       throw new DomainError(
         'RESOURCE_NOT_FOUND',
-        `Orchestration run '${args.runId}' not found.`
+        `Orchestration run '${args.orchestrationRunId}' not found.`
       );
     }
     return receipt;
@@ -322,7 +322,7 @@ const resolveReceipt = async (args: {
   if (!args.generationId) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'generation_id or run_id query parameter is required.'
+      'generation_id or orchestration_run_id query parameter is required.'
     );
   }
 
@@ -344,7 +344,7 @@ const resolveReceipt = async (args: {
  * GET /api/v1/usage/receipt
  * operationId: getUsageReceipt
  * Returns a billing receipt. Pass generation_id for a per-generation receipt or
- * run_id for a per-run receipt summed across the orchestration run's meters —
+ * orchestration_run_id for a per-run receipt summed across the orchestration run's meters —
  * both share the same shape (per-model line items with tokens, the price-book
  * version that priced them, and cost, plus totals).
  */
@@ -369,14 +369,14 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
     return;
   }
 
-  const { generation_id: generationId, run_id: runId } = ctx.query as Record<
-    string,
-    string | undefined
-  >;
+  const {
+    generation_id: generationId,
+    orchestration_run_id: orchestrationRunId,
+  } = ctx.query as Record<string, string | undefined>;
 
   ctx.body = await resolveReceipt({
     generationId,
-    runId,
+    orchestrationRunId,
     projectIds: projectIds ?? undefined,
   });
 });

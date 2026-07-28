@@ -56,7 +56,7 @@ const resolveEventAttribution = (
     provider: aiProvider?.provider ?? 'unknown',
     actionId: metadataString(metadata, 'actionId'),
     triggerId: metadataString(metadata, 'triggerId'),
-    runPublicId: metadataString(metadata, 'runId'),
+    runPublicId: metadataString(metadata, 'orchestrationRunId'),
     nodeId: metadataString(metadata, 'nodeId'),
   };
 };
@@ -125,7 +125,7 @@ const writeGenerationEvent = async (args: {
     })
   );
 
-  const runId = await resolveRunId(attribution.runPublicId);
+  const orchestrationRunId = await resolveRunId(attribution.runPublicId);
   const idempotencyKey = buildIdempotencyKey({
     generationPublicId: generation.publicId,
     runPublicId: attribution.runPublicId,
@@ -135,7 +135,7 @@ const writeGenerationEvent = async (args: {
   const created = await persistTokenEvent({
     attribution: {
       projectId: generation.projectId,
-      runId,
+      orchestrationRunId,
       nodeId: attribution.nodeId,
       agentId: generation.agentId,
       generationId: generation.id,
@@ -226,7 +226,7 @@ export const recordCompletionUsage = async (args: {
     const created = await persistTokenEvent({
       attribution: {
         projectId: args.projectId,
-        runId: null,
+        orchestrationRunId: null,
         nodeId: null,
         agentId: args.agentId ?? null,
         generationId: null,

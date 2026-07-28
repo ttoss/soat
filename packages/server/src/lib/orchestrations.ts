@@ -503,18 +503,18 @@ export const deleteOrchestration = async (args: {
       .map((run) => {
         return run.id as number;
       })
-      .filter((runId) => {
-        return Number.isInteger(runId);
+      .filter((orchestrationRunId) => {
+        return Number.isInteger(orchestrationRunId);
       });
 
     if (runIds.length > 0) {
       await db.OrchestrationCheckpoint.destroy({
-        where: { runId: runIds },
+        where: { orchestrationRunId: runIds },
         transaction: t,
       });
 
       await db.OrchestrationNodeExecution.destroy({
-        where: { runId: runIds },
+        where: { orchestrationRunId: runIds },
         transaction: t,
       });
 

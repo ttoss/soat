@@ -139,7 +139,7 @@ describe('guardrail per-run usage ceiling', () => {
   }): Promise<void> => {
     const event = await db.UsageEvent.create({
       projectId,
-      runId: args.runInternalId,
+      orchestrationRunId: args.runInternalId,
       nodeId: 'node-a',
       meterType: 'llm_tokens',
       provider: 'ollama',
@@ -178,7 +178,7 @@ describe('guardrail per-run usage ceiling', () => {
 
   const resolveGuarded = async (opts: {
     guardrailIds: string[];
-    runId?: string | null;
+    orchestrationRunId?: string | null;
     guardrailContext?: Record<string, unknown>;
   }): Promise<Tool> => {
     await db.Tool.update(
@@ -190,7 +190,7 @@ describe('guardrail per-run usage ceiling', () => {
       generationId: 'gen_run_ceiling',
       projectId,
       projectPublicId,
-      runId: opts.runId ?? null,
+      orchestrationRunId: opts.orchestrationRunId ?? null,
       guardrailContext: opts.guardrailContext,
     });
     const tools = await resolveAgentTools({
@@ -224,7 +224,7 @@ describe('guardrail per-run usage ceiling', () => {
     const id = await makeGuardrail(TOKEN_CEILING_GUARD);
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: run.publicId,
+      orchestrationRunId: run.publicId,
       guardrailContext: { action_token_ceiling: 5000 },
     });
 
@@ -245,7 +245,7 @@ describe('guardrail per-run usage ceiling', () => {
     const id = await makeGuardrail(TOKEN_CEILING_GUARD);
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: run.publicId,
+      orchestrationRunId: run.publicId,
       guardrailContext: { action_token_ceiling: 500 },
     });
 
@@ -276,7 +276,7 @@ describe('guardrail per-run usage ceiling', () => {
     const id = await makeGuardrail(TOKEN_CEILING_GUARD);
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: quietRun.publicId,
+      orchestrationRunId: quietRun.publicId,
       guardrailContext: { action_token_ceiling: 1000 },
     });
 
@@ -311,7 +311,7 @@ describe('guardrail per-run usage ceiling', () => {
     });
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: run.publicId,
+      orchestrationRunId: run.publicId,
       // 4.00 + 3.50 = 7.50 spent, over the 5.00 ceiling.
       guardrailContext: { action_cost_ceiling: 5 },
     });
@@ -329,7 +329,7 @@ describe('guardrail per-run usage ceiling', () => {
     const id = await makeGuardrail(TOKEN_CEILING_GUARD);
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: run.publicId,
+      orchestrationRunId: run.publicId,
       guardrailContext: { action_token_ceiling: 1 },
     });
 
@@ -342,7 +342,7 @@ describe('guardrail per-run usage ceiling', () => {
     const id = await makeGuardrail(TOKEN_CEILING_GUARD);
     const refund = await resolveGuarded({
       guardrailIds: [id],
-      runId: null,
+      orchestrationRunId: null,
       guardrailContext: { action_token_ceiling: 5000 },
     });
 

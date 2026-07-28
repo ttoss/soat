@@ -747,7 +747,7 @@ describe('executeToolNode', () => {
         state: {},
         projectIds: [project.id as number],
         projectId: project.id as number,
-        runId: 'orch_run_activitywire',
+        orchestrationRunId: 'orch_run_activitywire',
       });
 
       let entry = null;
@@ -765,7 +765,7 @@ describe('executeToolNode', () => {
       }
       expect(entry).toBeTruthy();
       expect(entry!.get('refId')).toBe('tool_activitywire0');
-      expect(entry!.get('runId')).toBe('orch_run_activitywire');
+      expect(entry!.get('orchestrationRunId')).toBe('orch_run_activitywire');
     } finally {
       spy.mockRestore();
     }

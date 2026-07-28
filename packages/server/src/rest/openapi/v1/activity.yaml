@@ -140,7 +140,7 @@ components:
           description: >-
             Kind-specific structured context (tool, args digest, node id,
             generation id, guardrail policy version)
-        run_id:
+        orchestration_run_id:
           type: string
           nullable: true
           description: Originating orchestration run, if any

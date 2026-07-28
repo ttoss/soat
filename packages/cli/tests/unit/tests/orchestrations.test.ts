@@ -60,7 +60,7 @@ describe('orchestration run commands', () => {
   test('get-orchestration-run performs GET to specific run endpoint', async () => {
     const requests = await cliTestClient.call([
       'get-orchestration-run',
-      '--run-id',
+      '--orchestration-run-id',
       'run_test',
     ]);
 
@@ -73,7 +73,7 @@ describe('orchestration run commands', () => {
   test('cancel-orchestration-run performs POST to cancel endpoint', async () => {
     const requests = await cliTestClient.call([
       'cancel-orchestration-run',
-      '--run-id',
+      '--orchestration-run-id',
       'run_test',
     ]);
 
@@ -88,7 +88,7 @@ describe('orchestration run commands', () => {
   test('resume-orchestration-run performs POST to resume endpoint', async () => {
     const requests = await cliTestClient.call([
       'resume-orchestration-run',
-      '--run-id',
+      '--orchestration-run-id',
       'run_test',
     ]);
 

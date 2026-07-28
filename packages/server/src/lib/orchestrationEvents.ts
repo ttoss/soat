@@ -52,7 +52,7 @@ export const emitRunLifecycleEvent = (args: {
   run: MappedOrchestrationRun;
 }): void => {
   const { event, projectId, run } = args;
-  log('emitRunLifecycleEvent event=%s runId=%s', event, run.id);
+  log('emitRunLifecycleEvent event=%s orchestrationRunId=%s', event, run.id);
   resolveProjectPublicId({ projectId })
     .then((projectPublicId) => {
       emitEvent({

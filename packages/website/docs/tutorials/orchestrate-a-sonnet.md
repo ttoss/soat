@@ -765,7 +765,7 @@ Use `get-orchestration-run` to inspect the accumulated [orchestration](/docs/mod
 ```bash
 soat get-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
-  --run-id "$RUN_ID" | jq '{status, state, output}'
+  --orchestration-run-id "$RUN_ID" | jq '{status, state, output}'
 ```
 
 Key fields to look for:
@@ -780,7 +780,7 @@ Key fields to look for:
 
 ```ts
 const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: RUN_ID },
+  path: { orchestration_run_id: RUN_ID },
 });
 console.log(JSON.stringify(runState.state, null, 2));
 console.log(runState.output?.['return-poem']?.result);

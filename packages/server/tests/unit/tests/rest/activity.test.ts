@@ -99,7 +99,7 @@ describe('Activity', () => {
         kind: 'action_executed',
         summary: 'Tool executed',
         detail: { toolId: 'tool_abc' },
-        runId: 'orch_run_seed0000000',
+        orchestrationRunId: 'orch_run_seed0000000',
         agentId: 'agent_seed00000000',
         refId: 'tool_abc',
       });
@@ -117,7 +117,7 @@ describe('Activity', () => {
       expect(found.severity).toBe('info');
       expect(found.summary).toBe('Tool executed');
       expect(found.detail).toEqual({ tool_id: 'tool_abc' });
-      expect(found.run_id).toBe('orch_run_seed0000000');
+      expect(found.orchestration_run_id).toBe('orch_run_seed0000000');
       expect(found.agent_id).toBe('agent_seed00000000');
       expect(found.ref_id).toBe('tool_abc');
       expect(found.created_at).toBeDefined();

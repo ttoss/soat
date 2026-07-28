@@ -51,7 +51,7 @@ export type PersistedUsageComponent = {
 export type PersistedUsageEvent = {
   id: string;
   project_id: string;
-  run_id: string | null;
+  orchestration_run_id: string | null;
   node_id: string | null;
   agent_id: string | null;
   generation_id: string | null;
@@ -111,7 +111,7 @@ const mapUsageEvent = (
   return {
     id: event.publicId,
     project_id: event.project.publicId,
-    run_id: assocPublicId(event.run),
+    orchestration_run_id: assocPublicId(event.run),
     node_id: event.nodeId,
     agent_id: assocPublicId(event.agent),
     generation_id: assocPublicId(event.generation),

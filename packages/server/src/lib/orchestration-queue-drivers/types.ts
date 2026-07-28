@@ -15,7 +15,7 @@ export type QueueDriverName = 'postgres' | 'sqs';
 export type ClaimedTask = {
   id: string;
   handle: string;
-  runId: number;
+  orchestrationRunId: number;
   kind: RunTaskKind;
   /** Delivery count for this task, including the current delivery. */
   attempts: number;
@@ -61,9 +61,9 @@ export type OrchestrationQueueDriver = {
   readonly name: QueueDriverName;
   /** Whether `claim` honours each project's `max_concurrent_runs` (D8/D9). */
   readonly enforcesProjectConcurrency: boolean;
-  /** Makes a task for `runId` claimable, at `availableAt` or immediately. */
+  /** Makes a task for `orchestrationRunId` claimable, at `availableAt` or immediately. */
   enqueue: (args: {
-    runId: number;
+    orchestrationRunId: number;
     kind: RunTaskKind;
     availableAt?: Date;
   }) => Promise<void>;

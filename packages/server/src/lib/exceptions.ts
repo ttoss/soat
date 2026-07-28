@@ -106,7 +106,7 @@ export const mapException = (instance: ExceptionInstance) => {
     detail: mapExceptionDetail(instance.detail),
     occurrence_count: instance.occurrenceCount,
     last_seen_at: instance.lastSeenAt,
-    run_id: instance.runId,
+    orchestration_run_id: instance.orchestrationRunId,
     node_id: instance.nodeId,
     agent_id: instance.agentId,
     guardrail_version: instance.guardrailVersion,
@@ -187,7 +187,7 @@ export type FileExceptionArgs = {
   detail?: object | null;
   severity?: ExceptionSeverity;
   dedupKey?: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   nodeId?: string | null;
   agentId?: string | null;
   guardrailVersion?: string | null;
@@ -224,7 +224,7 @@ const insertException = async (
       detail: args.detail,
       dedupKey: args.dedupKey,
       lastSeenAt: new Date(),
-      runId: args.runId,
+      orchestrationRunId: args.orchestrationRunId,
       nodeId: args.nodeId,
       agentId: args.agentId,
       guardrailVersion: args.guardrailVersion,
@@ -388,17 +388,17 @@ const asStringOrNull = (value: unknown): string | null => {
 };
 
 const fileRunFailedException = async (event: SoatEvent): Promise<void> => {
-  const runId = event.resourceId;
+  const orchestrationRunId = event.resourceId;
   await fileException({
     projectId: event.projectId,
     kind: 'run_failed',
-    title: `Orchestration run ${runId} failed`,
+    title: `Orchestration run ${orchestrationRunId} failed`,
     detail: asRecord(event.data).error
       ? asRecord(asRecord(event.data).error)
       : null,
-    runId,
+    orchestrationRunId,
     // One exception per failed run — a run reaches `failed` once.
-    dedupKey: `run_failed:${runId}`,
+    dedupKey: `run_failed:${orchestrationRunId}`,
   });
 };
 
@@ -415,7 +415,7 @@ const fileApprovalExpiredException = async (
       approvalId,
       toolId: asRecord(approval.proposed_action).tool_id,
     },
-    runId: asStringOrNull(approval.run_id),
+    orchestrationRunId: asStringOrNull(approval.orchestration_run_id),
     agentId: asStringOrNull(approval.agent_id),
     dedupKey: approvalId ? `approval_expired:${approvalId}` : null,
   });
@@ -425,20 +425,20 @@ const fileGuardrailTripwireException = async (
   event: SoatEvent
 ): Promise<void> => {
   const data = asRecord(event.data);
-  const runId = asStringOrNull(data.runId);
+  const orchestrationRunId = asStringOrNull(data.orchestrationRunId);
   const nodeId = asStringOrNull(data.nodeId);
   const agentId = asStringOrNull(data.agentId);
   const toolName = asStringOrNull(data.toolName) ?? event.resourceId;
   const guardrailVersion = asStringOrNull(data.guardrailVersion);
   // Fold repeated trips of the same guardrail on the same call site (a tool
   // node that trips every attempt, an agent looping) into one open item.
-  // The run path keys on `runId:nodeId`, which is stable across retries of the
+  // The run path keys on `orchestrationRunId:nodeId`, which is stable across retries of the
   // same node. The non-run path must key on the call site (`agentId:toolName`)
   // rather than `generationId` — every generation gets a fresh id, so keying
   // on it would make dedup impossible for the exact "agent looping" case this
   // fold exists to handle.
-  const scope = runId
-    ? `${runId}:${nodeId ?? ''}`
+  const scope = orchestrationRunId
+    ? `${orchestrationRunId}:${nodeId ?? ''}`
     : `${agentId ?? ''}:${toolName}`;
   await fileException({
     projectId: event.projectId,
@@ -449,7 +449,7 @@ const fileGuardrailTripwireException = async (
       action: asStringOrNull(data.action),
       guardrailVersion,
     },
-    runId,
+    orchestrationRunId,
     nodeId,
     agentId,
     guardrailVersion,
@@ -491,7 +491,7 @@ export const emitGuardrailTripwireEvent = (args: {
   toolName: string;
   action: string;
   guardrailVersion: string | null;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   nodeId?: string | null;
   agentId?: string | null;
   generationId?: string | null;
@@ -506,7 +506,7 @@ export const emitGuardrailTripwireEvent = (args: {
       toolName: args.toolName,
       action: args.action,
       guardrailVersion: args.guardrailVersion,
-      runId: args.runId ?? null,
+      orchestrationRunId: args.orchestrationRunId ?? null,
       nodeId: args.nodeId ?? null,
       agentId: args.agentId ?? null,
       generationId: args.generationId ?? null,

@@ -41,7 +41,7 @@ export type UsageReceipt = {
   generation_id?: string;
   // Present on a per-run receipt (summed across the run's meters); absent on a
   // per-generation receipt.
-  run_id?: string;
+  orchestration_run_id?: string;
   currency: string;
   line_items: UsageReceiptLine[];
   by_meter_type: UsageReceiptMeterTypeTotal[];
@@ -162,10 +162,10 @@ const loadLineItems = async (
 
 // Assembles the totals + breakdowns shared by every receipt shape from a set of
 // line items. `identity` stamps the receipt with either a generationId or a
-// runId (never both).
+// orchestrationRunId (never both).
 const assembleReceipt = (
   lineItems: UsageReceiptLine[],
-  identity: { generation_id?: string; run_id?: string }
+  identity: { generation_id?: string; orchestration_run_id?: string }
 ): UsageReceipt => {
   // Reconstruct the provider's reported counts: `input_tokens` components hold
   // the uncached input, so full prompt tokens = input + cached.
@@ -209,11 +209,11 @@ export const getReceipt = async (args: {
 // Resolves an orchestration run's public id to its internal id within scope.
 // Returns null when the run is not visible (the route yields 404).
 const resolveRunInternalId = async (args: {
-  runId: string;
+  orchestrationRunId: string;
   projectIds?: number[];
 }): Promise<number | null> => {
   const where: { publicId: string; projectId?: number[] } = {
-    publicId: args.runId,
+    publicId: args.orchestrationRunId,
   };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
   const run = await db.OrchestrationRun.findOne({ where });
@@ -228,14 +228,16 @@ const resolveRunInternalId = async (args: {
  * visible in scope (the route yields 404).
  */
 export const getRunReceipt = async (args: {
-  runId: string;
+  orchestrationRunId: string;
   projectIds?: number[];
 }): Promise<UsageReceipt | null> => {
   const runInternalId = await resolveRunInternalId(args);
   if (runInternalId === null) return null;
 
-  const lineItems = await loadLineItems({ runId: runInternalId });
-  return assembleReceipt(lineItems, { run_id: args.runId });
+  const lineItems = await loadLineItems({ orchestrationRunId: runInternalId });
+  return assembleReceipt(lineItems, {
+    orchestration_run_id: args.orchestrationRunId,
+  });
 };
 
 /**
@@ -246,7 +248,9 @@ export const getRunReceipt = async (args: {
 export const getRunUsageTotals = async (args: {
   runInternalId: number;
 }): Promise<UsageTotals> => {
-  const lineItems = await loadLineItems({ runId: args.runInternalId });
+  const lineItems = await loadLineItems({
+    orchestrationRunId: args.runInternalId,
+  });
   const receipt = assembleReceipt(lineItems, {});
   return {
     totalInputTokens: receipt.total_input_tokens,

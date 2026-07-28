@@ -8,7 +8,7 @@ import type { WorkflowDispatch } from './workflowsValidation';
 export type DispatchResult = {
   result: unknown;
   generationId: string | null;
-  runId: string | null;
+  orchestrationRunId: string | null;
 };
 
 /**
@@ -40,7 +40,7 @@ export const runDispatch = async (args: {
   // run id can be persisted while the run is still in flight (#606).
   onDispatchStarted?: (ids: {
     generationId: string | null;
-    runId: string | null;
+    orchestrationRunId: string | null;
   }) => Promise<void> | void;
 }): Promise<DispatchResult> => {
   if (args.dispatch.kind === 'agent') {
@@ -53,7 +53,7 @@ export const runDispatch = async (args: {
     return {
       result: gen.output ?? {},
       generationId: gen.id,
-      runId: null,
+      orchestrationRunId: null,
     };
   }
 
@@ -63,15 +63,18 @@ export const runDispatch = async (args: {
     input: args.inputs,
     wait: true,
     onRunCreated: args.onDispatchStarted
-      ? ({ runId }) => {
-          return args.onDispatchStarted!({ generationId: null, runId });
+      ? ({ orchestrationRunId }) => {
+          return args.onDispatchStarted!({
+            generationId: null,
+            orchestrationRunId,
+          });
         }
       : undefined,
   });
   return {
     result: run.state ?? {},
     generationId: null,
-    runId: run.id,
+    orchestrationRunId: run.id,
   };
 };
 
@@ -81,14 +84,17 @@ export const runDispatch = async (args: {
  * the `generation_id` (see `recordGenerationFailure`), written snake_case
  * to match the external REST contract. This lets the
  * on_failure-driven transition link the causing record, mirroring the
- * on_complete path's `id: generationId ?? runId` provenance (#607).
+ * on_complete path's `id: generationId ?? orchestrationRunId` provenance (#607).
  */
 export const failedDispatchIds = (
   error: unknown
-): { generationId: string | null; runId: string | null } => {
+): { generationId: string | null; orchestrationRunId: string | null } => {
   const meta = error instanceof DomainError ? (error.meta ?? {}) : {};
   const generationId =
     typeof meta.generation_id === 'string' ? meta.generation_id : null;
-  const runId = typeof meta.run_id === 'string' ? meta.run_id : null;
-  return { generationId, runId };
+  const orchestrationRunId =
+    typeof meta.orchestration_run_id === 'string'
+      ? meta.orchestration_run_id
+      : null;
+  return { generationId, orchestrationRunId };
 };

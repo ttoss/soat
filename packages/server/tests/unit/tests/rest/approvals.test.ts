@@ -87,8 +87,9 @@ describe('Approvals', () => {
       expect(found.proposed_action.arguments).toEqual({ amount: 500 });
       expect(found.reasoning).toBe('Refund exceeds auto-approve threshold');
       expect(found.expires_at).toBeDefined();
+      // No run backs this approval, so the field is present but null.
+      expect(found.orchestration_run_id).toBeNull();
       // Internal columns must never leak.
-      expect(found.orchestration_run_id).toBeUndefined();
       expect(found.resolved_by_user_id).toBeUndefined();
     });
 

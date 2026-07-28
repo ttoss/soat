@@ -41,7 +41,7 @@ import { UsageComponent } from './UsageComponent';
       fields: ['public_id'],
     },
     { fields: ['project_id', 'created_at'] },
-    { fields: ['run_id'] },
+    { fields: ['orchestration_run_id'] },
     { fields: ['trace_id'] },
     { fields: ['generation_id'] },
     { fields: ['actor_id'] },
@@ -89,7 +89,7 @@ export class UsageEvent extends Model {
     return OrchestrationRun;
   })
   @Column({ type: DataType.INTEGER, allowNull: true })
-  declare runId: number | null;
+  declare orchestrationRunId: number | null;
 
   @BelongsTo(
     () => {

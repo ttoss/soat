@@ -1234,7 +1234,7 @@ fi
 i=0
 ORCH_ASYNC_FINAL=""
 while [ $i -lt 60 ]; do
-  ORCH_ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$ORCH_ASYNC_ID")
+  ORCH_ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$ORCH_ASYNC_ID")
   ORCH_ASYNC_FINAL=$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.status')
   [ "$ORCH_ASYNC_FINAL" = "succeeded" ] && break
   [ "$ORCH_ASYNC_FINAL" = "failed" ] && break
@@ -1280,7 +1280,7 @@ EXC_ID=""
 i=0
 while [ $i -lt 30 ]; do
   EXC_LIST=$($SOAT_CLI list-exceptions --project_id "$PROJECT_PUBLIC_ID" --kind run_failed)
-  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" '.data | map(select(.run_id == $run)) | .[0].id // empty')
+  EXC_ID=$(printf '%s\n' "$EXC_LIST" | jq -r --arg run "$FAIL_RUN_ID" '.data | map(select(.orchestration_run_id == $run)) | .[0].id // empty')
   [ -n "$EXC_ID" ] && break
   i=$((i + 1))
   sleep 1
@@ -1349,7 +1349,7 @@ echo "Run input namespace: OK"
 
 echo "--- Getting run ---"
 ORCH_RUN_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run \
-  --run-id "$ORCH_RUN_ID")
+  --orchestration-run-id "$ORCH_RUN_ID")
 if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e --arg id "$ORCH_RUN_ID" '.id == $id and .status == "succeeded"' >/dev/null 2>&1; then
   echo "get-orchestration-run returned unexpected response"
   printf '%s\n' "$ORCH_RUN_GET_RESP"
@@ -1373,12 +1373,12 @@ if ! printf '%s\n' "$ORCH_RUN_GET_RESP" | jq -e '(.usage | type) == "object" and
 fi
 echo "Run usage roll-up: OK"
 
-# Per-run receipt: same shape as the generation receipt, addressed by run_id.
+# Per-run receipt: same shape as the generation receipt, addressed by orchestration_run_id.
 # Uses the default admin CLI (the usage:GetReceipt permission lives with the
 # admin, not the orchestration-scoped API key).
-ORCH_RUN_RECEIPT=$($SOAT_CLI get-usage-receipt --run-id "$ORCH_RUN_ID")
-if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.total_input_tokens | type) == "number")' >/dev/null 2>&1; then
-  echo "get-usage-receipt --run-id did not return a well-formed run receipt"
+ORCH_RUN_RECEIPT=$($SOAT_CLI get-usage-receipt --orchestration-run-id "$ORCH_RUN_ID")
+if ! printf '%s\n' "$ORCH_RUN_RECEIPT" | jq -e --arg id "$ORCH_RUN_ID" '(.orchestration_run_id == $id) and (.currency == "USD") and ((.line_items | type) == "array") and ((.total_input_tokens | type) == "number")' >/dev/null 2>&1; then
+  echo "get-usage-receipt --orchestration-run-id did not return a well-formed run receipt"
   printf '%s\n' "$ORCH_RUN_RECEIPT"
   exit 1
 fi
@@ -1442,7 +1442,7 @@ echo "Paused run: OK"
 
 echo "--- Submitting human input ---"
 HUMAN_INPUT_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI submit-human-input \
-  --run-id "$HUMAN_RUN_ID" \
+  --orchestration-run-id "$HUMAN_RUN_ID" \
   --node-id "$HUMAN_NODE_ID" \
   --output '{"choice":"approve"}')
 if ! printf '%s\n' "$HUMAN_INPUT_RESP" | jq -e '.status == "succeeded" and .output.finalize.result == "approve"' >/dev/null 2>&1; then
@@ -1464,7 +1464,7 @@ if ! printf '%s\n' "$RESUME_CANDIDATE_RESP" | jq -e '.status == "awaiting_input"
   exit 1
 fi
 HUMAN_RESUME_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI resume-orchestration-run \
-  --run-id "$RESUME_RUN_ID")
+  --orchestration-run-id "$RESUME_RUN_ID")
 if ! printf '%s\n' "$HUMAN_RESUME_RESP" | jq -e '.status == "awaiting_input" and .required_action.node_id == "approval"' >/dev/null 2>&1; then
   echo "resume-orchestration-run did not complete human orchestration as expected"
   printf '%s\n' "$HUMAN_RESUME_RESP"
@@ -1484,7 +1484,7 @@ if ! printf '%s\n' "$CANCEL_CANDIDATE_RESP" | jq -e '.status == "awaiting_input"
   exit 1
 fi
 CANCEL_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI cancel-orchestration-run \
-  --run-id "$CANCEL_RUN_ID")
+  --orchestration-run-id "$CANCEL_RUN_ID")
 if ! printf '%s\n' "$CANCEL_RUN_RESP" | jq -e '.status == "cancelled"' >/dev/null 2>&1; then
   echo "cancel-orchestration-run did not return cancelled status"
   printf '%s\n' "$CANCEL_RUN_RESP"
@@ -1553,7 +1553,7 @@ echo "Async run returned status queued: OK"
 ASYNC_DONE=0
 i=0
 while [ "$i" -lt 30 ]; do
-  ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$ASYNC_RUN_ID")
+  ASYNC_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$ASYNC_RUN_ID")
   ASYNC_STATUS=$(printf '%s\n' "$ASYNC_GET" | jq -r '.status')
   if [ "$ASYNC_STATUS" = "succeeded" ]; then
     ASYNC_DONE=1
@@ -1593,7 +1593,7 @@ fi
 DELAY_DONE=0
 i=0
 while [ "$i" -lt 30 ]; do
-  DELAY_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --run-id "$DELAY_RUN_ID")
+  DELAY_GET=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-run --orchestration-run-id "$DELAY_RUN_ID")
   DELAY_STATUS=$(printf '%s\n' "$DELAY_GET" | jq -r '.status')
   if [ "$DELAY_STATUS" = "succeeded" ]; then
     DELAY_DONE=1

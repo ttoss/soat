@@ -395,7 +395,7 @@ components:
           type: string
           nullable: true
           description: Set on tool-call items to suppress duplicate proposals
-        run_id:
+        orchestration_run_id:
           type: string
           nullable: true
           description: Originating orchestration run (node producer)

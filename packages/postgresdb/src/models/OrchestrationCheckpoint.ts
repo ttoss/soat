@@ -17,7 +17,7 @@ export class OrchestrationCheckpoint extends Model {
     return OrchestrationRun;
   })
   @Column({ type: DataType.INTEGER, allowNull: false })
-  declare runId: number;
+  declare orchestrationRunId: number;
 
   @BelongsTo(() => {
     return OrchestrationRun;

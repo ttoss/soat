@@ -28,7 +28,10 @@ describe('Exceptions', () => {
   // Producers file exceptions fire-and-forget off an event, so poll the
   // observable side effect rather than racing it.
   const waitForException = async (
-    predicate: (e: { kind: string; run_id: string | null }) => boolean
+    predicate: (e: {
+      kind: string;
+      orchestration_run_id: string | null;
+    }) => boolean
   ) => {
     for (let i = 0; i < 100; i += 1) {
       const res = await listExceptions('');
@@ -305,7 +308,9 @@ describe('Exceptions', () => {
       expect(runRes.body.status).toBe('failed');
 
       const match = await waitForException((e) => {
-        return e.kind === 'run_failed' && e.run_id === runRes.body.id;
+        return (
+          e.kind === 'run_failed' && e.orchestration_run_id === runRes.body.id
+        );
       });
       expect(match).not.toBeNull();
       expect(match.severity).toBe('critical');
@@ -355,7 +360,10 @@ describe('Exceptions', () => {
       expect(runRes.status).toBe(201);
 
       const match = await waitForException((e) => {
-        return e.kind === 'guardrail_tripwire' && e.run_id === runRes.body.id;
+        return (
+          e.kind === 'guardrail_tripwire' &&
+          e.orchestration_run_id === runRes.body.id
+        );
       });
       expect(match).not.toBeNull();
     });
@@ -405,12 +413,15 @@ describe('Exceptions', () => {
         approval: {
           id: 'apr_full_1',
           proposed_action: { tool_id: 'tool_x' },
-          run_id: 'run_exp_1',
+          orchestration_run_id: 'run_exp_1',
           agent_id: 'agent_exp_1',
         },
       });
       const match = await pollException((e) => {
-        return e.kind === 'approval_expired' && e.run_id === 'run_exp_1';
+        return (
+          e.kind === 'approval_expired' &&
+          e.orchestration_run_id === 'run_exp_1'
+        );
       });
       expect(match).not.toBeNull();
       expect(match!.severity).toBe('warning');
@@ -427,14 +438,16 @@ describe('Exceptions', () => {
         );
       });
       expect(match).not.toBeNull();
-      expect(match!.run_id).toBeNull();
+      expect(match!.orchestration_run_id).toBeNull();
       expect(match!.agent_id).toBeNull();
     });
 
     test('orchestration_runs.failed with no error detail files a run_failed exception', async () => {
       emit('orchestration_runs.failed', 'run_noerr_1', {});
       const match = await pollException((e) => {
-        return e.kind === 'run_failed' && e.run_id === 'run_noerr_1';
+        return (
+          e.kind === 'run_failed' && e.orchestration_run_id === 'run_noerr_1'
+        );
       });
       expect(match).not.toBeNull();
       expect(match!.detail).toBeNull();
@@ -453,9 +466,9 @@ describe('Exceptions', () => {
         );
       });
       expect(match).not.toBeNull();
-      // No runId on the event → the non-run path; toolName fell back to the
+      // No orchestrationRunId on the event → the non-run path; toolName fell back to the
       // event resourceId (there was no toolName in the data).
-      expect(match!.run_id).toBeNull();
+      expect(match!.orchestration_run_id).toBeNull();
       expect(match!.agent_id).toBe('agent_trip_1');
     });
 

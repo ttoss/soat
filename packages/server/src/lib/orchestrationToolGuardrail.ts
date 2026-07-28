@@ -129,7 +129,7 @@ const enactToolNodeDecision = (args: {
   toolName: string;
   projectId: number;
   projectPublicId: string;
-  runId: string | null;
+  orchestrationRunId: string | null;
 }): ToolNodeGateResult => {
   const { decision, cleanArgs, effectiveArgs, justification, evaluated } =
     args.classification;
@@ -160,7 +160,7 @@ const enactToolNodeDecision = (args: {
         toolName: args.toolName,
         action: args.node.operationId ?? args.toolName,
         guardrailVersion: governingGuardrailVersion({ evaluated, decision }),
-        runId: args.runId,
+        orchestrationRunId: args.orchestrationRunId,
         nodeId: args.node.id,
       });
     }
@@ -188,7 +188,7 @@ export const runToolNodeGate = async (args: {
   inputs: Record<string, unknown>;
   projectId: number;
   authHeader?: string;
-  runId?: string | null;
+  orchestrationRunId?: string | null;
   nodeAttempt?: number | null;
 }): Promise<ToolNodeGateResult> => {
   const toolId = args.node.toolId;
@@ -208,7 +208,7 @@ export const runToolNodeGate = async (args: {
     sessionId: null,
     authHeader: args.authHeader,
     callerContext: {},
-    runId: args.runId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
     run: { nodeAttempt: args.nodeAttempt ?? null },
     baseGuardrails: [],
   };
@@ -248,6 +248,6 @@ export const runToolNodeGate = async (args: {
     toolName,
     projectId: args.projectId,
     projectPublicId,
-    runId: args.runId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
   });
 };

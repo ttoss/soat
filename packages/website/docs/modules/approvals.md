@@ -58,7 +58,7 @@ filtering only — the lifecycle never branches on it.
 | `predicted_impact`   | string \| null  | Expected execution effect                                          |
 | `expires_at`         | string          | Server-enforced hard gate; the item can never execute after this   |
 | `dedup_key`          | string \| null  | Set on tool-call items to suppress duplicate proposals             |
-| `run_id`             | string \| null  | Originating orchestration run (node producer)                      |
+| `orchestration_run_id`             | string \| null  | Originating orchestration run (node producer)                      |
 | `node_id`            | string \| null  | Originating node id within the run's graph                         |
 | `generation_id`      | string \| null  | Originating generation (tool-call producer)                        |
 | `session_id`         | string \| null  | Session the originating generation ran in (tool-call producer)     |

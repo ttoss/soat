@@ -14,7 +14,7 @@ import { recordComputeUsage } from 'src/lib/usageComputeRecording';
 describe('recordComputeUsage idempotency', () => {
   let projectId: number;
   let runPublicId: string;
-  let runId: number;
+  let orchestrationRunId: number;
 
   const countEvents = async (idempotencyKey: string): Promise<number> => {
     return db.UsageEvent.count({ where: { idempotencyKey } });
@@ -40,7 +40,7 @@ describe('recordComputeUsage idempotency', () => {
       activeNodes: [],
       artifacts: {},
     });
-    runId = run.id;
+    orchestrationRunId = run.id;
     runPublicId = run.publicId;
   });
 
@@ -51,7 +51,7 @@ describe('recordComputeUsage idempotency', () => {
 
     await recordComputeUsage({
       projectId,
-      runId,
+      orchestrationRunId,
       runPublicId,
       nodeId: 'xf',
       attempt: 1,
@@ -73,7 +73,7 @@ describe('recordComputeUsage idempotency', () => {
     // event is left alone and no duplicate component is appended.
     await recordComputeUsage({
       projectId,
-      runId,
+      orchestrationRunId,
       runPublicId,
       nodeId: 'xf',
       attempt: 1,
@@ -95,7 +95,7 @@ describe('recordComputeUsage idempotency', () => {
 
     await recordComputeUsage({
       projectId,
-      runId,
+      orchestrationRunId,
       runPublicId,
       nodeId: 'xf',
       attempt: 2,

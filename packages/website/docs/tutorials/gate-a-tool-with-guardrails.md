@@ -469,7 +469,7 @@ RUN1=$(soat start-orchestration-run --orchestration-id "$ORCHESTRATION_ID" \
   --input '{"amount":150}' --wait true)
 RUN1_ID=$(printf '%s\n' "$RUN1" | jq -r '.id')
 printf '%s\n' "$RUN1" | jq '{status, required_action}'
-soat get-orchestration-run --run-id "$RUN1_ID" | jq '{outcome: .state.outcome}'
+soat get-orchestration-run --orchestration-run-id "$RUN1_ID" | jq '{outcome: .state.outcome}'
 ```
 
 Expected output:
@@ -546,14 +546,14 @@ The item records exactly which guardrail — and which **version** of it — sen
 
 ```bash
 soat get-approval --approval-id "$APPROVAL_ID" \
-  | jq '{status, origin, run_id, node_id, proposed_action, policy_version}'
+  | jq '{status, origin, orchestration_run_id, node_id, proposed_action, policy_version}'
 ```
 
 ```json
 {
   "status": "pending",
   "origin": "node",
-  "run_id": "orch_run_...",
+  "orchestration_run_id": "orch_run_...",
   "node_id": "apply",
   "proposed_action": { "tool_id": "tool_...", "arguments": { "amount": 900 } },
   "policy_version": "guard_...@1"
@@ -564,7 +564,7 @@ Approve it, and the node re-dispatches the tool with the frozen arguments:
 
 ```bash
 soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
-soat get-orchestration-run --run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
+soat get-orchestration-run --orchestration-run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
 ```
 
 ```json
@@ -596,7 +596,7 @@ await adminSoat.approvals.approveApproval({
 });
 
 const { data: resumed } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: run2.id },
+  path: { orchestration_run_id: run2.id },
 });
 console.log(resumed.status, resumed.state.outcome); // succeeded Budget updated.
 ```
@@ -641,7 +641,7 @@ On approval the tool is re-dispatched with the frozen (or edited) arguments and 
 RUN3=$(soat start-orchestration-run --orchestration-id "$ORCHESTRATION_ID" \
   --input '{"amount":450}' --wait true)
 RUN3_ID=$(printf '%s\n' "$RUN3" | jq -r '.id')
-soat get-orchestration-run --run-id "$RUN3_ID" \
+soat get-orchestration-run --orchestration-run-id "$RUN3_ID" \
   | jq '{status, outcome: .state.outcome, refusal: .artifacts.apply}'
 ```
 
@@ -688,7 +688,7 @@ const { data: run3 } = await adminSoat.orchestrations.startOrchestrationRun({
 });
 
 const { data: settled } = await adminSoat.orchestrations.getOrchestrationRun({
-  path: { run_id: run3.id },
+  path: { orchestration_run_id: run3.id },
 });
 console.log(settled.state.outcome); // Stopped by a guardrail.
 console.log(settled.artifacts.apply); // { status: 'tripwire', reason: '...' }

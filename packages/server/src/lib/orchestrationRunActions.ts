@@ -9,7 +9,7 @@ import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
 const log = createDebug('soat:orchestrations');
 
 export type MappedOrchestrationCheckpoint = {
-  runId: string;
+  orchestrationRunId: string;
   nodeId: string;
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
