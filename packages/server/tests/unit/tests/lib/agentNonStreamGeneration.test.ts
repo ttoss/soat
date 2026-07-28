@@ -93,6 +93,73 @@ describe('agentNonStreamGeneration', () => {
     expect(prepareStep!({ stepNumber: 0 })).toEqual({});
   });
 
+  test('buildPrepareStep honors the wire-shaped (snake_case) step rule keys', async () => {
+    // step_rules are stored verbatim from the request body, and the wire is
+    // snake_case: { step, tool_choice: { type, tool_name } } is the documented
+    // shape (see docs/modules/agents.md#step-rules).
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
+      ],
+      logContext: 'non_stream',
+    });
+
+    expect(prepareStep).toBeDefined();
+    expect(prepareStep!({ stepNumber: 1 })).toEqual({
+      toolChoice: { type: 'tool', toolName: 'lookup' },
+      activeTools: ['lookup'],
+    });
+  });
+
+  test('runNonStreamGeneration normalizes a wire-shaped tool_choice before calling generateText', async () => {
+    // The agent's tool_choice is stored verbatim from the request body
+    // ({ type: "tool", tool_name: "..." } on the wire) but the AI SDK expects
+    // { type: "tool", toolName: "..." } — the runner must translate.
+    // The model output is a pending client tool call so the run suspends at
+    // requires_action (in-memory only) — the assertion below is about the
+    // toolChoice argument handed to generateText, not the final result.
+    const generateTextMock = jest.fn().mockResolvedValue({
+      steps: [
+        {
+          toolCalls: [
+            { toolCallId: 'tc_tc1', toolName: 'forced_tool', input: {} },
+          ],
+        },
+      ],
+      response: { messages: [], modelId: 'mock-model' },
+      text: 'ignored',
+      finishReason: 'tool-calls',
+    });
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return { ...actual, generateText: generateTextMock };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+
+    const result = await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'hi' }],
+      resolvedTools: { forced_tool: {} as Tool },
+      typedAgent: {
+        ...(buildTypedAgent() as object),
+        toolChoice: { type: 'tool', tool_name: 'forced_tool' },
+        stepRules: null,
+      } as never,
+      generationId: 'gen_nonstream_tc_wire',
+      traceId: 'trc_nonstream_tc_wire',
+      agentId: realAgentPublicId,
+    });
+
+    expect(result.status).toBe('requires_action');
+    expect(generateTextMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolChoice: { type: 'tool', toolName: 'forced_tool' },
+      })
+    );
+  });
+
   test('buildToolResultMessages maps string and object outputs', async () => {
     const { buildToolResultMessages } = await loadNonStreamModule();
     const messages = buildToolResultMessages({
@@ -241,6 +308,50 @@ describe('agentNonStreamGeneration', () => {
       ...overrides,
     };
   };
+
+  test('runToolOutputsGeneration never re-forces a forced tool_choice on resume', async () => {
+    // A forced specific tool ({ type: "tool", ... }) is satisfied once the
+    // model has called that tool. If the continuation after
+    // submit-tool-outputs re-applied it, the model would be forced to call
+    // the tool again and the generation would pause forever — so the
+    // continuation must run with the SDK default (auto). This pins that
+    // invariant now that a wire-shaped forced tool_choice actually forces.
+    const generateTextMock = jest.fn().mockResolvedValue({
+      text: 'The order shipped.',
+      finishReason: 'stop',
+      steps: [],
+      response: { modelId: 'mock-model', messages: [] },
+    });
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return { ...actual, generateText: generateTextMock };
+    });
+
+    const { runToolOutputsGeneration } = await loadNonStreamModule();
+
+    const pending = buildPending({
+      agentConfig: {
+        instructions: null,
+        maxSteps: 5,
+        toolChoice: { type: 'tool', tool_name: 'send-reply' },
+        stopConditions: null,
+        activeToolIds: null,
+        stepRules: null,
+        temperature: null,
+        outputSchema: null,
+      },
+    });
+
+    await runToolOutputsGeneration({
+      generationId: pending.generationId,
+      pending,
+      system: undefined,
+      nonSystemMessages: pending.messages,
+    });
+
+    expect(generateTextMock).toHaveBeenCalledTimes(1);
+    expect(generateTextMock.mock.calls[0][0].toolChoice).toBeUndefined();
+  });
 
   test('runToolOutputsGeneration + resolveToolOutputsResult reports requires_action for a continuation tool call', async () => {
     jest.doMock('ai', () => {

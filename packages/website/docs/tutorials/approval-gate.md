@@ -1,5 +1,11 @@
 ---
 description: "Pause an orchestration for a human decision with an approval node, then approve or reject it from the approvals queue."
+keywords:
+  - human in the loop
+  - approval workflow
+  - human approval gate
+  - HITL
+  - approvals queue
 sidebar_position: 18
 ---
 

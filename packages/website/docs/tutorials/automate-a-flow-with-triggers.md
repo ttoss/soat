@@ -1,5 +1,11 @@
 ---
 description: "Automate a SOAT flow by binding a manual, webhook, or schedule starter to an executable target with Triggers."
+keywords:
+  - cron triggers
+  - webhook triggers
+  - scheduled AI agents
+  - agent automation
+  - event-driven agents
 sidebar_position: 17
 ---
 

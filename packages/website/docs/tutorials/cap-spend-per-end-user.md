@@ -1,5 +1,11 @@
 ---
 description: "Attribute agent spend to individual end users with Actors, then cap each user's monthly budget with one actor-scoped quota."
+keywords:
+  - per-user budgets
+  - LLM spend caps
+  - quotas
+  - cost attribution
+  - actors
 sidebar_position: 21
 ---
 

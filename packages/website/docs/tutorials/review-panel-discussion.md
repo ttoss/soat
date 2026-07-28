@@ -1,5 +1,10 @@
 ---
 description: "Build an editorial review-panel workflow where reviewers check a draft's fundamentals and tone, then synthesize a verdict."
+keywords:
+  - multi-agent discussion
+  - AI review panel
+  - LLM as judge
+  - draft review workflow
 sidebar_position: 15
 ---
 

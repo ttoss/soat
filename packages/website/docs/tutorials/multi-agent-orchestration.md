@@ -1,5 +1,11 @@
 ---
 description: "Build a nested-agent pipeline where one agent coordinates sub-agents with SOAT tools."
+keywords:
+  - multi-agent system
+  - nested agent calls
+  - sub-agents
+  - agent coordination
+  - agent-as-tool
 sidebar_position: 11
 ---
 

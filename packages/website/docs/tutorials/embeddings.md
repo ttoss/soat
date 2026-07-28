@@ -1,5 +1,11 @@
 ---
 description: "Use the SOAT Embeddings endpoint to convert text into vectors and compute cosine similarity."
+keywords:
+  - text embeddings
+  - vector embeddings
+  - embeddings API
+  - cosine similarity
+  - semantic search
 sidebar_position: 7
 ---
 

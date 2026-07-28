@@ -15,6 +15,7 @@ import {
   buildAllMessages,
   buildCompletedGenerationResult,
   findPendingClientTools,
+  normalizeToolChoice,
   pendingGenerations,
   runStreamGeneration,
   savePendingGeneration,
@@ -158,6 +159,38 @@ describe('findPendingClientTools', () => {
         return r.toolName === 'clientTool';
       })
     ).toBe(true);
+  });
+});
+
+describe('normalizeToolChoice', () => {
+  test('passes through the string strategies the AI SDK accepts', () => {
+    expect(normalizeToolChoice('auto')).toBe('auto');
+    expect(normalizeToolChoice('required')).toBe('required');
+    expect(normalizeToolChoice('none')).toBe('none');
+  });
+
+  test('returns undefined for null, undefined, and unknown strings', () => {
+    expect(normalizeToolChoice(null)).toBeUndefined();
+    expect(normalizeToolChoice(undefined)).toBeUndefined();
+    expect(normalizeToolChoice('sometimes')).toBeUndefined();
+  });
+
+  test('maps the wire-shaped object ({ tool_name }) to the AI SDK shape', () => {
+    expect(
+      normalizeToolChoice({ type: 'tool', tool_name: 'get_weather' })
+    ).toEqual({ type: 'tool', toolName: 'get_weather' });
+  });
+
+  test('keeps supporting the legacy camelCase object ({ toolName })', () => {
+    expect(
+      normalizeToolChoice({ type: 'tool', toolName: 'get_weather' })
+    ).toEqual({ type: 'tool', toolName: 'get_weather' });
+  });
+
+  test('returns undefined for objects without a usable tool name', () => {
+    expect(normalizeToolChoice({ type: 'tool' })).toBeUndefined();
+    expect(normalizeToolChoice({ type: 'tool', tool_name: 7 })).toBeUndefined();
+    expect(normalizeToolChoice({ type: 'other' })).toBeUndefined();
   });
 });
 
@@ -595,6 +628,64 @@ describe('runStreamGeneration', () => {
       // Give the fire-and-forget rejected promises a tick to settle.
       await new Promise((resolve) => {
         return setTimeout(resolve, 0);
+      });
+    });
+
+    test('normalizes a wire-shaped tool_choice before delegating to streamText', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          toolChoice: { type: 'tool', tool_name: 'get_weather' },
+        },
+        generationId: 'gen_tc_wire',
+        traceId: 'trc_tc_wire',
+        agentId: 'agt_tc_wire',
+      });
+
+      expect(capturedOpts?.toolChoice).toEqual({
+        type: 'tool',
+        toolName: 'get_weather',
+      });
+    });
+
+    test('prepareStep honors the wire-shaped (snake_case) step rule keys', () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            { step: 1, tool_choice: { type: 'tool', tool_name: 'myTool' } },
+          ],
+        },
+        generationId: 'gen_steprules_wire',
+        traceId: 'trc_steprules_wire',
+        agentId: 'agt_steprules_wire',
+      });
+
+      expect(capturedOpts?.prepareStep).toBeDefined();
+      const result = capturedOpts?.prepareStep({ stepNumber: 0 });
+      expect(result).toEqual({
+        toolChoice: { type: 'tool', toolName: 'myTool' },
+        activeTools: ['myTool'],
       });
     });
 

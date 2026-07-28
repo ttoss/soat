@@ -1,5 +1,11 @@
 ---
 description: "Meter an agent's token usage, price it, aggregate per-project spend, and get pushed a webhook alert when a budget threshold is crossed."
+keywords:
+  - token usage metering
+  - LLM cost tracking
+  - AI budgets
+  - usage thresholds
+  - webhook alerts
 sidebar_position: 19
 ---
 

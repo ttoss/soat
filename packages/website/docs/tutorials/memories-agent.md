@@ -1,5 +1,11 @@
 ---
 description: "Give a SOAT agent long-term memory that persists across sessions."
+keywords:
+  - AI agent memory
+  - long-term memory
+  - persistent memory
+  - memory extraction
+  - conversational memory
 sidebar_position: 5
 ---
 

@@ -1,5 +1,11 @@
 ---
-description: "Walk through a full back-and-forth conversation with an LLM in SOAT."
+description: "Build a multi-turn LLM chat with managed conversation history on your own infrastructure, via CLI, SDK, or REST."
+keywords:
+  - chat with an LLM
+  - chat completions API
+  - conversation history
+  - self-hosted LLM chat
+  - Ollama
 sidebar_position: 2
 ---
 

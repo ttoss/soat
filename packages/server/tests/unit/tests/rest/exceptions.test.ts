@@ -527,6 +527,44 @@ describe('Exceptions', () => {
       expect(noop).toBeUndefined();
     });
 
+    test('a filer rejection is swallowed by handleEvent, not raised as an unhandled rejection', async () => {
+      // A nonexistent internal project id makes the filer's insert fail the
+      // projects FK deterministically — the only way to drive handleEvent's
+      // .catch resilience branch, which was previously covered (or not) by
+      // whichever unrelated test happened to produce a filing failure.
+      const unhandled: unknown[] = [];
+      const onUnhandled = (reason: unknown) => {
+        unhandled.push(reason);
+      };
+      process.on('unhandledRejection', onUnhandled);
+      try {
+        emitEvent({
+          type: 'orchestration_runs.failed',
+          projectId: 999999999,
+          projectPublicId: 'proj_does_not_exist',
+          resourceType: 'test',
+          resourceId: 'run_fk_reject_1',
+          data: {},
+          timestamp: new Date().toISOString(),
+        });
+        // The filer's DB insert rejects asynchronously; give it a bounded
+        // moment to settle (same pattern as the unmatched-event test above).
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 100);
+        });
+        expect(unhandled).toHaveLength(0);
+        const res = await listExceptions('');
+        const filed = (res.body.data as Record<string, unknown>[]).find((e) => {
+          return (
+            typeof e.title === 'string' && e.title.includes('run_fk_reject_1')
+          );
+        });
+        expect(filed).toBeUndefined();
+      } finally {
+        process.off('unhandledRejection', onUnhandled);
+      }
+    });
+
     test('concurrent files with the same fresh dedup key fold via the unique-violation path', async () => {
       const dedupKey = 'excrace:concurrent:1';
       const [a, b] = await Promise.all([

@@ -1,5 +1,11 @@
 ---
 description: 'Classify a dangerous tool call with a guardrail — execute below a threshold, require human sign-off above it, and hard-stop on a failing guard.'
+keywords:
+  - AI guardrails
+  - tool call gating
+  - AI safety
+  - human sign-off
+  - guardrail classification
 sidebar_position: 20
 ---
 

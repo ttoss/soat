@@ -1,5 +1,10 @@
 ---
-description: "Build a poem pipeline with the Orchestrations module, invoking each agent directly from the graph."
+description: "Build a sequential multi-agent pipeline with the Orchestrations module — four agents compose a sonnet stanza by stanza, invoked directly from the graph."
+keywords:
+  - AI agent orchestration
+  - sequential agent pipeline
+  - orchestration DAG
+  - multi-step AI workflow
 sidebar_position: 10
 ---
 

@@ -1,5 +1,11 @@
 ---
 description: "Use orchestration control-flow nodes — delay, poll, loop, and condition — to pace, wait, repeat, and branch a run."
+keywords:
+  - control flow nodes
+  - delay node
+  - polling
+  - loop node
+  - orchestration control flow
 sidebar_position: 13
 ---
 

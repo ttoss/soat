@@ -1,5 +1,11 @@
 ---
 description: "Deploy a multi-agent orchestration pipeline with a single Agent Formation template instead of many ordered API calls."
+keywords:
+  - infrastructure as code
+  - declarative agent deployment
+  - agent formation
+  - multi-agent template
+  - stack deployment
 sidebar_position: 16
 ---
 

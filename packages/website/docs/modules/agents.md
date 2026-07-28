@@ -21,6 +21,7 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 
 - [Chat with an LLM - Step 4 (Create an agent)](/docs/tutorials/chat-with-llm#step-4--create-an-agent)
 - [Agent SOAT Tools and Preset Parameters - Step 7 (Create the agent)](/docs/tutorials/agent-soat-tools#step-7--create-the-agent)
+- [Execute Agent Tool Calls in Your Own App - Step 6 (The generation pauses)](/docs/tutorials/client-tools#step-6--ask-about-an-order-the-generation-pauses)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
 - [Create an Agent Squad - Step 4 (Write the formation template)](/docs/tutorials/create-an-agent-squad#step-4--write-the-formation-template)
 
@@ -159,6 +160,8 @@ The `tool_choice` field sets the **default** tool-selection strategy for every s
 | `{ type: "tool", tool_name: "<name>" }` | The model must call the specified tool                   |
 
 Using `"required"` is useful when combined with a tool that has no `execute` configuration (a "done" tool). The agent is forced to use tools at every step and stops when it calls the tool without an executor.
+
+The object form applies to the current model call only. When a generation pauses at `requires_action` for a [client tool](./tools.md#client) and resumes after `submit-tool-outputs`, the continuation runs with `"auto"` — the force is satisfied by the call that produced the pause, so the model is free to use the tool result instead of being forced to call the tool again.
 
 ### Step Rules
 

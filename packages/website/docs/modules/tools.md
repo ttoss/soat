@@ -21,6 +21,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 
 ## Related Tutorials
 
+- [Execute Agent Tool Calls in Your Own App - Step 4 (Declare the function as a client tool)](/docs/tutorials/client-tools#step-4--declare-the-function-as-a-client-tool)
 - [Agent SOAT Tools and Preset Parameters - Step 6 (Create soat tools)](/docs/tutorials/agent-soat-tools#step-6--create-soat-tools)
 - [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 5 (Create fixed SOAT tools)](/docs/tutorials/multi-agent-orchestration#step-5--create-fixed-soat-tools-for-stanza-agents)

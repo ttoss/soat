@@ -1,5 +1,10 @@
 ---
 description: "Build a branching orchestration with condition nodes and see skipped nodes recorded in the execution trace."
+keywords:
+  - conditional branching
+  - condition nodes
+  - dynamic routing
+  - branching orchestration
 sidebar_position: 12
 ---
 
