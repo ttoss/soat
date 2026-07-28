@@ -4,41 +4,27 @@ Unit tests prove the code does what the code says. They cannot prove the
 **product does what the docs promise** — that gap is closed by live QA passes
 against a running server.
 
-Those passes are tracked as **issues**, indexed by the tracker
-[#748](https://github.com/ttoss/soat/issues/748). There is no per-module
-checklist file, and one must not be reintroduced.
+This repo used to track those passes as issues indexed by a single umbrella
+tracker ([#748](https://github.com/ttoss/soat/issues/748), now closed). That
+tracking approach is **retired**. A live QA pass is still valuable
+verification and the procedure below still applies, but it is no longer a
+mandated, centrally-indexed process — do not reintroduce a per-module
+checklist file, and do not open a new umbrella tracker issue to replace #748.
 
 This rule is separate from `quality-assurance.md` (which governs the automated
 Definition of Done) and from `tests.md` (which governs where unit tests live).
 
-## Why issues, not files
-
-A checklist file records "verified on date X" and then keeps asserting it. The
-code moves, the file does not, and nothing forces a re-run — so it degrades from
-a coverage map into a claim nobody has standing to trust. The failure is silent:
-a stale `[x]` is indistinguishable from a fresh one.
-
-An issue cannot go stale that way. It is open or it is closed, and closing it
-takes a deliberate act by someone who looked.
-
-The cost is real and worth naming: deleting the checklists gave up the
-**enumeration** of what should be verified per module. #748 carries that
-inventory forward — the unverified surface, why each item is unreachable, and the
-procedure for a pass. Keep it current, because it is now the only such record.
-
 ## When to act
 
-| Change | Action |
-|---|---|
-| A live pass finds a deviation | File an issue labeled `qa`, link it in #748 |
-| A live pass confirms a documented behavior works | Nothing to file. Note it in #748 only if it closes a gap that issue lists |
-| A defect is fixed | Close its issue; #748's index reflects it |
-| A behavior turns out unreachable on this infrastructure | Record it under "Not verifiable here" in #748 with the reason — never as an issue |
-| A new module ships | Add it to the never-passed list in #748 |
-
-**Do not file an issue for a coverage gap.** An issue closes; a gap does not. An
-unbuilt feature, an environment limit, or a behavior nobody has attempted belongs
-in #748's inventory, not in a bug report.
+- **A live pass finds a real deviation from documented behavior** — fix it, or
+  if it can't be fixed in the same session, file a normal issue labeled `qa`
+  describing the deviation. Close that issue when the defect is fixed, same as
+  any other bug.
+- **A live pass confirms documented behavior works** — nothing to file.
+- **A behavior turns out unreachable on this infrastructure, or is an unbuilt
+  feature** — this is not a defect; do not file an issue for it. Mention it in
+  the session/PR summary if it's relevant context, but there is no standing
+  inventory to update.
 
 ## Running a pass
 
