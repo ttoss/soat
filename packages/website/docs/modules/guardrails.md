@@ -132,7 +132,7 @@ The `soat.*` catalog (windows are baked into the key name — a fixed suffix set
 | `soat.action` / `soat.tool.id` / `soat.tool.name`          | string  | The call being classified                               |
 | `soat.agent.id` / `soat.project.id`                        | string  | Evaluation identity                                     |
 | `soat.run.node_attempt` / `soat.run.tool_calls`            | integer | Current [orchestration run](./orchestrations.md) state  |
-| `soat.activity.actions_1h` / `soat.activity.actions_24h`   | integer | [Activity feed](./approvals.md) (per project)           |
+| `soat.activity.actions_1h` / `soat.activity.actions_24h`   | integer | [Activity feed](./activity.md) (per project)            |
 | `soat.usage.cost_usd_1h` / `_24h` / `_7d` / `_30d`         | number  | [Usage metering](./usage.md) (per project)              |
 | `soat.usage.tokens_24h` / `soat.usage.tokens_30d`          | integer | [Usage metering](./usage.md) (per project)              |
 | `soat.usage.run_tokens` / `soat.usage.run_cost_usd`        | number  | [Usage metering](./usage.md) (**per run**, cumulative)  |

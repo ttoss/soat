@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { emitActivityEntry } from './activity';
 import { createScheduler, createSweep } from './scheduler';
 import { computeNextFireAt } from './triggerValidation';
 
@@ -78,6 +79,12 @@ export const fireDueTriggers = createSweep({
       fireInput: null,
     });
     await runFiringDispatch(prepared);
+    void emitActivityEntry({
+      projectId: trigger.projectId as number,
+      kind: 'schedule_fired',
+      summary: `Schedule trigger '${trigger.publicId as string}' fired`,
+      refId: trigger.publicId as string,
+    });
   },
 });
 

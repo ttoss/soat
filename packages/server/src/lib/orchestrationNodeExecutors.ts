@@ -3,6 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { emitActivityEntry } from './activity';
 import { createGeneration } from './agentGeneration';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
@@ -304,6 +305,22 @@ export const executeToolNode = async (args: {
     typeof result === 'object' && result !== null
       ? (result as Record<string, unknown>)
       : { result };
+
+  // Activity feed (G3 Phase 4): record the successful execution. Known v1
+  // gap — only orchestration tool nodes are instrumented; agent-generation
+  // time tool calls (conversation/session tool-call content blocks, the
+  // pipeline-tool resolver) are not yet wired (see docs/prd-approvals.md).
+  // Fire-and-forget so a recording failure never affects the run.
+  if (scopeProjectId !== undefined) {
+    void emitActivityEntry({
+      projectId: scopeProjectId,
+      kind: 'action_executed',
+      summary: `Tool '${node.toolId}' executed by node '${node.id}'`,
+      detail: { nodeId: node.id, action: node.operationId },
+      runId: args.runId,
+      refId: node.toolId,
+    });
+  }
 
   return { kind: 'artifact', artifact };
 };

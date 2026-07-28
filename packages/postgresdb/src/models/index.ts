@@ -1,3 +1,4 @@
+export { ActivityEntry } from './ActivityEntry';
 export { Actor } from './Actor';
 export { Agent } from './Agent';
 export { AiProvider } from './AiProvider';

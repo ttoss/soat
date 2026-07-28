@@ -1,0 +1,159 @@
+openapi: 3.0.3
+info:
+  title: SOAT Activity API
+  version: 1.0.0
+  description: >-
+    API for the activity feed — "what did agents do today," one entry per
+    autonomously executed action. Distinct from the audit log: the audit log is
+    principal-centric (who did what to the platform); this feed is
+    agent/run-centric (what an agent did during a run). There is no public
+    create endpoint — entries are platform-written by producers (approval
+    resolution, exception filing, schedule firing, tool execution). Cursor
+    (keyset) paginated, not offset, because the feed is append-only and
+    high-volume.
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Activity
+    description: Read the autonomous-execution activity feed
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/activity:
+    get:
+      tags:
+        - Activity
+      summary: List activity feed entries
+      description: >-
+        Returns activity entries for a project, newest first, filterable by
+        kind and severity. Paginated with an opaque cursor rather than
+        offset/limit — pass the previous page's `next_cursor` to fetch the
+        next one; a `null` `next_cursor` means there is no more data.
+      operationId: listActivity
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: kind
+          in: query
+          description: Filter by activity kind
+          schema:
+            type: string
+            enum:
+              [
+                action_executed,
+                approval_resolved,
+                exception_created,
+                schedule_fired,
+              ]
+        - name: severity
+          in: query
+          description: Filter by severity
+          schema:
+            type: string
+            enum: [info, warning, critical]
+        - name: cursor
+          in: query
+          description: Opaque cursor from a previous page's `next_cursor`
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+      responses:
+        '200':
+          description: Page of activity entries
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - next_cursor
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ActivityEntry'
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: Pass as `cursor` to fetch the next page; `null` when this is the last page
+        '400':
+          description: Malformed cursor
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
+  schemas:
+    ActivityEntry:
+      type: object
+      properties:
+        id:
+          type: string
+          example: acte_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        kind:
+          type: string
+          enum:
+            [
+              action_executed,
+              approval_resolved,
+              exception_created,
+              schedule_fired,
+            ]
+          description: How the entry was produced
+        severity:
+          type: string
+          enum: [info, warning, critical]
+        summary:
+          type: string
+          description: One-line, human-readable description
+        detail:
+          type: object
+          nullable: true
+          description: >-
+            Kind-specific structured context (tool, args digest, node id,
+            generation id, guardrail policy version)
+        run_id:
+          type: string
+          nullable: true
+          description: Originating orchestration run, if any
+        agent_id:
+          type: string
+          nullable: true
+          description: Associated agent, if any
+        ref_id:
+          type: string
+          nullable: true
+          description: >-
+            Producer-specific reference (the approval, exception, or trigger
+            firing id the entry came from, or the executed tool's id)
+        created_at:
+          type: string
+          format: date-time

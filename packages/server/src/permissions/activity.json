@@ -1,0 +1,10 @@
+{
+  "module": "activity",
+  "operations": [
+    {
+      "operationId": "listActivity",
+      "action": "activity:ListActivity",
+      "description": "List activity feed entries in a project"
+    }
+  ]
+}

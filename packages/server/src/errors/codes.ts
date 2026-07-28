@@ -397,6 +397,11 @@ export const ERROR_CODES = {
     description:
       'The edited arguments supplied on edit-then-approve must be a JSON object.',
   },
+  ACTIVITY_INVALID_CURSOR: {
+    httpStatus: 400,
+    description:
+      'The activity feed cursor is malformed or does not decode to a valid (created_at, id) position.',
+  },
   WORKFLOW_NOT_FOUND: {
     httpStatus: 404,
     description: 'The workflow does not exist or is not accessible.',
