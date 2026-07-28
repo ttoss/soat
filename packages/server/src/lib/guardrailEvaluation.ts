@@ -238,8 +238,9 @@ const resolveClass = (
  * guard — forgetting to supply context tightens the posture, never loosens
  * it. The unresolved-var check runs *before* evaluation so a comparison
  * operator's `null → 0` coercion (`{ "<": [{ "var":
- * "soat.activity.actions_24h" }, 100] }` passing while the activity feed is
- * dark) can never flip an unresolvable reference into a passing guard. Plain
+ * "soat.activity.actions_24h" }, 100] }` passing when the provider could not
+ * resolve the key) can never flip an unresolvable reference into a passing
+ * guard. Plain
  * JS truthiness matches the JSON Logic convention used elsewhere in the
  * server.
  */

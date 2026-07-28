@@ -144,6 +144,13 @@ const resolveGenerationTools = async (args: {
     remainingDepth: args.remainingDepth,
     // Guardrails are the single tool-call gating mechanism.
     guardrail,
+    // Attributes a successful tool call to this agent/generation on the activity
+    // feed (approvals PRD Phase 4).
+    activity: {
+      projectId: args.typedAgent.project.id as number,
+      agentId: args.agentId,
+      generationId: args.generationId,
+    },
   });
 
   buildKnowledgeTools({

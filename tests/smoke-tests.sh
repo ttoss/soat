@@ -2164,6 +2164,80 @@ $SOAT_CLI delete-tool --tool-id "$GATED_TOOL_ID" >/dev/null 2>&1 || true
 $SOAT_CLI delete-guardrail --guardrail-id "$GATED_GUARDRAIL_ID" >/dev/null 2>&1 || true
 echo "Guardrail-gated flow cleanup: OK"
 
+# 22h. Agent-generation tool call: activity recording + the activity-rate guard
+# context. A class-B guardrail whose guard reads `soat.activity.actions_24h`
+# against a very high ceiling must PASS — which only happens if the key really
+# resolves off the feed. An unresolvable `soat.*` var fails closed (tripwire), so
+# a tool call that executes here is itself the proof the provider is wired. The
+# executed call must then appear on the feed as `action_executed`.
+echo "--- Creating activity-recorded tool and rate-guarded agent ---"
+ACT_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name activity-project-detail \
+  --type http \
+  --description "Reads the smoke test project; records on the activity feed." \
+  --parameters '{"type":"object","properties":{},"required":[]}' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+ACT_TOOL_ID=$(printf '%s\n' "$ACT_TOOL_RESP" | jq -r '.id')
+echo "Activity-recorded tool id: $ACT_TOOL_ID"
+
+ACT_GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-activity-rate-guardrail \
+  --document '{"class":"B","guard":{"<":[{"var":"soat.activity.actions_24h"},{"var":"context.action_rate_ceiling"}]}}')
+ACT_GUARDRAIL_ID=$(printf '%s\n' "$ACT_GUARDRAIL_RESP" | jq -r '.id')
+echo "Activity-rate guardrail id: $ACT_GUARDRAIL_ID"
+
+ACT_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name activity-recorded-agent \
+  --instructions "Call the activity-project-detail tool to fetch the project." \
+  --tool_ids "[\"$ACT_TOOL_ID\"]" \
+  --guardrail_ids "[\"$ACT_GUARDRAIL_ID\"]" \
+  --tool_choice required \
+  --max_steps 2)
+ACT_AGENT_ID=$(printf '%s\n' "$ACT_AGENT_RESP" | jq -r '.id')
+echo "Activity-recorded agent id: $ACT_AGENT_ID"
+
+echo "--- Running generation under the activity-rate guard ---"
+set +e
+$SOAT_CLI create-agent-generation --agent-id "$ACT_AGENT_ID" \
+  --messages '[{"role":"user","content":"fetch the project"}]' \
+  --guardrail_context '{"action_rate_ceiling":1000000}' >/dev/null 2>&1
+set -e
+
+# The emit is fire-and-forget, so poll. Whether the model actually calls the tool
+# is LLM-dependent even with tool_choice=required, so a missing entry warns
+# rather than fails — but an entry that IS present must be well-formed.
+echo "--- Activity: the executed agent tool call is on the feed ---"
+ACT_EXEC_ENTRY=""
+i=0
+while [ $i -lt 30 ]; do
+  ACT_EXEC_LIST=$($SOAT_CLI list-activity --project_id "$PROJECT_PUBLIC_ID" --kind action_executed | sanitize_json)
+  ACT_EXEC_ENTRY=$(printf '%s\n' "$ACT_EXEC_LIST" | jq -c --arg ref "$ACT_TOOL_ID" '.data | map(select(.ref_id == $ref)) | .[0] // empty')
+  [ -n "$ACT_EXEC_ENTRY" ] && break
+  i=$((i + 1))
+  sleep 1
+done
+if [ -n "$ACT_EXEC_ENTRY" ]; then
+  if ! printf '%s\n' "$ACT_EXEC_ENTRY" \
+    | jq -e --arg agent "$ACT_AGENT_ID" '.kind == "action_executed" and .severity == "info" and .agent_id == $agent and (.detail.action | type == "string")' >/dev/null 2>&1; then
+    echo "ERROR: action_executed entry is malformed for tool $ACT_TOOL_ID" >&2
+    printf '%s\n' "$ACT_EXEC_ENTRY" >&2
+    exit 1
+  fi
+  echo "Agent tool-call activity recording: OK"
+  echo "Activity-rate guard context resolved (the guarded call executed): OK"
+else
+  echo "WARNING: model did not call the tool (LLM response varies); skipping action_executed assertion." >&2
+fi
+
+$SOAT_CLI delete-agent --agent-id "$ACT_AGENT_ID" --force >/dev/null 2>&1 || true
+$SOAT_CLI delete-tool --tool-id "$ACT_TOOL_ID" >/dev/null 2>&1 || true
+$SOAT_CLI delete-guardrail --guardrail-id "$ACT_GUARDRAIL_ID" >/dev/null 2>&1 || true
+echo "Activity recording flow cleanup: OK"
+
 # 23. Generated agents are now delete-blocked by dependent generations/traces
 echo "--- Verifying agent delete-block after generation ---"
 expect_cli_error_status 409 delete-agent --agent-id "$AGENT_ID"

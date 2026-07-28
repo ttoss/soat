@@ -306,11 +306,12 @@ export const executeToolNode = async (args: {
       ? (result as Record<string, unknown>)
       : { result };
 
-  // Activity feed (G3 Phase 4): record the successful execution. Known v1
-  // gap — only orchestration tool nodes are instrumented; agent-generation
-  // time tool calls (conversation/session tool-call content blocks, the
-  // pipeline-tool resolver) are not yet wired (see docs/prd-approvals.md).
-  // Fire-and-forget so a recording failure never affects the run.
+  // Activity feed (G3 Phase 4): record the successful execution. This is the
+  // run-scoped call site — a tool node has no agent in scope, so it attributes
+  // to the run and node. Agent-generation-time tool calls are recorded by the
+  // resolver instead (`recordToolActivity`), which this path deliberately does
+  // not opt into: it threads no `ActivityCallContext`, so no call is recorded
+  // twice. Fire-and-forget so a recording failure never affects the run.
   if (scopeProjectId !== undefined) {
     void emitActivityEntry({
       projectId: scopeProjectId,

@@ -10,9 +10,9 @@
 | Capability                                | PRD                                                    |
 | ----------------------------------------- | ------------------------------------------------------ |
 | Queue-backed run execution ✅ shipped     | [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution) |
-| Approval & exception queues, activity feed | [prd-approvals.md](./prd-approvals.md)                 |
+| Approval & exception queues, activity feed ✅ shipped | [approvals](../packages/website/docs/modules/approvals.md) · [exceptions](../packages/website/docs/modules/exceptions.md) · [activity](../packages/website/docs/modules/activity.md) module docs |
 | Usage metering ✅ shipped                  | [usage module doc](../packages/website/docs/modules/usage.md) |
-| Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [prd-approvals.md](./prd-approvals.md#recurrence-view--not-started) · [prd-learned-rules.md](./prd-learned-rules.md) |
+| Feedback loop → recurrence surfacing (learned rules ⏭️ deferred) | [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view) · [prd-learned-rules.md](./prd-learned-rules.md) |
 
 ## Problem Statement
 
@@ -86,7 +86,7 @@ With the remaining PRDs shipped (on top of the already-shipped schedule
 triggers and guardrail modules), a single template expresses an operating
 stack. Canonical end-state example (node and resource properties follow the
 child PRDs: the `approval` node schema from
-[prd-approvals.md](./prd-approvals.md#the-approval-node--template-schema), the
+[orchestrations → Approval Nodes](../packages/website/docs/modules/orchestrations.md#approval-nodes), the
 `schedule` trigger from the [Triggers module](../packages/website/docs/modules/triggers.md), and the
 `action_classes` policy from [guardrails](../packages/website/docs/modules/guardrails.md)):
 

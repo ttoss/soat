@@ -27,14 +27,16 @@ The umbrella — [prd-agent-operations.md](./prd-agent-operations.md) — define
 the gap series that turns a Formation deploy into an *operating* agent team.
 Only initiatives with open work are listed. G1 (schedule triggers), G2
 (queue-backed runs), G4 (guardrails), and G5 (usage metering) are fully shipped
-and have no remaining items. The G2 and G5 PRDs have been retired in favor of
-the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution)
-and the [usage module doc](../packages/website/docs/modules/usage.md); G5's one
-open refinement is kept in the [backlog](#g5--usage-metering) below.
+and have no remaining items. The G2, G3 and G5 PRDs have been retired in favor of
+the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution),
+the [approvals](../packages/website/docs/modules/approvals.md) / [exceptions](../packages/website/docs/modules/exceptions.md) / [activity](../packages/website/docs/modules/activity.md)
+module docs, and the [usage module doc](../packages/website/docs/modules/usage.md);
+G3's and G5's remaining deferred items are kept in the
+[backlog](#g3--approvals-exceptions--activity) below.
 
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 all phases shipped; `5.4` (`soat.activity.*` guard context) is the one unbuilt piece. Phase 5 approver targeting and in-channel approval clients remain deferred, no demand signal yet |
+| G3 | Approvals · exceptions · activity | _retired_ — [approvals](../packages/website/docs/modules/approvals.md) · [exceptions](../packages/website/docs/modules/exceptions.md) · [activity](../packages/website/docs/modules/activity.md) | ✔ every deliverable shipped (`5.4` guard context and the `action_executed` agent-generation coverage closed 2026-07). Phase 5 approver targeting and in-channel approval clients remain deferred by design, no demand signal yet — see the [G3 backlog](#g3--approvals-exceptions--activity) |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
 ### Adjacent / standalone module PRDs
@@ -121,10 +123,10 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 - [x] **Phase 4 / activity feed** — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md):
   - [x] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
   - [x] `5.2` cursor-paginated `GET /api/v1/activity` (kind / severity filters, per project)
-  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` coverage has a known v1 gap: only the orchestration tool-node executor is instrumented, not agent-generation-time tool calls (see [activity module docs](../packages/website/docs/modules/activity.md#producers))
-  - [ ] `5.4` write `soat.activity.actions_1h` / `actions_24h` guard context — **not started, and the only unbuilt piece of Phase 4.** Both keys are already in the guardrail allowlist (`guardrailDocument.ts`) and documented in [Guards and Guardrail Context](../packages/website/docs/modules/guardrails.md#guards-and-guardrail-context), but nothing populates them from `activity_entries` yet. Not a security hole — `hasUnsafeComparisonWithUnresolvedVar` makes a guard referencing an unresolvable `soat.*` var fail closed — but a guard written against these keys protects nothing until this lands
-- [ ] **Phase 5** Approver targeting & assignment (route items to specific humans; deferred until demand)
-- [ ] In-channel approval clients (WhatsApp/Slack) over the queue
+  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` now covers both the orchestration tool-node executor and agent-generation-time tool calls (the v1 gap, closed 2026-07: the resolver is the single seam, wrapped innermost so blocked / tripped / approval-routed / failed calls record nothing; see [activity module docs](../packages/website/docs/modules/activity.md#producers))
+  - [x] `5.4` `soat.activity.actions_1h` / `actions_24h` guard context — shipped (2026-07). Counts the project's `action_executed` entries over the rolling window at evaluation time, so a guard can cap the autonomous-action rate; an empty feed reads as a real `0`, only a failing query falls back to fail-closed. Live behavior in [the feed as a guardrail signal](../packages/website/docs/modules/activity.md#the-feed-as-a-guardrail-signal)
+- [ ] **Phase 5** Approver targeting & assignment — optional `approver_policy` / `assignees` on the approval node or tool binding, routing specific items to specific humans. Deferred until real demand; nothing in the shipped queue blocks it
+- [ ] In-channel approval clients (WhatsApp/Slack) over the queue — surface items, and let humans resolve them, inside conversational channels rather than only through the queue UI/API. The substrate they build on is settled: continuation is platform-automatic (the decision is persisted and its lifecycle webhook emitted first, then the continuation fires fire-and-forget), so a channel client observes through the webhook and gets a notification, not a control point. If a client ever needs client-controlled continuation timing (defer/batch), that extension is scoped **here**, not in the core loop. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md)
 
 ### G5 — Usage metering
 
@@ -211,15 +213,15 @@ stays the source of truth:
 
 - **Activity-feed ownership — resolved (2026-07), shipped.** The shipped
   [`AuditEntry`](../packages/website/docs/modules/audit-log.md) (`detail` kinds)
-  and [prd-approvals.md](./prd-approvals.md) (`ActivityEntry`, `acte_`) both
+  and the retired G3 PRD (`ActivityEntry`, `acte_`) both
   described an activity substrate; settled as two distinct models with a firm
   boundary rather than one. Audit-shaped events stay on `AuditEntry` — that part
   was already narrowed: a policy `deny` is recorded as an ordinary entry with
   `status = 403` (there is no `detail.kind = 'action_denied'` marker, despite an
   earlier revision of this line claiming one), and a decision-changing guardrail
   evaluation is mirrored there as `detail->>'kind' = 'guardrail_evaluation'`. The remaining product-feed question (which model owns
-  agent/run-centric autonomous-execution telemetry) is resolved: the PRD's own
-  `ActivityEntry`, per [prd-approvals.md decision 4](./prd-approvals.md#decisions-formerly-open-questions) —
+  agent/run-centric autonomous-execution telemetry) is resolved: a dedicated
+  `ActivityEntry` model —
   `AuditEntry`'s `action` column is documented as the permission-action string
   that authorized a request, and none of `ActivityEntry`'s four kinds
   (`action_executed`, `approval_resolved`, `exception_created`,
@@ -271,7 +273,7 @@ corrections — and its raw material already persists on `ApprovalItem`
 Consequences:
 
 - **Exact-key recurrence ships as the approvals
-  [recurrence view](./prd-approvals.md#recurrence-view--not-started) (G3)** —
+  [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view) (G3)** —
   zero new models, zero AI-provider coupling in a deliberately deterministic
   module, and its output is a guardrail graduation prompt ("rejected 4×,
   encode a `deny`"): a hard, enforceable, platform-owned outcome.

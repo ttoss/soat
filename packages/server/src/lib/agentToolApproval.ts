@@ -52,7 +52,7 @@ export const stripApprovalJustification = (
 /**
  * Adds the three optional justification fields to a tool's model-visible
  * parameters schema, the additive mirror of the `preset_parameters` surgery
- * that strips fields (prd-approvals.md §5). `reasoning_prompt` customizes the
+ * that strips fields (approvals module docs). `reasoning_prompt` customizes the
  * guidance the model sees; a default is used when omitted. The fields stay
  * optional — never added to `required` — so a guarded call without justification
  * still validates.

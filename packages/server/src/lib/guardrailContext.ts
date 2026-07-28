@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { windowedActionCount } from './activity';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
@@ -168,16 +169,67 @@ const resolveWindowedUsage = async (args: {
   }
 };
 
+// `soat.activity.actions_*` — how many actions this project executed
+// autonomously in the rolling window ending now, read off the activity feed. An
+// empty feed is a real 0 (not unresolved), so a rate ceiling passes for a
+// project that has taken no actions yet. An unknown window suffix is left
+// unresolved.
+const resolveWindowedActivity = async (args: {
+  rel: string;
+  path: string;
+  projectId: number;
+  now: Date;
+}): Promise<number | null | typeof UNRESOLVED> => {
+  const key = args.rel.slice('activity.'.length);
+  if (!key.startsWith('actions_')) return UNRESOLVED;
+  const ms = WINDOW_MS[key.slice(key.lastIndexOf('_') + 1)];
+  if (ms === undefined) return UNRESOLVED;
+  const start = new Date(args.now.getTime() - ms);
+  try {
+    return await windowedActionCount({ projectId: args.projectId, start });
+  } catch (error) {
+    log(
+      'buildGuardrailSoatContext: activity failed path=%s %o',
+      args.path,
+      error
+    );
+    return null;
+  }
+};
+
+// Dispatches one referenced catalog key to the namespace that computes it. A key
+// outside these namespaces is either already set by `buildDeterministicSoat` or
+// one we don't compute — returning UNRESOLVED leaves it unset, so it reads as
+// null → fail-closed.
+const resolveAsyncSoatKey = (args: {
+  rel: string;
+  path: string;
+  projectId: number;
+  now: Date;
+  resolveRun: () => Promise<number | null>;
+}): Promise<number | null | typeof UNRESOLVED> => {
+  const { rel, path, projectId, now } = args;
+  if (rel.startsWith('activity.')) {
+    return resolveWindowedActivity({ rel, path, projectId, now });
+  }
+  if (!rel.startsWith('usage.')) {
+    return Promise.resolve(UNRESOLVED);
+  }
+  return RUN_USAGE_KEYS.has(rel)
+    ? resolveRunUsage({ rel, path, resolveRun: args.resolveRun })
+    : resolveWindowedUsage({ rel, path, projectId, now });
+};
+
 /**
  * Populates the `soat.*` namespace for a call, filling **only** the catalog keys
  * the applying guardrails actually reference (`referencedSoatPaths`). Identity
  * and run keys are synchronous; `soat.usage.cost_usd_*` / `tokens_*` sum the
  * project's windowed usage at evaluation time; `soat.usage.run_tokens` /
  * `run_cost_usd` sum only the current orchestration run's meters so far, so a
- * per-run ceiling can abort one runaway run mid-flight; `soat.activity.*` stays
- * unresolvable (`null`) until the activity feed is populated (task 5.4) — a
- * guard referencing it fails closed. Fail-closed throughout: a usage query that
- * throws, or a run key read outside a run, leaves the key `null`.
+ * per-run ceiling can abort one runaway run mid-flight; `soat.activity.actions_*`
+ * count the project's executed actions over the same rolling windows, off the
+ * activity feed. Fail-closed throughout: a usage or activity query that throws,
+ * or a run key read outside a run, leaves the key `null`.
  */
 export const buildGuardrailSoatContext = async (args: {
   identity: GuardrailCallIdentity;
@@ -190,19 +242,13 @@ export const buildGuardrailSoatContext = async (args: {
   for (const path of args.referencedSoatPaths) {
     // path is like 'soat.usage.cost_usd_24h' — strip the leading namespace.
     const rel = path.startsWith('soat.') ? path.slice('soat.'.length) : path;
-    if (!rel.startsWith('usage.')) {
-      // activity.* and any other catalog key we don't yet compute are left
-      // unset → resolves to null → fail-closed.
-      continue;
-    }
-    const value = RUN_USAGE_KEYS.has(rel)
-      ? await resolveRunUsage({ rel, path, resolveRun })
-      : await resolveWindowedUsage({
-          rel,
-          path,
-          projectId: args.identity.projectId,
-          now: args.now,
-        });
+    const value = await resolveAsyncSoatKey({
+      rel,
+      path,
+      projectId: args.identity.projectId,
+      now: args.now,
+      resolveRun,
+    });
     if (value !== UNRESOLVED) setByPath(soat, rel, value);
   }
 

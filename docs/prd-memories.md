@@ -202,7 +202,7 @@ This phase delivers the **memory-side data layer** that Phase 3 queries against:
   `MemoryEntityEdge` edges (applying `predicate` / `direction` filters), and maps matched edges
   to their provenance entries.
 - Entity filters narrow the candidate set; when a `query` is present, vector search ranks within it.
-- Memory-type results are enriched with their linked entities (see [Entity Graph (Edges)](#entity-graph-edges)).
+- Memory-type results are enriched with their linked entities (see [Entity Graph (Edges)](#entity-graph-edges-phase-6)).
 - **Single-hop only:** entity → edges → entries. Multi-hop path traversal ("how are Pedro and
   Company X related?") is out of scope until a dedicated path-query design exists.
 
