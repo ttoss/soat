@@ -298,6 +298,13 @@ const resolveReceipt = async (args: {
   runId?: string;
   projectIds?: number[];
 }) => {
+  if (args.runId && args.generationId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'generation_id and run_id are mutually exclusive — supply exactly one.'
+    );
+  }
+
   if (args.runId) {
     const receipt = await getRunReceipt({
       runId: args.runId,

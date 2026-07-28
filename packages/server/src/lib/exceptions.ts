@@ -427,12 +427,19 @@ const fileGuardrailTripwireException = async (
   const data = asRecord(event.data);
   const runId = asStringOrNull(data.runId);
   const nodeId = asStringOrNull(data.nodeId);
-  const generationId = asStringOrNull(data.generationId);
+  const agentId = asStringOrNull(data.agentId);
   const toolName = asStringOrNull(data.toolName) ?? event.resourceId;
   const guardrailVersion = asStringOrNull(data.guardrailVersion);
   // Fold repeated trips of the same guardrail on the same call site (a tool
   // node that trips every attempt, an agent looping) into one open item.
-  const scope = runId ? `${runId}:${nodeId ?? ''}` : (generationId ?? '');
+  // The run path keys on `runId:nodeId`, which is stable across retries of the
+  // same node. The non-run path must key on the call site (`agentId:toolName`)
+  // rather than `generationId` — every generation gets a fresh id, so keying
+  // on it would make dedup impossible for the exact "agent looping" case this
+  // fold exists to handle.
+  const scope = runId
+    ? `${runId}:${nodeId ?? ''}`
+    : `${agentId ?? ''}:${toolName}`;
   await fileException({
     projectId: event.projectId,
     kind: 'guardrail_tripwire',
@@ -444,7 +451,7 @@ const fileGuardrailTripwireException = async (
     },
     runId,
     nodeId,
-    agentId: asStringOrNull(data.agentId),
+    agentId,
     guardrailVersion,
     dedupKey: `guardrail_tripwire:${scope}:${guardrailVersion ?? ''}`,
   });

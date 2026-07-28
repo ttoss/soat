@@ -1737,6 +1737,14 @@ describe('Usage', () => {
       expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
     });
 
+    test('GET /usage/receipt with both generation_id and run_id returns 400 instead of silently resolving the run', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage/receipt?generation_id=gen_doesNotExist01&run_id=${runId}`
+      );
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('the orchestration-run response surfaces usage totals', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/orchestration-runs/${runId}`
