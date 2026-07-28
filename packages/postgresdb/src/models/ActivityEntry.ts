@@ -28,7 +28,10 @@ import { Project } from './Project';
       unique: true,
       fields: ['public_id'],
     },
-    { name: 'activity_entries_project_created_at', fields: ['project_id', 'created_at'] },
+    {
+      name: 'activity_entries_project_created_at',
+      fields: ['project_id', 'created_at'],
+    },
     // Tiebreaker for keyset pagination when two rows share a `created_at`.
     {
       name: 'activity_entries_project_created_public_id',
