@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
@@ -727,6 +728,44 @@ describe('executeToolNode', () => {
         kind: 'artifact',
         artifact: { result: 'done' },
       });
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  // Activity feed (G3 Phase 4): a successful tool-node execution is one of the
+  // "autonomous execution" producers. Real project row so the ActivityEntry
+  // FK resolves; the write is fire-and-forget, so poll for it.
+  test('records an action_executed activity entry after a successful call', async () => {
+    const project = await db.Project.create({ name: `act-node-${Date.now()}` });
+    const spy = jest
+      .spyOn(toolsModule, 'callTool')
+      .mockResolvedValue({ ok: true });
+    try {
+      await executeToolNode({
+        node: makeNode({ type: 'tool', toolId: 'tool_activitywire0' }),
+        state: {},
+        projectIds: [project.id as number],
+        projectId: project.id as number,
+        runId: 'orch_run_activitywire',
+      });
+
+      let entry = null;
+      for (let i = 0; i < 200; i += 1) {
+        entry = await db.ActivityEntry.findOne({
+          where: {
+            projectId: project.id as number,
+            kind: 'action_executed',
+          },
+        });
+        if (entry) break;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 10);
+        });
+      }
+      expect(entry).toBeTruthy();
+      expect(entry!.get('refId')).toBe('tool_activitywire0');
+      expect(entry!.get('runId')).toBe('orch_run_activitywire');
     } finally {
       spy.mockRestore();
     }

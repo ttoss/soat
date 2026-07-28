@@ -2,6 +2,7 @@ import type http from 'node:http';
 
 import { app } from 'src/app';
 import { db } from 'src/db';
+import { emitActivityEntry } from 'src/lib/activity';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import * as discussionCompletion from 'src/lib/discussionCompletion';
 import { fileException } from 'src/lib/exceptions';
@@ -259,6 +260,31 @@ describe('MCP tools - happy path', () => {
       })
     );
     expect(resolved.status).toBe('resolved');
+  });
+
+  // ── Activity ─────────────────────────────────────────────────────────────
+
+  test('list-activity exposes the autonomous-execution feed', async () => {
+    // No public create endpoint — emit one through the lib, the way a
+    // producer would, then read it through the MCP surface.
+    const project = await db.Project.findOne({
+      where: { publicId: projectId },
+    });
+    const emitted = await emitActivityEntry({
+      projectId: project!.id as number,
+      kind: 'action_executed',
+      summary: 'MCP activity entry',
+    });
+
+    const listed = parseResult(
+      await mcpCall('list-activity', { project_id: projectId })
+    );
+    expect(Array.isArray(listed.data)).toBe(true);
+    expect(
+      listed.data.some((e: { id: string }) => {
+        return e.id === emitted!.id;
+      })
+    ).toBe(true);
   });
 
   // ── Workflows & Tasks ──────────────────────────────────────────────────────

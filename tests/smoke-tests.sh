@@ -1302,6 +1302,25 @@ if ! printf '%s\n' "$EXC_RESOLVED" | jq -e '.status == "resolved"' >/dev/null 2>
 fi
 echo "Exceptions coverage: OK"
 
+# Activity feed coverage: exception_created is written fire-and-forget off the
+# same exceptions.created event just exercised above, so poll for it.
+echo "--- Activity: the filed exception is visible on the activity feed ---"
+ACT_ID=""
+i=0
+while [ $i -lt 30 ]; do
+  ACT_LIST=$($SOAT_CLI list-activity --project_id "$PROJECT_PUBLIC_ID" --kind exception_created)
+  ACT_ID=$(printf '%s\n' "$ACT_LIST" | jq -r --arg ref "$EXC_ID" '.data | map(select(.ref_id == $ref)) | .[0].id // empty')
+  [ -n "$ACT_ID" ] && break
+  i=$((i + 1))
+  sleep 1
+done
+if [ -z "$ACT_ID" ]; then
+  echo "ERROR: no exception_created activity entry found for exception $EXC_ID" >&2
+  printf '%s\n' "$ACT_LIST" >&2
+  exit 1
+fi
+echo "Activity feed coverage: OK ($ACT_ID)"
+
 echo "--- Run input is visible to node logic via the input namespace ---"
 # A snake_case input key must round-trip verbatim; it resolves only through the
 # namespaced form ({"var":"input.cycle_task"}) — a flat {"var":"cycle_task"}

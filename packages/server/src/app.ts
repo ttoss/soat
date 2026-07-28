@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { addHealthCheck, App, bodyParser, cors } from '@ttoss/http-server';
 
 import type { Context } from './Context';
+import { initializeActivityListener } from './lib/activity';
 import { initializeExceptionsListener } from './lib/exceptions';
 import { initializeDispatcher } from './lib/webhookDispatcher';
 import { setupMcpMiddleware } from './mcp/server';
@@ -24,6 +25,7 @@ addHealthCheck({ app });
 
 initializeDispatcher();
 initializeExceptionsListener();
+initializeActivityListener();
 
 app.use(errorLoggerMiddleware);
 app.use(cors());

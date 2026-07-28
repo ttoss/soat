@@ -19,7 +19,7 @@ existing pending item, and a re-proposal matching a *rejected* item is admitted
 with `previous_item_id` linking the prior item (decision 2). Outstanding:
 
 - [x] Recurrence view (`GET /api/v1/approvals/recurrences`) — folded in from the deferred learned-rules module (2026-07); shipped. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
-- [ ] `ActivityEntry` feed (`acte_` prefix)
+- [x] `ActivityEntry` feed (`acte_` prefix) — shipped (2026-07), with one documented v1 gap (decision 4). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md)
 
 ---
 
@@ -79,19 +79,29 @@ fact — the graduation prompt for encoding a
 stops the recurrence upstream. Whether humans act on this surface is the
 demand signal that decides if the full learned-rules module ever gets built.
 
-### Phase 4 — Activity feed — Not started
+### Phase 4 — Activity feed — Shipped
 
-Every autonomous execution visible, for auditability.
+Every autonomous execution visible, for auditability. Live behavior in the
+[activity module docs](../packages/website/docs/modules/activity.md).
 
 **Deliverables:**
 
-- `ActivityEntry` model: one entry per autonomously executed action (both
-  producers write through the same module hook).
-- Cursor-paginated `GET /api/v1/activity` with type/severity filters.
-- Links to originating run/generation, node, agent, and guardrail policy
-  version.
+- `ActivityEntry` model: one entry per autonomously executed action, written
+  through a single shared module hook (`emitActivityEntry`) regardless of
+  producer.
+- Cursor-paginated `GET /api/v1/activity` with `kind`/`severity` filters.
+- `run_id` / `agent_id` as top-level provenance columns; node id, generation
+  id, and guardrail policy version carry in `detail` instead (decision 4).
 
 **Unlock:** the "what did agents do today" surface.
+
+**Known v1 gap:** `action_executed` is only instrumented at the orchestration
+tool-node executor. Agent-generation-time tool calls (conversation/session
+tool-call content blocks, the pipeline-tool resolver) are not yet wired — the
+agent identity isn't threaded through that call path today, and doing so
+touches a widely-shared low-level resolver used by every agent tool call.
+Scoped down deliberately rather than expanded into that surface in this pass;
+tracked as explicit follow-up, not silently dropped.
 
 ### Phase 5 — Approver targeting and assignment (future)
 
@@ -109,7 +119,7 @@ timing (defer/batch), that extension is scoped here, not in the core loop.
 
 ---
 
-## Data model (pending)
+## Data model — shipped
 
 ### ActivityEntry
 
@@ -118,16 +128,18 @@ timing (defer/batch), that extension is scoped here, not in the core loop.
 | `id` | string | Public ID, `acte_` prefix |
 | `project_id` | string | Owning project |
 | `kind` | string | `action_executed`, `approval_resolved`, `exception_created`, `schedule_fired` |
+| `severity` | string | `info`, `warning`, `critical` (per-kind default; decision 4) |
 | `summary` | string | One-line description |
-| `detail` | object \| null | Tool, args digest, policy version |
-| `run_id` / `agent_id` / `ref_id` | string \| null | Provenance |
+| `detail` | object \| null | Tool, args digest, node id, generation id, guardrail policy version |
+| `run_id` / `agent_id` / `ref_id` | string \| null | Provenance (bare public ids, no FK — decision 4) |
 | `created_at` | string | Append-only timestamp |
 
-**Indexing:** `(project_id, created_at DESC)` on ActivityEntry.
+**Indexing:** `(project_id, created_at)` and `(project_id, created_at, public_id)`
+(keyset-pagination tiebreaker) on ActivityEntry.
 
 ---
 
-## Authorization (pending)
+## Authorization — shipped
 
 | Permission | Endpoint |
 |---|---|
@@ -136,16 +148,15 @@ timing (defer/batch), that extension is scoped here, not in the core loop.
 
 ---
 
-## REST API (pending)
+## REST API — shipped
 
 | Method | Path | Function |
 |---|---|---|
 | GET | `/api/v1/approvals/recurrences` | Read-only `dedup_key` recurrence groups (chain, count, ordered reasons) |
 | GET | `/api/v1/activity` | Cursor-paginated project feed |
 
-**MCP integration:** the `list-activity` tool auto-generates from OpenAPI once
-the endpoint exists — external assistants get the same feed surface as product
-UIs.
+**MCP integration:** the `list-activity` tool auto-generates from OpenAPI —
+external assistants get the same feed surface as product UIs.
 
 ---
 
@@ -195,3 +206,52 @@ UIs.
    reconciliation direction (audit-shaped kinds land on `AuditEntry`); the
    broader question of which model owns the Phase 4 product feed remains
    tracked in the [roadmap](./roadmap.md#cross-cutting-reconciliations).
+
+4. **Phase 4 activity-feed ownership and schema gaps — resolved (2026-07),
+   shipped.** The roadmap's cross-cutting reconciliation asked which model
+   owns the Phase 4 product feed: fold it into the shipped `AuditEntry`, or
+   ship the PRD's own `ActivityEntry`. Decided: a new `ActivityEntry` model,
+   per the user's explicit choice — `AuditEntry`'s `action` field is
+   documented as *the permission-action string that authorized the request*,
+   and none of the four activity kinds (`action_executed`,
+   `approval_resolved`, `exception_created`, `schedule_fired`) is an
+   authorization event; folding them in would have required bolting
+   `agent_id`/`run_id` provenance onto a compliance-grade, append-only audit
+   table that customers already pipe to SIEMs, mixing high-volume operational
+   telemetry into a security-review surface. This sub-decision was forwarded
+   rather than self-resolved because it fixes a public REST/schema contract
+   (the open-questions gate's high-risk class always forwards those).
+   Implementing it surfaced sub-gaps, resolved on the spot (Pareto/long-term
+   tests, not forwarded — none is security/auth/billing/deletion/migration or
+   a genuine trade with no dominant option):
+   - **Q: the deliverables ask for a `severity` filter, but the PRD's own data
+     model table had no `severity` column — real gap or documentation nit?**
+     A: added `severity` (`info`/`warning`/`critical`, per-kind default) —
+     resolved by Pareto; reuses [Exceptions](../packages/website/docs/modules/exceptions.md#severity)'s
+     existing enum verbatim, so it's consistent rather than a third
+     convention, and nothing else changes.
+   - **Q: cursor pagination has no precedent anywhere in this codebase (every
+     other list endpoint is offset/limit) — design it, or fall back to
+     offset?** A: real keyset pagination, opaque `base64url(created_at|id)`
+     cursor — resolved by Pareto; offset would silently contradict the PRD's
+     explicit "cursor-paginated" deliverable on a high-volume, append-only
+     feed where an offset page shifts under concurrent writes.
+   - **Q: `run_id`/`agent_id`/`guardrail_version` have three inconsistent
+     shapes across sibling models (bare string on `ExceptionItem`, FK on
+     `ApprovalItem.orchestrationRunId`, raw int vs. composite string for
+     guardrail version) — which does `ActivityEntry` follow?** A: bare public
+     ids, matching `ExceptionItem` — resolved by the long-term test (pattern
+     hygiene: don't add a fourth convention); node id, generation id, and
+     guardrail policy version live in `detail` instead of dedicated columns,
+     since the feed has no resolution workflow needing to join back to those
+     rows (same reasoning as Exceptions).
+   - **Q: which call sites should emit `action_executed`, given `callTool()`
+     itself turned out not to be a safe single hook (some of its ~9 callers
+     are guardrail-context/converter evaluation, not real autonomous
+     execution)?** Forwarded to the user; no response arrived, so scoped down
+     under the long-term test (debt containment: a visible, documented,
+     bounded gap beats silently expanding into a widely-shared low-level
+     resolver without a check on blast radius) to the one clean call site —
+     the orchestration tool-node executor. Recorded as the "known v1 gap"
+     above rather than left unshipped or forced into a wider, unverified
+     change.

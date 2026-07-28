@@ -34,7 +34,7 @@ open refinement is kept in the [backlog](#g5--usage-metering) below.
 
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
-| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | 🟡 activity feed remains (dedup + recurrence view shipped) |
+| G3 | Approvals · exceptions · activity | [prd-approvals.md](./prd-approvals.md) | ✅ shipped (Phase 5 approver targeting and in-channel approval clients remain deferred, no demand signal yet) |
 | G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
 
 ### Adjacent / standalone module PRDs
@@ -78,7 +78,7 @@ feedback + governance loops ─────────────────�
   approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
   learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
   agent-versions P3 (eval-gated promotion) ◄── evaluations P1
-  approvals P4 (activity feed) ◄── audit-log (substrate) + guardrails (A/B labels)
+  approvals P4 (activity feed) ✔ ◄── audit-log (substrate) + guardrails (A/B labels)
 ```
 
 ### Edge reference
@@ -90,7 +90,7 @@ feedback + governance loops ─────────────────�
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
 | evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
-| audit-log + guardrails ✔ | approvals P4 (activity feed) | feed labels autonomous class-A/B actions on the audit substrate |
+| audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
 | — | model-routing | standalone; complements G2 ✔, no metering change |
 
 ## Recommended build order
@@ -103,9 +103,10 @@ feedback + governance loops ─────────────────�
    `audit.entry_created` webhook, and the per-project NDJSON export).
    **Evaluations P1–P2** remain — the substrate the activity feed and
    agent-versions promotion gate need.
-3. **Agent-versions**, **approvals P3/P4** (exceptions + activity feed).
+3. **Agent-versions**.
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
+   ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
 5. **Model-routing** as hardening.
 
 ## Pending backlog
@@ -117,11 +118,11 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 - [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
 - [x] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6. Live behavior in [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
-- [ ] **Phase 4 / activity feed** (needs G4 class-A/B labels + audit substrate):
-  - [ ] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
-  - [ ] `5.2` cursor-paginated `GET /api/v1/activity` (type / severity filters, per project)
-  - [ ] `5.3` evidence + drill-through linkage (feed item → run → generations, agent/node/guardrail-version links)
-  - [ ] `5.4` write `soat.activity.actions_24h` guard context
+- [x] **Phase 4 / activity feed** — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md):
+  - [x] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
+  - [x] `5.2` cursor-paginated `GET /api/v1/activity` (kind / severity filters, per project)
+  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` coverage has a known v1 gap: only the orchestration tool-node executor is instrumented, not agent-generation-time tool calls (see [activity module docs](../packages/website/docs/modules/activity.md#producers))
+  - [ ] `5.4` write `soat.activity.actions_24h` guard context — not started
 - [ ] **Phase 5** Approver targeting & assignment (route items to specific humans; deferred until demand)
 - [ ] In-channel approval clients (WhatsApp/Slack) over the queue
 
@@ -208,16 +209,23 @@ _Not started. Standalone; complements G2; no metering change._
 Open consistency items the PRDs still carry — flagged here so the roadmap
 stays the source of truth:
 
-- **Activity-feed ownership.** The shipped
+- **Activity-feed ownership — resolved (2026-07), shipped.** The shipped
   [`AuditEntry`](../packages/website/docs/modules/audit-log.md) (`detail` kinds)
   and [prd-approvals.md](./prd-approvals.md) (`ActivityEntry`, `acte_`) both
-  describe an activity substrate. Settle which model owns the feed before
-  approvals Phase 4 ships. Partially narrowed: approvals decision 3 lands
-  guardrail-`deny` records as `AuditEntry`
-  `detail->>'kind' = 'action_denied'`, and the shipped audit log lands
-  decision-changing guardrail evaluations as `AuditEntry`
-  `detail->>'kind' = 'guardrail_evaluation'`, so new audit-shaped kinds go to
-  `AuditEntry`; only the product-feed model question remains open.
+  described an activity substrate; settled as two distinct models with a firm
+  boundary rather than one. Audit-shaped kinds (a policy `deny`, a
+  decision-changing guardrail evaluation) stay on `AuditEntry`
+  (`detail->>'kind' = 'action_denied'` / `'guardrail_evaluation'`) — that part
+  was already narrowed. The remaining product-feed question (which model owns
+  agent/run-centric autonomous-execution telemetry) is resolved: the PRD's own
+  `ActivityEntry`, per [prd-approvals.md decision 4](./prd-approvals.md#decisions-formerly-open-questions) —
+  `AuditEntry`'s `action` column is documented as the permission-action string
+  that authorized a request, and none of `ActivityEntry`'s four kinds
+  (`action_executed`, `approval_resolved`, `exception_created`,
+  `schedule_fired`) is an authorization event, so folding them in would have
+  bolted agent/run provenance onto a compliance-grade audit table customers
+  pipe to SIEMs. Live behavior in the
+  [activity module docs](../packages/website/docs/modules/activity.md).
 - **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
   `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s

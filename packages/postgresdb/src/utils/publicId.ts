@@ -54,6 +54,7 @@ export const PUBLIC_ID_PREFIXES = {
   quota: 'quota_',
   auditEntry: 'audit_',
   exception: 'exc_',
+  activityEntry: 'acte_',
 } as const;
 
 /**

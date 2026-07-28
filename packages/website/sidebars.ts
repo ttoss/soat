@@ -123,6 +123,7 @@ const sidebars: SidebarsConfig = {
             'modules/traces',
             'modules/audit-log',
             'modules/exceptions',
+            'modules/activity',
             'modules/usage',
             'modules/quotas',
             'modules/secrets',

@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 
+import { activityRouter } from './activity';
 import { actorsRouter } from './actors';
 import { actorTagsRouter } from './actorTags';
 import { agentsRouter } from './agents';
@@ -41,6 +42,7 @@ import { workflowsRouter } from './workflows';
 
 const v1Router = new Router();
 
+v1Router.use(activityRouter.routes());
 v1Router.use(formationsRouter.routes());
 v1Router.use(generationsRouter.routes());
 v1Router.use(guardrailsRouter.routes());
