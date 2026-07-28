@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.1](https://127.0.0.1/41729/git/ttoss/compare/v0.17.0...v0.17.1) (2026-07-28)
+
+### Features
+
+* **activity:** ship the G3 Phase 4 activity feed ([#755](https://127.0.0.1/41729/git/ttoss/issues/755)) ([35f2c4c](https://127.0.0.1/41729/git/ttoss/commits/35f2c4c8742d0a3fad86771f80dee5a4ddb74d20))
+
 # [0.17.0](https://127.0.0.1/41729/git/ttoss/compare/v0.16.3...v0.17.0) (2026-07-27)
 
 **Note:** Version bump only for package @soat/postgresdb

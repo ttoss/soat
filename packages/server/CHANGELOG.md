@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.1](https://127.0.0.1/41729/git/ttoss/compare/v0.17.0...v0.17.1) (2026-07-28)
+
+* fix(tool-context)!: forward tool_context keys verbatim as header names (#753) ([4fcb53d](https://127.0.0.1/41729/git/ttoss/commits/4fcb53d6ba4249fe848958d964308d033867a4c7)), closes [#753](https://127.0.0.1/41729/git/ttoss/issues/753) [#651](https://127.0.0.1/41729/git/ttoss/issues/651) [#690](https://127.0.0.1/41729/git/ttoss/issues/690) [#729](https://127.0.0.1/41729/git/ttoss/issues/729) [#737](https://127.0.0.1/41729/git/ttoss/issues/737)
+
+### Bug Fixes
+
+* **quotas:** enforce requests quotas for unscoped API keys ([#749](https://127.0.0.1/41729/git/ttoss/issues/749)) ([#752](https://127.0.0.1/41729/git/ttoss/issues/752)) ([073475d](https://127.0.0.1/41729/git/ttoss/commits/073475d8423bcc2ae7d2318b77874d3f25be4c01)), closes [#742](https://127.0.0.1/41729/git/ttoss/issues/742) [#742](https://127.0.0.1/41729/git/ttoss/issues/742)
+* resolve five QA-tracked defects from [#748](https://127.0.0.1/41729/git/ttoss/issues/748) (quotas, audit-log, orchestrations) ([#751](https://127.0.0.1/41729/git/ttoss/issues/751)) ([09a3e5e](https://127.0.0.1/41729/git/ttoss/commits/09a3e5e0d19ddf5991f0d53088a595da9ca4ac50)), closes [#719](https://127.0.0.1/41729/git/ttoss/issues/719) [#746](https://127.0.0.1/41729/git/ttoss/issues/746) [#749](https://127.0.0.1/41729/git/ttoss/issues/749) [#742](https://127.0.0.1/41729/git/ttoss/issues/742) [#745](https://127.0.0.1/41729/git/ttoss/issues/745) [#747](https://127.0.0.1/41729/git/ttoss/issues/747) [#747](https://127.0.0.1/41729/git/ttoss/issues/747)
+
+### Features
+
+* **activity:** close the last two G3 approvals-PRD deliverables ([#756](https://127.0.0.1/41729/git/ttoss/issues/756)) ([d12000c](https://127.0.0.1/41729/git/ttoss/commits/d12000c4612a9c1b722d82c2d229e2243fef09d4)), closes [#entity-graph-edges](https://127.0.0.1/41729/git/ttoss/issues/entity-graph-edges)
+* **activity:** ship the G3 Phase 4 activity feed ([#755](https://127.0.0.1/41729/git/ttoss/issues/755)) ([35f2c4c](https://127.0.0.1/41729/git/ttoss/commits/35f2c4c8742d0a3fad86771f80dee5a4ddb74d20))
+
+### BREAKING CHANGES
+
+* the emitted `X-Soat-Context-*` header names no longer
+  uppercase the key's first character. This is invisible to any client that
+  looks headers up through a normal framework accessor, since header names are
+  case-insensitive and HTTP/2 lowercases them on the wire. It affects only
+  consumers that match the header name as an exact string, such as an API
+  gateway rule, a WAF matcher, or log-based routing -- make those matches
+  case-insensitive.
+
 # [0.17.0](https://127.0.0.1/41729/git/ttoss/compare/v0.16.3...v0.17.0) (2026-07-27)
 
 * fix(case-transform)!: stop case-converting tags, IAM conditions and mapping keys (#737) ([086dfa3](https://127.0.0.1/41729/git/ttoss/commits/086dfa382771642ef2fff4de6000098df5d87e1b)), closes [#737](https://127.0.0.1/41729/git/ttoss/issues/737) [#736](https://127.0.0.1/41729/git/ttoss/issues/736)
