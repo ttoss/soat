@@ -664,7 +664,7 @@ Submit the human reviewer's decision with [`submit-human-input`](/docs/modules/o
 
 ```bash
 RESULT=$(soat submit-human-input \
-  --run-id "$RUN_ID" \
+  --orchestration-run-id "$RUN_ID" \
   --node-id "approve" \
   --output '{"approved": true}')
 
@@ -717,7 +717,7 @@ Inspect the [per-node executions](/docs/modules/orchestrations#node-executions) 
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-orchestration-run --run-id "$RUN_ID" | jq '.node_executions[] | {node_id, node_type, status}'
+soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq '.node_executions[] | {node_id, node_type, status}'
 ```
 
 </TabItem>

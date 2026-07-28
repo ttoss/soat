@@ -296,7 +296,7 @@ Get a run's receipt (summed across every node of the run):
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-usage-receipt --run-id orch_run_V1StGXR8Z5jdHi6B
+soat get-usage-receipt --orchestration-run-id orch_run_V1StGXR8Z5jdHi6B
 ```
 
 </TabItem>

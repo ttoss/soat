@@ -469,7 +469,7 @@ RUN1=$(soat start-orchestration-run --orchestration-id "$ORCHESTRATION_ID" \
   --input '{"amount":150}' --wait true)
 RUN1_ID=$(printf '%s\n' "$RUN1" | jq -r '.id')
 printf '%s\n' "$RUN1" | jq '{status, required_action}'
-soat get-orchestration-run --run-id "$RUN1_ID" | jq '{outcome: .state.outcome}'
+soat get-orchestration-run --orchestration-run-id "$RUN1_ID" | jq '{outcome: .state.outcome}'
 ```
 
 Expected output:
@@ -564,7 +564,7 @@ Approve it, and the node re-dispatches the tool with the frozen arguments:
 
 ```bash
 soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
-soat get-orchestration-run --run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
+soat get-orchestration-run --orchestration-run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
 ```
 
 ```json
@@ -641,7 +641,7 @@ On approval the tool is re-dispatched with the frozen (or edited) arguments and 
 RUN3=$(soat start-orchestration-run --orchestration-id "$ORCHESTRATION_ID" \
   --input '{"amount":450}' --wait true)
 RUN3_ID=$(printf '%s\n' "$RUN3" | jq -r '.id')
-soat get-orchestration-run --run-id "$RUN3_ID" \
+soat get-orchestration-run --orchestration-run-id "$RUN3_ID" \
   | jq '{status, outcome: .state.outcome, refusal: .artifacts.apply}'
 ```
 

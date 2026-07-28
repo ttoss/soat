@@ -400,7 +400,7 @@ soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
 
 soat get-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
-  --run-id "$RUN_ID" | jq '{status, outcome: .state.outcome}'
+  --orchestration-run-id "$RUN_ID" | jq '{status, outcome: .state.outcome}'
 ```
 
 Expected output:
@@ -466,7 +466,7 @@ soat reject-approval --approval-id "$APPROVAL2_ID" --reason "Exceeds monthly bud
 
 soat get-orchestration-run \
   --orchestration-id "$ORCHESTRATION_ID" \
-  --run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
+  --orchestration-run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
 ```
 
 Expected output:
