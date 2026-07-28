@@ -20,7 +20,7 @@ A module is a named resource (e.g., `files`, `users`) that is exposed through th
 - [ ] Module docs updated in `packages/website/docs/modules/<module>.md`
 - [ ] ID examples use runtime prefixes (`packages/postgresdb/src/utils/publicId.ts`)
 - [ ] Tests updated in `packages/server/tests/unit/tests/<module>.test.ts`
-- [ ] Live QA tracked as issues against [#748](https://github.com/ttoss/soat/issues/748) — a new module is added to its never-passed list (see `.claude/rules/qa-checklist.md`)
+- [ ] Live QA pass run for the new/changed behavior against a running server
 - [ ] Formation schema synced if the module has a formation resource type (see [Formations Sync](#formations-sync))
 
 ## REST
