@@ -1,5 +1,11 @@
 ---
 description: "Compose a sonnet stanza by stanza through a Workflow — a chain of agent-driven states, a human review, a guarded publish, and a backward move a DAG would reject."
+keywords:
+  - agentic workflow
+  - state machine
+  - human review step
+  - workflow states
+  - task transitions
 sidebar_position: 11
 ---
 

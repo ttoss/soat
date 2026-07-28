@@ -1,10 +1,15 @@
 ---
-description: "End-to-end SOAT tutorials that walk through complete workflows from scratch."
+description: "End-to-end SOAT tutorials that walk through complete workflows from scratch — agents, tools, RAG, orchestration, guardrails, and cost controls."
+keywords:
+  - SOAT tutorials
+  - AI agent tutorials
+  - self-hosted AI agents
+  - AI agent infrastructure
 sidebar_position: 0
 title: Tutorials
 ---
 
-Tutorials walk you through complete, end-to-end workflows using SOAT. Each one starts from scratch and demonstrates how the platform's building blocks fit together in a real scenario.
+Tutorials walk you through complete, end-to-end workflows using SOAT. Each one starts from scratch and demonstrates how the platform's building blocks fit together in a real scenario — every step comes with CLI, SDK, and curl examples, and every tutorial is validated against a live server in CI.
 
 ## Before you begin
 
@@ -13,6 +18,14 @@ All tutorials assume:
 - A running SOAT instance. Follow the [Quick Start](/docs/getting-started) to bring the stack up.
 - Familiarity with SOAT's core concepts. Read [Key Concepts](/docs/getting-started/concepts) if you are new.
 - The CLI installed, or the SDK set up in a TypeScript project.
+
+## Pick a path
+
+- **New to SOAT?** Start with [Permissions in Practice](/docs/tutorials/permissions) and [Chat with an LLM](/docs/tutorials/chat-with-llm), then connect a hosted model with [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+- **Building an agent?** Wire platform tools in [Agent SOAT Tools](/docs/tutorials/agent-soat-tools), run your own functions with [client tools](/docs/tutorials/client-tools), add [persistent memory](/docs/tutorials/memories-agent), and learn to [debug sessions, generations, and traces](/docs/tutorials/debug-session-generation-trace-history).
+- **Retrieval and RAG?** Generate [embeddings](/docs/tutorials/embeddings), build an [agent over a library of PDFs](/docs/tutorials/agent-with-pdfs), and [ingest images and audio](/docs/tutorials/ingest-images-and-audio).
+- **Coordinating multiple agents?** Compare a direct [orchestration pipeline](/docs/tutorials/orchestrate-a-sonnet), a [workflow state machine](/docs/tutorials/orchestrate-a-sonnet-with-workflows), and [nested agent calls](/docs/tutorials/multi-agent-orchestration) — then add [branching](/docs/tutorials/conditional-orchestration), [control flow](/docs/tutorials/orchestration-control-flow), [human approval gates](/docs/tutorials/approval-gate), or a [review panel discussion](/docs/tutorials/review-panel-discussion).
+- **Shipping to production?** Deploy a whole stack declaratively with [Formations](/docs/tutorials/formations) and an [agent squad](/docs/tutorials/create-an-agent-squad), automate it with [Triggers](/docs/tutorials/automate-a-flow-with-triggers), gate risky calls with [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails), and control cost with [metering and budgets](/docs/tutorials/metering-and-budgets) and [per-end-user spend caps](/docs/tutorials/cap-spend-per-end-user).
 
 ---
 

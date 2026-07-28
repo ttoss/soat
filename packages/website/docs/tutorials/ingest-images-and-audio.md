@@ -1,5 +1,11 @@
 ---
 description: "Ingest images and audio into searchable documents using converter tools and ingestion rules."
+keywords:
+  - multimodal ingestion
+  - OCR
+  - speech to text
+  - audio transcription
+  - converter tools
 sidebar_position: 9
 ---
 

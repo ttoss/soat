@@ -1,5 +1,11 @@
 ---
 description: "Build and deploy a coordinated agent squad — researcher, writer, reviewer, and human approval — as a single Formation stack."
+keywords:
+  - agent squad
+  - AI agent team
+  - infrastructure as code
+  - formation template
+  - multi-agent deployment
 sidebar_position: 14
 ---
 

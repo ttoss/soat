@@ -1,5 +1,12 @@
 ---
 description: "Build a SOAT agent that answers questions from a library of PDFs using ingestion and knowledge search."
+keywords:
+  - RAG tutorial
+  - PDF question answering
+  - document ingestion
+  - knowledge search
+  - vector search
+  - retrieval augmented generation
 sidebar_position: 8
 ---
 

@@ -1,5 +1,11 @@
 ---
 description: "Give an agent access to platform documents with soat tools, and lock a tool to a document ID using preset parameters."
+keywords:
+  - AI agent tools
+  - tool calling
+  - preset parameters
+  - document tools
+  - agent permissions
 sidebar_position: 4
 ---
 

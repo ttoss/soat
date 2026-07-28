@@ -1,5 +1,11 @@
 ---
 description: "Walk through a realistic SOAT permissions setup from scratch with users, policies, and API keys."
+keywords:
+  - AI agent permissions
+  - IAM policies
+  - API keys
+  - access control
+  - least privilege
 sidebar_position: 1
 ---
 
