@@ -12,9 +12,8 @@ import { auditMiddleware } from './middleware/audit';
 import { authMiddleware } from './middleware/auth';
 import { errorLoggerMiddleware } from './middleware/errorLogger';
 import { hookRawBodyMiddleware } from './middleware/hookRawBody';
-import { quotaMiddleware } from './middleware/quota';
+import { requestAttributionMiddleware } from './middleware/requestAttribution';
 import { requestIdMiddleware } from './middleware/requestId';
-import { usageRequestMiddleware } from './middleware/usageRequest';
 import { oauthAuthorizationServer } from './oauth/server';
 import { hooksRouter } from './rest/hooks';
 import { restRouter } from './rest/router';
@@ -37,18 +36,17 @@ app.use(requestIdMiddleware);
 app.use(hookRawBodyMiddleware);
 app.use(bodyParser());
 app.use(authMiddleware);
-// API-request metering: after auth (counted identity is known), before quota so
-// a request a quota will block is still counted (same count-on-arrival scope as
-// quota). Pure in-memory increment; counts flush to usage events on an interval.
-app.use(usageRequestMiddleware);
-// Request-quota enforcement: after auth (counted identity is known), before the
-// route handlers so no handler work is wasted on a blocked request. Counts
-// API-key-authenticated /api/v1 requests only; fails open on DB error.
-app.use(quotaMiddleware);
 // Audit-log write hook: after auth (wraps the attached isAllowed) and wrapping
 // the route handlers, it records one entry per mutating /api/v1 request
 // post-commit through a fire-and-forget queue.
 app.use(auditMiddleware);
+// API-request metering + request-quota enforcement, in that order: the meter
+// records arrivals, the quota decides admissions. A project-scoped key is
+// attributed here, before routing, so no handler work is wasted on a request a
+// quota will reject; an unscoped key is attributed once the route resolves and
+// authorizes its project. Mounted after `audit` so it wraps the already-wrapped
+// authorizer and the admitting check is audited even on a 429.
+app.use(requestAttributionMiddleware);
 
 // OAuth 2.1 authorization server (issuer side): /authorize, /token, /register,
 // and discovery metadata. Public — the routes do their own validation. The

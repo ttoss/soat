@@ -811,15 +811,167 @@ describe('Quotas', () => {
       }
     });
 
-    // Pins the documented exemption (see #742): a `requests` quota is always
-    // project-scoped, and an unscoped key (no bound project) has no single
-    // project to count or block against — the same reasoning that exempts
-    // JWT-user requests above. This is a deliberate, symmetric design with
-    // usageRequestMiddleware's identical exemption, not a bug; the test exists
-    // so the behavior can't silently drift without a test failing.
-    test('unscoped API key requests are never counted or blocked', async () => {
+    // #749 (was the documented #742 exemption): an unscoped key has no bound
+    // project at auth time, so attribution waits until the route itself
+    // resolves *and authorizes* a single project — then the request counts and
+    // blocks exactly like a project-scoped key's.
+    test('unscoped API key requests are counted and blocked once the route resolves one project', async () => {
       const { enfProjectId } = await setupEnforcementProject(
-        'quotas-unscoped-exempt'
+        'quotas-unscoped-enforced'
+      );
+
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 2,
+        },
+        enfProjectId
+      );
+
+      const unscopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'quotas-unscoped-enforced key', policy_ids: [policyId] });
+      expect(unscopedKeyRes.status).toBe(201);
+      const rawUnscopedKey = unscopedKeyRes.body.key as string;
+
+      for (let i = 0; i < 2; i += 1) {
+        const ok = await authenticatedTestClient(rawUnscopedKey).get(
+          `/api/v1/quotas?project_id=${enfProjectId}`
+        );
+        expect(ok.status).toBe(200);
+      }
+
+      const blocked = await authenticatedTestClient(rawUnscopedKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
+      expect(blocked.body.error.meta.metric).toBe('requests');
+      expect(blocked.headers['retry-after']).toBeDefined();
+    });
+
+    // An unscoped key can never be *named* by a `scope_ref` — that check
+    // requires the key to live in the quota's project (`assertScopeRefValid`),
+    // and an unscoped key lives in none. A null-ref `api_key` quota is the cap
+    // that reaches it, so the api_key-scope matching branch must fire for it.
+    test('a null-ref api_key-scope quota blocks an unscoped key', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-keyscope'
+      );
+
+      const unscopedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'quotas-unscoped-keyscope key', policy_ids: [policyId] });
+      expect(unscopedKeyRes.status).toBe(201);
+      const rawUnscopedKey = unscopedKeyRes.body.key as string;
+
+      // Naming the unscoped key is rejected: it is not an API key "in this
+      // project", so no project-owned quota can reference it.
+      const namedQuota = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          scope_ref: unscopedKeyRes.body.id,
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+      expect(namedQuota.status).toBe(400);
+
+      const keyQuota = await createQuota(
+        userToken,
+        {
+          scope: 'api_key',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+      expect(keyQuota.status).toBe(201);
+      expect(keyQuota.body.scope_ref).toBeNull();
+
+      const ok = await authenticatedTestClient(rawUnscopedKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(ok.status).toBe(200);
+
+      const blocked = await authenticatedTestClient(rawUnscopedKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.meta.quota_id).toBe(keyQuota.body.id);
+      expect(blocked.body.error.meta.scope ?? 'api_key').toBe('api_key');
+    });
+
+    // The route class the #749 investigation flagged as needing per-route
+    // review: `GET /actors/:id` never calls `resolveProjectIds` — it loads the
+    // actor, derives the project from it, and authorizes with `isAllowed`.
+    // Wrapping the authorizer covers it with no change to the route.
+    test('a route that authorizes only via isAllowed is counted and blocked', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-isallowed'
+      );
+
+      const actorRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/actors')
+        .send({ project_id: enfProjectId, name: 'quota probe actor' });
+      expect(actorRes.status).toBe(201);
+      const actorId = actorRes.body.id as string;
+
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 2,
+        },
+        enfProjectId
+      );
+
+      const actorPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [{ effect: 'Allow', action: ['actors:GetActor'] }],
+          },
+        });
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'quotas-unscoped-isallowed key',
+          policy_ids: [actorPolicyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const rawKey = keyRes.body.key as string;
+
+      for (let i = 0; i < 2; i += 1) {
+        const ok = await authenticatedTestClient(rawKey).get(
+          `/api/v1/actors/${actorId}`
+        );
+        expect(ok.status).toBe(200);
+      }
+
+      const blocked = await authenticatedTestClient(rawKey).get(
+        `/api/v1/actors/${actorId}`
+      );
+      expect(blocked.status).toBe(429);
+      expect(blocked.body.error.code).toBe('QUOTA_EXCEEDED');
+    });
+
+    // The DoS vector #742 rejected: naming a project you hold no permission on
+    // must never touch its counter. The positive control is the permitted key
+    // below — it still gets its full allowance, proving the denied requests
+    // incremented nothing.
+    test('a request denied on the named project never touches its counter', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-denied'
       );
 
       await createQuota(
@@ -833,17 +985,152 @@ describe('Quotas', () => {
         enfProjectId
       );
 
-      const unscopedKeyRes = await authenticatedTestClient(userToken)
+      // A policy that grants the quota actions only on the *other* project, so
+      // this key is denied on `enfProjectId`.
+      const scopedPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: QUOTA_ACTIONS,
+                resource: [`soat:${otherProjectId}:*:*`],
+              },
+            ],
+          },
+        });
+      const outsiderKeyRes = await authenticatedTestClient(userToken)
         .post('/api/v1/api-keys')
-        .send({ name: 'quotas-unscoped-exempt key', policy_ids: [policyId] });
-      expect(unscopedKeyRes.status).toBe(201);
-      const rawUnscopedKey = unscopedKeyRes.body.key as string;
+        .send({
+          name: 'quotas-unscoped-denied key',
+          policy_ids: [scopedPolicyRes.body.id],
+        });
+      expect(outsiderKeyRes.status).toBe(201);
+      const rawOutsiderKey = outsiderKeyRes.body.key as string;
 
-      // Far more than the limit; an unscoped key is exempt from counting.
       for (let i = 0; i < 5; i += 1) {
-        const res = await authenticatedTestClient(rawUnscopedKey).get(
+        const denied = await authenticatedTestClient(rawOutsiderKey).get(
           `/api/v1/quotas?project_id=${enfProjectId}`
         );
+        expect(denied.status).toBe(403);
+      }
+
+      // Positive control: the limit-1 allowance is still intact.
+      const permittedKeyRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'quotas-unscoped-denied control key',
+          policy_ids: [policyId],
+        });
+      const rawPermittedKey = permittedKeyRes.body.key as string;
+
+      const ok = await authenticatedTestClient(rawPermittedKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(ok.status).toBe(200);
+
+      const blocked = await authenticatedTestClient(rawPermittedKey).get(
+        `/api/v1/quotas?project_id=${enfProjectId}`
+      );
+      expect(blocked.status).toBe(429);
+    });
+
+    // `POST /triggers` authorizes twice — once to write in the project, once to
+    // prove the caller could start the target itself. Attribution is
+    // per-request, not per-check, so a limit of 2 must admit exactly two of
+    // these; a double count would reject the second.
+    test('a handler that authorizes twice is counted once', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-once'
+      );
+
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({ project_id: enfProjectId, name: 'quota probe tool' });
+      expect(toolRes.status).toBe(201);
+
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 2,
+        },
+        enfProjectId
+      );
+
+      const triggerPolicyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: ['triggers:CreateTrigger', 'tools:CallTool'],
+              },
+            ],
+          },
+        });
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          name: 'quotas-unscoped-once key',
+          policy_ids: [triggerPolicyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const rawKey = keyRes.body.key as string;
+
+      const createTrigger = (name: string) => {
+        return authenticatedTestClient(rawKey).post('/api/v1/triggers').send({
+          project_id: enfProjectId,
+          name,
+          type: 'manual',
+          target_type: 'tool',
+          target_id: toolRes.body.id,
+        });
+      };
+
+      for (let i = 0; i < 2; i += 1) {
+        const ok = await createTrigger(`quota probe trigger ${i}`);
+        expect(ok.status).toBe(201);
+      }
+
+      const blocked = await createTrigger('quota probe trigger blocked');
+      expect(blocked.status).toBe(429);
+    });
+
+    // The residual exemption #749 leaves in place: a request that resolves to
+    // *every* project (an unscoped admin key with no attached policies, no
+    // `project_id` filter) names no single project to count against.
+    test('an unscoped key resolving to no single project is still exempt', async () => {
+      const { enfProjectId } = await setupEnforcementProject(
+        'quotas-unscoped-allprojects'
+      );
+
+      await createQuota(
+        userToken,
+        {
+          scope: 'project',
+          metric: 'requests',
+          window: 'rolling_1m',
+          limit: 1,
+        },
+        enfProjectId
+      );
+
+      // Unscoped, no attached policies, admin owner → full inheritance, so
+      // `resolveProjectIds` returns `undefined` (no project filter at all).
+      const adminKeyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'quotas-unscoped-allprojects key' });
+      expect(adminKeyRes.status).toBe(201);
+      const rawAdminKey = adminKeyRes.body.key as string;
+
+      for (let i = 0; i < 5; i += 1) {
+        const res =
+          await authenticatedTestClient(rawAdminKey).get('/api/v1/quotas');
         expect(res.status).toBe(200);
       }
     });

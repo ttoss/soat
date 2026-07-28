@@ -4183,6 +4183,39 @@ $SOAT_CLI delete-actor --actor-id "$QUOTA_ACTOR_ID"
 
 $SOAT_CLI delete-quota --quota-id "$QUOTA_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_ID"
+
+# requests-quota enforcement for an UNSCOPED key (#749). Confined to a
+# throwaway project so a limit of 1 cannot block the rest of this run: the
+# quota is project-scoped, and nothing else here touches that project.
+echo "--- requests-quota enforcement (unscoped key) ---"
+QUOTA_ENF_PROJECT_ID=$($SOAT_CLI create-project \
+  --name smoke-quota-enforcement | jq -r '.id')
+QUOTA_ENF_POLICY_ID=$($SOAT_CLI create-policy \
+  --name smoke-quota-enf-policy \
+  --document '{"statement":[{"effect":"Allow","action":["quotas:ListQuotas"]}]}' \
+  | jq -r '.id')
+# No --project_id: the key spans projects, so its project is only known once a
+# route resolves and authorizes one.
+QUOTA_ENF_KEY=$($SOAT_CLI create-api-key \
+  --name smoke-quota-enf-key \
+  --policy_ids "[\"$QUOTA_ENF_POLICY_ID\"]" | jq -r '.key')
+QUOTA_ENF_QUOTA_ID=$($SOAT_CLI create-quota \
+  --project-id "$QUOTA_ENF_PROJECT_ID" --scope project --metric requests \
+  --window rolling_1m --limit 1 | jq -r '.id')
+
+# Positive control first: the allowance admits one request, so the 429 below is
+# the quota firing and not a missing permission.
+SOAT_TOKEN="$QUOTA_ENF_KEY" $SOAT_CLI list-quotas \
+  --project-id "$QUOTA_ENF_PROJECT_ID" >/dev/null
+export SOAT_TOKEN="$QUOTA_ENF_KEY"
+expect_cli_error_status 429 list-quotas --project-id "$QUOTA_ENF_PROJECT_ID"
+unset SOAT_TOKEN
+
+# The admin JWT is exempt, so cleanup is never blocked by the quota it deletes.
+$SOAT_CLI delete-quota --quota-id "$QUOTA_ENF_QUOTA_ID"
+$SOAT_CLI delete-project --project-id "$QUOTA_ENF_PROJECT_ID" --force true
+echo "requests-quota enforcement (unscoped key): OK"
+
 echo "Quotas: OK"
 
 echo ""
