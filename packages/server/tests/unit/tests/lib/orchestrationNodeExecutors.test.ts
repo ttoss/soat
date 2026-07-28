@@ -750,12 +750,19 @@ describe('executeToolNode', () => {
         orchestrationRunId: 'orch_run_activitywire',
       });
 
+      // Other tests in this file exercise executeToolNode with a literal
+      // projectIds: [1] fixture (not a real row), which — when a project
+      // with public id 1 genuinely exists in the shared test DB — fires its
+      // own fire-and-forget action_executed write. Filtering by refId too
+      // (unique to this test) keeps this assertion from picking up that
+      // unrelated row instead of its own.
       let entry = null;
       for (let i = 0; i < 200; i += 1) {
         entry = await db.ActivityEntry.findOne({
           where: {
             projectId: project.id as number,
             kind: 'action_executed',
+            refId: 'tool_activitywire0',
           },
         });
         if (entry) break;
