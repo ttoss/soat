@@ -157,6 +157,7 @@ const sidebars: SidebarsConfig = {
       label: 'Agents',
       items: [
         'tutorials/agent-soat-tools',
+        'tutorials/client-tools',
         'tutorials/memories-agent',
         'tutorials/debug-session-generation-trace-history',
       ],
