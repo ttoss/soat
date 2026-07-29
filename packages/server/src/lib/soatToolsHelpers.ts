@@ -12,8 +12,10 @@ import {
   buildPathFn,
   buildQueryFn,
   dereferenceSchema,
+  normalizeSubschema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
+  sanitizeDescription,
 } from './soatToolsSchemaHelpers';
 
 const log = createDebug('soat:tools');
@@ -124,6 +126,65 @@ export const getJsonSchemaType = (
 };
 
 /**
+ * Builds a single property schema, preserving the parts of the OpenAPI type
+ * that a single primitive cannot express.
+ *
+ * A property declaring `oneOf`/`anyOf` is forwarded verbatim rather than
+ * collapsed to a guessed primitive, and `nullable: true` becomes a two-entry
+ * `type` array (e.g. `['string', 'null']`) so the property keeps its declared
+ * type while still accepting an explicit `null`. Both matter because the
+ * schema is what an MCP client is told it may send: collapsing them advertises
+ * a stricter contract than the REST API actually enforces, so a documented
+ * call — "pass `null` to clear this field" — looks invalid.
+ */
+const buildTypedProperty = (param: {
+  type?: string;
+  description: string;
+  items?: unknown;
+  nullable?: boolean;
+  oneOf?: unknown[];
+  anyOf?: unknown[];
+}): JSONSchema7 => {
+  const description = sanitizeDescription(param.description);
+
+  if (param.oneOf && param.oneOf.length > 0) {
+    return {
+      oneOf: normalizeSubschema(param.oneOf) as JSONSchema7[],
+      description,
+    };
+  }
+
+  if (param.anyOf && param.anyOf.length > 0) {
+    return {
+      anyOf: normalizeSubschema(param.anyOf) as JSONSchema7[],
+      description,
+    };
+  }
+
+  // A property the spec declares with neither a `type` nor alternatives accepts
+  // more than one shape — `tool_choice` is a string *or* an object. Guessing a
+  // single type here (the old behaviour guessed `string`) advertises a narrower
+  // contract than the REST API enforces, so the object form looks invalid. An
+  // absent `type` accepts any shape, including null, matching the spec.
+  if (param.type === undefined) {
+    return { description };
+  }
+
+  const jsonType = getJsonSchemaType(param.type);
+  const finalType =
+    param.nullable === true ? [jsonType, 'null' as const] : jsonType;
+
+  if (param.type === 'array') {
+    const items = param.items
+      ? (normalizeSubschema(param.items) as JSONSchema7)
+      : { type: 'string' as const };
+    return { type: finalType, items, description };
+  }
+
+  return { type: finalType, description };
+};
+
+/**
  * Builds an MCP tool's `inputSchema` from the operation's path, query, and body
  * parameters. Property names are the spec's own snake_case names, verbatim — the
  * MCP contract is the OpenAPI contract, so a client that read the docs can call
@@ -141,8 +202,12 @@ export const buildInputSchema = (
     name: string;
     description: string;
     required: boolean;
-    type: string;
+    /** `undefined` when the spec declares no `type` for this property. */
+    type?: string;
     items?: unknown;
+    nullable?: boolean;
+    oneOf?: unknown[];
+    anyOf?: unknown[];
   }>
 ): JsonObjectSchema => {
   if (pathParams.length + queryParams.length + bodyProps.length === 0) {
@@ -179,30 +244,17 @@ export const buildInputSchema = (
   }
 
   for (const param of [...queryParams, ...bodyProps]) {
-    const description = (param.description || '')
-      .replace(/'/g, "\\'")
-      .replace(/\n/g, ' ')
-      .trim();
-
-    if (param.type === 'array') {
-      const items =
-        'items' in param && param.items
-          ? (param.items as JSONSchema7)
-          : { type: 'string' as const };
-      properties[param.name] = { type: 'array', items, description };
-      continue;
-    }
-
-    properties[param.name] = {
-      type: getJsonSchemaType(param.type),
-      description,
-    };
+    properties[param.name] = buildTypedProperty(param);
   }
 
+  // `required` is omitted rather than set to `undefined`: JSON has no
+  // `undefined`, so the key was never visible to clients anyway, and leaving
+  // explicit `undefined` on the in-memory schema only risks tripping the
+  // validator that compiles it at tool-registration time.
   return {
     type: 'object',
     properties,
-    required: requiredFields.length > 0 ? requiredFields : undefined,
+    ...(requiredFields.length > 0 ? { required: requiredFields } : {}),
   };
 };
 
@@ -273,8 +325,12 @@ export const extractBodyProps = (args: {
   name: string;
   description: string;
   required: boolean;
-  type: string;
+  /** `undefined` when the spec declares no `type` for this property. */
+  type?: string;
   items?: unknown;
+  nullable?: boolean;
+  oneOf?: unknown[];
+  anyOf?: unknown[];
 }> => {
   const bodySchema = resolveBodySchema(args);
   if (!bodySchema?.properties) return [];
@@ -305,13 +361,21 @@ export const extractBodyProps = (args: {
       description?: unknown;
       type?: unknown;
       items?: unknown;
+      nullable?: unknown;
+      oneOf?: unknown;
+      anyOf?: unknown;
     };
     return {
       name: key,
       description: typeof val.description === 'string' ? val.description : '',
       required: (bodySchema.required || []).includes(key),
-      type: typeof val.type === 'string' ? val.type : 'string',
+      // Left undefined when the spec declares none, so buildInputSchema can
+      // advertise "any shape" rather than guessing a single type.
+      type: typeof val.type === 'string' ? val.type : undefined,
       items: val.items,
+      nullable: val.nullable === true,
+      oneOf: Array.isArray(val.oneOf) ? val.oneOf : undefined,
+      anyOf: Array.isArray(val.anyOf) ? val.anyOf : undefined,
     };
   });
 };
