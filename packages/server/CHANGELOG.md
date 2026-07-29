@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.4](https://127.0.0.1/41729/git/ttoss/compare/v0.17.3...v0.17.4) (2026-07-29)
+
+### Bug Fixes
+
+* **server:** resolve unresolvable $refs to an empty schema, not a dropped key ([#770](https://127.0.0.1/41729/git/ttoss/issues/770)) ([befbcd7](https://127.0.0.1/41729/git/ttoss/commits/befbcd72ae6d3f8b4e67f8ebcaa729480e54ccd7)), closes [#769](https://127.0.0.1/41729/git/ttoss/issues/769) [#769](https://127.0.0.1/41729/git/ttoss/issues/769)
+
+### Features
+
+* **server:** adopt MCP 2026-07-28 and describe tool schemas accurately ([#769](https://127.0.0.1/41729/git/ttoss/issues/769)) ([242038c](https://127.0.0.1/41729/git/ttoss/commits/242038c4abf3af7fd47df3c45b41cc64280401ab)), closes [ttoss/ttoss#1171](https://127.0.0.1/ttoss/ttoss/issues/1171)
+
 ## [0.17.3](https://127.0.0.1/41729/git/ttoss/compare/v0.17.1...v0.17.3) (2026-07-28)
 
 * refactor!: rename orchestration run_id to orchestration_run_id (#763) ([74b5171](https://127.0.0.1/41729/git/ttoss/commits/74b51711c725af1a959feb13d985924b56622cd2)), closes [#763](https://127.0.0.1/41729/git/ttoss/issues/763)
