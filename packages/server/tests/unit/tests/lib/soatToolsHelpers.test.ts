@@ -282,6 +282,62 @@ describe('buildInputSchema', () => {
       });
     });
 
+    test('an unresolved $ref inside items is dropped, not left as undefined', () => {
+      // dereferenceSchema follows only same-file refs, so a cross-file one —
+      // ToolBinding.properties.tool -> ./tools.yaml#/... — comes back
+      // undefined. Left in place, the validator that compiles the schema at
+      // tool-registration time throws on Object.keys(undefined).
+      const schema = buildInputSchema(
+        [],
+        [],
+        [
+          {
+            name: 'tool_bindings',
+            description: 'Tool attachments.',
+            required: false,
+            type: 'array',
+            nullable: true,
+            items: {
+              type: 'object',
+              properties: {
+                tool_id: { type: 'string' },
+                tool: undefined,
+              },
+            },
+          },
+        ]
+      );
+
+      expect(schema.properties?.tool_bindings).toEqual({
+        type: ['array', 'null'],
+        items: {
+          type: 'object',
+          properties: { tool_id: { type: 'string' } },
+        },
+        description: 'Tool attachments.',
+      });
+      expect(JSON.stringify(schema.properties?.tool_bindings)).not.toContain(
+        'tool"'
+      );
+    });
+
+    test('required is omitted entirely when nothing is required', () => {
+      const schema = buildInputSchema(
+        [],
+        [],
+        [
+          {
+            name: 'note',
+            description: 'A note',
+            required: false,
+            type: 'string',
+          },
+        ]
+      );
+
+      expect('required' in schema).toBe(false);
+    });
+
     test('a non-nullable property is unaffected', () => {
       const schema = buildInputSchema(
         [],

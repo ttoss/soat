@@ -225,20 +225,49 @@ export const sanitizeDescription = (description: string): string => {
 };
 
 /**
- * Rewrites OpenAPI's `nullable` into its JSON Schema equivalent, recursively.
+ * Turns an OpenAPI subschema into valid JSON Schema, recursively.
  *
- * `nullable` is an OpenAPI extension with no meaning in JSON Schema, and a
- * validator reading the generated tool schema rejects it outright — so it has
- * to be translated wherever it appears, not just on top-level properties.
- * Nested occurrences are easy to miss: SOAT's formation specs declare one
- * several levels down, inside a `oneOf` alternative's `additionalProperties`.
+ * Two OpenAPI-isms have to be dealt with wherever they appear, not just on
+ * top-level properties, because the generated schema is compiled by a real
+ * JSON Schema validator when the MCP tool is registered:
  *
- * `nullable: true` merges `'null'` into the sibling `type`; a subschema with no
- * declared `type` already permits null, so the keyword is simply dropped.
+ * 1. **`nullable`** is an OpenAPI extension with no meaning in JSON Schema, and
+ *    a validator rejects it outright. `nullable: true` merges `'null'` into the
+ *    sibling `type`; a subschema with no declared `type` already permits null,
+ *    so the keyword is simply dropped. Nested occurrences are easy to miss —
+ *    the formation specs declare one several levels down, inside a `oneOf`
+ *    alternative's `additionalProperties`.
+ *
+ * 2. **`undefined` values**, which {@link dereferenceSchema} leaves behind for a
+ *    `$ref` it cannot resolve — it only follows same-file
+ *    `#/components/schemas/...` refs, so a cross-file ref such as
+ *    `ToolBinding.properties.tool` → `./tools.yaml#/...` yields `undefined`.
+ *    JSON has no `undefined`, so such a key was already invisible to clients
+ *    (serialising the schema dropped it); leaving it on the in-memory object
+ *    makes the validator throw as it compiles `properties`. Dropping the key
+ *    keeps exactly the shape clients already saw.
  */
-export const normalizeNullable = (value: unknown): unknown => {
+/** Merges `'null'` into a subschema's `type`, however that type is expressed. */
+const mergeNullIntoType = (schema: Record<string, unknown>): void => {
+  const type = schema.type;
+
+  if (typeof type === 'string') {
+    schema.type = [type, 'null'];
+    return;
+  }
+
+  if (Array.isArray(type) && !type.includes('null')) {
+    schema.type = [...type, 'null'];
+  }
+};
+
+export const normalizeSubschema = (value: unknown): unknown => {
   if (Array.isArray(value)) {
-    return value.map(normalizeNullable);
+    return value
+      .filter((entry) => {
+        return entry !== undefined;
+      })
+      .map(normalizeSubschema);
   }
 
   if (value === null || typeof value !== 'object') {
@@ -249,17 +278,12 @@ export const normalizeNullable = (value: unknown): unknown => {
   const result: Record<string, unknown> = {};
 
   for (const [key, nested] of Object.entries(source)) {
-    if (key === 'nullable') continue;
-    result[key] = normalizeNullable(nested);
+    if (key === 'nullable' || nested === undefined) continue;
+    result[key] = normalizeSubschema(nested);
   }
 
   if (source.nullable === true) {
-    const type = result.type;
-    if (typeof type === 'string') {
-      result.type = [type, 'null'];
-    } else if (Array.isArray(type) && !type.includes('null')) {
-      result.type = [...type, 'null'];
-    }
+    mergeNullIntoType(result);
   }
 
   return result;

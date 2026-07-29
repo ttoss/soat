@@ -12,7 +12,7 @@ import {
   buildPathFn,
   buildQueryFn,
   dereferenceSchema,
-  normalizeNullable,
+  normalizeSubschema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
   sanitizeDescription,
@@ -149,14 +149,14 @@ const buildTypedProperty = (param: {
 
   if (param.oneOf && param.oneOf.length > 0) {
     return {
-      oneOf: normalizeNullable(param.oneOf) as JSONSchema7[],
+      oneOf: normalizeSubschema(param.oneOf) as JSONSchema7[],
       description,
     };
   }
 
   if (param.anyOf && param.anyOf.length > 0) {
     return {
-      anyOf: normalizeNullable(param.anyOf) as JSONSchema7[],
+      anyOf: normalizeSubschema(param.anyOf) as JSONSchema7[],
       description,
     };
   }
@@ -176,7 +176,7 @@ const buildTypedProperty = (param: {
 
   if (param.type === 'array') {
     const items = param.items
-      ? (normalizeNullable(param.items) as JSONSchema7)
+      ? (normalizeSubschema(param.items) as JSONSchema7)
       : { type: 'string' as const };
     return { type: finalType, items, description };
   }
@@ -247,10 +247,14 @@ export const buildInputSchema = (
     properties[param.name] = buildTypedProperty(param);
   }
 
+  // `required` is omitted rather than set to `undefined`: JSON has no
+  // `undefined`, so the key was never visible to clients anyway, and leaving
+  // explicit `undefined` on the in-memory schema only risks tripping the
+  // validator that compiles it at tool-registration time.
   return {
     type: 'object',
     properties,
-    required: requiredFields.length > 0 ? requiredFields : undefined,
+    ...(requiredFields.length > 0 ? { required: requiredFields } : {}),
   };
 };
 
