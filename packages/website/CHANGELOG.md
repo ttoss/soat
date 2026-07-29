@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.4](https://127.0.0.1/41729/git/ttoss/compare/v0.17.3...v0.17.4) (2026-07-29)
+
+**Note:** Version bump only for package @soat/website
+
 ## [0.17.3](https://127.0.0.1/41729/git/ttoss/compare/v0.17.1...v0.17.3) (2026-07-28)
 
 * refactor!: rename orchestration run_id to orchestration_run_id (#763) ([74b5171](https://127.0.0.1/41729/git/ttoss/commits/74b51711c725af1a959feb13d985924b56622cd2)), closes [#763](https://127.0.0.1/41729/git/ttoss/issues/763)
