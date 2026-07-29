@@ -218,3 +218,49 @@ export const buildBodyFn = (
     return body;
   };
 };
+
+/** Sanitises a spec description for embedding in the tool schema. */
+export const sanitizeDescription = (description: string): string => {
+  return (description || '').replace(/'/g, "\\'").replace(/\n/g, ' ').trim();
+};
+
+/**
+ * Rewrites OpenAPI's `nullable` into its JSON Schema equivalent, recursively.
+ *
+ * `nullable` is an OpenAPI extension with no meaning in JSON Schema, and a
+ * validator reading the generated tool schema rejects it outright — so it has
+ * to be translated wherever it appears, not just on top-level properties.
+ * Nested occurrences are easy to miss: SOAT's formation specs declare one
+ * several levels down, inside a `oneOf` alternative's `additionalProperties`.
+ *
+ * `nullable: true` merges `'null'` into the sibling `type`; a subschema with no
+ * declared `type` already permits null, so the keyword is simply dropped.
+ */
+export const normalizeNullable = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(normalizeNullable);
+  }
+
+  if (value === null || typeof value !== 'object') {
+    return value;
+  }
+
+  const source = value as Record<string, unknown>;
+  const result: Record<string, unknown> = {};
+
+  for (const [key, nested] of Object.entries(source)) {
+    if (key === 'nullable') continue;
+    result[key] = normalizeNullable(nested);
+  }
+
+  if (source.nullable === true) {
+    const type = result.type;
+    if (typeof type === 'string') {
+      result.type = [type, 'null'];
+    } else if (Array.isArray(type) && !type.includes('null')) {
+      result.type = [...type, 'null'];
+    }
+  }
+
+  return result;
+};
