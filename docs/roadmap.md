@@ -179,9 +179,9 @@ _Fully shipped._
 
 _Not started. Standalone; complements G2; no metering change._
 
-- [ ] **Phase 1** `ModelRoute` model + lib (`route_` prefix, ordered targets + retry/breaker config); REST CRUD + OpenAPI + permissions; shared `route`-vs-pin exclusivity validation; agent consumption (`model_route_id`); ordered fallback executor (non-streaming)
-- [ ] **Phase 2** Circuit breaker (in-process, per-target consecutive-failure skip + cooldown); streaming pre-token fallback; `routing` metadata on Generation
-- [ ] **Phase 3** Remaining consumers (discussions, extraction, chats); `model-route` formation resource type
+- [ ] **Phase 1** `ModelRoute` model + lib (`route_` prefix, ordered targets + retry/breaker config; create-time attempt cap); REST CRUD (incl. `DELETE` → `409` referential guard) + OpenAPI + permissions; shared `route`-vs-pin exclusivity validation (`Agent.aiProviderId` relaxed to nullable); agent consumption (`model_route_id`, both generation **and** recovery resolution sites) + agent-field formation sync; composite-`LanguageModel` fallback executor at the `buildModel` seam — per-LLM-call failover, no tool re-execution, `maxRetries: 0` on routed calls (non-streaming)
+- [ ] **Phase 2** Circuit breaker (in-process, keyed `(provider, model)` shared across routes, consecutive-failure skip + cooldown); streaming pre-token fallback (composite `doStream` arm); `routing` metadata on Generation
+- [ ] **Phase 3** Remaining consumers (chats, discussions, memory extraction/consolidation — each `buildModel` site); `model-route` formation resource type
 
 ### Memories
 
