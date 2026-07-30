@@ -69,8 +69,8 @@ echo "Bootstrap status: $BOOTSTRAP_STATUS"
 # 2. Login to get JWT token
 echo "--- Logging in ---"
 LOGIN_RESP=$($SOAT_CLI login-user --username admin --password 'Admin1234!')
-TOKEN=$(echo "$LOGIN_RESP" | jq -r '.token')
-ADMIN_USER_ID=$(echo "$LOGIN_RESP" | jq -r '.id')
+TOKEN=$(printf '%s\n' "$LOGIN_RESP" | jq -r '.token')
+ADMIN_USER_ID=$(printf '%s\n' "$LOGIN_RESP" | jq -r '.id')
 if [ -z "$ADMIN_USER_ID" ] || [ "$ADMIN_USER_ID" = "null" ]; then
   echo "ERROR: Login response did not include user id" >&2
   echo "$LOGIN_RESP" >&2
@@ -84,13 +84,13 @@ echo "CLI: $SOAT_CLI"
 # 3. Create a project
 echo "--- Creating project ---"
 PROJECT_RESP=$($SOAT_CLI create-project --name smoke-test-project)
-PROJECT_PUBLIC_ID=$(echo "$PROJECT_RESP" | jq -r '.id')
+PROJECT_PUBLIC_ID=$(printf '%s\n' "$PROJECT_RESP" | jq -r '.id')
 echo "Project id: $PROJECT_PUBLIC_ID"
 
 # 3a. Rename the project
 echo "--- Renaming project ---"
 PROJECT_RENAME_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --name smoke-test-project-renamed)
-if [ "$(echo "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-renamed" ]; then
+if [ "$(printf '%s\n' "$PROJECT_RENAME_RESP" | jq -r '.name')" != "smoke-test-project-renamed" ]; then
   echo "ERROR: update-project did not rename the project" >&2
   echo "$PROJECT_RENAME_RESP" >&2
   exit 1
@@ -100,7 +100,7 @@ echo "Project rename: OK"
 # 3a-ii. Set the per-project orchestration concurrency limit
 echo "--- Project concurrency limit ---"
 PROJECT_LIMIT_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --max-concurrent-runs 5)
-if [ "$(echo "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != "5" ]; then
+if [ "$(printf '%s\n' "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != "5" ]; then
   echo "ERROR: update-project did not set max_concurrent_runs" >&2
   echo "$PROJECT_LIMIT_RESP" >&2
   exit 1
@@ -110,7 +110,7 @@ echo "Project concurrency limit: OK"
 # 3a-iii. Orchestration queue stats endpoint
 echo "--- Orchestration queue stats ---"
 QUEUE_STATS_RESP=$($SOAT_CLI get-queue-stats)
-if [ "$(echo "$QUEUE_STATS_RESP" | jq -r '.driver')" != "postgres" ]; then
+if [ "$(printf '%s\n' "$QUEUE_STATS_RESP" | jq -r '.driver')" != "postgres" ]; then
   echo "ERROR: get-queue-stats did not return driver=postgres" >&2
   echo "$QUEUE_STATS_RESP" >&2
   exit 1
@@ -122,7 +122,7 @@ echo "--- Policies coverage ---"
 POLICY_READ_RESP=$($SOAT_CLI create-policy \
   --document '{"statement":[{"effect":"Allow","action":["files:GetFile"]}]}' \
   --name smoke-read-policy)
-POLICY_READ_ID=$(echo "$POLICY_READ_RESP" | jq -r '.id')
+POLICY_READ_ID=$(printf '%s\n' "$POLICY_READ_RESP" | jq -r '.id')
 if [ -z "$POLICY_READ_ID" ] || [ "$POLICY_READ_ID" = "null" ]; then
   echo "ERROR: Failed to create read policy" >&2
   echo "$POLICY_READ_RESP" >&2
@@ -132,7 +132,7 @@ fi
 POLICY_WRITE_RESP=$($SOAT_CLI create-policy \
   --document '{"statement":[{"effect":"Allow","action":["files:CreateFile"]}]}' \
   --name smoke-write-policy)
-POLICY_WRITE_ID=$(echo "$POLICY_WRITE_RESP" | jq -r '.id')
+POLICY_WRITE_ID=$(printf '%s\n' "$POLICY_WRITE_RESP" | jq -r '.id')
 if [ -z "$POLICY_WRITE_ID" ] || [ "$POLICY_WRITE_ID" = "null" ]; then
   echo "ERROR: Failed to create write policy" >&2
   echo "$POLICY_WRITE_RESP" >&2
@@ -183,8 +183,8 @@ API_KEY_RESP=$($SOAT_CLI create-api-key \
   --name smoke-api-key \
   --project_id "$PROJECT_PUBLIC_ID" \
   --policy_ids "[\"$POLICY_READ_ID\"]")
-API_KEY_ID=$(echo "$API_KEY_RESP" | jq -r '.id')
-API_KEY_RAW=$(echo "$API_KEY_RESP" | jq -r '.key')
+API_KEY_ID=$(printf '%s\n' "$API_KEY_RESP" | jq -r '.id')
+API_KEY_RAW=$(printf '%s\n' "$API_KEY_RESP" | jq -r '.key')
 if [ -z "$API_KEY_ID" ] || [ "$API_KEY_ID" = "null" ]; then
   echo "ERROR: Failed to create api-key" >&2
   echo "$API_KEY_RESP" >&2
@@ -230,8 +230,8 @@ expect_cli_error_status 404 get-api-key --api-key-id "$API_KEY_ID"
 
 # Unscoped api-key (no project_id) — spans projects, bounded by owner permissions
 UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-unscoped-key)
-UNSCOPED_KEY_ID=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.id')
-UNSCOPED_KEY_RAW=$(echo "$UNSCOPED_KEY_RESP" | jq -r '.key')
+UNSCOPED_KEY_ID=$(printf '%s\n' "$UNSCOPED_KEY_RESP" | jq -r '.id')
+UNSCOPED_KEY_RAW=$(printf '%s\n' "$UNSCOPED_KEY_RESP" | jq -r '.key')
 if [ -z "$UNSCOPED_KEY_ID" ] || [ "$UNSCOPED_KEY_ID" = "null" ]; then
   echo "ERROR: Failed to create unscoped api-key" >&2
   echo "$UNSCOPED_KEY_RESP" >&2
@@ -263,7 +263,7 @@ echo "Policy DELETE coverage: OK"
 echo "--- Secrets coverage ---"
 SECRET_CREATE_RESP=$($SOAT_CLI create-secret \
   --project_id "$PROJECT_PUBLIC_ID" --name smoke-secret --value supersecretvalue)
-SECRET_ID=$(echo "$SECRET_CREATE_RESP" | jq -r '.id')
+SECRET_ID=$(printf '%s\n' "$SECRET_CREATE_RESP" | jq -r '.id')
 if [ -z "$SECRET_ID" ] || [ "$SECRET_ID" = "null" ]; then
   echo "ERROR: Failed to create secret" >&2
   echo "$SECRET_CREATE_RESP" >&2
@@ -271,7 +271,7 @@ if [ -z "$SECRET_ID" ] || [ "$SECRET_ID" = "null" ]; then
 fi
 
 SECRET_GET_RESP=$($SOAT_CLI get-secret --secret-id "$SECRET_ID")
-if echo "$SECRET_GET_RESP" | jq -e '.value' >/dev/null 2>&1; then
+if printf '%s\n' "$SECRET_GET_RESP" | jq -e '.value' >/dev/null 2>&1; then
   echo "ERROR: Secret value must not be returned" >&2
   echo "$SECRET_GET_RESP" >&2
   exit 1
@@ -288,7 +288,7 @@ SECRET_REF_TOOL_RESP=$($SOAT_CLI create-tool \
   --name smoke-secret-ref-tool \
   --type http \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$SECRET_REF_TOKEN\"}}")
-SECRET_REF_TOOL_ID=$(echo "$SECRET_REF_TOOL_RESP" | jq -r '.id')
+SECRET_REF_TOOL_ID=$(printf '%s\n' "$SECRET_REF_TOOL_RESP" | jq -r '.id')
 if [ -z "$SECRET_REF_TOOL_ID" ] || [ "$SECRET_REF_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create tool with a {{secret:...}} reference" >&2
   echo "$SECRET_REF_TOOL_RESP" >&2
@@ -296,7 +296,7 @@ if [ -z "$SECRET_REF_TOOL_ID" ] || [ "$SECRET_REF_TOOL_ID" = "null" ]; then
 fi
 
 SECRET_REF_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$SECRET_REF_TOOL_ID")
-STORED_AUTH_HEADER=$(echo "$SECRET_REF_TOOL_GET" | jq -r '.execute.headers.Authorization')
+STORED_AUTH_HEADER=$(printf '%s\n' "$SECRET_REF_TOOL_GET" | jq -r '.execute.headers.Authorization')
 if [ "$STORED_AUTH_HEADER" != "$SECRET_REF_TOKEN" ]; then
   echo "ERROR: Expected stored header to echo the {{secret:...}} token, got '$STORED_AUTH_HEADER'" >&2
   echo "$SECRET_REF_TOOL_GET" >&2
@@ -322,7 +322,7 @@ echo "Secrets coverage: OK"
 echo "--- Audit Log coverage ---"
 AUDIT_LIST_RESP=$($SOAT_CLI list-audit-entries \
   --project_id "$PROJECT_PUBLIC_ID" --resource_public_id "$SECRET_ID")
-AUDIT_ENTRY_ID=$(echo "$AUDIT_LIST_RESP" | jq -r '.data[0].id')
+AUDIT_ENTRY_ID=$(printf '%s\n' "$AUDIT_LIST_RESP" | jq -r '.data[0].id')
 if [ -z "$AUDIT_ENTRY_ID" ] || [ "$AUDIT_ENTRY_ID" = "null" ]; then
   echo "ERROR: Expected audit entries for the deleted secret" >&2
   echo "$AUDIT_LIST_RESP" >&2
@@ -334,7 +334,7 @@ $SOAT_CLI list-audit-entries \
   --project_id "$PROJECT_PUBLIC_ID" --action secrets:DeleteSecret >/dev/null
 
 AUDIT_GET_RESP=$($SOAT_CLI get-audit-entry --entry-id "$AUDIT_ENTRY_ID")
-AUDIT_GET_ACTION=$(echo "$AUDIT_GET_RESP" | jq -r '.action')
+AUDIT_GET_ACTION=$(printf '%s\n' "$AUDIT_GET_RESP" | jq -r '.action')
 if [ -z "$AUDIT_GET_ACTION" ] || [ "$AUDIT_GET_ACTION" = "null" ]; then
   echo "ERROR: Failed to fetch audit entry $AUDIT_ENTRY_ID" >&2
   echo "$AUDIT_GET_RESP" >&2
@@ -396,7 +396,7 @@ echo "Audit Log coverage: OK"
 echo "--- Actors coverage ---"
 ACTOR_CREATE_RESP=$($SOAT_CLI create-actor \
   --project_id "$PROJECT_PUBLIC_ID" --name smoke-actor --external_id smoke-ext-actor)
-ACTOR_ID=$(echo "$ACTOR_CREATE_RESP" | jq -r '.id')
+ACTOR_ID=$(printf '%s\n' "$ACTOR_CREATE_RESP" | jq -r '.id')
 if [ -z "$ACTOR_ID" ] || [ "$ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create actor" >&2
   echo "$ACTOR_CREATE_RESP" >&2
@@ -418,7 +418,7 @@ echo "Actors coverage: OK"
 echo "--- Conversations coverage ---"
 CONVO_ACTOR_RESP=$($SOAT_CLI create-actor \
   --project_id "$PROJECT_PUBLIC_ID" --name smoke-conversation-actor)
-CONVO_ACTOR_ID=$(echo "$CONVO_ACTOR_RESP" | jq -r '.id')
+CONVO_ACTOR_ID=$(printf '%s\n' "$CONVO_ACTOR_RESP" | jq -r '.id')
 if [ -z "$CONVO_ACTOR_ID" ] || [ "$CONVO_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation actor" >&2
   echo "$CONVO_ACTOR_RESP" >&2
@@ -426,7 +426,7 @@ if [ -z "$CONVO_ACTOR_ID" ] || [ "$CONVO_ACTOR_ID" = "null" ]; then
 fi
 
 CONVO_CREATE_RESP=$($SOAT_CLI create-conversation --project_id "$PROJECT_PUBLIC_ID")
-CONVO_ID=$(echo "$CONVO_CREATE_RESP" | jq -r '.id')
+CONVO_ID=$(printf '%s\n' "$CONVO_CREATE_RESP" | jq -r '.id')
 if [ -z "$CONVO_ID" ] || [ "$CONVO_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation" >&2
   echo "$CONVO_CREATE_RESP" >&2
@@ -444,7 +444,7 @@ fi
 
 CONVO_ADD_MSG_RESP=$($SOAT_CLI add-conversation-message \
   --conversation-id "$CONVO_ID" --message "smoke conversation message" --role user --actor_id "$CONVO_ACTOR_ID")
-CONVO_DOC_ID=$(echo "$CONVO_ADD_MSG_RESP" | jq -r '.document_id')
+CONVO_DOC_ID=$(printf '%s\n' "$CONVO_ADD_MSG_RESP" | jq -r '.document_id')
 if [ -z "$CONVO_DOC_ID" ] || [ "$CONVO_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add conversation message" >&2
   echo "$CONVO_ADD_MSG_RESP" >&2
@@ -472,8 +472,8 @@ UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --filename smoke.txt \
   --content "$SMOKE_FILE_B64" \
   --content_type text/plain)
-FILE_ID=$(echo "$UPLOAD_RESP" | jq -r '.id')
-FILE_PATH=$(echo "$UPLOAD_RESP" | jq -r '.path')
+FILE_ID=$(printf '%s\n' "$UPLOAD_RESP" | jq -r '.id')
+FILE_PATH=$(printf '%s\n' "$UPLOAD_RESP" | jq -r '.path')
 echo "File id: $FILE_ID"
 if [ "$FILE_PATH" != "/reports/smoke.txt" ]; then
   echo "ERROR: file path field expected '/reports/smoke.txt', got '$FILE_PATH'" >&2
@@ -519,8 +519,8 @@ TOKEN_RESP=$($SOAT_CLI create-presigned-url \
   --prefix /reports \
   --filename token-upload.txt \
   --content_type text/plain)
-UPLOAD_TOKEN=$(echo "$TOKEN_RESP" | jq -r '.upload_token')
-UPLOAD_URL=$(echo "$TOKEN_RESP" | jq -r '.upload_url')
+UPLOAD_TOKEN=$(printf '%s\n' "$TOKEN_RESP" | jq -r '.upload_token')
+UPLOAD_URL=$(printf '%s\n' "$TOKEN_RESP" | jq -r '.upload_url')
 if [ -z "$UPLOAD_TOKEN" ] || [ "$UPLOAD_TOKEN" = "null" ]; then
   echo "ERROR: upload token not returned" >&2
   exit 1
@@ -540,7 +540,7 @@ TOKEN_FILE_B64=$(base64 /tmp/smoke-token.txt | tr -d '\n')
 TOKEN_UPLOAD_RESP=$($SOAT_CLI upload-file-with-token \
   --token "$UPLOAD_TOKEN" \
   --content "$TOKEN_FILE_B64")
-TOKEN_FILE_ID=$(echo "$TOKEN_UPLOAD_RESP" | jq -r '.id')
+TOKEN_FILE_ID=$(printf '%s\n' "$TOKEN_UPLOAD_RESP" | jq -r '.id')
 if [ -z "$TOKEN_FILE_ID" ] || [ "$TOKEN_FILE_ID" = "null" ]; then
   echo "ERROR: token upload did not return a file id" >&2
   exit 1
@@ -573,8 +573,8 @@ DOC1_RESP=$($SOAT_CLI create-document \
   --content "The quick brown fox jumps over the lazy dog" \
   --filename fox.txt \
   --path /animals/fox.txt)
-DOC1_ID=$(echo "$DOC1_RESP" | jq -r '.id')
-DOC1_PATH=$(echo "$DOC1_RESP" | jq -r '.path')
+DOC1_ID=$(printf '%s\n' "$DOC1_RESP" | jq -r '.id')
+DOC1_PATH=$(printf '%s\n' "$DOC1_RESP" | jq -r '.path')
 echo "Document 1 id: $DOC1_ID"
 if [ "$DOC1_PATH" != "/animals/fox.txt" ]; then
   echo "ERROR: document path field expected '/animals/fox.txt', got '$DOC1_PATH'" >&2
@@ -589,13 +589,13 @@ DOC2_RESP=$($SOAT_CLI create-document \
   --content "Machine learning models require large amounts of training data" \
   --filename ml.txt \
   --path /tech/ml.txt)
-DOC2_ID=$(echo "$DOC2_RESP" | jq -r '.id')
+DOC2_ID=$(printf '%s\n' "$DOC2_RESP" | jq -r '.id')
 echo "Document 2 id: $DOC2_ID"
 
 # 11b. Verify path persists on GET /documents/:id
 echo "--- Verifying document path field on GET ---"
 GET_DOC1_RESP=$($SOAT_CLI get-document --document-id "$DOC1_ID")
-GET_DOC1_PATH=$(echo "$GET_DOC1_RESP" | jq -r '.path')
+GET_DOC1_PATH=$(printf '%s\n' "$GET_DOC1_RESP" | jq -r '.path')
 if [ "$GET_DOC1_PATH" != "/animals/fox.txt" ]; then
   echo "ERROR: GET document path expected '/animals/fox.txt', got '$GET_DOC1_PATH'" >&2
   exit 1
@@ -607,7 +607,7 @@ echo "--- Search knowledge by path prefix ---"
 PATH_SEARCH_RESP=$($SOAT_CLI search-knowledge \
   --project-id "$PROJECT_PUBLIC_ID" \
   --document-paths '["/animals/"]')
-PATH_SEARCH_COUNT=$(echo "$PATH_SEARCH_RESP" | jq '.results | length')
+PATH_SEARCH_COUNT=$(printf '%s\n' "$PATH_SEARCH_RESP" | jq '.results | length')
 if [ "$PATH_SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: path-prefix search returned $PATH_SEARCH_COUNT results, expected at least 1" >&2
   exit 1
@@ -620,7 +620,7 @@ SEARCH_RESP=$($SOAT_CLI search-knowledge \
   --project_id "$PROJECT_PUBLIC_ID" \
   --query "fox animal jumping" \
   --limit 5)
-SEARCH_COUNT=$(echo "$SEARCH_RESP" | jq '.results | length')
+SEARCH_COUNT=$(printf '%s\n' "$SEARCH_RESP" | jq '.results | length')
 if [ "$SEARCH_COUNT" -lt 1 ]; then
   echo "ERROR: Knowledge search returned $SEARCH_COUNT results, expected at least 1" >&2
   exit 1
@@ -635,15 +635,15 @@ PDF_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --filename smoke-test.pdf \
   --content "$PDF_BASE64" \
   --content_type application/pdf)
-PDF_FILE_ID=$(echo "$PDF_UPLOAD_RESP" | jq -r '.id')
+PDF_FILE_ID=$(printf '%s\n' "$PDF_UPLOAD_RESP" | jq -r '.id')
 echo "Uploaded PDF file id: $PDF_FILE_ID"
 
 PDF_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$PDF_FILE_ID" \
   --path-prefix /smoke/)
-PDF_DOC_ID=$(echo "$PDF_DOC_RESP" | jq -r '.id')
-PDF_CHUNK_COUNT=$(echo "$PDF_DOC_RESP" | jq -r '.chunk_count')
+PDF_DOC_ID=$(printf '%s\n' "$PDF_DOC_RESP" | jq -r '.id')
+PDF_CHUNK_COUNT=$(printf '%s\n' "$PDF_DOC_RESP" | jq -r '.chunk_count')
 echo "PDF document id: $PDF_DOC_ID chunk_count: $PDF_CHUNK_COUNT"
 if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
   echo "ERROR: ingest-document did not return a document id" >&2
@@ -659,14 +659,14 @@ MD_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --filename smoke-notes.md \
   --content "$MD_BASE64" \
   --content_type text/markdown)
-MD_FILE_ID=$(echo "$MD_UPLOAD_RESP" | jq -r '.id')
+MD_FILE_ID=$(printf '%s\n' "$MD_UPLOAD_RESP" | jq -r '.id')
 MD_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$MD_FILE_ID" \
   --path-prefix /smoke/ \
   --chunk-strategy whole)
-MD_DOC_ID=$(echo "$MD_DOC_RESP" | jq -r '.id')
-echo "Markdown document id: $MD_DOC_ID chunk_count: $(echo "$MD_DOC_RESP" | jq -r '.chunk_count')"
+MD_DOC_ID=$(printf '%s\n' "$MD_DOC_RESP" | jq -r '.id')
+echo "Markdown document id: $MD_DOC_ID chunk_count: $(printf '%s\n' "$MD_DOC_RESP" | jq -r '.chunk_count')"
 if [ -z "$MD_DOC_ID" ] || [ "$MD_DOC_ID" = "null" ]; then
   echo "ERROR: ingest-document did not return a document id for markdown" >&2
   exit 1
@@ -676,15 +676,15 @@ echo "Text ingestion: OK"
 # 12d. Lightweight ingestion status endpoint (issues #5/#6)
 echo "--- Checking document status endpoint ---"
 PDF_STATUS_RESP=$($SOAT_CLI get-document-status --document-id "$PDF_DOC_ID")
-PDF_STATUS=$(echo "$PDF_STATUS_RESP" | jq -r '.status')
-PDF_STATUS_CHUNKS=$(echo "$PDF_STATUS_RESP" | jq -r '.chunk_count')
+PDF_STATUS=$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.status')
+PDF_STATUS_CHUNKS=$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.chunk_count')
 echo "Document status: $PDF_STATUS chunk_count: $PDF_STATUS_CHUNKS"
 if [ "$PDF_STATUS" != "ready" ]; then
   echo "ERROR: get-document-status expected 'ready', got '$PDF_STATUS'" >&2
   exit 1
 fi
 # The status payload must be lightweight — no chunk content.
-if [ "$(echo "$PDF_STATUS_RESP" | jq -r '.content // "absent"')" != "absent" ]; then
+if [ "$(printf '%s\n' "$PDF_STATUS_RESP" | jq -r '.content // "absent"')" != "absent" ]; then
   echo "ERROR: get-document-status leaked chunk content" >&2
   exit 1
 fi
@@ -696,8 +696,8 @@ REINGEST_RESP=$($SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
   --async false \
   --chunk-strategy whole)
-REINGEST_STATUS=$(echo "$REINGEST_RESP" | jq -r '.status')
-REINGEST_CHUNKS=$(echo "$REINGEST_RESP" | jq -r '.chunk_count')
+REINGEST_STATUS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.status')
+REINGEST_CHUNKS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.chunk_count')
 echo "Re-ingested status: $REINGEST_STATUS chunk_count: $REINGEST_CHUNKS"
 if [ "$REINGEST_STATUS" != "ready" ]; then
   echo "ERROR: reingest-document expected 'ready', got '$REINGEST_STATUS'" >&2
@@ -717,7 +717,7 @@ CONVERTER_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Deterministic stub call used as an ingestion-rule converter step." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-CONVERTER_HTTP_TOOL_ID=$(echo "$CONVERTER_HTTP_TOOL_RESP" | jq -r '.id')
+CONVERTER_HTTP_TOOL_ID=$(printf '%s\n' "$CONVERTER_HTTP_TOOL_RESP" | jq -r '.id')
 echo "Converter http tool id: $CONVERTER_HTTP_TOOL_ID"
 
 CONVERTER_TOOL_TEXT="Ingestion rule smoke test converter output."
@@ -727,7 +727,7 @@ CONVERTER_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --type pipeline \
   --description "Wraps the stub http call and returns fixed extracted text." \
   --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$CONVERTER_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"pages\":[{\"text\":\"$CONVERTER_TOOL_TEXT\",\"page_number\":1}]}}")
-CONVERTER_TOOL_ID=$(echo "$CONVERTER_PIPELINE_TOOL_RESP" | jq -r '.id')
+CONVERTER_TOOL_ID=$(printf '%s\n' "$CONVERTER_PIPELINE_TOOL_RESP" | jq -r '.id')
 echo "Converter pipeline tool id: $CONVERTER_TOOL_ID"
 
 echo "--- Creating an ingestion rule for image/x-smoke-test ---"
@@ -737,7 +737,7 @@ INGESTION_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
   --tool-id "$CONVERTER_TOOL_ID" \
   --file-delivery base64 \
   --chunk-strategy whole)
-INGESTION_RULE_ID=$(echo "$INGESTION_RULE_RESP" | jq -r '.id')
+INGESTION_RULE_ID=$(printf '%s\n' "$INGESTION_RULE_RESP" | jq -r '.id')
 echo "Ingestion rule id: $INGESTION_RULE_ID"
 if [ -z "$INGESTION_RULE_ID" ] || [ "$INGESTION_RULE_ID" = "null" ]; then
   echo "ERROR: create-ingestion-rule did not return a rule id" >&2
@@ -761,15 +761,15 @@ CONVERTER_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --filename smoke-test-image.smk \
   --content "$SMOKE_IMAGE_BASE64" \
   --content_type image/x-smoke-test)
-CONVERTER_FILE_ID=$(echo "$CONVERTER_UPLOAD_RESP" | jq -r '.id')
+CONVERTER_FILE_ID=$(printf '%s\n' "$CONVERTER_UPLOAD_RESP" | jq -r '.id')
 
 CONVERTER_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$CONVERTER_FILE_ID" \
   --path-prefix /smoke/ \
   --async false)
-CONVERTER_DOC_ID=$(echo "$CONVERTER_DOC_RESP" | jq -r '.id')
-CONVERTER_DOC_STATUS=$(echo "$CONVERTER_DOC_RESP" | jq -r '.status')
+CONVERTER_DOC_ID=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.id')
+CONVERTER_DOC_STATUS=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.status')
 echo "Converter-ingested document id: $CONVERTER_DOC_ID status: $CONVERTER_DOC_STATUS"
 if [ "$CONVERTER_DOC_STATUS" != "ready" ]; then
   echo "ERROR: converter ingestion expected status 'ready', got '$CONVERTER_DOC_STATUS'" >&2
@@ -807,7 +807,7 @@ ASYNC_HTTP_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Deterministic stub call used as an async ingestion-rule converter step." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-ASYNC_HTTP_TOOL_ID=$(echo "$ASYNC_HTTP_TOOL_RESP" | jq -r '.id')
+ASYNC_HTTP_TOOL_ID=$(printf '%s\n' "$ASYNC_HTTP_TOOL_RESP" | jq -r '.id')
 
 ASYNC_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --project-id "$PROJECT_PUBLIC_ID" \
@@ -815,7 +815,7 @@ ASYNC_PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --type pipeline \
   --description "Wraps the stub http call but always defers with status: pending." \
   --pipeline "{\"steps\":[{\"id\":\"call\",\"tool_id\":\"$ASYNC_HTTP_TOOL_ID\",\"input\":{}}],\"output\":{\"status\":\"pending\"}}")
-ASYNC_TOOL_ID=$(echo "$ASYNC_PIPELINE_TOOL_RESP" | jq -r '.id')
+ASYNC_TOOL_ID=$(printf '%s\n' "$ASYNC_PIPELINE_TOOL_RESP" | jq -r '.id')
 echo "Async converter pipeline tool id: $ASYNC_TOOL_ID"
 
 ASYNC_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
@@ -824,7 +824,7 @@ ASYNC_RULE_RESP=$($SOAT_CLI create-ingestion-rule \
   --tool-id "$ASYNC_TOOL_ID" \
   --file-delivery base64 \
   --chunk-strategy whole)
-ASYNC_RULE_ID=$(echo "$ASYNC_RULE_RESP" | jq -r '.id')
+ASYNC_RULE_ID=$(printf '%s\n' "$ASYNC_RULE_RESP" | jq -r '.id')
 if [ -z "$ASYNC_RULE_ID" ] || [ "$ASYNC_RULE_ID" = "null" ]; then
   echo "ERROR: create-ingestion-rule (async) did not return a rule id" >&2
   echo "$ASYNC_RULE_RESP" >&2
@@ -838,14 +838,14 @@ ASYNC_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --filename smoke-test-async-image.smk \
   --content "$ASYNC_IMAGE_BASE64" \
   --content_type image/x-smoke-test-async)
-ASYNC_FILE_ID=$(echo "$ASYNC_UPLOAD_RESP" | jq -r '.id')
+ASYNC_FILE_ID=$(printf '%s\n' "$ASYNC_UPLOAD_RESP" | jq -r '.id')
 
 # Async by default (no --async false) — the request returns immediately.
 ASYNC_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$ASYNC_FILE_ID" \
   --path-prefix /smoke/)
-ASYNC_DOC_ID=$(echo "$ASYNC_DOC_RESP" | jq -r '.id')
+ASYNC_DOC_ID=$(printf '%s\n' "$ASYNC_DOC_RESP" | jq -r '.id')
 echo "Async document id: $ASYNC_DOC_ID"
 
 echo "--- Polling until the converter's deferral is recorded (status: processing) ---"
@@ -907,7 +907,7 @@ MEM_RESP=$($SOAT_CLI create-memory \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name "Smoke Test Memory" \
   --description "A memory for smoke testing")
-MEM_ID=$(echo "$MEM_RESP" | jq -r '.id')
+MEM_ID=$(printf '%s\n' "$MEM_RESP" | jq -r '.id')
 if ! printf '%s\n' "$MEM_ID" | grep -q '^mem_'; then
   echo "ERROR: memory id expected to start with 'mem_', got '$MEM_ID'" >&2
   exit 1
@@ -1650,7 +1650,7 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
   --base_url "$OLLAMA_URL")
-AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
+AI_PROVIDER_ID=$(printf '%s\n' "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
 # 16a. Model routes — ordered failover. The first target points at a port with
@@ -1663,20 +1663,20 @@ DEAD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
   --base_url "http://127.0.0.1:1")
-DEAD_PROVIDER_ID=$(echo "$DEAD_PROVIDER_RESP" | jq -r '.id')
+DEAD_PROVIDER_ID=$(printf '%s\n' "$DEAD_PROVIDER_RESP" | jq -r '.id')
 
 MODEL_ROUTE_RESP=$($SOAT_CLI create-model-route \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-failover \
   --targets "[{\"ai_provider_id\":\"$DEAD_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"timeout_seconds\":10},{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\"}]")
-MODEL_ROUTE_ID=$(echo "$MODEL_ROUTE_RESP" | jq -r '.id')
+MODEL_ROUTE_ID=$(printf '%s\n' "$MODEL_ROUTE_RESP" | jq -r '.id')
 echo "Model route id: $MODEL_ROUTE_ID"
 
 $SOAT_CLI get-model-route --route-id "$MODEL_ROUTE_ID" > /dev/null
 $SOAT_CLI list-model-routes --project_id "$PROJECT_PUBLIC_ID" > /dev/null
 
 MODEL_ROUTE_UPDATED=$($SOAT_CLI update-model-route --route-id "$MODEL_ROUTE_ID" --cooldown_seconds 30)
-if [ "$(echo "$MODEL_ROUTE_UPDATED" | jq -r '.cooldown_seconds')" != "30" ]; then
+if [ "$(printf '%s\n' "$MODEL_ROUTE_UPDATED" | jq -r '.cooldown_seconds')" != "30" ]; then
   echo "ERROR: update-model-route did not persist cooldown_seconds" >&2
   echo "$MODEL_ROUTE_UPDATED" >&2
   exit 1
@@ -1702,8 +1702,8 @@ ROUTED_AGENT_RESP=$($SOAT_CLI create-agent \
   --model_route_id "$MODEL_ROUTE_ID" \
   --name smoke-routed-agent \
   --instructions "Answer in one short sentence.")
-ROUTED_AGENT_ID=$(echo "$ROUTED_AGENT_RESP" | jq -r '.id')
-if [ "$(echo "$ROUTED_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
+ROUTED_AGENT_ID=$(printf '%s\n' "$ROUTED_AGENT_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$ROUTED_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
   echo "ERROR: routed agent should have no pinned ai_provider_id" >&2
   echo "$ROUTED_AGENT_RESP" >&2
   exit 1
@@ -1737,7 +1737,7 @@ expect_cli_error_status 400 create-agent \
 
 PROJECT_DEFAULTED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" \
   --default_model_route_id "$MODEL_ROUTE_ID")
-if [ "$(echo "$PROJECT_DEFAULTED" | jq -r '.default_model_route_id')" != "$MODEL_ROUTE_ID" ]; then
+if [ "$(printf '%s\n' "$PROJECT_DEFAULTED" | jq -r '.default_model_route_id')" != "$MODEL_ROUTE_ID" ]; then
   echo "ERROR: update-project did not persist default_model_route_id" >&2
   echo "$PROJECT_DEFAULTED" >&2
   exit 1
@@ -1747,9 +1747,9 @@ INHERITING_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name smoke-inheriting-agent \
   --instructions "Answer in one short sentence.")
-INHERITING_AGENT_ID=$(echo "$INHERITING_AGENT_RESP" | jq -r '.id')
-if [ "$(echo "$INHERITING_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ] ||
-  [ "$(echo "$INHERITING_AGENT_RESP" | jq -r '.model_route_id')" != "null" ]; then
+INHERITING_AGENT_ID=$(printf '%s\n' "$INHERITING_AGENT_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$INHERITING_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ] ||
+  [ "$(printf '%s\n' "$INHERITING_AGENT_RESP" | jq -r '.model_route_id')" != "null" ]; then
   echo "ERROR: inheriting agent should bind neither field" >&2
   echo "$INHERITING_AGENT_RESP" >&2
   exit 1
@@ -1768,15 +1768,15 @@ fi
 
 # A chat that pins no provider inherits the same default.
 INHERITING_CHAT_RESP=$($SOAT_CLI create-chat --project_id "$PROJECT_PUBLIC_ID" --name smoke-inheriting-chat)
-INHERITING_CHAT_ID=$(echo "$INHERITING_CHAT_RESP" | jq -r '.id')
-if [ "$(echo "$INHERITING_CHAT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
+INHERITING_CHAT_ID=$(printf '%s\n' "$INHERITING_CHAT_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$INHERITING_CHAT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
   echo "ERROR: inheriting chat should pin no ai_provider_id" >&2
   echo "$INHERITING_CHAT_RESP" >&2
   exit 1
 fi
 INHERITED_CHAT_RESP=$($SOAT_CLI create-chat-completion-for-chat --chat-id "$INHERITING_CHAT_ID" \
   --messages '[{"role":"user","content":"say hello"}]')
-if [ "$(echo "$INHERITED_CHAT_RESP" | jq -r '.object')" != "chat.completion" ]; then
+if [ "$(printf '%s\n' "$INHERITED_CHAT_RESP" | jq -r '.object')" != "chat.completion" ]; then
   echo "ERROR: inheriting chat completion did not resolve through the project default" >&2
   echo "$INHERITED_CHAT_RESP" >&2
   exit 1
@@ -1801,13 +1801,13 @@ echo "Model route lifecycle OK."
 # 17. Chat completion — valid non-streaming request
 echo "--- Chat completion: valid request ---"
 CHAT_RESP=$($SOAT_CLI create-chat-completion --ai_provider_id "$AI_PROVIDER_ID" --messages '[{"role":"user","content":"say hello"}]')
-CHAT_OBJECT=$(echo "$CHAT_RESP" | jq -r '.object')
+CHAT_OBJECT=$(printf '%s\n' "$CHAT_RESP" | jq -r '.object')
 if [ "$CHAT_OBJECT" != "chat.completion" ]; then
   echo "ERROR: Expected object=chat.completion, got $CHAT_OBJECT" >&2
   echo "$CHAT_RESP" >&2
   exit 1
 fi
-echo "Chat completion OK. Response: $(echo "$CHAT_RESP" | jq -r '.choices[0].message.content' | cut -c1-60)"
+echo "Chat completion OK. Response: $(printf '%s\n' "$CHAT_RESP" | jq -r '.choices[0].message.content' | cut -c1-60)"
 
 # 18. Chat completion — SSE streaming request
 echo "--- Chat completion: SSE streaming ---"
@@ -1830,7 +1830,7 @@ TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Lists all projects from the SOAT API. Call this tool whenever the user asks for the list of projects." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-TOOL_ID=$(echo "$TOOL_RESP" | jq -r '.id')
+TOOL_ID=$(printf '%s\n' "$TOOL_RESP" | jq -r '.id')
 echo "Agent Tool id: $TOOL_ID"
 
 # 19b. Create a pipeline tool that chains the list-projects HTTP tool twice and
@@ -1846,7 +1846,7 @@ PIPELINE_TOOL_RESP=$($SOAT_CLI create-tool \
   --type pipeline \
   --description "Runs list-projects twice and maps both step outputs" \
   --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}},{\"id\":\"b\",\"tool_id\":\"$TOOL_ID\",\"input\":{\"note\":{\"wrapped\":{\"var\":\"steps.a\"}}}}],\"output\":{\"from_a\":{\"var\":\"steps.a\"},\"from_b\":{\"var\":\"steps.b\"},\"echoed\":{\"container\":{\"var\":\"input.tag\"}}}}")
-PIPELINE_TOOL_ID=$(echo "$PIPELINE_TOOL_RESP" | jq -r '.id')
+PIPELINE_TOOL_ID=$(printf '%s\n' "$PIPELINE_TOOL_RESP" | jq -r '.id')
 if [ -z "$PIPELINE_TOOL_ID" ] || [ "$PIPELINE_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create pipeline tool"
   echo "$PIPELINE_TOOL_RESP"
@@ -1883,7 +1883,7 @@ BARE_OUTPUT_PIPELINE_RESP=$($SOAT_CLI create-tool \
   --type pipeline \
   --description "Returns a bare scalar extracted from a step output" \
   --pipeline "{\"steps\":[{\"id\":\"a\",\"tool_id\":\"$TOOL_ID\",\"input\":{}}],\"output\":{\"var\":\"steps.a.data.0.id\"}}")
-BARE_OUTPUT_PIPELINE_ID=$(echo "$BARE_OUTPUT_PIPELINE_RESP" | jq -r '.id')
+BARE_OUTPUT_PIPELINE_ID=$(printf '%s\n' "$BARE_OUTPUT_PIPELINE_RESP" | jq -r '.id')
 if [ -z "$BARE_OUTPUT_PIPELINE_ID" ] || [ "$BARE_OUTPUT_PIPELINE_ID" = "null" ]; then
   echo "FAIL: could not create bare-scalar-output pipeline tool"
   echo "$BARE_OUTPUT_PIPELINE_RESP"
@@ -1913,7 +1913,7 @@ OUTPUT_MAPPING_TOOL_RESP=$($SOAT_CLI create-tool \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
   --output-mapping '{"var":"output.data.0.id"}')
-OUTPUT_MAPPING_TOOL_ID=$(echo "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
+OUTPUT_MAPPING_TOOL_ID=$(printf '%s\n' "$OUTPUT_MAPPING_TOOL_RESP" | jq -r '.id')
 if [ -z "$OUTPUT_MAPPING_TOOL_ID" ] || [ "$OUTPUT_MAPPING_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create http tool with output_mapping"
   echo "$OUTPUT_MAPPING_TOOL_RESP"
@@ -1947,14 +1947,14 @@ MULTIPART_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Uploads a file via multipart/form-data." \
   --parameters '{"type":"object","properties":{"project_id":{"type":"string"},"file":{"type":"object"}},"required":["file"]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/files/upload\",\"method\":\"POST\",\"body_mode\":\"multipart\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-MULTIPART_TOOL_ID=$(echo "$MULTIPART_TOOL_RESP" | jq -r '.id')
+MULTIPART_TOOL_ID=$(printf '%s\n' "$MULTIPART_TOOL_RESP" | jq -r '.id')
 if [ -z "$MULTIPART_TOOL_ID" ] || [ "$MULTIPART_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create multipart http tool"
   echo "$MULTIPART_TOOL_RESP"
   exit 1
 fi
 # body_mode must round-trip verbatim (snake_case) on the stored tool.
-if [ "$(echo "$MULTIPART_TOOL_RESP" | jq -r '.execute.body_mode')" != "multipart" ]; then
+if [ "$(printf '%s\n' "$MULTIPART_TOOL_RESP" | jq -r '.execute.body_mode')" != "multipart" ]; then
   echo "FAIL: stored tool did not persist execute.body_mode=multipart"
   echo "$MULTIPART_TOOL_RESP"
   exit 1
@@ -1984,7 +1984,7 @@ REJECTING_TOOL_RESP=$($SOAT_CLI create-tool \
   --type http \
   --description "Proxies an unauthenticated request to trigger an upstream 401." \
   --execute "{\"url\":\"$SERVER_URL/api/v1/orchestrations\",\"method\":\"GET\"}")
-REJECTING_TOOL_ID=$(echo "$REJECTING_TOOL_RESP" | jq -r '.id')
+REJECTING_TOOL_ID=$(printf '%s\n' "$REJECTING_TOOL_RESP" | jq -r '.id')
 if [ -z "$REJECTING_TOOL_ID" ] || [ "$REJECTING_TOOL_ID" = "null" ]; then
   echo "FAIL: could not create rejecting http tool"
   echo "$REJECTING_TOOL_RESP"
@@ -2014,7 +2014,7 @@ AGENT_RESP=$($SOAT_CLI create-agent \
   --instructions "You are a helpful assistant. When the user asks you to list projects, you MUST call the list-projects tool and return the results. Always use the tool, never make up data." \
   --tool_ids "[\"$TOOL_ID\"]" \
   --max_steps 5)
-AGENT_ID=$(echo "$AGENT_RESP" | jq -r '.id')
+AGENT_ID=$(printf '%s\n' "$AGENT_RESP" | jq -r '.id')
 echo "Agent id: $AGENT_ID"
 
 # 21. Run the agent — ask it to list projects (non-streaming)
@@ -2124,7 +2124,7 @@ DISCUSSION_RESP=$($SOAT_CLI create-discussion \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --max_rounds 1 \
   --participants '[{"name":"Advocate","prompt":"Argue for."},{"name":"Skeptic","prompt":"Argue against."}]')
-DISCUSSION_ID=$(echo "$DISCUSSION_RESP" | jq -r '.id')
+DISCUSSION_ID=$(printf '%s\n' "$DISCUSSION_RESP" | jq -r '.id')
 if [ -z "$DISCUSSION_ID" ] || [ "$DISCUSSION_ID" = "null" ]; then
   echo "ERROR: create-discussion did not return an id" >&2
   echo "$DISCUSSION_RESP" >&2
@@ -2174,7 +2174,7 @@ PROJECT_DETAIL_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Gets the current smoke test project." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-PROJECT_DETAIL_TOOL_ID=$(echo "$PROJECT_DETAIL_TOOL_RESP" | jq -r '.id')
+PROJECT_DETAIL_TOOL_ID=$(printf '%s\n' "$PROJECT_DETAIL_TOOL_RESP" | jq -r '.id')
 echo "Project-detail tool id: $PROJECT_DETAIL_TOOL_ID"
 
 # 22d. Create an agent that echoes the resolved tool_output content
@@ -2186,7 +2186,7 @@ TOOL_OUTPUT_AGENT_RESP=$($SOAT_CLI create-agent \
   --instructions "Repeat the user's last message exactly. Do not add any extra words or punctuation." \
   --tool_ids "[\"$PROJECT_DETAIL_TOOL_ID\"]" \
   --max_steps 2)
-TOOL_OUTPUT_AGENT_ID=$(echo "$TOOL_OUTPUT_AGENT_RESP" | jq -r '.id')
+TOOL_OUTPUT_AGENT_ID=$(printf '%s\n' "$TOOL_OUTPUT_AGENT_RESP" | jq -r '.id')
 echo "Tool-output agent id: $TOOL_OUTPUT_AGENT_ID"
 
 # 22e. Run generation using tool_output content extracted via output_path
@@ -2232,7 +2232,7 @@ GATED_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "Reads the smoke test project; guardrail-gated." \
   --parameters '{"type":"object","properties":{},"required":[]}' \
   --execute "{\"url\":\"$SERVER_URL/api/v1/projects/$PROJECT_PUBLIC_ID\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-GATED_TOOL_ID=$(echo "$GATED_TOOL_RESP" | jq -r '.id')
+GATED_TOOL_ID=$(printf '%s\n' "$GATED_TOOL_RESP" | jq -r '.id')
 echo "Guardrail-gated tool id: $GATED_TOOL_ID"
 
 echo "--- Creating class-C guardrail ---"
@@ -2240,7 +2240,7 @@ GATED_GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-gated-guardrail \
   --document '{"class":"C"}')
-GATED_GUARDRAIL_ID=$(echo "$GATED_GUARDRAIL_RESP" | jq -r '.id')
+GATED_GUARDRAIL_ID=$(printf '%s\n' "$GATED_GUARDRAIL_RESP" | jq -r '.id')
 echo "Class-C guardrail id: $GATED_GUARDRAIL_ID"
 
 echo "--- Creating guardrail-gated agent (agent-scope guardrail_ids) ---"
@@ -2253,11 +2253,11 @@ GATED_AGENT_RESP=$($SOAT_CLI create-agent \
   --guardrail_ids "[\"$GATED_GUARDRAIL_ID\"]" \
   --tool_choice required \
   --max_steps 2)
-GATED_AGENT_ID=$(echo "$GATED_AGENT_RESP" | jq -r '.id')
+GATED_AGENT_ID=$(printf '%s\n' "$GATED_AGENT_RESP" | jq -r '.id')
 echo "Guardrail-gated agent id: $GATED_AGENT_ID"
 
 # The guardrail must attach on the agent (deterministic).
-GATED_ATTACHED=$(echo "$GATED_AGENT_RESP" | jq -r '.guardrail_ids[0] // empty')
+GATED_ATTACHED=$(printf '%s\n' "$GATED_AGENT_RESP" | jq -r '.guardrail_ids[0] // empty')
 if [ "$GATED_ATTACHED" != "$GATED_GUARDRAIL_ID" ]; then
   echo "ERROR: guardrail did not attach to the agent" >&2
   exit 1
@@ -2281,12 +2281,12 @@ GATED_APPROVAL_ID=$($SOAT_CLI list-approvals \
 if [ -n "$GATED_APPROVAL_ID" ]; then
   echo "Filed tool-call approval id: $GATED_APPROVAL_ID"
   APPROVE_RESP=$($SOAT_CLI approve-approval --approval-id "$GATED_APPROVAL_ID" | sanitize_json)
-  APPROVE_STATUS=$(echo "$APPROVE_RESP" | jq -r '.status')
+  APPROVE_STATUS=$(printf '%s\n' "$APPROVE_RESP" | jq -r '.status')
   if [ "$APPROVE_STATUS" != "approved" ]; then
     echo "ERROR: Expected approval status 'approved', got '$APPROVE_STATUS'" >&2
     exit 1
   fi
-  APPROVE_ORIGIN=$(echo "$APPROVE_RESP" | jq -r '.origin')
+  APPROVE_ORIGIN=$(printf '%s\n' "$APPROVE_RESP" | jq -r '.origin')
   if [ "$APPROVE_ORIGIN" != "tool_call" ]; then
     echo "ERROR: Expected approval origin 'tool_call', got '$APPROVE_ORIGIN'" >&2
     exit 1
@@ -2409,7 +2409,7 @@ MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --type mcp \
   --description "SOAT MCP server - exposes all SOAT tools over the MCP protocol." \
   --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
-MCP_TOOL_ID=$(echo "$MCP_TOOL_RESP" | jq -r '.id')
+MCP_TOOL_ID=$(printf '%s\n' "$MCP_TOOL_RESP" | jq -r '.id')
 echo "MCP Agent Tool id: $MCP_TOOL_ID"
 
 # 26. Create an agent backed by the MCP tool
@@ -2421,7 +2421,7 @@ MCP_AGENT_RESP=$($SOAT_CLI create-agent \
   --instructions "You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool exactly once and return a concise summary. Always use the tool." \
   --tool_ids "[\"$MCP_TOOL_ID\"]" \
   --max_steps 2)
-MCP_AGENT_ID=$(echo "$MCP_AGENT_RESP" | jq -r '.id')
+MCP_AGENT_ID=$(printf '%s\n' "$MCP_AGENT_RESP" | jq -r '.id')
 echo "MCP Agent id: $MCP_AGENT_ID"
 
 # 27. Deterministic MCP check (direct protocol call, no LLM)
@@ -2458,10 +2458,10 @@ SCOPED_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "SOAT MCP server scoped to a read-only action." \
   --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
   --actions '["list-agents"]')
-SCOPED_MCP_TOOL_ID=$(echo "$SCOPED_MCP_TOOL_RESP" | jq -r '.id')
+SCOPED_MCP_TOOL_ID=$(printf '%s\n' "$SCOPED_MCP_TOOL_RESP" | jq -r '.id')
 echo "Scoped MCP Tool id: $SCOPED_MCP_TOOL_ID"
 
-SCOPED_MCP_ACTIONS=$(echo "$SCOPED_MCP_TOOL_RESP" | jq -r '.actions | join(",")')
+SCOPED_MCP_ACTIONS=$(printf '%s\n' "$SCOPED_MCP_TOOL_RESP" | jq -r '.actions | join(",")')
 if [ "$SCOPED_MCP_ACTIONS" != "list-agents" ]; then
   echo "ERROR: scoped MCP tool did not round-trip its actions allowlist, got '$SCOPED_MCP_ACTIONS'" >&2
   exit 1
@@ -2495,10 +2495,10 @@ DENY_MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --description "SOAT MCP server with a write action denied." \
   --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
   --denied_actions '["create-agent"]')
-DENY_MCP_TOOL_ID=$(echo "$DENY_MCP_TOOL_RESP" | jq -r '.id')
+DENY_MCP_TOOL_ID=$(printf '%s\n' "$DENY_MCP_TOOL_RESP" | jq -r '.id')
 echo "Denylist MCP Tool id: $DENY_MCP_TOOL_ID"
 
-DENY_MCP_ACTIONS=$(echo "$DENY_MCP_TOOL_RESP" | jq -r '.denied_actions | join(",")')
+DENY_MCP_ACTIONS=$(printf '%s\n' "$DENY_MCP_TOOL_RESP" | jq -r '.denied_actions | join(",")')
 if [ "$DENY_MCP_ACTIONS" != "create-agent" ]; then
   echo "ERROR: denylist MCP tool did not round-trip its denied_actions, got '$DENY_MCP_ACTIONS'" >&2
   exit 1
@@ -2523,7 +2523,7 @@ echo "Denylist MCP action rejected: OK"
 # 27a. OAuth discovery endpoints (required for Claude Connectors / MCP OAuth 2.1)
 echo "--- Validating OAuth discovery endpoints ---"
 OAUTH_AS_META=$(curl -sf "$SERVER_URL/.well-known/oauth-authorization-server")
-if ! echo "$OAUTH_AS_META" | jq -e '.issuer' >/dev/null 2>&1; then
+if ! printf '%s\n' "$OAUTH_AS_META" | jq -e '.issuer' >/dev/null 2>&1; then
   echo "ERROR: /.well-known/oauth-authorization-server did not return expected metadata" >&2
   echo "$OAUTH_AS_META" >&2
   exit 1
@@ -2531,7 +2531,7 @@ fi
 echo "OAuth authorization server metadata: OK"
 
 OAUTH_PR_META=$(curl -sf "$SERVER_URL/.well-known/oauth-protected-resource")
-if ! echo "$OAUTH_PR_META" | jq -e '.resource' >/dev/null 2>&1; then
+if ! printf '%s\n' "$OAUTH_PR_META" | jq -e '.resource' >/dev/null 2>&1; then
   echo "ERROR: /.well-known/oauth-protected-resource did not return expected metadata" >&2
   echo "$OAUTH_PR_META" >&2
   exit 1
@@ -2619,7 +2619,7 @@ CLIENT_TOOL_RESP=$($SOAT_CLI create-tool \
   --type client \
   --description "Returns the current weather for a given city." \
   --parameters '{"type":"object","properties":{"cityName":{"type":"string","description":"The city name"}},"required":["cityName"]}')
-CLIENT_TOOL_ID=$(echo "$CLIENT_TOOL_RESP" | jq -r '.id')
+CLIENT_TOOL_ID=$(printf '%s\n' "$CLIENT_TOOL_RESP" | jq -r '.id')
 if [ -z "$CLIENT_TOOL_ID" ] || [ "$CLIENT_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create client agent tool" >&2
   echo "$CLIENT_TOOL_RESP" >&2
@@ -2637,7 +2637,7 @@ CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
   --tool_ids "[\"$CLIENT_TOOL_ID\"]" \
   --tool_choice '{"type":"tool","tool_name":"get_weather"}' \
   --max_steps 3)
-CLIENT_AGENT_ID=$(echo "$CLIENT_AGENT_RESP" | jq -r '.id')
+CLIENT_AGENT_ID=$(printf '%s\n' "$CLIENT_AGENT_RESP" | jq -r '.id')
 if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create client-tool agent" >&2
   echo "$CLIENT_AGENT_RESP" >&2
@@ -2700,9 +2700,9 @@ SUBMIT_RESP=$($SOAT_CLI submit-agent-tool-outputs \
   --generation-id "$CLIENT_GEN_ID" \
   --tool_outputs "[{\"tool_call_id\":\"$CLIENT_TOOL_CALL_ID\",\"output\":{\"city\":\"Paris\",\"temperature\":\"18C\",\"condition\":\"Partly cloudy\"}}]" | sanitize_json)
 echo "Submit tool output response:"
-echo "$SUBMIT_RESP" | jq .
+printf '%s\n' "$SUBMIT_RESP" | jq .
 
-SUBMIT_STATUS=$(echo "$SUBMIT_RESP" | jq -r '.status')
+SUBMIT_STATUS=$(printf '%s\n' "$SUBMIT_RESP" | jq -r '.status')
 if [ "$SUBMIT_STATUS" != "completed" ]; then
   echo "ERROR: Expected final status 'completed', got '$SUBMIT_STATUS'" >&2
   exit 1
@@ -2982,7 +2982,7 @@ DEL_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
   --base_url "$OLLAMA_URL")
-DEL_PROVIDER_ID=$(echo "$DEL_PROVIDER_RESP" | jq -r '.id')
+DEL_PROVIDER_ID=$(printf '%s\n' "$DEL_PROVIDER_RESP" | jq -r '.id')
 
 # Soft dependent: a price override blocks a plain delete with 409...
 $SOAT_CLI update-ai-provider-prices \
@@ -3004,12 +3004,12 @@ HARD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
   --base_url "$OLLAMA_URL")
-HARD_PROVIDER_ID=$(echo "$HARD_PROVIDER_RESP" | jq -r '.id')
+HARD_PROVIDER_ID=$(printf '%s\n' "$HARD_PROVIDER_RESP" | jq -r '.id')
 HARD_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$HARD_PROVIDER_ID" \
   --name smoke-hardref-agent)
-HARD_AGENT_ID=$(echo "$HARD_AGENT_RESP" | jq -r '.id')
+HARD_AGENT_ID=$(printf '%s\n' "$HARD_AGENT_RESP" | jq -r '.id')
 expect_cli_error_status 409 delete-ai-provider --ai_provider_id "$HARD_PROVIDER_ID" --force true
 echo "AI provider delete blocked by live agent even with force (409): OK"
 # Clean up: remove the agent, then the provider deletes cleanly.
@@ -3083,7 +3083,7 @@ SOAT_TOOL_RESP=$($SOAT_CLI create-tool \
   --type soat \
   --description "SOAT platform actions exposed as tools." \
   --actions '["list-projects"]')
-SOAT_TOOL_ID=$(echo "$SOAT_TOOL_RESP" | jq -r '.id')
+SOAT_TOOL_ID=$(printf '%s\n' "$SOAT_TOOL_RESP" | jq -r '.id')
 if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
   echo "ERROR: Failed to create SOAT agent tool" >&2
   echo "$SOAT_TOOL_RESP" >&2
@@ -3100,7 +3100,7 @@ SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
   --instructions "You are a helpful assistant. Use the SOAT list-projects action to list projects for the user." \
   --tool_ids "[\"$SOAT_TOOL_ID\"]" \
   --max_steps 5)
-SOAT_AGENT_ID=$(echo "$SOAT_AGENT_RESP" | jq -r '.id')
+SOAT_AGENT_ID=$(printf '%s\n' "$SOAT_AGENT_RESP" | jq -r '.id')
 if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create SOAT agent" >&2
   echo "$SOAT_AGENT_RESP" >&2
@@ -3160,7 +3160,7 @@ CONVO_GEN_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name convo-gen-agent \
   --instructions "You are a helpful conversation participant. Reply concisely.")
-CONVO_GEN_AGENT_ID=$(echo "$CONVO_GEN_AGENT_RESP" | jq -r '.id')
+CONVO_GEN_AGENT_ID=$(printf '%s\n' "$CONVO_GEN_AGENT_RESP" | jq -r '.id')
 if [ -z "$CONVO_GEN_AGENT_ID" ] || [ "$CONVO_GEN_AGENT_ID" = "null" ]; then
   echo "ERROR: Failed to create conversation-generate agent" >&2
   echo "$CONVO_GEN_AGENT_RESP" >&2
@@ -3172,8 +3172,8 @@ echo "Conversation-generate agent id: $CONVO_GEN_AGENT_ID"
 echo "--- Creating named conversation ---"
 NAMED_CONVO_RESP=$($SOAT_CLI create-conversation \
   --project_id "$PROJECT_PUBLIC_ID" --name smoke-named-conversation)
-NAMED_CONVO_ID=$(echo "$NAMED_CONVO_RESP" | jq -r '.id')
-NAMED_CONVO_NAME=$(echo "$NAMED_CONVO_RESP" | jq -r '.name')
+NAMED_CONVO_ID=$(printf '%s\n' "$NAMED_CONVO_RESP" | jq -r '.id')
+NAMED_CONVO_NAME=$(printf '%s\n' "$NAMED_CONVO_RESP" | jq -r '.name')
 if [ -z "$NAMED_CONVO_ID" ] || [ "$NAMED_CONVO_ID" = "null" ]; then
   echo "ERROR: Failed to create named conversation" >&2
   echo "$NAMED_CONVO_RESP" >&2
@@ -3188,7 +3188,7 @@ echo "Named conversation id: $NAMED_CONVO_ID, name: $NAMED_CONVO_NAME"
 # 44b. PATCH the conversation name
 echo "--- Patching conversation name ---"
 NAME_PATCH_RESP=$($SOAT_CLI update-conversation --conversation-id "$NAMED_CONVO_ID" --name smoke-renamed-conversation)
-NAME_PATCH_NAME=$(echo "$NAME_PATCH_RESP" | jq -r '.name')
+NAME_PATCH_NAME=$(printf '%s\n' "$NAME_PATCH_RESP" | jq -r '.name')
 if [ "$NAME_PATCH_NAME" != "smoke-renamed-conversation" ]; then
   echo "ERROR: Expected patched name 'smoke-renamed-conversation', got '$NAME_PATCH_NAME'" >&2
   exit 1
@@ -3201,9 +3201,9 @@ AGENT_ACTOR_RESP=$($SOAT_CLI create-actor --agent-id "$CONVO_GEN_AGENT_ID" \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name convo-agent-actor \
   --instructions "Reply as a friendly assistant.")
-AGENT_ACTOR_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.id')
-AGENT_ACTOR_AGENT_ID=$(echo "$AGENT_ACTOR_RESP" | jq -r '.agent_id')
-AGENT_ACTOR_INSTRUCTIONS=$(echo "$AGENT_ACTOR_RESP" | jq -r '.instructions')
+AGENT_ACTOR_ID=$(printf '%s\n' "$AGENT_ACTOR_RESP" | jq -r '.id')
+AGENT_ACTOR_AGENT_ID=$(printf '%s\n' "$AGENT_ACTOR_RESP" | jq -r '.agent_id')
+AGENT_ACTOR_INSTRUCTIONS=$(printf '%s\n' "$AGENT_ACTOR_RESP" | jq -r '.instructions')
 if [ -z "$AGENT_ACTOR_ID" ] || [ "$AGENT_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create agent-backed actor" >&2
   echo "$AGENT_ACTOR_RESP" >&2
@@ -3222,8 +3222,8 @@ echo "Agent-backed actor id: $AGENT_ACTOR_ID, agent_id: $AGENT_ACTOR_AGENT_ID, i
 # 45b. Verify actor fields on GET /actors/:id
 echo "--- Verifying actor shape on GET ---"
 ACTOR_GET_RESP=$($SOAT_CLI get-actor --actor-id "$AGENT_ACTOR_ID")
-ACTOR_GET_AGENT_ID=$(echo "$ACTOR_GET_RESP" | jq -r '.agent_id')
-ACTOR_GET_INSTRUCTIONS=$(echo "$ACTOR_GET_RESP" | jq -r '.instructions')
+ACTOR_GET_AGENT_ID=$(printf '%s\n' "$ACTOR_GET_RESP" | jq -r '.agent_id')
+ACTOR_GET_INSTRUCTIONS=$(printf '%s\n' "$ACTOR_GET_RESP" | jq -r '.instructions')
 if [ "$ACTOR_GET_AGENT_ID" != "$CONVO_GEN_AGENT_ID" ]; then
   echo "ERROR: GET actor returned agent_id='$ACTOR_GET_AGENT_ID', expected '$CONVO_GEN_AGENT_ID'" >&2
   exit 1
@@ -3246,7 +3246,7 @@ echo "Actor mutual exclusion (agent_id+chat_id): OK (400 as expected)"
 # 46. Create a plain user actor for the conversation
 echo "--- Creating user actor for conversation ---"
 USER_ACTOR_RESP=$($SOAT_CLI create-actor --project_id "$PROJECT_PUBLIC_ID" --name convo-user-actor)
-USER_ACTOR_ID=$(echo "$USER_ACTOR_RESP" | jq -r '.id')
+USER_ACTOR_ID=$(printf '%s\n' "$USER_ACTOR_RESP" | jq -r '.id')
 if [ -z "$USER_ACTOR_ID" ] || [ "$USER_ACTOR_ID" = "null" ]; then
   echo "ERROR: Failed to create user actor" >&2
   echo "$USER_ACTOR_RESP" >&2
@@ -3258,7 +3258,7 @@ echo "User actor id: $USER_ACTOR_ID"
 echo "--- Adding user message to conversation ---"
 USER_MSG_RESP=$($SOAT_CLI add-conversation-message \
   --conversation-id "$NAMED_CONVO_ID" --message "Hello, how are you?" --role user --actor_id "$USER_ACTOR_ID")
-USER_MSG_DOC_ID=$(echo "$USER_MSG_RESP" | jq -r '.document_id')
+USER_MSG_DOC_ID=$(printf '%s\n' "$USER_MSG_RESP" | jq -r '.document_id')
 if [ -z "$USER_MSG_DOC_ID" ] || [ "$USER_MSG_DOC_ID" = "null" ]; then
   echo "ERROR: Failed to add user message" >&2
   echo "$USER_MSG_RESP" >&2
@@ -3294,10 +3294,13 @@ echo "Conversation generate: OK (message document_id: $CONVO_GEN_MSG_ID)"
 
 # 48b. Verify the generated message is listed in conversation messages
 echo "--- Verifying generated message persisted ---"
-# Persisted messages echo the model's output, which can contain raw control
-# characters; strip them so jq (strict since 1.7) can parse the response.
+# Persisted messages echo the model's output. Two hazards, both handled:
+# `sanitize_json` strips raw control bytes the API may embed, and the response is
+# piped with `printf '%s\n'` rather than `echo` — POSIX `echo` expands the `\n`
+# escapes inside JSON string values into real newlines, which is itself what makes
+# jq (strict since 1.7) reject the document.
 CONVO_MSGS_RESP=$($SOAT_CLI list-conversation-messages --conversation-id "$NAMED_CONVO_ID" | sanitize_json)
-MSG_COUNT=$(echo "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
+MSG_COUNT=$(printf '%s\n' "$CONVO_MSGS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$MSG_COUNT" -lt "2" ]; then
   echo "ERROR: Expected at least 2 conversation messages (user + generated), got $MSG_COUNT" >&2
   exit 1
@@ -3307,7 +3310,7 @@ echo "Conversation messages count: $MSG_COUNT (OK)"
 # 49. Verify GET /actors?conversation_id= lists the user actor
 echo "--- Verifying GET /actors?conversation_id= ---"
 CONVO_ACTORS_RESP=$($SOAT_CLI list-actors --conversation-id "$NAMED_CONVO_ID")
-CONVO_ACTORS_COUNT=$(echo "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
+CONVO_ACTORS_COUNT=$(printf '%s\n' "$CONVO_ACTORS_RESP" | jq 'if type=="array" then length else (.data | length) end')
 if [ "$CONVO_ACTORS_COUNT" -lt "1" ]; then
   echo "ERROR: Expected at least 1 actor in conversation, got $CONVO_ACTORS_COUNT" >&2
   exit 1
@@ -3357,7 +3360,7 @@ WEBHOOK_CREATE_RESP=$($SOAT_CLI create-webhook --project-id "$PROJECT_PUBLIC_ID"
   --name "Smoke Webhook" \
   --url "https://example.com/smoke-hook" \
   --events '["file.*"]')
-WEBHOOK_ID=$(echo "$WEBHOOK_CREATE_RESP" | jq -r '.id')
+WEBHOOK_ID=$(printf '%s\n' "$WEBHOOK_CREATE_RESP" | jq -r '.id')
 if [ -z "$WEBHOOK_ID" ] || [ "$WEBHOOK_ID" = "null" ]; then
   echo "ERROR: Failed to create webhook" >&2
   echo "$WEBHOOK_CREATE_RESP" >&2
@@ -4055,7 +4058,7 @@ echo "add-session-message idempotency_key: OK"
 echo ""
 echo "--- Project delete-block and force-delete ---"
 DEL_PROJECT_RESP=$($SOAT_CLI create-project --name smoke-delete-project)
-DEL_PROJECT_ID=$(echo "$DEL_PROJECT_RESP" | jq -r '.id')
+DEL_PROJECT_ID=$(printf '%s\n' "$DEL_PROJECT_RESP" | jq -r '.id')
 
 DEL_AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --project_id "$DEL_PROJECT_ID" \
@@ -4063,13 +4066,13 @@ DEL_AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
   --base_url "$OLLAMA_URL")
-DEL_AI_PROVIDER_ID=$(echo "$DEL_AI_PROVIDER_RESP" | jq -r '.id')
+DEL_AI_PROVIDER_ID=$(printf '%s\n' "$DEL_AI_PROVIDER_RESP" | jq -r '.id')
 
 DEL_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$DEL_PROJECT_ID" \
   --ai_provider_id "$DEL_AI_PROVIDER_ID" \
   --name smoke-delete-agent)
-DEL_AGENT_ID=$(echo "$DEL_AGENT_RESP" | jq -r '.id')
+DEL_AGENT_ID=$(printf '%s\n' "$DEL_AGENT_RESP" | jq -r '.id')
 
 expect_cli_error_status 409 delete-project --project-id "$DEL_PROJECT_ID"
 echo "Project delete-block: OK (409 PROJECT_HAS_DEPENDENTS as expected)"
@@ -4252,7 +4255,7 @@ GUARDRAIL_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-budget-guardrail \
   --document '{"default_class":"C","class":{"if":[{"<":[{"var":"args.amount"},500]},"B","C"]},"guard":{"<":[{"var":"soat.usage.cost_usd_24h"},1000000]}}')
-GUARDRAIL_ID=$(echo "$GUARDRAIL_RESP" | jq -r '.id')
+GUARDRAIL_ID=$(printf '%s\n' "$GUARDRAIL_RESP" | jq -r '.id')
 if [ -z "$GUARDRAIL_ID" ] || [ "$GUARDRAIL_ID" = "null" ]; then
   echo "ERROR: Failed to create guardrail" >&2
   echo "$GUARDRAIL_RESP" >&2
@@ -4266,8 +4269,8 @@ fi
 
 # Dry-run: below the threshold classifies B and the spend guard passes → execute.
 DRYRUN_LOW=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":100}')
-if [ "$(echo "$DRYRUN_LOW" | jq -r '.class')" != "B" ] || \
-   [ "$(echo "$DRYRUN_LOW" | jq -r '.decision')" != "execute" ]; then
+if [ "$(printf '%s\n' "$DRYRUN_LOW" | jq -r '.class')" != "B" ] || \
+   [ "$(printf '%s\n' "$DRYRUN_LOW" | jq -r '.decision')" != "execute" ]; then
   echo "ERROR: dry-run (amount 100) expected class B / execute" >&2
   echo "$DRYRUN_LOW" >&2
   exit 1
@@ -4275,8 +4278,8 @@ fi
 
 # Dry-run: at/above the threshold classifies C → route_to_approval. Nothing runs.
 DRYRUN_HIGH=$($SOAT_CLI evaluate-guardrail --guardrail-id "$GUARDRAIL_ID" --args '{"amount":999}')
-if [ "$(echo "$DRYRUN_HIGH" | jq -r '.class')" != "C" ] || \
-   [ "$(echo "$DRYRUN_HIGH" | jq -r '.decision')" != "route_to_approval" ]; then
+if [ "$(printf '%s\n' "$DRYRUN_HIGH" | jq -r '.class')" != "C" ] || \
+   [ "$(printf '%s\n' "$DRYRUN_HIGH" | jq -r '.decision')" != "route_to_approval" ]; then
   echo "ERROR: dry-run (amount 999) expected class C / route_to_approval" >&2
   echo "$DRYRUN_HIGH" >&2
   exit 1
@@ -4292,7 +4295,7 @@ RUN_CEILING_RESP=$($SOAT_CLI create-guardrail \
   --project-id "$PROJECT_PUBLIC_ID" \
   --name smoke-run-ceiling-guardrail \
   --document '{"class":"B","guard":{"<":[{"var":"soat.usage.run_tokens"},{"var":"context.action_token_ceiling"}]}}')
-RUN_CEILING_ID=$(echo "$RUN_CEILING_RESP" | jq -r '.id')
+RUN_CEILING_ID=$(printf '%s\n' "$RUN_CEILING_RESP" | jq -r '.id')
 if [ -z "$RUN_CEILING_ID" ] || [ "$RUN_CEILING_ID" = "null" ]; then
   echo "ERROR: soat.usage.run_tokens was rejected by the guardrail catalog" >&2
   echo "$RUN_CEILING_RESP" >&2
@@ -4302,7 +4305,7 @@ fi
 DRYRUN_RUN_CEILING=$($SOAT_CLI evaluate-guardrail \
   --guardrail-id "$RUN_CEILING_ID" \
   --guardrail-context '{"action_token_ceiling":1000000}')
-if [ "$(echo "$DRYRUN_RUN_CEILING" | jq -r '.decision')" != "tripwire" ]; then
+if [ "$(printf '%s\n' "$DRYRUN_RUN_CEILING" | jq -r '.decision')" != "tripwire" ]; then
   echo "ERROR: run-scoped ceiling did not fail closed outside a run" >&2
   echo "$DRYRUN_RUN_CEILING" >&2
   exit 1
@@ -4318,7 +4321,7 @@ echo "--- Quotas coverage ---"
 QUOTA_CREATE_RESP=$($SOAT_CLI create-quota \
   --project-id "$PROJECT_PUBLIC_ID" --scope project --metric requests \
   --window rolling_1h --limit 500)
-QUOTA_ID=$(echo "$QUOTA_CREATE_RESP" | jq -r '.id')
+QUOTA_ID=$(printf '%s\n' "$QUOTA_CREATE_RESP" | jq -r '.id')
 if [ -z "$QUOTA_ID" ] || [ "$QUOTA_ID" = "null" ]; then
   echo "ERROR: Failed to create quota" >&2
   echo "$QUOTA_CREATE_RESP" >&2
@@ -4326,14 +4329,14 @@ if [ -z "$QUOTA_ID" ] || [ "$QUOTA_ID" = "null" ]; then
 fi
 
 QUOTA_LIST_RESP=$($SOAT_CLI list-quotas --project-id "$PROJECT_PUBLIC_ID")
-if ! echo "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.data[] | select(.id == $id)' >/dev/null 2>&1; then
+if ! printf '%s\n' "$QUOTA_LIST_RESP" | jq -e --arg id "$QUOTA_ID" '.data[] | select(.id == $id)' >/dev/null 2>&1; then
   echo "ERROR: Created quota not found in list" >&2
   echo "$QUOTA_LIST_RESP" >&2
   exit 1
 fi
 
 QUOTA_GET_RESP=$($SOAT_CLI get-quota --quota-id "$QUOTA_ID")
-if [ "$(echo "$QUOTA_GET_RESP" | jq -r '.current_usage.count')" = "null" ]; then
+if [ "$(printf '%s\n' "$QUOTA_GET_RESP" | jq -r '.current_usage.count')" = "null" ]; then
   echo "ERROR: Expected current_usage on a requests quota" >&2
   echo "$QUOTA_GET_RESP" >&2
   exit 1
@@ -4389,12 +4392,12 @@ if [ -z "$ACTOR_QUOTA_ID" ] || [ "$ACTOR_QUOTA_ID" = "null" ]; then
   exit 1
 fi
 ACTOR_QUOTA_GET=$($SOAT_CLI get-quota --quota-id "$ACTOR_QUOTA_ID")
-if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope')" != "actor" ]; then
+if [ "$(printf '%s\n' "$ACTOR_QUOTA_GET" | jq -r '.scope')" != "actor" ]; then
   echo "ERROR: Expected scope=actor on the actor quota" >&2
   echo "$ACTOR_QUOTA_GET" >&2
   exit 1
 fi
-if [ "$(echo "$ACTOR_QUOTA_GET" | jq -r '.scope_ref')" != "$QUOTA_ACTOR_ID" ]; then
+if [ "$(printf '%s\n' "$ACTOR_QUOTA_GET" | jq -r '.scope_ref')" != "$QUOTA_ACTOR_ID" ]; then
   echo "ERROR: Expected the actor quota scope_ref to name the actor" >&2
   echo "$ACTOR_QUOTA_GET" >&2
   exit 1
