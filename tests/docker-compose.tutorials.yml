@@ -36,6 +36,40 @@ services:
       retries: 60
       start_period: 60s
 
+  # Ollama's OpenAI-compatible endpoint does not implement `tool_choice` — it
+  # silently drops the field — so an agent that forces a specific tool gets no
+  # forcing at all and the run pauses only when the 0.5b model happens to
+  # volunteer a tool call. This shim implements that one missing field
+  # deterministically and forwards everything else (including embeddings) to the
+  # real Ollama, so every other step still runs against the real model.
+  # See tests/mocks/ollamaToolChoiceProxy.mjs.
+  ollama-tool-choice:
+    image: node:22-alpine
+    depends_on:
+      ollama:
+        condition: service_healthy
+    volumes:
+      - ./mocks/ollamaToolChoiceProxy.mjs:/ollamaToolChoiceProxy.mjs:ro
+    command: ['node', '/ollamaToolChoiceProxy.mjs']
+    environment:
+      PORT: '11434'
+      OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
+      # Only these tools have their forcing honored deterministically — the client-tools tutorial.
+      # Every other forced tool still goes to the real model.
+      TOOL_CHOICE_TOOLS: 'get_order_status'
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - '-e'
+        - >-
+          require('http').get('http://localhost:11434/health',
+          (r) => process.exit(r.statusCode === 200 ? 0 : 1)
+          ).on('error', () => process.exit(1))
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   # Deterministic stand-ins for the external provider APIs the converter tutorial
   # calls: the OpenAI Responses API for the image *agent* converter (image → OCR
   # text) and an xAI-shaped speech-to-text REST endpoint for the audio *tool*
@@ -79,6 +113,8 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
+      ollama-tool-choice:
+        condition: service_healthy
     environment:
       PORT: 5047
       DATABASE_HOST: database
@@ -92,7 +128,7 @@ services:
       EMBEDDING_PROVIDER: ollama
       EMBEDDING_MODEL: qwen3-embedding:0.6b
       EMBEDDING_DIMENSIONS: '1024'
-      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_BASE_URL: http://ollama-tool-choice:11434
       NODE_OPTIONS: '--max-old-space-size=768'
       DEBUG: 'soat:*'
     healthcheck:

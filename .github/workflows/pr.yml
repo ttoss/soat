@@ -47,6 +47,9 @@ jobs:
       - name: Docs lint (drift guardrail)
         run: pnpm run docs-lint
 
+      - name: Test test-harness scripts
+        run: pnpm run test:harness
+
   build-test-and-deploy:
     name: Build, Test and Deploy
     runs-on: ubuntu-latest

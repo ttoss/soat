@@ -39,6 +39,9 @@ jobs:
       - name: Build and test
         run: pnpm turbo run build typecheck lint test
 
+      - name: Test test-harness scripts
+        run: pnpm run test:harness
+
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest

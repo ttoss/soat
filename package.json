@@ -17,6 +17,7 @@
   "scripts": {
     "prepare": "husky",
     "docs-lint": "node scripts/docs-lint.mjs",
+    "test:harness": "node --test \"tests/harness/*.test.mjs\"",
     "smoke-tests": "docker compose -f tests/docker-compose.smoke.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from smoke-test",
     "postsmoke-tests": "docker compose -f tests/docker-compose.smoke.yml down --volumes",
     "tutorials-tests": "docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials",
