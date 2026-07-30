@@ -134,27 +134,52 @@ export const resolveSchemaRef = (args: {
 };
 
 /**
- * JSON-Schema primitive the MCP `inputSchema` collapses a value to, mirroring
- * `getJsonSchemaType` in the server's `soatToolsHelpers.ts`. This is the type an
- * MCP client actually sees, so the MCP docs report it rather than the richer
- * OpenAPI label.
+ * Label for the JSON Schema shape the MCP `inputSchema` actually advertises for
+ * a property, mirroring `buildTypedProperty`/`getJsonSchemaType` in the
+ * server's `soatToolsHelpers.ts`. This is the type an MCP client actually
+ * sees, so the MCP docs report it rather than the richer OpenAPI label:
+ *
+ * - `oneOf`/`anyOf` are forwarded as a union of their member types rather than
+ *   collapsed to a guessed primitive (e.g. `tool_choice` accepts a string or
+ *   an object).
+ * - A property with neither `type` nor `oneOf`/`anyOf` accepts any shape —
+ *   the server does not guess a type for it, so the docs must not either.
+ * - `nullable: true` is rendered as `<type> | null`, matching the two-entry
+ *   `type` array (`['number', 'null']`) the server advertises.
  */
+const SCALAR_MCP_TYPE_LABELS: Record<string, string> = {
+  integer: 'number',
+  number: 'number',
+  boolean: 'boolean',
+  object: 'object',
+};
+
 export const getMcpTypeLabel = (args: {
   schema?: JsonSchema;
   spec: OpenApiSpec;
 }): string => {
   const { schema, spec } = args;
-  if (!schema) return 'string';
+  if (!schema) return 'any';
   const resolved = resolveSchemaRef({ schema, spec });
-  const type = resolved.type;
-  if (type === 'integer' || type === 'number') return 'number';
-  if (type === 'boolean') return 'boolean';
-  if (type === 'object') return 'object';
-  if (type === 'array') {
-    const itemType = getMcpTypeLabel({ schema: resolved.items, spec });
-    return `array<${itemType}>`;
-  }
-  return 'string';
+
+  const getBaseLabel = (): string => {
+    const alternatives = resolved.oneOf ?? resolved.anyOf;
+    if (alternatives && alternatives.length > 0) {
+      return alternatives
+        .map((alternative) => {
+          return getMcpTypeLabel({ schema: alternative, spec });
+        })
+        .join(' | ');
+    }
+    if (resolved.type === undefined) return 'any';
+    if (resolved.type === 'array') {
+      return `array<${getMcpTypeLabel({ schema: resolved.items, spec })}>`;
+    }
+    return SCALAR_MCP_TYPE_LABELS[resolved.type] ?? 'string';
+  };
+
+  const label = getBaseLabel();
+  return resolved.nullable ? `${label} | null` : label;
 };
 
 export const camelize = (name: string): string => {
