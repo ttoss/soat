@@ -330,7 +330,7 @@ The card is `open` in `triage`.
 
 Firing `start` moves the card into `create_text`, whose `on_enter` **dispatches the
 agent**. From there the card walks the chain on its own: each state's `on_complete`
-rule fires the next transition **as the `automation` actor**, re-entering a new
+rule fires the next transition **as the `automation` principal**, re-entering a new
 state that dispatches the agent again. While a generation runs the card shows
 `automation_status: running`; the poem-so-far accumulates in `payload.last_result`
 until the card lands in `review`.
@@ -455,7 +455,7 @@ Automation-driven moves carry their `generation_id` as provenance.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat get-task-history --task-id "$TASK_ID" | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.actor_kind)]  \(.transition // "(initial)")"'
+soat get-task-history --task-id "$TASK_ID" | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
 ```
 
 </TabItem>
@@ -463,13 +463,13 @@ soat get-task-history --task-id "$TASK_ID" | jq -r '.[] | "\(.from_state // "∅
 
 ```bash
 curl -s "$SOAT_URL/api/v1/tasks/$TASK_ID/history" -H "Authorization: Bearer $ADMIN_TOKEN" \
-  | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.actor_kind)]  \(.transition // "(initial)")"'
+  | jq -r '.[] | "\(.from_state // "∅") → \(.to_state)  [\(.principal_kind)]  \(.transition // "(initial)")"'
 ```
 
 </TabItem>
 </Tabs>
 
-You will see the full trail, including the `automation`-actor stanza chain
+You will see the full trail, including the `automation`-principal stanza chain
 (`create_text → stanza_1 → … → stanza_4 → review`) and the backward
 `review → create_text` — the entity's whole life, audited.
 

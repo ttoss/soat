@@ -99,7 +99,7 @@ application-side state.
 | `name`              | string         | Unique within the workflow; the name a caller fires               |
 | `from`              | string[]       | Source states this transition is valid from                       |
 | `to`                | string         | The single destination state                                      |
-| `guard`             | object \| null | [JSON Logic](https://jsonlogic.com) over `{task, transition, actor}`; a false result rejects the move with `TASK_GUARD_REJECTED` |
+| `guard`             | object \| null | [JSON Logic](https://jsonlogic.com) over `{task, transition, principal}`; a false result rejects the move with `TASK_GUARD_REJECTED` |
 | `requires_approval` | boolean        | Gate the move behind a human approval. Firing it parks a pending approval instead of transitioning. See [Approval-gated transitions](#approval-gated-transitions). |
 
 A transition not defined here **cannot be fired by anyone** — there is no
@@ -117,7 +117,7 @@ state in `from`) if a workflow needs one.
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
 | `payload`           | object           | Mutable task data; input to guards and dispatch `input_mapping`s        |
-| `assignee`          | string \| null   | Informational in v1 (user/actor public ID)                              |
+| `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any          |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
@@ -137,8 +137,8 @@ contract for a task. `GET /tasks/{id}/history` returns them oldest-first.
 | `from_state`    | string \| null  | Source state (`null` on the initial placement)                    |
 | `to_state`      | string          | Destination state                                                 |
 | `transition`    | string \| null  | Transition name fired (`null` for the initial placement)          |
-| `actor_kind`    | string          | `user` \| `api_key` \| `automation` \| `approval`                 |
-| `actor_id`      | string \| null  | Principal or automation provenance. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted; for automation it is the causing generation/run id |
+| `principal_kind`| string          | `user` \| `api_key` \| `automation` \| `approval`                 |
+| `principal_id`  | string \| null  | The principal that made the move. For `api_key` auth this is the API key's own id (`key_…`), distinguishing which key acted. `null` for `automation`, which has no principal — read `generation_id` / `orchestration_run_id` for the cause |
 | `generation_id` | string \| null  | The agent generation that caused the move (set for both `on_complete` routing and `on_failure`, linking the failed generation) |
 | `orchestration_run_id`        | string \| null  | The orchestration run that caused the move, when automation-driven |
 | `note`          | string \| null  | Optional reason supplied by the caller                            |
@@ -175,14 +175,14 @@ run when a task enters it, and routes the outcome back into a transition:
   over `{task}` that resolves the dispatch input from the task payload — the same
   expression language orchestrations use.
 - **`on_complete`** — labeled rules evaluated in order against `{task, result}`;
-  the first match fires its transition **as the `automation` actor** (subject to
+  the first match fires its transition **as the `automation` principal** (subject to
   the same guards). An agent dispatch exposes its generation output under
   `{result}`; an orchestration dispatch exposes its final run state. The result
   is also written to `task.payload.last_result` for downstream states. No rule
   matches → the task stays put with `automation_status: completed` and a
   `tasks.automation_unrouted` event fires (never silently stuck). A rule
   matches but its transition is rejected (its guard fails for the `automation`
-  actor, or a concurrent move invalidated it) → the task stays put with
+  principal, or a concurrent move invalidated it) → the task stays put with
   `automation_status: unrouted` and a `tasks.automation_rejected` event fires
   (carrying the matched `transition` and the rejection `errorCode`) — again,
   never silently stuck.
@@ -237,7 +237,7 @@ task.
 
 Resolve the gate through the standard [approvals](./approvals.md) endpoints:
 
-- **Approve** → the transition is fired **as the `approval` actor** through the
+- **Approve** → the transition is fired **as the `approval` principal** through the
   same single transition path. Its guard is **re-evaluated at resolution time**
   against the committed state, so a gate can be filed before the payload that
   satisfies its guard is set. If the move is no longer valid then (its guard now
@@ -245,11 +245,11 @@ Resolve the gate through the standard [approvals](./approvals.md) endpoints:
   `tasks.approval_failed` event fires carrying the `transition` and `errorCode` —
   surfaced, never silently dropped.
 - **Reject** → the gate is cleared and a note is appended to the task's history
-  (`actor_kind: approval`, `transition: null`). The task never moved.
+  (`principal_kind: approval`, `transition: null`). The task never moved.
 - **Expire** → the approvals module's server-side expiry sweeper flips the item
   to `expired`; the gate is cleared and an expiry note is appended to history.
 
-The gated move, when it applies, is recorded in history as the `approval` actor.
+The gated move, when it applies, is recorded in history as the `approval` principal.
 
 ### Stall detection
 
@@ -443,7 +443,7 @@ soat transition-task --task-id "$TASK_ID" --transition publish
 APPROVAL_ID=$(soat list-approvals --project-id "$PROJECT_ID" --status pending \
   | jq -r --arg t "$TASK_ID" '.[] | select(.task_id == $t) | .id' | head -n1)
 
-# Approving fires the gated transition as the `approval` actor.
+# Approving fires the gated transition as the `approval` principal.
 soat approve-approval --approval-id "$APPROVAL_ID"
 ```
 
@@ -462,7 +462,7 @@ const { data: pending } = await soat.approvals.listApprovals({
 });
 const gate = pending.find((a) => a.task_id === TASK_ID)!;
 
-// Approving fires the gated transition as the `approval` actor.
+// Approving fires the gated transition as the `approval` principal.
 await soat.approvals.approveApproval({ path: { approval_id: gate.id } });
 ```
 

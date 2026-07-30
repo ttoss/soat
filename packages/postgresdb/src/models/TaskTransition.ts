@@ -69,13 +69,17 @@ export class TaskTransition extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare transition: string | null;
 
-  // user | api_key | automation | approval.
+  // user | api_key | automation | approval. Named `principal*`, not `actor*`, to
+  // avoid confusion with the unrelated Actor resource — the values here are
+  // never actor public ids.
   @Column({ type: DataType.STRING, allowNull: false })
-  declare actorKind: string;
+  declare principalKind: string;
 
-  // Principal or automation provenance (public ID).
+  // The principal that made the move (a user or API key public ID). Null for
+  // `automation`, which has no principal — the cause is carried by
+  // `generationId` / `orchestrationRunId` instead.
   @Column({ type: DataType.STRING, allowNull: true })
-  declare actorId: string | null;
+  declare principalId: string | null;
 
   // Dispatch that caused the move.
   @Column({ type: DataType.STRING, allowNull: true })

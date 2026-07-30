@@ -11,8 +11,8 @@ import {
   findTaskInstance,
   mapTask,
   stateByName,
-  type TaskActor,
   type TaskInstance,
+  type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
 import {
@@ -61,14 +61,14 @@ const cancelDispatchOnExit = async (args: {
 const evaluateGuard = (args: {
   transition: WorkflowTransition;
   task: TaskInstance;
-  actor: TaskActor;
+  principal: TaskPrincipal;
 }): void => {
   if (args.transition.guard == null) return;
   const ok = Boolean(
     evaluateLogic(args.transition.guard, {
       task: buildTaskContext(args.task),
       transition: { name: args.transition.name },
-      actor: args.actor,
+      principal: args.principal,
     })
   );
   if (!ok) {
@@ -84,7 +84,7 @@ type TransitionArgs = {
   id: string;
   transition: string;
   note?: string | null;
-  actor: TaskActor;
+  principal: TaskPrincipal;
   generationId?: string | null;
   orchestrationRunId?: string | null;
 };
@@ -107,8 +107,8 @@ const resolveLockedTransition = (args: {
   }
   // While a transition is parked awaiting approval the task is a true park: no
   // principal may move it out from under the pending gate. Only the `approval`
-  // actor (the resolution firing the gated transition) passes.
-  if (task.pendingTransition && a.actor.kind !== 'approval') {
+  // principal (the resolution firing the gated transition) passes.
+  if (task.pendingTransition && a.principal.kind !== 'approval') {
     throw new DomainError(
       'TASK_TRANSITION_CONFLICT',
       `Task '${a.id}' has transition '${task.pendingTransition}' pending approval.`,
@@ -127,7 +127,7 @@ const resolveLockedTransition = (args: {
       { transition: a.transition, fromState: task.state }
     );
   }
-  evaluateGuard({ transition, task, actor: a.actor });
+  evaluateGuard({ transition, task, principal: a.principal });
   return transition;
 };
 
@@ -185,8 +185,8 @@ const performTransitionTxn = async (args: {
         fromState,
         toState: transition.to,
         transition: transition.name,
-        actorKind: a.actor.kind,
-        actorId: a.actor.id,
+        principalKind: a.principal.kind,
+        principalId: a.principal.id,
         generationId: a.generationId ?? null,
         orchestrationRunId: a.orchestrationRunId ?? null,
         note: a.note ?? null,
@@ -207,10 +207,10 @@ const performTransitionTxn = async (args: {
  */
 export const transitionTask = async (args: TransitionArgs) => {
   log(
-    'transitionTask: id=%s transition=%s actor=%s',
+    'transitionTask: id=%s transition=%s principal=%s',
     args.id,
     args.transition,
-    args.actor.kind
+    args.principal.kind
   );
 
   const loaded = await findTaskInstance({ id: args.id });
@@ -235,11 +235,14 @@ export const transitionTask = async (args: TransitionArgs) => {
   }
 
   // Approval-gated: a `requires_approval` transition fired by anyone other than
-  // the `approval` actor (the resolution itself) parks as an ApprovalItem
-  // instead of applying. The gated move is re-fired here as the `approval` actor
-  // when the item resolves, so guards are re-evaluated against the committed
-  // state at resolution time (§6.5).
-  if (definition.requiresApproval === true && args.actor.kind !== 'approval') {
+  // the `approval` principal (the resolution itself) parks as an ApprovalItem
+  // instead of applying. The gated move is re-fired here as the `approval`
+  // principal when the item resolves, so guards are re-evaluated against the
+  // committed state at resolution time (§6.5).
+  if (
+    definition.requiresApproval === true &&
+    args.principal.kind !== 'approval'
+  ) {
     return parkTransitionForApproval({
       task: loaded,
       transition: definition,

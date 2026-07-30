@@ -364,16 +364,28 @@ components:
         transition:
           type: string
           nullable: true
-        actor_kind:
+        principal_kind:
           type: string
+          description: >
+            Who made the move. `user` and `api_key` are authenticated
+            principals; `automation` (the engine acting on an `on_enter`
+            dispatch outcome) and `approval` (an approval resolution) are system
+            principals. Named `principal_*`, not `actor_*`: these ids never
+            reference the Actors module.
           enum:
             - user
             - api_key
             - automation
             - approval
-        actor_id:
+        principal_id:
           type: string
           nullable: true
+          description: >
+            Public id of the principal that made the move — the user
+            (`user_...`), or for `api_key` auth the key's own id (`key_...`),
+            distinguishing which key acted. Null for `automation`, which has no
+            principal: the cause is carried by `generation_id` /
+            `orchestration_run_id`.
         generation_id:
           type: string
           nullable: true

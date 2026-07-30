@@ -112,7 +112,7 @@ export class Task extends Model {
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
   declare payload: Record<string, unknown>;
 
-  // Informational in v1 (user/actor public ID).
+  // Informational in v1: a user or actor public ID, not interpreted by the engine.
   @Column({ type: DataType.STRING, allowNull: true })
   declare assignee: string | null;
 
