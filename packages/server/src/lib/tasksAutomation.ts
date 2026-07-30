@@ -72,7 +72,7 @@ const setDispatchState = async (args: {
 };
 
 // Transition failures that mean the matched rule could not be applied — the
-// automation actor was guard-rejected, or a concurrent move invalidated the
+// automation principal was guard-rejected, or a concurrent move invalidated the
 // transition. Both must be surfaced, not swallowed, so the task is never left
 // silently parked as `completed` (PRD §6.3).
 const REJECTION_CODES: ReadonlySet<string> = new Set([
@@ -181,10 +181,9 @@ const routeOnComplete = async (args: {
       await transitionTask({
         id: args.taskPublicId,
         transition: matched.transition,
-        actor: {
-          kind: 'automation',
-          id: args.generationId ?? args.orchestrationRunId ?? null,
-        },
+        // No principal moved the task: `generationId` / `orchestrationRunId`
+        // below carry the cause, so the id is not duplicated here (#786).
+        principal: { kind: 'automation', id: null },
         generationId: args.generationId,
         orchestrationRunId: args.orchestrationRunId,
       });
@@ -262,7 +261,7 @@ const handleFailure = async (args: {
     await transitionTask({
       id: args.taskPublicId,
       transition: args.onEnter.onFailure,
-      actor: { kind: 'automation', id: failedId },
+      principal: { kind: 'automation', id: null },
       generationId,
       orchestrationRunId,
     });

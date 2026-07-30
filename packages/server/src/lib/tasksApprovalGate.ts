@@ -214,8 +214,8 @@ const appendResolutionNote = async (args: {
     fromState: task.state,
     toState: task.state,
     transition: null,
-    actorKind: 'approval',
-    actorId: args.resolvedBy,
+    principalKind: 'approval',
+    principalId: args.resolvedBy,
     generationId: null,
     orchestrationRunId: null,
     note,
@@ -223,7 +223,7 @@ const appendResolutionNote = async (args: {
 };
 
 // Fires the approved transition through `transitionTask` as the `approval`
-// actor. Guards re-run against the committed state; a now-invalid move is
+// principal. Guards re-run against the committed state; a now-invalid move is
 // surfaced (a `tasks.approval_failed` event + a cleared gate) rather than
 // leaving the task parked against a resolved approval.
 const applyApprovedTransition = async (args: {
@@ -242,7 +242,7 @@ const applyApprovedTransition = async (args: {
     await transitionTask({
       id: item.task_id,
       transition: item.task_transition,
-      actor: { kind: 'approval', id: decision.resolvedBy },
+      principal: { kind: 'approval', id: decision.resolvedBy },
       note: `Approved via approval ${item.id}.`,
     });
   } catch (error) {

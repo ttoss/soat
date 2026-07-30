@@ -238,7 +238,8 @@ components:
       description: >-
         A named, directional move. `from` is a list of source states; `to` is
         one target state. `guard` is a JSON Logic expression over
-        `{task, transition, actor}` that must be truthy for the move to apply.
+        `{task, transition, principal}` that must be truthy for the move to
+        apply.
       additionalProperties: true
       required:
         - name
@@ -263,7 +264,7 @@ components:
             transition (by anyone other than the approval resolution itself)
             parks a pending `ApprovalItem` instead of moving the task; the task
             exposes `pending_transition` until the item resolves. Approval fires
-            the transition as the `approval` actor (its guard re-evaluated at
+            the transition as the `approval` principal (its guard re-evaluated at
             resolution time); rejection or expiry clears the gate and appends a
             history note.
     Workflow:

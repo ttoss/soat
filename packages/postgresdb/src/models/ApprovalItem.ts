@@ -144,7 +144,7 @@ export class ApprovalItem extends Model {
 
   // Set on `task_transition` items (Phase 3): the gated task's public id and the
   // transition name to fire on approval. Resolution re-fires it through
-  // `transitionTask` as the `approval` actor.
+  // `transitionTask` as the `approval` principal.
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare taskId: string | null;
 

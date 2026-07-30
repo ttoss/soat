@@ -93,7 +93,7 @@ The two producers share the item lifecycle but suspend differently:
 - **Task transition — the gate parks.** A `requires_approval` transition files
   the item and sets `pending_transition` on the task; the task keeps its state
   and no other transition may fire until the item resolves. Approval fires the
-  transition as the `approval` actor (guard re-evaluated then); rejection or
+  transition as the `approval` principal (guard re-evaluated then); rejection or
   expiry clears the gate and appends a note to the task's history. See
   [Workflows](./workflows.md#approval-gated-transitions).
 - **Tool-call interception — return-pending.** A synchronous generation cannot

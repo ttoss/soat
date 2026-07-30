@@ -4100,12 +4100,24 @@ expect_cli_error_status 409 transition-task --task-id "$TASK_ID" --transition re
 echo "Closed-task guard: OK (409 as expected)"
 
 # History is append-only: initial + start + to_review + revise + to_review + publish = 6.
-HIST_COUNT=$($SOAT_CLI get-task-history --task-id "$TASK_ID" | jq 'length')
+TASK_HISTORY=$($SOAT_CLI get-task-history --task-id "$TASK_ID")
+HIST_COUNT=$(printf '%s\n' "$TASK_HISTORY" | jq 'length')
 if [ "$HIST_COUNT" -lt 6 ]; then
   echo "ERROR: expected >= 6 history rows, got $HIST_COUNT" >&2
   exit 1
 fi
 echo "Transition history: OK ($HIST_COUNT rows)"
+
+# Every row names the principal that moved the task (never `actor_*`, which
+# would collide with the unrelated Actors module).
+HIST_PRINCIPAL_OK=$(printf '%s\n' "$TASK_HISTORY" | jq -r \
+  'all(.[]; (.principal_kind | type == "string") and (has("actor_kind") | not))')
+if [ "$HIST_PRINCIPAL_OK" != "true" ]; then
+  echo "ERROR: task history rows missing principal_kind (or still exposing actor_kind)" >&2
+  printf '%s\n' "$TASK_HISTORY" >&2
+  exit 1
+fi
+echo "Transition history principal_kind: OK"
 
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null

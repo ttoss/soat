@@ -11,10 +11,21 @@ export { transitionTask } from './tasksTransition';
 
 const log = createDebug('soat:tasks');
 
-export type TaskActorKind = 'user' | 'api_key' | 'automation' | 'approval';
+/**
+ * Who moved a task. `principal`, not `actor`: the ids here come from Users and
+ * API Keys, never from the Actors module. `automation` and `approval` are the
+ * engine's own system principals.
+ */
+export type TaskPrincipalKind = 'user' | 'api_key' | 'automation' | 'approval';
 
-export type TaskActor = {
-  kind: TaskActorKind;
+export type TaskPrincipal = {
+  kind: TaskPrincipalKind;
+  /**
+   * The principal's public id (`user_…` / `key_…`), or null when there is no
+   * principal behind the move. Always null for `automation` — a generation or
+   * orchestration run is a *cause*, and it is recorded as such in
+   * `generationId` / `orchestrationRunId`.
+   */
   id: string | null;
 };
 
@@ -238,7 +249,7 @@ export const createTask = async (args: {
   title: string;
   payload?: Record<string, unknown> | null;
   assignee?: string | null;
-  actor: TaskActor;
+  principal: TaskPrincipal;
 }) => {
   log(
     'createTask: projectId=%d workflowId=%s title=%s',
@@ -289,8 +300,8 @@ export const createTask = async (args: {
     fromState: null,
     toState: initial.name,
     transition: null,
-    actorKind: args.actor.kind,
-    actorId: args.actor.id,
+    principalKind: args.principal.kind,
+    principalId: args.principal.id,
     generationId: null,
     orchestrationRunId: null,
     note: null,
@@ -386,8 +397,8 @@ export const getTaskHistory = async (args: { id: string }) => {
       from_state: row.fromState,
       to_state: row.toState,
       transition: row.transition,
-      actor_kind: row.actorKind,
-      actor_id: row.actorId,
+      principal_kind: row.principalKind,
+      principal_id: row.principalId,
       generation_id: row.generationId,
       orchestration_run_id: row.orchestrationRunId,
       note: row.note,

@@ -48,7 +48,7 @@ const pollTask = async (args: {
 };
 
 type HistoryRow = {
-  actor_kind: string;
+  principal_kind: string;
   transition: string | null;
   note: string | null;
 };
@@ -78,6 +78,7 @@ describe('Tasks', () => {
   let projectId: string;
   let workflowId: string;
   let agentId: string;
+  let userId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -103,6 +104,7 @@ describe('Tasks', () => {
     userToken = setup.userToken;
     noPermToken = setup.noPermToken as string;
     projectId = setup.projectId;
+    userId = setup.userId;
 
     const aiProv = await authenticatedTestClient(adminToken)
       .post('/api/v1/ai-providers')
@@ -170,7 +172,11 @@ describe('Tasks', () => {
       expect(history.body).toHaveLength(1);
       expect(history.body[0].from_state).toBeNull();
       expect(history.body[0].to_state).toBe('triage');
-      expect(history.body[0].actor_kind).toBe('user');
+      expect(history.body[0].principal_kind).toBe('user');
+      expect(history.body[0].principal_id).toBe(userId);
+      // The pre-#786 names are gone from the wire, not aliased.
+      expect(history.body[0].actor_kind).toBeUndefined();
+      expect(history.body[0].actor_id).toBeUndefined();
     });
 
     test('rejects a payload that violates payload_schema', async () => {
@@ -200,7 +206,7 @@ describe('Tasks', () => {
       expect(res.status).toBe(403);
     });
 
-    test('history actor_id is the API key id (not the owner user id) for api_key auth (#608)', async () => {
+    test('history principal_id is the API key id (not the owner user id) for api_key auth (#608)', async () => {
       // The user creates an unscoped API key it owns; the key inherits the
       // owner's permissions.
       const keyRes = await authenticatedTestClient(userToken)
@@ -226,9 +232,9 @@ describe('Tasks', () => {
           `/api/v1/tasks/${created.body.id}/history`
         )
       ).body;
-      expect(history[0].actor_kind).toBe('api_key');
+      expect(history[0].principal_kind).toBe('api_key');
       // The forensic value: the specific key, distinguishable from the owner.
-      expect(history[0].actor_id).toBe(keyPublicId);
+      expect(history[0].principal_id).toBe(keyPublicId);
     });
   });
 
@@ -287,6 +293,76 @@ describe('Tasks', () => {
       const again = await transition(task.id, 'to_draft');
       expect(again.status).toBe(409);
       expect(again.body.error.code).toBe('TASK_TRANSITION_CONFLICT');
+    });
+
+    test('a guard reads the firing principal as `principal` (#786)', async () => {
+      // A guard that only a `user` principal satisfies. If the guard context
+      // did not bind `principal`, `var` would resolve to null and this move
+      // would be rejected — so a 200 here proves the binding.
+      const wf = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'principal-guard',
+            states: [{ name: 'start', initial: true }, { name: 'done' }],
+            transitions: [
+              {
+                name: 'advance',
+                from: ['start'],
+                to: 'done',
+                guard: { '==': [{ var: 'principal.kind' }, 'user'] },
+              },
+            ],
+          })
+      ).body.id;
+
+      const task = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: wf,
+          title: 'principal guard',
+        })
+      ).body;
+
+      const moved = await transition(task.id, 'advance');
+      expect(moved.status).toBe(200);
+      expect(moved.body.state).toBe('done');
+    });
+
+    test('a guard on the removed `actor` name no longer resolves (#786)', async () => {
+      // `actor` was renamed to `principal`; the old name is not aliased, so a
+      // guard still reading `actor.kind` resolves to null and rejects the move.
+      // This pins the rename as a real break rather than a silent dual-binding.
+      const wf = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'legacy-actor-guard',
+            states: [{ name: 'start', initial: true }, { name: 'done' }],
+            transitions: [
+              {
+                name: 'advance',
+                from: ['start'],
+                to: 'done',
+                guard: { '==': [{ var: 'actor.kind' }, 'user'] },
+              },
+            ],
+          })
+      ).body.id;
+
+      const task = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: wf,
+          title: 'legacy actor guard',
+        })
+      ).body;
+
+      const res = await transition(task.id, 'advance');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TASK_GUARD_REJECTED');
     });
 
     test('an unknown transition name is 400 TASK_TRANSITION_NOT_FOUND', async () => {
@@ -604,7 +680,9 @@ describe('Tasks', () => {
         })
       );
 
-      // The routed move was recorded as the `automation` actor with provenance.
+      // The routed move was recorded as the `automation` principal with
+      // provenance. There is no principal behind an automated move, so
+      // `principal_id` is null and the cause lives only in `generation_id`.
       const history = (
         await authenticatedTestClient(userToken).get(
           `/api/v1/tasks/${created.body.id}/history`
@@ -613,7 +691,8 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.actor_kind).toBe('automation');
+      expect(routed.principal_kind).toBe('automation');
+      expect(routed.principal_id).toBeNull();
       expect(routed.generation_id).toBe('gen_test1');
     });
   });
@@ -778,7 +857,7 @@ describe('Tasks', () => {
             name: 'advance',
             from: ['writing'],
             to: 'approved',
-            guard: { '==': [{ var: 'actor.kind' }, 'user'] },
+            guard: { '==': [{ var: 'principal.kind' }, 'user'] },
           },
         ],
       });
@@ -871,10 +950,12 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.actor_kind).toBe('automation');
+      expect(routed.principal_kind).toBe('automation');
       // The causing (failed) generation is linked so a reader can jump to its trace.
       expect(routed.generation_id).toBe('gen_failed607');
-      expect(routed.actor_id).toBe('gen_failed607');
+      // The cause is not a principal: it is carried by `generation_id` alone,
+      // never duplicated into the principal field (#786).
+      expect(routed.principal_id).toBeNull();
     });
 
     test('an orchestration dispatch runs the pipeline and routes on_complete', async () => {
@@ -925,8 +1006,11 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_done';
       });
-      expect(routed.actor_kind).toBe('automation');
+      expect(routed.principal_kind).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
+      // An orchestration run is a cause, not a principal — it is never copied
+      // into `principal_id` (#786).
+      expect(routed.principal_id).toBeNull();
     });
 
     test('a failed orchestration dispatch sets automation_status and follows on_failure, not on_complete', async () => {
@@ -994,8 +1078,9 @@ describe('Tasks', () => {
       const routed = history.find((h: { transition: string }) => {
         return h.transition === 'to_failed';
       });
-      expect(routed.actor_kind).toBe('automation');
+      expect(routed.principal_kind).toBe('automation');
       expect(typeof routed.orchestration_run_id).toBe('string');
+      expect(routed.principal_id).toBeNull();
     });
 
     test('a failed orchestration dispatch with no on_failure leaves the task parked, not routed by on_complete', async () => {
@@ -1451,7 +1536,7 @@ describe('Tasks', () => {
       const move = history.find((h: { transition: string }) => {
         return h.transition === 'publish';
       });
-      expect(move.actor_kind).toBe('approval');
+      expect(move.principal_kind).toBe('approval');
       expect(move.to_state).toBe('published');
     });
 
@@ -1479,7 +1564,7 @@ describe('Tasks', () => {
         )
       ).body;
       const note = history[history.length - 1];
-      expect(note.actor_kind).toBe('approval');
+      expect(note.principal_kind).toBe('approval');
       expect(note.transition).toBeNull();
       expect(note.note).toMatch(/rejected/i);
     });
@@ -1513,7 +1598,9 @@ describe('Tasks', () => {
         taskId,
         predicate: (h) => {
           return h.some((r) => {
-            return r.actor_kind === 'approval' && /expired/i.test(r.note ?? '');
+            return (
+              r.principal_kind === 'approval' && /expired/i.test(r.note ?? '')
+            );
           });
         },
       });
