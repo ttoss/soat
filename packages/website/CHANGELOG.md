@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.17.5](https://127.0.0.1/41729/git/ttoss/compare/v0.17.4...v0.17.5) (2026-07-30)
+
+### Bug Fixes
+
+* **website:** retry forced tool_choice generation in client-tools tutorial ([#772](https://127.0.0.1/41729/git/ttoss/issues/772)) ([22aec70](https://127.0.0.1/41729/git/ttoss/commits/22aec70accdc7e1da1716674a3b7a7423fd1faa4))
+
 ## [0.17.4](https://127.0.0.1/41729/git/ttoss/compare/v0.17.3...v0.17.4) (2026-07-29)
 
 **Note:** Version bump only for package @soat/website
