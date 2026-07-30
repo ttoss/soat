@@ -9,6 +9,7 @@ import type { AgentToolBinding } from '../agentToolBindings';
 import { bindingsFromLegacyFields } from '../agentToolBindings';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
+import { validateModelRouteExclusivity } from '../modelRoutes';
 import {
   normalizePropertyKeys,
   toNullableArray,
@@ -62,6 +63,33 @@ const pushToolBindingErrors = (args: {
   }
 };
 
+/**
+ * The pinned-provider vs model-route invariant, enforced with the same exported
+ * rule the REST handlers use (`.claude/rules/modules.md`, Shared Business
+ * Rules). A declaring template must name exactly one; an update that mentions
+ * neither field leaves the stored binding untouched, so "neither" is only an
+ * error when the template is declaring the agent's binding.
+ */
+const pushModelBindingErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+  forUpdate?: boolean;
+}): void => {
+  const { properties, basePath, errors, forUpdate } = args;
+  const declaresBinding =
+    properties.ai_provider_id !== undefined ||
+    properties.model_route_id !== undefined;
+  if (forUpdate && !declaresBinding) return;
+
+  const message = validateModelRouteExclusivity({
+    modelRouteId: properties.model_route_id,
+    aiProviderId: properties.ai_provider_id,
+    model: properties.model,
+  });
+  if (message) errors.push({ path: basePath, message });
+};
+
 const validateAgentProperties = (args: {
   properties: unknown;
   basePath: string;
@@ -105,6 +133,8 @@ const validateAgentProperties = (args: {
   }
 
   pushToolBindingErrors({ properties, basePath, errors });
+
+  pushModelBindingErrors({ properties, basePath, errors, forUpdate });
 
   return errors;
 };
@@ -157,7 +187,8 @@ const toOptional = <T>(value: T | null | undefined): T | undefined => {
 
 const mapAgentProperties = (properties: Record<string, unknown>) => {
   return {
-    aiProviderId: properties.ai_provider_id as string,
+    aiProviderId: toOptionalString(properties.ai_provider_id),
+    modelRouteId: toOptionalString(properties.model_route_id),
     name: toOptionalString(properties.name),
     instructions: toOptionalString(properties.instructions),
     model: toOptionalString(properties.model),
@@ -237,7 +268,12 @@ export const agentsFormationModule: FormationModule = {
     const properties = normalizePropertyKeys(rawProperties);
     await updateAgent({
       id: physicalResourceId,
-      aiProviderId: toOptionalString(properties.ai_provider_id),
+      // Same semantics as a REST PATCH: an explicit `null` clears the binding,
+      // an undeclared field leaves it alone. Switching an agent to a route
+      // therefore declares `model_route_id` together with
+      // `ai_provider_id: null`.
+      aiProviderId: toNullableString(properties.ai_provider_id),
+      modelRouteId: toNullableString(properties.model_route_id),
       name: toNullableString(properties.name),
       instructions: toNullableString(properties.instructions),
       model: toNullableString(properties.model),
@@ -268,6 +304,7 @@ export const agentsFormationModule: FormationModule = {
       const agent = await getAgent({ id: physicalResourceId });
       return {
         ai_provider_id: agent.ai_provider_id,
+        model_route_id: agent.model_route_id,
         name: agent.name,
         instructions: agent.instructions,
         model: agent.model,

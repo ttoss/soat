@@ -307,10 +307,12 @@ components:
             afterwards (via the update-generation request), plus
             server-owned keys: `action_id` (the logical action label supplied on
             the generate request), `trigger_id` (set when a trigger initiated
-            the generation), and `extraction` — set when the agent's
+            the generation), `extraction` — set when the agent's
             `knowledge_config.extraction` produced a memory-extraction summary
-            for this turn (`candidates`, `created`, `updated`, `skipped`).
-            Internal recovery state is never included here.
+            for this turn (`candidates`, `created`, `updated`, `skipped`) — and
+            `routing`, set when the agent resolved its model through a
+            [model route](/docs/modules/model-routes). Internal recovery state is
+            never included here.
           properties:
             action_id:
               type: string
@@ -338,6 +340,50 @@ components:
                 skipped:
                   type: integer
                   description: Number of candidates skipped (e.g. duplicates)
+            routing:
+              type: object
+              nullable: true
+              description: >
+                What the model route did for this generation. Present only when
+                the agent resolves its model through a `model_route_id`.
+              properties:
+                route_id:
+                  x-soat-ref: model-routes
+                  type: string
+                  description: The route that resolved the model
+                target_index:
+                  type: integer
+                  nullable: true
+                  description: >
+                    Position in the route's `targets` of the target that served
+                    the last LLM call; null when every attempt failed.
+                fallbacks:
+                  type: integer
+                  description: >
+                    How many times the route moved past a target during this
+                    generation (cumulative across a multi-step run).
+                attempts:
+                  type: array
+                  description: >
+                    Every attempt, in order, across every LLM call of the run.
+                    An attempt with no `error_class` succeeded.
+                  items:
+                    type: object
+                    properties:
+                      target_index:
+                        type: integer
+                      ai_provider_id:
+                        x-soat-ref: ai-providers
+                        type: string
+                      model:
+                        type: string
+                      error_class:
+                        type: string
+                        enum: [provider_error, timeout, rate_limited]
+                        description: >
+                          Why the attempt failed. Absent on the serving attempt,
+                          and absent on a deterministic failure (which fails the
+                          generation instead of failing over).
         created_at:
           type: string
           format: date-time

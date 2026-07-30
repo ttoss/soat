@@ -89,6 +89,7 @@ const sidebars: SidebarsConfig = {
           label: 'Agents & Conversations',
           items: [
             'modules/ai-providers',
+            'modules/model-routes',
             'modules/agents',
             'modules/tools',
             'modules/sessions',

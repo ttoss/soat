@@ -1,4 +1,4 @@
-import type { LanguageModelUsage } from 'ai';
+import type { LanguageModel, LanguageModelUsage } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
@@ -8,6 +8,7 @@ import type {
 } from './agentGenerationHelpers';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload } from './providerError';
 import { recordTraceError, saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
@@ -24,6 +25,8 @@ export const recordGenerationFailure = async (args: {
   generationId: string;
   traceId: string;
   error: unknown;
+  /** The model the failed turn ran on — a routed one stamps its attempts. */
+  model?: LanguageModel;
 }): Promise<unknown> => {
   const errorPayload = buildGenerationErrorPayload(args.error);
 
@@ -47,6 +50,10 @@ export const recordGenerationFailure = async (args: {
       traceId: args.traceId,
       error: errorPayload,
     }),
+    // Every attempt the route burned is named on the generation even though it
+    // ultimately failed — that is what makes the unmetered-failed-attempt gap
+    // visible rather than silent.
+    saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
   ]);
 
   // Meta keys are
@@ -101,6 +108,10 @@ const runCompletionSideEffects = async (
       status: 'completed',
       completedAt: new Date(),
       stopReason: args.result.finishReason,
+    }),
+    saveRoutingMetadata({
+      generationId: args.generationId,
+      model: args.pending.resolvedModel,
     }),
     // The tool-outputs continuation is a separate completion path from
     // `buildCompletedGenerationResult`/`runStreamGeneration`'s `onEnd` — both

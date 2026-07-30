@@ -1,3 +1,4 @@
+import type { LanguageModel } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { db } from '../db';
@@ -14,6 +15,7 @@ import {
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import { getGeneration, updateGenerationRecord } from './generations';
+import { buildRoutedModel, loadModelRouteConfig } from './modelRoutes';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
@@ -30,6 +32,7 @@ export const resolveAgentForGeneration = async (args: {
     include: [
       { model: db.Project, as: 'project' },
       { model: db.AiProvider, as: 'aiProvider' },
+      { model: db.ModelRoute, as: 'modelRoute' },
     ],
   });
 
@@ -148,6 +151,39 @@ const resolveRecoveryTools = async (args: {
   });
 };
 
+/**
+ * The `LanguageModel` a resumed generation continues on: the agent's model
+ * route (composite, with failover) or its pinned provider. Returns `undefined`
+ * when neither resolves, which the caller reports as an unrecoverable pending
+ * generation.
+ */
+const resolveResumptionModel = async (
+  typedAgent: TypedAgent
+): Promise<LanguageModel | undefined> => {
+  if (typedAgent.modelRoute) {
+    const route = await loadModelRouteConfig({
+      modelRouteId: typedAgent.modelRoute.publicId,
+    });
+    return buildRoutedModel({ route });
+  }
+
+  /* istanbul ignore next -- exclusivity guarantees one of the two is set */
+  if (!typedAgent.aiProvider) return undefined;
+
+  const resolved = await resolveAiProviderSecret({
+    aiProviderId: typedAgent.aiProvider.publicId,
+  });
+  if (!resolved) return undefined;
+
+  return buildModel({
+    provider: resolved.provider,
+    secretValue: resolved.secretValue,
+    model: typedAgent.model ?? resolved.defaultModel,
+    baseUrl: resolved.baseUrl,
+    config: resolved.config as Record<string, unknown> | undefined,
+  });
+};
+
 const buildPendingFromState = async (args: {
   generationId: string;
   agentId: string;
@@ -157,18 +193,11 @@ const buildPendingFromState = async (args: {
   traceId: string;
   pendingState: PendingStateDb;
 }): Promise<PendingGeneration | undefined> => {
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.typedAgent.aiProvider.publicId,
-  });
-  if (!resolved) return undefined;
-
-  const model = buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
+  // A route-only agent has no pinned provider, so the resumption path has to
+  // resolve the route too — a client-tool continuation is the least-traveled
+  // consumer and would otherwise be the one place routing silently broke.
+  const model = await resolveResumptionModel(args.typedAgent);
+  if (!model) return undefined;
 
   const resolvedTools = await resolveRecoveryTools(args);
 

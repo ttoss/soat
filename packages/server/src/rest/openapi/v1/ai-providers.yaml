@@ -280,8 +280,9 @@ paths:
         Deletes an AI provider configuration.
 
 
-        Live references — chats, agents, and discussions that use this provider —
-        always block deletion with `409 AI_PROVIDER_HAS_DEPENDENTS`; `force` does
+        Live references — chats, agents, discussions, and model routes whose
+        targets name this provider — always block deletion with
+        `409 AI_PROVIDER_HAS_DEPENDENTS`; `force` does
         not override them, so delete or repoint those resources first. Soft
         dependents — price overrides, usage/generation records, and discussion
         participants — also block with `409` unless `force=true`, which deletes
@@ -304,7 +305,7 @@ paths:
             When `true`, delete the provider's price overrides and unlink its
             usage/participant history so a provider with only soft dependents can
             be removed. Has no effect on live references (chats, agents,
-            discussions), which always block deletion.
+            discussions, model routes), which always block deletion.
           schema:
             type: boolean
             default: false

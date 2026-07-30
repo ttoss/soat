@@ -1653,6 +1653,83 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
+# 16a. Model routes — ordered failover. The first target points at a port with
+# nothing listening, so the attempt fails at the connection level
+# (provider_error) and the route falls through to the working Ollama target.
+echo "--- Creating model route (dead primary, healthy fallback) ---"
+DEAD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-dead-provider \
+  --provider ollama \
+  --default_model "qwen2.5:0.5b" \
+  --base_url "http://127.0.0.1:1")
+DEAD_PROVIDER_ID=$(echo "$DEAD_PROVIDER_RESP" | jq -r '.id')
+
+MODEL_ROUTE_RESP=$($SOAT_CLI create-model-route \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-failover \
+  --targets "[{\"ai_provider_id\":\"$DEAD_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"timeout_seconds\":10},{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\"}]")
+MODEL_ROUTE_ID=$(echo "$MODEL_ROUTE_RESP" | jq -r '.id')
+echo "Model route id: $MODEL_ROUTE_ID"
+
+$SOAT_CLI get-model-route --route-id "$MODEL_ROUTE_ID" > /dev/null
+$SOAT_CLI list-model-routes --project_id "$PROJECT_PUBLIC_ID" > /dev/null
+
+MODEL_ROUTE_UPDATED=$($SOAT_CLI update-model-route --route-id "$MODEL_ROUTE_ID" --cooldown_seconds 30)
+if [ "$(echo "$MODEL_ROUTE_UPDATED" | jq -r '.cooldown_seconds')" != "30" ]; then
+  echo "ERROR: update-model-route did not persist cooldown_seconds" >&2
+  echo "$MODEL_ROUTE_UPDATED" >&2
+  exit 1
+fi
+
+# An attempt budget above the cap is rejected at write time, not clamped.
+echo "--- Model route: 400 when the attempt budget exceeds the cap ---"
+expect_cli_error_status 400 create-model-route \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-over-cap \
+  --targets "[{\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"model\":\"qwen2.5:0.5b\",\"max_retries\":20}]"
+
+# 16b. A routed agent has no pinned provider, and both bindings at once is a 400.
+echo "--- Creating routed agent ---"
+expect_cli_error_status 400 create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --model_route_id "$MODEL_ROUTE_ID" \
+  --name smoke-both-bindings
+
+ROUTED_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --model_route_id "$MODEL_ROUTE_ID" \
+  --name smoke-routed-agent \
+  --instructions "Answer in one short sentence.")
+ROUTED_AGENT_ID=$(echo "$ROUTED_AGENT_RESP" | jq -r '.id')
+if [ "$(echo "$ROUTED_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
+  echo "ERROR: routed agent should have no pinned ai_provider_id" >&2
+  echo "$ROUTED_AGENT_RESP" >&2
+  exit 1
+fi
+echo "Routed agent id: $ROUTED_AGENT_ID"
+
+echo "--- Running routed agent generation (must fail over to the healthy target) ---"
+ROUTED_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$ROUTED_AGENT_ID" \
+  --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
+ROUTED_GEN_STATUS=$(printf '%s\n' "$ROUTED_GEN_RESP" | jq -r '.status')
+if [ "$ROUTED_GEN_STATUS" != "completed" ]; then
+  echo "ERROR: Expected routed generation status 'completed', got '$ROUTED_GEN_STATUS'" >&2
+  printf '%s\n' "$ROUTED_GEN_RESP" >&2
+  exit 1
+fi
+echo "Routed generation completed via the fallback target."
+
+# A route referenced by an agent cannot be deleted.
+echo "--- Model route: 409 while an agent references it ---"
+expect_cli_error_status 409 delete-model-route --route-id "$MODEL_ROUTE_ID"
+
+$SOAT_CLI delete-agent --agent-id "$ROUTED_AGENT_ID" --force true
+$SOAT_CLI delete-model-route --route-id "$MODEL_ROUTE_ID"
+$SOAT_CLI delete-ai-provider --ai-provider-id "$DEAD_PROVIDER_ID" --force true
+echo "Model route lifecycle OK."
+
 # 17. Chat completion — valid non-streaming request
 echo "--- Chat completion: valid request ---"
 CHAT_RESP=$($SOAT_CLI create-chat-completion --ai_provider_id "$AI_PROVIDER_ID" --messages '[{"role":"user","content":"say hello"}]')

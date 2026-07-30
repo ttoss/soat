@@ -25,6 +25,7 @@ export { GuardrailVersion } from './GuardrailVersion';
 export { IngestionRule } from './IngestionRule';
 export { Memory } from './Memory';
 export { MemoryEntry } from './MemoryEntry';
+export { ModelRoute } from './ModelRoute';
 export { OauthAuthCode } from './OauthAuthCode';
 export { OauthClient } from './OauthClient';
 export { OauthConsentGrant } from './OauthConsentGrant';

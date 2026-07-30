@@ -25,6 +25,7 @@ export const PUBLIC_ID_PREFIXES = {
   session: 'sess_',
   memory: 'mem_',
   memoryEntry: 'mem_entry_',
+  modelRoute: 'route_',
   orchestration: 'orch_',
   orchestrationRun: 'orch_run_',
   orchestrationRunTask: 'orch_task_',

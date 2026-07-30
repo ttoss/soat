@@ -1748,6 +1748,112 @@ describe('camelCase unknown-key normalization', () => {
   );
 });
 
+// ── agent model binding (formations sync for model_route_id) ────────────────
+
+describe('agentsFormationModule model binding', () => {
+  const createRoute = async (name: string): Promise<string> => {
+    const res = await authenticatedTestClient(adminToken)
+      .post('/api/v1/model-routes')
+      .send({
+        project_id: projectId,
+        name,
+        targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o-mini' }],
+      });
+    expect(res.status).toBe(201);
+    return res.body.id;
+  };
+
+  test('round-trips model_route_id in snake_case', async () => {
+    const routeId = await createRoute('formation-route-a');
+
+    const agentId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'Routed Formation Agent',
+        model_route_id: routeId,
+      },
+    });
+
+    const read = await readModule('agent').read?.({
+      physicalResourceId: agentId,
+    });
+    expect(read).toMatchObject({
+      model_route_id: routeId,
+      ai_provider_id: null,
+    });
+  });
+
+  test('switches a pinned agent to a route when the pin is explicitly cleared', async () => {
+    const routeId = await createRoute('formation-route-b');
+
+    const agentId = await applyCreateResource({
+      resourceType: 'agent',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'Switching Agent',
+        ai_provider_id: aiProviderId,
+      },
+    });
+
+    await applyUpdateResource({
+      resourceType: 'agent',
+      physicalResourceId: agentId,
+      resolvedProperties: {
+        name: 'Switching Agent',
+        model_route_id: routeId,
+        ai_provider_id: null,
+      },
+    });
+
+    expect(
+      await readModule('agent').read?.({ physicalResourceId: agentId })
+    ).toMatchObject({ model_route_id: routeId, ai_provider_id: null });
+  });
+
+  test('rejects a template declaring both a provider and a route', async () => {
+    const routeId = await createRoute('formation-route-c');
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'agent',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'Both Agent',
+          ai_provider_id: aiProviderId,
+          model_route_id: routeId,
+        },
+      })
+    ).rejects.toThrow(/mutually exclusive/);
+  });
+
+  test('rejects a template declaring neither', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'agent',
+        projectId: internalProjectId,
+        resolvedProperties: { name: 'Unbound Agent' },
+      })
+    ).rejects.toThrow(/exactly one of/);
+  });
+
+  test('rejects combining model with a route', async () => {
+    const routeId = await createRoute('formation-route-d');
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'agent',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'Route And Model Agent',
+          model_route_id: routeId,
+          model: 'gpt-4o-mini',
+        },
+      })
+    ).rejects.toThrow(/each route target names its own model/);
+  });
+});
+
 // ── ingestion rule converter rules ──────────────────────────────────────────
 
 describe('ingestionRulesFormationModule', () => {

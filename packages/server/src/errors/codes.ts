@@ -100,7 +100,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The AI provider still has dependents. Live references (chats, agents, discussions) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records, discussion participants) block only until force=true, which drops the overrides and unlinks usage/participant history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
+      'The AI provider still has dependents. Live references (chats, agents, discussions, model-route targets) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records, discussion participants) block only until force=true, which drops the overrides and unlinks usage/participant history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
   },
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
@@ -457,6 +457,15 @@ export const ERROR_CODES = {
     httpStatus: 409,
     description:
       'A quota with the same (project, scope, scope_ref, metric, window) already exists. The all-enforce precedence rule makes duplicates pure redundancy, so a duplicate is rejected instead of stored.',
+  },
+  MODEL_ROUTE_NOT_FOUND: {
+    httpStatus: 400,
+    description: 'A referenced model route does not exist in the project.',
+  },
+  MODEL_ROUTE_HAS_DEPENDENTS: {
+    httpStatus: 409,
+    description:
+      'The model route is referenced by one or more agents and cannot be deleted. Repoint or delete the referencing agents first; the error meta reports the count and a sample of agent IDs.',
   },
 } as const satisfies Record<
   string,

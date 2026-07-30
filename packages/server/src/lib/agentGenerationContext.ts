@@ -24,6 +24,11 @@ import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
+import {
+  buildRoutedModel,
+  loadModelRouteConfig,
+  ROUTED_PROVIDER_LABEL,
+} from './modelRoutes';
 
 const log = createDebug('soat:generation');
 
@@ -41,12 +46,33 @@ const resolveGenerationModel = async (args: {
   agentId: string;
   typedAgent: TypedAgent;
 }) => {
+  const modelRoute = args.typedAgent.modelRoute;
+  if (modelRoute) {
+    const route = await loadModelRouteConfig({
+      modelRouteId: modelRoute.publicId,
+    });
+    return {
+      model: await buildRoutedModel({ route }),
+      provider: ROUTED_PROVIDER_LABEL,
+    };
+  }
+
+  // Exclusivity guarantees a pinned provider once no route is set; this only
+  // fires if a row violates it (never reachable through a write path).
+  /* istanbul ignore next */
+  if (!args.typedAgent.aiProvider) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `Agent '${args.agentId}' has neither an AI provider nor a model route.`
+    );
+  }
+
   const resolved = await resolveAiProviderSecret({
     aiProviderId: args.typedAgent.aiProvider.publicId,
   });
 
-  // Defensive TOCTOU guard: the agent is loaded with its aiProvider join
-  // (aiProviderId is a NOT NULL FK), so a consistent DB always resolves the
+  // Defensive TOCTOU guard: the agent is loaded with its aiProvider join and
+  // the guard above proved it is set, so a consistent DB always resolves the
   // secret here. This branch only fires if the provider row is deleted
   // between the agent load and this lookup — unreachable through any entry
   // point without racing a concurrent delete or mocking an owned module.

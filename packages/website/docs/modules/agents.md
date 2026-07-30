@@ -33,7 +33,8 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 | -------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `id`                       | string        | Unique identifier (`agent_` prefix)                                                                                              |
 | `project_id`               | string        | Project the agent belongs to                                                                                                     |
-| `ai_provider_id`           | string        | AI provider used for the model                                                                                                   |
+| `ai_provider_id`           | string        | AI provider used for the model. `null` when the agent routes through `model_route_id`                                            |
+| `model_route_id`           | string        | [Model route](./model-routes.md) resolving the model with ordered failover. `null` when a provider is pinned. Mutually exclusive with `ai_provider_id` and `model` |
 | `name`                     | string        | Display name                                                                                                                     |
 | `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
 | `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
@@ -148,6 +149,8 @@ The `instructions` field sets the agent's system prompt. It defines the agent's 
 ### AI Provider Resolution
 
 The agent resolves its AI provider by `ai_provider_id`. The provider's secret is decrypted and used to authenticate with the upstream model API. If `model` is not set on the agent, the provider's `default_model` is used. See [AI Providers](./ai-providers.md).
+
+An agent sets **exactly one** of `ai_provider_id` or `model_route_id` — both, or neither, is a `400`. With a [model route](./model-routes.md) the model is resolved through the route's ordered provider+model targets, and a retryable failure fails over to the next target *per LLM call*, so already-executed tool calls are never repeated. `model` cannot accompany a route, since each target names its own model. To switch a pinned agent to a route, send `model_route_id` together with `ai_provider_id: null` in the same request.
 
 ### Tool Choice
 

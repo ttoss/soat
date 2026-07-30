@@ -493,8 +493,20 @@ components:
           x-soat-ref: projects
         ai_provider_id:
           type: string
-          description: Public ID of the AI provider
+          nullable: true
+          description: >-
+            Public ID of the pinned AI provider. Null when the agent resolves
+            its model through `model_route_id` instead.
           x-soat-ref: ai-providers
+        model_route_id:
+          type: string
+          nullable: true
+          description: >-
+            Public ID of the model route that resolves this agent's completion
+            model. Null when the agent pins a provider through
+            `ai_provider_id`. Mutually exclusive with `ai_provider_id` and
+            `model`.
+          x-soat-ref: model-routes
         name:
           type: string
           nullable: true
@@ -669,8 +681,10 @@ components:
 
     CreateAgentRequest:
       type: object
-      required:
-        - ai_provider_id
+      description: >-
+        Exactly one of `ai_provider_id` or `model_route_id` must be set (400
+        otherwise). `model` names the model on a pinned provider and cannot be
+        combined with `model_route_id`, whose targets each name their own model.
       properties:
         project_id:
           x-soat-ref: projects
@@ -679,7 +693,17 @@ components:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider
+          description: >-
+            Public ID of the AI provider to pin. Mutually exclusive with
+            `model_route_id`.
+        model_route_id:
+          x-soat-ref: model-routes
+          type: string
+          description: >-
+            Public ID of a model route in the same project. The agent's
+            completion model is then resolved through the route's ordered
+            targets with failover. Mutually exclusive with `ai_provider_id` and
+            `model`.
         name:
           type: string
         instructions:
@@ -806,10 +830,23 @@ components:
 
     UpdateAgentRequest:
       type: object
+      description: >-
+        The post-update state must still set exactly one of `ai_provider_id` or
+        `model_route_id`. To switch a pinned agent to a route, send
+        `model_route_id` together with `ai_provider_id: null` in the same
+        request (and vice versa).
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
+          nullable: true
+        model_route_id:
+          x-soat-ref: model-routes
+          type: string
+          nullable: true
+          description: >-
+            Model route in the same project. Mutually exclusive with
+            `ai_provider_id` and `model`; set to null to clear.
         name:
           type: string
           nullable: true
