@@ -61,8 +61,9 @@ running work unattended, nobody is watching to retry by hand: this is an
   already lets an operator front providers with an external router (LiteLLM,
   OpenRouter, …) and get failover outside SOAT. This module exists for
   SOAT-native routing with per-target observability stamped on the
-  Generation; whether that distinction justifies the module's priority is a
-  product call recorded in the [forwarded questions](#forwarded-not-self-resolved).
+  Generation; the product owner confirmed on 2026-07-30 that this
+  distinction justifies the module (all three phases) — see the
+  [resolved forwarded questions](#forwarded-questions-resolved-2026-07-30).
 
 ## Key Concepts
 
@@ -151,14 +152,17 @@ policy rejection will fail identically on every target — retrying it wastes
 spend, adds latency, and hides the caller's bug behind a different provider's
 error message. Only infrastructure-shaped failures justify failover.
 
-### Error Classification (forwarded — public contract)
+### Error Classification (approved 2026-07-30 — public contract)
 
 The mapping from an AI SDK error to a `retry_on` class is public contract
 surface: it defines what `retry_on` values mean and is caller-visible in
-Phase 2 as `routing.attempts[].error_class`. Per the open-questions gate it
-requires human sign-off; the recommended mapping, checked against
+Phase 2 as `routing.attempts[].error_class`. **Signed off by the product
+owner on 2026-07-30** (see the decision log); Phase 1 may freeze it into the
+OpenAPI spec, SDK, and CLI. The mapping, checked against
 `@ai-sdk/provider@4.0.3` (`APICallError` exposes `statusCode?: number` and
-`isRetryable: boolean`):
+`isRetryable: boolean`) and consistent with the boundary the existing
+`src/lib/providerError.ts` (`toProviderDomainError`) already draws between
+provider-shaped and caller-shaped failures:
 
 | Condition (first match wins) | Class | Fails over? |
 | --- | --- | --- |
@@ -469,21 +473,33 @@ A: Both Phase 1 — resolved by pareto (agents reference routes from day one,
    Sync).
 ```
 
-### Forwarded, not self-resolved
+### Forwarded questions — resolved 2026-07-30
 
-- **Error-class mapping (public API contract — high-risk class).** The
-  `retry_on` values, the classification table above, and Phase 2's
-  `routing.attempts[].error_class` are public contract surface; the gate
-  forwards these regardless of how settled the recommendation looks. The
-  recommended mapping is concrete and checked (`APICallError.statusCode` /
-  `isRetryable` verified in `@ai-sdk/provider@4.0.3`), but needs sign-off
-  before Phase 1 freezes it into the OpenAPI spec, SDK, and CLI.
-- **Gateway overlap (product intent).** Operators can already front providers
-  with an external gateway via the `gateway` slug and get failover outside
-  SOAT, without per-target observability or `routing` metadata. How much of
-  the demand that workaround absorbs — and therefore whether this module's
-  priority holds — is a product judgment, not something a code check can
-  resolve.
+Both questions were forwarded to the product owner per the open-questions
+gate and resolved on 2026-07-30. Phase 1 has no remaining open gates.
+
+- **Error-class mapping (public API contract — high-risk class). APPROVED
+  as recommended.** The classification table above is frozen as the public
+  contract for `retry_on` and Phase 2's `routing.attempts[].error_class`:
+  `429 → rate_limited`; abort/per-target timeout → `timeout`; 5xx /
+  `isRetryable` / connection-level failure → `provider_error`; everything
+  else (400-class, auth, content policy) fails fast with no failover.
+  Supporting evidence reviewed at sign-off: the mapping is verified against
+  the pinned `@ai-sdk/provider@4.0.3` and is a finer-grained version of the
+  provider/caller boundary the codebase already enforces in
+  `src/lib/providerError.ts` (`toProviderDomainError` unwraps `RetryError`
+  and treats `APICallError` plus connection-level fetch failures as
+  provider-shaped) — it introduces no new taxonomy.
+- **Gateway overlap (product intent). PRIORITY CONFIRMED — build all three
+  phases.** The external-gateway workaround (LiteLLM/OpenRouter via the
+  `gateway` slug) was weighed and judged insufficient: it requires operators
+  to run and secure a second service holding provider credentials outside
+  SOAT's secrets module, it blinds SOAT's observability (the Generation
+  records the gateway's alias, not the provider that actually answered — no
+  `routing.attempts`, wrong attribution in usage/price-book costing), and
+  the routing config lives outside SOAT's IAM, formations, and audit
+  surface. SOAT-native, project-scoped, observable routing is in scope for
+  the platform's "production-ready agent infrastructure" positioning.
 
 ## Risks
 
