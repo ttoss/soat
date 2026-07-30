@@ -41,23 +41,26 @@ G3's and G5's remaining deferred items are kept in the
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed. Three initiatives are fully shipped and
+Only PRDs with open work are listed. Four initiatives are fully shipped and
 their PRDs have been retired — the live behavior lives in the module docs:
 [quotas](../packages/website/docs/modules/quotas.md) (request/token/cost
 quotas, the `QUOTA_EXCEEDED` / `429` contract, monitor mode with its
 [breach audit entry](../packages/website/docs/modules/quotas.md#monitor-mode),
 the `quota.exceeded` webhook, and the `quota` formation resource),
 [audit-log](../packages/website/docs/modules/audit-log.md) (the read-auditing
-flag, the `audit.entry_created` webhook, and the per-project NDJSON export), and
+flag, the `audit.entry_created` webhook, and the per-project NDJSON export),
 [usage](../packages/website/docs/modules/usage.md) (the event + component model,
 price book, receipts, aggregation, thresholds, every LLM path metered, the
-compute/storage/request dimensions, and the `soat.usage.*` spend guards).
+compute/storage/request dimensions, and the `soat.usage.*` spend guards), and
+[model-routes](../packages/website/docs/modules/model-routes.md) (ordered
+provider failover through a composite model, error classification, the
+in-process circuit breaker, `routing` generation metadata, the project default
+route, and the `model_route` formation resource).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
-| Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,6,7 remain | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -93,7 +96,6 @@ feedback + governance loops ─────────────────�
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
 | evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
-| — | model-routing | standalone; complements G2 ✔, no metering change |
 
 ## Recommended build order
 
@@ -109,7 +111,9 @@ feedback + governance loops ─────────────────�
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
    ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
-5. **Model-routing** as hardening.
+5. ~~**Model-routing** as hardening~~ — **fully shipped** (CRUD + composite
+   fallback executor, circuit breaker + streaming + `routing` metadata, and the
+   project default route with every consumer routed).
 
 ## Pending backlog
 
@@ -118,13 +122,12 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 ### G3 — Approvals (exceptions · activity)
 
-- [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
-- [x] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6. Live behavior in [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
-- [x] **Phase 4 / activity feed** — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md):
-  - [x] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
-  - [x] `5.2` cursor-paginated `GET /api/v1/activity` (kind / severity filters, per project)
-  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` now covers both the orchestration tool-node executor and agent-generation-time tool calls (the v1 gap, closed 2026-07: the resolver is the single seam, wrapped innermost so blocked / tripped / approval-routed / failed calls record nothing; see [activity module docs](../packages/website/docs/modules/activity.md#producers))
-  - [x] `5.4` `soat.activity.actions_1h` / `actions_24h` guard context — shipped (2026-07). Counts the project's `action_executed` entries over the rolling window at evaluation time, so a guard can cap the autonomous-action rate; an empty feed reads as a real `0`, only a failing query falls back to fail-closed. Live behavior in [the feed as a guardrail signal](../packages/website/docs/modules/activity.md#the-feed-as-a-guardrail-signal)
+✅ **Shipped**, PRD retired; live behavior is documented in the
+[approvals](../packages/website/docs/modules/approvals.md) /
+[exceptions](../packages/website/docs/modules/exceptions.md) /
+[activity](../packages/website/docs/modules/activity.md) module docs. Two items
+remain deferred by design, with no demand signal yet:
+
 - [ ] **Phase 5** Approver targeting & assignment — optional `approver_policy` / `assignees` on the approval node or tool binding, routing specific items to specific humans. Deferred until real demand; nothing in the shipped queue blocks it
 - [ ] In-channel approval clients (WhatsApp/Slack) over the queue — surface items, and let humans resolve them, inside conversational channels rather than only through the queue UI/API. The substrate they build on is settled: continuation is platform-automatic (the decision is persisted and its lifecycle webhook emitted first, then the continuation fires fire-and-forget), so a channel client observes through the webhook and gets a notification, not a control point. If a client ever needs client-controlled continuation timing (defer/batch), that extension is scoped **here**, not in the core loop. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md)
 
@@ -167,21 +170,21 @@ _Not started._
 - [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
 - [ ] Webhook events (`eval_run.completed` / `.failed`)
 
-### Audit log
-
-_Fully shipped._
-
-- [x] **Phase 2** Decision-changing guardrail evaluations (`route_to_approval` / `blocked` / `tripwire`) mirror into `AuditEntry` as `detail.kind = "guardrail_evaluation"` via selective-write from `persistGuardrailEvaluations`; plain `execute` stays in the dedicated `guardrail_evaluations` table. Platform-originated (`action: guardrails:Evaluate`, null principal). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#system-originated-entries)
-- [x] **Phase 3** Read-audit config flag — `audit_reads_enabled` on the project, off by default, gated at enqueue via a 30s per-project cache so read traffic never evicts mutation entries from the audit queue; a read naming no project is never audited. Plus the `audit.entry_created` webhook, emitted from the `writeAuditEntry` choke point with the full snake_case entry as its `data` (project-scoped entries only). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#read-auditing)
-- [x] **Per-project NDJSON export** — `GET /api/v1/audit-log/export`: streams one snake_case entry per line, oldest first, paged internally; `project_id` required and authorized by its own `audit:ExportAuditEntries` action (bulk egress is granted separately from read). Also serves LGPD/GDPR subject-access requests. Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#ndjson-export)
-
 ### Model routing
 
-_Not started. Standalone; complements G2; no metering change._
+✅ **Shipped.** All three phases are complete and the PRD retired; live behavior
+is documented in the
+[model-routes module doc](../packages/website/docs/modules/model-routes.md).
+Two items carry forward:
 
-- [ ] **Phase 1** `ModelRoute` model + lib (`route_` prefix, ordered targets + retry/breaker config; create-time attempt cap); REST CRUD (incl. `DELETE` → `409` referential guard) + OpenAPI + permissions; shared `route`-vs-pin exclusivity validation (`Agent.aiProviderId` relaxed to nullable); agent consumption (`model_route_id`, both generation **and** recovery resolution sites) + agent-field formation sync; composite-`LanguageModel` fallback executor at the `buildModel` seam — per-LLM-call failover, no tool re-execution, `maxRetries: 0` on routed calls (non-streaming)
-- [ ] **Phase 2** Circuit breaker (in-process, keyed `(provider, model)` shared across routes, consecutive-failure skip + cooldown); streaming pre-token fallback (composite `doStream` arm); `routing` metadata on Generation
-- [ ] **Phase 3** Remaining consumers (chats, discussions, memory extraction/consolidation — each `buildModel` site); `model-route` formation resource type
+- [ ] ⏭️ **Deferred — per-consumer `model_route_id` on Chat / Discussion.** The
+      project default plus explicit pins covers "most consumers routed, some
+      pinned"; the column is only needed to run *two different routes in one
+      project*. Worth adding when that is actually requested, not before
+- [ ] **Accepted gap — a failed attempt that burned tokens is not metered.**
+      Visible rather than silent (`routing.attempts` names every failed attempt
+      on the generation); closing it needs usage data provider error responses
+      do not carry. Revisit only if a provider starts returning usage on error
 
 ### Memories
 
