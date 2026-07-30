@@ -666,7 +666,9 @@ Wait for the async delivery, inspect the webhook listener output, then fetch ses
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-for _ in $(seq 1 20); do soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '[.data[] | select(.status == "completed")] | length > 0' && break || sleep 1; done # → ignore
+# → retry 30
+soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" \
+  | jq -e '[.data[] | select(.status == "completed")] | length > 0'
 
 soat list-webhook-deliveries \
   --webhook-id "$WEBHOOK_ID" | jq '.data[] | {event_type, status, status_code}'
