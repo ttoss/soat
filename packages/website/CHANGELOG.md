@@ -3,6 +3,35 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.18.0](https://127.0.0.1/41729/git/ttoss/compare/v0.17.5...v0.18.0) (2026-07-30)
+
+### Bug Fixes
+
+* **postgresdb:** stop the mechanisms that produce bad indexes ([#780](https://127.0.0.1/41729/git/ttoss/issues/780)) ([f696c89](https://127.0.0.1/41729/git/ttoss/commits/f696c8917ea6f32aa98cf23e0b45d6a9a734151a)), closes [#508](https://127.0.0.1/41729/git/ttoss/issues/508) [#561](https://127.0.0.1/41729/git/ttoss/issues/561) [#561](https://127.0.0.1/41729/git/ttoss/issues/561) [#710](https://127.0.0.1/41729/git/ttoss/issues/710)
+* **tests:** make forced tool_choice deterministic in CI; add "# → retry N" tutorial annotation ([#779](https://127.0.0.1/41729/git/ttoss/issues/779)) ([38fed24](https://127.0.0.1/41729/git/ttoss/commits/38fed241775ef130d26c13a8b0eb727bcc41f50b)), closes [#774](https://127.0.0.1/41729/git/ttoss/issues/774) [#774](https://127.0.0.1/41729/git/ttoss/issues/774)
+* **website:** sync MCP docs type labels with the server's fixed schema logic ([#777](https://127.0.0.1/41729/git/ttoss/issues/777)) ([b6fd911](https://127.0.0.1/41729/git/ttoss/commits/b6fd911c7254280a382f4dbda4ffc49c0dabc44b)), closes [#770](https://127.0.0.1/41729/git/ttoss/issues/770) [#775](https://127.0.0.1/41729/git/ttoss/issues/775) [#775](https://127.0.0.1/41729/git/ttoss/issues/775)
+
+### Features
+
+* **model-routes:** ordered provider failover for completions (model-routing PRD phases 1–2) ([#782](https://127.0.0.1/41729/git/ttoss/issues/782)) ([70cb5b3](https://127.0.0.1/41729/git/ttoss/commits/70cb5b3c33d6cb3d0d469a99856fd4c56f5dccfe))
+* **model-routes:** project default route and remaining consumers (model-routing PRD phase 3) ([#785](https://127.0.0.1/41729/git/ttoss/issues/785)) ([db003bd](https://127.0.0.1/41729/git/ttoss/commits/db003bd888b7f143c85dd8e404f5eeb2423d9ef0))
+* **workflows:** rename TaskTransition actor_* to principal_* ([#787](https://127.0.0.1/41729/git/ttoss/issues/787)) ([e6457da](https://127.0.0.1/41729/git/ttoss/commits/e6457da849314992a17a49ec18f628c548aa3d75))
+
+### BREAKING CHANGES
+
+* **workflows:** `GET /tasks/{id}/history` returns `principal_kind` /
+  `principal_id` instead of `actor_kind` / `actor_id`, on REST, the SDK's
+  `TaskTransition` interface, the CLI's `get-task-history` output and the MCP
+  tool result. Workflow transition guards must read `principal` instead of
+  `actor`. For `automation` moves `principal_id` is now always null — read
+  `generation_id` / `orchestration_run_id` for the cause.
+
+  Schema follow-up: this repo syncs with `sync --alter`, which adds the new
+  columns but never drops the old ones. In each long-lived environment run
+  `UPDATE task_transitions SET principal_kind = actor_kind, principal_id =
+  actor_id;` (then null out principal_id where principal_kind = 'automation')
+  before dropping `actor_kind` / `actor_id`.
+
 ## [0.17.5](https://127.0.0.1/41729/git/ttoss/compare/v0.17.4...v0.17.5) (2026-07-30)
 
 ### Bug Fixes
