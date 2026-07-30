@@ -1,7 +1,6 @@
 import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
-import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import {
   buildRoutedModel,
@@ -97,11 +96,10 @@ export const resolveChatModel = async (args: {
     aiProviderId: args.aiProviderId,
   });
 
+  // The stateless route maps this exact message to a 404 — it is the endpoint's
+  // published contract, so the message is load-bearing and must not drift.
   if (!resolved) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider '${args.aiProviderId}' not found or not configured.`
-    );
+    throw new Error('AI provider not found');
   }
 
   return buildResolvedChatModel({

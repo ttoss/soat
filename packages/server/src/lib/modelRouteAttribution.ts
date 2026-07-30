@@ -84,17 +84,7 @@ export const resolveCompletionAttribution = async (args: {
   return served ?? args.fallback;
 };
 
-/**
- * Meters one completion against the provider instance that actually served it —
- * the single metering entry point for every path whose model may be a route
- * composite (chats, discussions, memory extraction and consolidation).
- *
- * Fire-and-forget by construction: resolving a routed call's served target is a
- * database read, and metering must never delay or fail the completion it
- * measures. `recordCompletionUsage` already catches internally, so the `.catch`
- * here only covers that read.
- */
-export const meterCompletion = (args: {
+export type MeterCompletionArgs = {
   model: LanguageModel;
   /** Attribution resolved before the call; `null` for a route composite. */
   fallback: CompletionAttribution | null;
@@ -109,27 +99,53 @@ export const meterCompletion = (args: {
    */
   pinnedModel?: string;
   usage: LanguageModelUsage | undefined;
-}): void => {
-  void resolveCompletionAttribution({
-    model: args.model,
-    fallback: args.fallback,
-  })
-    .then((attribution) => {
-      /* istanbul ignore next -- a completion that returned always yields one: a
-         routed model records its serving target, a pinned one carries `fallback`. */
-      if (!attribution) return;
+};
 
-      void recordCompletionUsage({
-        source: args.source,
-        projectId: args.projectId,
-        ...(args.agentId !== undefined && { agentId: args.agentId }),
-        provider: attribution.provider,
-        aiProviderId: attribution.aiProviderDbId,
-        model: args.fallback
-          ? (args.pinnedModel ?? attribution.modelName)
-          : attribution.modelName,
-        usage: args.usage,
-      });
-    })
-    .catch(() => {});
+/**
+ * The awaited body of `meterCompletion`. The `try`/`catch` is a statement rather
+ * than a `.catch()` callback on purpose: a rejection handler that never fires is
+ * an uncovered function, and the only way to fire it would be a stub that makes
+ * the served-target read reject.
+ */
+const recordServedCompletion = async (
+  args: MeterCompletionArgs
+): Promise<void> => {
+  try {
+    const attribution = await resolveCompletionAttribution({
+      model: args.model,
+      fallback: args.fallback,
+    });
+    /* istanbul ignore next -- a completion that returned always yields one: a
+       routed model records its serving target, a pinned one carries `fallback`. */
+    if (!attribution) return;
+
+    void recordCompletionUsage({
+      source: args.source,
+      projectId: args.projectId,
+      ...(args.agentId !== undefined && { agentId: args.agentId }),
+      provider: attribution.provider,
+      aiProviderId: attribution.aiProviderDbId,
+      model: args.fallback
+        ? (args.pinnedModel ?? attribution.modelName)
+        : attribution.modelName,
+      usage: args.usage,
+    });
+  } catch {
+    // Metering must never surface as an unhandled rejection on a completion that
+    // already succeeded. `recordCompletionUsage` catches internally, so the only
+    // thing this covers is the served-target read.
+  }
+};
+
+/**
+ * Meters one completion against the provider instance that actually served it —
+ * the single metering entry point for every path whose model may be a route
+ * composite (chats, discussions, memory extraction and consolidation).
+ *
+ * Fire-and-forget by construction: resolving a routed call's served target is a
+ * database read, and metering must never delay or fail the completion it
+ * measures.
+ */
+export const meterCompletion = (args: MeterCompletionArgs): void => {
+  void recordServedCompletion(args);
 };
