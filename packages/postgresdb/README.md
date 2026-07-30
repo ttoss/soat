@@ -98,6 +98,43 @@ The name must be explicit: Sequelize derives one from the table and field list w
 
 Convention: `<table>_<field>_..._unique`, using snake_case column names (models are `underscored`). `tests/unit/tests/modelIndexes.test.ts` enforces all of this.
 
+### Retiring an Index
+
+`sync({ alter: true })` has no teardown step for indexes: it creates what the models declare and **never drops** what they stopped declaring. Renaming an index therefore leaves the old name in the catalog permanently, in every database the schema has ever been synced against — the two indexes then coexist, and if the rename widened a unique index the narrower predecessor keeps rejecting rows the new one is meant to allow.
+
+So a rename is two edits, in the same change:
+
+```ts
+// 1. src/models/PriceBook.ts — the new name
+{ name: 'price_books_scope_sku_component_effective_uk', unique: true, fields: [...] }
+```
+
+```ts
+// 2. src/retiredIndexes.ts — the name it replaces
+const RETIRED_BY_RENAME_NAMES = [
+  'price_books_provider_model_effective_uk',
+] as const;
+```
+
+Names listed there are dropped idempotently at boot (`dropRetiredIndexes`, called from the server's `syncSchemaWithAdvisoryLock`), so every environment converges instead of only the database someone cleaned by hand. Dropping is best-effort: a failure is logged and boot continues.
+
+Use the name **Postgres actually stored**, which is not always the one you wrote:
+
+| How the index was declared      | Catalog name                                      |
+| ------------------------------- | ------------------------------------------------- |
+| `@Column({ unique: true })`     | `<table>_<column>_key` (named by Postgres)        |
+| `indexes` entry with no `name:` | `<table>_<field>_<field>…`, truncated at 63 chars |
+| `indexes` entry with `name:`    | the name as written                               |
+
+`tests/unit/tests/schemaDrift.test.ts` runs the whole thing against a real Postgres: it syncs, then asserts no index is undeclared, no two indexes are exact duplicates, a second sync adds nothing, and no retired name is one a model still declares. It starts a container by default, or reuses a running server when `TEST_DB_HOST` is set:
+
+```bash
+TEST_DB_HOST=127.0.0.1 TEST_DB_USERNAME=postgres TEST_DB_PASSWORD=postgres \
+  TEST_DB_NAME=soat_drift pnpm test
+```
+
+The other suites in this package need neither, so they still run with no database available.
+
 ### Running Database for Development
 
 To start a PostgreSQL database for development, follow these steps:

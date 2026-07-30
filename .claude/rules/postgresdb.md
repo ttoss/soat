@@ -1,6 +1,6 @@
 ---
 paths:
-  - "packages/postgresdb/**"
+  - 'packages/postgresdb/**'
 ---
 
 # PostgresDB Package Instructions
@@ -29,6 +29,12 @@ Never use column-level `unique: true` or the `@Unique` decorator. Every unique c
 ```
 
 Column-level `unique` makes `sync({ alter: true })` re-add the same constraint on every boot until it crashes with `42P07`, and an omitted `name` lets Sequelize derive one that can exceed Postgres's 63-character identifier limit. Name indexes `<table>_<field>_..._unique` with snake_case columns (models are `underscored`). `packages/postgresdb/tests/unit/tests/modelIndexes.test.ts` enforces this.
+
+## Renaming or Removing an Index
+
+`sync({ alter: true })` never drops an index the models stopped declaring, so a rename leaves the old one in every database forever — still enforcing the old grain if it was unique. **Every rename or removal must add the previous name to `RETIRED_INDEX_NAMES` in `packages/postgresdb/src/retiredIndexes.ts` in the same change.** Listed names are dropped idempotently at boot.
+
+Use the name Postgres stored, not the one you wrote: a column-level `unique` is `<table>_<column>_key`, an unnamed `indexes` entry is `<table>_<field>_<field>…` truncated at 63 characters. See the "Retiring an Index" section of `packages/postgresdb/README.md`; `tests/unit/tests/schemaDrift.test.ts` checks the result against a real database.
 
 ## Rebuilding After Model Changes
 

@@ -147,6 +147,33 @@ describe('syncSchemaWithAdvisoryLock', () => {
     });
   });
 
+  test('drops retired indexes left behind by earlier schema versions', async () => {
+    // `sync({ alter: true })` cannot express a drop, so an index the models
+    // renamed survives in every database the schema has ever been synced
+    // against — including one that enforces a uniqueness grain the models have
+    // since widened. Boot is the only place that reaches every environment, so
+    // the teardown has to ride along with the sync rather than be applied by
+    // hand to the one database someone remembered.
+    await sequelize.query(
+      'CREATE UNIQUE INDEX usage_events_idempotency_key ON usage_events (idempotency_key)'
+    );
+
+    await syncSchemaWithAdvisoryLock({ sequelize });
+
+    const [rows] = await sequelize.query(
+      `SELECT relname FROM pg_class WHERE relname = 'usage_events_idempotency_key'`
+    );
+    expect(rows).toEqual([]);
+
+    // The live index that replaced it is untouched — the cleanup drops
+    // redundant names, never the guarantee.
+    const [live] = await sequelize.query(
+      `SELECT relname FROM pg_class
+        WHERE relname = 'usage_events_idempotency_key_unique'`
+    );
+    expect(live).toHaveLength(1);
+  });
+
   test('fails fast with a lock-timeout error when the lock is held past the bound', async () => {
     // Regression guard for PR #549: a peer SIGKILLed mid-boot leaves the
     // session advisory lock held until its backend is reaped (minutes behind a

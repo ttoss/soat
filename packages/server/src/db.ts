@@ -1,4 +1,4 @@
-import { models } from '@soat/postgresdb';
+import { dropRetiredIndexes, models } from '@soat/postgresdb';
 import type { App } from '@ttoss/http-server';
 import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
@@ -57,6 +57,15 @@ export const getSchemaSyncLockTimeoutMs = (): number => {
  * (which propagates to `startServer`'s catch → `process.exit(1)`) instead of a
  * silent multi-minute hang. See `getSchemaSyncLockTimeoutMs` for why the bound
  * must exceed a real migration's duration.
+ *
+ * Once the schema is in place, retired indexes are dropped (see
+ * `RETIRED_INDEX_NAMES` in `@soat/postgresdb`). `sync({ alter: true })` is
+ * additive where indexes are concerned — it creates what the models declare and
+ * never drops what they stopped declaring — so a renamed index survives in
+ * every database the schema has ever touched. Boot is the only step that
+ * reaches all of them, which is why the teardown rides along here rather than
+ * being applied by hand to one database at a time. It runs **after** the sync
+ * so the replacement index exists before its predecessor is removed.
  */
 export const syncSchemaWithAdvisoryLock = async (args: {
   sequelize: Sequelize;
@@ -73,6 +82,26 @@ export const syncSchemaWithAdvisoryLock = async (args: {
     sync: { alter: true },
     lockTimeoutMs,
   });
+
+  const { dropped, failed } = await dropRetiredIndexes({
+    sequelize: args.sequelize,
+    advisoryLockKey: SCHEMA_SYNC_LOCK_KEY,
+  });
+
+  if (dropped.length > 0) {
+    log('syncSchemaWithAdvisoryLock: dropped retired indexes %o', dropped);
+  }
+
+  for (const failure of failed) {
+    // Never fatal: the object has been in the database the whole time the
+    // service has been running, so failing boot over a cleanup step would be
+    // strictly worse than leaving it. Printed rather than logged via `debug`
+    // because it needs a human and `debug` is off in production.
+    // eslint-disable-next-line no-console
+    console.error(
+      `failed to drop retired index ${failure.name}: ${failure.error}`
+    );
+  }
 };
 
 /**
