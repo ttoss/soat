@@ -929,6 +929,123 @@ describe('Tasks', () => {
       expect(typeof routed.orchestration_run_id).toBe('string');
     });
 
+    test('a failed orchestration dispatch sets automation_status and follows on_failure, not on_complete', async () => {
+      // memory_write against a nonexistent memory_id deterministically fails the
+      // run without any external HTTP dependency (see orchestrations.test.ts).
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `failing-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'write',
+                type: 'memory_write',
+                memory_id: 'mem_nonexistent12345',
+                input_mapping: { content: { var: 'topic' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const wf = await dispatchWorkflow({
+        name: 'orch-failure',
+        onEnter: {
+          dispatch: {
+            kind: 'orchestration',
+            orchestration_id: orchestrationId,
+            input_mapping: { topic: { var: 'task.payload.topic' } },
+          },
+          // A catch-all on_complete rule must never fire for a failed run.
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, { topic: 'winter' });
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+      expect(settled.status).toBe('closed');
+      // The failed run's partial state must never be presented as a result.
+      expect(
+        (settled.payload as { last_result?: unknown }).last_result
+      ).toBeUndefined();
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      expect(
+        history.some((h: { transition: string }) => {
+          return h.transition === 'to_done';
+        })
+      ).toBe(false);
+      const routed = history.find((h: { transition: string }) => {
+        return h.transition === 'to_failed';
+      });
+      expect(routed.actor_kind).toBe('automation');
+      expect(typeof routed.orchestration_run_id).toBe('string');
+    });
+
+    test('a failed orchestration dispatch with no on_failure leaves the task parked, not routed by on_complete', async () => {
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `failing-pipeline-unrouted-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'write',
+                type: 'memory_write',
+                memory_id: 'mem_nonexistent12345',
+                input_mapping: { content: { var: 'topic' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const wf = await dispatchWorkflow({
+        name: 'orch-failure-unrouted',
+        onEnter: {
+          dispatch: {
+            kind: 'orchestration',
+            orchestration_id: orchestrationId,
+            input_mapping: { topic: { var: 'task.payload.topic' } },
+          },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+      });
+      const taskId = await startTask(wf, { topic: 'winter' });
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'failed';
+        },
+      });
+      expect(settled.state).toBe('writing');
+      expect(settled.status).toBe('open');
+      expect((settled.active_dispatch as { status?: string }).status).toBe(
+        'failed'
+      );
+      expect(
+        (settled.payload as { last_result?: unknown }).last_result
+      ).toBeUndefined();
+    });
+
     test('cancellation-on-exit cancels a genuinely in-flight orchestration run (#606)', async () => {
       // Gate the orchestration's agent-node generation so the run is genuinely
       // in flight (not merely parked on human input) when we transition out.
