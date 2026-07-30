@@ -29,12 +29,12 @@ import { Project } from './Project';
       fields: ['public_id'],
     },
     {
-      name: 'activity_entries_project_created_at',
+      name: 'activity_entries_project_id_created_at_idx',
       fields: ['project_id', 'created_at'],
     },
     // Tiebreaker for keyset pagination when two rows share a `created_at`.
     {
-      name: 'activity_entries_project_created_public_id',
+      name: 'activity_entries_project_id_created_at_public_id_idx',
       fields: ['project_id', 'created_at', 'public_id'],
     },
   ],

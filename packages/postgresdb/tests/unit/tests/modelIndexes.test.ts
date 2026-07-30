@@ -80,6 +80,108 @@ const uniqueIndexes = modelEntries.flatMap(({ model, table, indexes }) => {
  */
 const EXPLICIT_UNIQUE_NAME = /_(unique|uk)$/;
 
+/**
+ * The name Sequelize derives for an index that declares none: the table
+ * followed by every field, joined with `_`. Comparing against it is the exact
+ * test for "was this name written by a human", with no suffix convention to
+ * agree on.
+ */
+const derivedNameOf = (args: { table: string; index: ModelIndex }) => {
+  const fields = (
+    Array.isArray(args.index.fields) ? args.index.fields : []
+  ).map((field) => {
+    return typeof field === 'string'
+      ? field
+      : ((field as { name?: string }).name ?? '');
+  });
+
+  return [args.table, ...fields].join('_');
+};
+
+describe('every index name is written, not derived', () => {
+  /**
+   * The rule that closes the loop this package kept going round.
+   *
+   * A derived name is a function of the field list, so *editing the fields
+   * renames the index* — and `sync({ alter: true })` responds to a rename by
+   * creating the new name and keeping the old one forever. The dangerous part
+   * is that the diff shows no rename at all: only a changed `fields:` array.
+   * #508 and #561 both landed exactly that way.
+   *
+   * With an explicit name, changing the fields is still a change that needs a
+   * retired-name entry, but it is now *visible* — and `schemaDrift.test.ts`
+   * catches it against a real catalog if it is missed.
+   */
+  test('no index name equals the one Sequelize would derive', () => {
+    const offenders: string[] = [];
+
+    for (const { model, table, indexes } of modelEntries) {
+      for (const index of indexes) {
+        if (index.name === derivedNameOf({ table, index })) {
+          offenders.push(`${model}: ${index.name}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('every non-unique index name ends in `_idx`', () => {
+    // Unique names end in `_unique`/`_uk` (asserted below), so a suffix on the
+    // rest makes "is this an index name?" answerable by looking at it — in a
+    // Postgres error, a slow-query log, or a review diff.
+    const offenders: string[] = [];
+
+    for (const { model, indexes } of modelEntries) {
+      for (const index of indexes) {
+        if (!index.unique && !index.name?.endsWith('_idx')) {
+          offenders.push(`${model}: ${index.name}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  test('no model uses the `@Index` decorator', () => {
+    // `@Index` is silently inert here. The bundled models invoke decorators
+    // through the `__decorate` helper, which passes a third `descriptor`
+    // argument, and in that call shape sequelize-typescript registers nothing —
+    // so the decorator reads as an index in review and produces none in the
+    // database. Seven of them had accumulated, leaving `traces.agent_id`,
+    // `traces.parent_trace_id`, `traces.root_trace_id` and
+    // `usage_events.ai_provider_id` unindexed. Declare indexes in `@Table`,
+    // where they demonstrably work.
+    //
+    // This asserts on the *effect* rather than grepping source: an index that
+    // reaches `options.indexes` is real, and one that does not is not, whatever
+    // syntax produced it.
+    const declaredFieldSets = new Set(
+      modelEntries.flatMap(({ table, indexes }) => {
+        return indexes.map((index) => {
+          return derivedNameOf({ table, index });
+        });
+      })
+    );
+
+    // Every column that a `@ForeignKey` points at and that the models intend to
+    // index must appear in some declared index. This pins the four that were
+    // silently missing.
+    const mustBeIndexed = [
+      'traces_agent_id',
+      'traces_parent_trace_id',
+      'traces_root_trace_id',
+      'usage_events_ai_provider_id',
+    ];
+
+    const missing = mustBeIndexed.filter((name) => {
+      return !declaredFieldSets.has(name);
+    });
+
+    expect(missing).toEqual([]);
+  });
+});
+
 describe('model unique constraints', () => {
   test('the model list resolves to real tables', () => {
     expect(modelEntries.length).toBeGreaterThan(0);

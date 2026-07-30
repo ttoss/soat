@@ -26,7 +26,10 @@ import { User } from './User';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id', 'status', 'expires_at'] },
+    {
+      name: 'approval_items_project_id_status_expires_at_idx',
+      fields: ['project_id', 'status', 'expires_at'],
+    },
     // A tool-call producer must not enqueue the same proposal twice while one
     // is still pending — the partial unique index makes that a DB-level
     // guarantee (used from Phase 2).

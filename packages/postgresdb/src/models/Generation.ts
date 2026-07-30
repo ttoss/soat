@@ -3,7 +3,6 @@ import {
   Column,
   DataType,
   ForeignKey,
-  Index,
   Model,
   Table,
 } from '@ttoss/postgresdb';
@@ -24,12 +23,15 @@ import { Trace } from './Trace';
       fields: ['public_id'],
     },
     {
+      name: 'generations_project_id_status_started_at_idx',
       fields: ['project_id', 'status', 'started_at'],
     },
     {
+      name: 'generations_agent_id_status_started_at_idx',
       fields: ['agent_id', 'status', 'started_at'],
     },
     {
+      name: 'generations_trace_id_idx',
       fields: ['trace_id'],
     },
   ],
@@ -59,7 +61,6 @@ export class Generation extends Model {
   })
   declare project: Project;
 
-  @Index
   @ForeignKey(() => {
     return Agent;
   })

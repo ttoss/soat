@@ -24,7 +24,10 @@ import { Task } from './Task';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['task_id', 'created_at'] },
+    {
+      name: 'task_transitions_task_id_created_at_idx',
+      fields: ['task_id', 'created_at'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: TaskTransition) => {

@@ -3,7 +3,6 @@ import {
   Column,
   DataType,
   ForeignKey,
-  Index,
   Model,
   Table,
 } from '@ttoss/postgresdb';
@@ -22,8 +21,14 @@ import { Project } from './Project';
       fields: ['public_id'],
     },
     {
+      name: 'traces_project_id_created_at_idx',
       fields: ['project_id', 'created_at'],
     },
+    { name: 'traces_agent_id_idx', fields: ['agent_id'] },
+    // Walked by the trace-tree read: a node's children are found by
+    // `parent_trace_id`, and a whole tree by `root_trace_id`.
+    { name: 'traces_parent_trace_id_idx', fields: ['parent_trace_id'] },
+    { name: 'traces_root_trace_id_idx', fields: ['root_trace_id'] },
   ],
   hooks: {
     beforeValidate: (instance: Trace) => {
@@ -51,7 +56,6 @@ export class Trace extends Model {
   })
   declare project: Project;
 
-  @Index
   @ForeignKey(() => {
     return Agent;
   })
@@ -80,7 +84,6 @@ export class Trace extends Model {
   )
   declare file: File | null;
 
-  @Index
   @ForeignKey(() => {
     return Trace;
   })
@@ -95,7 +98,6 @@ export class Trace extends Model {
   )
   declare parentTrace: Trace | null;
 
-  @Index
   @ForeignKey(() => {
     return Trace;
   })

@@ -51,7 +51,10 @@ import { Project } from './Project';
       ],
     },
     // Serves the global-default, project+slug, and per-provider lookups.
-    { fields: ['provider', 'model', 'component', 'effective_from'] },
+    {
+      name: 'price_books_provider_model_component_effective_from_idx',
+      fields: ['provider', 'model', 'component', 'effective_from'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: PriceBook) => {
