@@ -28,14 +28,23 @@ import { Workflow } from './Workflow';
       fields: ['public_id'],
     },
     // Board queries: columns of a workflow filtered by state/status.
-    { fields: ['project_id', 'workflow_id', 'state', 'status'] },
+    {
+      name: 'tasks_project_id_workflow_id_state_status_idx',
+      fields: ['project_id', 'workflow_id', 'state', 'status'],
+    },
     // Board queries and stall-episode reasoning by how long a task has parked.
-    { fields: ['project_id', 'status', 'entered_state_at'] },
+    {
+      name: 'tasks_project_id_status_entered_state_at_idx',
+      fields: ['project_id', 'status', 'entered_state_at'],
+    },
     // Stall sweeper (Phase 3): the precise due-set query. `stall_deadline_at` is
     // the precomputed `entered_state_at + stalled_after` for the current state
     // (null when the state defines no threshold or the stall was already
     // emitted this episode), so the sweeper selects only genuinely-due tasks.
-    { fields: ['status', 'stall_deadline_at'] },
+    {
+      name: 'tasks_status_stall_deadline_at_idx',
+      fields: ['status', 'stall_deadline_at'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Task) => {

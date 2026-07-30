@@ -41,10 +41,22 @@ const APPEND_ONLY_MESSAGE =
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id', 'created_at'] },
-    { fields: ['principal_id', 'created_at'] },
-    { fields: ['action', 'created_at'] },
-    { fields: ['resource_public_id', 'created_at'] },
+    {
+      name: 'audit_entries_project_id_created_at_idx',
+      fields: ['project_id', 'created_at'],
+    },
+    {
+      name: 'audit_entries_principal_id_created_at_idx',
+      fields: ['principal_id', 'created_at'],
+    },
+    {
+      name: 'audit_entries_action_created_at_idx',
+      fields: ['action', 'created_at'],
+    },
+    {
+      name: 'audit_entries_resource_public_id_created_at_idx',
+      fields: ['resource_public_id', 'created_at'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: AuditEntry) => {

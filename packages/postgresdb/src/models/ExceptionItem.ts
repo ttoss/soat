@@ -27,7 +27,10 @@ import { User } from './User';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id', 'status', 'severity'] },
+    {
+      name: 'exception_items_project_id_status_severity_idx',
+      fields: ['project_id', 'status', 'severity'],
+    },
     // At most one OPEN exception per dedup key: repeated identical failures
     // fold into it (occurrenceCount++) instead of filing duplicates. A resolved
     // item leaves the key free, so a recurrence after resolution opens a fresh

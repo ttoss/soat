@@ -4,7 +4,6 @@ import {
   DataType,
   ForeignKey,
   HasMany,
-  Index,
   Model,
   Table,
 } from '@ttoss/postgresdb';
@@ -40,13 +39,20 @@ import { UsageComponent } from './UsageComponent';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id', 'created_at'] },
-    { fields: ['orchestration_run_id'] },
-    { fields: ['trace_id'] },
-    { fields: ['generation_id'] },
-    { fields: ['actor_id'] },
-    { fields: ['session_id'] },
-    { fields: ['meter_type'] },
+    {
+      name: 'usage_events_project_id_created_at_idx',
+      fields: ['project_id', 'created_at'],
+    },
+    {
+      name: 'usage_events_orchestration_run_id_idx',
+      fields: ['orchestration_run_id'],
+    },
+    { name: 'usage_events_trace_id_idx', fields: ['trace_id'] },
+    { name: 'usage_events_generation_id_idx', fields: ['generation_id'] },
+    { name: 'usage_events_actor_id_idx', fields: ['actor_id'] },
+    { name: 'usage_events_session_id_idx', fields: ['session_id'] },
+    { name: 'usage_events_meter_type_idx', fields: ['meter_type'] },
+    { name: 'usage_events_ai_provider_id_idx', fields: ['ai_provider_id'] },
     {
       name: 'usage_events_idempotency_key_unique',
       unique: true,
@@ -84,7 +90,6 @@ export class UsageEvent extends Model {
 
   // Orchestration run that initiated the occurrence, when it ran inside a run.
   // Null for standalone events.
-  @Index
   @ForeignKey(() => {
     return OrchestrationRun;
   })
@@ -186,7 +191,6 @@ export class UsageEvent extends Model {
   // price book (a project may have several providers with the same slug).
   // SET NULL on delete so an old event never blocks provider removal; the
   // denormalized `provider`/`model` below preserve the as-billed receipt.
-  @Index
   @ForeignKey(() => {
     return AiProvider;
   })

@@ -31,7 +31,7 @@ import { UsageEvent } from './UsageEvent';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['usage_event_id'] },
+    { name: 'usage_components_usage_event_id_idx', fields: ['usage_event_id'] },
   ],
   hooks: {
     beforeValidate: (instance: UsageComponent) => {

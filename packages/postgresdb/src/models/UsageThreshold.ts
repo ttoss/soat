@@ -3,7 +3,6 @@ import {
   Column,
   DataType,
   ForeignKey,
-  Index,
   Model,
   Table,
 } from '@ttoss/postgresdb';
@@ -30,7 +29,7 @@ import { Project } from './Project';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id'] },
+    { name: 'usage_thresholds_project_id_idx', fields: ['project_id'] },
   ],
   hooks: {
     beforeValidate: (instance: UsageThreshold) => {
@@ -47,7 +46,6 @@ export class UsageThreshold extends Model {
   })
   declare publicId: string;
 
-  @Index
   @ForeignKey(() => {
     return Project;
   })

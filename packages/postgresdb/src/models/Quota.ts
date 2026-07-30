@@ -20,8 +20,11 @@ import { QuotaWindowCounter } from './QuotaWindowCounter';
       unique: true,
       fields: ['public_id'],
     },
-    { fields: ['project_id'] },
-    { fields: ['project_id', 'scope', 'scope_ref', 'metric'] },
+    { name: 'quotas_project_id_idx', fields: ['project_id'] },
+    {
+      name: 'quotas_project_id_scope_scope_ref_metric_idx',
+      fields: ['project_id', 'scope', 'scope_ref', 'metric'],
+    },
   ],
   hooks: {
     beforeValidate: (instance: Quota) => {

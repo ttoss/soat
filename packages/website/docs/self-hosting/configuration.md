@@ -1,5 +1,5 @@
 ---
-description: "Reference for every SOAT server environment variable, with guidance for production deployments."
+description: 'Reference for every SOAT server environment variable, with guidance for production deployments.'
 sidebar_label: Configuration
 ---
 
@@ -25,12 +25,12 @@ The database must have the [pgvector](https://github.com/pgvector/pgvector) exte
 
 The `DATABASE_*` variables above set the host, port, name, user, and password. For anything else — most commonly TLS behavior — SOAT relies on the underlying [`node-postgres`](https://node-postgres.com/features/connecting#environment-variables) driver, which honors the standard [libpq `PG*` environment variables](https://www.postgresql.org/docs/current/libpq-envars.html). Set any of them alongside the `DATABASE_*` variables when you need finer-grained control over the connection.
 
-| Variable    | Description                                                                                              |
-| ----------- | -------------------------------------------------------------------------------------------------------- |
-| `PGSSLMODE` | SSL negotiation mode: `disable`, `prefer`, `require`, `verify-ca`, `verify-full`, or `no-verify`         |
-| `PGSSLROOTCERT` | Path to a CA certificate bundle used to verify the server certificate (required for `verify-full`)   |
-| `PGCONNECT_TIMEOUT` | Connection timeout in seconds                                                                     |
-| `PGOPTIONS` | Command-line options to send to the server at connection time                                            |
+| Variable            | Description                                                                                        |
+| ------------------- | -------------------------------------------------------------------------------------------------- |
+| `PGSSLMODE`         | SSL negotiation mode: `disable`, `prefer`, `require`, `verify-ca`, `verify-full`, or `no-verify`   |
+| `PGSSLROOTCERT`     | Path to a CA certificate bundle used to verify the server certificate (required for `verify-full`) |
+| `PGCONNECT_TIMEOUT` | Connection timeout in seconds                                                                      |
+| `PGOPTIONS`         | Command-line options to send to the server at connection time                                      |
 
 The full list is documented in the [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html) reference. These take effect without any SOAT-specific configuration.
 
@@ -62,14 +62,22 @@ On boot, SOAT runs `sync({ alter: true })` behind a **session-level Postgres adv
 
 That wait is **bounded**. If a task is SIGKILLed (grace-period expiry, OOM) while holding the lock mid-sync, its Postgres backend can linger — behind a connection pooler or a managed engine like Aurora it may take minutes to be reaped — leaving the session lock held. Without a bound, every later boot would block on lock acquisition forever and the whole deploy would deadlock. The bound turns that into a fast, logged failure (`canceling statement due to lock timeout`) that exits the process with a non-zero code, so the orchestrator restarts the task cleanly.
 
-| Variable                       | Default          | Description                                                                        |
-| ------------------------------ | ---------------- | --------------------------------------------------------------------------------- |
-| `SCHEMA_SYNC_LOCK_TIMEOUT_MS`  | `600000` (10min) | Upper bound in milliseconds on how long boot waits to acquire the schema-sync advisory lock before failing fast |
+| Variable                      | Default          | Description                                                                                                     |
+| ----------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `SCHEMA_SYNC_LOCK_TIMEOUT_MS` | `600000` (10min) | Upper bound in milliseconds on how long boot waits to acquire the schema-sync advisory lock before failing fast |
 
 Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) falls back to the default — a misconfigured bound never becomes an unbounded wait.
 
 :::warning
 Keep this value **larger than a legitimate migration's duration.** A task that is merely waiting for a live peer's `sync` to finish should wait it out rather than abort. Align it with your deployment's health-check grace period. Lower it only if your migrations are known to be fast and you want boots to fail sooner when a lock is genuinely stuck.
+:::
+
+:::note Indexes are never dropped by the sync
+
+`sync({ alter: true })` is additive where indexes are concerned: it creates what the current schema declares and never drops what an earlier version declared. When a SOAT release renames an index, the previous one stays in your database, and a release that _widens_ a unique index leaves its narrower predecessor in place — still enforcing the old constraint.
+
+Release notes call out any index that needs dropping. Apply it with `DROP INDEX CONCURRENTLY IF EXISTS <name>` (or `ALTER TABLE <table> DROP CONSTRAINT IF EXISTS <name>` when a UNIQUE constraint owns the index). Leaving one in place costs disk and write throughput; leaving a stale _unique_ index in place can reject writes the current schema permits.
+
 :::
 
 ### Server
@@ -170,15 +178,15 @@ If an external tool server does not respond within this window, the call is abor
 
 SOAT uses [Ollama](https://ollama.com) by default for generating vector embeddings, and also supports [OpenAI](https://platform.openai.com/docs/guides/embeddings) and [Amazon Bedrock](https://docs.aws.amazon.com/bedrock/latest/userguide/titan-embedding-models.html).
 
-| Variable               | Default                  | Description                                                                                    |
-| ---------------------- | ------------------------ | ---------------------------------------------------------------------------------------------- |
-| `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                           |
-| `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                           |
-| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model)                                             |
-| `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                                |
-| `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY`     |
-| `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                            |
-| `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                             |
+| Variable               | Default                  | Description                                                                                |
+| ---------------------- | ------------------------ | ------------------------------------------------------------------------------------------ |
+| `EMBEDDING_PROVIDER`   | `ollama`                 | Embedding provider: `ollama`, `openai`, or `bedrock`                                       |
+| `EMBEDDING_MODEL`      | `qwen3-embedding:0.6b`   | Model name for the selected provider                                                       |
+| `EMBEDDING_DIMENSIONS` | `1024`                   | Embedding vector dimensions (must match the model)                                         |
+| `OLLAMA_BASE_URL`      | `http://localhost:11434` | Base URL of the Ollama instance (`ollama` only)                                            |
+| `EMBEDDING_API_KEY`    | —                        | OpenAI API key, or a Bedrock `ABSK…` bearer token. `openai` falls back to `OPENAI_API_KEY` |
+| `EMBEDDING_BASE_URL`   | —                        | Override base URL for an OpenAI-compatible endpoint (`openai` only)                        |
+| `EMBEDDING_REGION`     | `us-east-1`              | AWS region for Bedrock (`bedrock` only); falls back to `AWS_REGION`                        |
 
 To use a different embedding model, update `EMBEDDING_MODEL` and `EMBEDDING_DIMENSIONS` together — the model name and dimension count must be consistent. For `openai` and `bedrock`, set the provider's credentials as well; Bedrock without `EMBEDDING_API_KEY` uses the standard AWS credential chain (`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`).
 
