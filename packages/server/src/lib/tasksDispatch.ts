@@ -3,7 +3,18 @@ import type { GenerationResult } from './agentGenerationHelpers';
 import { createGeneration } from './agents';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
+import type { MappedOrchestrationRun } from './orchestrations';
 import type { WorkflowDispatch } from './workflowsValidation';
+
+// Terminal statuses `startOrchestrationRun({ wait: true })` can settle a run
+// into other than success. Unlike a failed agent generation (which throws),
+// a failed/cancelled/expired orchestration run resolves normally with its
+// partial state — so runDispatch must check for these explicitly rather than
+// relying on a rejected promise, or a failed dispatch would look identical to
+// a successful one to its caller.
+const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
+  MappedOrchestrationRun['status']
+> = new Set(['failed', 'cancelled', 'expired']);
 
 export type DispatchResult = {
   result: unknown;
@@ -71,6 +82,21 @@ export const runDispatch = async (args: {
         }
       : undefined,
   });
+
+  if (NON_SUCCESS_TERMINAL_STATUSES.has(run.status)) {
+    const runError =
+      run.error && typeof run.error === 'object' && 'message' in run.error
+        ? String((run.error as { message?: unknown }).message)
+        : `Orchestration run ended with status '${run.status}'`;
+    // Meta keys are written snake_case to match failedDispatchIds and the
+    // external REST contract, mirroring recordGenerationFailure's
+    // generation_id shape for the agent-dispatch failure path.
+    throw new DomainError('ORCHESTRATION_DISPATCH_FAILED', runError, {
+      orchestration_run_id: run.id,
+      run_status: run.status,
+    });
+  }
+
   return {
     result: run.state ?? {},
     generationId: null,

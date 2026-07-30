@@ -200,6 +200,11 @@ export const ERROR_CODES = {
     description:
       'A poll node reached its attempt limit without its exit condition becoming true (only raised when fail_on_timeout is set).',
   },
+  ORCHESTRATION_DISPATCH_FAILED: {
+    httpStatus: 422,
+    description:
+      "A workflow on_enter dispatch's orchestration run settled in a non-success terminal status (failed, cancelled, or expired).",
+  },
   EMBEDDING_NOT_CONFIGURED: {
     httpStatus: 503,
     description:
