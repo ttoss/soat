@@ -324,9 +324,15 @@ Start a generation the same way as for any [agent](/docs/modules/agents#examples
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-GEN_RESPONSE=$(soat create-agent-generation \
-  --agent-id "$AGENT_ID" \
-  --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]')
+# A small local model occasionally answers directly on the first attempt
+# instead of honoring the forced tool_choice — retry a few times.
+for i in $(seq 1 5); do \
+  GEN_RESPONSE=$(soat create-agent-generation \
+    --agent-id "$AGENT_ID" \
+    --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]'); \
+  [ "$(echo "$GEN_RESPONSE" | jq -r '.status')" = "requires_action" ] && break; \
+  sleep 1; \
+done
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
 
 GEN_ID=$(echo "$GEN_RESPONSE" | jq -r '.id')
@@ -340,14 +346,21 @@ echo "Generation $GEN_ID paused; pending tool call: $TOOL_CALL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: generation } = await adminSoat.agents.createAgentGeneration({
-  path: { agent_id: agentId },
-  body: {
-    messages: [
-      { role: 'user', content: 'What is the status of order ord_1042?' },
-    ],
-  },
-});
+// A small local model occasionally answers directly on the first attempt
+// instead of honoring the forced tool_choice — retry a few times.
+let generation;
+for (let attempt = 0; attempt < 5; attempt++) {
+  const { data } = await adminSoat.agents.createAgentGeneration({
+    path: { agent_id: agentId },
+    body: {
+      messages: [
+        { role: 'user', content: 'What is the status of order ord_1042?' },
+      ],
+    },
+  });
+  generation = data;
+  if (generation!.status === 'requires_action') break;
+}
 
 console.log(generation!.status); // "requires_action"
 const toolCall = generation!.required_action!.tool_calls[0];
@@ -358,10 +371,16 @@ console.log(toolCall.tool_name, toolCall.args); // "get_order_status" { orderId:
 <TabItem value="curl" label="curl">
 
 ```bash
-GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}')
+# A small local model occasionally answers directly on the first attempt
+# instead of honoring the forced tool_choice — retry a few times.
+for i in $(seq 1 5); do \
+  GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" \
+    -H "Content-Type: application/json" \
+    -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}'); \
+  [ "$(echo "$GEN_RESPONSE" | jq -r '.status')" = "requires_action" ] && break; \
+  sleep 1; \
+done
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
 
 GEN_ID=$(echo "$GEN_RESPONSE" | jq -r '.id')
