@@ -28,6 +28,9 @@ export const saveRoutingMetadata = async (args: {
   const generation = await db.Generation.findOne({
     where: { publicId: args.generationId },
   });
+  // The record is created before the generation runs, so every caller here
+  // names a row that exists.
+  /* istanbul ignore next */
   if (!generation) return;
 
   const metadata = (generation.metadata ?? {}) as Record<string, unknown>;

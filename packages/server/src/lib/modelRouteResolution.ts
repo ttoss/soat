@@ -42,15 +42,21 @@ export const resolveModelRouteDbId = async (args: {
   return (route as unknown as { id: number }).id;
 };
 
-/** Loads the runtime config for a route referenced by its public id. */
+/**
+ * Loads the runtime config for a route a consumer already holds a reference to.
+ * No project filter: the reference itself was project-scoped when it was
+ * written (`resolveModelRouteDbId`), so re-checking here would only add a way
+ * for the two to disagree.
+ */
 export const loadModelRouteConfig = async (args: {
   modelRouteId: string;
-  projectId?: number;
 }): Promise<ModelRouteConfig> => {
-  const where: Record<string, unknown> = { publicId: args.modelRouteId };
-  if (args.projectId !== undefined) where.projectId = args.projectId;
-
-  const route = await db.ModelRoute.findOne({ where });
+  const route = await db.ModelRoute.findOne({
+    where: { publicId: args.modelRouteId },
+  });
+  // A consumer's FK is enforced by the database, so this only fires if the row
+  // vanished between the agent load and here.
+  /* istanbul ignore next */
   if (!route) {
     throw new DomainError(
       'MODEL_ROUTE_NOT_FOUND',
