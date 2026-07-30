@@ -29,6 +29,7 @@ export const agentsRouter = new Router<Context>();
 
 type CreateAgentBody = {
   ai_provider_id?: unknown;
+  model_route_id?: unknown;
   name?: unknown;
   instructions?: unknown;
   model?: unknown;
@@ -140,8 +141,8 @@ const parseUpdateAgentBody = (
   tools: InlineToolDefinition[] | null | undefined
 ) => {
   return {
-    aiProviderId:
-      typeof body.ai_provider_id === 'string' ? body.ai_provider_id : undefined,
+    aiProviderId: parseNullableString(body.ai_provider_id),
+    modelRouteId: parseNullableString(body.model_route_id),
     name: parseNullableString(body.name),
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
@@ -192,6 +193,16 @@ const resolveAgentProjectId = async (
   return targetProjectId;
 };
 
+/** The create-time model binding: exactly one of these reaches `createAgent`. */
+const parseModelBinding = (body: CreateAgentBody) => {
+  return {
+    aiProviderId:
+      typeof body.ai_provider_id === 'string' ? body.ai_provider_id : undefined,
+    modelRouteId:
+      typeof body.model_route_id === 'string' ? body.model_route_id : undefined,
+  };
+};
+
 const buildCreateAgentArgs = (
   projectId: number,
   body: CreateAgentBody,
@@ -199,7 +210,7 @@ const buildCreateAgentArgs = (
 ): Parameters<typeof createAgent>[0] => {
   return {
     projectId,
-    aiProviderId: body.ai_provider_id as string,
+    ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
     instructions:
       typeof body.instructions === 'string' ? body.instructions : undefined,
@@ -268,12 +279,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const reqBody = ctx.request.body as CreateAgentBody;
-
-  if (!reqBody.ai_provider_id || typeof reqBody.ai_provider_id !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'ai_provider_id is required' };
-    return;
-  }
 
   const tools = parseInlineTools(reqBody.tools);
   if (tools === 'invalid') {

@@ -28,6 +28,7 @@ import {
   recordGenerationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
 import { serializeSteps } from './traces';
@@ -187,6 +188,9 @@ const callGenerateText = async (args: {
       stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
       temperature: (args.typedAgent.temperature as number) ?? undefined,
       abortSignal: args.abortSignal,
+      // The route config is the only retry authority for a routed model; a
+      // non-routed model keeps the SDK default.
+      maxRetries: routedMaxRetries(args.model),
       output: buildStructuredOutput(args.typedAgent.outputSchema),
     });
   } catch (error) {
@@ -377,6 +381,7 @@ const resolveGenerationResult = async (args: {
     },
     typedAgent: args.typedAgent,
     agentId: args.agentId,
+    model: args.model,
   });
 };
 
@@ -468,6 +473,7 @@ export const runToolOutputsGeneration = async (args: {
       }),
       stopWhen: isStepCount(args.pending.agentConfig.maxSteps),
       temperature: args.pending.agentConfig.temperature ?? undefined,
+      maxRetries: routedMaxRetries(args.pending.resolvedModel),
       output: buildStructuredOutput(args.pending.agentConfig.outputSchema),
     });
   } catch (error) {
@@ -475,6 +481,7 @@ export const runToolOutputsGeneration = async (args: {
       generationId: args.generationId,
       traceId: args.pending.traceId,
       error: toProviderDomainError(error) ?? error,
+      model: args.pending.resolvedModel,
     });
   }
 };

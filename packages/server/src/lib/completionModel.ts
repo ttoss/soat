@@ -10,6 +10,27 @@ import { buildModel } from './agentModel';
 const log = createDebug('soat:completion-model');
 
 /**
+ * The provider an internal system completion runs on: the explicit override,
+ * else the agent's pinned provider. Internal completions still resolve a single
+ * provider, so a route-only agent needs an explicit `ai_provider_id` on the
+ * completion config.
+ */
+const resolveProviderId = (args: {
+  agentId: string;
+  overrideId?: string;
+  pinnedId?: string;
+}): string => {
+  const providerId = args.overrideId ?? args.pinnedId;
+  if (!providerId) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `Agent '${args.agentId}' resolves its model through a model route; set an explicit ai_provider_id for this completion.`
+    );
+  }
+  return providerId;
+};
+
+/**
  * Resolves a LanguageModel for an internal system completion (memory
  * extraction, discussion turns) anchored to an agent.
  *
@@ -60,7 +81,15 @@ export const resolveCompletionModel = async (args: {
     }
   }
 
-  const providerId = args.aiProviderId ?? typedAgent.aiProvider.publicId;
+  // Internal system completions (memory extraction/consolidation, discussions)
+  // still resolve a single provider. A route-only agent therefore needs an
+  // explicit `ai_provider_id` override on the completion config until routed
+  // resolution reaches these consumers.
+  const providerId = resolveProviderId({
+    agentId: args.agentId,
+    overrideId: args.aiProviderId,
+    pinnedId: typedAgent.aiProvider?.publicId,
+  });
   const resolved = await resolveAiProviderSecret({ aiProviderId: providerId });
 
   if (!resolved) {

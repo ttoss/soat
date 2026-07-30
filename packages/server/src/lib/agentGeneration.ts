@@ -309,6 +309,7 @@ export const createGeneration = async (
       generationId: ctx.generationId,
       traceId,
       error,
+      model: ctx.model,
     });
   }
 };

@@ -519,16 +519,28 @@ components:
     AgentResourceProperties:
       description: >-
         Creates an AI agent backed by a provider. The agent handles requests,
-        runs tools, and can be attached to actors.
+        runs tools, and can be attached to actors. Exactly one of
+        `ai_provider_id` or `model_route_id` must be declared. Switching an
+        existing agent between the two declares the new field together with an
+        explicit `null` for the old one.
       type: object
       additionalProperties: false
-      required:
-        - ai_provider_id
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider
+          nullable: true
+          description: >-
+            Public ID of the AI provider to pin. Mutually exclusive with
+            `model_route_id`.
+        model_route_id:
+          x-soat-ref: model-routes
+          type: string
+          nullable: true
+          description: >-
+            Public ID of a model route in the same project — the agent's
+            completion model is resolved through the route's ordered targets
+            with failover. Mutually exclusive with `ai_provider_id` and `model`.
         name:
           type: string
           nullable: true

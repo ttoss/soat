@@ -1,6 +1,7 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { findModelRoutesReferencingProvider } from 'src/lib/modelRouteReferences';
 import { paginatedList } from 'src/lib/pagination';
 import { decryptValue } from 'src/lib/secrets';
 
@@ -130,14 +131,25 @@ const DEPENDENT_ID_SAMPLE_CAP = 20;
 // someone's work. Soft dependents (price overrides, usage/generation records,
 // discussion participants) are bookkeeping that only has meaning relative to the
 // provider — they block by default but clear under `force`.
-const collectAiProviderDependents = async (aiProviderId: number) => {
+const collectAiProviderDependents = async (args: {
+  aiProviderId: number;
+  aiProviderPublicId: string;
+  projectId: number;
+}) => {
+  const aiProviderId = args.aiProviderId;
   const where = { aiProviderId };
   const attributes = ['publicId'];
 
-  const [chats, agents, discussions] = await Promise.all([
+  const [chats, agents, discussions, modelRoutes] = await Promise.all([
     db.Chat.findAll({ where, attributes }),
     db.Agent.findAll({ where, attributes }),
     db.Discussion.findAll({ where, attributes }),
+    // A route target names its provider inside JSONB, so no FK protects it —
+    // the reference is live all the same (see `modelRouteReferences`).
+    findModelRoutesReferencingProvider({
+      projectId: args.projectId,
+      aiProviderPublicId: args.aiProviderPublicId,
+    }),
   ]);
 
   const [priceOverrideCount, usageEventCount, discussionParticipantCount] =
@@ -147,7 +159,8 @@ const collectAiProviderDependents = async (aiProviderId: number) => {
       db.DiscussionParticipant.count({ where }),
     ]);
 
-  const hardCount = chats.length + agents.length + discussions.length;
+  const hardCount =
+    chats.length + agents.length + discussions.length + modelRoutes.length;
   const softCount =
     priceOverrideCount + usageEventCount + discussionParticipantCount;
 
@@ -164,6 +177,8 @@ const collectAiProviderDependents = async (aiProviderId: number) => {
     agentIds: sample(agents),
     discussionCount: discussions.length,
     discussionIds: sample(discussions),
+    modelRouteCount: modelRoutes.length,
+    modelRouteIds: sample(modelRoutes),
     priceOverrideCount,
     usageEventCount,
     discussionParticipantCount,
@@ -172,7 +187,15 @@ const collectAiProviderDependents = async (aiProviderId: number) => {
     forcible: hardCount === 0,
   };
 
-  return { chats, agents, discussions, hardCount, softCount, meta };
+  return {
+    chats,
+    agents,
+    discussions,
+    modelRoutes,
+    hardCount,
+    softCount,
+    meta,
+  };
 };
 
 export const deleteAiProvider = async (args: {
@@ -184,14 +207,26 @@ export const deleteAiProvider = async (args: {
   });
   if (!instance) return null;
 
-  const { chats, agents, discussions, hardCount, softCount, meta } =
-    await collectAiProviderDependents(instance.id);
+  const {
+    chats,
+    agents,
+    discussions,
+    modelRoutes,
+    hardCount,
+    softCount,
+    meta,
+  } = await collectAiProviderDependents({
+    aiProviderId: instance.id,
+    aiProviderPublicId: instance.publicId,
+    projectId: instance.projectId,
+  });
 
   if (hardCount > 0) {
     const parts = [
       chats.length > 0 ? `${chats.length} chat(s)` : null,
       agents.length > 0 ? `${agents.length} agent(s)` : null,
       discussions.length > 0 ? `${discussions.length} discussion(s)` : null,
+      modelRoutes.length > 0 ? `${modelRoutes.length} model route(s)` : null,
     ].filter(Boolean);
     throw new DomainError(
       'AI_PROVIDER_HAS_DEPENDENTS',

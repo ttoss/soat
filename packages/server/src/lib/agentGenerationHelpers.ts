@@ -11,6 +11,8 @@ import createDebug from 'debug';
 
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
+import { routedMaxRetries } from './modelRouteExecutor';
+import { saveRoutingMetadata } from './modelRouteMetadata';
 import { saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
 
@@ -154,7 +156,11 @@ export type TypedAgent = {
   outputSchema: unknown;
   guardrailIds?: string[] | null;
   project: { id: unknown; publicId: string; guardrailIds?: string[] | null };
-  aiProvider: { publicId: string };
+  // Exactly one of these is set (enforced on every agent write path by
+  // `validateModelRouteExclusivity`): a pinned provider, or a model route whose
+  // ordered targets resolve the completion model with failover.
+  aiProvider: { publicId: string } | null;
+  modelRoute?: { publicId: string } | null;
 };
 
 // ── In-Memory Store ───────────────────────────────────────────────────────
@@ -285,6 +291,8 @@ export const runStreamGeneration = (args: {
   log('runStreamGeneration: tools=%o', Object.keys(args.resolvedTools));
   const result = streamText({
     model: args.model,
+    // Routed models own every attempt themselves (see `routedMaxRetries`).
+    maxRetries: routedMaxRetries(args.model),
     instructions: system,
     messages: nonSystemMessages as ModelMessage[],
     tools:
@@ -311,6 +319,13 @@ export const runStreamGeneration = (args: {
         completedAt: new Date(),
         stopReason: finishReason,
       }).catch(() => {});
+      saveRoutingMetadata({
+        generationId: args.generationId,
+        model: args.model,
+      }).catch(
+        /* istanbul ignore next -- fire-and-forget alongside the trace write */
+        () => {}
+      );
       // recordGenerationUsage never rejects (it catches internally), so `void`
       // marks the intentional fire-and-forget without an extra no-op handler.
       void recordGenerationUsage({
@@ -494,7 +509,13 @@ export const buildCompletedGenerationResult = async (args: {
   };
   typedAgent: TypedAgent;
   agentId: string;
+  /** The model the turn ran on — routed models stamp `metadata.routing`. */
+  model?: LanguageModel;
 }): Promise<GenerationResult> => {
+  await saveRoutingMetadata({
+    generationId: args.generationId,
+    model: args.model,
+  });
   const serializedStepsCompleted = serializeSteps(
     args.result.steps as unknown[]
   );

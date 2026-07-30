@@ -65,8 +65,9 @@ const INTERNAL_METADATA_KEYS = ['pendingState'];
 // `pendingState` is internal recovery state; `action_id`/`trigger_id`/`orchestration_run_id`/
 // `node_id` are the wire names (see generations.yaml) for the usage-attribution
 // keys read back by usageRecording.ts (stored internally as `actionId`/
-// `triggerId`/`orchestrationRunId`/`nodeId`); and `extraction` is the memory-extraction
-// summary written on completion. Writes that include any of these are rejected
+// `triggerId`/`orchestrationRunId`/`nodeId`); `extraction` is the memory-extraction
+// summary written on completion; and `routing` is the model route's own record of
+// which target served the generation. Writes that include any of these are rejected
 // so caller metadata can never corrupt system bookkeeping or usage rollups.
 // Reserved-key validation runs against the raw wire request body (there is no
 // recursive case-transform middleware anymore), so both the wire (snake_case)
@@ -85,6 +86,9 @@ export const RESERVED_GENERATION_METADATA_KEYS = [
   'node_id',
   'nodeId',
   'extraction',
+  // Written by the model-route executor: which target actually served the
+  // generation, and every attempt it burned getting there.
+  'routing',
 ];
 
 // Validates caller-supplied generation metadata. Shared by the create-agent-

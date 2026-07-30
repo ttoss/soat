@@ -305,7 +305,7 @@ permissions JSON, `pnpm --filter @soat/sdk generate` +
 `packages/website/docs/modules/model-routes.md`, tests in
 `tests/unit/tests/rest/model-routes.test.ts`.
 
-### Phase 1 — CRUD, Composite Executor, Agent Consumption (non-streaming) ❌ Not started
+### Phase 1 — CRUD, Composite Executor, Agent Consumption (non-streaming) ✅ Done
 
 **Deliverables:**
 
@@ -355,11 +355,18 @@ permissions JSON, `pnpm --filter @soat/sdk generate` +
 - An agent without `model_route_id` produces byte-identical resolution
   behavior to today (existing tests stay green).
 
-### Phase 2 — Circuit Breaker, Streaming, Routing Metadata ❌ Not started
+### Phase 2 — Circuit Breaker, Streaming, Routing Metadata ✅ Done
 
 **Deliverables:** in-process breaker keyed `(ai_provider_db_id, model)`;
 pre-first-token fallback for streaming (the composite's `doStream` arm);
 `routing` metadata written to Generation.
+
+> Shipped alongside Phase 1: the composite's `doStream` arm and the shared
+> breaker are the same object as `doGenerate`, so splitting them across two
+> changes would have meant landing an executor with a knowingly untested arm.
+> `routing` is written by `saveRoutingMetadata` from the completion, failure,
+> and continuation paths, and is a reserved generation-metadata key so a caller
+> cannot forge it.
 
 **Acceptance criteria:**
 
@@ -376,6 +383,12 @@ pre-first-token fallback for streaming (the composite's `doStream` arm);
   and metadata records no additional attempts.
 
 ### Phase 3 — Remaining Consumers + Formation Resource ❌ Not started
+
+> Until this lands, `resolveCompletionModel` rejects a route-only agent with
+> `AI_PROVIDER_NOT_FOUND` naming the fix ("set an explicit ai_provider_id for
+> this completion") rather than resolving a model the caller did not configure.
+> The provider-delete guard already treats a model route as a live reference, so
+> a target can never dangle.
 
 **Deliverables:** `model_route_id` accepted by the remaining resolution
 sites — `chatCompletionModel.ts` (chats), `discussionCompletion.ts`

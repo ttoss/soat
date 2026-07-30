@@ -1,0 +1,30 @@
+{
+  "module": "model-routes",
+  "operations": [
+    {
+      "operationId": "listModelRoutes",
+      "action": "model-routes:ListModelRoutes",
+      "description": "List model routes in a project"
+    },
+    {
+      "operationId": "createModelRoute",
+      "action": "model-routes:CreateModelRoute",
+      "description": "Create a model route"
+    },
+    {
+      "operationId": "getModelRoute",
+      "action": "model-routes:GetModelRoute",
+      "description": "Get a model route by ID"
+    },
+    {
+      "operationId": "updateModelRoute",
+      "action": "model-routes:UpdateModelRoute",
+      "description": "Update a model route's name, targets, retry classes, or breaker configuration"
+    },
+    {
+      "operationId": "deleteModelRoute",
+      "action": "model-routes:DeleteModelRoute",
+      "description": "Delete a model route"
+    }
+  ]
+}

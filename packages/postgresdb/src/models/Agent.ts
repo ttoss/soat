@@ -9,6 +9,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { AiProvider } from './AiProvider';
+import { ModelRoute } from './ModelRoute';
 import { Project } from './Project';
 
 @Table({
@@ -46,16 +47,33 @@ export class Agent extends Model {
   })
   declare project: Project;
 
+  /**
+   * Nullable because an agent resolves its completion model through EITHER a
+   * pinned provider (`aiProviderId` + `model`) OR a `modelRouteId` — never
+   * both, never neither. The invariant is enforced by
+   * `validateModelRouteExclusivity` on every write path.
+   */
   @ForeignKey(() => {
     return AiProvider;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare aiProviderId: number;
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare aiProviderId: number | null;
 
   @BelongsTo(() => {
     return AiProvider;
   })
-  declare aiProvider: AiProvider;
+  declare aiProvider: AiProvider | null;
+
+  @ForeignKey(() => {
+    return ModelRoute;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare modelRouteId: number | null;
+
+  @BelongsTo(() => {
+    return ModelRoute;
+  })
+  declare modelRoute: ModelRoute | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare name: string | null;

@@ -15,6 +15,10 @@ import {
 } from './agentToolBindings';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
+import {
+  resolveModelRouteDbId,
+  validateModelRouteExclusivity,
+} from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { type InlineToolDefinition } from './tools';
@@ -36,7 +40,10 @@ export { resolveUrlPathParams } from './agentToolResolver';
 export type MappedAgent = {
   id: string;
   project_id: string;
-  ai_provider_id: string;
+  /** Null when the agent resolves its model through `model_route_id` instead. */
+  ai_provider_id: string | null;
+  /** Null when the agent pins a provider through `ai_provider_id` instead. */
+  model_route_id: string | null;
   name: string | null;
   instructions: string | null;
   model: string | null;
@@ -65,13 +72,15 @@ const getAgentIncludes = () => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.AiProvider, as: 'aiProvider' },
+    { model: db.ModelRoute, as: 'modelRoute' },
   ];
 };
 
 const mapAgent = (
   agent: InstanceType<typeof db.Agent> & {
     project: InstanceType<typeof db.Project>;
-    aiProvider: InstanceType<typeof db.AiProvider>;
+    aiProvider: InstanceType<typeof db.AiProvider> | null;
+    modelRoute: InstanceType<typeof db.ModelRoute> | null;
   }
 ): MappedAgent => {
   // Canonical bindings (legacy rows normalize lazily); the deprecated
@@ -82,7 +91,8 @@ const mapAgent = (
   return {
     id: agent.publicId,
     project_id: agent.project.publicId,
-    ai_provider_id: agent.aiProvider.publicId,
+    ai_provider_id: agent.aiProvider?.publicId ?? null,
+    model_route_id: agent.modelRoute?.publicId ?? null,
     name: agent.name,
     instructions: agent.instructions,
     model: agent.model,
@@ -109,7 +119,8 @@ const mapAgent = (
 // ── Agent CRUD Helpers ────────────────────────────────────────────────────
 
 type AgentUpdateFields = {
-  aiProviderId?: string;
+  aiProviderId?: string | null;
+  modelRouteId?: string | null;
   name?: string | null;
   instructions?: string | null;
   model?: string | null;
@@ -167,11 +178,67 @@ const resolveAiProviderDbId = async (
   return aiProvider ? (aiProvider as unknown as { id: number }).id : null;
 };
 
+/**
+ * An agent resolves its completion model through exactly one of a pinned
+ * provider or a model route. The rule itself lives in `modelRoutes` (shared
+ * with the formation module); this asserts it and translates the message into
+ * the standard `VALIDATION_FAILED` (400).
+ */
+const assertModelBindingExclusive = (args: {
+  modelRouteId: unknown;
+  aiProviderId: unknown;
+  model: unknown;
+}): void => {
+  const error = validateModelRouteExclusivity(args);
+  if (error) throw new DomainError('VALIDATION_FAILED', error);
+};
+
+const requireAiProviderDbId = async (publicId: string): Promise<number> => {
+  const dbId = await resolveAiProviderDbId(publicId);
+  if (!dbId) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      `AI provider '${publicId}' not found.`
+    );
+  }
+  return dbId;
+};
+
+/**
+ * Resolves the create-time model binding: exactly one of a pinned provider or a
+ * model route, both stored as internal ids.
+ */
+const resolveCreateModelBinding = async (args: {
+  projectId: number;
+  aiProviderId?: string;
+  modelRouteId?: string;
+  model?: string;
+}): Promise<{ aiProviderId: number | null; modelRouteId: number | null }> => {
+  assertModelBindingExclusive({
+    modelRouteId: args.modelRouteId,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
+  });
+
+  return {
+    aiProviderId: args.aiProviderId
+      ? await requireAiProviderDbId(args.aiProviderId)
+      : null,
+    modelRouteId: args.modelRouteId
+      ? await resolveModelRouteDbId({
+          modelRouteId: args.modelRouteId,
+          projectId: args.projectId,
+        })
+      : null,
+  };
+};
+
 // ── Agent CRUD ───────────────────────────────────────────────────────────
 
 export const createAgent = async (args: {
   projectId: number;
-  aiProviderId: string;
+  aiProviderId?: string;
+  modelRouteId?: string;
   name?: string;
   instructions?: string;
   model?: string;
@@ -193,12 +260,7 @@ export const createAgent = async (args: {
 }): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
 
-  const aiProviderId = await resolveAiProviderDbId(args.aiProviderId);
-  if (!aiProviderId)
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider '${args.aiProviderId}' not found.`
-    );
+  const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
   await assertGuardrailsExist({
     guardrailIds: args.guardrailIds,
@@ -229,6 +291,7 @@ export const createAgent = async (args: {
     tools: null,
     projectId: args.projectId,
     aiProviderId,
+    modelRouteId,
   });
 
   const created = await db.Agent.findOne({
@@ -296,6 +359,52 @@ export const getAgent = async (args: {
   return mapAgent(agent as unknown as Parameters<typeof mapAgent>[0]);
 };
 
+/** The value a field will hold after the update: incoming, else stored. */
+const effectiveValue = (incoming: unknown, stored: unknown): unknown => {
+  return incoming !== undefined ? incoming : stored;
+};
+
+/**
+ * Applies the `ai_provider_id` / `model_route_id` half of an update. The
+ * exclusivity invariant is checked against the **effective post-write state**
+ * (the incoming value where provided, the stored one otherwise), so a partial
+ * update that touches neither field can never trip it — and switching an agent
+ * to a route requires clearing the pin in the same request.
+ */
+const applyModelBindingUpdates = async (args: {
+  agent: InstanceType<typeof db.Agent>;
+  args: AgentUpdateFields;
+  updates: Record<string, unknown>;
+}): Promise<void> => {
+  const { agent, args: fields, updates } = args;
+  const projectId = (agent as unknown as { projectId: number }).projectId;
+
+  const touchesBinding =
+    fields.aiProviderId !== undefined || fields.modelRouteId !== undefined;
+  if (!touchesBinding && fields.model === undefined) return;
+
+  assertModelBindingExclusive({
+    aiProviderId: effectiveValue(fields.aiProviderId, agent.aiProviderId),
+    modelRouteId: effectiveValue(fields.modelRouteId, agent.modelRouteId),
+    model: effectiveValue(fields.model, agent.model),
+  });
+
+  if (fields.aiProviderId !== undefined) {
+    updates.aiProviderId = fields.aiProviderId
+      ? await requireAiProviderDbId(fields.aiProviderId)
+      : null;
+  }
+
+  if (fields.modelRouteId !== undefined) {
+    updates.modelRouteId = fields.modelRouteId
+      ? await resolveModelRouteDbId({
+          modelRouteId: fields.modelRouteId,
+          projectId,
+        })
+      : null;
+  }
+};
+
 export const updateAgent = async (
   args: {
     projectIds?: number[];
@@ -337,15 +446,7 @@ export const updateAgent = async (
     updates.tools = null;
   }
 
-  if (args.aiProviderId !== undefined) {
-    const dbId = await resolveAiProviderDbId(args.aiProviderId);
-    if (!dbId)
-      throw new DomainError(
-        'AI_PROVIDER_NOT_FOUND',
-        `AI provider '${args.aiProviderId}' not found.`
-      );
-    updates.aiProviderId = dbId;
-  }
+  await applyModelBindingUpdates({ agent, args, updates });
 
   await agent.update(updates);
 

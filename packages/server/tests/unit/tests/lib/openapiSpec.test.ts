@@ -211,8 +211,25 @@ describe('openapiSpec', () => {
       expect(create.allowedFields.has('aiProviderId')).toBe(false);
       expect(create.allowedFields.has('maxSteps')).toBe(false);
 
-      // required is derived from the schema's `required` array
-      expect([...create.requiredFields]).toEqual(['ai_provider_id']);
+      // `CreateAgentRequest` declares no required field: an agent must set
+      // exactly one of `ai_provider_id` / `model_route_id`, which an OpenAPI
+      // `required` array cannot express — `validateModelRouteExclusivity` owns
+      // it instead. Asserted so re-adding `required: [ai_provider_id]` (which
+      // would make a route-only agent unrepresentable) fails here.
+      expect(create.requiredFields.size).toBe(0);
+    });
+
+    test('derives required fields from the schema’s own `required` array', () => {
+      const tool = getRequestSchemaFields({ schemaName: 'CreateToolRequest' });
+      expect([...tool.requiredFields]).toEqual(['name']);
+
+      const guardrail = getRequestSchemaFields({
+        schemaName: 'CreateGuardrailRequest',
+      });
+      expect([...guardrail.requiredFields].sort()).toEqual([
+        'document',
+        'name',
+      ]);
     });
 
     test('distinguishes create-only fields from updatable ones', () => {

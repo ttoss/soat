@@ -205,18 +205,32 @@ describe('validateRequestBody', () => {
       const error = expectThrows(() => {
         return validateRequestBody({
           method: 'post',
-          path: '/agents',
-          body: { foo: 1 },
+          path: '/model-routes',
+          body: { foo: 1, name: 'route' },
         });
       });
-      // `foo` is not in the schema; `ai_provider_id` is required and absent.
+      // `foo` is not in the schema; `targets` is required and absent.
       // Under the old dual-casing kernel this case was self-contradictory —
-      // `ai_provider_id` counted as unknown *and* `aiProviderId` as missing,
+      // a field counted as unknown *and* its camelCase spelling as missing,
       // for a body that spelled the field exactly as the spec declares it.
       expect(error.meta).toEqual({
         unknownFields: ['foo'],
-        missingFields: ['ai_provider_id'],
+        missingFields: ['targets'],
       });
+    });
+
+    test('an agent create body with neither model binding passes the schema check', () => {
+      // `CreateAgentRequest` has no required field — "exactly one of
+      // ai_provider_id / model_route_id" is not expressible as an OpenAPI
+      // `required` array, so the shared validator rejects it downstream with
+      // its own message instead of the schema layer guessing.
+      expect(() => {
+        return validateRequestBody({
+          method: 'post',
+          path: '/agents',
+          body: { name: 'Unbound' },
+        });
+      }).not.toThrow();
     });
   });
 });

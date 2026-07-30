@@ -14,7 +14,7 @@ const unwrapProviderError = (error: unknown): unknown => {
  * Checked structurally rather than via `instanceof TypeError` because the
  * error may originate from a different JS realm (undici internals).
  */
-const isFetchFailure = (
+export const isFetchFailure = (
   error: unknown
 ): error is { name: string; message: string } => {
   if (typeof error !== 'object' || error === null) {
