@@ -122,13 +122,12 @@ are preserved from the former topic roadmaps. Blockers are noted inline.
 
 ### G3 — Approvals (exceptions · activity)
 
-- [x] Dedup return-existing logic (`emitApproval` fast path + create-time unique-violation backstop over the partial unique index) + `previous_item_id` threading on re-proposals matching a rejected item (approvals decision 2)
-- [x] **Recurrence view** — `GET /api/v1/approvals/recurrences`: read-only rollup of `previous_item_id` chains grouped by `dedup_key` (count, ordered chain, rejection reasons); the guardrail-graduation prompt and the demand gate for deferred G6. Live behavior in [approvals module docs](../packages/website/docs/modules/approvals.md#recurrence-view)
-- [x] **Phase 4 / activity feed** — shipped (2026-07). Live behavior in the [activity module docs](../packages/website/docs/modules/activity.md):
-  - [x] `5.1` `ActivityEntry` feed (`acte_`) — one entry per autonomously executed action
-  - [x] `5.2` cursor-paginated `GET /api/v1/activity` (kind / severity filters, per project)
-  - [x] `5.3` evidence + drill-through linkage (`run_id`/`agent_id` columns; node id, generation id, guardrail policy version in `detail`) — `action_executed` now covers both the orchestration tool-node executor and agent-generation-time tool calls (the v1 gap, closed 2026-07: the resolver is the single seam, wrapped innermost so blocked / tripped / approval-routed / failed calls record nothing; see [activity module docs](../packages/website/docs/modules/activity.md#producers))
-  - [x] `5.4` `soat.activity.actions_1h` / `actions_24h` guard context — shipped (2026-07). Counts the project's `action_executed` entries over the rolling window at evaluation time, so a guard can cap the autonomous-action rate; an empty feed reads as a real `0`, only a failing query falls back to fail-closed. Live behavior in [the feed as a guardrail signal](../packages/website/docs/modules/activity.md#the-feed-as-a-guardrail-signal)
+✅ **Shipped**, PRD retired; live behavior is documented in the
+[approvals](../packages/website/docs/modules/approvals.md) /
+[exceptions](../packages/website/docs/modules/exceptions.md) /
+[activity](../packages/website/docs/modules/activity.md) module docs. Two items
+remain deferred by design, with no demand signal yet:
+
 - [ ] **Phase 5** Approver targeting & assignment — optional `approver_policy` / `assignees` on the approval node or tool binding, routing specific items to specific humans. Deferred until real demand; nothing in the shipped queue blocks it
 - [ ] In-channel approval clients (WhatsApp/Slack) over the queue — surface items, and let humans resolve them, inside conversational channels rather than only through the queue UI/API. The substrate they build on is settled: continuation is platform-automatic (the decision is persisted and its lifecycle webhook emitted first, then the continuation fires fire-and-forget), so a channel client observes through the webhook and gets a notification, not a control point. If a client ever needs client-controlled continuation timing (defer/batch), that extension is scoped **here**, not in the core loop. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md)
 
@@ -170,14 +169,6 @@ _Not started._
 - [ ] **Phase 2** `llm_judge` scorer; async execution on the RunTask queue (**needs Orchestration-queue P1** ✔); baseline comparison + pass/fail gating; curate dataset items from traces/generations
 - [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
 - [ ] Webhook events (`eval_run.completed` / `.failed`)
-
-### Audit log
-
-_Fully shipped._
-
-- [x] **Phase 2** Decision-changing guardrail evaluations (`route_to_approval` / `blocked` / `tripwire`) mirror into `AuditEntry` as `detail.kind = "guardrail_evaluation"` via selective-write from `persistGuardrailEvaluations`; plain `execute` stays in the dedicated `guardrail_evaluations` table. Platform-originated (`action: guardrails:Evaluate`, null principal). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#system-originated-entries)
-- [x] **Phase 3** Read-audit config flag — `audit_reads_enabled` on the project, off by default, gated at enqueue via a 30s per-project cache so read traffic never evicts mutation entries from the audit queue; a read naming no project is never audited. Plus the `audit.entry_created` webhook, emitted from the `writeAuditEntry` choke point with the full snake_case entry as its `data` (project-scoped entries only). Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#read-auditing)
-- [x] **Per-project NDJSON export** — `GET /api/v1/audit-log/export`: streams one snake_case entry per line, oldest first, paged internally; `project_id` required and authorized by its own `audit:ExportAuditEntries` action (bulk egress is granted separately from read). Also serves LGPD/GDPR subject-access requests. Live behavior in the [audit-log module docs](../packages/website/docs/modules/audit-log.md#ndjson-export)
 
 ### Model routing
 
