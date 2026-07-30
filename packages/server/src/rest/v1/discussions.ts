@@ -47,7 +47,11 @@ type WireParticipantInput = {
 type CreateDiscussionBody = {
   project_id?: string;
   name: string;
-  ai_provider_id: string;
+  /**
+   * Optional since the model-routing project-default amendment: a discussion
+   * that pins no provider inherits the project's default_model_route_id.
+   */
+  ai_provider_id?: string;
   description?: string | null;
   max_rounds?: number | null;
   model?: string | null;
@@ -60,7 +64,8 @@ type UpdateDiscussionBody = {
   name?: string;
   description?: string | null;
   max_rounds?: number | null;
-  ai_provider_id?: string;
+  /** An explicit `null` unpins the discussion onto the project default route. */
+  ai_provider_id?: string | null;
   model?: string | null;
   synthesis?: WireSynthesisConfig | null;
   tags?: Record<string, string> | null;

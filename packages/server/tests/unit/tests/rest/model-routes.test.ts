@@ -583,12 +583,18 @@ describe('Model Routes', () => {
       expect(res.body.error.message).toMatch(/mutually exclusive/);
     });
 
-    test('setting neither returns 400', async () => {
+    // "Neither" means "inherit the project's default_model_route_id" since the
+    // project-default amendment, so it is only an error while the project has no
+    // default — which this fixture project does not.
+    test('setting neither returns 400 when the project has no default', async () => {
       const res = await createAgent({ name: 'Neither' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.message).toMatch(/exactly one of/);
+      expect(res.body.error.message).toMatch(
+        /binds neither ai_provider_id nor model_route_id/
+      );
+      expect(res.body.error.message).toMatch(/no default_model_route_id/);
     });
 
     test('combining model with a route returns 400', async () => {
@@ -649,6 +655,9 @@ describe('Model Routes', () => {
       expect(reverted.body.model_route_id).toBeNull();
     });
 
+    // Clearing the pin leaves the agent bound to nothing, which is only
+    // representable when its project has a default route to inherit — this
+    // fixture project has none.
     test('clearing both bindings returns 400', async () => {
       const agent = await createAgent({
         name: 'Unbindable',
@@ -660,7 +669,9 @@ describe('Model Routes', () => {
         .send({ ai_provider_id: null });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/exactly one of/);
+      expect(res.body.error.message).toMatch(
+        /binds neither ai_provider_id nor model_route_id/
+      );
     });
 
     test('an unrelated partial update never trips the invariant', async () => {

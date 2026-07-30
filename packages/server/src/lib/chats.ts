@@ -7,10 +7,18 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import {
   buildResolvedChatModel,
+  buildRoutedChatModel,
   meterChatCompletion,
   resolveChatModel,
+  type ResolvedChatModel,
 } from './chatCompletionModel';
 import { resolveMessageContent } from './messageContent';
+import {
+  assertModelBindingResolvable,
+  resolveConsumerModelRoute,
+  routedMaxRetries,
+  validateModelRouteExclusivity,
+} from './modelRoutes';
 import { paginatedList, type PaginatedResult } from './pagination';
 
 export type ChatMessage = {
@@ -31,7 +39,7 @@ export type ChatMessageInput =
 export type MappedChat = {
   id: string;
   project_id: string;
-  ai_provider_id: string;
+  ai_provider_id: string | null;
   name: string | null;
   system_message: string | null;
   model: string | null;
@@ -41,14 +49,15 @@ export type MappedChat = {
 
 const mapChat = (
   chat: InstanceType<typeof db.Chat> & {
-    aiProvider: InstanceType<typeof db.AiProvider>;
+    aiProvider: InstanceType<typeof db.AiProvider> | null;
     project: InstanceType<typeof db.Project>;
   }
 ): MappedChat => {
   return {
     id: chat.publicId,
     project_id: chat.project.publicId,
-    ai_provider_id: chat.aiProvider.publicId,
+    // Null when the chat pins no provider and inherits the project default route.
+    ai_provider_id: chat.aiProvider?.publicId ?? null,
     name: chat.name,
     system_message: chat.systemMessage,
     model: chat.model,
@@ -66,16 +75,34 @@ const getChatIncludes = () => {
 
 export const createChat = async (args: {
   projectId: number;
-  aiProviderId: string;
+  aiProviderId?: string;
   name?: string;
   systemMessage?: string;
   model?: string;
 }): Promise<MappedChat> => {
-  const aiProvider = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId },
+  // At most one binding: a chat that pins no provider inherits its project's
+  // `default_model_route_id`, which must therefore exist. `model` cannot
+  // accompany the inherited route — each target names its own.
+  const bindingError = validateModelRouteExclusivity({
+    modelRouteId: null,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
+  });
+  if (bindingError) {
+    throw new DomainError('VALIDATION_FAILED', bindingError);
+  }
+  await assertModelBindingResolvable({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+    modelRouteId: null,
+    resourceLabel: 'chat',
   });
 
-  if (!aiProvider) {
+  const aiProvider = args.aiProviderId
+    ? await db.AiProvider.findOne({ where: { publicId: args.aiProviderId } })
+    : null;
+
+  if (args.aiProviderId && !aiProvider) {
     throw new DomainError(
       'AI_PROVIDER_NOT_FOUND',
       `AI provider '${args.aiProviderId}' not found.`
@@ -84,7 +111,7 @@ export const createChat = async (args: {
 
   const chat = await db.Chat.create({
     projectId: args.projectId,
-    aiProviderId: aiProvider.id,
+    aiProviderId: aiProvider ? aiProvider.id : null,
     name: args.name ?? null,
     systemMessage: args.systemMessage ?? null,
     model: args.model ?? null,
@@ -252,6 +279,45 @@ export const streamChatCompletion = async (args: {
   return result.textStream;
 };
 
+/**
+ * The model a chat-scoped completion runs on, following the chat's own binding:
+ * its pinned provider, else its project's `default_model_route_id`. Shared by
+ * the streaming and non-streaming paths so both resolve and meter identically.
+ */
+const resolveChatScopedModel = async (args: {
+  typedChat: Parameters<typeof mapChat>[0];
+  model?: string;
+}): Promise<ResolvedChatModel> => {
+  const { typedChat } = args;
+  const projectId = typedChat.projectId as number;
+
+  const route = await resolveConsumerModelRoute({
+    projectId,
+    aiProviderId: typedChat.aiProvider?.publicId,
+  });
+  if (route) {
+    return buildRoutedChatModel({ projectId, route });
+  }
+
+  const resolved = typedChat.aiProvider
+    ? await resolveAiProviderSecret({
+        aiProviderId: typedChat.aiProvider.publicId,
+      })
+    : null;
+
+  if (!resolved) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      'AI provider not found or not configured.'
+    );
+  }
+
+  return buildResolvedChatModel({
+    resolved,
+    modelName: args.model ?? typedChat.model ?? resolved.defaultModel,
+  });
+};
+
 const buildChatFinalMessages = (
   resolvedMessages: ChatMessage[],
   systemMessage: string | null
@@ -292,17 +358,6 @@ export const createChatCompletionForChat = async (args: {
 
   const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
 
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: typedChat.aiProvider.publicId,
-  });
-
-  if (!resolved) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      'AI provider not found or not configured.'
-    );
-  }
-
   const resolvedMessages = await resolveMessages({
     messages: args.messages,
     authUser: args.authUser,
@@ -313,9 +368,9 @@ export const createChatCompletionForChat = async (args: {
   );
   const finalMessages = buildChatFinalMessages(resolvedMessages, systemMessage);
 
-  const resolvedModel = buildResolvedChatModel({
-    resolved,
-    modelName: args.model ?? typedChat.model ?? resolved.defaultModel,
+  const resolvedModel = await resolveChatScopedModel({
+    typedChat,
+    model: args.model,
   });
 
   const result = await generateText({
@@ -324,6 +379,8 @@ export const createChatCompletionForChat = async (args: {
     messages: finalMessages.filter((m) => {
       return m.role !== 'system';
     }) as ModelMessage[],
+    // A routed model owns every attempt itself (see `routedMaxRetries`).
+    maxRetries: routedMaxRetries(resolvedModel.model),
   });
 
   const model = result.response?.modelId ?? args.model ?? typedChat.model ?? '';
@@ -353,17 +410,6 @@ export const streamChatCompletionForChat = async (args: {
 
   const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
 
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: typedChat.aiProvider.publicId,
-  });
-
-  if (!resolved) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      'AI provider not found or not configured.'
-    );
-  }
-
   const resolvedMessages = await resolveMessages({
     messages: args.messages,
     authUser: args.authUser,
@@ -378,15 +424,16 @@ export const streamChatCompletionForChat = async (args: {
     return m.role !== 'system';
   });
 
-  const resolvedModel = buildResolvedChatModel({
-    resolved,
-    modelName: args.model ?? typedChat.model ?? resolved.defaultModel,
+  const resolvedModel = await resolveChatScopedModel({
+    typedChat,
+    model: args.model,
   });
 
   const result = streamText({
     model: resolvedModel.model,
     instructions: systemMessage ?? undefined,
     messages: userAssistantMessages as ModelMessage[],
+    maxRetries: routedMaxRetries(resolvedModel.model),
     // See `streamChatCompletion`: usage is only known at stream end.
     onEnd: ({ usage }) => {
       meterChatCompletion({

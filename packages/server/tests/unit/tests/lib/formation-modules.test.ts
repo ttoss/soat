@@ -159,6 +159,7 @@ const NON_OBJECT: Array<[string, string]> = [
   ['document', 'Document `properties` must be an object'],
   ['workflow', 'Workflow `properties` must be an object'],
   ['guardrail', 'Guardrail `properties` must be an object'],
+  ['model_route', 'Model route `properties` must be an object'],
 ];
 
 // Every module — including `document` since it now re-chunks on update —
@@ -1748,6 +1749,205 @@ describe('camelCase unknown-key normalization', () => {
   );
 });
 
+// ── model_route resource type ──────────────────────────────────────────────
+
+describe('modelRoutesFormationModule', () => {
+  test('plans, applies, and reads back targets in snake_case', async () => {
+    const routeId = await applyCreateResource({
+      resourceType: 'model_route',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'formation-declared-route',
+        targets: [
+          { ai_provider_id: aiProviderId, model: 'gpt-4o' },
+          {
+            ai_provider_id: aiProviderId,
+            model: 'gpt-4o-mini',
+            max_retries: 1,
+          },
+        ],
+        retry_on: ['provider_error', 'timeout'],
+        failure_threshold: 2,
+        cooldown_seconds: 30,
+      },
+    });
+    expect(routeId).toMatch(/^route_/);
+
+    expect(
+      await readModule('model_route').read?.({ physicalResourceId: routeId })
+    ).toEqual({
+      name: 'formation-declared-route',
+      targets: [
+        { ai_provider_id: aiProviderId, model: 'gpt-4o' },
+        { ai_provider_id: aiProviderId, model: 'gpt-4o-mini', max_retries: 1 },
+      ],
+      retry_on: ['provider_error', 'timeout'],
+      failure_threshold: 2,
+      cooldown_seconds: 30,
+    });
+  });
+
+  test('updates a declared route in place', async () => {
+    const routeId = await applyCreateResource({
+      resourceType: 'model_route',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'formation-updated-route',
+        targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+      },
+    });
+
+    await applyUpdateResource({
+      resourceType: 'model_route',
+      physicalResourceId: routeId,
+      resolvedProperties: {
+        name: 'formation-updated-route',
+        targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o-mini' }],
+        retry_on: ['rate_limited'],
+      },
+    });
+
+    expect(
+      await readModule('model_route').read?.({ physicalResourceId: routeId })
+    ).toMatchObject({
+      targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o-mini' }],
+      retry_on: ['rate_limited'],
+    });
+  });
+
+  test('rejects an unknown field', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'formation-unknown-field-route',
+          targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+          strategy: 'cheapest',
+        },
+      })
+    ).rejects.toThrow(/strategy/);
+  });
+
+  test('requires a non-empty target list', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: { name: 'formation-empty-route', targets: [] },
+      })
+    ).rejects.toThrow(/targets must be a non-empty array/);
+  });
+
+  test('enforces the same attempt cap as the REST surface', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'formation-capped-route',
+          targets: [
+            { ai_provider_id: aiProviderId, model: 'gpt-4o', max_retries: 9 },
+            { ai_provider_id: aiProviderId, model: 'gpt-4o-mini' },
+          ],
+        },
+      })
+    ).rejects.toThrow(/the maximum is 10/);
+  });
+
+  test('rejects an unknown retry_on class', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'formation-bad-retry-route',
+          targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+          retry_on: ['gremlins'],
+        },
+      })
+    ).rejects.toThrow(/unknown class 'gremlins'/);
+  });
+
+  test("rejects a target naming another project's provider", async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'formation-cross-project-route',
+          targets: [{ ai_provider_id: 'aip_doesnotexist0', model: 'gpt-4o' }],
+        },
+      })
+    ).rejects.toThrow(/not found in this project/);
+  });
+
+  test('rejects a non-positive failure_threshold', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'model_route',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'formation-bad-breaker-route',
+          targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+          failure_threshold: 0,
+        },
+      })
+    ).rejects.toThrow(/failure_threshold must be a positive integer/);
+  });
+
+  // Declaring only one breaker value is valid — the lib defaults the other.
+  test('accepts a declared cooldown_seconds without a failure_threshold', async () => {
+    const routeId = await applyCreateResource({
+      resourceType: 'model_route',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'formation-partial-breaker-route',
+        targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+        cooldown_seconds: 15,
+      },
+    });
+
+    expect(
+      await readModule('model_route').read?.({ physicalResourceId: routeId })
+    ).toMatchObject({ cooldown_seconds: 15, failure_threshold: 3 });
+  });
+
+  // Plan / validate runs `validateProperties` without touching the database, so
+  // a bad template is rejected before anything is applied.
+  test('validateProperties reports a missing target list at plan time', () => {
+    const errors = readModule('model_route').validateProperties?.({
+      properties: { name: 'formation-plan-time-route' },
+      basePath: 'resources.<model_route>.properties',
+    });
+    expect(errors).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          path: 'resources.<model_route>.properties.targets',
+          message: expect.stringMatching(/targets must be a non-empty array/),
+        }),
+      ])
+    );
+  });
+
+  test('read returns null for a deleted route', async () => {
+    const routeId = await applyCreateResource({
+      resourceType: 'model_route',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'formation-deleted-route',
+        targets: [{ ai_provider_id: aiProviderId, model: 'gpt-4o' }],
+      },
+    });
+
+    await readModule('model_route').delete?.({ physicalResourceId: routeId });
+
+    expect(
+      await readModule('model_route').read?.({ physicalResourceId: routeId })
+    ).toBeNull();
+  });
+});
+
 // ── agent model binding (formations sync for model_route_id) ────────────────
 
 describe('agentsFormationModule model binding', () => {
@@ -1827,14 +2027,14 @@ describe('agentsFormationModule model binding', () => {
     ).rejects.toThrow(/mutually exclusive/);
   });
 
-  test('rejects a template declaring neither', async () => {
+  test('rejects a template declaring neither when the project has no default', async () => {
     await expect(
       applyCreateResource({
         resourceType: 'agent',
         projectId: internalProjectId,
         resolvedProperties: { name: 'Unbound Agent' },
       })
-    ).rejects.toThrow(/exactly one of/);
+    ).rejects.toThrow(/binds neither ai_provider_id nor model_route_id/);
   });
 
   test('rejects combining model with a route', async () => {

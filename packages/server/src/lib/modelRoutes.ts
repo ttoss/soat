@@ -24,6 +24,19 @@ const log = createDebug('soat:model-routes');
 // module has a single public surface (consumers, REST handlers, the formation
 // module and tests all import from `modelRoutes`).
 export {
+  type CompletionAttribution,
+  meterCompletion,
+  resolveCompletionAttribution,
+} from './modelRouteAttribution';
+export {
+  assertDefaultModelRouteInProject,
+  assertModelBindingResolvable,
+  assertProjectDefaultNotInherited,
+  findProjectDefaultInheritors,
+  findProjectDefaultModelRouteId,
+  resolveConsumerModelRoute,
+} from './modelRouteDefaults';
+export {
   MODEL_ROUTE_ERROR_CLASSES,
   type ModelRouteErrorClass,
 } from './modelRouteErrors';
@@ -46,6 +59,7 @@ export {
   DEFAULT_COOLDOWN_SECONDS,
   DEFAULT_FAILURE_THRESHOLD,
   DEFAULT_TARGET_MAX_RETRIES,
+  hasModelBinding,
   MAX_MODEL_ROUTE_ATTEMPTS,
   type ModelRouteTarget,
   modelRouteTotalAttempts,
@@ -301,28 +315,49 @@ export const updateModelRoute = async (args: {
 const MAX_DEPENDENT_SAMPLE = 5;
 
 /**
- * A route referenced by an agent cannot be dropped: the agent has no pinned
+ * A referenced route cannot be dropped. An agent referencing it has no pinned
  * provider to fall back on (exclusivity), so a dangling reference would break
- * every one of its generations. Agents reference routes from day one, so this
- * guard ships with them.
+ * every one of its generations; a project defaulting to it would strand every
+ * consumer inheriting the default. Agents reference routes from day one, so this
+ * guard ships with them; the project reference was added by the project-default
+ * amendment.
  */
-const assertNoDependents = async (routeDbId: number): Promise<void> => {
-  const agents = await db.Agent.findAll({
-    where: { modelRouteId: routeDbId },
-    attributes: ['publicId'],
-    limit: MAX_DEPENDENT_SAMPLE,
-  });
-  if (agents.length === 0) return;
+const assertNoDependents = async (args: {
+  routeDbId: number;
+  routePublicId: string;
+}): Promise<void> => {
+  const [agents, agentCount, projects] = await Promise.all([
+    db.Agent.findAll({
+      where: { modelRouteId: args.routeDbId },
+      attributes: ['publicId'],
+      limit: MAX_DEPENDENT_SAMPLE,
+    }),
+    db.Agent.count({ where: { modelRouteId: args.routeDbId } }),
+    db.Project.findAll({
+      where: { defaultModelRouteId: args.routePublicId },
+      attributes: ['publicId'],
+      limit: MAX_DEPENDENT_SAMPLE,
+    }),
+  ]);
 
-  const count = await db.Agent.count({ where: { modelRouteId: routeDbId } });
+  if (agentCount === 0 && projects.length === 0) return;
+
+  const projectIds = projects.map((project) => {
+    return project.publicId;
+  });
+
   throw new DomainError(
     'MODEL_ROUTE_HAS_DEPENDENTS',
-    `The model route is referenced by ${count} agent(s) and cannot be deleted.`,
+    `The model route is referenced by ${agentCount} agent(s) and is the default_model_route_id of ${projectIds.length} project(s); it cannot be deleted.`,
     {
-      agents: count,
-      sample: agents.map((agent) => {
-        return agent.publicId;
-      }),
+      agents: agentCount,
+      projects: projectIds.length,
+      sample: [
+        ...agents.map((agent) => {
+          return agent.publicId;
+        }),
+        ...projectIds,
+      ],
     }
   );
 };
@@ -335,7 +370,10 @@ export const deleteModelRoute = async (args: {
     projectIds: args.projectIds,
     id: args.id,
   });
-  await assertNoDependents((route as unknown as { id: number }).id);
+  await assertNoDependents({
+    routeDbId: (route as unknown as { id: number }).id,
+    routePublicId: route.publicId,
+  });
   await route.destroy();
   log('deleteModelRoute: id=%s', args.id);
 };

@@ -295,6 +295,72 @@ describe('memoryExtractionCompletion lib', () => {
     ).toBe(1);
   });
 
+  test('an agent binding nothing inherits the project default route and meters the served target', async () => {
+    // The project default is the third arm of the resolution chain (model-routing
+    // PRD, Phase 3): consumer route → consumer pin → project default.
+    const routeRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/model-routes')
+      .send({
+        project_id: projectId,
+        name: 'extraction-default-route',
+        targets: [{ ai_provider_id: aiProviderId, model: 'routed-stub-model' }],
+      });
+    expect(routeRes.status).toBe(201);
+
+    const patched = await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${projectId}`)
+      .send({ default_model_route_id: routeRes.body.id });
+    expect(patched.status).toBe(200);
+
+    const unbound = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({ project_id: projectId, name: 'ComplInheritingAgent' });
+    expect(unbound.status).toBe(201);
+    expect(unbound.body.ai_provider_id).toBeNull();
+
+    const agent = await db.Agent.findOne({
+      where: { publicId: unbound.body.id },
+    });
+    const provider = await db.AiProvider.findOne({
+      where: { publicId: aiProviderId },
+    });
+
+    const text = await runExtractionCompletion({
+      agentId: unbound.body.id,
+      prompt: 'Extract facts from: user prefers email.',
+    });
+
+    expect(text).toBe('["stub fact"]');
+    // The target's own model, not the agent's (it has none) and not the route id.
+    expect(lastRequestBody?.model).toBe('routed-stub-model');
+
+    // Attribution is read back from the routing metadata after the call, so the
+    // usage event names the target that served rather than the route.
+    let event: InstanceType<typeof db.UsageEvent> | undefined;
+    for (let attempt = 0; attempt < 200 && !event; attempt += 1) {
+      event =
+        (await db.UsageEvent.findOne({
+          where: { agentId: agent?.id as number, meterType: 'llm_tokens' },
+        })) ?? undefined;
+      await new Promise((resolve) => {
+        return setImmediate(resolve);
+      });
+    }
+    expect(event).toBeDefined();
+    expect(event?.provider).toBe('ollama');
+    expect(event?.model).toBe('routed-stub-model');
+    expect(event?.aiProviderId).toBe(provider?.id as number);
+
+    // Leave the project with no default so file-order changes cannot leak it.
+    await authenticatedTestClient(adminToken).delete(
+      `/api/v1/agents/${unbound.body.id}`
+    );
+    const cleared = await authenticatedTestClient(adminToken)
+      .patch(`/api/v1/projects/${projectId}`)
+      .send({ default_model_route_id: null });
+    expect(cleared.status).toBe(200);
+  });
+
   test('throws RESOURCE_NOT_FOUND for an unknown agent', async () => {
     await expect(
       runExtractionCompletion({

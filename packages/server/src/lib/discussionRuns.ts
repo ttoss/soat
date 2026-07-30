@@ -312,12 +312,11 @@ const loadDiscussionForRun = async (
       `Discussion '${discussionId}' not found.`
     );
   }
-  if (!discussion.aiProvider) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `Discussion '${discussionId}' has no AI provider.`
-    );
-  }
+  // No pinned-provider guard: since the model-routing project-default amendment
+  // a discussion may pin none and resolve every turn through its project's
+  // `default_model_route_id`. "Neither" is kept unrepresentable by the write-time
+  // guards instead (`assertModelBindingResolvable` on write, and the 409 that
+  // refuses to clear an inherited default), so there is nothing left to check here.
   return discussion;
 };
 
@@ -361,7 +360,9 @@ export const runDiscussion = async (args: {
 
   const outcome: DiscussionOutcome = await runDiscussionPipeline({
     projectId,
-    defaultAiProviderId: discussion.aiProvider!.publicId,
+    // Absent when the discussion pins no provider: the turn then inherits
+    // the project's default model route.
+    defaultAiProviderId: discussion.aiProvider?.publicId,
     defaultModel: discussion.model,
     steps,
     topic: args.topic,

@@ -57,16 +57,19 @@ export class Discussion extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
   declare maxRounds: number;
 
+  // Nullable since the model-routing PRD's project-default amendment: a
+  // discussion that pins no provider inherits its project's
+  // `defaultModelRouteId`.
   @ForeignKey(() => {
     return AiProvider;
   })
-  @Column({ type: DataType.INTEGER, allowNull: false })
-  declare aiProviderId: number;
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare aiProviderId: number | null;
 
   @BelongsTo(() => {
     return AiProvider;
   })
-  declare aiProvider: AiProvider;
+  declare aiProvider: AiProvider | null;
 
   @Column({ type: DataType.STRING, allowNull: true })
   declare model: string | null;

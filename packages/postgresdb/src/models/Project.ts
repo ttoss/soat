@@ -47,6 +47,19 @@ export class Project extends Model {
   @Column({ type: DataType.INTEGER, allowNull: true })
   declare maxConcurrentRuns: number | null;
 
+  // Public ID of the model route inherited by consumers in this project that
+  // name neither a route nor an AI provider (model-routing PRD, Phase 3).
+  // `null` means no default — every consumer must then bind explicitly.
+  //
+  // Stored as the route's public id rather than an `@ForeignKey` to the internal
+  // id, mirroring `guardrailIds` above: `ModelRoute` already belongs to
+  // `Project`, so a foreign key here would close a cycle between the two tables
+  // that `sync()` cannot create. Referential integrity is enforced at write
+  // time instead — the route must belong to the project, and `deleteModelRoute`
+  // refuses to drop a route a project defaults to.
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare defaultModelRouteId: string | null;
+
   // Opts the project into read auditing: when true, `GET` requests that name
   // this project are recorded in the audit log alongside mutations. Off by
   // default — reads are high-volume and low-value, so v1 records mutations only

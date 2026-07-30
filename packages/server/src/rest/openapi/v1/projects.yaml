@@ -148,7 +148,8 @@ paths:
         Updates a project's name, its attached guardrails (`guardrail_ids` —
         the project-scope baseline governing every tool call by every agent in
         the project), its orchestration concurrency limit
-        (`max_concurrent_runs`), and/or its read-auditing opt-in
+        (`max_concurrent_runs`), its inherited model route
+        (`default_model_route_id`), and/or its read-auditing opt-in
         (`audit_reads_enabled`). At least one field is required. Requires admin
         role. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
@@ -188,6 +189,19 @@ paths:
                     `null` clears the limit (unlimited); otherwise an integer
                     >= 1. Enforced at queue claim time — excess runs stay
                     queued until a slot frees.
+                default_model_route_id:
+                  x-soat-ref: model-routes
+                  type: string
+                  nullable: true
+                  example: route_V1StGXR8Z5jdHi6B
+                  description: >-
+                    Model route inherited by consumers in this project that bind
+                    neither `model_route_id` nor `ai_provider_id`. The route must
+                    belong to this project (`400` otherwise). `null` clears the
+                    default, which is refused with `409` while any consumer
+                    inherits it — repointing it to another route is always
+                    allowed and immediately changes which targets those
+                    consumers use.
                 audit_reads_enabled:
                   type: boolean
                   example: true
@@ -210,6 +224,10 @@ paths:
           description: Forbidden (non-admin user)
         '404':
           description: Project not found
+        '409':
+          description: >-
+            `default_model_route_id` cannot be cleared while consumers inherit
+            it (PROJECT_DEFAULT_ROUTE_INHERITED).
     delete:
       tags:
         - Projects
@@ -361,6 +379,15 @@ components:
           description: >-
             Maximum orchestration runs of this project driven at once. `null`
             means unlimited (the default). Enforced at queue claim time.
+          example: null
+        default_model_route_id:
+          x-soat-ref: model-routes
+          type: string
+          nullable: true
+          description: >-
+            Model route inherited by consumers in this project that bind neither
+            `model_route_id` nor `ai_provider_id`. `null` means no default, so
+            every consumer must bind explicitly.
           example: null
         audit_reads_enabled:
           type: boolean

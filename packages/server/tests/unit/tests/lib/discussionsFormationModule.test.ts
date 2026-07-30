@@ -48,9 +48,12 @@ describe('discussionsFormationModule', () => {
         basePath: 'x',
       }).length
     ).toBeGreaterThan(0);
+    // `name` is the only required field since the model-routing project-default
+    // amendment made `ai_provider_id` optional, so probe the required check with
+    // a template that omits `name` instead.
     expect(
       discussionsFormationModule.validateProperties!({
-        properties: { name: 'x' },
+        properties: { ai_provider_id: 'aip_x' },
         basePath: 'x',
       }).length
     ).toBeGreaterThan(0);

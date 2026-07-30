@@ -11,6 +11,7 @@ import { guardrailsFormationModule } from './formation-modules/guardrailsFormati
 import { ingestionRulesFormationModule } from './formation-modules/ingestionRulesFormationModule';
 import { memoriesFormationModule } from './formation-modules/memoriesFormationModule';
 import { memoryEntriesFormationModule } from './formation-modules/memoryEntriesFormationModule';
+import { modelRoutesFormationModule } from './formation-modules/modelRoutesFormationModule';
 import { orchestrationsFormationModule } from './formation-modules/orchestrationsFormationModule';
 import { policiesFormationModule } from './formation-modules/policiesFormationModule';
 import { projectPricesFormationModule } from './formation-modules/projectPricesFormationModule';
@@ -44,6 +45,7 @@ registerFormationModule({ module: apiKeysFormationModule });
 registerFormationModule({ module: documentsFormationModule });
 registerFormationModule({ module: memoriesFormationModule });
 registerFormationModule({ module: memoryEntriesFormationModule });
+registerFormationModule({ module: modelRoutesFormationModule });
 registerFormationModule({ module: webhooksFormationModule });
 registerFormationModule({ module: chatsFormationModule });
 registerFormationModule({ module: conversationsFormationModule });

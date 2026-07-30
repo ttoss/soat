@@ -26,7 +26,7 @@ import {
 } from './generationInputMessages';
 import {
   buildRoutedModel,
-  loadModelRouteConfig,
+  resolveConsumerModelRoute,
   ROUTED_PROVIDER_LABEL,
 } from './modelRoutes';
 
@@ -46,19 +46,24 @@ const resolveGenerationModel = async (args: {
   agentId: string;
   typedAgent: TypedAgent;
 }) => {
-  const modelRoute = args.typedAgent.modelRoute;
-  if (modelRoute) {
-    const route = await loadModelRouteConfig({
-      modelRouteId: modelRoute.publicId,
-    });
+  // Chain: the agent's own route → its pinned provider → the project default
+  // (`resolveConsumerModelRoute` returns null as soon as a pin is present, so a
+  // project-wide default can never override a deliberate binding).
+  const route = await resolveConsumerModelRoute({
+    projectId: args.typedAgent.project.id as number,
+    modelRouteId: args.typedAgent.modelRoute?.publicId,
+    aiProviderId: args.typedAgent.aiProvider?.publicId,
+  });
+  if (route) {
     return {
       model: await buildRoutedModel({ route }),
       provider: ROUTED_PROVIDER_LABEL,
     };
   }
 
-  // Exclusivity guarantees a pinned provider once no route is set; this only
-  // fires if a row violates it (never reachable through a write path).
+  // The write-time guards guarantee a pinned provider once neither a route nor a
+  // project default resolves; this only fires if a row violates them (never
+  // reachable through a write path).
   /* istanbul ignore next */
   if (!args.typedAgent.aiProvider) {
     throw new DomainError(

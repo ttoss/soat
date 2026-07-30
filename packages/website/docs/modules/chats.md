@@ -33,7 +33,7 @@ Both endpoints support SSE streaming via `stream: true`. To see a completion dri
 | ---------------- | -------- | ---------------------------------------------------------------- |
 | `id`             | string   | Public ID prefixed with `chat_`                                  |
 | `project_id`     | string   | Public ID of the owning project                                  |
-| `ai_provider_id` | string   | Public ID of the AI provider used for completions                |
+| `ai_provider_id` | string \| null | Public ID of the pinned AI provider, or `null` when the chat pins none and inherits its project's [`default_model_route_id`](./model-routes.md#project-default-route) |
 | `name`           | string   | Optional human-readable name                                     |
 | `system_message` | string   | Optional default system prompt applied to all completions        |
 | `model`          | string   | Optional model override (falls back to provider's `default_model`) |
@@ -58,7 +58,11 @@ When running `POST /chats/{chat_id}/completions`, if a message with `role: syste
 
 ### AI Provider Resolution
 
-For per-chat completions the AI provider is taken from the Chat record. For stateless completions it is passed directly in the request body. See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
+For per-chat completions the AI provider is taken from the Chat record. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
+
+For stateless `POST /chat/completions` the provider is passed directly in the request body and stays **required** — that call belongs to no chat and no project of its own, so there is no default to inherit.
+
+See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
 ### Streaming
 

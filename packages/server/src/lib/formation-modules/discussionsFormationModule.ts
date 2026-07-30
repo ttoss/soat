@@ -125,10 +125,8 @@ export const discussionsFormationModule: FormationModule = {
     const created = await createDiscussion({
       projectId,
       name: requireString({ value: properties.name, fieldName: 'name' }),
-      aiProviderId: requireString({
-        value: properties.ai_provider_id,
-        fieldName: 'ai_provider_id',
-      }),
+      // Absent means the discussion inherits the project's default model route.
+      aiProviderId: toOptionalString(properties.ai_provider_id) ?? undefined,
       description: toNullableString(properties.description),
       maxRounds: toNullableNumber(properties.max_rounds),
       model: toNullableString(properties.model),

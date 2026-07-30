@@ -488,13 +488,7 @@ pre-first-token fallback for streaming (the composite's `doStream` arm);
   target 1; a fake stream that dies after emitting tokens surfaces an error
   and metadata records no additional attempts.
 
-### Phase 3 — Project Default, Remaining Consumers, Formation Resource ❌ Not started
-
-> Until this lands, `resolveCompletionModel` rejects a route-only agent with
-> `AI_PROVIDER_NOT_FOUND` naming the fix ("set an explicit ai_provider_id for
-> this completion") rather than resolving a model the caller did not configure.
-> The provider-delete guard already treats a model route as a live reference, so
-> a target can never dangle.
+### Phase 3 — Project Default, Remaining Consumers, Formation Resource ✅ Done
 
 Reshaped by the [2026-07-30 amendment](#amendment--project-default-route-2026-07-30):
 chats and discussions inherit routing through the project default, so this phase
@@ -541,8 +535,13 @@ one column on `Project`.
   inherits it, naming the count; repointing it to another route returns `200`
   and the next generation uses the new route's targets.
 - Deleting a route that is a project's default returns `409`.
-- A formation template declaring a `model-route` resource plans, applies, and
+- A formation template declaring a `model_route` resource plans, applies, and
   reads back `targets` in snake_case; unknown fields are rejected with 400.
+
+**As shipped, deviating from the plan in three recorded ways** — the
+`Project.defaultModelRouteId` representation, the stateless chat endpoint, and
+`Chat`/`Discussion` nullability. See the
+[Phase 3 decisions](#phase-3-decisions--2026-07-30).
 
 **Deferred, with an activation condition:** a per-consumer `model_route_id` on
 Chat / Discussion. A project default plus explicit pins covers "most consumers
@@ -664,6 +663,66 @@ A: Two write-time guards — 400 on a consumer that binds neither while the
    route-delete dependent guard already shipped in Phase 1, which extends to
    count the project reference alongside its agents.
 ```
+
+### Phase 3 decisions — 2026-07-30
+
+Three questions were raised while implementing Phase 3 and resolved under
+`.claude/rules/open-questions.md`.
+
+```txt
+Q: Does Project.defaultModelRouteId store the route's internal id behind a
+   foreign key (like Agent.modelRouteId), or its public id with no FK?
+A: The public id, no FK — resolved by long-term (a foreign key here would close
+   a Project ↔ ModelRoute cycle, and Postgres creates FK constraints inline in
+   CREATE TABLE, so `sync()` would have to create one of the two tables before
+   the table it references; referential integrity is instead enforced at write
+   time by the same-project check and the route-delete guard, both of which this
+   phase ships and tests); checked: ModelRoute already declares
+   `@ForeignKey(() => Project)` on projectId, so the cycle is real; Project
+   itself already holds a public-id reference list in `guardrailIds` with a
+   lib-level delete guard, so this is the model's existing pattern rather than a
+   new one; the guard is deterministic enforcement, not prose.
+
+Q: Does the stateless `POST /chat/completions` endpoint also inherit the project
+   default, making its `ai_provider_id` optional?
+A: No — it stays required — resolved by long-term (boundary integrity: that call
+   belongs to no chat and no project; today its project is derived *from* the
+   provider, so inheriting a default would require inventing a `project_id`
+   body field, i.e. new public API surface the PRD does not ask for, and a
+   request that names neither would have no project to look a default up in);
+   checked: `resolveChatModel`'s attribution reads `resolved.projectId` off the
+   provider secret, and `chatsRouter.post('/chat/completions')` takes no
+   project parameter. Chat-scoped completions — the ones the acceptance
+   criteria name — do inherit, through `resolveChatScopedModel`.
+
+Q: Chats and discussions get no `model_route_id` column, but their
+   `aiProviderId` is `allowNull: false` — how does a consumer "bind nothing"?
+A: Relax both columns to nullable — resolved by pareto (it is the only way the
+   amendment's own acceptance criteria are representable, and it costs nothing
+   elsewhere: `mapDiscussion` already emitted `ai_provider_id` as nullable, and
+   the same write-time guard that protects agents protects both);
+   checked: `packages/postgresdb/src/models/{Chat,Discussion}.ts` both declared
+   `allowNull: false`; `DiscussionRecord.ai_provider_id` in discussions.yaml was
+   already `nullable: true`, so the read contract did not change for
+   discussions; `discussionRuns.ts` was asserting non-null with
+   `discussion.aiProvider!.publicId`, which is now the optional
+   `defaultAiProviderId` the turn resolver falls through on.
+```
+
+### Adjacent fixes shipped with Phase 3
+
+Two pre-existing gaps were in the blast radius and fixed rather than left:
+
+- **`ModelRoute` was missing from the project-delete dependent count** (Phase 1).
+  `countProjectDependents` never counted it, so deleting a project holding a
+  route hit the database's RESTRICT foreign key and surfaced as a `500` instead
+  of `PROJECT_HAS_DEPENDENTS`. It is now counted, and the force-cascade destroys
+  routes after agents (whose `modelRouteId` FK points at them).
+- **`discussion` was missing from the formation `type` enum** in
+  `formations.yaml`, despite having a `DiscussionResourceProperties` schema, a
+  registered module, and a `oneOf` entry. Added alongside the new `model_route`.
+  The formations module doc listed neither, and was also missing `quota` (which
+  the enum did have); all three are now listed there.
 
 ### Forwarded questions — resolved 2026-07-30
 

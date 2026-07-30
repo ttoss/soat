@@ -1,7 +1,7 @@
 import {
+  chunkPages,
   DEFAULT_CHUNK_OVERLAP,
   DEFAULT_CHUNK_SIZE,
-  chunkPages,
 } from 'src/lib/chunking';
 
 describe('chunking', () => {
@@ -56,8 +56,16 @@ describe('chunking', () => {
         strategy: 'page',
       });
       expect(chunks).toHaveLength(2);
-      expect(chunks[0]).toEqual({ content: 'first', chunkIndex: 0, pageNumber: 1 });
-      expect(chunks[1]).toEqual({ content: 'second', chunkIndex: 1, pageNumber: 2 });
+      expect(chunks[0]).toEqual({
+        content: 'first',
+        chunkIndex: 0,
+        pageNumber: 1,
+      });
+      expect(chunks[1]).toEqual({
+        content: 'second',
+        chunkIndex: 1,
+        pageNumber: 2,
+      });
     });
 
     test('pages without pageNumber produce chunks without pageNumber', () => {

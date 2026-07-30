@@ -1013,6 +1013,48 @@ components:
           additionalProperties: true
           description: Arbitrary structured metadata attached to the entry
 
+    ModelRouteResourceProperties:
+      description: >-
+        Declares a model route within the formation's project: a named, ordered
+        list of provider+model failover targets with retry and circuit-breaker
+        configuration. Consumers reference it through their own `model_route_id`,
+        or inherit it as the project's `default_model_route_id`.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - targets
+      properties:
+        name:
+          type: string
+          description: Route name, unique within the project
+        targets:
+          type: array
+          description: >-
+            Ordered failover targets, tried in array order. Each entry is
+            `{ ai_provider_id, model, timeout_seconds?, max_retries? }`; every
+            provider must belong to this project, and the total attempt budget
+            (sum of `1 + max_retries`) is capped at 10.
+          items:
+            type: object
+        retry_on:
+          type: array
+          description: >-
+            Which failure classes fail over: any of `provider_error`, `timeout`,
+            `rate_limited`. Defaults to all three. Deterministic rejections
+            (400-class, auth, content policy) never fail over.
+          items:
+            type: string
+        failure_threshold:
+          type: integer
+          nullable: true
+          description: >-
+            Consecutive retryable failures before a target is skipped (default 3)
+        cooldown_seconds:
+          type: integer
+          nullable: true
+          description: How long a tripped target is skipped before being probed again (default 60)
+
     WebhookResourceProperties:
       description: >-
         Registers an HTTPS endpoint to receive SOAT platform event
@@ -1124,16 +1166,20 @@ components:
 
     ChatResourceProperties:
       description: >-
-        Creates a chat connected to an AI provider within the formation's project.
+        Creates a chat within the formation's project, connected either to an AI
+        provider or — by declaring no provider — to the project's
+        `default_model_route_id`.
       type: object
       additionalProperties: false
-      required:
-        - ai_provider_id
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider to use for this chat
+          nullable: true
+          description: >-
+            Public ID of the AI provider to use for this chat. Omit (or declare
+            `null`) to inherit the project's `default_model_route_id`, which
+            requires the project to have one and cannot be combined with `model`.
         name:
           type: string
           nullable: true
@@ -1174,7 +1220,6 @@ components:
       additionalProperties: false
       required:
         - name
-        - ai_provider_id
       properties:
         name:
           type: string
@@ -1185,7 +1230,11 @@ components:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Default AI provider participants and synthesis fall back to
+          nullable: true
+          description: >-
+            Default AI provider participants and synthesis fall back to. Omit (or
+            declare `null`) to inherit the project's `default_model_route_id`,
+            which requires the project to have one.
         model:
           type: string
           nullable: true
@@ -1629,6 +1678,8 @@ components:
             - ingestion_rule
             - memory
             - memory_entry
+            - model_route
+            - discussion
             - orchestration
             - policy
             - project_price
@@ -1655,6 +1706,7 @@ components:
             - $ref: '#/components/schemas/IngestionRuleResourceProperties'
             - $ref: '#/components/schemas/MemoryResourceProperties'
             - $ref: '#/components/schemas/MemoryEntryResourceProperties'
+            - $ref: '#/components/schemas/ModelRouteResourceProperties'
             - $ref: '#/components/schemas/OrchestrationResourceProperties'
             - $ref: '#/components/schemas/PolicyResourceProperties'
             - $ref: '#/components/schemas/ProjectPriceResourceProperties'

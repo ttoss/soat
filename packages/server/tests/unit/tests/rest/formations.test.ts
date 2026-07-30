@@ -3534,7 +3534,11 @@ resources:
       expect(discRes.body.synthesis.effort).toBe('high');
     });
 
-    test('validate rejects a discussion missing ai_provider_id', async () => {
+    // `ai_provider_id` is optional since the model-routing project-default
+    // amendment: a discussion that declares none inherits the project's
+    // `default_model_route_id`. Whether the project actually has one is a
+    // database fact, so it is enforced on apply, not by schema validation.
+    test('validate accepts a discussion declaring no ai_provider_id', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')
         .send({
@@ -3543,6 +3547,23 @@ resources:
               Panel: {
                 type: 'discussion',
                 properties: { name: 'no provider' },
+              },
+            },
+          },
+        });
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
+
+    test('validate still rejects a discussion missing name', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              Panel: {
+                type: 'discussion',
+                properties: { ai_provider_id: 'aip_whatever000000' },
               },
             },
           },

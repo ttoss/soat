@@ -97,7 +97,6 @@ paths:
               type: object
               required:
                 - name
-                - ai_provider_id
               properties:
                 project_id:
                   x-soat-ref: projects
@@ -113,7 +112,12 @@ paths:
                 ai_provider_id:
                   x-soat-ref: ai-providers
                   type: string
-                  description: Default AI provider participants and synthesis fall back to.
+                  description: >-
+                    Default AI provider participants and synthesis fall back to.
+                    Optional: omit it to inherit the project's
+                    `default_model_route_id`, which gives every turn provider
+                    failover. Omitting it returns `400` when the project has no
+                    default.
                   example: 'aip_V1StGXR8Z5jdHi6B'
                 model:
                   type: string
@@ -269,6 +273,11 @@ paths:
                 ai_provider_id:
                   x-soat-ref: ai-providers
                   type: string
+                  nullable: true
+                  description: >-
+                    Repins the default AI provider. An explicit `null` unpins the
+                    discussion onto the project's `default_model_route_id`, and
+                    returns `400` when the project has no default.
                 model:
                   type: string
                   nullable: true

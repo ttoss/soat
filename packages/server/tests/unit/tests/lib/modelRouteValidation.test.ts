@@ -230,14 +230,27 @@ describe('validateModelRouteExclusivity', () => {
     expect(message).toMatch(/set ai_provider_id to null/);
   });
 
-  test('rejects neither', () => {
+  // Since the project-default amendment, "neither" means "inherit the project's
+  // default_model_route_id" — a database fact, so this pure rule accepts it and
+  // `assertModelBindingResolvable` owns the check that a default exists.
+  test('accepts neither binding', () => {
     expect(
       validateModelRouteExclusivity({
         modelRouteId: null,
         aiProviderId: undefined,
-        model: 'gpt-4o-mini',
+        model: null,
       })
-    ).toMatch(/exactly one of ai_provider_id or model_route_id/);
+    ).toBeNull();
+  });
+
+  test('rejects a model with neither binding, naming the inherited route', () => {
+    const message = validateModelRouteExclusivity({
+      modelRouteId: null,
+      aiProviderId: undefined,
+      model: 'gpt-4o-mini',
+    });
+    expect(message).toMatch(/model requires an ai_provider_id/);
+    expect(message).toMatch(/inherited project default route/);
   });
 
   test('rejects a model alongside a route', () => {

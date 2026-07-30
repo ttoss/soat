@@ -113,7 +113,11 @@ export type DiscussionOutcome = {
 
 type EngineContext = {
   projectId: number;
-  defaultAiProviderId: string;
+  /**
+   * The discussion's own pinned provider, or `undefined` when it pins none — the
+   * turn then resolves through the project's `default_model_route_id`.
+   */
+  defaultAiProviderId?: string;
   defaultModel?: string | null;
   topic: string;
   temperature?: number | null;
@@ -278,7 +282,7 @@ const resolveOutputIndex = (steps: DiscussionStep[]): number => {
  */
 export const runDiscussionPipeline = async (args: {
   projectId: number;
-  defaultAiProviderId: string;
+  defaultAiProviderId?: string;
   defaultModel?: string | null;
   steps: DiscussionStep[];
   topic: string;
