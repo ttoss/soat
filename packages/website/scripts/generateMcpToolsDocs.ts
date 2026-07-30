@@ -114,7 +114,11 @@ const renderArguments = (args: ToolArgument[]): string => {
   ];
   const rows = args.map((arg) => {
     const desc = arg.description ? sanitizeInline(arg.description) : '—';
-    return `| \`${arg.name}\` | \`${arg.type}\` | ${
+    // A union/nullable type label (e.g. `array<string> | null`) contains a
+    // literal `|`, which Markdown reads as a table cell delimiter even inside
+    // backticks — escape it the same way sanitizeInline already does for
+    // descriptions, or the cell split breaks MDX's inline-code parsing.
+    return `| \`${arg.name}\` | \`${sanitizeInline(arg.type)}\` | ${
       arg.required ? 'yes' : 'no'
     } | ${desc} |`;
   });
