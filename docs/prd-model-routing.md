@@ -86,6 +86,11 @@ export const validateModelRouteExclusivity = (args: {
 Routes are strictly opt-in: an agent without `model_route_id` resolves exactly
 as today.
 
+> **Amended 2026-07-30.** "Exactly one" is relaxed to "**at most** one" so a
+> consumer that names neither can inherit its project's default route. The
+> exclusivity function is unchanged for consumers that do name one; see
+> [Project Default Route](#amendment--project-default-route-2026-07-30).
+
 **Decision (2026-07): strict exclusivity, which requires relaxing
 `Agent.aiProviderId` to nullable.** The column is `allowNull: false` today
 (`packages/postgresdb/src/models/Agent.ts`), so a route-only agent cannot
@@ -271,6 +276,18 @@ enforced by the shared validator on every write path, and the
 `TypedAgent.aiProvider` type flips to nullable so the compiler enumerates
 every consuming site.
 
+**Amended 2026-07-30:** the invariant is now "*at most* one of `aiProviderId` /
+`modelRouteId`", with "neither" meaning *inherit the project default route*, and
+`Project.defaultModelRouteId` added. Two write-time guards keep "this consumer
+has no model at all" unrepresentable — see
+[Project Default Route](#amendment--project-default-route-2026-07-30).
+
+### Project
+
+| Field                   | Type          | Description                                                                 |
+| ----------------------- | ------------- | --------------------------------------------------------------------------- |
+| `default_model_route_id` | string \| null | Route inherited by consumers in this project that name neither a route nor a provider. Null = no default (every consumer must then bind explicitly). Added by the 2026-07-30 amendment |
+
 ## Permissions
 
 | Permission                      | Endpoint                                    |
@@ -294,7 +311,96 @@ regeneration steps.
 | GET    | `/api/v1/model-routes`               | List routes (filter by project)      |
 | GET    | `/api/v1/model-routes/{route_id}`    | Get a route                          |
 | PUT    | `/api/v1/model-routes/{route_id}`    | Update name/targets/retry/breaker    |
-| DELETE | `/api/v1/model-routes/{route_id}`    | Delete — `409` if referenced by a consumer (Phase 1: agents reference routes from day one, so referential protection ships with them) |
+| DELETE | `/api/v1/model-routes/{route_id}`    | Delete — `409` if referenced by a consumer (Phase 1: agents reference routes from day one, so referential protection ships with them) or, after the 2026-07-30 amendment, if it is a project's `default_model_route_id` |
+
+## Amendment — Project Default Route (2026-07-30)
+
+Raised after Phases 1–2 landed: *should the target list live on the AI provider
+instead, so every consumer inherits failover automatically?* The appeal is real —
+it would delete the nullable `Agent.aiProviderId`, the exclusivity rule, and most
+of Phase 3's per-consumer wiring.
+
+**Rejected.** Three costs, one of them fatal in this codebase:
+
+- **The model does not live on the provider.** `Agent`, `Chat`, and `Discussion`
+  each carry their own nullable `model` that overrides the provider's
+  `default_model`, and a target is inherently a *(provider, model)* pair. With
+  fallbacks on the provider, the primary model is per-consumer but the fallback
+  models are per-provider: an agent pinned to `gpt-4o` and a chat pinned to
+  `gpt-4o-mini` on the same credential cannot share one correct fallback list —
+  the cheap consumer silently fails over to the expensive model, and
+  "order same-family models" becomes unstatable. Any fix ends in per-consumer
+  fallback overrides, i.e. the per-consumer field again, weaker.
+- **Inheritance-by-credential is an unbounded blast radius.** Editing a
+  credential row would change behavior for every agent, chat, discussion,
+  memory extraction, and evaluation referencing it — including consumers whose
+  owner never asked for failover (quality-sensitive output shapes, or a
+  data-residency constraint pinning one Bedrock region). Adding a per-consumer
+  `disable_fallback` to fix that pays the per-consumer cost anyway.
+- **The attempt cap stops being enforceable at write time.** Today
+  `Σ (1 + max_retries) ≤ 10` is a pure function of one route's own `targets`.
+  Provider-level fallbacks form a graph (P→Q→R→P), so the budget depends on rows
+  the author is not editing — requiring cycle detection and a runtime depth cap,
+  the clamp the [attempt-cap decision](#attempt-cap-decision) refused.
+
+There is also an attribution smell: `PriceBook` and `UsageEvent` are keyed by
+`(ai_provider_id, model)`, so a provider row that sometimes answers as a
+*different* provider recreates the gateway-alias mis-attribution this module
+exists to avoid. `AiProvider` holds `secretId` / slug / `baseUrl` / `config` — it
+is a credential and endpoint, not a routing policy.
+
+**Adopted instead: a project-level default route.** Routes are *already* the
+shared object — every consumer pointing at one `route_` id inherits changes to
+its targets. What was missing is a **default binding** so an operator does not
+have to touch each consumer.
+
+### Revised invariant
+
+A consumer sets **at most one** of `model_route_id` / `ai_provider_id`:
+
+| Consumer state | Resolves through |
+| --- | --- |
+| `model_route_id` set | that route |
+| `ai_provider_id` set | that provider (+ the consumer's `model`) |
+| neither set | the project's `default_model_route_id` |
+| both set | rejected `400` (unchanged) |
+
+`model` still may not accompany a route — named **or inherited** — because each
+target names its own. Resolution order is therefore a lookup, not a precedence
+puzzle: consumer route → consumer pin → project default. An explicit binding
+always wins; the default only fills the gap. A project-wide default is never
+allowed to override a deliberate pin.
+
+### Keeping "no model at all" unrepresentable
+
+Relaxing "exactly one" to "at most one" removes a write-time guarantee, so it is
+replaced by two — both at write time, neither a runtime error:
+
+1. **Create/update a consumer with neither binding → `400`** unless the project
+   has `default_model_route_id` set.
+2. **Clearing `default_model_route_id` → `409`** while any consumer in the
+   project is inheriting it (the count of consumers with both bindings null),
+   naming the count and a sample. *Repointing* it from one route to another stays
+   free — that is the switch the feature exists for.
+
+Together these make the runtime resolution a total function: every consumer that
+can be read has exactly one resolvable model. The existing route-delete guard
+extends to count the project reference alongside its agents.
+
+### Accepted blast radius
+
+Repointing a project's default deliberately changes behavior for every consumer
+inheriting it. That is the feature, and it differs from provider-level
+inheritance in the two ways that matter: it is a single project-scoped switch
+rather than a side effect of editing a credential, and it cannot silently
+override a consumer that bound itself explicitly.
+
+### REST and permissions
+
+`default_model_route_id` is a field on the existing project create/update
+surface, governed by `projects:UpdateProject` — no new permission, no new
+endpoint. The route must belong to the project (`400` otherwise), mirroring the
+same-project guard on targets.
 
 ## Implementation Phases
 
@@ -382,7 +488,7 @@ pre-first-token fallback for streaming (the composite's `doStream` arm);
   target 1; a fake stream that dies after emitting tokens surfaces an error
   and metadata records no additional attempts.
 
-### Phase 3 — Remaining Consumers + Formation Resource ❌ Not started
+### Phase 3 — Project Default, Remaining Consumers, Formation Resource ❌ Not started
 
 > Until this lands, `resolveCompletionModel` rejects a route-only agent with
 > `AI_PROVIDER_NOT_FOUND` naming the fix ("set an explicit ai_provider_id for
@@ -390,22 +496,58 @@ pre-first-token fallback for streaming (the composite's `doStream` arm);
 > The provider-delete guard already treats a model route as a live reference, so
 > a target can never dangle.
 
-**Deliverables:** `model_route_id` accepted by the remaining resolution
-sites — `chatCompletionModel.ts` (chats), `discussionCompletion.ts`
-(discussions), and `completionModel.ts` (memory extraction + consolidation
-`ai_provider_id` overrides) — each swapping its `buildModel` call for
-`buildRoutedModel` when a route is configured; `model-route` formation
-resource type (`modelRoutesFormationModule.ts`,
-`ModelRouteResourceProperties` in `formations.yaml`); smoke-test steps via
-`$SOAT_CLI`.
+Reshaped by the [2026-07-30 amendment](#amendment--project-default-route-2026-07-30):
+chats and discussions inherit routing through the project default, so this phase
+adds **no `model_route_id` column to them** — only the resolution-site change and
+one column on `Project`.
+
+**Deliverables:**
+
+- `Project.defaultModelRouteId` + the field on the project create/update
+  surface, the same-project validation, and both write-time guards (`400` for a
+  consumer with neither binding and no project default; `409` for clearing a
+  default that consumers inherit). The agent exclusivity validator relaxes to
+  "at most one".
+- The remaining resolution sites consult the chain (consumer route → consumer
+  pin → project default), swapping `buildModel` for `buildRoutedModel` when it
+  resolves to a route: `chatCompletionModel.ts` (chats),
+  `discussionCompletion.ts` (discussions), `completionModel.ts` (memory
+  extraction + consolidation).
+- **Attribution after the call for routed internal completions.**
+  `resolveCompletionModel` / `chatCompletionModel` return
+  `{ aiProviderDbId, modelName, provider }` *before* the call for
+  `recordCompletionUsage` to write. A composite cannot know its serving target
+  up front, so the internal-completion metering path must read attribution back
+  from the routing metadata (or the response's `modelId`) once the call
+  returns. This is the one real cost the amendment does **not** remove.
+- `model-route` formation resource type (`modelRoutesFormationModule.ts`,
+  `ModelRouteResourceProperties` in `formations.yaml`), plus
+  `default_model_route_id` wherever a project's own properties are declarable.
+- Smoke-test steps via `$SOAT_CLI` for the project default and one inheriting
+  consumer.
 
 **Acceptance criteria:**
 
-- A discussion run, a chat completion, and a memory-extraction completion
-  configured with a route whose first target fails complete successfully via
-  the second target.
+- A chat completion, a discussion run, and a memory-extraction completion that
+  bind **nothing** inherit the project default and complete via the second
+  target when the first fails; each records the served target for metering
+  (asserted against the usage event's provider + model, not just a 200).
+- A consumer with an explicit `ai_provider_id` ignores the project default
+  entirely — asserted by a fake server on the default's targets receiving zero
+  requests.
+- Creating a consumer that binds neither returns `400` when the project has no
+  default, and `201` when it does.
+- Clearing a project's `default_model_route_id` returns `409` while a consumer
+  inherits it, naming the count; repointing it to another route returns `200`
+  and the next generation uses the new route's targets.
+- Deleting a route that is a project's default returns `409`.
 - A formation template declaring a `model-route` resource plans, applies, and
   reads back `targets` in snake_case; unknown fields are rejected with 400.
+
+**Deferred, with an activation condition:** a per-consumer `model_route_id` on
+Chat / Discussion. A project default plus explicit pins covers "most consumers
+routed, some pinned"; the column is only needed for *two different routes in one
+project* — worth adding when that is actually requested, not before.
 
 ## Decision log
 
@@ -484,6 +626,43 @@ A: Both Phase 1 — resolved by pareto (agents reference routes from day one,
    deliverables create the referencing column and the formation module
    already round-trips agent fields (.claude/rules/modules.md Formations
    Sync).
+
+Q: Should the target list live on AiProvider, so every consumer of that
+   provider inherits failover automatically, instead of a separate
+   ModelRoute each consumer references? (raised 2026-07-30, after Phases 1-2)
+A: No — keep ModelRoute, add Project.default_model_route_id for the
+   inheritance — resolved by long-term (boundary integrity: AiProvider is a
+   credential + endpoint, and a target is a (provider, model) pair the
+   provider row cannot express; durability ladder: the write-time attempt cap
+   survives only while a route's budget is a pure function of its own
+   targets); checked: Agent, Chat and Discussion each declare their own
+   nullable `model` overriding the provider's default_model
+   (packages/postgresdb/src/models/{Agent,Chat,Discussion}.ts), so one
+   provider-level fallback list cannot be correct for two consumers pinning
+   different models on the same credential; PriceBook and UsageEvent are keyed
+   by (aiProviderId, model), so a provider answering as another provider
+   recreates the gateway mis-attribution this module exists to avoid;
+   AiProvider's own fields are secretId / provider / defaultModel / baseUrl /
+   config.
+
+Q: Precedence when a project default and a consumer binding both exist?
+A: The consumer always wins; the default only fills "neither" — resolved by
+   long-term (pattern hygiene: a project-wide switch that can override a
+   deliberate pin is the "route overrides pin" antipattern this PRD already
+   rejected, one scope up); checked: the resolution chain has three steps and
+   the revised invariant makes exactly one of them apply, so no precedence
+   rule lives in prose.
+
+Q: Relaxing "exactly one binding" to "at most one" drops a write-time
+   guarantee — how does "this consumer has no model at all" stay
+   unrepresentable?
+A: Two write-time guards — 400 on a consumer that binds neither while the
+   project has no default, 409 on clearing a default that consumers inherit
+   (repointing stays free) — resolved by long-term (durability ladder:
+   deterministic enforcement at write, keeping runtime resolution a total
+   function instead of a new failure mode); checked: this mirrors the
+   route-delete dependent guard already shipped in Phase 1, which extends to
+   count the project reference alongside its agents.
 ```
 
 ### Forwarded questions — resolved 2026-07-30
