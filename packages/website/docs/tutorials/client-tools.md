@@ -255,7 +255,9 @@ echo "Tool: $TOOL_ID"
 
 Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings), the canonical attachment field. Two settings make the pause-and-resume loop predictable:
 
-- [`tool_choice`](/docs/modules/agents#tool-choice) `{ "type": "tool", "tool_name": "get_order_status" }` forces the first model call to invoke the function instead of guessing an answer. The force applies to the call that produces the pause; after you submit the output, the run continues with `"auto"` so the model can answer from the result. With a larger model you can leave `tool_choice` at its default `"auto"` and let the model decide.
+- [`tool_choice`](/docs/modules/agents#tool-choice) `{ "type": "tool", "tool_name": "get_order_status" }` forces the first model call to invoke the function instead of guessing an answer. The force applies to the call that produces the pause; after you submit the output, the run continues with `"auto"` so the model can answer from the result. Leave `tool_choice` at its default `"auto"` when you want the model to decide whether the function is needed.
+
+  Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, which means a local Ollama agent falls back to `"auto"` no matter what you set — a small model then answers directly as often as it calls the function. OpenAI, Anthropic, and xAI all honor it.
 - `max_steps` bounds the agent loop.
 
 <Tabs groupId="client">
@@ -324,15 +326,9 @@ Start a generation the same way as for any [agent](/docs/modules/agents#examples
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# A small local model occasionally answers directly on the first attempt
-# instead of honoring the forced tool_choice — retry a few times.
-for i in $(seq 1 5); do \
-  GEN_RESPONSE=$(soat create-agent-generation \
-    --agent-id "$AGENT_ID" \
-    --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]'); \
-  [ "$(echo "$GEN_RESPONSE" | jq -r '.status')" = "requires_action" ] && break; \
-  sleep 1; \
-done
+GEN_RESPONSE=$(soat create-agent-generation \
+  --agent-id "$AGENT_ID" \
+  --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]')
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
 
 GEN_ID=$(echo "$GEN_RESPONSE" | jq -r '.id')
@@ -346,21 +342,14 @@ echo "Generation $GEN_ID paused; pending tool call: $TOOL_CALL_ID"
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// A small local model occasionally answers directly on the first attempt
-// instead of honoring the forced tool_choice — retry a few times.
-let generation;
-for (let attempt = 0; attempt < 5; attempt++) {
-  const { data } = await adminSoat.agents.createAgentGeneration({
-    path: { agent_id: agentId },
-    body: {
-      messages: [
-        { role: 'user', content: 'What is the status of order ord_1042?' },
-      ],
-    },
-  });
-  generation = data;
-  if (generation!.status === 'requires_action') break;
-}
+const { data: generation } = await adminSoat.agents.createAgentGeneration({
+  path: { agent_id: agentId },
+  body: {
+    messages: [
+      { role: 'user', content: 'What is the status of order ord_1042?' },
+    ],
+  },
+});
 
 console.log(generation!.status); // "requires_action"
 const toolCall = generation!.required_action!.tool_calls[0];
@@ -371,16 +360,10 @@ console.log(toolCall.tool_name, toolCall.args); // "get_order_status" { orderId:
 <TabItem value="curl" label="curl">
 
 ```bash
-# A small local model occasionally answers directly on the first attempt
-# instead of honoring the forced tool_choice — retry a few times.
-for i in $(seq 1 5); do \
-  GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}'); \
-  [ "$(echo "$GEN_RESPONSE" | jq -r '.status')" = "requires_action" ] && break; \
-  sleep 1; \
-done
+GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}')
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
 
 GEN_ID=$(echo "$GEN_RESPONSE" | jq -r '.id')
@@ -408,6 +391,10 @@ The response looks like this:
   }
 }
 ```
+
+:::note
+Running against local Ollama and got `"status": "completed"` with `required_action: null`? That is the ignored `tool_choice` described in Step 5 — the model chose to answer instead of calling the function. Re-run the generation, or point the agent at a provider that honors forcing.
+:::
 
 Nothing is executing anywhere at this point. The generation is suspended server-side, waiting for your app — this is also the seam where a human can review the call before anything happens (see [Approvals](/docs/modules/approvals)).
 

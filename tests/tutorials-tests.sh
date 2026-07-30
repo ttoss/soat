@@ -13,6 +13,11 @@
 #   # → 403         Expect a non-zero exit (the number is the HTTP status code).
 #                   The command is run; a zero exit is treated as an error.
 #   # → ignore      Run the command but ignore its exit code entirely.
+#   # → retry N     Re-run the command until it exits 0, up to N attempts
+#                   (1s between attempts). Fails the run if all N fail.
+#                   For steps that are slow to converge, not for steps whose
+#                   outcome depends on what an LLM decides — keep those
+#                   deterministic instead (see tests/mocks/ollamaToolChoiceProxy.mjs).
 #
 # Non-interactive profile handling:
 #   "soat login-user" output is captured and the returned token is used to
@@ -224,7 +229,10 @@ for entry in "${COMMANDS[@]}"; do
   # Determine expect-fail from annotation
   expect_fail=0
   ignore_exit=0
-  if [[ "$annotation" =~ ^[0-9]+$ ]] || [[ "$annotation" == "expect-fail" ]]; then
+  max_attempts=1
+  if [[ "$annotation" =~ ^retry[[:space:]]+([0-9]+)$ ]]; then
+    max_attempts="${BASH_REMATCH[1]}"
+  elif [[ "$annotation" =~ ^[0-9]+$ ]] || [[ "$annotation" == "expect-fail" ]]; then
     expect_fail=1
   elif [[ "$annotation" == "ignore" ]]; then
     ignore_exit=1
@@ -301,11 +309,28 @@ for entry in "${COMMANDS[@]}"; do
     echo "[Step $STEP] $cmd"
   fi
 
-  # Execute
-  set +e
-  eval "$cmd"
-  exit_code=$?
-  set -e
+  # Execute — retried when the command carries a "# → retry N" annotation.
+  attempt=1
+  while true; do
+    set +e
+    eval "$cmd"
+    exit_code=$?
+    set -e
+
+    if [[ $exit_code -eq 0 || $attempt -ge $max_attempts ]]; then
+      break
+    fi
+    attempt=$((attempt + 1))
+    echo "(exit $exit_code — retrying, attempt $attempt/$max_attempts)"
+    sleep 1
+  done
+
+  if [[ $max_attempts -gt 1 && $exit_code -ne 0 ]]; then
+    echo ""
+    echo "❌ ERROR: Command failed after $max_attempts attempts at step $STEP"
+    echo "   Command: $cmd"
+    exit 1
+  fi
 
   if [[ $ignore_exit -eq 1 ]]; then
     : # ignore

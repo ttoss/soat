@@ -660,13 +660,15 @@ When generation runs, your `soat listen` terminal should log events such as:
 
 ## Step 11 - Verify delivery and final assistant message
 
-Wait for the async delivery, inspect the webhook listener output, then fetch session messages again. Delivery records are queryable via the [Webhooks](/docs/modules/webhooks#examples) module.
+Wait for the async delivery, inspect the webhook listener output, then fetch session messages again. Delivery records are queryable via the [Webhooks](/docs/modules/webhooks#examples) module, and a delivery's `status` is `pending`, `success`, or `failed`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-for _ in $(seq 1 20); do soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" | jq -e '[.data[] | select(.status == "completed")] | length > 0' && break || sleep 1; done # → ignore
+# → retry 30
+soat list-webhook-deliveries --webhook-id "$WEBHOOK_ID" \
+  | jq -e '[.data[] | select(.status == "success")] | length > 0'
 
 soat list-webhook-deliveries \
   --webhook-id "$WEBHOOK_ID" | jq '.data[] | {event_type, status, status_code}'

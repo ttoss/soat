@@ -4,6 +4,14 @@ set -e
 SERVER_URL="${SERVER_URL:-http://localhost:50477}"
 BASE_URL="$SERVER_URL"
 
+# Ollama endpoint the AI providers created below point at. In the compose stack
+# this is the tool_choice shim (tests/mocks/ollamaToolChoiceProxy.mjs), which
+# implements the `tool_choice` field Ollama's OpenAI-compatible endpoint drops
+# and forwards everything else to the real Ollama. A provider that pins
+# `base_url` overrides the server's OLLAMA_BASE_URL, so it must be routed here
+# too or the client-tool step goes back to depending on what the model decides.
+OLLAMA_URL="${OLLAMA_URL:-http://ollama:11434}"
+
 # ── CLI setup ─────────────────────────────────────────────────────────────────
 # Set env vars consumed by the CLI (no profile / config file needed)
 # The SDK paths already include /api/v1, so the base URL should be host-only.
@@ -1641,7 +1649,7 @@ AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --name smoke-ollama \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
-  --base_url "http://ollama:11434")
+  --base_url "$OLLAMA_URL")
 AI_PROVIDER_ID=$(echo "$AI_PROVIDER_RESP" | jq -r '.id')
 echo "AI Provider id: $AI_PROVIDER_ID"
 
@@ -2492,21 +2500,16 @@ if [ -z "$CLIENT_AGENT_ID" ] || [ "$CLIENT_AGENT_ID" = "null" ]; then
 fi
 echo "Client Agent id: $CLIENT_AGENT_ID"
 
-# 33. Start a generation — expect requires_action with a tool call
+# 33. Start a generation — expect requires_action with a tool call.
+# The agent forces `tool_choice: get_weather`, and the compose stack routes
+# Ollama through tests/mocks/ollamaToolChoiceProxy.mjs, which implements the
+# `tool_choice` field Ollama's OpenAI-compatible endpoint drops. The pause is
+# therefore deterministic — no retry loop, and a failure here is a real
+# regression in the client-tool pause path rather than a model coin flip.
 echo "--- Starting client-tool generation ---"
-CLIENT_GEN_RESP=''
-CLIENT_GEN_STATUS=''
-CLIENT_ATTEMPT=1
-while [ "$CLIENT_ATTEMPT" -le 3 ]; do
-  CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$CLIENT_AGENT_ID" \
-    --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
-  CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
-  if [ "$CLIENT_GEN_STATUS" = "requires_action" ]; then
-    break
-  fi
-  echo "Attempt $CLIENT_ATTEMPT did not yield requires_action (got '$CLIENT_GEN_STATUS'); retrying..."
-  CLIENT_ATTEMPT=$((CLIENT_ATTEMPT + 1))
-done
+CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$CLIENT_AGENT_ID" \
+  --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
+CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
 
 echo "Client generation response:"
 printf '%s\n' "$CLIENT_GEN_RESP" | jq .
@@ -2833,7 +2836,7 @@ DEL_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --name smoke-delete-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
-  --base_url "http://ollama:11434")
+  --base_url "$OLLAMA_URL")
 DEL_PROVIDER_ID=$(echo "$DEL_PROVIDER_RESP" | jq -r '.id')
 
 # Soft dependent: a price override blocks a plain delete with 409...
@@ -2855,7 +2858,7 @@ HARD_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --name smoke-hardref-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
-  --base_url "http://ollama:11434")
+  --base_url "$OLLAMA_URL")
 HARD_PROVIDER_ID=$(echo "$HARD_PROVIDER_RESP" | jq -r '.id')
 HARD_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
@@ -3914,7 +3917,7 @@ DEL_AI_PROVIDER_RESP=$($SOAT_CLI create-ai-provider \
   --name smoke-delete-provider \
   --provider ollama \
   --default_model "qwen2.5:0.5b" \
-  --base_url "http://ollama:11434")
+  --base_url "$OLLAMA_URL")
 DEL_AI_PROVIDER_ID=$(echo "$DEL_AI_PROVIDER_RESP" | jq -r '.id')
 
 DEL_AGENT_RESP=$($SOAT_CLI create-agent \

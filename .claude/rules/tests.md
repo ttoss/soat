@@ -512,8 +512,62 @@ Tutorial discovery and execution is split across two scripts:
 2. Ensures `SOAT_BASE_URL` is set.
 3. Extracts commands only from `<TabItem value="cli">` fenced `bash` blocks.
 4. Joins multiline commands and executes them in order in one shell context.
-5. Supports `# → expect-fail` and `# → ignore` command annotations.
+5. Supports `# → expect-fail`, `# → ignore`, and `# → retry N` command annotations.
 6. Handles non-interactive profile setup by capturing `soat login-user` tokens and writing profiles for `soat configure` steps.
+
+The runner itself is covered by `tests/harness/` (`pnpm run test:harness`, wired into
+`pr.yml` and `main.yml`). Any change to annotation handling needs a test there first.
+
+### Command Annotations
+
+| Annotation | Meaning |
+|---|---|
+| `# → 403` / `# → expect-fail` | The command must exit non-zero. A zero exit fails the run. |
+| `# → ignore` | Run the command, ignore its exit code entirely. |
+| `# → retry N` | Re-run until the command exits 0, up to N attempts, 1s apart. Fails after N. |
+
+An annotation on its own line applies to the **next** command; a trailing inline
+annotation applies to the command it sits on.
+
+`# → retry N` is for steps that are **slow to converge** — an async webhook delivery, a
+queued job, an ingestion that finishes shortly after the call returns. It replaces
+hand-rolled `for _ in $(seq 1 20); do … done` loops in tutorial prose, and it lets an
+assertion stay *enforced* instead of being downgraded to `# → ignore`.
+
+Do **not** use it to paper over an LLM's choices. A step whose outcome depends on what a
+model decides must be made deterministic instead — see "Deterministic model behavior"
+below — or the tutorial belongs in `.tutorialsignore` with a comment saying why.
+
+### Deterministic Model Behavior
+
+The smoke and tutorials stacks route Ollama traffic through
+`tests/mocks/ollamaToolChoiceProxy.mjs` (`OLLAMA_BASE_URL: http://ollama-tool-choice:11434`).
+
+Ollama's OpenAI-compatible endpoint does not implement `tool_choice` — it drops the field
+— so an agent that forces a specific tool gets no forcing at all and the run pauses only
+when the sandbox's `qwen2.5:0.5b` volunteers a tool call. That made the client-tool
+assertions in both suites probabilistic, and a single flake blocked a release (#774).
+
+The proxy implements that one missing field, for the tools named in
+`TOOL_CHOICE_TOOLS` (one per stack today: `get_order_status` in tutorials, `get_weather`
+in smoke), and forwards everything else — an unlisted tool, no `tool_choice`, `"auto"`,
+`"none"`, embeddings, every other route — to the real Ollama verbatim. A forced-tool
+assertion on an allowlisted tool is therefore deterministic, and a failure is a real
+regression in the pause/resume path.
+
+The allowlist is what keeps this safe. Other flows force tools whose **arguments** only a
+model can supply — the guardrail-gated tool in the smoke suite, per-step `step_rules`
+forcing in the formations tutorial (document ids, the poem text) — and synthesizing those
+would be worse than the status quo. Adding a tool to `TOOL_CHOICE_TOOLS` is only correct
+when the assertion is about *the pause/dispatch wiring*, not about argument quality.
+
+Note the interaction with `base_url`: an AI provider that pins `base_url` overrides the
+server's `OLLAMA_BASE_URL`, so it bypasses the shim. `tests/smoke-tests.sh` routes its
+providers through `$OLLAMA_URL` for that reason.
+
+When a CI-only nondeterminism appears, prefer this shape — implement the missing
+capability at the provider boundary — over weakening an assertion or retrying a
+generation.
 
 ### Ignoring Tutorials
 
