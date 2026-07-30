@@ -28,6 +28,7 @@ A Project is a top-level container that scopes all resources. Users access proje
 | `id`         | string | Public identifier prefixed with `proj_` |
 | `name`       | string | Human-readable project name             |
 | `guardrail_ids` | array | Guardrails attached at the project scope — the baseline governing every tool call by every agent in the project. See [Guardrails — Attachment](./guardrails.md#attachment) |
+| `default_model_route_id` | string \| null | [Model route](./model-routes.md#project-default-route) inherited by consumers in this project that bind neither `model_route_id` nor `ai_provider_id`. `null` (default) means no default, so every consumer must bind explicitly. Settable/clearable via `update-project`. |
 | `max_concurrent_runs` | integer \| null | Maximum [orchestration runs](./orchestrations.md#concurrency-limits) of this project driven at once. `null` (default) means unlimited; otherwise an integer ≥ 1. Settable/clearable via `update-project`. |
 | `audit_reads_enabled` | boolean | Opts the project into [read auditing](./audit-log.md#read-auditing): when `true`, `GET` requests naming this project are recorded in the audit log alongside mutations. `false` by default. Settable via `update-project`. |
 | `created_at` | string | ISO 8601 creation timestamp             |
@@ -79,6 +80,16 @@ To grant a user access to a single project, attach a [Policy](./policies.md) sco
 }
 ```
 
+### Default Model Route
+
+`default_model_route_id` names the [model route](./model-routes.md) every consumer in the project inherits when it binds neither `model_route_id` nor `ai_provider_id` — a single project-scoped switch that gives agents, chats, discussions, and memory completions provider failover without editing each one.
+
+```bash
+soat update-project --project-id proj_… --default_model_route_id route_…
+```
+
+The route must belong to this project. An explicit binding on a consumer always wins, so the default can never override a deliberate pin. Repointing the default to another route is free; **clearing** it returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, and deleting the route itself returns `409 MODEL_ROUTE_HAS_DEPENDENTS`. Governed by `projects:UpdateProject`.
+
 ### Deletion
 
 By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
@@ -91,6 +102,7 @@ By default, deleting a project that has any dependent resource (agents, AI provi
 | `403`  | `{ "error": "Forbidden" }`                       | `GET /projects/{id}` (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `soat:<this-project-id>:*:*`, or use a key scoped to this project — see [Authorization Model](#authorization-model) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
+| `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
 
 Project-scoped access is entirely policy-driven (there is no membership list), so a `403` on a project route almost always means the caller's current policies don't include an `Allow` statement covering that project's SRN — see [Project Access via Policies](#project-access-via-policies).
 

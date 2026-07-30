@@ -31,7 +31,7 @@ Deep thinking lives entirely in Discussions rather than in a per-agent `reasonin
 | `project_id`     | string   | Project the discussion belongs to                                           |
 | `name`           | string   | Display name                                                                |
 | `description`    | string   | Optional description                                                        |
-| `ai_provider_id` | string   | Default AI provider participants and synthesis fall back to (**required**)  |
+| `ai_provider_id` | string \| null | Default AI provider participants and synthesis fall back to. `null` when the discussion pins none and inherits its project's [`default_model_route_id`](./model-routes.md#project-default-route), which gives every turn ordered provider failover. Omitting it returns `400` when the project has no default; setting it to `null` on an update unpins the discussion onto the default |
 | `model`          | string   | Default model (falls back to the provider's `default_model`)                |
 | `max_rounds`     | number   | Rounds of deliberation (1–3, default `1`)                                   |
 | `synthesis`      | object   | Optional override for the final synthesis pass — see [Synthesis](#synthesis) |
@@ -78,6 +78,10 @@ A run is a single invocation of a discussion.
 | `created_at`              | string      | ISO 8601 creation timestamp                                        |
 
 ## Key Concepts
+
+### Provider resolution
+
+Each turn resolves its model from the participant's own `ai_provider_id` override, else the discussion's, else — when the discussion pins none — the project's [`default_model_route_id`](./model-routes.md#project-default-route). A routed turn is metered against the target that actually served, and `effort` becomes a no-op for it: reasoning options are provider-native and a route's targets may span providers that disagree about them.
 
 ### Deliberation and synthesis
 

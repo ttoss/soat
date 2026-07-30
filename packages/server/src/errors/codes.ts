@@ -470,7 +470,12 @@ export const ERROR_CODES = {
   MODEL_ROUTE_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The model route is referenced by one or more agents and cannot be deleted. Repoint or delete the referencing agents first; the error meta reports the count and a sample of agent IDs.',
+      "The model route is referenced by one or more agents, or is a project's default_model_route_id, and cannot be deleted. Repoint or delete the referencing consumers first; the error meta reports the counts and a sample of agent IDs.",
+  },
+  PROJECT_DEFAULT_ROUTE_INHERITED: {
+    httpStatus: 409,
+    description:
+      "A project's default_model_route_id cannot be cleared while consumers that bind neither an AI provider nor a model route inherit it — clearing it would leave them with no resolvable model. Repointing the default to another route is always allowed; the error meta reports the count and a sample of inheriting resource IDs.",
   },
 } as const satisfies Record<
   string,

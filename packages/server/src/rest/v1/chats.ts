@@ -56,14 +56,14 @@ const validateCreateChatBody = (
   body: unknown
 ):
   | {
-      aiProviderId: string;
+      aiProviderId?: string;
       name?: string;
       systemMessage?: string;
       model?: string;
       projectId?: string;
       error?: undefined;
     }
-  | { error: string; aiProviderId?: undefined } => {
+  | { error: string } => {
   const {
     ai_provider_id: aiProviderId,
     name,
@@ -72,8 +72,11 @@ const validateCreateChatBody = (
     project_id: projectId,
   } = body as Record<string, unknown>;
 
-  if (!aiProviderId || typeof aiProviderId !== 'string') {
-    return { error: 'ai_provider_id is required' };
+  // Optional since the model-routing project-default amendment: a chat that
+  // pins no provider inherits the project's default_model_route_id, and
+  // `createChat` rejects the combination the project cannot satisfy.
+  if (aiProviderId !== undefined && typeof aiProviderId !== 'string') {
+    return { error: 'ai_provider_id must be a string' };
   }
 
   return {

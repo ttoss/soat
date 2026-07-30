@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
 import { buildConsolidationPrompt } from './memoryConsolidation';
-import { recordCompletionUsage } from './usage';
+import { meterCompletion, routedMaxRetries } from './modelRoutes';
 
 const log = createDebug('soat:memory-consolidation');
 
@@ -48,18 +48,18 @@ export const runConsolidationCompletion = async (args: {
       incoming: args.incoming,
     }),
     temperature: 0,
+    // A routed model owns every attempt itself (see `routedMaxRetries`).
+    maxRetries: routedMaxRetries(resolved.model),
   });
 
-  // Consolidation is a real provider call, so it meters like any other.
-  // `recordCompletionUsage` never rejects, so `void` marks the intentional
-  // fire-and-forget: metering must not delay or fail the consolidation.
-  void recordCompletionUsage({
+  // Consolidation is a real provider call, so it meters like any other — against
+  // the target that actually served when it ran through a route.
+  meterCompletion({
+    model: resolved.model,
+    fallback: resolved.attribution,
     source: 'memory_consolidation',
     projectId: resolved.projectId,
-    provider: resolved.provider,
-    aiProviderId: resolved.aiProviderDbId,
     agentId: resolved.agentDbId,
-    model: resolved.modelName,
     usage,
   });
 

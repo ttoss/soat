@@ -211,11 +211,13 @@ describe('openapiSpec', () => {
       expect(create.allowedFields.has('aiProviderId')).toBe(false);
       expect(create.allowedFields.has('maxSteps')).toBe(false);
 
-      // `CreateAgentRequest` declares no required field: an agent must set
-      // exactly one of `ai_provider_id` / `model_route_id`, which an OpenAPI
-      // `required` array cannot express — `validateModelRouteExclusivity` owns
-      // it instead. Asserted so re-adding `required: [ai_provider_id]` (which
-      // would make a route-only agent unrepresentable) fails here.
+      // `CreateAgentRequest` declares no required field: an agent sets *at most*
+      // one of `ai_provider_id` / `model_route_id` and may set neither (it then
+      // inherits the project's `default_model_route_id`), which an OpenAPI
+      // `required` array cannot express — `validateModelRouteExclusivity` plus
+      // `assertModelBindingResolvable` own it instead. Asserted so re-adding
+      // `required: [ai_provider_id]` (which would make a route-only or
+      // inheriting agent unrepresentable) fails here.
       expect(create.requiredFields.size).toBe(0);
     });
 

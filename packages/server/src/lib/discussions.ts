@@ -3,6 +3,12 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
+  assertDiscussionBinding,
+  assertSynthesisProvider,
+  createParticipants,
+  resolveOptionalProviderId,
+} from './discussionsResolvers';
+import {
   type DiscussionModel,
   type ParticipantInput,
   type SynthesisConfig,
@@ -11,6 +17,7 @@ import {
   findDiscussionTemplateWarnings,
   validateDiscussionConfig,
 } from './discussionsValidation';
+import { assertModelBindingResolvable } from './modelRoutes';
 import { registerResourceFieldMap } from './policyCompiler';
 
 const log = createDebug('soat:discussions');
@@ -132,106 +139,12 @@ const getDiscussionByDbId = async (id: number) => {
   return mapDiscussion(created as DiscussionModel);
 };
 
-// ── Provider / actor resolution ───────────────────────────────────────────────
-
-const resolveProviderId = async (args: {
-  projectId: number;
-  aiProviderId: string;
-}): Promise<number> => {
-  const provider = await db.AiProvider.findOne({
-    where: { publicId: args.aiProviderId, projectId: args.projectId },
-  });
-  if (!provider) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider '${args.aiProviderId}' not found in the project.`
-    );
-  }
-  return provider.id as number;
-};
-
-const resolveActorId = async (args: {
-  projectId: number;
-  actorId: string;
-}): Promise<number> => {
-  const actor = await db.Actor.findOne({
-    where: { publicId: args.actorId, projectId: args.projectId },
-  });
-  if (!actor) {
-    throw new DomainError(
-      'ACTOR_NOT_FOUND',
-      `Actor '${args.actorId}' not found in the project.`
-    );
-  }
-  return actor.id as number;
-};
-
-const buildParticipantAttributes = async (args: {
-  discussionId: number;
-  projectId: number;
-  participant: ParticipantInput;
-  index: number;
-}) => {
-  const { participant } = args;
-  const aiProviderId = participant.aiProviderId
-    ? await resolveProviderId({
-        projectId: args.projectId,
-        aiProviderId: participant.aiProviderId,
-      })
-    : null;
-  const actorId = participant.actorId
-    ? await resolveActorId({
-        projectId: args.projectId,
-        actorId: participant.actorId,
-      })
-    : null;
-  return {
-    discussionId: args.discussionId,
-    name: participant.name ?? null,
-    prompt: participant.prompt ?? null,
-    position: participant.position ?? args.index,
-    actorId,
-    aiProviderId,
-    model: participant.model ?? null,
-    temperature: participant.temperature ?? null,
-    effort: participant.effort ?? null,
-  };
-};
-
-const createParticipants = async (args: {
-  discussionId: number;
-  projectId: number;
-  participants: ParticipantInput[];
-}): Promise<void> => {
-  for (let index = 0; index < args.participants.length; index++) {
-    const attributes = await buildParticipantAttributes({
-      discussionId: args.discussionId,
-      projectId: args.projectId,
-      participant: args.participants[index],
-      index,
-    });
-    await db.DiscussionParticipant.create(attributes);
-  }
-};
-
-const assertSynthesisProvider = async (args: {
-  projectId: number;
-  synthesis?: SynthesisConfig | null;
-}): Promise<void> => {
-  if (args.synthesis?.aiProviderId) {
-    await resolveProviderId({
-      projectId: args.projectId,
-      aiProviderId: args.synthesis.aiProviderId,
-    });
-  }
-};
-
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
 export const createDiscussion = async (args: {
   projectId: number;
   name: string;
-  aiProviderId: string;
+  aiProviderId?: string;
   description?: string | null;
   maxRounds?: number | null;
   model?: string | null;
@@ -252,7 +165,16 @@ export const createDiscussion = async (args: {
     synthesis: args.synthesis,
   });
 
-  const aiProviderId = await resolveProviderId({
+  // At most one binding: a discussion that pins no provider inherits its
+  // project's `default_model_route_id`, which must therefore exist.
+  await assertModelBindingResolvable({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+    modelRouteId: null,
+    resourceLabel: 'discussion',
+  });
+
+  const aiProviderId = await resolveOptionalProviderId({
     projectId: args.projectId,
     aiProviderId: args.aiProviderId,
   });
@@ -342,7 +264,7 @@ const buildDiscussionUpdates = async (args: {
   name?: string;
   description?: string | null;
   maxRounds?: number | null;
-  aiProviderId?: string;
+  aiProviderId?: string | null;
   model?: string | null;
   synthesis?: SynthesisConfig | null;
   tags?: Record<string, string> | null;
@@ -357,10 +279,9 @@ const buildDiscussionUpdates = async (args: {
   if (args.synthesis !== undefined) updates.synthesis = args.synthesis;
   if (args.tags !== undefined) updates.tags = args.tags ?? {};
   if (args.aiProviderId !== undefined) {
-    updates.aiProviderId = await resolveProviderId({
-      projectId: args.projectId,
-      aiProviderId: args.aiProviderId,
-    });
+    // An explicit `null` unpins the discussion, handing resolution to the
+    // project default route.
+    updates.aiProviderId = await resolveOptionalProviderId(args);
   }
   return updates;
 };
@@ -370,7 +291,7 @@ export const updateDiscussion = async (args: {
   name?: string;
   description?: string | null;
   maxRounds?: number | null;
-  aiProviderId?: string;
+  aiProviderId?: string | null;
   model?: string | null;
   synthesis?: SynthesisConfig | null;
   tags?: Record<string, string> | null;
@@ -393,6 +314,7 @@ export const updateDiscussion = async (args: {
   });
 
   const projectId = discussion.projectId as number;
+  await assertDiscussionBinding({ projectId, aiProviderId: args.aiProviderId });
   await assertSynthesisProvider({ projectId, synthesis: args.synthesis });
 
   const updates = await buildDiscussionUpdates({ ...args, projectId });

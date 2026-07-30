@@ -16,6 +16,7 @@ import {
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
 import {
+  assertModelBindingResolvable,
   resolveModelRouteDbId,
   validateModelRouteExclusivity,
 } from './modelRoutes';
@@ -179,18 +180,28 @@ const resolveAiProviderDbId = async (
 };
 
 /**
- * An agent resolves its completion model through exactly one of a pinned
- * provider or a model route. The rule itself lives in `modelRoutes` (shared
- * with the formation module); this asserts it and translates the message into
- * the standard `VALIDATION_FAILED` (400).
+ * An agent resolves its completion model through **at most one** of a pinned
+ * provider or a model route; binding neither inherits the project's
+ * `default_model_route_id`. The pure rule lives in `modelRoutes` (shared with
+ * the formation module) and this asserts it as the standard `VALIDATION_FAILED`
+ * (400); the second guard is the database fact that a project default actually
+ * exists to inherit.
  */
-const assertModelBindingExclusive = (args: {
+const assertModelBinding = async (args: {
+  projectId: number;
   modelRouteId: unknown;
   aiProviderId: unknown;
   model: unknown;
-}): void => {
+}): Promise<void> => {
   const error = validateModelRouteExclusivity(args);
   if (error) throw new DomainError('VALIDATION_FAILED', error);
+
+  await assertModelBindingResolvable({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+    modelRouteId: args.modelRouteId,
+    resourceLabel: 'agent',
+  });
 };
 
 const requireAiProviderDbId = async (publicId: string): Promise<number> => {
@@ -205,8 +216,9 @@ const requireAiProviderDbId = async (publicId: string): Promise<number> => {
 };
 
 /**
- * Resolves the create-time model binding: exactly one of a pinned provider or a
- * model route, both stored as internal ids.
+ * Resolves the create-time model binding: at most one of a pinned provider or a
+ * model route, both stored as internal ids. Both null means the agent inherits
+ * its project's default route.
  */
 const resolveCreateModelBinding = async (args: {
   projectId: number;
@@ -214,7 +226,8 @@ const resolveCreateModelBinding = async (args: {
   modelRouteId?: string;
   model?: string;
 }): Promise<{ aiProviderId: number | null; modelRouteId: number | null }> => {
-  assertModelBindingExclusive({
+  await assertModelBinding({
+    projectId: args.projectId,
     modelRouteId: args.modelRouteId,
     aiProviderId: args.aiProviderId,
     model: args.model,
@@ -383,7 +396,8 @@ const applyModelBindingUpdates = async (args: {
     fields.aiProviderId !== undefined || fields.modelRouteId !== undefined;
   if (!touchesBinding && fields.model === undefined) return;
 
-  assertModelBindingExclusive({
+  await assertModelBinding({
+    projectId,
     aiProviderId: effectiveValue(fields.aiProviderId, agent.aiProviderId),
     modelRouteId: effectiveValue(fields.modelRouteId, agent.modelRouteId),
     model: effectiveValue(fields.model, agent.model),

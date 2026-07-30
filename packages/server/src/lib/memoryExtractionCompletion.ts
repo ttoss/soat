@@ -2,7 +2,7 @@ import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { resolveCompletionModel } from './completionModel';
-import { recordCompletionUsage } from './usage';
+import { meterCompletion, routedMaxRetries } from './modelRoutes';
 
 const log = createDebug('soat:memory-extraction');
 
@@ -41,18 +41,18 @@ export const runExtractionCompletion = async (args: {
     model: resolved.model,
     prompt: args.prompt,
     temperature: 0,
+    // A routed model owns every attempt itself (see `routedMaxRetries`).
+    maxRetries: routedMaxRetries(resolved.model),
   });
 
-  // Extraction is a real provider call, so it meters like any other.
-  // `recordCompletionUsage` never rejects, so `void` marks the intentional
-  // fire-and-forget: metering must not delay or fail the extraction.
-  void recordCompletionUsage({
+  // Extraction is a real provider call, so it meters like any other — against
+  // the target that actually served when it ran through a route.
+  meterCompletion({
+    model: resolved.model,
+    fallback: resolved.attribution,
     source: 'memory_extraction',
     projectId: resolved.projectId,
-    provider: resolved.provider,
-    aiProviderId: resolved.aiProviderDbId,
     agentId: resolved.agentDbId,
-    model: resolved.modelName,
     usage,
   });
 

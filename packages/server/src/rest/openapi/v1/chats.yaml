@@ -368,7 +368,10 @@ components:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider
+          nullable: true
+          description: >-
+            Public ID of the pinned AI provider, or `null` when the chat pins
+            none and inherits its project's `default_model_route_id`.
           example: aip_V1StGXR8Z5jdHi6B
         name:
           type: string
@@ -394,13 +397,15 @@ components:
 
     CreateChatRequest:
       type: object
-      required:
-        - ai_provider_id
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider
+          description: >-
+            Public ID of the AI provider to pin. Optional: omit it to inherit the
+            project's `default_model_route_id`, which gives the chat provider
+            failover. Omitting it returns `400` when the project has no default,
+            and cannot be combined with `model` — each route target names its own.
           example: aip_V1StGXR8Z5jdHi6B
         project_id:
           x-soat-ref: projects

@@ -5,6 +5,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
 import { assertGuardrailsExist } from './guardrails';
+import {
+  assertDefaultModelRouteInProject,
+  assertProjectDefaultNotInherited,
+} from './modelRouteDefaults';
 import { paginatedList, resolvePagination } from './pagination';
 
 const log = createDebug('soat:projects');
@@ -14,6 +18,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     id: project.publicId,
     name: project.name,
     guardrail_ids: project.guardrailIds,
+    default_model_route_id: project.defaultModelRouteId,
     max_concurrent_runs: project.maxConcurrentRuns,
     audit_reads_enabled: project.auditReadsEnabled,
     created_at: project.createdAt,
@@ -128,10 +133,39 @@ export const createProject = async (args: { name: string }) => {
   return mapProject(project);
 };
 
+/**
+ * Validates a `default_model_route_id` write. Setting it requires a route in the
+ * same project; clearing it is refused while consumers inherit it — the two
+ * write-time guards that keep "this consumer has no model at all"
+ * unrepresentable once a consumer may bind neither field.
+ *
+ * Repointing from one route to another is deliberately unguarded: that is the
+ * project-wide switch the feature exists for.
+ */
+const assertDefaultModelRouteWritable = async (args: {
+  projectId: number;
+  projectPublicId: string;
+  defaultModelRouteId: string | null;
+}): Promise<void> => {
+  if (args.defaultModelRouteId === null) {
+    await assertProjectDefaultNotInherited({
+      projectId: args.projectId,
+      projectPublicId: args.projectPublicId,
+    });
+    return;
+  }
+
+  await assertDefaultModelRouteInProject({
+    projectId: args.projectId,
+    defaultModelRouteId: args.defaultModelRouteId,
+  });
+};
+
 export const updateProject = async (args: {
   id: string;
   name?: string;
   guardrailIds?: string[] | null;
+  defaultModelRouteId?: string | null;
   maxConcurrentRuns?: number | null;
   auditReadsEnabled?: boolean;
 }) => {
@@ -146,6 +180,14 @@ export const updateProject = async (args: {
     });
   }
 
+  if (args.defaultModelRouteId !== undefined) {
+    await assertDefaultModelRouteWritable({
+      projectId: (project as unknown as { id: number }).id,
+      projectPublicId: args.id,
+      defaultModelRouteId: args.defaultModelRouteId,
+    });
+  }
+
   if (args.maxConcurrentRuns !== undefined) {
     const error = validateMaxConcurrentRuns(args.maxConcurrentRuns);
     if (error) {
@@ -156,6 +198,9 @@ export const updateProject = async (args: {
   const updates: Record<string, unknown> = {};
   if (args.name !== undefined) updates.name = args.name;
   if (args.guardrailIds !== undefined) updates.guardrailIds = args.guardrailIds;
+  if (args.defaultModelRouteId !== undefined) {
+    updates.defaultModelRouteId = args.defaultModelRouteId;
+  }
   if (args.maxConcurrentRuns !== undefined) {
     updates.maxConcurrentRuns = args.maxConcurrentRuns;
   }
@@ -191,6 +236,7 @@ const countProjectDependents = async (args: {
   const counts = await Promise.all([
     db.Agent.count({ where: { projectId } }),
     db.AiProvider.count({ where: { projectId } }),
+    db.ModelRoute.count({ where: { projectId } }),
     db.Tool.count({ where: { projectId } }),
     db.Actor.count({ where: { projectId } }),
     db.Chat.count({ where: { projectId } }),
@@ -324,6 +370,8 @@ const forceDeleteProjectWithDependents = async (args: {
     await db.Chat.destroy({ where: { projectId }, transaction });
 
     await db.Agent.destroy({ where: { projectId }, transaction });
+    // Must follow Agent, whose modelRouteId FK points at it.
+    await db.ModelRoute.destroy({ where: { projectId }, transaction });
     await db.AiProvider.destroy({ where: { projectId }, transaction });
     await db.Tool.destroy({ where: { projectId }, transaction });
 

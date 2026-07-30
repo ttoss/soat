@@ -79,7 +79,8 @@ export const chatsFormationModule: FormationModule = {
 
     const result = await createChat({
       projectId,
-      aiProviderId: properties.ai_provider_id as string,
+      // Absent means the chat inherits the project's default model route.
+      aiProviderId: toOptionalString(properties.ai_provider_id) ?? undefined,
       name: toOptionalString(properties.name) ?? undefined,
       systemMessage: toNullableString(properties.system_message) ?? undefined,
       model: toNullableString(properties.model) ?? undefined,

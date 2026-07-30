@@ -361,7 +361,9 @@ export const runDiscussion = async (args: {
 
   const outcome: DiscussionOutcome = await runDiscussionPipeline({
     projectId,
-    defaultAiProviderId: discussion.aiProvider!.publicId,
+    // Absent when the discussion pins no provider: the turn then inherits
+    // the project's default model route.
+    defaultAiProviderId: discussion.aiProvider?.publicId,
     defaultModel: discussion.model,
     steps,
     topic: args.topic,

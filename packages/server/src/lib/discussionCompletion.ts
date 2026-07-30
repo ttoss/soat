@@ -6,7 +6,13 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { buildModel } from './agentModel';
 import type { DiscussionEffort } from './discussionEngine';
-import { recordCompletionUsage } from './usage';
+import {
+  buildRoutedModel,
+  type CompletionAttribution,
+  meterCompletion,
+  resolveConsumerModelRoute,
+  routedMaxRetries,
+} from './modelRoutes';
 
 const log = createDebug('soat:discussions');
 
@@ -64,24 +70,60 @@ export const buildDiscussionProviderOptions = (args: {
   return undefined;
 };
 
+export type ResolvedDiscussionModel = {
+  model: LanguageModel;
+  /** Model name for logs — the route id when the turn runs through a route. */
+  modelName: string;
+  /**
+   * Billing attribution known *before* the call, or `null` for a route
+   * composite, which cannot know its serving target up front — routed callers
+   * read it back with `resolveCompletionAttribution` after the call.
+   */
+  attribution: CompletionAttribution | null;
+};
+
 /**
  * Resolves a LanguageModel for a discussion completion. Unlike the agent-based
- * resolver, a discussion has no agent to inherit from — the provider is always
- * project-scoped. The `aiProviderId` must belong to `projectId`, so a config
- * can never borrow another project's provider secret. `model` overrides the
- * provider's `default_model`.
+ * resolver, a discussion has no agent to inherit from — resolution is
+ * project-scoped: an explicit `aiProviderId` (which must belong to `projectId`,
+ * so a config can never borrow another project's provider secret), else the
+ * project's `default_model_route_id`. `model` overrides the provider's
+ * `default_model`, and applies only to the provider case — each route target
+ * names its own model.
  */
 export const resolveDiscussionModel = async (args: {
   projectId: number;
-  aiProviderId: string;
+  aiProviderId?: string | null;
   model?: string | null;
-}): Promise<{
-  model: LanguageModel;
-  modelName: string;
-  provider: string;
-  /** Internal id of the billed provider instance, for usage attribution. */
-  aiProviderDbId: number;
-}> => {
+}): Promise<ResolvedDiscussionModel> => {
+  const route = await resolveConsumerModelRoute({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+  });
+
+  if (route) {
+    log(
+      'resolveDiscussionModel: projectId=%d routeId=%s',
+      args.projectId,
+      route.id
+    );
+    return {
+      model: await buildRoutedModel({ route }),
+      modelName: route.id,
+      attribution: null,
+    };
+  }
+
+  // The write-time guards leave a pinned provider as the only remaining
+  // possibility once no route resolves.
+  /* istanbul ignore next */
+  if (!args.aiProviderId) {
+    throw new DomainError(
+      'AI_PROVIDER_NOT_FOUND',
+      "This discussion turn resolves neither an AI provider nor a model route; pin an ai_provider_id or set the project's default_model_route_id."
+    );
+  }
+
   const provider = await db.AiProvider.findOne({
     where: { publicId: args.aiProviderId, projectId: args.projectId },
   });
@@ -122,8 +164,11 @@ export const resolveDiscussionModel = async (args: {
   return {
     model,
     modelName,
-    provider: resolved.provider,
-    aiProviderDbId: provider.id as number,
+    attribution: {
+      provider: resolved.provider,
+      modelName,
+      aiProviderDbId: provider.id as number,
+    },
   };
 };
 
@@ -137,7 +182,7 @@ export const resolveDiscussionModel = async (args: {
  */
 export const runDiscussionCompletion = async (args: {
   projectId: number;
-  aiProviderId: string;
+  aiProviderId?: string | null;
   prompt: string;
   model?: string | null;
   temperature?: number;
@@ -145,17 +190,22 @@ export const runDiscussionCompletion = async (args: {
   /** Aborts the completion (e.g. a per-turn timeout) so it cannot hang. */
   abortSignal?: AbortSignal;
 }): Promise<string> => {
-  const { model, modelName, provider, aiProviderDbId } =
-    await resolveDiscussionModel({
-      projectId: args.projectId,
-      aiProviderId: args.aiProviderId,
-      model: args.model,
-    });
-
-  const options = buildDiscussionProviderOptions({
-    provider,
-    effort: args.effort,
+  const { model, modelName, attribution } = await resolveDiscussionModel({
+    projectId: args.projectId,
+    aiProviderId: args.aiProviderId,
+    model: args.model,
   });
+
+  // Reasoning options are provider-native, and a route's targets may span
+  // providers that disagree about them — so a routed turn treats `effort` as the
+  // no-op it already is for a provider without a mapping, rather than sending
+  // one provider's options to whichever target serves.
+  const options = attribution
+    ? buildDiscussionProviderOptions({
+        provider: attribution.provider,
+        effort: args.effort,
+      })
+    : undefined;
 
   log(
     'runDiscussionCompletion: projectId=%d model=%s effort=%s',
@@ -169,7 +219,9 @@ export const runDiscussionCompletion = async (args: {
     prompt: args.prompt,
     temperature: args.temperature ?? 0,
     abortSignal: args.abortSignal,
-    maxRetries: 1,
+    // A routed model owns every attempt itself (see `routedMaxRetries`); a
+    // pinned one keeps the discussion path's own single retry.
+    maxRetries: routedMaxRetries(model) ?? 1,
     ...(options
       ? {
           providerOptions: options.providerOptions,
@@ -180,15 +232,14 @@ export const runDiscussionCompletion = async (args: {
       : {}),
   });
 
-  // A discussion turn is a real provider call, so it meters like any other.
-  // `recordCompletionUsage` never rejects, so `void` marks the intentional
-  // fire-and-forget: metering must not delay or fail the turn it measures.
-  void recordCompletionUsage({
+  // A discussion turn is a real provider call, so it meters like any other —
+  // against the target that actually served when the turn ran through a route.
+  meterCompletion({
+    model,
+    fallback: attribution,
     source: 'discussion',
     projectId: args.projectId,
-    provider,
-    aiProviderId: aiProviderDbId,
-    model: modelName,
+    pinnedModel: modelName,
     usage,
   });
 

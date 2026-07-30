@@ -12,7 +12,7 @@ An agent normally pins one [AI provider](./ai-providers.md) and one model. A sin
 
 A model route replaces that pin with an ordered list of targets. The first target is tried first; a **retryable** failure is retried up to that target's `max_retries` and then falls through to the next target. A **deterministic** failure (400-class, auth, content policy) fails immediately — it would fail identically on every target.
 
-Routing is opt-in and byte-identical for anything that does not use it: an agent without `model_route_id` resolves exactly as before.
+Routing is opt-in and byte-identical for anything that does not use it: a consumer that pins an `ai_provider_id` resolves exactly as before. A consumer that names **neither** a route nor a provider inherits its project's [`default_model_route_id`](#project-default-route), which is how chats, discussions, and memory completions get failover without a per-consumer field.
 
 > This is not a replacement for an external gateway. The `gateway` provider slug still lets you front providers with LiteLLM/OpenRouter. A model route is the SOAT-native alternative: the credentials stay in the [secrets](./secrets.md) module, the config lives inside SOAT's IAM and [formations](./formations.md), and the [generation](./generations.md) records which target actually answered.
 
@@ -53,9 +53,20 @@ soat create-model-route \
 
 ## Key Concepts
 
-### Route or pin — never both
+### Route or pin — at most one
 
-A consumer sets **either** `model_route_id` **or** `ai_provider_id` (+ `model`). Setting both, or neither, is a `400`. `model` cannot accompany a route: each target names its own model.
+A consumer sets **at most one** of `model_route_id` and `ai_provider_id` (+ `model`). Resolution is a lookup, not a precedence puzzle:
+
+| Consumer state         | Resolves through                     |
+| ---------------------- | ------------------------------------ |
+| `model_route_id` set   | that route                           |
+| `ai_provider_id` set   | that provider (+ the consumer's `model`) |
+| neither set            | the project's `default_model_route_id` |
+| both set               | rejected `400`                       |
+
+An explicit binding always wins; the project default only fills the gap. A project-wide default is never allowed to override a deliberate pin.
+
+`model` cannot accompany a route — named *or* inherited — because each target names its own model.
 
 The invariant is enforced on every write path — REST, and [formations](./formations.md) — by one exported validator, so `ai_provider_id` never lingers as dead config next to a route that overrides it.
 
@@ -64,6 +75,23 @@ To switch a pinned agent to a route, clear the pin in the same request:
 ```bash
 soat update-agent --agent_id agent_… --model_route_id route_… --ai_provider_id null
 ```
+
+### Project default route
+
+A project's `default_model_route_id` is the route inherited by every consumer in it that binds nothing. It is the switch that turns failover on for a whole project without editing each consumer:
+
+```bash
+soat update-project --project-id proj_… --default_model_route_id route_…
+```
+
+Repointing it from one route to another is free and deliberately changes behavior for every inheriting consumer — that is the feature. It differs from putting fallbacks on the AI provider in the two ways that matter: it is a single project-scoped switch rather than a side effect of editing a credential, and it cannot silently override a consumer that bound itself explicitly.
+
+Two write-time guards keep "this consumer has no model at all" unrepresentable, so runtime resolution is a total function rather than a new failure mode:
+
+1. Creating or updating a consumer that binds **neither** field returns `400 VALIDATION_FAILED` unless the project has a `default_model_route_id`.
+2. **Clearing** `default_model_route_id` returns `409 PROJECT_DEFAULT_ROUTE_INHERITED` while any consumer inherits it, naming the count and a sample. Bind those consumers explicitly first, or repoint the default instead.
+
+The route must belong to the project (`400` otherwise), mirroring the same-project guard on targets. The field lives on the existing project update surface and is governed by `projects:UpdateProject` — no new permission, no new endpoint.
 
 ### The routing layer is a composite model
 
@@ -114,18 +142,27 @@ Fallback applies **before the first token only**. Once a stream has started, a m
 
 The [generation](./generations.md) records the model that actually served it, so [usage metering](./usage.md) prices the completion against the provider that answered — no metering change, and no wrong attribution.
 
+Internal completions (chats, discussions, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing metadata once the call returns, so a routed chat or discussion turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
+
 **Known gap:** a *failed* attempt that burned tokens before erroring is not metered. Providers typically return no usage alongside an error, so the data to price it does not exist; the attempt is still visible rather than silent.
 
 ### Deleting a route
 
-`DELETE` returns `409 MODEL_ROUTE_HAS_DEPENDENTS` while an agent still references the route — a routed agent has no pinned provider to fall back on, so a dangling reference would break every one of its generations. The error `meta` reports the count and a sample of agent IDs.
+`DELETE` returns `409 MODEL_ROUTE_HAS_DEPENDENTS` while an agent still references the route, or while it is a project's `default_model_route_id` — a routed agent has no pinned provider to fall back on, and an inherited default backs every consumer that binds nothing, so a dangling reference would break their completions. The error `meta` reports both counts and a sample of the referencing IDs.
 
 ## Consumers
 
-| Consumer                          | Accepts `model_route_id` |
-| --------------------------------- | ------------------------ |
-| Agents (generations, and client-tool resumption) | yes       |
-| Chats, discussions, memory extraction/consolidation | not yet — these resolve a single provider, and a route-only agent needs an explicit `ai_provider_id` on the completion config |
+| Consumer                                            | How it routes |
+| --------------------------------------------------- | ------------- |
+| Agents (generations, and client-tool resumption)    | its own `model_route_id`, else its pin, else the project default |
+| Memory extraction / consolidation                   | the completion config's `ai_provider_id` override, else the agent's pin, else the agent's `model_route_id`, else the project default |
+| Chats (chat-scoped completions)                     | the chat's pin, else the project default |
+| Discussions (runs)                                  | the discussion's pin, else the project default |
+| Stateless `POST /chat/completions`                  | its per-request `ai_provider_id` only — it belongs to no project of its own, so there is no default to inherit |
+
+Chats and discussions deliberately have **no** `model_route_id` column: a project default plus explicit pins already covers "most consumers routed, some pinned". A per-consumer column is only needed for *two different routes in one project*, and is worth adding when that is actually requested.
+
+A discussion turn's `effort` is provider-native, and a route's targets may span providers that disagree about it — so a routed turn treats `effort` as the no-op it already is for a provider without a mapping, rather than sending one provider's options to whichever target serves.
 
 ## Behavioral drift
 

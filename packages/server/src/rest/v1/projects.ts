@@ -118,6 +118,13 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
     )
       ? (body.max_concurrent_runs as number | null)
       : undefined,
+    // An explicit `null` clears the project default route; absent leaves it.
+    defaultModelRouteId: Object.prototype.hasOwnProperty.call(
+      body,
+      'default_model_route_id'
+    )
+      ? (body.default_model_route_id as string | null)
+      : undefined,
     auditReadsEnabled:
       typeof body.audit_reads_enabled === 'boolean'
         ? body.audit_reads_enabled
@@ -128,19 +135,25 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   if (!requireAdmin(ctx, 'projects:UpdateProject')) return;
 
-  const { name, guardrailIds, maxConcurrentRuns, auditReadsEnabled } =
-    parseProjectPatchFields(ctx.request.body as Record<string, unknown>);
+  const {
+    name,
+    guardrailIds,
+    maxConcurrentRuns,
+    defaultModelRouteId,
+    auditReadsEnabled,
+  } = parseProjectPatchFields(ctx.request.body as Record<string, unknown>);
 
   if (
     name === undefined &&
     guardrailIds === undefined &&
     maxConcurrentRuns === undefined &&
+    defaultModelRouteId === undefined &&
     auditReadsEnabled === undefined
   ) {
     ctx.status = 400;
     ctx.body = {
       error:
-        'name, guardrail_ids, max_concurrent_runs, or audit_reads_enabled is required',
+        'name, guardrail_ids, max_concurrent_runs, default_model_route_id, or audit_reads_enabled is required',
     };
     return;
   }
@@ -163,6 +176,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     name,
     guardrailIds,
     maxConcurrentRuns,
+    defaultModelRouteId,
     auditReadsEnabled,
   });
 

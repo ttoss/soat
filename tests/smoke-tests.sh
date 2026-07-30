@@ -1726,6 +1726,74 @@ echo "--- Model route: 409 while an agent references it ---"
 expect_cli_error_status 409 delete-model-route --route-id "$MODEL_ROUTE_ID"
 
 $SOAT_CLI delete-agent --agent-id "$ROUTED_AGENT_ID" --force true
+
+# 16c. Project default route — a consumer that binds neither field inherits it.
+echo "--- Project default model route: binding neither field ---"
+
+# Without a project default, "neither" is unrepresentable.
+expect_cli_error_status 400 create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-unbound-agent
+
+PROJECT_DEFAULTED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" \
+  --default_model_route_id "$MODEL_ROUTE_ID")
+if [ "$(echo "$PROJECT_DEFAULTED" | jq -r '.default_model_route_id')" != "$MODEL_ROUTE_ID" ]; then
+  echo "ERROR: update-project did not persist default_model_route_id" >&2
+  echo "$PROJECT_DEFAULTED" >&2
+  exit 1
+fi
+
+INHERITING_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-inheriting-agent \
+  --instructions "Answer in one short sentence.")
+INHERITING_AGENT_ID=$(echo "$INHERITING_AGENT_RESP" | jq -r '.id')
+if [ "$(echo "$INHERITING_AGENT_RESP" | jq -r '.ai_provider_id')" != "null" ] ||
+  [ "$(echo "$INHERITING_AGENT_RESP" | jq -r '.model_route_id')" != "null" ]; then
+  echo "ERROR: inheriting agent should bind neither field" >&2
+  echo "$INHERITING_AGENT_RESP" >&2
+  exit 1
+fi
+echo "Inheriting agent id: $INHERITING_AGENT_ID"
+
+echo "--- Inheriting agent generation (must fail over via the project default) ---"
+INHERITED_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$INHERITING_AGENT_ID" \
+  --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
+INHERITED_GEN_STATUS=$(printf '%s\n' "$INHERITED_GEN_RESP" | jq -r '.status')
+if [ "$INHERITED_GEN_STATUS" != "completed" ]; then
+  echo "ERROR: Expected inherited generation status 'completed', got '$INHERITED_GEN_STATUS'" >&2
+  printf '%s\n' "$INHERITED_GEN_RESP" >&2
+  exit 1
+fi
+
+# A chat that pins no provider inherits the same default.
+INHERITING_CHAT_RESP=$($SOAT_CLI create-chat --project_id "$PROJECT_PUBLIC_ID" --name smoke-inheriting-chat)
+INHERITING_CHAT_ID=$(echo "$INHERITING_CHAT_RESP" | jq -r '.id')
+if [ "$(echo "$INHERITING_CHAT_RESP" | jq -r '.ai_provider_id')" != "null" ]; then
+  echo "ERROR: inheriting chat should pin no ai_provider_id" >&2
+  echo "$INHERITING_CHAT_RESP" >&2
+  exit 1
+fi
+INHERITED_CHAT_RESP=$($SOAT_CLI create-chat-completion-for-chat --chat-id "$INHERITING_CHAT_ID" \
+  --messages '[{"role":"user","content":"say hello"}]')
+if [ "$(echo "$INHERITED_CHAT_RESP" | jq -r '.object')" != "chat.completion" ]; then
+  echo "ERROR: inheriting chat completion did not resolve through the project default" >&2
+  echo "$INHERITED_CHAT_RESP" >&2
+  exit 1
+fi
+
+# The route is now referenced twice over: by the project default and by the
+# consumers inheriting it. Both guards must hold.
+echo "--- Project default model route: delete and clear guards ---"
+expect_cli_error_status 409 delete-model-route --route-id "$MODEL_ROUTE_ID"
+expect_cli_error_status 409 update-project --project-id "$PROJECT_PUBLIC_ID" \
+  --default_model_route_id null
+
+$SOAT_CLI delete-chat --chat-id "$INHERITING_CHAT_ID"
+$SOAT_CLI delete-agent --agent-id "$INHERITING_AGENT_ID" --force true
+$SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --default_model_route_id null > /dev/null
+echo "Project default model route OK."
+
 $SOAT_CLI delete-model-route --route-id "$MODEL_ROUTE_ID"
 $SOAT_CLI delete-ai-provider --ai-provider-id "$DEAD_PROVIDER_ID" --force true
 echo "Model route lifecycle OK."

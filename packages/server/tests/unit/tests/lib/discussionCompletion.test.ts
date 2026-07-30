@@ -152,7 +152,8 @@ describe('discussionCompletion lib', () => {
         aiProviderId,
       });
       expect(resolved.modelName).toBe('disc-default-model');
-      expect(resolved.provider).toBe('ollama');
+      expect(resolved.attribution?.provider).toBe('ollama');
+      expect(resolved.attribution?.modelName).toBe('disc-default-model');
     });
 
     test('throws for a provider not in the project', async () => {

@@ -15,7 +15,7 @@ import {
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import { getGeneration, updateGenerationRecord } from './generations';
-import { buildRoutedModel, loadModelRouteConfig } from './modelRoutes';
+import { buildRoutedModel, resolveConsumerModelRoute } from './modelRoutes';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
@@ -152,22 +152,26 @@ const resolveRecoveryTools = async (args: {
 };
 
 /**
- * The `LanguageModel` a resumed generation continues on: the agent's model
- * route (composite, with failover) or its pinned provider. Returns `undefined`
- * when neither resolves, which the caller reports as an unrecoverable pending
- * generation.
+ * The `LanguageModel` a resumed generation continues on, following the same
+ * chain as a fresh generation: the agent's model route → its pinned provider →
+ * the project default route (both route cases composite, with failover).
+ * Returns `undefined` when none resolves, which the caller reports as an
+ * unrecoverable pending generation.
  */
 const resolveResumptionModel = async (
   typedAgent: TypedAgent
 ): Promise<LanguageModel | undefined> => {
-  if (typedAgent.modelRoute) {
-    const route = await loadModelRouteConfig({
-      modelRouteId: typedAgent.modelRoute.publicId,
-    });
+  const route = await resolveConsumerModelRoute({
+    projectId: typedAgent.project.id as number,
+    modelRouteId: typedAgent.modelRoute?.publicId,
+    aiProviderId: typedAgent.aiProvider?.publicId,
+  });
+  if (route) {
     return buildRoutedModel({ route });
   }
 
-  /* istanbul ignore next -- exclusivity guarantees one of the two is set */
+  /* istanbul ignore next -- the write-time guards leave a pin as the only
+     remaining possibility once no route resolves */
   if (!typedAgent.aiProvider) return undefined;
 
   const resolved = await resolveAiProviderSecret({
