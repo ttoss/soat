@@ -41,23 +41,26 @@ G3's and G5's remaining deferred items are kept in the
 
 ### Adjacent / standalone module PRDs
 
-Only PRDs with open work are listed. Three initiatives are fully shipped and
+Only PRDs with open work are listed. Four initiatives are fully shipped and
 their PRDs have been retired — the live behavior lives in the module docs:
 [quotas](../packages/website/docs/modules/quotas.md) (request/token/cost
 quotas, the `QUOTA_EXCEEDED` / `429` contract, monitor mode with its
 [breach audit entry](../packages/website/docs/modules/quotas.md#monitor-mode),
 the `quota.exceeded` webhook, and the `quota` formation resource),
 [audit-log](../packages/website/docs/modules/audit-log.md) (the read-auditing
-flag, the `audit.entry_created` webhook, and the per-project NDJSON export), and
+flag, the `audit.entry_created` webhook, and the per-project NDJSON export),
 [usage](../packages/website/docs/modules/usage.md) (the event + component model,
 price book, receipts, aggregation, thresholds, every LLM path metered, the
-compute/storage/request dimensions, and the `soat.usage.*` spend guards).
+compute/storage/request dimensions, and the `soat.usage.*` spend guards), and
+[model-routes](../packages/website/docs/modules/model-routes.md) (ordered
+provider failover through a composite model, error classification, the
+in-process circuit breaker, `routing` generation metadata, the project default
+route, and the `model_route` formation resource).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
-| Model routing | [prd-model-routing.md](./prd-model-routing.md) | ❌ Not started | complements G2 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,6,7 remain | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -93,7 +96,6 @@ feedback + governance loops ─────────────────�
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
 | evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
-| — | model-routing | standalone; complements G2 ✔, no metering change |
 
 ## Recommended build order
 
@@ -109,7 +111,9 @@ feedback + governance loops ─────────────────�
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
    ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
-5. **Model-routing** as hardening.
+5. ~~**Model-routing** as hardening~~ — **fully shipped** (CRUD + composite
+   fallback executor, circuit breaker + streaming + `routing` metadata, and the
+   project default route with every consumer routed).
 
 ## Pending backlog
 
@@ -177,11 +181,19 @@ _Fully shipped._
 
 ### Model routing
 
-_Not started. Standalone; complements G2; no metering change._
+✅ **Shipped.** All three phases are complete and the PRD retired; live behavior
+is documented in the
+[model-routes module doc](../packages/website/docs/modules/model-routes.md).
+Two items carry forward:
 
-- [ ] **Phase 1** `ModelRoute` model + lib (`route_` prefix, ordered targets + retry/breaker config; create-time attempt cap); REST CRUD (incl. `DELETE` → `409` referential guard) + OpenAPI + permissions; shared `route`-vs-pin exclusivity validation (`Agent.aiProviderId` relaxed to nullable); agent consumption (`model_route_id`, both generation **and** recovery resolution sites) + agent-field formation sync; composite-`LanguageModel` fallback executor at the `buildModel` seam — per-LLM-call failover, no tool re-execution, `maxRetries: 0` on routed calls (non-streaming)
-- [ ] **Phase 2** Circuit breaker (in-process, keyed `(provider, model)` shared across routes, consecutive-failure skip + cooldown); streaming pre-token fallback (composite `doStream` arm); `routing` metadata on Generation
-- [ ] **Phase 3** Remaining consumers (chats, discussions, memory extraction/consolidation — each `buildModel` site); `model-route` formation resource type
+- [ ] ⏭️ **Deferred — per-consumer `model_route_id` on Chat / Discussion.** The
+      project default plus explicit pins covers "most consumers routed, some
+      pinned"; the column is only needed to run *two different routes in one
+      project*. Worth adding when that is actually requested, not before
+- [ ] **Accepted gap — a failed attempt that burned tokens is not metered.**
+      Visible rather than silent (`routing.attempts` names every failed attempt
+      on the generation); closing it needs usage data provider error responses
+      do not carry. Revisit only if a provider starts returning usage on error
 
 ### Memories
 
