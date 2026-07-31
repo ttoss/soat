@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.1](https://github.com/ttoss/soat/compare/v0.18.0...v0.18.1) (2026-07-31)
+
+### Bug Fixes
+
+* **webhooks,triggers:** encrypt signing secrets at rest ([#793](https://github.com/ttoss/soat/issues/793)) ([b937d2e](https://github.com/ttoss/soat/commit/b937d2e3fca2e8db94ae2a0e13d265a49e592b64))
+* **workflows:** reject an automation transition with no recorded cause ([#792](https://github.com/ttoss/soat/issues/792)) ([#792](https://github.com/ttoss/soat/issues/792)) ([c65bb2a](https://github.com/ttoss/soat/commit/c65bb2ad867128064d81f791b912ed6ea21b0712)), closes [#786](https://github.com/ttoss/soat/issues/786) [#786](https://github.com/ttoss/soat/issues/786) [#3](https://github.com/ttoss/soat/issues/3)
+
 # [0.18.0](https://github.com/ttoss/soat/compare/v0.17.5...v0.18.0) (2026-07-30)
 
 ### Bug Fixes
