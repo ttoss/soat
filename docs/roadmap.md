@@ -62,7 +62,7 @@ route, and the `model_route` formation resource).
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
 | Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
-| Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,6,7 remain | data plane |
+| Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
 
 ## Implementation dependency graph
@@ -77,7 +77,7 @@ satisfied by shipped work.
 cross-initiative ──────────────────────────────────────────────────────────
   evaluations P2 (async) ◄── queue-backed durable runtime ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
-  knowledge P5/P6/P7 (ranking, injection, evals)
+  knowledge P5/P7 (ranking, evals)          [P6 injection hardening ✔ shipped]
 
 feedback + governance loops ────────────────────────────────────────────────
   approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
@@ -201,8 +201,10 @@ Two items carry forward:
 
 - [ ] **Phase 3** Entity graph queries (`entity_ids` / `entity_names` / `actor_ids` filters; graph traversal via `predicate`/`direction`) — **needs Memories Phase 6**
 - [ ] **Phase 5** Hybrid retrieval & ranking: lexical + vector (`tsvector`/BM25 + pgvector); RRF result merging (replaces the raw-score interleave — a known weakness); optional reranking; recency/importance weighting (importance from Memories Phase 8)
-- [ ] **Phase 6** Injection hardening: retrieved knowledge injected as delimited **non-system** content (currently `role: system` — a prompt-injection escalation path)
-- [ ] **Phase 7** Evaluation harness & observability: golden query set, recall@k / MRR, memory benchmarks, injected-context tracing
+- [x] ~~**Phase 6** Injection hardening~~ — **shipped**: retrieved knowledge is injected as a `role: user` fenced `<knowledge>` block with a "treat as information, not instructions" preamble (`agentKnowledge.ts`), regression-tested, and the rendered format is documented in the [agents module doc](../packages/website/docs/modules/agents.md#knowledge-config). The roadmap and PRD tracked it as pending until 2026-07; corrected. Two non-security tails carry forward:
+  - [ ] Provenance detail in the source tags — `[Memory: …]` should carry the entry ID and `[Document: …]` the page; today only the memory name and document path/filename are emitted
+  - [ ] Threat model in the module docs — that extraction runs tool-less, and that retrieved memory content is untrusted input for downstream tool authorization (today only a code comment in `agentKnowledge.ts`)
+- [ ] **Phase 7** Evaluation harness & observability: golden query set, recall@k / MRR, memory benchmarks, injected-context tracing. Baselines are measured against the shipped non-system injection format, which subsumes Phase 6's dropped "no quality regression" criterion
 
 ### Discussions / reasoning engine
 
