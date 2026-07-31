@@ -443,6 +443,11 @@ export const ERROR_CODES = {
     description:
       'A concurrent change made the requested transition invalid from the current state, or the task is already closed.',
   },
+  TASK_AUTOMATION_PROVENANCE_MISSING: {
+    httpStatus: 500,
+    description:
+      'An automation-caused transition was about to be persisted with no recorded cause: principal_id, generation_id, and orchestration_run_id would all be null. This is a writer bug, not a valid degraded record — the transition is rejected instead of being silently written (#792).',
+  },
   GUARDRAIL_NOT_FOUND: {
     httpStatus: 400,
     description:
