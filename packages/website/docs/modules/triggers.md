@@ -143,7 +143,10 @@ Security invariants:
   causes the firing to record the error.
 - **Secret hygiene.** Webhook secrets are 32 random bytes (hex), never returned
   in list/get responses, rotate on demand, and inbound signatures are compared
-  timing-safe.
+  timing-safe. The secret is stored encrypted at rest (AES-256-GCM, the same
+  scheme as [secrets](./secrets.md)), keyed by `SECRETS_ENCRYPTION_KEY`, and is
+  decrypted only to verify an inbound signature or to return it to a caller
+  with `triggers:GetTriggerSecret`.
 
 ### Inbound Webhook Endpoint
 

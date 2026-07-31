@@ -5,6 +5,7 @@ import { evaluatePolicies, type PolicyDocument } from 'src/lib/iam';
 
 import type { SoatEvent } from './eventBus';
 import { onEvent } from './eventBus';
+import { decryptWebhookSecret } from './webhooks';
 
 const MAX_ATTEMPTS = 3;
 const DELIVERY_TIMEOUT_MS = 10_000;
@@ -62,7 +63,7 @@ const deliverWebhook = async (args: {
 
   const signature = signPayload({
     payload,
-    secret: args.webhook.secret,
+    secret: decryptWebhookSecret(args.webhook.secret),
   });
 
   const delivery = await db.WebhookDelivery.create({

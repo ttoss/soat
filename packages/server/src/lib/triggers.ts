@@ -5,6 +5,7 @@ import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
+import { decryptValue, encryptValue } from './secrets';
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
@@ -23,6 +24,21 @@ const log = createDebug('soat:triggers');
 
 const generateSecret = () => {
   return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Rows created before secret-at-rest encryption store the raw secret.
+ * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
+ * so fall back to treating it as plaintext. Rotating or recreating the
+ * secret re-encrypts it going forward.
+ */
+const decryptTriggerSecret = (stored: string): string => {
+  try {
+    return decryptValue(stored);
+  } catch {
+    log('decryptTriggerSecret: value is not encrypted (legacy row)');
+    return stored;
+  }
 };
 
 type TriggerInstance = InstanceType<(typeof db)['Trigger']> & {
@@ -49,7 +65,9 @@ const mapTrigger = (
     active: instance.active,
     policy_id: instance.policy?.publicId ?? null,
     next_fire_at: instance.nextFireAt,
-    ...(args?.includeSecret ? { secret: instance.secret } : {}),
+    ...(args?.includeSecret
+      ? { secret: decryptTriggerSecret(instance.secret as string) }
+      : {}),
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
@@ -162,7 +180,7 @@ export const findWebhookTriggerForDelivery = async (args: { id: string }) => {
   return {
     id: trigger.publicId as string,
     active: trigger.active as boolean,
-    secret: trigger.secret as string,
+    secret: decryptTriggerSecret(trigger.secret as string),
   };
 };
 
@@ -185,7 +203,7 @@ export const getTriggerSecret = async (args: { id: string }) => {
       'Only webhook triggers have a secret.'
     );
   }
-  return { secret: trigger.secret as string };
+  return { secret: decryptTriggerSecret(trigger.secret as string) };
 };
 
 /**
@@ -197,7 +215,7 @@ export const getTriggerSecret = async (args: { id: string }) => {
 export const findTriggerSecret = async (args: { id: string }) => {
   const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
   if (!trigger || trigger.type !== 'webhook') return null;
-  return { secret: trigger.secret as string };
+  return { secret: decryptTriggerSecret(trigger.secret as string) };
 };
 
 type CreateTriggerArgs = {
@@ -218,7 +236,7 @@ type CreateTriggerArgs = {
 /** Derives the type-dependent fields: a secret for webhooks, next fire for schedules. */
 const deriveTypeFields = (args: { type: string; cron?: string | null }) => {
   return {
-    secret: args.type === 'webhook' ? generateSecret() : null,
+    secret: args.type === 'webhook' ? encryptValue(generateSecret()) : null,
     nextFireAt:
       args.type === 'schedule' && args.cron
         ? computeNextFireAt(args.cron)
@@ -369,7 +387,7 @@ export const rotateTriggerSecret = async (args: { id: string }) => {
       'Only webhook triggers have a secret.'
     );
   }
-  trigger.secret = generateSecret();
+  trigger.secret = encryptValue(generateSecret());
   await trigger.save();
   return mapTrigger(trigger, { includeSecret: true });
 };

@@ -146,6 +146,8 @@ This is useful for container-based deployments where you want the first admin se
 | ------------------------ | -------- | ----------------------------------------------------------------- |
 | `SECRETS_ENCRYPTION_KEY` | **Yes**  | 64-character hex string (32 bytes) used to encrypt stored secrets |
 
+This key also encrypts [webhook](../modules/webhooks.md) and [trigger](../modules/triggers.md) signing secrets at rest. Losing it makes those secrets unreadable too — outbound webhook delivery and inbound webhook-trigger signature verification will fail until each affected webhook/trigger has its secret rotated and subscribers are given the new value.
+
 Generate a secure key:
 
 ```bash
@@ -155,7 +157,7 @@ openssl rand -hex 32
 :::danger
 Production requirement
 
-`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets unreadable.
+`SECRETS_ENCRYPTION_KEY` must be set in production. Changing it after secrets have been stored will make those secrets, as well as webhook and trigger signing secrets, unreadable.
 :::
 
 ### File Storage
