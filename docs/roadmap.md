@@ -59,8 +59,8 @@ route, and the `model_route` formation resource).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
-| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ❌ Not started | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions |
+| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | 🟡 Phases 1–2 shipped; P3 (eval-gated promotion) remains | umbrella (no G#) |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions P3 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -107,7 +107,10 @@ feedback + governance loops ─────────────────�
    `audit.entry_created` webhook, and the per-project NDJSON export).
    **Evaluations P1–P2** remain — the substrate the activity feed and
    agent-versions promotion gate need.
-3. **Agent-versions**.
+3. ~~**Agent-versions**~~ — **Phases 1–2 shipped**: append-only config history
+   with restore, and the deterministic stable/canary split with the served
+   version stamped on every generation. **P3 (eval-gated promotion)** remains,
+   blocked on evaluations P1.
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
    ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.

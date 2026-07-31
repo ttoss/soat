@@ -155,6 +155,16 @@ export type TypedAgent = {
   knowledgeConfig: unknown;
   outputSchema: unknown;
   guardrailIds?: string[] | null;
+  /**
+   * Internal row id of the live agent. Present on a row loaded from the DB;
+   * absent on a config rebuilt from an archived version. Used to look up the
+   * archive a staged rollout assigns (`agentServedVersion.ts`).
+   */
+  id?: number;
+  /** Config version this agent is serving. */
+  version?: number;
+  /** Staged rollout pointer, read by the served-version resolver. */
+  activeRelease?: unknown;
   project: { id: unknown; publicId: string; guardrailIds?: string[] | null };
   // Exactly one of these is set (enforced on every agent write path by
   // `validateModelRouteExclusivity`): a pinned provider, or a model route whose

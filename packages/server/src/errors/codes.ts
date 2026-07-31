@@ -107,6 +107,11 @@ export const ERROR_CODES = {
     description:
       'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
   },
+  NO_ACTIVE_RELEASE: {
+    httpStatus: 409,
+    description:
+      'The agent has no active release to promote or abort. Set one with PUT /agents/{agent_id}/release first.',
+  },
   PROJECT_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

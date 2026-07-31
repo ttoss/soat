@@ -262,7 +262,7 @@ const countProjectDependents = async (args: {
 const findProjectDependentIds = async (args: { projectId: number }) => {
   const { projectId } = args;
 
-  const [orchestrationRunRows, generationRows, traceRows, fileRows] =
+  const [orchestrationRunRows, generationRows, traceRows, fileRows, agentRows] =
     await Promise.all([
       db.OrchestrationRun.findAll({
         where: { projectId },
@@ -271,6 +271,7 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
       db.Generation.findAll({ where: { projectId }, attributes: ['id'] }),
       db.Trace.findAll({ where: { projectId }, attributes: ['id'] }),
       db.File.findAll({ where: { projectId }, attributes: ['id'] }),
+      db.Agent.findAll({ where: { projectId }, attributes: ['id'] }),
     ]);
 
   const fileIds = collectIds(fileRows);
@@ -289,6 +290,7 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
     traceIds: collectIds(traceRows),
     fileIds,
     documentIds: collectIds(documentRows),
+    agentIds: collectIds(agentRows),
   };
 };
 
@@ -298,18 +300,24 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
 // before Chat, IngestionRule before Tool/Agent). Models without a direct
 // `projectId` column (FormationOperation/FormationResource, MemoryEntry,
 // ConversationMessage, WebhookDelivery, OrchestrationCheckpoint/
-// NodeExecution) are either DB-cascaded from their immediate parent or, when
-// the FK is RESTRICT, deleted explicitly by parent id (OrchestrationCheckpoint
-// /NodeExecution by orchestrationRunId, ConversationMessage by documentId so that
-// project-owned Documents can be removed).
+// NodeExecution, AgentVersion) are either DB-cascaded from their immediate
+// parent or, when the FK is RESTRICT, deleted explicitly by parent id
+// (OrchestrationCheckpoint/NodeExecution by orchestrationRunId,
+// ConversationMessage by documentId so that project-owned Documents can be
+// removed, AgentVersion by agentId).
 const forceDeleteProjectWithDependents = async (args: {
   project: InstanceType<typeof db.Project>;
   projectId: number;
 }): Promise<void> => {
   const { projectId } = args;
 
-  const { orchestrationRunIds, generationIds, traceIds, documentIds } =
-    await findProjectDependentIds({ projectId });
+  const {
+    orchestrationRunIds,
+    generationIds,
+    traceIds,
+    documentIds,
+    agentIds,
+  } = await findProjectDependentIds({ projectId });
 
   await db.sequelize.transaction(async (transaction) => {
     // Null self-referencing FKs (RESTRICT) before destroying the rows they
@@ -369,6 +377,14 @@ const forceDeleteProjectWithDependents = async (args: {
     await db.Actor.destroy({ where: { projectId }, transaction });
     await db.Chat.destroy({ where: { projectId }, transaction });
 
+    // AgentVersion has no projectId of its own and its FK to Agent is RESTRICT,
+    // so archived configs are removed by parent agent id before the agents go.
+    if (agentIds.length > 0) {
+      await db.AgentVersion.destroy({
+        where: { agentId: agentIds },
+        transaction,
+      });
+    }
     await db.Agent.destroy({ where: { projectId }, transaction });
     // Must follow Agent, whose modelRouteId FK points at it.
     await db.ModelRoute.destroy({ where: { projectId }, transaction });

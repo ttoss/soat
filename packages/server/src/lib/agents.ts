@@ -5,6 +5,10 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
+  type ActiveRelease,
+  parseActiveRelease,
+} from './agentReleaseAssignment';
+import {
   type AgentToolBinding,
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -13,6 +17,12 @@ import {
   toWireToolBinding,
   type WireAgentToolBinding,
 } from './agentToolBindings';
+import {
+  type AgentConfigSnapshot,
+  buildAgentConfigSnapshot,
+  isSameAgentConfig,
+  writeAgentVersion,
+} from './agentVersionSnapshot';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { assertGuardrailsExist } from './guardrails';
 import {
@@ -63,6 +73,10 @@ export type MappedAgent = {
   max_context_messages: number | null;
   single_session_per_actor: boolean;
   guardrail_ids: string[] | null;
+  /** Current config version; starts at 1 and bumps on every config change. */
+  version: number;
+  /** Staged rollout in progress, or null when all traffic serves this config. */
+  active_release: ActiveRelease | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -112,6 +126,10 @@ const mapAgent = (
     max_context_messages: agent.maxContextMessages,
     single_session_per_actor: agent.singleSessionPerActor,
     guardrail_ids: agent.guardrailIds,
+    version: agent.version,
+    // Normalized rather than echoed raw, so the release the API reports is
+    // exactly the one the generation path will act on.
+    active_release: parseActiveRelease(agent.activeRelease),
     created_at: agent.createdAt,
     updated_at: agent.updatedAt,
   };
@@ -140,6 +158,16 @@ type AgentUpdateFields = {
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
   guardrailIds?: string[] | null;
+};
+
+/**
+ * Who caused a config write, and an optional tag for the version it archives.
+ * Accepted by both write paths so history records an author regardless of
+ * whether the change arrived through REST or a formation apply.
+ */
+type AgentVersionAuthorship = {
+  createdByUserId?: number | null;
+  versionLabel?: string | null;
 };
 
 // `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
@@ -248,29 +276,31 @@ const resolveCreateModelBinding = async (args: {
 
 // ── Agent CRUD ───────────────────────────────────────────────────────────
 
-export const createAgent = async (args: {
-  projectId: number;
-  aiProviderId?: string;
-  modelRouteId?: string;
-  name?: string;
-  instructions?: string;
-  model?: string;
-  toolBindings?: AgentToolBinding[] | null;
-  toolIds?: string[];
-  tools?: InlineToolDefinition[];
-  maxSteps?: number;
-  toolChoice?: string | object;
-  stopConditions?: object[];
-  activeToolIds?: string[];
-  stepRules?: object[];
-  boundaryPolicy?: object;
-  temperature?: number;
-  knowledgeConfig?: object;
-  outputSchema?: object;
-  maxContextMessages?: number;
-  singleSessionPerActor?: boolean;
-  guardrailIds?: string[] | null;
-}): Promise<MappedAgent> => {
+export const createAgent = async (
+  args: {
+    projectId: number;
+    aiProviderId?: string;
+    modelRouteId?: string;
+    name?: string;
+    instructions?: string;
+    model?: string;
+    toolBindings?: AgentToolBinding[] | null;
+    toolIds?: string[];
+    tools?: InlineToolDefinition[];
+    maxSteps?: number;
+    toolChoice?: string | object;
+    stopConditions?: object[];
+    activeToolIds?: string[];
+    stepRules?: object[];
+    boundaryPolicy?: object;
+    temperature?: number;
+    knowledgeConfig?: object;
+    outputSchema?: object;
+    maxContextMessages?: number;
+    singleSessionPerActor?: boolean;
+    guardrailIds?: string[] | null;
+  } & AgentVersionAuthorship
+): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
@@ -313,6 +343,16 @@ export const createAgent = async (args: {
   });
 
   const mapped = mapAgent(created as unknown as Parameters<typeof mapAgent>[0]);
+
+  // Version 1 is archived on create, so an agent has recoverable history from
+  // the moment it exists rather than from its first edit.
+  await writeAgentVersion({
+    agentDbId: (agent as unknown as { id: number }).id,
+    version: 1,
+    config: buildAgentConfigSnapshot(mapped),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+  });
 
   emitEvent({
     type: 'agents.created',
@@ -419,23 +459,61 @@ const applyModelBindingUpdates = async (args: {
   }
 };
 
+/**
+ * Archives the post-write config as a new version, but only when the write
+ * actually changed it.
+ *
+ * The comparison runs on the serialized config rather than on the incoming
+ * fields, so it is immune to a request that sets a field to the value it already
+ * held — including the whole-config replacement `restore` performs, which is why
+ * restoring the live config is a genuine no-op instead of an endless version
+ * chain.
+ */
+const archiveConfigChange = async (args: {
+  agent: InstanceType<typeof db.Agent>;
+  before: AgentConfigSnapshot;
+  after: AgentConfigSnapshot;
+  authorship: AgentVersionAuthorship;
+}): Promise<void> => {
+  if (isSameAgentConfig(args.before, args.after)) return;
+
+  const nextVersion = args.agent.version + 1;
+  await args.agent.update({ version: nextVersion });
+
+  await writeAgentVersion({
+    agentDbId: (args.agent as unknown as { id: number }).id,
+    version: nextVersion,
+    config: args.after,
+    label: args.authorship.versionLabel,
+    createdByUserId: args.authorship.createdByUserId,
+  });
+};
+
 export const updateAgent = async (
   args: {
     projectIds?: number[];
     id: string;
-  } & AgentUpdateFields
+  } & AgentUpdateFields &
+    AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
 
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds !== undefined) where.projectId = args.projectIds;
 
-  const agent = await db.Agent.findOne({ where });
+  // Loaded with its joins so the pre-write config can be snapshotted through
+  // the same mapper that serializes the response — the diff is then between two
+  // wire-shaped configs, never between a model instance and a response body.
+  const agent = await db.Agent.findOne({ where, include: getAgentIncludes() });
   if (!agent)
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `Agent '${args.id}' not found.`
     );
+
+  const beforeConfig = buildAgentConfigSnapshot(
+    mapAgent(agent as unknown as Parameters<typeof mapAgent>[0])
+  );
 
   // No-ops when guardrailIds is undefined (attachments left untouched).
   await assertGuardrailsExist({
@@ -464,11 +542,21 @@ export const updateAgent = async (
 
   await agent.update(updates);
 
-  const updated = await db.Agent.findOne({
+  const updated = (await db.Agent.findOne({
     where: { id: (agent as unknown as { id: number }).id },
     include: getAgentIncludes(),
+  })) as InstanceType<typeof db.Agent>;
+
+  await archiveConfigChange({
+    agent: updated,
+    before: beforeConfig,
+    after: buildAgentConfigSnapshot(
+      mapAgent(updated as unknown as Parameters<typeof mapAgent>[0])
+    ),
+    authorship: args,
   });
 
+  // Mapped after the archive so the response carries the bumped version.
   const mapped = mapAgent(updated as unknown as Parameters<typeof mapAgent>[0]);
 
   emitEvent({
@@ -544,6 +632,12 @@ const forceDeleteAgentWithDependents = async (args: {
       transaction,
     });
     await db.Trace.destroy({ where: { agentId: args.agentId }, transaction });
+    // Archived configs are owned by the agent; remove them before the parent so
+    // no orphan version rows are left behind.
+    await db.AgentVersion.destroy({
+      where: { agentId: args.agentId },
+      transaction,
+    });
     await args.agent.destroy({ transaction });
   });
 };
@@ -589,7 +683,10 @@ export const deleteAgent = async (args: {
 
     await forceDeleteAgentWithDependents({ agent, agentId });
   } else {
-    // Actor.agentId is cleared automatically by the DB via onDelete: 'SET NULL' on the FK.
+    // Archived configs are owned by the agent, so they go first (the FK is
+    // RESTRICT); Actor.agentId is cleared automatically by the DB via
+    // onDelete: 'SET NULL' on its own FK.
+    await db.AgentVersion.destroy({ where: { agentId } });
     await agent.destroy();
   }
 

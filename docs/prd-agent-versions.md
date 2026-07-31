@@ -11,13 +11,87 @@
 
 | Component                                          | Status         | Notes                                                        |
 | -------------------------------------------------- | -------------- | ------------------------------------------------------------ |
-| `AgentVersion` model + snapshot-on-write hook      | ❌ Not started | One shared write path for REST and formation applies         |
-| `version` column on Agent, returned in responses   | ❌ Not started | Starts at 1 on create                                        |
-| List / get / restore version endpoints             | ❌ Not started | Restore is append-only (creates a new version)               |
-| `active_release` (stable/canary split)             | ❌ Not started | Deterministic per-actor assignment                           |
-| Served-version stamping on generations             | ❌ Not started | `agent_version` in generation metadata                       |
-| Promote / abort release endpoints                  | ❌ Not started |                                                              |
+| `AgentVersion` model + snapshot-on-write hook      | ✅ Shipped     | One shared write path for REST and formation applies         |
+| `version` column on Agent, returned in responses   | ✅ Shipped     | Starts at 1 on create                                        |
+| List / get / restore version endpoints             | ✅ Shipped     | Restore is append-only (creates a new version)               |
+| `active_release` (stable/canary split)             | ✅ Shipped     | Deterministic per-actor assignment                           |
+| Served-version stamping on generations             | ✅ Shipped     | `agent_version` in generation metadata (reserved key)        |
+| Promote / abort release endpoints                  | ✅ Shipped     | Both pin their version explicitly                            |
 | Eval-gated promotion (`promotion_gate`)            | ❌ Not started | Requires [prd-evaluations.md](./prd-evaluations.md) Phase 1+ |
+
+## Decisions Taken During Implementation
+
+Recorded per `.claude/rules/open-questions.md`; each was resolved rather than
+forwarded, with what was checked named.
+
+```txt
+Q: Ship `AgentVersion.evalRunId` now, or wait for Phase 3?
+A: Wait — resolved by long-term. A FK to a table that does not exist cannot be
+   created, and a bare nullable column nothing reads or writes is invisible debt.
+   Checked: no evaluations model or lib exists in packages/server/src/lib.
+
+Q: Accept `promotion_gate` on `PUT /release` before Phase 3 enforces it?
+A: Reject it — resolved by long-term (durability ladder). Omitting it from the
+   OpenAPI schema makes `strictFields` return 400 automatically, so a caller can
+   never set a gate that silently does not gate. Checked: `strictFields` derives
+   its allowlist from the spec, and a test asserts the 400.
+
+Q: How does `label` get written, given the PRD lists it but names no endpoint?
+A: A write-only `version_label` on create/update, plus `label` on restore —
+   resolved by pareto. Without a writer the column is dead weight (the same
+   argument that deferred `evalRunId`); it is optional and additive, and because
+   the snapshot is derived from the agent response it cannot leak into `config`.
+   Checked: a test asserts `config.version_label` is undefined.
+
+Q: Does `promote`/`abort` need to write config, or just move the pointer?
+A: Write the winning version's config, then clear the pointer — resolved by
+   long-term (correctness). Clearing alone would serve whatever the live row
+   held, which during an abort is the very config being rolled back. Checked: a
+   test promotes after a third edit lands mid-rollout and asserts the canary,
+   not the draft, goes live.
+
+Q: Do `version` / `active_release` need adding to `AgentResourceProperties` in
+   formations.yaml (the formation-sync rule in .claude/rules/modules.md)?
+A: No — resolved by long-term (boundary integrity). Both are server-managed, so
+   letting a template declare a version number or start a rollout would put IaC
+   in charge of state it cannot own. `AgentResourceProperties` is
+   `additionalProperties: false`, so they are rejected with no change needed, and
+   the module's `read` returns only declared properties, so drift detection is
+   unaffected. Checked: the formation parity test asserts an apply archives
+   versions correctly without either field, and the formations suite passes.
+
+Q: Model the snapshot as an allowlist of config fields or an exclusion list?
+A: Exclusion — resolved by long-term. An allowlist fails silently (a new field
+   stops being restored, with nothing to notice); exclusion fails loudly (a
+   bookkeeping field leaking in sprays spurious versions). A test pins the exact
+   key set so adding an agent field forces a deliberate choice.
+```
+
+## Deviations From This Document
+
+- **No `(agentId, createdAt)` index.** The unique `(agent_id, version)` index
+  serves both the point lookup and the newest-first listing, which orders by the
+  version counter rather than a timestamp (two versions can share a `createdAt`,
+  and a non-deterministic page boundary in history is worse than useless). A
+  second index would be dead weight.
+- **`agent_version` is stamped on the generation *record*, not echoed in the
+  synchronous generate response.** The record is the durable, queryable location
+  that traces and evals read, and it is reachable through
+  `GET /api/v1/generations/{id}`. Threading the field through every
+  `GenerationResult` construction site (stream, non-stream, tool-outputs, depth
+  guard, recovery) would touch five files to duplicate data a documented endpoint
+  already returns.
+- **Two agent fields are not covered by the canary overlay**, because they are
+  consumed outside the generation-context seam: `single_session_per_actor`
+  (evaluated once, at session creation) and `max_context_messages` (applied by
+  the conversation path before dispatch). Both always read the live row. Neither
+  changes what the model is told to be.
+- **A generation recovered from the database after a restart re-resolves its
+  config from the live row**, so a paused canary generation resuming across a
+  process restart may complete on a different version than it started on. The
+  in-process resume path (`pendingGenerations`) keeps the served config and is
+  unaffected. The stamped `agent_version` records the version the generation
+  *started* on either way. Worth closing when the recovery path next changes.
 
 ## Problem
 
@@ -115,13 +189,13 @@ prefixes (`agent_`, `aip_`, …).
 | `agentId`     | FK         | → Agent, NOT NULL                                        |
 | `version`     | INTEGER    | Unique with `agentId` (composite unique index)           |
 | `config`      | JSONB      | Full config snapshot (fields above), NOT NULL            |
-| `label`       | VARCHAR    | Optional human tag (e.g. `pre-tone-change`)              |
-| `evalRunId`   | FK \| NULL | Eval run that validated this version ([prd-evaluations.md](./prd-evaluations.md)) |
-| `createdBy`   | FK         | User or API key that caused the write                    |
+| `label`       | VARCHAR    | Optional human tag (e.g. `pre-tone-change`), set via `version_label` |
+| `evalRunId`   | FK \| NULL | Eval run that validated this version ([prd-evaluations.md](./prd-evaluations.md)) — **deferred to Phase 3**, see Decisions |
+| `createdByUserId` | FK \| NULL | User whose action caused the write; null when none resolves |
 | `createdAt`   | TIMESTAMP  | Immutable                                                |
 
-Indexes: `(agentId, version)` unique; `(agentId, createdAt)` for paginated
-listing.
+Index: `(agentId, version)` unique — it serves the point lookup and the
+newest-first listing both (see Deviations).
 
 ### Agent (existing table) gains
 
@@ -163,7 +237,7 @@ Added to the existing `packages/server/src/permissions/agents.json`:
 
 ## Implementation Phases
 
-### Phase 1 — Version Snapshots + List/Get/Restore ❌ Not started
+### Phase 1 — Version Snapshots + List/Get/Restore ✅ Shipped
 
 **Goal:** Every agent config mutation is recoverable.
 
@@ -183,7 +257,7 @@ endpoints; OpenAPI + SDK/CLI regeneration; formation module parity.
 - `401`/`403`/`404` covered for all three endpoints; cross-project access
   returns `404`.
 
-### Phase 2 — Releases + Deterministic Canary ❌ Not started
+### Phase 2 — Releases + Deterministic Canary ✅ Shipped
 
 **Goal:** Try a version on a slice of traffic without touching the rest.
 

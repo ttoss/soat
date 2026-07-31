@@ -2116,6 +2116,151 @@ if ! printf '%s\n' "$RC_REMOVED_RESP" | jq -e '.status == 400' >/dev/null 2>&1; 
 fi
 echo "reasoning rejected on agents: OK"
 
+# ── Agent versions and staged rollout ────────────────────────────────────────
+# Covers the full lifecycle: snapshot on create, snapshot on update, restore as
+# a new (append-only) version, a staged rollout serving an archived config, the
+# version stamped on a generation, abort, and promote.
+
+echo "--- Agent versioning: snapshot on create ---"
+VER_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name version-demo \
+  --instructions "You are terse. Answer in one word." \
+  --version-label initial)
+VER_AGENT_ID=$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.id')
+if [ "$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.version')" != "1" ]; then
+  echo "ERROR: a new agent did not start at version 1" >&2
+  echo "$VER_AGENT_RESP" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$VER_AGENT_RESP" | jq -r '.active_release')" != "null" ]; then
+  echo "ERROR: a new agent reported an active_release" >&2
+  exit 1
+fi
+echo "Agent id: $VER_AGENT_ID (version 1)"
+
+VER_LIST=$($SOAT_CLI list-agent-versions --agent-id "$VER_AGENT_ID")
+if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.total')" != "1" ]; then
+  echo "ERROR: create did not archive exactly one version" >&2
+  printf '%s\n' "$VER_LIST" >&2
+  exit 1
+fi
+if [ "$(printf '%s\n' "$VER_LIST" | jq -r '.data[0].label')" != "initial" ]; then
+  echo "ERROR: version_label did not reach the archived version" >&2
+  printf '%s\n' "$VER_LIST" >&2
+  exit 1
+fi
+echo "snapshot on create: OK"
+
+echo "--- Agent versioning: snapshot on update ---"
+VER_UPDATED=$($SOAT_CLI update-agent --agent-id "$VER_AGENT_ID" \
+  --instructions "You are verbose. Answer in three sentences." \
+  --version-label wordy)
+if [ "$(printf '%s\n' "$VER_UPDATED" | jq -r '.version')" != "2" ]; then
+  echo "ERROR: a config change did not bump the version to 2" >&2
+  printf '%s\n' "$VER_UPDATED" >&2
+  exit 1
+fi
+
+# A write that changes nothing must not create a version.
+$SOAT_CLI update-agent --agent-id "$VER_AGENT_ID" \
+  --instructions "You are verbose. Answer in three sentences." >/dev/null
+VER_NOOP=$($SOAT_CLI get-agent --agent-id "$VER_AGENT_ID")
+if [ "$(printf '%s\n' "$VER_NOOP" | jq -r '.version')" != "2" ]; then
+  echo "ERROR: a no-op update created a new version" >&2
+  printf '%s\n' "$VER_NOOP" >&2
+  exit 1
+fi
+echo "snapshot on update (and no-op guard): OK"
+
+VER_ONE=$($SOAT_CLI get-agent-version --agent-id "$VER_AGENT_ID" --version 1)
+if ! printf '%s\n' "$VER_ONE" | jq -e '.config.instructions | test("one word")' >/dev/null 2>&1; then
+  echo "ERROR: version 1 did not archive the original instructions" >&2
+  printf '%s\n' "$VER_ONE" >&2
+  exit 1
+fi
+echo "archived config readback: OK"
+
+echo "--- Agent versioning: restore is append-only ---"
+VER_RESTORED=$($SOAT_CLI restore-agent-version --agent-id "$VER_AGENT_ID" --version 1)
+if [ "$(printf '%s\n' "$VER_RESTORED" | jq -r '.version')" != "3" ]; then
+  echo "ERROR: restore did not create a new version 3" >&2
+  printf '%s\n' "$VER_RESTORED" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$VER_RESTORED" | jq -e '.instructions | test("one word")' >/dev/null 2>&1; then
+  echo "ERROR: restore did not bring back version 1's instructions" >&2
+  exit 1
+fi
+# The version that was undone must remain retrievable.
+$SOAT_CLI get-agent-version --agent-id "$VER_AGENT_ID" --version 2 >/dev/null
+echo "restore (append-only, intermediate version retained): OK"
+
+echo "--- Agent versioning: staged rollout serves an archived config ---"
+# 100% canary makes the assignment deterministic without depending on hashing.
+VER_RELEASE=$($SOAT_CLI set-agent-release --agent-id "$VER_AGENT_ID" \
+  --stable-version 1 --canary-version 2 --canary-percent 100)
+if [ "$(printf '%s\n' "$VER_RELEASE" | jq -r '.active_release.canary_version')" != "2" ]; then
+  echo "ERROR: set-agent-release did not record the canary version" >&2
+  printf '%s\n' "$VER_RELEASE" >&2
+  exit 1
+fi
+
+VER_GEN=$($SOAT_CLI create-agent-generation --agent-id "$VER_AGENT_ID" \
+  --messages '[{"role":"user","content":"Say hello."}]' | sanitize_json)
+VER_GEN_ID=$(printf '%s\n' "$VER_GEN" | jq -r '.id')
+if [ -z "$VER_GEN_ID" ] || [ "$VER_GEN_ID" = "null" ]; then
+  echo "ERROR: generation under a rollout did not return an id" >&2
+  printf '%s\n' "$VER_GEN" >&2
+  exit 1
+fi
+VER_GEN_RECORD=$($SOAT_CLI get-generation --generation-id "$VER_GEN_ID")
+VER_SERVED=$(printf '%s\n' "$VER_GEN_RECORD" | jq -r '.metadata.agent_version')
+if [ "$VER_SERVED" != "2" ]; then
+  echo "ERROR: expected the 100% canary (version 2) to serve, got '$VER_SERVED'" >&2
+  printf '%s\n' "$VER_GEN_RECORD" >&2
+  exit 1
+fi
+echo "rollout assignment stamped on the generation record: OK"
+
+echo "--- Agent versioning: abort rolls back to stable ---"
+VER_ABORTED=$($SOAT_CLI abort-agent-release --agent-id "$VER_AGENT_ID")
+if [ "$(printf '%s\n' "$VER_ABORTED" | jq -r '.active_release')" != "null" ]; then
+  echo "ERROR: abort did not clear the release" >&2
+  printf '%s\n' "$VER_ABORTED" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$VER_ABORTED" | jq -e '.instructions | test("one word")' >/dev/null 2>&1; then
+  echo "ERROR: abort did not restore the stable config" >&2
+  printf '%s\n' "$VER_ABORTED" >&2
+  exit 1
+fi
+echo "abort: OK"
+
+echo "--- Agent versioning: promote makes the canary live ---"
+$SOAT_CLI set-agent-release --agent-id "$VER_AGENT_ID" \
+  --stable-version 1 --canary-version 2 --canary-percent 50 >/dev/null
+VER_PROMOTED=$($SOAT_CLI promote-agent-release --agent-id "$VER_AGENT_ID")
+if [ "$(printf '%s\n' "$VER_PROMOTED" | jq -r '.active_release')" != "null" ]; then
+  echo "ERROR: promote did not clear the release" >&2
+  printf '%s\n' "$VER_PROMOTED" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$VER_PROMOTED" | jq -e '.instructions | test("three sentences")' >/dev/null 2>&1; then
+  echo "ERROR: promote did not make the canary config live" >&2
+  printf '%s\n' "$VER_PROMOTED" >&2
+  exit 1
+fi
+echo "promote: OK"
+
+# Promoting with no active release is a conflict, not a silent no-op.
+expect_cli_error_status 409 promote-agent-release --agent-id "$VER_AGENT_ID"
+echo "promote without a release rejected with 409: OK"
+
+$SOAT_CLI delete-agent --agent-id "$VER_AGENT_ID" --force true >/dev/null
+echo "Agent versioning lifecycle OK"
+
 # 22b4. Discussions — create a deliberation config, run it, inspect the run.
 echo "--- Creating a discussion ---"
 DISCUSSION_RESP=$($SOAT_CLI create-discussion \

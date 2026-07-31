@@ -16,6 +16,7 @@ import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import { agentGenerationRouter } from './agentGeneration';
+import { agentVersionsRouter } from './agentVersions';
 import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
@@ -49,6 +50,8 @@ type CreateAgentBody = {
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
   project_id?: string;
+  /** Write-only tag for the version this write archives; never stored on the agent. */
+  version_label?: unknown;
 };
 
 /**
@@ -167,6 +170,9 @@ const parseUpdateAgentBody = (
         ? body.single_session_per_actor
         : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    // Annotates the archived version, not the agent — deliberately absent from
+    // the config snapshot, so labelling a change is not itself a change.
+    versionLabel: parseNullableString(body.version_label),
   };
 };
 
@@ -203,13 +209,17 @@ const parseModelBinding = (body: CreateAgentBody) => {
   };
 };
 
-const buildCreateAgentArgs = (
-  projectId: number,
-  body: CreateAgentBody,
-  tools: InlineToolDefinition[] | undefined
-): Parameters<typeof createAgent>[0] => {
+const buildCreateAgentArgs = (args: {
+  projectId: number;
+  body: CreateAgentBody;
+  tools: InlineToolDefinition[] | undefined;
+  createdByUserId?: number;
+}): Parameters<typeof createAgent>[0] => {
+  const { projectId, body, tools, createdByUserId } = args;
   return {
     projectId,
+    createdByUserId,
+    versionLabel: parseNullableString(body.version_label),
     ...parseModelBinding(body),
     name: typeof body.name === 'string' ? body.name : undefined,
     instructions:
@@ -268,7 +278,13 @@ const runAgentUpdate = async (args: {
     });
   }
 
-  return updateAgent({ projectIds, id: ctx.params.agent_id, ...parsed });
+  return updateAgent({
+    projectIds,
+    id: ctx.params.agent_id,
+    ...parsed,
+    // Attributes the archived version to whoever made the change.
+    createdByUserId: ctx.authUser?.id,
+  });
 };
 
 agentsRouter.post('/agents', async (ctx: Context) => {
@@ -304,7 +320,12 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   }
 
   const result = await createAgent(
-    buildCreateAgentArgs(targetProjectId, reqBody, tools ?? undefined)
+    buildCreateAgentArgs({
+      projectId: targetProjectId,
+      body: reqBody,
+      tools: tools ?? undefined,
+      createdByUserId: ctx.authUser.id,
+    })
   );
 
   ctx.status = 201;
@@ -454,3 +475,8 @@ agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
 
 agentsRouter.use(agentGenerationRouter.routes());
 agentsRouter.use(agentGenerationRouter.allowedMethods());
+
+// ── Versions and staged rollout ──────────────────────────────────────────
+
+agentsRouter.use(agentVersionsRouter.routes());
+agentsRouter.use(agentVersionsRouter.allowedMethods());

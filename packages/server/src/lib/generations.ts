@@ -86,6 +86,11 @@ export const RESERVED_GENERATION_METADATA_KEYS = [
   'node_id',
   'nodeId',
   'extraction',
+  // Written by the served-version resolver: the agent config version this
+  // generation ran against. Forging it would misattribute a canary's behavior
+  // to the stable version (or the reverse) in every downstream comparison.
+  'agent_version',
+  'agentVersion',
   // Written by the model-route executor: which target actually served the
   // generation, and every attempt it burned getting there.
   'routing',
