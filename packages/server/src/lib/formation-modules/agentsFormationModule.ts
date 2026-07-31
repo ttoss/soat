@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import { db } from '../../db';
 import {
   denormalizeKnowledgeConfig,
   normalizeKnowledgeConfig,
@@ -7,6 +8,7 @@ import {
 import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import { bindingsFromLegacyFields } from '../agentToolBindings';
+import { lookupProjectOwnerUserId } from '../formationsHelpers';
 import type { FormationModule, ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
 import { validateModelRouteExclusivity } from '../modelRoutes';
@@ -221,11 +223,40 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
 const buildCreateAgentArgs = (args: {
   properties: Record<string, unknown>;
   projectId: number;
+  createdByUserId: number;
 }) => {
   return {
     projectId: args.projectId,
+    createdByUserId: args.createdByUserId,
     ...mapAgentProperties(args.properties),
   };
+};
+
+/**
+ * The principal an apply is attributed to. A formation deploy has no request
+ * user, so — exactly as trigger firings do — it resolves to the project's owning
+ * identity, which keeps a formation-authored version indistinguishable in shape
+ * from a REST-authored one rather than leaving history anonymous.
+ */
+const resolveApplyingPrincipal = async (args: {
+  projectId: number;
+}): Promise<number> => {
+  return lookupProjectOwnerUserId(args.projectId);
+};
+
+/**
+ * `update` receives only the physical resource id, so the project has to be
+ * resolved from the agent itself before its owner can be looked up.
+ */
+const resolveApplyingPrincipalForAgent = async (
+  agentPublicId: string
+): Promise<number | undefined> => {
+  const agent = await db.Agent.findOne({
+    where: { publicId: agentPublicId },
+    attributes: ['projectId'],
+  });
+  if (!agent) return undefined;
+  return resolveApplyingPrincipal({ projectId: agent.projectId });
 };
 
 export const agentsFormationModule: FormationModule = {
@@ -245,7 +276,11 @@ export const agentsFormationModule: FormationModule = {
     }
     const properties = normalizePropertyKeys(rawProperties);
     const result = await createAgent(
-      buildCreateAgentArgs({ properties, projectId })
+      buildCreateAgentArgs({
+        properties,
+        projectId,
+        createdByUserId: await resolveApplyingPrincipal({ projectId }),
+      })
     );
     log(
       'created agent from formation: projectId=%d agentId=%s',
@@ -268,6 +303,8 @@ export const agentsFormationModule: FormationModule = {
     const properties = normalizePropertyKeys(rawProperties);
     await updateAgent({
       id: physicalResourceId,
+      createdByUserId:
+        await resolveApplyingPrincipalForAgent(physicalResourceId),
       // Same semantics as a REST PATCH: an explicit `null` clears the binding,
       // an undeclared field leaves it alone. Switching an agent to a route
       // therefore declares `model_route_id` together with

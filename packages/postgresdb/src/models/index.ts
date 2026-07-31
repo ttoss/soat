@@ -1,6 +1,7 @@
 export { ActivityEntry } from './ActivityEntry';
 export { Actor } from './Actor';
 export { Agent } from './Agent';
+export { AgentVersion } from './AgentVersion';
 export { AiProvider } from './AiProvider';
 export { ApiKey } from './ApiKey';
 export { ApprovalItem } from './ApprovalItem';

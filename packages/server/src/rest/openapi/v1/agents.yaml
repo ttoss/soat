@@ -19,6 +19,8 @@ servers:
 tags:
   - name: Agents
     description: Manage AI agents
+  - name: Agent Versions
+    description: Agent config history and staged rollout
   - name: Agent Traces
     description: View agent traces
 security:
@@ -473,6 +475,361 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/versions:
+    get:
+      tags:
+        - Agent Versions
+      summary: List an agent's config versions
+      description: >
+        Returns the agent's archived configurations, newest first. A version is
+        written on create and on every subsequent write that changes the config —
+        through the REST API or a formation apply alike. See
+        [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
+      operationId: listAgentVersions
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of agent versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AgentVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/versions/{version}:
+    get:
+      tags:
+        - Agent Versions
+      summary: Get an archived agent config version
+      description: >
+        Returns the exact configuration the agent held at a given version, so a
+        generation can be traced back to the config that produced it.
+      operationId: getAgentVersion
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Archived agent version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AgentVersion'
+        '400':
+          description: Bad Request — version is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Agent Versions
+      summary: Restore an archived config as a new version
+      description: >
+        Copies the named version's configuration onto the agent as a **new**
+        version rather than rewinding the counter, so history stays append-only
+        and the versions in between remain retrievable. Restoring the config the
+        agent already holds is a no-op and creates no version.
+
+
+        The restored config fully replaces the current one: a field the archived
+        version did not set is cleared, not merged. Restore re-validates the
+        config, so a tool, provider, or guardrail deleted since the snapshot was
+        taken fails the request instead of writing a broken agent.
+      operationId: restoreAgentVersion
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreAgentVersionRequest'
+      responses:
+        '200':
+          description: The agent, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          description: Bad Request — invalid version, or the archived config no longer validates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent or version not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/release:
+    put:
+      tags:
+        - Agent Versions
+      summary: Set or replace a staged rollout
+      description: >
+        Starts serving two archived versions side by side: `canary_percent` of
+        traffic gets `canary_version`, the rest gets `stable_version`.
+
+
+        Assignment is deterministic — it hashes the actor behind the request's
+        session (falling back to the session itself), so one end user never
+        flip-flops between configs mid-conversation. Requests with neither are
+        split randomly.
+
+
+        While a release is active the agent's live columns act as a **draft**:
+        further edits archive new versions but do not disturb either side of the
+        running split. End the rollout with `promote` or `abort`.
+      operationId: setAgentRelease
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SetAgentReleaseRequest'
+      responses:
+        '200':
+          description: The agent, with its active release set
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '400':
+          description: Bad Request — malformed input, or a version that does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/release/promote:
+    post:
+      tags:
+        - Agent Versions
+      summary: Promote the canary and end the rollout
+      description: >
+        Makes the canary version's config the agent's live config and clears the
+        release. The canary is pinned by version, so an edit that landed
+        mid-rollout is not promoted in its place — it stays an unreleased draft
+        in the version history.
+      operationId: promoteAgentRelease
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent, now serving the promoted config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — the agent has no active release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/agents/{agent_id}/release/abort:
+    post:
+      tags:
+        - Agent Versions
+      summary: Abort the rollout and roll back to stable
+      description: >
+        Restores the stable version's config as the agent's live config and
+        clears the release, so all traffic returns to the configuration the
+        rollout was measured against — not to whatever draft the live columns
+        happened to hold.
+      operationId: abortAgentRelease
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent, back on the stable config
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Agent not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Conflict — the agent has no active release
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   securitySchemes:
     bearerAuth:
@@ -653,12 +1010,146 @@ components:
         single_session_per_actor:
           type: boolean
           description: When true, only one open session per actor_id is allowed for this agent. Creating a second open session for the same actor returns 409.
+        version:
+          type: integer
+          description: >-
+            Current config version. Starts at 1 and increments on every write
+            that changes the config; each increment archives the new config as an
+            `AgentVersion`. A write that changes nothing leaves it untouched.
+          example: 3
+        active_release:
+          nullable: true
+          allOf:
+            - $ref: '#/components/schemas/AgentRelease'
+          description: >-
+            Staged rollout in progress, or null when all traffic serves this
+            config.
         created_at:
           type: string
           format: date-time
         updated_at:
           type: string
           format: date-time
+
+    AgentRelease:
+      type: object
+      description: >-
+        A staged rollout splitting traffic between two archived versions. See
+        [Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout).
+      required:
+        - stable_version
+        - canary_version
+        - canary_percent
+      properties:
+        stable_version:
+          type: integer
+          minimum: 1
+          description: Version served to traffic not assigned to the canary
+          example: 3
+        canary_version:
+          type: integer
+          minimum: 1
+          description: Version under trial. Must differ from `stable_version`.
+          example: 4
+        canary_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Percentage of traffic assigned to `canary_version`
+          example: 20
+
+    AgentVersion:
+      type: object
+      description: >-
+        An immutable archive of an agent's configuration at one version.
+      properties:
+        id:
+          type: string
+          description: Public ID of the archived version
+          example: agver_V1StGXR8Z5jdHi6B
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: Public ID of the agent this version belongs to
+          example: agent_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: The archived version number
+          example: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            The agent's configuration as it stood at this version: every mutable
+            field of the `Agent` schema (`instructions`, `model`,
+            `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`,
+            `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`,
+            `knowledge_config`, `output_schema`, `max_context_messages`,
+            `single_session_per_actor`, `guardrail_ids`, `ai_provider_id`,
+            `model_route_id`, `name`), and none of its identity or bookkeeping
+            fields (`id`, `project_id`, `version`, `active_release`, timestamps).
+
+
+            Deliberately open rather than a fixed schema: an archive written by
+            an earlier release of SOAT reflects the agent surface **of its own
+            time**, so it may carry fields the current schema no longer defines,
+            or lack ones it has since gained. Knowledge retrieval is not part of
+            the snapshot — a version records which `knowledge_config` applied,
+            while the documents and memories it resolves keep their own
+            histories and are pinned at generation time.
+        label:
+          type: string
+          nullable: true
+          description: >-
+            Optional human tag, set with `version_label` on the write that
+            created this version. Restore, promote and abort set one
+            automatically (e.g. `restored from v1`).
+          example: pre-tone-change
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: >-
+            Public ID of the user whose action produced this version. A formation
+            apply is attributed to the project's owning identity; null when no
+            principal could be resolved.
+        created_at:
+          type: string
+          format: date-time
+
+    RestoreAgentVersionRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: >-
+            Tag for the version this restore creates. Defaults to
+            `restored from v{version}`.
+          example: rollback-incident-42
+
+    SetAgentReleaseRequest:
+      type: object
+      required:
+        - stable_version
+        - canary_version
+        - canary_percent
+      properties:
+        stable_version:
+          type: integer
+          minimum: 1
+          description: An existing version to serve as the baseline
+          example: 3
+        canary_version:
+          type: integer
+          minimum: 1
+          description: An existing version to trial. Must differ from `stable_version`.
+          example: 4
+        canary_percent:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Percentage of traffic to assign to `canary_version`
+          example: 20
 
     ToolBinding:
       type: object
@@ -827,6 +1318,15 @@ components:
         single_session_per_actor:
           type: boolean
           description: When true, only one open session per actor_id is allowed for this agent.
+        version_label:
+          type: string
+          nullable: true
+          description: >-
+            Optional tag for the config version this write archives (e.g.
+            `initial`). Annotates the version only — it is not stored on the
+            agent and is not part of the config, so labelling a change is never
+            itself a change.
+          example: initial
 
     UpdateAgentRequest:
       type: object
@@ -986,6 +1486,16 @@ components:
           type: boolean
           nullable: true
           description: When true, only one open session per actor_id is allowed for this agent.
+        version_label:
+          type: string
+          nullable: true
+          description: >-
+            Optional tag for the config version this write archives (e.g.
+            `pre-tone-change`). Annotates the version only — it is not stored on
+            the agent and is not part of the config, so labelling a change is
+            never itself a change. Ignored when the write changes nothing, since
+            no version is created.
+          example: pre-tone-change
 
     CreateAgentGenerationRequest:
       type: object

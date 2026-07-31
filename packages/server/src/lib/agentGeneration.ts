@@ -86,6 +86,7 @@ const buildGenerationMetadata = (args: {
   triggerId?: string;
   orchestrationRunId?: string;
   nodeId?: string;
+  agentVersion?: number;
   metadata?: Record<string, unknown> | null;
 }): Record<string, unknown> | null => {
   // Caller-supplied metadata (F-15) seeds the bag; system attribution keys are
@@ -99,6 +100,12 @@ const buildGenerationMetadata = (args: {
   if (args.orchestrationRunId !== undefined)
     metadata.orchestrationRunId = args.orchestrationRunId;
   if (args.nodeId !== undefined) metadata.nodeId = args.nodeId;
+  // The agent config version that served this generation
+  // (docs/prd-agent-versions.md, Phase 2). Keyed snake_case — it is a new
+  // system key, and the wire contract is snake_case — so a client reading the
+  // metadata bag sees the same spelling the spec documents.
+  if (args.agentVersion !== undefined)
+    metadata.agent_version = args.agentVersion;
   return Object.keys(metadata).length > 0 ? metadata : null;
 };
 
@@ -136,6 +143,10 @@ const resolveContextAndRecord = async (args: {
     remainingDepth: args.remainingDepth,
     knowledgeConfig: args.knowledgeConfig,
     guardrailContext: args.guardrailContext,
+    // Carries the end user into config resolution: a staged rollout keys its
+    // split on the actor behind this session, so the same end user keeps the
+    // same agent version across calls.
+    sessionId: args.sessionId,
   });
 
   // Awaited so the record reliably exists before the generation runs and a
@@ -158,6 +169,7 @@ const resolveContextAndRecord = async (args: {
       triggerId: args.triggerId,
       orchestrationRunId: args.orchestrationRunId,
       nodeId: args.nodeId,
+      agentVersion: ctx.agentVersion,
       metadata: args.metadata,
     }),
   }).catch((error) => {

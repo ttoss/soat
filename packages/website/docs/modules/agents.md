@@ -53,8 +53,36 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 | `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
+| `version`                  | number        | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                    |
+| `active_release`            | object/null   | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
 | `updated_at`               | string        | ISO 8601 last-updated timestamp                                                                                                  |
+
+`version_label` is accepted on create and update but is not a field of the agent: it tags the version the write archives — see [Versioning and Staged Rollout](#versioning-and-staged-rollout).
+
+### Agent Version
+
+An immutable archive of an agent's configuration at one version. Written on create, and on every later write that actually changes the config.
+
+| Field        | Type        | Description                                                                            |
+| ------------ | ----------- | -------------------------------------------------------------------------------------- |
+| `id`         | string      | Unique identifier (`agver_` prefix)                                                    |
+| `agent_id`   | string      | Agent this version belongs to                                                          |
+| `version`    | number      | The archived version number                                                            |
+| `config`     | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures) |
+| `label`      | string/null | Optional human tag, e.g. `pre-tone-change`                                             |
+| `created_by` | string/null | User whose action produced this version                                                |
+| `created_at` | string      | ISO 8601 creation timestamp                                                            |
+
+### Agent Release
+
+The `active_release` object on an agent. Not a standalone resource — it is set with `set-agent-release` and cleared by `promote-agent-release` or `abort-agent-release`.
+
+| Field            | Type   | Description                                                            |
+| ---------------- | ------ | ---------------------------------------------------------------------- |
+| `stable_version` | number | Version served to traffic not assigned to the canary                   |
+| `canary_version` | number | Version under trial. Must differ from `stable_version`                 |
+| `canary_percent` | number | Percentage of traffic (`0`–`100`) assigned to `canary_version`         |
 
 ### Generation
 
@@ -463,9 +491,76 @@ For observability, every generation creates its own **trace** linked to the pare
 
 See it end to end in [Multi-Agent Sonnet with Nested Agent Calls — Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents), which wires an orchestrator to four worker agents via `create-agent-generation` tools.
 
+### Versioning and Staged Rollout
+
+Every agent carries a `version`, starting at `1`. Each write that changes the config increments it and archives the new config as an [Agent Version](#agent-version). A write that changes nothing — setting a field to the value it already holds — creates no version and leaves the counter alone.
+
+Snapshots are written by the shared business-logic layer, not by the REST handlers, so a `PUT`, a `PATCH`, and a [formation](./formations.md) apply all leave identical history. A formation apply is attributed to the project's owning identity, since a deploy has no request user.
+
+```bash
+soat list-agent-versions --agent-id agent_V1StGXR8Z5jdHi6B
+soat get-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 2
+```
+
+Tag a version as you create it with `version_label`:
+
+```bash
+soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
+  --instructions "Be concise and cite sources." \
+  --version-label pre-tone-change
+```
+
+#### What a version captures
+
+A version's `config` holds every mutable field of the agent — `instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `max_context_messages`, `single_session_per_actor`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name` — and none of its identity or bookkeeping fields (`id`, `project_id`, `version`, `active_release`, timestamps).
+
+Runtime-injected context is **not** part of a snapshot. A version records which `knowledge_config` applied, not the documents or memories it resolves: those keep their own histories and are pinned at generation time.
+
+#### Restore
+
+`restore-agent-version` copies an archived config onto the agent as a **new** version rather than rewinding the counter. History stays append-only, the versions in between remain retrievable, and "undo the undo" is just another restore.
+
+```bash
+soat restore-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 1
+```
+
+The restored config fully replaces the current one — a field the archived version did not set is cleared, not merged. Restore re-validates the config, so a tool, provider, or guardrail deleted since the snapshot was taken fails the request instead of writing a broken agent. Restoring the config the agent already holds is a no-op and creates no version.
+
+#### Staged Rollout
+
+A release serves two archived versions side by side, so a config change can be tried on a slice of traffic before it reaches everyone.
+
+```bash
+soat set-agent-release --agent-id agent_V1StGXR8Z5jdHi6B \
+  --stable-version 1 --canary-version 2 --canary-percent 20
+```
+
+Assignment is deterministic: it hashes the [actor](./actors.md) behind the request's [session](./sessions.md), falling back to the session itself. One end user therefore keeps the same config across calls instead of flip-flopping between two personas mid-conversation. Requests with neither an actor nor a session — anonymous one-shot generations — are split randomly.
+
+While a release is active, the agent's live config acts as a **draft**: further edits archive new versions but do not disturb either side of the running split. That means you can keep iterating while a canary is being observed.
+
+End the rollout one of two ways:
+
+```bash
+soat promote-agent-release --agent-id agent_V1StGXR8Z5jdHi6B   # canary wins
+soat abort-agent-release   --agent-id agent_V1StGXR8Z5jdHi6B   # back to stable
+```
+
+Both write the winning version's config to the agent and clear the release. Each pins its version explicitly, so an edit that landed mid-rollout is neither promoted by accident nor left serving traffic after an abort — it stays an unreleased draft in the version history. Calling either without an active release returns `409 Conflict` with error code `NO_ACTIVE_RELEASE`.
+
+#### Which version served a generation
+
+Every generation record carries the version that served it as `metadata.agent_version`, so [traces](./traces.md) and post-hoc comparisons can attribute behavior to a specific config. The key is reserved: callers cannot set it in their own `metadata`.
+
+```bash
+soat get-generation --generation-id gen_V1StGXR8Z5jdHi6B
+```
+
+Two agent fields are read from the live agent even during a rollout, because they are consumed outside the generation path: `single_session_per_actor` (evaluated once, when a session is created) and `max_context_messages` (applied by the conversation path before it dispatches). Neither changes what the model is told to be.
+
 ### Deletion
 
-By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS`. Pass `?force=true` to delete those generations and traces along with the agent.
+By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS`. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are owned by it and are removed with it.
 
 ## Examples
 

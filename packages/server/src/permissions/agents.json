@@ -35,6 +35,36 @@
       "operationId": "submitAgentToolOutputs",
       "action": "agents:CreateAgentGeneration",
       "description": "Submit tool outputs to resume a paused generation"
+    },
+    {
+      "operationId": "listAgentVersions",
+      "action": "agents:ListAgentVersions",
+      "description": "List an agent's archived config versions"
+    },
+    {
+      "operationId": "getAgentVersion",
+      "action": "agents:GetAgentVersion",
+      "description": "Get one archived agent config version"
+    },
+    {
+      "operationId": "restoreAgentVersion",
+      "action": "agents:RestoreAgentVersion",
+      "description": "Restore an archived agent config as a new version"
+    },
+    {
+      "operationId": "setAgentRelease",
+      "action": "agents:SetAgentRelease",
+      "description": "Set or replace an agent's staged rollout"
+    },
+    {
+      "operationId": "promoteAgentRelease",
+      "action": "agents:SetAgentRelease",
+      "description": "Promote the canary version to stable and end the rollout"
+    },
+    {
+      "operationId": "abortAgentRelease",
+      "action": "agents:SetAgentRelease",
+      "description": "Roll traffic back to the stable version and end the rollout"
     }
   ]
 }

@@ -138,6 +138,24 @@ export class Agent extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare guardrailIds: string[] | null;
 
+  /**
+   * Current config version, starting at 1. Bumped by the shared lib update path
+   * only when a write actually changes the config; each bump archives an
+   * `AgentVersion` row.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  declare version: number;
+
+  /**
+   * Staged rollout pointer: `{ stable_version, canary_version, canary_percent }`,
+   * stored in its wire (snake_case) shape and echoed verbatim. While it is set,
+   * every generation serves one of the two named versions' archived configs —
+   * never this row — so the live columns act as a draft that ongoing traffic
+   * does not see. Null means all traffic serves this row.
+   */
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare activeRelease: object | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

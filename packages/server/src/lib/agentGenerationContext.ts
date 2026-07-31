@@ -14,6 +14,7 @@ import {
   normalizeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
+import { resolveServedAgentVersion } from './agentServedVersion';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -40,6 +41,13 @@ export type GenerationContext = {
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
+  /**
+   * The agent config version this generation actually ran against — the live
+   * row's version, or the version a staged rollout assigned to this request.
+   * Stamped on the generation record so traces and evals can compare versions
+   * after the fact.
+   */
+  agentVersion: number;
 };
 
 const resolveGenerationModel = async (args: {
@@ -207,17 +215,27 @@ export const buildGenerationContext = async (args: {
   remainingDepth?: number;
   knowledgeConfig?: object;
   guardrailContext?: Record<string, unknown> | null;
+  sessionId?: string | null;
 }): Promise<GenerationContext> => {
-  const typedAgent = await resolveAgentForGeneration({
+  const liveAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
   });
 
-  if (!typedAgent)
+  if (!liveAgent)
     throw new DomainError(
       'RESOURCE_NOT_FOUND',
       `Agent '${args.agentId}' not found.`
     );
+
+  // Resolved before anything reads the config: while a staged rollout is active
+  // this request is assigned one of its two archived versions, and everything
+  // below — instructions, model, tools, guardrails — must come from that
+  // version rather than from the live row.
+  const { typedAgent, agentVersion } = await resolveServedAgentVersion({
+    agent: liveAgent,
+    sessionId: args.sessionId,
+  });
 
   const boundToolIds = deriveLegacyToolFields(
     readAgentToolBindings(typedAgent)
@@ -270,5 +288,6 @@ export const buildGenerationContext = async (args: {
     generationId,
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
+    agentVersion,
   };
 };
