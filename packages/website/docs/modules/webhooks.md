@@ -89,6 +89,8 @@ Before pointing `url` at a real endpoint, use [`soat listen`](../cli/usage.md#te
 
 Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
 
+The secret is stored encrypted at rest using the same AES-256-GCM encryption as [secrets](./secrets.md), keyed by `SECRETS_ENCRYPTION_KEY`. It is decrypted only to sign outbound deliveries or to return it through the API to a caller with `webhooks:GetWebhookSecret`. See [Configuration](/docs/self-hosting/configuration) for the operational impact of losing this key.
+
 To verify a delivery:
 
 ```js

@@ -1,10 +1,30 @@
 import crypto from 'node:crypto';
 
+import createDebug from 'debug';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
 
+import { decryptValue, encryptValue } from './secrets';
+
+const log = createDebug('soat:webhooks');
+
 const generateSecret = () => {
   return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Rows created before secret-at-rest encryption store the raw secret.
+ * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
+ * so fall back to treating it as plaintext. Rotating or recreating the
+ * secret re-encrypts it going forward.
+ */
+export const decryptWebhookSecret = (stored: string): string => {
+  try {
+    return decryptValue(stored);
+  } catch {
+    log('decryptWebhookSecret: value is not encrypted (legacy row)');
+    return stored;
+  }
 };
 
 const mapWebhook = (
@@ -23,7 +43,9 @@ const mapWebhook = (
     url: instance.url,
     events: instance.events,
     active: instance.active,
-    ...(args?.includeSecret ? { secret: instance.secret } : {}),
+    ...(args?.includeSecret
+      ? { secret: decryptWebhookSecret(instance.secret) }
+      : {}),
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
@@ -73,7 +95,7 @@ export const findWebhookSecret = async (args: { id: string }) => {
     where: { publicId: args.id },
   });
   if (!webhook) return null;
-  return { secret: webhook.secret as string };
+  return { secret: decryptWebhookSecret(webhook.secret as string) };
 };
 
 export const createWebhook = async (args: {
@@ -92,7 +114,7 @@ export const createWebhook = async (args: {
     name: args.name,
     description: args.description ?? null,
     url: args.url,
-    secret,
+    secret: encryptValue(secret),
     events: args.events,
     active: true,
   });
@@ -153,7 +175,7 @@ export const rotateWebhookSecret = async (args: { id: string }) => {
   if (!webhook) return null;
 
   const newSecret = generateSecret();
-  await webhook.update({ secret: newSecret });
+  await webhook.update({ secret: encryptValue(newSecret) });
 
   const withIncludes = await db.Webhook.findOne({
     where: { id: webhook.id },

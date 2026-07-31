@@ -249,6 +249,34 @@ describe('Webhooks', () => {
 
       expect(response.status).toBe(403);
     });
+
+    test('the secret is stored encrypted at rest, not in plaintext', async () => {
+      const apiResponse = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhooks/${webhookId}/secret`
+      );
+      const plaintextSecret = apiResponse.body.secret as string;
+
+      const row = await db.Webhook.findOne({
+        where: { publicId: webhookId },
+      });
+
+      expect(row!.secret).not.toBe(plaintextSecret);
+    });
+
+    test('a legacy plaintext row (pre-encryption) is still readable', async () => {
+      const row = await db.Webhook.findOne({
+        where: { publicId: webhookId },
+      });
+      const legacyPlaintextSecret = 'a'.repeat(64);
+      await row!.update({ secret: legacyPlaintextSecret });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/webhooks/${webhookId}/secret`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.secret).toBe(legacyPlaintextSecret);
+    });
   });
 
   describe('PUT /api/v1/webhooks/:webhookId', () => {
@@ -313,6 +341,11 @@ describe('Webhooks', () => {
       expect(response.status).toBe(200);
       expect(response.body.secret).toBeDefined();
       expect(response.body.id).toBe(webhookId);
+
+      const row = await db.Webhook.findOne({
+        where: { publicId: webhookId },
+      });
+      expect(row!.secret).not.toBe(response.body.secret);
     });
 
     test('unauthenticated request returns 401', async () => {

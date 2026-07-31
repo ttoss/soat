@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { db } from 'src/db';
 import { signTriggerToken } from 'src/lib/triggerToken';
 
 import {
@@ -799,6 +800,38 @@ describe('Triggers', () => {
         `/api/v1/triggers/${webhookTriggerId}/secret`
       );
       expect(after.body.secret).toBe(res.body.secret);
+
+      const row = await db.Trigger.findOne({
+        where: { publicId: webhookTriggerId },
+      });
+      expect(row!.secret).not.toBe(res.body.secret);
+    });
+
+    test('the secret is stored encrypted at rest, not in plaintext', async () => {
+      const row = await db.Trigger.findOne({
+        where: { publicId: webhookTriggerId },
+      });
+
+      const current = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${webhookTriggerId}/secret`
+      );
+
+      expect(row!.secret).not.toBe(current.body.secret);
+    });
+
+    test('a legacy plaintext row (pre-encryption) is still readable', async () => {
+      const row = await db.Trigger.findOne({
+        where: { publicId: webhookTriggerId },
+      });
+      const legacyPlaintextSecret = 'b'.repeat(64);
+      await row!.update({ secret: legacyPlaintextSecret });
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${webhookTriggerId}/secret`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.secret).toBe(legacyPlaintextSecret);
     });
 
     test('rotate-secret on a non-webhook trigger returns 400', async () => {
