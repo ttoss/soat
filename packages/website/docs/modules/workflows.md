@@ -307,6 +307,7 @@ resources:
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
+| `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, and `orchestration_run_id` all null — rejected as a writer bug rather than silently recorded |
 
 ## Webhook events
 

@@ -888,7 +888,14 @@ describe('Tasks', () => {
     });
 
     test('a failed dispatch sets automation_status and follows on_failure', async () => {
-      mockCreateGeneration.mockRejectedValue(new Error('model exploded'));
+      // Production createGeneration always wraps a terminal failure in a
+      // DomainError carrying the generation_id (see recordGenerationFailure) — a
+      // real dispatch failure never comes back with zero provenance.
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'model exploded', {
+          generation_id: 'gen_exploded890',
+        })
+      );
       const wf = await dispatchWorkflow({
         name: 'failing',
         onEnter: {
@@ -910,6 +917,50 @@ describe('Tasks', () => {
         },
       });
       expect(settled.status).toBe('closed');
+    });
+
+    test('a failed dispatch with no recoverable cause id never persists a provenance-less automation transition (#792)', async () => {
+      // Simulates a dispatch failure that surfaces before any generation or
+      // orchestration run id exists (e.g. a bug upstream of recordGenerationFailure).
+      // Without a defensive check this would silently write a `to_failed` history
+      // row with principal_id, generation_id, and orchestration_run_id all null —
+      // a transition with no recorded cause at all.
+      mockCreateGeneration.mockRejectedValue(new Error('no meta at all'));
+      const wf = await dispatchWorkflow({
+        name: 'failing-no-provenance',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+      await flushTaskAutomations();
+
+      const task = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      // The rejected transition never applied: the task stays in `writing`,
+      // flagged `failed` by automation_status, rather than moving to a `failed`
+      // state whose history row would carry no cause.
+      expect(task.state).toBe('writing');
+      expect(task.status).toBe('open');
+      expect(task.automation_status).toBe('failed');
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      expect(
+        history.some((h: { transition: string | null }) => {
+          return h.transition === 'to_failed';
+        })
+      ).toBe(false);
     });
 
     test('on_failure history links the failed generation (#607)', async () => {

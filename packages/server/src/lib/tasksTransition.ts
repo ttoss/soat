@@ -58,6 +58,29 @@ const cancelDispatchOnExit = async (args: {
   // staleness check in tasksAutomation (task re-validated on completion).
 };
 
+// An `automation` transition always carries `principal.id === null` (#786) —
+// the cause lives in `generationId` / `orchestrationRunId` instead. If both of
+// those are also null, nothing at all records why the task moved: not a
+// degraded record, a meaningless one. Reject the write rather than silently
+// persisting it (#792).
+const assertAutomationHasProvenance = (args: {
+  transitionArgs: TransitionArgs;
+  transitionName: string;
+}): void => {
+  const { transitionArgs: a, transitionName } = args;
+  const hasNoProvenance =
+    a.principal.id == null &&
+    a.generationId == null &&
+    a.orchestrationRunId == null;
+  if (a.principal.kind === 'automation' && hasNoProvenance) {
+    throw new DomainError(
+      'TASK_AUTOMATION_PROVENANCE_MISSING',
+      `Automation transition '${transitionName}' for task '${a.id}' has no recorded cause (no principal, generation, or orchestration run id).`,
+      { transition: transitionName, taskId: a.id }
+    );
+  }
+};
+
 const evaluateGuard = (args: {
   transition: WorkflowTransition;
   task: TaskInstance;
@@ -178,6 +201,11 @@ const performTransitionTxn = async (args: {
         ? null
         : computeStallDeadline({ state: toStateDef, enteredStateAt });
     await task.save({ transaction: t });
+
+    assertAutomationHasProvenance({
+      transitionArgs: a,
+      transitionName: transition.name,
+    });
 
     await db.TaskTransition.create(
       {
