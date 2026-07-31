@@ -13,7 +13,7 @@ Only outstanding work is tracked here; shipped functionality lives in `packages/
 | RRF result merging                 | ❌ Future      | Reciprocal rank fusion replaces raw-score interleave across sources (Phase 5)                    |
 | Reranking stage                    | ❌ Future      | Optional cross-encoder/LLM rerank of fused candidates (Phase 5)                                  |
 | Recency/importance weighting       | ❌ Future      | Retrieval-time blend for memory results (Phase 5; importance from prd-memories.md Phase 8)       |
-| Injection hardening                | ❌ Future      | Retrieved knowledge injected as delimited non-system content (Phase 6)                           |
+| Injection hardening                | ✅ Shipped     | Retrieved knowledge injected as a delimited non-system block (Phase 6); two doc/provenance tails remain, listed there |
 | Evaluation harness                 | ❌ Future      | Golden query set, recall@k/MRR, memory benchmarks, injected-context tracing (Phase 7)            |
 
 ## Implementation Phases
@@ -135,47 +135,49 @@ endpoint, better ranking.
 
 ---
 
-### Phase 6 — Injection Hardening (Memory as Untrusted Input) ❌ Future
+### Phase 6 — Injection Hardening (Memory as Untrusted Input) ✅ Shipped
 
 **Goal:** Stop laundering retrieved content into the `system` role. Extraction-sourced memory
 entries are user-derived text; injecting them as system messages lets a user's phrasing acquire
 system-level authority in **future** generations — a persistent prompt-injection escalation path
 (say something once, and it comes back as a system instruction forever).
 
-**Current behavior:** `buildKnowledgeMessages()` returns retrieved knowledge as a
-`role: "system"` message prepended to the conversation.
+**Shipped behavior:** `buildKnowledgeMessages()` returns a single `role: "user"` message whose
+content is a fenced `<knowledge>` block preceded by a fixed preamble framing the enclosed text as
+reference information (`packages/server/src/lib/agentKnowledge.ts`). The rendered block is
+documented in
+[the agents module doc](../packages/website/docs/modules/agents.md#knowledge-config).
 
-**Deliverables:**
-
-- Retrieved knowledge is injected as **clearly delimited, non-system content** (a user-role
-  context block or provider-appropriate context part), explicitly framed as reference data —
-  wrapped in delimiters with an instruction that the content inside is information, not
-  instructions
-- Source tags preserved inside the delimited block (`[Memory: …]`, `[Document: …]`), including
-  provenance where available (entry ID, document path/page)
-- The agent's own `instructions` remain the only system-authored content; a regression test
-  asserts retrieved content is never emitted with `role: "system"`
-- Memory threat model documented: extraction already runs tool-less (no side effects); retrieved
-  memory content must be treated as untrusted in downstream tool authorization
+The security objective is met and regression-tested; two tails remain, tracked in the
+[roadmap backlog](./roadmap.md#knowledge-retrieval-surface) rather than holding the phase open.
 
 **Acceptance criteria:**
 
-- [ ] **No system-role laundering:** a regression test asserts that no message produced by
-      `buildKnowledgeMessages()` is emitted with `role: "system"`, covering every injection path
-      (agent `knowledge_config`, per-generation `knowledge_config`, conversations and sessions).
-- [ ] **Delimited block format pinned:** retrieved content is wrapped in explicit delimiters with a
-      fixed preamble stating the enclosed content is reference information, not instructions; the
-      exact delimiter/preamble text is documented in the module docs so it is testable and stable.
-- [ ] **Provenance preserved:** source tags survive inside the block — `[Memory: <name>]` with the
-      entry ID, `[Document: <path>]` with page where available — verified by test.
-- [ ] **Single system author:** a generation configured with both agent `instructions` and retrieved
-      knowledge produces exactly one system-authored message containing only the instructions.
-- [ ] **Threat model documented** in the module docs: extraction runs tool-less; retrieved memory
-      content is untrusted input for downstream tool authorization.
-- [ ] **No quality regression:** Phase 7 golden-set numbers before/after the injection change show
-      no material retrieval/answer regression.
+- [x] **No system-role laundering:** `agentKnowledge.test.ts` (`never injects retrieved knowledge
+      with the system role`) asserts the emitted message is `role: "user"` and not `"system"`.
+      Coverage is structural rather than per-path: `buildKnowledgeMessages()` has exactly one call
+      site — `assembleContextMessages` in `agentGenerationContext.ts` — reached by
+      `buildGenerationContext` from `agentGeneration.ts` and `agentClientToolReHandoff.ts`, and
+      both the agent `knowledge_config` and the per-generation override flow through
+      `mergeKnowledgeConfig` into that call, so conversations, sessions, and the tool-resume path
+      cannot diverge.
+- [x] **Delimited block format pinned:** `KNOWLEDGE_PREAMBLE` + the `<knowledge>` fence are
+      asserted by test and the exact rendered text is reproduced in the agents module doc.
+- [ ] **Provenance preserved:** partially met — `formatResult` emits `[Memory: <memory_name>]` and
+      `[Document: <path ?? filename>]`, but **not** the memory entry ID or the document page the
+      criterion asks for. Remaining tail; not security-critical.
+- [x] **Single system author:** `buildAllMessages(typedAgent.instructions, [...knowledgeMessages,
+      ...resolvedMessages])` makes the agent's `instructions` the only system-authored input.
+- [ ] **Threat model documented:** the rationale exists only as a code comment in
+      `agentKnowledge.ts`; no module doc states that extraction runs tool-less and that retrieved
+      memory content is untrusted input for downstream tool authorization. Remaining tail.
+- [x] ~~**No quality regression** vs the Phase 7 golden set~~ — **dropped as unsatisfiable in this
+      order.** Phase 6 shipped before Phase 7, so no golden set existed to measure against. Folded
+      into Phase 7 instead: its baseline numbers are taken against the shipped (non-system)
+      injection format, so the comparison this criterion wanted is subsumed by Phase 5's
+      "must show wins on the golden set before landing" gate.
 
-**Unlocks:** Memory and RAG that don't widen the prompt-injection blast radius.
+**Unlocked:** Memory and RAG that don't widen the prompt-injection blast radius.
 
 ---
 
