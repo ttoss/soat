@@ -8,14 +8,16 @@
 
 index
 connect-third-party-llms
-# review-panel-discussion drives a discussion-type tool *from inside* an agent
-# generation (agent → review-panel tool → nested 3-participant discussion +
-# synthesis, all against the CI sandbox's local qwen2.5:0.5b). That nested
-# invocation fails in CI with a `fetch failed` at generation time, while the
-# standalone discussion run (step 10) succeeds. The tutorial only ever passed
-# before because a stale `--discussion` flag silently produced a tool-less
-# agent; wiring the tool correctly (discussion_id) exposed the nested-run
-# failure. Ignored pending a separate fix to nested discussion-tool execution.
+# review-panel-discussion now runs the panel as an orchestration `tool` node
+# (draft → review → revise) rather than from inside an agent generation, so the
+# original failure — a nested discussion-tool call from a generation dying with
+# `fetch failed` — no longer applies. It stays ignored for a different reason:
+# both agent nodes declare an `output_schema`, and the CI sandbox's
+# qwen2.5:0.5b is not reliable at emitting the required structured JSON, so
+# `draft`/`revise` can fail nondeterministically. Re-enable only after running
+# the tutorials stack locally and confirming the run reaches `succeeded`
+# repeatedly; the deterministic parts (the tool node's pause/dispatch wiring)
+# are already covered by tests/smoke-tests.sh.
 review-panel-discussion
 # orchestrate-a-sonnet-with-workflows exercises on_enter agent dispatch, which
 # runs the generation asynchronously (fire-and-forget) when a task enters a state

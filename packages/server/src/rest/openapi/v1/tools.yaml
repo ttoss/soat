@@ -481,7 +481,6 @@ components:
             - mcp
             - soat
             - pipeline
-            - discussion
           description: Tool type
           example: http
         description:
@@ -557,14 +556,6 @@ components:
             executed directly without a Tool row, but never both. An inline
             step `tool` cannot itself be of type `pipeline`. An optional
             `output` maps the final result.
-        discussion_id:
-          x-soat-ref: discussions
-          type: string
-          nullable: true
-          description: >-
-            For `discussion` tools: the ID of the discussion to invoke.
-            Calling the tool with a `topic` runs that discussion synchronously
-            and returns its outcome + run id as the tool result.
         output_mapping:
           type: object
           nullable: true
@@ -611,7 +602,6 @@ components:
             - mcp
             - soat
             - pipeline
-            - discussion
           description: Tool type (default http)
         description:
           type: string
@@ -668,11 +658,6 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
-        discussion_id:
-          x-soat-ref: discussions
-          type: string
-          description: >-
-            For `discussion` tools: the ID of the discussion to invoke.
         output_mapping:
           type: object
           description: >-
@@ -758,12 +743,6 @@ components:
           description: >-
             Pipeline definition for `pipeline` tools. See the `pipeline` field
             on the Tool schema for the full structure.
-        discussion_id:
-          x-soat-ref: discussions
-          type: string
-          nullable: true
-          description: >-
-            For `discussion` tools: the ID of the discussion to invoke.
         output_mapping:
           type: object
           nullable: true

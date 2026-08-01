@@ -8,7 +8,6 @@ import {
   buildMcpToolExecute,
   executeSoatTool,
 } from './agentToolResolverExternalTools';
-import { runDiscussion } from './discussionRuns';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
@@ -38,7 +37,6 @@ export type InlineToolDefinition = {
   deniedActions?: string[];
   presetParameters?: object;
   pipeline?: object;
-  discussionId?: string;
   outputMapping?: object;
 };
 
@@ -57,7 +55,6 @@ export type CallableToolDefinition = {
   deniedActions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussionId?: string | null;
   outputMapping?: object | null;
 };
 
@@ -77,46 +74,6 @@ export const assertEphemeralTypeSupported = (
       'Ephemeral tool definitions of type "pipeline" are not supported; create a persisted pipeline tool via POST /tools and reference it by ID instead.'
     );
   }
-  if (definition.type === 'discussion') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'Ephemeral tool definitions of type "discussion" are not supported; create a persisted discussion tool via POST /tools and reference it by ID instead.'
-    );
-  }
-};
-
-/**
- * Executes a `discussion` tool: invokes the referenced discussion synchronously
- * with the `topic` argument and returns the outcome + run id as the tool
- * result. Mirrors the `mcp` type (references another resource by id), but calls
- * the discussions engine directly rather than round-tripping HTTP.
- */
-export const callDiscussionTool = async (
-  tool: CallableToolDefinition,
-  mergedInput: Record<string, unknown>
-): Promise<unknown> => {
-  if (!tool.discussionId) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'Discussion tool has an invalid discussion configuration.'
-    );
-  }
-  const topic = mergedInput.topic;
-  if (typeof topic !== 'string' || topic.trim().length === 0) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'A discussion tool call requires a string `topic`.'
-    );
-  }
-  const run = await runDiscussion({
-    discussionId: tool.discussionId,
-    topic,
-    initiatorGenerationId:
-      typeof mergedInput.initiatorGenerationId === 'string'
-        ? mergedInput.initiatorGenerationId
-        : undefined,
-  });
-  return { outcome: run.outcome, run_id: run.id };
 };
 
 export const callHttpTool = (
@@ -311,9 +268,6 @@ const dispatchDirectTool = async (args: {
       args.mergedInput,
       args.toolProjectId
     );
-  }
-  if (args.type === 'discussion') {
-    return callDiscussionTool(args.tool, args.mergedInput);
   }
   throw new DomainError(
     'TOOL_CALL_NOT_SUPPORTED',

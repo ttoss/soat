@@ -51,7 +51,6 @@ const mapRunArtifacts = (run: RunModel) => {
     outcome_document_id: run.outcomeDocument?.publicId ?? null,
     started_by: run.startedBy ?? null,
     initiator_generation_id: run.initiatorGenerationId ?? null,
-    trace_id: run.traceId ?? null,
     completed_at: run.completedAt ?? null,
   };
 };
@@ -323,21 +322,14 @@ const loadDiscussionForRun = async (
 /**
  * Invokes a discussion: builds a deliberation (participants → branches) plus an
  * optional synthesis, runs the engine, persists the transcript + outcome, and
- * records a `DiscussionRun`. Synchronous — the caller (e.g. a `discussion` tool)
- * blocks for the full run, bounded by the engine caps and timeouts.
+ * records a `DiscussionRun`. Synchronous — the caller blocks for the full run,
+ * bounded by the engine caps and timeouts.
  */
 export const runDiscussion = async (args: {
   discussionId: string;
   topic: string;
   startedBy?: Record<string, unknown> | null;
   initiatorGenerationId?: string | null;
-  /**
-   * The trace of the generation that invoked this run as a tool (its own
-   * `traceId` — every generation's trace is 1:1 with the generation itself).
-   * Null for directly-invoked runs (`POST /discussions/:id/runs`), which have
-   * no generation/trace context to attribute to.
-   */
-  traceId?: string | null;
 }) => {
   log('runDiscussion: discussionId=%s', args.discussionId);
 
@@ -351,7 +343,6 @@ export const runDiscussion = async (args: {
     status: 'running',
     startedBy: args.startedBy ?? null,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
-    traceId: args.traceId ?? null,
   });
 
   const participants = sortedParticipants(discussion);

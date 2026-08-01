@@ -196,7 +196,6 @@ export const toolsFormationModule: FormationModule = {
         toNullableObject(properties.preset_parameters)
       ),
       pipeline: optional(toNullableObject(properties.pipeline)),
-      discussionId: toOptionalString(properties.discussion_id),
       outputMapping: optional(toNullableObject(properties.output_mapping)),
       guardrailIds: optional(toNullableArray<string>(properties.guardrail_ids)),
     });
@@ -231,7 +230,6 @@ export const toolsFormationModule: FormationModule = {
       deniedActions: toNullableArray<string>(properties.denied_actions),
       presetParameters: toNullableObject(properties.preset_parameters),
       pipeline: toNullableObject(properties.pipeline),
-      discussionId: toNullableString(properties.discussion_id),
       outputMapping: toNullableObject(properties.output_mapping),
       guardrailIds: toNullableArray<string>(properties.guardrail_ids),
     });
@@ -255,7 +253,6 @@ export const toolsFormationModule: FormationModule = {
         denied_actions: tool.denied_actions,
         preset_parameters: tool.preset_parameters,
         pipeline: tool.pipeline,
-        discussion_id: tool.discussion_id,
         output_mapping: tool.output_mapping,
         guardrail_ids: tool.guardrail_ids,
       };
