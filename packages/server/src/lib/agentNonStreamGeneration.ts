@@ -148,6 +148,9 @@ export const buildPrepareStep = (args: {
     const ruleToolChoice = normalizeToolChoice(
       rule?.tool_choice ?? rule?.toolChoice
     );
+    if (ruleToolChoice === undefined) {
+      return {};
+    }
     if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
       log(
         'prepareStep (%s): forcing toolChoice=%s',
@@ -161,7 +164,18 @@ export const buildPrepareStep = (args: {
       };
     }
 
-    return {};
+    // A string choice ('auto' | 'required' | 'none') overrides the agent's own
+    // tool_choice for this step and nothing else: no tool is named, so the
+    // active tool set is left alone. Skipping this branch made
+    // `{ step: 1, tool_choice: "required" }` a silent no-op, which is the only
+    // way to force a first-step tool call without also forcing one on every
+    // later step (agent-level "required" never lets the run stop).
+    log(
+      'prepareStep (%s): overriding toolChoice=%s',
+      args.logContext,
+      ruleToolChoice
+    );
+    return { toolChoice: ruleToolChoice };
   };
 };
 

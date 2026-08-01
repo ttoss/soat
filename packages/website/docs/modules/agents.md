@@ -215,6 +215,21 @@ Example — force `search` on step 1, then `analyze` on step 2:
 }
 ```
 
+`tool_choice` also takes the string forms here. A rule of `"required"` on step 1
+forces the model to call *some* tool before it can answer, without naming which
+one — useful when the right tool depends on the message and the failure you are
+guarding against is the model skipping tools entirely and answering from the
+prompt. Agent-level `tool_choice: "required"` cannot express this: it applies to
+every step, so the model is still forced to call a tool once it already has its
+answer and the loop runs to `max_steps`.
+
+```json
+{
+  "tool_choice": "auto",
+  "step_rules": [{ "step": 1, "tool_choice": "required" }]
+}
+```
+
 For **dynamic** per-step control (when you don't know the plan in advance), use `client` tools as pause points. When submitting tool outputs, you can pass overrides at multiple levels:
 
 | Field             | Scope                             | Description                                                                    |

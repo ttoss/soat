@@ -720,6 +720,38 @@ describe('runStreamGeneration', () => {
       });
     });
 
+    test('prepareStep honors a string tool_choice, not just a named tool', () => {
+      // See the matching non-stream test: { step: 1, tool_choice: "required" }
+      // forces a tool call on the first step without naming which tool, which
+      // agent-level "required" cannot express (it never lets the run stop).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [{ step: 1, tool_choice: 'required' }],
+        },
+        generationId: 'gen_steprules_str',
+        traceId: 'trc_steprules_str',
+        agentId: 'agt_steprules_str',
+      });
+
+      expect(capturedOpts?.prepareStep).toBeDefined();
+      // No specific tool is named, so activeTools stays untouched.
+      expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({
+        toolChoice: 'required',
+      });
+      expect(capturedOpts?.prepareStep({ stepNumber: 1 })).toEqual({});
+    });
+
     test('prepareStep returns empty object when no step rule matches', () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
