@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.19.0](https://127.0.0.1/41729/git/ttoss/compare/v0.18.1...v0.19.0) (2026-08-01)
+
+### Bug Fixes
+
+* **documents:** return 409 instead of 500 when re-ingesting a file_id ([#800](https://127.0.0.1/41729/git/ttoss/issues/800)) ([48b8b87](https://127.0.0.1/41729/git/ttoss/commits/48b8b87019883a4ed4d9050cab6bb356e59efaff))
+
+### Features
+
+* **agents:** version snapshots and staged rollout (PRD Phases 1-2) ([#796](https://127.0.0.1/41729/git/ttoss/issues/796)) ([037d597](https://127.0.0.1/41729/git/ttoss/commits/037d597518ee2b8a43b5037578757b43749cde64))
+
 ## [0.18.1](https://127.0.0.1/41729/git/ttoss/compare/v0.18.0...v0.18.1) (2026-07-31)
 
 ### Bug Fixes
