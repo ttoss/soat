@@ -170,6 +170,97 @@ type AgentVersionAuthorship = {
   versionLabel?: string | null;
 };
 
+/**
+ * The bound tool ids a generation may actually resolve, after applying the
+ * agent's `active_tool_ids` restriction (`modules/agents.md` — Active Tools).
+ *
+ * Shared by the generation and recovery paths so a resumed run is restricted
+ * exactly like the run it resumes.
+ *
+ * Two deliberate fail-open cases, both about not disarming a live agent for a
+ * value that cannot express real intent:
+ *
+ * - **absent / empty** — an empty active set would leave the agent with no
+ *   tools at all, which is never a deliberate configuration, and agents stored
+ *   `[]` while this field was inert (#811), so honouring it literally would
+ *   silently strip their tools on upgrade.
+ * - **not an array** — the column is untyped JSON, so a legacy or hand-written
+ *   row can hold anything.
+ *
+ * Inline (ephemeral) tool definitions carry no id, so they can never be named
+ * here and are always left active; they are authored on the agent itself
+ * alongside this field rather than referenced from the project.
+ */
+export const narrowToActiveTools = (args: {
+  toolIds: string[];
+  activeToolIds: unknown;
+}): string[] => {
+  if (!Array.isArray(args.activeToolIds)) return args.toolIds;
+  const allowed = new Set(
+    args.activeToolIds.filter((id): id is string => {
+      return typeof id === 'string';
+    })
+  );
+  if (allowed.size === 0) return args.toolIds;
+  return args.toolIds.filter((id) => {
+    return allowed.has(id);
+  });
+};
+
+/**
+ * Rejects an `active_tool_ids` entry that names no tool in the project, so a
+ * typo surfaces as a `400` on write instead of silently narrowing the agent's
+ * tool surface at generation time. Mirrors `assertGuardrailsExist` — both
+ * fields are declared references (`x-soat-ref`) and only one of them used to
+ * be checked (#811). A null/empty list is a no-op: it clears the restriction.
+ */
+const assertActiveToolsExist = async (args: {
+  activeToolIds: string[] | null | undefined;
+  projectId: number;
+}): Promise<void> => {
+  const ids = args.activeToolIds ?? [];
+  if (ids.length === 0) return;
+
+  const found = await db.Tool.findAll({
+    where: { publicId: ids, projectId: args.projectId },
+    attributes: ['publicId'],
+  });
+  const foundSet = new Set(
+    found.map((tool) => {
+      return tool.publicId;
+    })
+  );
+  const missing = ids.filter((id) => {
+    return !foundSet.has(id);
+  });
+  if (missing.length > 0) {
+    throw new DomainError(
+      'TOOL_NOT_FOUND',
+      `Tool(s) not found in the project: ${missing.join(', ')}.`,
+      { missing }
+    );
+  }
+};
+
+/**
+ * Every declared cross-resource reference on an agent write, checked together.
+ * Both are no-ops for an absent list, so create and update share one call.
+ */
+const assertAgentReferencesExist = async (args: {
+  guardrailIds: string[] | null | undefined;
+  activeToolIds: string[] | null | undefined;
+  projectId: number;
+}): Promise<void> => {
+  await assertGuardrailsExist({
+    guardrailIds: args.guardrailIds,
+    projectId: args.projectId,
+  });
+  await assertActiveToolsExist({
+    activeToolIds: args.activeToolIds,
+    projectId: args.projectId,
+  });
+};
+
 // `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
 // path, not copied verbatim.
 const AGENT_SCALAR_FIELDS = [
@@ -305,8 +396,9 @@ export const createAgent = async (
 
   const { aiProviderId, modelRouteId } = await resolveCreateModelBinding(args);
 
-  await assertGuardrailsExist({
+  await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
+    activeToolIds: args.activeToolIds,
     projectId: args.projectId,
   });
 
@@ -515,9 +607,10 @@ export const updateAgent = async (
     mapAgent(agent as unknown as Parameters<typeof mapAgent>[0])
   );
 
-  // No-ops when guardrailIds is undefined (attachments left untouched).
-  await assertGuardrailsExist({
+  // No-ops for an undefined list (attachments/restriction left untouched).
+  await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
+    activeToolIds: args.activeToolIds,
     projectId: (agent as unknown as { projectId: number }).projectId,
   });
 
