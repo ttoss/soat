@@ -651,6 +651,27 @@ if [ -z "$PDF_DOC_ID" ] || [ "$PDF_DOC_ID" = "null" ]; then
 fi
 echo "PDF ingestion: OK"
 
+# 12b-1. Re-ingesting the same file_id is rejected cleanly (issue #797)
+echo "--- Re-ingesting the same file_id returns a clean conflict ---"
+set +e
+DUP_INGEST_RESP=$($SOAT_CLI ingest-document \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --file-id "$PDF_FILE_ID" \
+  --path-prefix /smoke-dup/ 2>&1)
+DUP_INGEST_EXIT=$?
+set -e
+if [ "$DUP_INGEST_EXIT" -eq 0 ]; then
+  echo "ERROR: expected ingest-document to fail when re-using an already-ingested file_id" >&2
+  echo "$DUP_INGEST_RESP" >&2
+  exit 1
+fi
+if ! echo "$DUP_INGEST_RESP" | grep -q 'FILE_ALREADY_INGESTED'; then
+  echo "ERROR: expected FILE_ALREADY_INGESTED for a duplicate file_id" >&2
+  echo "$DUP_INGEST_RESP" >&2
+  exit 1
+fi
+echo "Duplicate file_id rejection: OK"
+
 # 12c. Ingest a Markdown file (exercises content-type dispatch)
 echo "--- Ingesting a text file ---"
 MD_BASE64=$(printf '# Smoke Notes\n\nThis is an ingested markdown document.\n' | base64 | tr -d '\n')

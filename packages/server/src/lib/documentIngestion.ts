@@ -111,6 +111,38 @@ const loadIngestibleFile = async (fileId: string) => {
   return file;
 };
 
+const createDocumentOrThrowConflict = async (args: {
+  file: InstanceType<(typeof db)['File']>;
+  fileId: string;
+  filename: string;
+  tags?: Record<string, string>;
+}) => {
+  try {
+    return await db.Document.create({
+      fileId: args.file.id,
+      title: args.filename,
+      status: 'pending',
+      metadata: JSON.stringify({ source_file_id: args.fileId }),
+      tags: args.tags ?? null,
+    });
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      error.name === 'SequelizeUniqueConstraintError'
+    ) {
+      const existing = await db.Document.findOne({
+        where: { fileId: args.file.id },
+      });
+      throw new DomainError(
+        'FILE_ALREADY_INGESTED',
+        `File '${args.fileId}' already backs Document '${existing?.publicId}'. Use POST /documents/${existing?.publicId}/ingest to re-process it, or upload a new copy of the file to ingest it separately.`,
+        { file_id: args.fileId, document_id: existing?.publicId }
+      );
+    }
+    throw error;
+  }
+};
+
 type IngestionPipelineArgs = ChunkConfigInput & {
   doc: InstanceType<(typeof db)['Document']>;
   attemptId: string;
@@ -272,12 +304,11 @@ export const enqueueDocumentIngestion = async (args: {
       : `/${filename}`
   );
 
-  const doc = await db.Document.create({
-    fileId: file.id,
-    title: filename,
-    status: 'pending',
-    metadata: JSON.stringify({ source_file_id: args.fileId }),
-    tags: args.tags ?? null,
+  const doc = await createDocumentOrThrowConflict({
+    file,
+    fileId: args.fileId,
+    filename,
+    tags: args.tags,
   });
 
   const docId = doc.id as number;

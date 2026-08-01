@@ -171,6 +171,12 @@ paths:
         type: PDFs are parsed page-by-page; `text/plain` and `text/markdown` files
         are read as a single source. How the source is chunked is controlled by
         `chunk_strategy`.
+
+        A file can only back one Document — a second call with the same `file_id`
+        returns `409 FILE_ALREADY_INGESTED`. To re-process an already-ingested file
+        (e.g. with a different `chunk_strategy`), use
+        `POST /documents/{document_id}/ingest`; to ingest the same source under a
+        different path, upload a new copy of the file first.
       operationId: ingestDocument
       x-iam-action: documents:IngestDocument
       parameters:
@@ -249,6 +255,12 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: The file already backs a Document (a file can only be ingested once). Use `POST /documents/{document_id}/ingest` to re-process the existing document, or upload a new copy of the file to ingest it separately.
           content:
             application/json:
               schema:

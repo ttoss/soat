@@ -148,6 +148,8 @@ Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid ove
 
 A content type with no built-in extractor and no matching [Ingestion Rule](./ingestion-rules.md) is rejected with `UNSUPPORTED_FILE_TYPE` (`400`).
 
+A file can back only one Document — `file_id` is unique across documents. Calling `POST /api/v1/documents/ingest` again with a `file_id` that already has a document returns `409 FILE_ALREADY_INGESTED`. To re-chunk or recover that same document (e.g. with a different `chunk_strategy`), use [Re-ingesting a Document](#re-ingesting-a-document) instead; to ingest the same source under a different path, upload a new copy of the file and ingest that.
+
 The extracted text is then split into one or more DocumentChunks according to `chunk_strategy`:
 
 - **`chunk_strategy: page`** (default) — one chunk per source page; `page_number` is set on each chunk (PDF only — non-paged sources yield a single chunk).
