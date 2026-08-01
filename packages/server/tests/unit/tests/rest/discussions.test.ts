@@ -340,38 +340,46 @@ describe('Discussions', () => {
     });
   });
 
-  describe('discussion-type tool', () => {
-    test('creates a tool referencing a discussion', async () => {
+  describe('invoking a discussion from a tool', () => {
+    // The `discussion` tool type was removed; a discussion is invoked from an
+    // agent or an orchestration through a `soat` tool bound to
+    // `create-discussion-run`, which runs the ordinary REST route and so is
+    // subject to discussions:CreateDiscussionRun like any other caller.
+    test('creates a soat tool bound to create-discussion-run with the discussion pinned', async () => {
       const created = await createDiscussion();
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
           name: 'ask-the-panel',
-          type: 'discussion',
-          parameters: {
-            type: 'object',
-            properties: { topic: { type: 'string' } },
-            required: ['topic'],
-          },
-          discussion_id: created.body.id,
+          type: 'soat',
+          actions: ['create-discussion-run'],
+          preset_parameters: { discussion_id: created.body.id },
         });
       expect(res.status).toBe(201);
-      expect(res.body.type).toBe('discussion');
-      expect(res.body.discussion_id).toBe(created.body.id);
+      expect(res.body.type).toBe('soat');
+      expect(res.body.actions).toEqual(['create-discussion-run']);
+      // Pinning the id here is what keeps `discussion_id` out of the schema the
+      // model sees, leaving `topic` as the only argument it supplies.
+      expect(res.body.preset_parameters).toEqual({
+        discussion_id: created.body.id,
+      });
+      expect(res.body.discussion_id).toBeUndefined();
     });
 
-    test('rejects a discussion tool referencing a missing discussion', async () => {
+    test('rejects the removed discussion tool type', async () => {
+      const created = await createDiscussion();
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
-          name: 'bad-panel',
+          name: 'ask-the-panel-legacy',
           type: 'discussion',
-          discussion_id: 'disc_missing',
+          preset_parameters: { discussion_id: created.body.id },
         });
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/unsupported tool type/i);
     });
   });
 
