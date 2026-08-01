@@ -15,6 +15,7 @@ describe('Documents', () => {
   let userToken: string;
   let projectId: string;
   let noPermToken: string;
+  let policyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -34,6 +35,7 @@ describe('Documents', () => {
     userToken = setup.userToken;
     projectId = setup.projectId;
     noPermToken = setup.noPermToken as string;
+    policyId = setup.policyId;
   });
 
   afterAll(() => {
@@ -1494,6 +1496,69 @@ describe('Documents', () => {
         .post(`/api/v1/documents/${docId}/ingest`)
         .send({});
       expect(res.status).toBe(403);
+    });
+  });
+
+  /**
+   * Both routes derive their project from `getDocumentStatus`, which returned
+   * the field as `projectId` while the permission check reads `project_id` —
+   * so `isAllowed` was called with `projectPublicId: undefined`. Only an
+   * **unscoped** API key surfaces it: that is the one credential whose usage
+   * attribution is deferred until a check is granted, and it then queries
+   * `Project.findOne({ where: { publicId: undefined } })`, which Sequelize
+   * rejects with a raw 500 (#801). A JWT session and a project-scoped key both
+   * bypass that path, which is why every existing test above passed.
+   */
+  describe('unscoped API key on document routes (issue #801)', () => {
+    let unscopedKey: string;
+    let docId: string;
+
+    beforeAll(async () => {
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({ name: 'docs unscoped key', policy_ids: [policyId] });
+      expect(keyRes.status).toBe(201);
+      expect(keyRes.body.project_id).toBeUndefined();
+      unscopedKey = keyRes.body.key as string;
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents')
+        .send({
+          project_id: projectId,
+          content: 'Unscoped key status content.',
+          filename: 'unscoped-801.txt',
+        });
+      expect(createRes.status).toBe(201);
+      docId = createRes.body.id as string;
+    });
+
+    test('GET /documents/:id/status succeeds', async () => {
+      const res = await authenticatedTestClient(unscopedKey).get(
+        `/api/v1/documents/${docId}/status`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(docId);
+      expect(res.body.status).toBe('ready');
+    });
+
+    test('POST /documents/:id/ingest (re-ingest) succeeds', async () => {
+      const res = await authenticatedTestClient(unscopedKey)
+        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .send({});
+
+      expect(res.status).toBe(201);
+      expect(res.body.id).toBe(docId);
+      expect(res.body.status).toBe('ready');
+    });
+
+    test('GET /documents/:id (unaffected route) still succeeds', async () => {
+      const res = await authenticatedTestClient(unscopedKey).get(
+        `/api/v1/documents/${docId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.project_id).toBe(projectId);
     });
   });
 });

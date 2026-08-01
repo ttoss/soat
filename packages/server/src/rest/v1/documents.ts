@@ -15,6 +15,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
+import type { ProjectOwned } from './helpers';
 import { checkAuth, resolveWriteProjectId } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 
@@ -42,8 +43,7 @@ const buildDocumentResources = (
   doc: {
     id: string;
     path?: string;
-    project_id?: string;
-  },
+  } & ProjectOwned,
   projectPublicId: string
 ): string[] => {
   const srn = buildSrn({
@@ -73,9 +73,8 @@ const checkDocumentPermission = async (
   doc: {
     id: string;
     path?: string;
-    project_id?: string;
     tags?: Record<string, unknown>;
-  },
+  } & ProjectOwned,
   action: string
 ): Promise<boolean> => {
   const context = buildDocumentContext(doc);

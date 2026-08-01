@@ -135,6 +135,31 @@ field named. It only logs an undeclared *snake_case* key, because that is
 pre-existing spec drift (~1900 cases, tracked in `tests/unit/openapiContract.ts`)
 rather than the bug this rule is about.
 
+Two static source checks cover the keys a middleware never sees, because they
+never reach a body:
+
+| Test | Catches |
+|---|---|
+| `rest/wireKeyContract.test.ts` | a handler **reading** a camelCase key off `ctx.request.body` / `ctx.query` — a name no client sends |
+| `lib/libReturnKeyContract.test.ts` | a lib function **returning** a camelCase key inside an otherwise snake_case object literal — a name no consumer reads |
+
+The second is the response-side twin, and #801 is why it exists.
+`getDocumentStatus` returned `projectId` next to `chunk_count`; the field it fed
+was the route's permission check, not the response body, so `responseContract`
+never saw it. Every consumer read `project_id`, got `undefined`, and the
+authorization call reached the DB with an undefined `WHERE` binding — a raw 500
+for any unscoped API key, on two routes that already had passing tests.
+
+Neither check needs a field allowlist. The lib-return rule is per-object-literal:
+a literal carrying at least one snake_case key is wire-shaped and must not also
+carry a camelCase key. An all-camelCase literal is internal (lib args, a
+Sequelize `where`) and is not wire-shaped, so it is never flagged.
+
+A permission helper that receives such a resource types the field as
+`ProjectOwned` (`rest/v1/helpers.ts`) — required but possibly `undefined` —
+rather than `project_id?: string`. The optional form accepts an object that is
+missing the field entirely, which is what let #801 typecheck.
+
 ## Adding a new field
 
 1. Add it in **camelCase** to the model and lib args.

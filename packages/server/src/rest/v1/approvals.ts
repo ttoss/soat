@@ -9,6 +9,7 @@ import {
 } from 'src/lib/approvals';
 import { buildSrn } from 'src/lib/iam';
 
+import type { ProjectOwned } from './helpers';
 import { parsePagination } from './helpers';
 
 const approvalsRouter = new Router<Context>();
@@ -21,7 +22,7 @@ const approvalsRouter = new Router<Context>();
  * resource defaults to `*`, which such a policy cannot match, wrongly denying
  * get/approve/reject while `list` (already SRN-checked) succeeds.
  */
-const approvalSrn = (approval: { project_id?: string; id: string }): string => {
+const approvalSrn = (approval: { id: string } & ProjectOwned): string => {
   return buildSrn({
     projectPublicId: approval.project_id!,
     resourceType: 'approval',
