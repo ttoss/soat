@@ -93,6 +93,28 @@ describe('agentNonStreamGeneration', () => {
     expect(prepareStep!({ stepNumber: 0 })).toEqual({});
   });
 
+  test('buildPrepareStep honors a string tool_choice, not just a named tool', async () => {
+    // `tool_choice` accepts the strings "auto" / "required" / "none" as well as
+    // the { type: "tool" } object, at the agent level and inside a step rule
+    // alike. Forcing *some* tool call on the first step — without naming which
+    // tool, because that varies per message — is the whole point of a rule like
+    // { step: 1, tool_choice: "required" }: agent-level "required" applies to
+    // every step and never lets the run stop, so the string form has to work
+    // here or the rule is a silent no-op.
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [{ step: 1, tool_choice: 'required' }],
+      logContext: 'non_stream',
+    });
+
+    expect(prepareStep).toBeDefined();
+    // Step 1 forces a tool call, and leaves the active tool set alone: no
+    // specific tool is named, so every bound tool stays available.
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({ toolChoice: 'required' });
+    // Later steps fall back to the agent's own tool_choice.
+    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+  });
+
   test('buildPrepareStep honors the wire-shaped (snake_case) step rule keys', async () => {
     // step_rules are stored verbatim from the request body, and the wire is
     // snake_case: { step, tool_choice: { type, tool_name } } is the documented

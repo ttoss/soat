@@ -258,6 +258,9 @@ const buildPrepareStep = (
     const ruleToolChoice = normalizeToolChoice(
       rule?.tool_choice ?? rule?.toolChoice
     );
+    if (ruleToolChoice === undefined) {
+      return {};
+    }
     if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
       log(
         'prepareStep (stream): forcing toolChoice=%s',
@@ -268,7 +271,11 @@ const buildPrepareStep = (
         activeTools: [ruleToolChoice.toolName],
       };
     }
-    return {};
+    // A string choice ('auto' | 'required' | 'none') overrides the agent's own
+    // tool_choice for this step and nothing else — see the matching comment in
+    // agentNonStreamGeneration.ts's buildPrepareStep.
+    log('prepareStep (stream): overriding toolChoice=%s', ruleToolChoice);
+    return { toolChoice: ruleToolChoice };
   };
 };
 
