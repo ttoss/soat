@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.4](https://github.com/ttoss/soat/compare/v0.18.3...v0.18.4) (2026-08-01)
+
+### Bug Fixes
+
+* **agents:** apply active_tool_ids and validate its references ([#812](https://github.com/ttoss/soat/issues/812)) ([f516c57](https://github.com/ttoss/soat/commit/f516c5706dcb1d5fa5b81d2f153791ba5deec6c5)), closes [#811](https://github.com/ttoss/soat/issues/811) [#809](https://github.com/ttoss/soat/issues/809)
+
 ## [0.18.3](https://github.com/ttoss/soat/compare/v0.18.2...v0.18.3) (2026-08-01)
 
 ### Bug Fixes

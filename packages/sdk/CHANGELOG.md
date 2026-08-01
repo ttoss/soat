@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.4](https://github.com/ttoss/soat/compare/v0.18.3...v0.18.4) (2026-08-01)
+
+**Note:** Version bump only for package @soat/sdk
+
 ## [0.18.3](https://github.com/ttoss/soat/compare/v0.18.2...v0.18.3) (2026-08-01)
 
 **Note:** Version bump only for package @soat/sdk
