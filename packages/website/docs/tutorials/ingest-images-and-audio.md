@@ -512,7 +512,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$IMAGE_FILE_ID\",\"path_prefix\":\"/images/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 ```
 
 </TabItem>
@@ -862,7 +862,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$AUDIO_FILE_ID\",\"path_prefix\":\"/audio/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 ```
 
 </TabItem>

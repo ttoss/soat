@@ -303,11 +303,11 @@ Ingestion is **asynchronous by default**: the endpoint returns `202 Accepted` wi
 `status: pending` and processing runs in the background (see
 [Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion)). Here
 we pass `--async false` so the call blocks until the document is `ready` and the
-response carries the final `chunk_count` — that way the next steps can search the
-chunks immediately without polling.
+response carries the final `chunk_count` (under `.metadata`) — that way the next steps
+can search the chunks immediately without polling.
 
 The default `page` chunk strategy produces **one chunk per page** — these PDFs are one
-page each, so `chunk_count` is `1`.
+page each, so `metadata.chunk_count` is `1`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -317,14 +317,14 @@ soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$PRINTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 
 soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$ROUTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 ```
 
@@ -340,7 +340,7 @@ const { data: printerDoc } = await adminSoat.documents.ingestDocument({
     path_prefix: '/manuals/',
   },
 });
-console.log(printerDoc.status, printerDoc.chunk_count); // "ready" 1
+console.log(printerDoc.status, printerDoc.metadata?.chunk_count); // "ready" 1
 
 const { data: routerDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
@@ -350,7 +350,7 @@ const { data: routerDoc } = await adminSoat.documents.ingestDocument({
     path_prefix: '/manuals/',
   },
 });
-console.log(routerDoc.status, routerDoc.chunk_count); // "ready" 1
+console.log(routerDoc.status, routerDoc.metadata?.chunk_count); // "ready" 1
 ```
 
 </TabItem>
@@ -361,13 +361,13 @@ curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 
 curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$ROUTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 ```
 
 </TabItem>
@@ -397,7 +397,7 @@ soat ingest-document \
   --chunk-strategy "size" \
   --chunk-size 60 \
   --chunk-overlap 10 \
-  --async false | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 3 }   # multiple windows from one page
 ```
 
@@ -416,7 +416,7 @@ const { data: sized } = await adminSoat.documents.ingestDocument({
     chunk_overlap: 10,
   },
 });
-console.log(sized.status, sized.chunk_count); // "ready" > 1
+console.log(sized.status, sized.metadata?.chunk_count); // "ready" > 1
 ```
 
 </TabItem>
@@ -427,7 +427,7 @@ curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \
-  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
+  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 ```
 
 </TabItem>
