@@ -729,6 +729,10 @@ describe('Documents', () => {
         });
       expect(firstRes.status).toBe(202);
 
+      // Wait for the background pipeline to finish so it doesn't race with
+      // (and steal) a later test's extractPdfPagesSpy.mockResolvedValueOnce.
+      await waitForDocumentStatus(firstRes.body.id as string, 'ready');
+
       const secondRes = await authenticatedTestClient(userToken)
         .post('/api/v1/documents/ingest')
         .send({
