@@ -4,16 +4,24 @@ Releases are fully automated once a release PR is merged into `main`. This docum
 
 ## Release Flow
 
-### 1. Release PR (CI validation)
+### 1. Release PR (no re-validation)
 
-Open a release PR (`release/vX.Y.Z` → `main`) by running `pnpm lerna version` locally or in a Claude Code session.
+Open a release PR (conventionally `release/vX.Y.Z` → `main`, though the branch name itself
+drives nothing) by running `pnpm lerna version` locally or in a Claude Code session, with a
+PR title that starts with `chore(release):`.
 
-GitHub Actions runs on the PR:
-- `build-and-test` — TypeScript, lint, unit tests
-- `smoke-test` — end-to-end smoke tests
-- `tutorials-test` — tutorial CLI flows
+`pr.yml` skips `build-test-and-deploy`, `smoke-test`, and `tutorials-test` (and the
+`changes`/`docs-lint` jobs) whenever the PR title starts with `chore(release):` —
+`if: "!startsWith(github.event.pull_request.title, 'chore(release):')"` on each job. The
+commits a release PR bundles were already validated on `main` before the version bump;
+re-running the full suite (which includes the slow smoke and tutorials stacks) on a
+changelog/version-only diff is redundant. `all-checks` treats a `skipped` dependency the
+same as `success`, so the required status check still passes.
 
-Branch protection requires all checks to pass before the PR can be merged.
+This means branch protection does **not** re-validate a release PR's contents — it passes
+on the strength of the title alone. Get the title right (`chore(release): ...`) or the
+full suite runs unnecessarily; conversely, never put unreviewed non-release code on a
+branch with that PR title, since CI will wave it through.
 
 ### 2. Merge → automated release
 
