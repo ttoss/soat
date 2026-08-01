@@ -265,6 +265,11 @@ export const ERROR_CODES = {
     description:
       'The file is too large to ingest synchronously. Retry without `?async=false` (or with `?async=true`) to run ingestion in the background and poll the document status.',
   },
+  FILE_ALREADY_INGESTED: {
+    httpStatus: 409,
+    description:
+      'The file already backs a Document (a file can only be ingested once). Use POST /documents/{document_id}/ingest to re-process the existing document, or upload a new copy of the file to ingest it under a different path/strategy.',
+  },
   PIPELINE_INVALID_STEP: {
     httpStatus: 400,
     description:

@@ -383,16 +383,25 @@ text into fixed-size character windows (`chunk_size` / `chunk_overlap`) for shar
 retrieval. The trade-off: `size` chunks are not page-aligned, so they carry no `page`
 number for citations.
 
-Re-ingest the printer PDF into a separate path with small windows to see multiple
-chunks from the same one-page file:
+A [file can only back one Document](/docs/modules/documents#file-ingestion-and-chunking) —
+`$PRINTER_FILE_ID` is already ingested from Step 6, so re-ingesting it directly would
+return `409 FILE_ALREADY_INGESTED`. Upload a second copy of the same PDF bytes and
+ingest *that* file into the new path with small windows to see multiple chunks from
+the same one-page source:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
+PRINTER_FILE_ID_SIZE=$(soat upload-file-base64 \
+  --project-id "$PROJECT_ID" \
+  --filename "printer-x1000.pdf" \
+  --content-type "application/pdf" \
+  --content "$PRINTER_PDF_B64" | jq -r '.id')
+
 soat ingest-document \
   --project-id "$PROJECT_ID" \
-  --file-id "$PRINTER_FILE_ID" \
+  --file-id "$PRINTER_FILE_ID_SIZE" \
   --path-prefix "/manuals-size/" \
   --chunk-strategy "size" \
   --chunk-size 60 \
@@ -405,11 +414,20 @@ soat ingest-document \
 <TabItem value="sdk" label="SDK">
 
 ```ts
+const { data: printerFileSize } = await adminSoat.files.uploadFileBase64({
+  body: {
+    project_id: PROJECT_ID,
+    filename: 'printer-x1000.pdf',
+    content_type: 'application/pdf',
+    content: PRINTER_PDF_B64,
+  },
+});
+
 const { data: sized } = await adminSoat.documents.ingestDocument({
   query: { async: false },
   body: {
     project_id: PROJECT_ID,
-    file_id: PRINTER_FILE_ID,
+    file_id: printerFileSize.id,
     path_prefix: '/manuals-size/',
     chunk_strategy: 'size',
     chunk_size: 60,
@@ -423,10 +441,16 @@ console.log(sized.status, sized.metadata?.chunk_count); // "ready" > 1
 <TabItem value="curl" label="curl">
 
 ```bash
+PRINTER_FILE_ID_SIZE=$(curl -s -X POST "$SOAT_URL/api/v1/files/upload/base64" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"printer-x1000.pdf\",\"content_type\":\"application/pdf\",\"content\":\"$PRINTER_PDF_B64\"}" \
+  | jq -r '.id')
+
 curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID_SIZE\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \
   | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
 ```
 

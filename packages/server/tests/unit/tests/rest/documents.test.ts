@@ -713,6 +713,43 @@ describe('Documents', () => {
       expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
     });
 
+    test('re-ingesting the same file_id into a different path returns 409 FILE_ALREADY_INGESTED (issue #797)', async () => {
+      const fileId = await uploadFile({
+        buffer: ONE_PAGE_PDF_BUFFER,
+        filename: 'duplicate.pdf',
+        contentType: 'application/pdf',
+      });
+
+      const firstRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          path_prefix: '/manuals/',
+        });
+      expect(firstRes.status).toBe(202);
+
+      // Wait for the background pipeline to finish so it doesn't race with
+      // (and steal) a later test's extractPdfPagesSpy.mockResolvedValueOnce.
+      await waitForDocumentStatus(firstRes.body.id as string, 'ready');
+
+      const secondRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/documents/ingest')
+        .send({
+          file_id: fileId,
+          project_id: projectId,
+          path_prefix: '/manuals-size/',
+          chunk_strategy: 'size',
+          chunk_size: 60,
+          chunk_overlap: 10,
+        });
+
+      expect(secondRes.status).toBe(409);
+      expect(secondRes.body.error.code).toBe('FILE_ALREADY_INGESTED');
+      expect(secondRes.body.error.meta.file_id).toBe(fileId);
+      expect(secondRes.body.error.meta.document_id).toBe(firstRes.body.id);
+    });
+
     test('3-page PDF produces chunk_count=3 with default page strategy', async () => {
       extractPdfPagesSpy.mockResolvedValueOnce([
         'Page 1: Introduction',
