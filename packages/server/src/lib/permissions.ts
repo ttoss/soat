@@ -1,9 +1,49 @@
+import createDebug from 'debug';
+
 import type { DB } from '../db';
 import {
   evaluatePolicies,
   evaluatePoliciesMultiResource,
   type PolicyDocument,
 } from './iam';
+
+const log = createDebug('soat:permissions');
+
+/**
+ * Rejects an authorization check that names no project.
+ *
+ * Every project authorization in the codebase funnels through one of the
+ * `isAllowed` implementations below, which makes this the one place that can
+ * make "the route failed to resolve a project" a **safe, uniform outcome** for
+ * every module at once, instead of a per-module hazard.
+ *
+ * Without it the missing value flows onward: the admin branch returns `true`
+ * without ever inspecting `projectPublicId`, and the granted check then hands
+ * `undefined` to the usage-attribution wrapper, whose `Project.findOne` throws
+ * on the undefined `WHERE` binding — a raw 500 on a route that is otherwise
+ * fine (#801). Denying instead is the correct direction: a check that cannot
+ * name its project has not proven access to one, so it gets `403`, no usage is
+ * attributed, and the cause is logged rather than swallowed.
+ *
+ * This is a backstop, not the contract. `ProjectOwned` in `rest/v1/helpers.ts`
+ * is what makes a resource missing `project_id` a compile error; this catches
+ * the paths types cannot reach (an association that resolved empty, a project
+ * deleted mid-request).
+ */
+const hasProjectPublicId = (args: {
+  projectPublicId: string;
+  action: string;
+}): boolean => {
+  if (typeof args.projectPublicId === 'string' && args.projectPublicId !== '') {
+    return true;
+  }
+  log(
+    'isAllowed: denying action=%s — no projectPublicId (got %o)',
+    args.action,
+    args.projectPublicId
+  );
+  return false;
+};
 
 /** Evaluates a policy set against either a single resource or a resource list. */
 const evalDocs = (args: {
@@ -77,6 +117,15 @@ export const createApiKeyIsAllowed = (args: {
     resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
+    if (
+      !hasProjectPublicId({
+        projectPublicId: reqArgs.projectPublicId,
+        action: reqArgs.action,
+      })
+    ) {
+      return false;
+    }
+
     // Hard project scope: if the key is scoped to a project, reject cross-project access
     if (
       args.apiKeyProjectPublicId &&
@@ -146,6 +195,15 @@ export const createJwtIsAllowed = (args: {
     resources?: string[];
     context?: Record<string, string>;
   }): Promise<boolean> => {
+    if (
+      !hasProjectPublicId({
+        projectPublicId: reqArgs.projectPublicId,
+        action: reqArgs.action,
+      })
+    ) {
+      return false;
+    }
+
     if (args.role === 'admin') return true;
 
     if (args.userPolicyIds.length === 0) return false;

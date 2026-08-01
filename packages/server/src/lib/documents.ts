@@ -253,8 +253,10 @@ export const getDocumentStatus = async (args: { id: string }) => {
     }),
     error: doc.status === 'failed' ? failureReason : undefined,
     // Context for the route's permission check — not part of the public
-    // status response shape.
-    projectId: mapped.project_id,
+    // status response shape. Named as the wire names it (`project_id`, not
+    // `projectId`): every consumer of a lib return reads the snake_case key,
+    // and a camelCase twin here silently resolves to `undefined` (#801).
+    project_id: mapped.project_id,
     path: mapped.path,
     tags: mapped.tags,
   };

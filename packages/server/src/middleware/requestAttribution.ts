@@ -111,6 +111,18 @@ const deferAttributionUntilAuthorized = (args: {
     // otherwise pay for a project query it cannot act on.
     if (ctx.state.requestAttributed) return;
 
+    // A granted check that names no project cannot be metered — and must not
+    // take the request down trying. Sequelize throws on a `WHERE` bound to
+    // `undefined`, and because that is not a `DomainError` it surfaced as a raw
+    // 500 on an otherwise valid route (#801). `isAllowed` now denies such a
+    // check outright, so this is unreachable through the normal path; it stays
+    // as the last line of the same fail-open philosophy this module applies to
+    // every other metering error.
+    if (!projectPublicId) {
+      log('attributeByProjectPublicId: no projectPublicId — not attributing');
+      return;
+    }
+
     // The numeric id is what the counter and the quota window are keyed by. A
     // miss means the project was deleted between the route's lookup and now;
     // there is nothing left to meter.

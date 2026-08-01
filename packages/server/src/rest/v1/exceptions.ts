@@ -8,6 +8,7 @@ import {
 } from 'src/lib/exceptions';
 import { buildSrn } from 'src/lib/iam';
 
+import type { ProjectOwned } from './helpers';
 import { parsePagination } from './helpers';
 
 const exceptionsRouter = new Router<Context>();
@@ -15,10 +16,7 @@ const exceptionsRouter = new Router<Context>();
 // Item-level SRN so a project-scoped principal (whose policy grants an SRN
 // pattern, never the bare `*`) is authorized on get/acknowledge/resolve — see
 // the equivalent note in approvals.ts.
-const exceptionSrn = (exception: {
-  project_id?: string;
-  id: string;
-}): string => {
+const exceptionSrn = (exception: { id: string } & ProjectOwned): string => {
   return buildSrn({
     projectPublicId: exception.project_id!,
     resourceType: 'exception',

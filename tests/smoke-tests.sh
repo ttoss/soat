@@ -726,7 +726,49 @@ if [ "$REINGEST_STATUS" != "ready" ]; then
 fi
 echo "Re-ingest: OK"
 
-# 12f. Ingestion Rules — route a non-native content type to a converter.
+# 12f. Both of the above again with an UNSCOPED api-key (issue #801).
+#
+# Every step so far runs as $TOKEN, a login JWT — and a JWT is exempt from
+# request attribution, so it never exercises the deferred-attribution path that
+# an unscoped key takes. That is precisely why #801 (get-document-status and
+# reingest-document returning 500 for any unscoped key) reached production with
+# both routes already covered above. An unscoped key is the shape a platform
+# integration uses for its shared service credential, so it is worth a pass of
+# its own on any route that derives its project from a parent resource.
+echo "--- Re-checking document status/re-ingest with an unscoped api-key ---"
+DOC_UNSCOPED_KEY_RESP=$($SOAT_CLI create-api-key --name smoke-docs-unscoped-key)
+DOC_UNSCOPED_KEY_ID=$(printf '%s\n' "$DOC_UNSCOPED_KEY_RESP" | jq -r '.id')
+DOC_UNSCOPED_KEY_RAW=$(printf '%s\n' "$DOC_UNSCOPED_KEY_RESP" | jq -r '.key')
+if [ -z "$DOC_UNSCOPED_KEY_RAW" ] || [ "$DOC_UNSCOPED_KEY_RAW" = "null" ]; then
+  echo "ERROR: Failed to create unscoped api-key for document routes" >&2
+  echo "$DOC_UNSCOPED_KEY_RESP" >&2
+  exit 1
+fi
+
+UNSCOPED_STATUS_RESP=$(SOAT_TOKEN="$DOC_UNSCOPED_KEY_RAW" $SOAT_CLI get-document-status \
+  --document-id "$PDF_DOC_ID")
+UNSCOPED_STATUS=$(printf '%s\n' "$UNSCOPED_STATUS_RESP" | jq -r '.status')
+if [ "$UNSCOPED_STATUS" != "ready" ]; then
+  echo "ERROR: get-document-status with an unscoped key expected 'ready', got '$UNSCOPED_STATUS'" >&2
+  echo "$UNSCOPED_STATUS_RESP" >&2
+  exit 1
+fi
+
+UNSCOPED_REINGEST_RESP=$(SOAT_TOKEN="$DOC_UNSCOPED_KEY_RAW" $SOAT_CLI reingest-document \
+  --document-id "$PDF_DOC_ID" \
+  --async false \
+  --chunk-strategy whole)
+UNSCOPED_REINGEST_STATUS=$(printf '%s\n' "$UNSCOPED_REINGEST_RESP" | jq -r '.status')
+if [ "$UNSCOPED_REINGEST_STATUS" != "ready" ]; then
+  echo "ERROR: reingest-document with an unscoped key expected 'ready', got '$UNSCOPED_REINGEST_STATUS'" >&2
+  echo "$UNSCOPED_REINGEST_RESP" >&2
+  exit 1
+fi
+
+$SOAT_CLI delete-api-key --api-key-id "$DOC_UNSCOPED_KEY_ID"
+echo "Unscoped-key document routes: OK"
+
+# 12g. Ingestion Rules — route a non-native content type to a converter.
 # The converter is a deterministic stub: a pipeline tool wrapping an http tool
 # that calls the SOAT server's own GET /projects (no external provider
 # needed), with its output mapped to a fixed extracted-text page.
@@ -814,7 +856,7 @@ $SOAT_CLI delete-tool --tool-id "$CONVERTER_TOOL_ID"
 $SOAT_CLI delete-tool --tool-id "$CONVERTER_HTTP_TOOL_ID"
 echo "Ingestion rule resources cleaned up."
 
-# 12g. Async conversion — a converter deferring with { status: "pending" }
+# 12h. Async conversion — a converter deferring with { status: "pending" }
 # leaves the document `processing` instead of failing, and the new
 # ingestion-callback endpoint is live (a bad token is rejected with 401).
 # The pipeline's fixed `output` always returns the deferral, regardless of

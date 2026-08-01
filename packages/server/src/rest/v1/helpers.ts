@@ -46,6 +46,26 @@ const assertCredentialProjectScope = (args: {
 };
 
 /**
+ * The project-owning field of a resource a route authorizes against, declared
+ * **required but possibly `undefined`** rather than optional (`project_id?:`).
+ *
+ * The distinction is the whole point. A lib return whose `project_id` is a
+ * mapped-but-empty association satisfies this type; a lib return that is
+ * *missing the field altogether* — because a mapper named it `projectId`, or
+ * forgot it — does not, and fails to typecheck at the helper boundary.
+ *
+ * `project_id?: string` accepted both, which is how #801 shipped: the object
+ * type-checked, `doc.project_id` was `undefined` at runtime, and the
+ * authorization call then reached the DB with an undefined `WHERE` binding and
+ * threw a raw 500. Excess-property checking does not cover it — the object is
+ * passed as a variable, not an inline literal.
+ *
+ * Intersect it into the resource shape a permission helper accepts:
+ * `doc: { id: string; path?: string } & ProjectOwned`.
+ */
+export type ProjectOwned = { project_id: string | undefined };
+
+/**
  * Parses `limit` / `offset` list pagination params from the query string.
  * Returns `undefined` for a param that is absent or not a valid integer, so the
  * lib layer applies its own defaults/bounds (see `lib/pagination.ts`).
