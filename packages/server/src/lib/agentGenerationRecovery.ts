@@ -8,6 +8,7 @@ import {
   type TypedAgent,
 } from './agentGenerationHelpers';
 import { buildModel } from './agentModel';
+import { narrowToActiveTools } from './agents';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -123,7 +124,11 @@ const resolveRecoveryTools = async (args: {
   const bindings = readAgentToolBindings(args.typedAgent);
   const legacyViews = deriveLegacyToolFields(bindings);
   return resolveAgentTools({
-    toolIds: legacyViews.toolIds ?? [],
+    // A resumed run is restricted exactly like the run it resumes.
+    toolIds: narrowToActiveTools({
+      toolIds: legacyViews.toolIds ?? [],
+      activeToolIds: args.typedAgent.activeToolIds,
+    }),
     tools: legacyViews.tools,
     projectId,
     projectIds: args.projectIds,

@@ -14,6 +14,7 @@ import {
   normalizeKnowledgeConfig,
 } from './agentKnowledge';
 import { buildModel } from './agentModel';
+import { narrowToActiveTools } from './agents';
 import { resolveServedAgentVersion } from './agentServedVersion';
 import {
   deriveLegacyToolFields,
@@ -170,7 +171,13 @@ const resolveGenerationTools = async (args: {
     guardrailContext: args.guardrailContext,
   });
   const resolvedTools = await resolveAgentTools({
-    toolIds: legacyViews.toolIds ?? [],
+    // `active_tool_ids` narrows the bound set before resolution — filtering ids
+    // here rather than resolved tools afterwards avoids needing an id→name map
+    // on this path.
+    toolIds: narrowToActiveTools({
+      toolIds: legacyViews.toolIds ?? [],
+      activeToolIds: args.typedAgent.activeToolIds,
+    }),
     tools: legacyViews.tools,
     projectId: args.typedAgent.project.id as number,
     projectIds: args.projectIds,

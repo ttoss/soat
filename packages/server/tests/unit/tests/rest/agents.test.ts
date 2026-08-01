@@ -608,6 +608,43 @@ describe('Agents', () => {
       expect(response.status).toBe(201);
       expect(response.body.single_session_per_actor).toBe(true);
     });
+
+    test('accepts an active_tool_ids entry naming a real tool in the project', async () => {
+      const tool = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({ project_id: projectId, name: 'active-tools-ok', type: 'http' });
+      expect(tool.status).toBe(201);
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          tool_bindings: [{ tool_id: tool.body.id }],
+          active_tool_ids: [tool.body.id],
+        });
+
+      expect(response.status).toBe(201);
+      expect(response.body.active_tool_ids).toEqual([tool.body.id]);
+    });
+
+    test('rejects an active_tool_ids entry that names no tool in the project', async () => {
+      // `active_tool_ids` is a declared reference (`x-soat-ref: tools`) and
+      // narrows the agent's tool surface at generation time, so an unknown id
+      // has to fail on write rather than silently disarm a tool (#811) — the
+      // same contract `guardrail_ids` already had.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          active_tool_ids: ['tool_doesNotExist9999'],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('TOOL_NOT_FOUND');
+      expect(response.body.error.message).toMatch(/tool_doesNotExist9999/);
+    });
   });
 
   describe('GET /api/v1/agents', () => {

@@ -262,7 +262,11 @@ Example — stop after the model calls a `done` tool **or** after 50 steps:
 
 By default, all bound tools are available at every step. Use `active_tool_ids` to restrict which tools the model can see globally. For phased workflows where different steps need different tools, use [Step Rules](#step-rules) instead.
 
-`active_tool_ids` must be a subset of the persisted tool IDs bound via `tool_bindings` (the `tool_id` entries). If omitted, all bound tools are active.
+`active_tool_ids` must be a subset of the persisted tool IDs bound via `tool_bindings` (the `tool_id` entries). An id naming no tool in the project is rejected with `400 TOOL_NOT_FOUND`.
+
+Omitting the field — or passing `null` or `[]` — leaves all bound tools active. An empty list means "no restriction" rather than "no tools": an agent with nothing active could never act, so it is read as the absence of a restriction.
+
+Inline (ephemeral) `tool` bindings have no ID, so they cannot be named here and stay active whatever the restriction is. To keep an inline tool out of a run, drop the binding.
 
 ### Generation Loop
 
