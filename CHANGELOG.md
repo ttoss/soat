@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.3](https://github.com/ttoss/soat/compare/v0.18.2...v0.18.3) (2026-08-01)
+
+### Bug Fixes
+
+* **agents:** honor a string tool_choice in step_rules ([#808](https://github.com/ttoss/soat/issues/808)) ([9b77816](https://github.com/ttoss/soat/commit/9b77816eae97571363439bd579353403c6922df2)), closes [arantespp/assistentelets#34](https://github.com/arantespp/assistentelets/issues/34)
+
 ## [0.18.2](https://github.com/ttoss/soat/compare/v0.18.1...v0.18.2) (2026-08-01)
 
 ### Bug Fixes
