@@ -22,7 +22,6 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
-import { runDiscussion } from './discussionRuns';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   resolveSecretRefsInRecord,
@@ -606,38 +605,6 @@ const resolveClientTool = (typedTool: {
   });
 };
 
-const resolveDiscussionTool = (
-  typedTool: {
-    name: string;
-    description: string | null;
-    parameters: Record<string, unknown> | null;
-    discussion: { discussionId: string } | null;
-  },
-  args: { traceId?: string }
-): Tool => {
-  const discussionId = typedTool.discussion?.discussionId ?? '';
-  const parameters =
-    typeof typedTool.parameters === 'string'
-      ? (JSON.parse(typedTool.parameters) as Record<string, unknown>)
-      : typedTool.parameters;
-  return tool({
-    description: typedTool.description ?? undefined,
-    inputSchema: jsonSchema(parameters ?? { type: 'object', properties: {} }),
-    execute: async (input: Record<string, unknown>) => {
-      const run = await runDiscussion({
-        discussionId,
-        topic: String(input.topic ?? ''),
-        initiatorGenerationId:
-          typeof input.initiatorGenerationId === 'string'
-            ? input.initiatorGenerationId
-            : undefined,
-        traceId: args.traceId ?? null,
-      });
-      return { outcome: run.outcome, run_id: run.id };
-    },
-  });
-};
-
 const resolveMcpToolEntry = async (
   typedTool: AgentToolRow,
   toolContext?: Record<string, string>
@@ -690,7 +657,6 @@ type AgentToolRow = {
     | string
     | null;
   mcp: { url: string; headers?: Record<string, string> } | null;
-  discussion: { discussionId: string } | null;
   actions: string[] | null;
   deniedActions: string[] | null;
   presetParameters: Record<string, unknown> | null;
@@ -717,9 +683,8 @@ const wrapExecuteWithOutputMapping = (
 /**
  * The parameter schema to hand the justification-field injector, or `undefined`
  * to skip injection. Only `http` and `pipeline` tools carry their full
- * model-visible schema in `typedTool.parameters`; `discussion` builds a
- * `{ topic }` schema internally, and `mcp`/`soat` schemas are remote/per-action,
- * so those are gated without justification-field injection.
+ * model-visible schema in `typedTool.parameters`; `mcp`/`soat` schemas are
+ * remote/per-action, so those are gated without justification-field injection.
  */
 const localInjectableSchema = (
   typedTool: AgentToolRow
@@ -830,13 +795,6 @@ const resolveToolByType = async (
         isSoatActionAllowedByBoundary,
         logToolCallingError,
       });
-    case 'discussion':
-      if (!typedTool.discussion?.discussionId) return {};
-      return {
-        [typedTool.name]: resolveDiscussionTool(typedTool, {
-          traceId: args.traceId,
-        }),
-      };
     default:
       return {};
   }
@@ -870,9 +828,6 @@ const ephemeralDefinitionToRow = (
     ),
     execute: orNull(definition.execute as AgentToolRow['execute']),
     mcp: orNull(definition.mcp as AgentToolRow['mcp']),
-    discussion: definition.discussionId
-      ? { discussionId: definition.discussionId }
-      : null,
     actions: orNull(definition.actions),
     deniedActions: orNull(definition.deniedActions),
     presetParameters: orNull(

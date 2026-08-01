@@ -166,7 +166,6 @@ type WireInlineToolDefinition = {
   denied_actions?: string[];
   preset_parameters?: object;
   pipeline?: object;
-  discussion_id?: string;
   output_mapping?: object;
 };
 
@@ -179,7 +178,6 @@ const INLINE_TOOL_FIELD_PAIRS: Array<
 > = [
   ['deniedActions', 'denied_actions'],
   ['presetParameters', 'preset_parameters'],
-  ['discussionId', 'discussion_id'],
   ['outputMapping', 'output_mapping'],
 ];
 

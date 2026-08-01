@@ -13,9 +13,9 @@ import TabItem from '@theme/TabItem';
 
 # Review Panel: Check a Draft's Fundamentals and Tone
 
-This tutorial builds a real editorial workflow: a **writer agent** produces a draft, then hands it to a **review panel** — two reviewers that check the *fundamentals* (factual accuracy and logical structure) and one reviewer that checks the *voice and tone*. A final **synthesis** pass weighs all three reviews into a single, actionable verdict the writer can act on.
+This tutorial builds a real editorial pipeline: a **writer agent** produces a draft, a **review panel** grades it — two reviewers check the *fundamentals* (factual accuracy and logical structure) and one checks the *voice and tone* — and a **reviser agent** applies the verdict. A **synthesis** pass weighs all three reviews into the single, actionable verdict the reviser reads.
 
-The panel is a [Discussion](/docs/modules/discussions) — a reusable deliberation config whose participants are tool-less "voices". The writer invokes it mid-loop through a [`discussion`-type tool](/docs/modules/tools#discussion), passing its own draft as the topic. This is how deep thinking works in SOAT after it moved off the agent's old `reasoning` config — see [Migrating from agent reasoning](/docs/modules/discussions#migrating-from-agent-reasoning).
+The panel is a [Discussion](/docs/modules/discussions) — a reusable deliberation config whose participants are tool-less "voices". You expose it as a [`soat` tool](/docs/modules/tools#soat) bound to `create-discussion-run`, then call that tool from a **`tool` node in an [orchestration](/docs/modules/orchestrations)**. Because the review sits on an edge of the graph rather than in an agent's toolbelt, it always runs — no model decides whether to consult the panel. This is how deep thinking works in SOAT after it moved off the agent's old `reasoning` config — see [Migrating from agent reasoning](/docs/modules/discussions#migrating-from-agent-reasoning).
 
 You will:
 
@@ -26,15 +26,16 @@ You will:
    - `Logic Reviewer` — checks the argument is well-structured and free of gaps.
    - `Voice & Tone Reviewer` — checks the writing matches the intended voice.
 4. Run the panel directly on a sample draft to see the synthesized verdict.
-5. Wrap the panel in a `discussion`-type tool.
-6. Create a writer agent that drafts text and then calls the panel to review it.
-7. Run a generation and observe the writer consulting the panel.
+5. Wrap the panel in a `soat` tool bound to `create-discussion-run`.
+6. Create a **writer** agent and a **reviser** agent.
+7. Wire `draft → review → revise` into an orchestration whose middle step is a `tool` node calling the panel.
+8. Start a run and read the draft, the verdict, and the revision out of the run state.
 
 By the end you will understand:
 
 - How to model a multi-reviewer review as participants plus a synthesis pass.
 - Why a single reviewer for `fundamentals` and a separate one for `tone` beats one do-everything prompt.
-- How an agent invokes a discussion as a tool and consumes only the synthesized outcome.
+- How to invoke a discussion as a deterministic orchestration step, and why that beats leaving the call to a model.
 
 ## Prerequisites
 
@@ -112,7 +113,7 @@ ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
 
 ## Step 2 — Create a project
 
-Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the provider, the discussion, the tool, and the agent.
+Every resource in SOAT lives inside a [project](/docs/modules/projects#examples). Create one to hold the provider, the discussion, the tool, the agents, and the orchestration.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -150,7 +151,7 @@ echo "Project: $PROJECT_ID"
 
 ## Step 3 — Create an Ollama AI provider
 
-Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. Both the writer agent and every panel participant fall back to this provider. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. The writer agent, the reviser agent, and every panel participant fall back to this provider. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -350,7 +351,9 @@ The `Fact Checker` should flag the false claim, the `Logic Reviewer` the non-seq
 
 ## Step 6 — Wrap the panel in a tool
 
-To let an agent consult the panel mid-loop, expose it as a [`discussion`-type tool](/docs/modules/tools#discussion). The tool references the discussion by ID; calling it with a `topic` runs the discussion synchronously and returns `{ outcome, run_id }` — only the synthesized verdict, never the full transcript.
+To make the panel callable from a pipeline, expose it as a [`soat` tool](/docs/modules/tools#soat) bound to the `create-discussion-run` action, with the discussion pinned through `preset_parameters`. Pinning it there leaves `topic` as the only input a caller has to supply; the server runs the discussion synchronously and returns the completed run — carrying the synthesized verdict, never the full transcript.
+
+Because the call goes through the ordinary REST route, it is authorized like any other: the caller needs `discussions:CreateDiscussionRun`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -359,9 +362,10 @@ To let an agent consult the panel mid-loop, expose it as a [`discussion`-type to
 REVIEW_TOOL_ID=$(soat create-tool \
   --project-id "$PROJECT_ID" \
   --name "review-panel" \
-  --type discussion \
+  --type soat \
   --description "Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes." \
-  --discussion-id "$DISCUSSION_ID" | jq -r '.id')
+  --actions '["create-discussion-run"]' \
+  --preset-parameters '{"discussion_id": "'"$DISCUSSION_ID"'"}' | jq -r '.id')
 echo "Tool: $REVIEW_TOOL_ID"
 ```
 
@@ -373,10 +377,11 @@ const { data: reviewTool } = await adminSoat.tools.createTool({
   body: {
     project_id: projectId,
     name: 'review-panel',
-    type: 'discussion',
+    type: 'soat',
     description:
       'Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes.',
-    discussion_id: discussionId,
+    actions: ['create-discussion-run'],
+    preset_parameters: { discussion_id: discussionId },
   },
 });
 const reviewToolId = reviewTool!.id;
@@ -392,9 +397,10 @@ REVIEW_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "name": "review-panel",
-    "type": "discussion",
+    "type": "soat",
     "description": "Sends a draft to the editorial review panel and returns a SHIP/REVISE verdict with concrete fixes.",
-    "discussion_id": "'"$DISCUSSION_ID"'"
+    "actions": ["create-discussion-run"],
+    "preset_parameters": { "discussion_id": "'"$DISCUSSION_ID"'" }
   }' | jq -r '.id')
 echo "Tool: $REVIEW_TOOL_ID"
 ```
@@ -404,116 +410,376 @@ echo "Tool: $REVIEW_TOOL_ID"
 
 ---
 
-## Step 7 — Create the writer agent
+## Step 7 — Create the writer and reviser agents
 
-Create the [writer agent](/docs/modules/agents#examples) and attach the review tool. Its instructions tell it to draft, then consult the panel, then revise if the verdict is `REVISE`. Because the tool result carries only the synthesized `outcome`, the writer's context stays small no matter how much the panel deliberated.
+Two single-purpose agents. Neither holds the review tool — the orchestration decides when the panel runs, so nothing is left to a model's discretion.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-AGENT_ID=$(soat create-agent \
+WRITER_AGENT_ID=$(soat create-agent \
   --project-id "$PROJECT_ID" \
   --ai-provider-id "$PROVIDER_ID" \
   --name "Writer" \
-  --instructions "You write short marketing blurbs. After drafting, call the review-panel tool with your draft as the topic. If the verdict is REVISE, apply the top fixes and return the improved blurb. If SHIP, return the draft as-is." \
-  --tool-ids '["'"$REVIEW_TOOL_ID"'"]' | jq -r '.id')
-echo "Agent: $AGENT_ID"
+  --instructions "You write short marketing blurbs. Return only the blurb text, nothing else." | jq -r '.id')
+echo "Writer: $WRITER_AGENT_ID"
+
+REVISER_AGENT_ID=$(soat create-agent \
+  --project-id "$PROJECT_ID" \
+  --ai-provider-id "$PROVIDER_ID" \
+  --name "Reviser" \
+  --instructions "You revise a marketing blurb using an editorial verdict. If the verdict says SHIP, return the draft unchanged. Otherwise apply the fixes it lists. Return only the final blurb text." | jq -r '.id')
+echo "Reviser: $REVISER_AGENT_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: agent } = await adminSoat.agents.createAgent({
+const { data: writer } = await adminSoat.agents.createAgent({
   body: {
     project_id: projectId,
     ai_provider_id: providerId,
     name: 'Writer',
     instructions:
-      'You write short marketing blurbs. After drafting, call the review-panel tool with your draft as the topic. If the verdict is REVISE, apply the top fixes and return the improved blurb. If SHIP, return the draft as-is.',
-    tool_ids: [reviewToolId],
+      'You write short marketing blurbs. Return only the blurb text, nothing else.',
   },
 });
-const agentId = agent!.id;
+const writerAgentId = writer!.id;
+
+const { data: reviser } = await adminSoat.agents.createAgent({
+  body: {
+    project_id: projectId,
+    ai_provider_id: providerId,
+    name: 'Reviser',
+    instructions:
+      'You revise a marketing blurb using an editorial verdict. If the verdict says SHIP, return the draft unchanged. Otherwise apply the fixes it lists. Return only the final blurb text.',
+  },
+});
+const reviserAgentId = reviser!.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+WRITER_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "'"$PROJECT_ID"'",
     "ai_provider_id": "'"$PROVIDER_ID"'",
     "name": "Writer",
-    "instructions": "You write short marketing blurbs. After drafting, call the review-panel tool with your draft as the topic. If the verdict is REVISE, apply the top fixes and return the improved blurb. If SHIP, return the draft as-is.",
-    "tool_ids": ["'"$REVIEW_TOOL_ID"'"]
+    "instructions": "You write short marketing blurbs. Return only the blurb text, nothing else."
   }' | jq -r '.id')
-echo "Agent: $AGENT_ID"
+echo "Writer: $WRITER_AGENT_ID"
+
+REVISER_AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "'"$PROJECT_ID"'",
+    "ai_provider_id": "'"$PROVIDER_ID"'",
+    "name": "Reviser",
+    "instructions": "You revise a marketing blurb using an editorial verdict. If the verdict says SHIP, return the draft unchanged. Otherwise apply the fixes it lists. Return only the final blurb text."
+  }' | jq -r '.id')
+echo "Reviser: $REVISER_AGENT_ID"
 ```
 
 </TabItem>
 </Tabs>
 
-To *force* the writer to consult the panel before answering (rather than leaving it to the model), attach a [step rule](/docs/modules/agents#step-rules) or set `tool_choice: required` for the first step.
-
 ---
 
-## Step 8 — Run a generation
+## Step 8 — Wire the panel into an orchestration
 
-Ask the writer for a blurb. It drafts, calls `review-panel` with the draft, receives the verdict, and revises. The result is LLM-dependent — check `status` and inspect the output, but do not assert exact wording. Follow the [trace](/docs/modules/traces) to see the discussion run nested inside the generation.
+An [orchestration](/docs/modules/orchestrations) is a DAG that runs forward and terminates — the right shape for `draft → review → revise`. The middle step is a **`tool` node** pointing at the review tool with `operation_id: create-discussion-run`; its `input_mapping` feeds the writer's draft in as the `topic`, and `state_mapping` lifts the panel's synthesized `outcome` into `state.verdict` for the reviser to read.
+
+This is the deterministic counterpart to attaching the tool to an agent: the panel runs because it is an **edge in the graph**, not because a model chose to call it.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# The result embeds the writer's draft and the panel's free-form verdict, so
-# print the raw generation rather than piping it through jq.
-soat create-agent-generation \
-  --agent-id "$AGENT_ID" \
-  --messages '[{"role":"user","content":"Write a one-sentence blurb for a note-taking app called Jotly."}]'
+ORCH_NODES='[
+  {
+    "id": "draft",
+    "type": "agent",
+    "agent_id": "'"$WRITER_AGENT_ID"'",
+    "input_mapping": {"brief": {"var": "input.brief"}},
+    "output_schema": {
+      "type": "object",
+      "required": ["blurb"],
+      "properties": {"blurb": {"type": "string"}}
+    },
+    "state_mapping": {"state.draft": {"var": "output.blurb"}}
+  },
+  {
+    "id": "review",
+    "type": "tool",
+    "tool_id": "'"$REVIEW_TOOL_ID"'",
+    "operation_id": "create-discussion-run",
+    "input_mapping": {"topic": {"var": "draft"}},
+    "state_mapping": {"state.verdict": {"var": "output.outcome"}}
+  },
+  {
+    "id": "revise",
+    "type": "agent",
+    "agent_id": "'"$REVISER_AGENT_ID"'",
+    "input_mapping": {"draft": {"var": "draft"}, "verdict": {"var": "verdict"}},
+    "output_schema": {
+      "type": "object",
+      "required": ["blurb"],
+      "properties": {"blurb": {"type": "string"}}
+    },
+    "state_mapping": {"state.final": {"var": "output.blurb"}}
+  },
+  {
+    "id": "return-final",
+    "type": "transform",
+    "expression": {"var": "final"}
+  }
+]'
+
+ORCH_EDGES='[
+  {"from": "draft", "to": "review"},
+  {"from": "review", "to": "revise"},
+  {"from": "revise", "to": "return-final"}
+]'
+
+ORCHESTRATION_ID=$(soat create-orchestration \
+  --project-id "$PROJECT_ID" \
+  --name "Reviewed Blurb" \
+  --description "Draft a blurb, review it with the editorial panel, then revise" \
+  --nodes "$ORCH_NODES" \
+  --edges "$ORCH_EDGES" | jq -r '.id')
+echo "Orchestration: $ORCHESTRATION_ID"
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: generation } = await adminSoat.agents.createAgentGeneration({
-  path: { agent_id: agentId },
-  body: {
-    messages: [
-      {
-        role: 'user',
-        content:
-          'Write a one-sentence blurb for a note-taking app called Jotly.',
-      },
-    ],
-  },
-});
-
-console.log('Status:', generation!.status);
-console.log('Result:', generation!.result);
+const { data: orchestration } =
+  await adminSoat.orchestrations.createOrchestration({
+    body: {
+      project_id: projectId,
+      name: 'Reviewed Blurb',
+      description:
+        'Draft a blurb, review it with the editorial panel, then revise',
+      nodes: [
+        {
+          id: 'draft',
+          type: 'agent',
+          agent_id: writerAgentId,
+          input_mapping: { brief: { var: 'input.brief' } },
+          output_schema: {
+            type: 'object',
+            required: ['blurb'],
+            properties: { blurb: { type: 'string' } },
+          },
+          state_mapping: { 'state.draft': { var: 'output.blurb' } },
+        },
+        {
+          id: 'review',
+          type: 'tool',
+          tool_id: reviewToolId,
+          operation_id: 'create-discussion-run',
+          input_mapping: { topic: { var: 'draft' } },
+          state_mapping: { 'state.verdict': { var: 'output.outcome' } },
+        },
+        {
+          id: 'revise',
+          type: 'agent',
+          agent_id: reviserAgentId,
+          input_mapping: { draft: { var: 'draft' }, verdict: { var: 'verdict' } },
+          output_schema: {
+            type: 'object',
+            required: ['blurb'],
+            properties: { blurb: { type: 'string' } },
+          },
+          state_mapping: { 'state.final': { var: 'output.blurb' } },
+        },
+        {
+          id: 'return-final',
+          type: 'transform',
+          expression: { var: 'final' },
+        },
+      ],
+      edges: [
+        { from: 'draft', to: 'review' },
+        { from: 'review', to: 'revise' },
+        { from: 'revise', to: 'return-final' },
+      ],
+    },
+  });
+const orchestrationId = orchestration!.id;
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+ORCHESTRATION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "messages": [
-      { "role": "user", "content": "Write a one-sentence blurb for a note-taking app called Jotly." }
+    "project_id": "'"$PROJECT_ID"'",
+    "name": "Reviewed Blurb",
+    "description": "Draft a blurb, review it with the editorial panel, then revise",
+    "nodes": [
+      {
+        "id": "draft",
+        "type": "agent",
+        "agent_id": "'"$WRITER_AGENT_ID"'",
+        "input_mapping": { "brief": { "var": "input.brief" } },
+        "output_schema": {
+          "type": "object",
+          "required": ["blurb"],
+          "properties": { "blurb": { "type": "string" } }
+        },
+        "state_mapping": { "state.draft": { "var": "output.blurb" } }
+      },
+      {
+        "id": "review",
+        "type": "tool",
+        "tool_id": "'"$REVIEW_TOOL_ID"'",
+        "operation_id": "create-discussion-run",
+        "input_mapping": { "topic": { "var": "draft" } },
+        "state_mapping": { "state.verdict": { "var": "output.outcome" } }
+      },
+      {
+        "id": "revise",
+        "type": "agent",
+        "agent_id": "'"$REVISER_AGENT_ID"'",
+        "input_mapping": { "draft": { "var": "draft" }, "verdict": { "var": "verdict" } },
+        "output_schema": {
+          "type": "object",
+          "required": ["blurb"],
+          "properties": { "blurb": { "type": "string" } }
+        },
+        "state_mapping": { "state.final": { "var": "output.blurb" } }
+      },
+      {
+        "id": "return-final",
+        "type": "transform",
+        "expression": { "var": "final" }
+      }
+    ],
+    "edges": [
+      { "from": "draft", "to": "review" },
+      { "from": "review", "to": "revise" },
+      { "from": "revise", "to": "return-final" }
     ]
-  }' | jq '{ status }'
+  }' | jq -r '.id')
+echo "Orchestration: $ORCHESTRATION_ID"
 ```
 
 </TabItem>
 </Tabs>
+
+---
+
+## Step 9 — Start a run
+
+Give the orchestration a brief. It drafts, sends the draft to the panel, and revises against the verdict. `wait` blocks until the run settles and returns it — without it the call returns immediately with status `queued` and the run finishes in the background. The text is LLM-dependent — check `status` and read the fields, but do not assert exact wording.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+RUN=$(soat start-orchestration-run \
+  --orchestration-id "$ORCHESTRATION_ID" \
+  --wait true \
+  --input '{"brief":"a one-sentence blurb for a note-taking app called Jotly"}')
+
+printf '%s\n' "$RUN" | jq '{status, trace_id}'
+RUN_ID=$(printf '%s\n' "$RUN" | jq -r '.id')
+echo "RUN_ID: $RUN_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: run } = await adminSoat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: orchestrationId,
+    wait: true,
+    input: {
+      brief: 'a one-sentence blurb for a note-taking app called Jotly',
+    },
+  },
+});
+
+console.log('Status:', run!.status);
+const runId = run!.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "orchestration_id": "'"$ORCHESTRATION_ID"'",
+    "wait": true,
+    "input": { "brief": "a one-sentence blurb for a note-taking app called Jotly" }
+  }')
+
+printf '%s\n' "$RUN" | jq '{status, trace_id}'
+RUN_ID=$(printf '%s\n' "$RUN" | jq -r '.id')
+echo "RUN_ID: $RUN_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 10 — Inspect the run
+
+The run state carries every intermediate value, so you can read the draft, the panel's verdict, and the revision side by side — the whole point of running this as an orchestration rather than one opaque generation.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-orchestration-run \
+  --orchestration-run-id "$RUN_ID" | jq '{status, state}'
+```
+
+Key fields to look for:
+
+- `state.draft` — the writer's first attempt.
+- `state.verdict` — the panel's synthesized `SHIP`/`REVISE` verdict.
+- `state.final` — the revised blurb.
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: runState } = await adminSoat.orchestrations.getOrchestrationRun({
+  path: { orchestration_run_id: runId },
+});
+console.log(JSON.stringify(runState!.state, null, 2));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status, state}'
+```
+
+</TabItem>
+</Tabs>
+
+The panel's full transcript is not in the run state — it persisted on the [DiscussionRun](/docs/modules/discussions#discussionrun) as a Conversation plus a Document. Only the synthesized verdict crosses into the orchestration.
 
 ---
 
@@ -521,11 +787,13 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
 
 1. **One discussion, three focused voices.** The panel is a single [Discussion](/docs/modules/discussions) with three participants. Each has a narrow persona — accuracy, logic, tone — so no single turn tries to do everything, and each verdict stays sharp.
 
-2. **Synthesis merges the reviews.** After the reviewers speak, the `synthesis` pass reads the whole transcript (`{steps.deliberation}`) plus the original draft (`{topic}`) and emits one `SHIP`/`REVISE` verdict with ranked fixes. This is the only text the caller sees.
+2. **Synthesis merges the reviews.** After the reviewers speak, the `synthesis` pass reads the whole transcript (`{steps.deliberation}`) plus the original draft (`{topic}`) and emits one `SHIP`/`REVISE` verdict with ranked fixes. This is the only text that leaves the discussion.
 
-3. **The agent consulted the panel as a tool.** The writer attached a [`discussion`-type tool](/docs/modules/tools#discussion). When it called the tool with its draft, the server ran the discussion synchronously and returned `{ outcome, run_id }`. The full transcript persisted on the run — the writer's context received only the synthesized verdict.
+3. **The panel is a step, not a suggestion.** The `review` node is a [`tool` node](/docs/modules/orchestrations) calling a [`soat` tool](/docs/modules/tools#soat) bound to `create-discussion-run`, with the discussion pinned in `preset_parameters` so only `topic` is left to map. Because it sits on an edge between `draft` and `revise`, the review cannot be skipped — there is no model deciding whether to consult the panel.
 
-4. **Deep thinking never breaks the flow.** If a reviewer turn or the synthesis fails, the run degrades gracefully rather than erroring — see [Deliberation and synthesis](/docs/modules/discussions#deliberation-and-synthesis).
+4. **Authorization is the platform's, not the tool's.** The call goes through the ordinary REST route, so the run needs `discussions:CreateDiscussionRun` like any other caller. Nothing about being invoked from a graph grants extra reach.
+
+5. **Deep thinking never breaks the flow.** If a reviewer turn or the synthesis fails, the discussion run degrades gracefully rather than erroring — see [Deliberation and synthesis](/docs/modules/discussions#deliberation-and-synthesis).
 
 ---
 
@@ -533,5 +801,6 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
 
 - Add `max_rounds: 2` so reviewers can rebut each other before synthesis — useful when fundamentals and tone pull in opposite directions.
 - Give the `Voice & Tone Reviewer` its own `ai_provider_id` or `model` [override](/docs/modules/discussions#participant) to grade tone with a stronger model than the fact check needs.
-- Force the review with a [step rule](/docs/modules/agents#step-rules) so the writer can never skip the panel.
+- Put a [`condition` node](/docs/modules/orchestrations) after `review` so a `SHIP` verdict skips the reviser entirely.
+- Drive the whole thing from a [workflow](/docs/modules/workflows) state's `on_enter` when the blurb is a long-lived item that can come back for another round.
 - Read the [Discussions module reference](/docs/modules/discussions) for the full participant and synthesis options, and [Migrating from agent reasoning](/docs/modules/discussions#migrating-from-agent-reasoning) if you used the old `reasoning` config.

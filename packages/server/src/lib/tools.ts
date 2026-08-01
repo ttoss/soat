@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -83,7 +82,6 @@ export type MappedTool = {
   denied_actions: string[] | null;
   preset_parameters: object | null;
   pipeline: object | null;
-  discussion_id: string | null;
   output_mapping: object | null;
   guardrail_ids: string[] | null;
   created_at: Date;
@@ -114,9 +112,6 @@ const mapTool = (
     denied_actions: tool.deniedActions,
     preset_parameters: tool.presetParameters,
     pipeline: tool.pipeline,
-    discussion_id:
-      (tool.discussion as { discussionId?: string } | null)?.discussionId ??
-      null,
     output_mapping: tool.outputMapping,
     guardrail_ids: tool.guardrailIds,
     created_at: tool.createdAt,
@@ -145,7 +140,6 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     deniedActions: nullify(args.deniedActions),
     presetParameters: nullify(args.presetParameters),
     pipeline: nullify(args.pipeline),
-    discussion: args.discussionId ? { discussionId: args.discussionId } : null,
     outputMapping: nullify(args.outputMapping),
     guardrailIds: nullify(args.guardrailIds),
   };
@@ -163,37 +157,19 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
 // ── Shared Tool Definition Validation ────────────────────────────────────────
 
 /**
- * Validates a tool definition's business rules — shared by `createTool` (a
- * persisted Tool row) and every ephemeral consumer (an agent's inline `tools`,
- * a pipeline step's inline `tool`): a name is required, `pipeline` steps
- * reference tools that exist, `soat` actions are known, and `{{secret:...}}`
- * references resolve within the given project.
+ * The complete set of tool types the server can resolve and execute. An
+ * unlisted type has no resolver branch, so it would silently vanish from an
+ * agent's toolset and fail at call time with a misleading error — reject it at
+ * write time instead. To invoke a discussion from an agent, bind a `soat` tool
+ * to `create-discussion-run`, which enforces IAM on the run.
  */
-/**
- * Validates a `discussion` tool's config: it must reference a discussion that
- * exists in the tool's project (so a tool cannot invoke another project's
- * discussion).
- */
-const assertDiscussionToolValid = async (args: {
-  definition: InlineToolDefinition;
-  projectId: number;
-}): Promise<void> => {
-  if (!args.definition.discussionId) {
+const TOOL_TYPES = ['http', 'client', 'mcp', 'soat', 'pipeline'] as const;
+
+const assertToolTypeSupported = (type: string): void => {
+  if (!(TOOL_TYPES as readonly string[]).includes(type)) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      'A discussion tool requires a discussion_id.'
-    );
-  }
-  const discussion = await db.Discussion.findOne({
-    where: {
-      publicId: args.definition.discussionId,
-      projectId: args.projectId,
-    },
-  });
-  if (!discussion) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Discussion '${args.definition.discussionId}' not found in the project.`
+      `Unsupported tool type '${type}'. Supported types: ${TOOL_TYPES.join(', ')}.`
     );
   }
 };
@@ -218,6 +194,8 @@ export const validateToolDefinition = async (args: {
     );
   }
 
+  assertToolTypeSupported(definition.type ?? 'http');
+
   if (definition.type === 'pipeline') {
     const config = validatePipelineConfig(definition.pipeline);
     await assertPipelineStepToolsValid({
@@ -229,10 +207,6 @@ export const validateToolDefinition = async (args: {
 
   if ((definition.type ?? 'http') === 'soat') {
     validateSoatActions(definition.actions);
-  }
-
-  if (definition.type === 'discussion') {
-    await assertDiscussionToolValid({ definition, projectId });
   }
 
   // Reject any {{...}} token that isn't a {{secret:...}} reference before
@@ -335,7 +309,6 @@ const buildToolUpdates = (args: {
   deniedActions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussionId?: string | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
 }): Record<string, unknown> => {
@@ -357,11 +330,6 @@ const buildToolUpdates = (args: {
   for (const field of scalarFields) {
     if (args[field] !== undefined) updates[field] = args[field];
   }
-  if (args.discussionId !== undefined) {
-    updates.discussion = args.discussionId
-      ? { discussionId: args.discussionId }
-      : null;
-  }
   return updates;
 };
 
@@ -378,7 +346,6 @@ type ToolUpdateArgs = {
   deniedActions?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
-  discussionId?: string | null;
   outputMapping?: object | null;
   guardrailIds?: string[] | null;
 };
@@ -389,15 +356,8 @@ const validateToolUpdate = async (params: {
   tool: InstanceType<typeof db.Tool>;
 }): Promise<void> => {
   const { args, tool } = params;
-  if (args.discussionId !== undefined && args.discussionId !== null) {
-    await assertDiscussionToolValid({
-      definition: {
-        name: tool.name,
-        type: 'discussion',
-        discussionId: args.discussionId,
-      },
-      projectId: tool.projectId,
-    });
+  if (args.type !== undefined) {
+    assertToolTypeSupported(args.type);
   }
   if (args.pipeline !== undefined && args.pipeline !== null) {
     const config = validatePipelineConfig(args.pipeline);
@@ -482,7 +442,6 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
     deniedActions: tool.denied_actions,
     presetParameters: tool.preset_parameters,
     pipeline: tool.pipeline,
-    discussionId: tool.discussion_id,
     outputMapping: tool.output_mapping,
   };
 };

@@ -105,9 +105,6 @@ export class DiscussionRun extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare initiatorGenerationId: string | null;
 
-  @Column({ type: DataType.STRING, allowNull: true })
-  declare traceId: string | null;
-
   @Column({ type: DataType.DATE, allowNull: true })
   declare completedAt: Date | null;
 

@@ -2360,18 +2360,53 @@ $SOAT_CLI get-discussion-run --run-id "$RUN_ID" >/dev/null
 $SOAT_CLI list-discussion-runs --discussion-id "$DISCUSSION_ID" >/dev/null
 echo "discussion run: OK"
 
-# A discussion-type tool references the discussion by id.
+# An agent invokes a discussion through a soat tool bound to
+# create-discussion-run, with the discussion pinned in preset_parameters.
 DISCUSSION_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name ask-the-panel \
-  --type discussion \
-  --discussion_id "$DISCUSSION_ID")
-if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -e '.type == "discussion"' >/dev/null 2>&1; then
-  echo "ERROR: create-tool did not create a discussion-type tool" >&2
+  --type soat \
+  --actions '["create-discussion-run"]' \
+  --preset_parameters "{\"discussion_id\": \"$DISCUSSION_ID\"}")
+if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -e '.type == "soat"' >/dev/null 2>&1; then
+  echo "ERROR: create-tool did not create the discussion soat tool" >&2
+  echo "$DISCUSSION_TOOL_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" \
+  | jq -e '.preset_parameters.discussion_id != null' >/dev/null 2>&1; then
+  echo "ERROR: discussion soat tool did not pin discussion_id" >&2
   echo "$DISCUSSION_TOOL_RESP" >&2
   exit 1
 fi
 echo "discussion tool: OK"
+
+# The removed discussion tool type must be rejected, not silently accepted.
+if $SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name legacy-discussion-tool \
+  --type discussion >/dev/null 2>&1; then
+  echo "ERROR: create-tool accepted the removed discussion type" >&2
+  exit 1
+fi
+echo "discussion tool type rejected: OK"
+
+# Call the tool for real: this is the documented replacement for the removed
+# discussion tool type, so prove the whole chain works — preset_parameters
+# supplying the `discussion_id` *path* parameter, `topic` coming from the
+# caller, and a real DiscussionRun coming back.
+DISCUSSION_TOOL_ID=$(printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -r '.id')
+DISCUSSION_TOOL_CALL_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$DISCUSSION_TOOL_ID" \
+  --action create-discussion-run \
+  --input '{"topic": "Should the smoke suite assert on LLM wording?"}')
+if ! printf '%s\n' "$DISCUSSION_TOOL_CALL_RESP" \
+  | jq -e '.id | startswith("drn_")' >/dev/null 2>&1; then
+  echo "ERROR: calling the discussion soat tool did not return a discussion run" >&2
+  echo "$DISCUSSION_TOOL_CALL_RESP" >&2
+  exit 1
+fi
+echo "discussion tool call: OK"
 
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"

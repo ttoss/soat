@@ -76,9 +76,6 @@ export class Tool extends Model {
   declare pipeline: object | null;
 
   @Column({ type: DataType.JSONB, allowNull: true })
-  declare discussion: object | null;
-
-  @Column({ type: DataType.JSONB, allowNull: true })
   declare outputMapping: object | null;
 
   // Public IDs of guardrails attached at the tool scope. A guardrail here

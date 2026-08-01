@@ -11,7 +11,7 @@ Reusable deliberation configs whose invocations are runs — a panel of particip
 
 ## Overview
 
-A **Discussion** is the home of deep thinking in SOAT. It is a reusable configuration (who deliberates and how); each invocation is a **DiscussionRun** (what was deliberated and what came out) — the same split as an [Agent](./agents.md) and its generations. Author a discussion once, then invoke it many times: standalone (brainstorming, red-teaming, expert review) or, more commonly, from an agent mid-loop via a `discussion`-type [tool](./tools.md#discussion).
+A **Discussion** is the home of deep thinking in SOAT. It is a reusable configuration (who deliberates and how); each invocation is a **DiscussionRun** (what was deliberated and what came out) — the same split as an [Agent](./agents.md) and its generations. Author a discussion once, then invoke it many times: standalone (brainstorming, red-teaming, expert review) or, more commonly, from an agent mid-loop via a [`soat` tool](./tools.md#soat) bound to `create-discussion-run`.
 
 Deep thinking lives entirely in Discussions rather than in a per-agent `reasoning` config. If you are porting a `reasoning` recipe, see [Migrating from agent reasoning](#migrating-from-agent-reasoning).
 
@@ -73,7 +73,6 @@ A run is a single invocation of a discussion.
 | `outcome_document_id`     | string/null | The stored outcome as a [Document](./documents.md)                 |
 | `started_by`              | object/null | Identity that triggered the run                                    |
 | `initiator_generation_id` | string/null | Generation that invoked this run (when triggered by an agent tool) |
-| `trace_id`                | string/null | Trace of the generation that invoked this run as a tool            |
 | `completed_at`            | string/null | ISO 8601 completion timestamp                                      |
 | `created_at`              | string      | ISO 8601 creation timestamp                                        |
 
@@ -102,13 +101,24 @@ The optional `synthesis` object overrides the final pass:
 
 ### Invoking a discussion from an agent
 
-An agent thinks by attaching a **`discussion`-type tool** that references a discussion config (`{ "type": "discussion", "discussion_id": "disc_..." }`). The model calls it mid-loop with a `topic`; the server runs the discussion synchronously and returns `{ outcome, run_id }` as the tool result. Use `tool_choice: required` or a step rule to force "discuss before acting". See [`discussion` tools](./tools.md#discussion).
+An agent thinks by attaching a [`soat` tool](./tools.md#soat) bound to the `create-discussion-run` action, with the discussion pinned via `preset_parameters`:
 
-The full transcript and outcome persist on the run (Conversation + Document); the tool result carries only the synthesized `outcome` plus the `run_id`, so it never floods the caller's context.
+```json
+{
+  "name": "ask-the-panel",
+  "type": "soat",
+  "actions": ["create-discussion-run"],
+  "preset_parameters": { "discussion_id": "disc_V1StGXR8Z5jdHi6B" }
+}
+```
 
-`trace_id` is populated with the invoking generation's own trace when a discussion is run as a tool, so `GET /discussions/runs/:run_id` links a run back to the generation that started it. It is `null` for runs started directly (`POST /discussions/:id/runs`), which have no generation/trace context to attribute to. `initiator_generation_id` is reserved for the same purpose but is not currently populated — the invoking generation's own ID is not yet allocated at the point tools are resolved, so `trace_id` is the reliable field for correlating a tool-invoked run back to its caller today.
+`preset_parameters` strips `discussion_id` from the schema the model sees, so the model supplies only a `topic`. The server runs the discussion synchronously and returns the completed run as the tool result. Use `tool_choice: required` or a step rule to force "discuss before acting".
 
-The discussion's own internal deliberation/synthesis calls do not themselves create generations or traces (they are not currently visible in [`get-trace-tree`](./traces.md)); only the outer, invoking generation's trace is recorded on the run.
+Because the call goes through the REST route, it is authorized like any other: the invoking credential needs `discussions:CreateDiscussionRun`, and the agent's boundary policy must allow the action.
+
+The full transcript and outcome persist on the run (Conversation + Document).
+
+The discussion's own internal deliberation/synthesis calls do not themselves create generations or traces (they are not currently visible in [`get-trace-tree`](./traces.md)).
 
 ### Migrating from agent reasoning
 
@@ -123,7 +133,7 @@ The agent schema has no `reasoning` field: agent create/update and per-generatio
 | `best-of-N` (independent samples + judge)   | Multiple participants with varied `temperature` + a synthesis pass that picks/merges |
 | `reasoning.effort`                          | `effort` on a participant and/or the `synthesis` override                         |
 
-Invoke the discussion from the agent via a `discussion`-type tool, or call `POST /discussions/{id}/runs` before/after a generation. No data migration is required — the old `reasoning` config simply stops being read.
+Invoke the discussion from the agent via a `soat` tool bound to `create-discussion-run`, or call `POST /discussions/{id}/runs` before/after a generation. No data migration is required — the old `reasoning` config simply stops being read.
 
 ## Examples
 

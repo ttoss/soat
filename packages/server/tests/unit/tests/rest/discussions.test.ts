@@ -1,5 +1,4 @@
 import * as discussionCompletion from 'src/lib/discussionCompletion';
-import { callDiscussionTool } from 'src/lib/toolsCall';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, testClient } from '../../testClient';
@@ -341,38 +340,46 @@ describe('Discussions', () => {
     });
   });
 
-  describe('discussion-type tool', () => {
-    test('creates a tool referencing a discussion', async () => {
+  describe('invoking a discussion from a tool', () => {
+    // The `discussion` tool type was removed; a discussion is invoked from an
+    // agent or an orchestration through a `soat` tool bound to
+    // `create-discussion-run`, which runs the ordinary REST route and so is
+    // subject to discussions:CreateDiscussionRun like any other caller.
+    test('creates a soat tool bound to create-discussion-run with the discussion pinned', async () => {
       const created = await createDiscussion();
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
           name: 'ask-the-panel',
-          type: 'discussion',
-          parameters: {
-            type: 'object',
-            properties: { topic: { type: 'string' } },
-            required: ['topic'],
-          },
-          discussion_id: created.body.id,
+          type: 'soat',
+          actions: ['create-discussion-run'],
+          preset_parameters: { discussion_id: created.body.id },
         });
       expect(res.status).toBe(201);
-      expect(res.body.type).toBe('discussion');
-      expect(res.body.discussion_id).toBe(created.body.id);
+      expect(res.body.type).toBe('soat');
+      expect(res.body.actions).toEqual(['create-discussion-run']);
+      // Pinning the id here is what keeps `discussion_id` out of the schema the
+      // model sees, leaving `topic` as the only argument it supplies.
+      expect(res.body.preset_parameters).toEqual({
+        discussion_id: created.body.id,
+      });
+      expect(res.body.discussion_id).toBeUndefined();
     });
 
-    test('rejects a discussion tool referencing a missing discussion', async () => {
+    test('rejects the removed discussion tool type', async () => {
+      const created = await createDiscussion();
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
-          name: 'bad-panel',
+          name: 'ask-the-panel-legacy',
           type: 'discussion',
-          discussion_id: 'disc_missing',
+          preset_parameters: { discussion_id: created.body.id },
         });
-      expect(res.status).toBe(404);
-      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/unsupported tool type/i);
     });
   });
 
@@ -525,58 +532,6 @@ describe('Discussions', () => {
         '/api/v1/discussions/runs/drn_missing'
       );
       expect(res.status).toBe(404);
-    });
-  });
-
-  describe('callDiscussionTool', () => {
-    afterEach(() => {
-      jest.restoreAllMocks();
-    });
-
-    test('runs the referenced discussion and returns outcome + run id', async () => {
-      jest
-        .spyOn(discussionCompletion, 'runDiscussionCompletion')
-        .mockResolvedValue('tool outcome');
-      const created = await createDiscussion({
-        participants: [{ name: 'Solo', prompt: 'think' }],
-      });
-      const result = (await callDiscussionTool(
-        {
-          name: 'ask',
-          type: 'discussion',
-          discussionId: created.body.id,
-        },
-        { topic: 'What should we do?' }
-      )) as { outcome: string; run_id: string };
-      expect(result.outcome).toBe('tool outcome');
-      expect(result.run_id).toMatch(/^drn_/);
-    });
-
-    test('throws when the discussion config is missing a discussionId', async () => {
-      await expect(
-        callDiscussionTool(
-          { name: 'ask', type: 'discussion' },
-          {
-            topic: 't',
-          }
-        )
-      ).rejects.toThrow(/discussion configuration/i);
-    });
-
-    test('throws when no topic is supplied', async () => {
-      const created = await createDiscussion({
-        participants: [{ name: 'Solo', prompt: 'think' }],
-      });
-      await expect(
-        callDiscussionTool(
-          {
-            name: 'ask',
-            type: 'discussion',
-            discussionId: created.body.id,
-          },
-          {}
-        )
-      ).rejects.toThrow(/topic/i);
     });
   });
 });

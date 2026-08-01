@@ -140,7 +140,6 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   const { name, type, description, actions } = body;
   const deniedActions = body.denied_actions;
   const projectPublicId = body.project_id as string | undefined;
-  const discussionId = body.discussion_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
     ctx.status = 400;
@@ -171,7 +170,6 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     deniedActions: Array.isArray(deniedActions)
       ? (deniedActions as string[])
       : undefined,
-    discussionId,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
     ...jsonFields,
   });
@@ -265,7 +263,6 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
   } = body;
   const deniedActions = body.denied_actions;
   const presetParameters = body.preset_parameters;
-  const discussionId = body.discussion_id;
   const outputMapping = body.output_mapping;
 
   const nextGuardrailIds = parseGuardrailIds(body.guardrail_ids);
@@ -313,7 +310,6 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     deniedActions: parseNullableArray(deniedActions),
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
-    discussionId: parseNullableString(discussionId),
     outputMapping: parsedOutputMapping,
     guardrailIds: nextGuardrailIds,
   });
