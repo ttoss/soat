@@ -134,6 +134,77 @@ describe('agentNonStreamGeneration', () => {
     });
   });
 
+  test('buildPrepareStep restricts activeTools to a step rule active_tool_ids, resolved via id→name map', async () => {
+    // `active_tool_ids` on a step rule holds persisted tool ids
+    // (`modules/agents.md` — Step Rules), while the AI SDK's `activeTools`
+    // takes tool names — the caller resolves the id→name map (via
+    // `resolveToolIdsToNames`) and hands it in here (#809).
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
+      logContext: 'non_stream',
+      toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
+    });
+
+    expect(prepareStep).toBeDefined();
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+      activeTools: ['search'],
+    });
+    // A later step with no matching rule is untouched.
+    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
+  });
+
+  test('buildPrepareStep combines a forced tool_choice with a step rule active_tool_ids', async () => {
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        {
+          step: 1,
+          tool_choice: { type: 'tool', tool_name: 'search' },
+          active_tool_ids: ['tool_abc', 'tool_def'],
+        },
+      ],
+      logContext: 'non_stream',
+      toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
+    });
+
+    expect(prepareStep).toBeDefined();
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+      toolChoice: { type: 'tool', toolName: 'search' },
+      activeTools: ['search', 'analyze'],
+    });
+  });
+
+  test('buildPrepareStep combines a string tool_choice override with active_tool_ids', async () => {
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        { step: 1, tool_choice: 'required', active_tool_ids: ['tool_abc'] },
+      ],
+      logContext: 'non_stream',
+      toolIdToName: { tool_abc: 'search' },
+    });
+
+    expect(prepareStep).toBeDefined();
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({
+      toolChoice: 'required',
+      activeTools: ['search'],
+    });
+  });
+
+  test('buildPrepareStep ignores active_tool_ids that resolve to no known tool', async () => {
+    const { buildPrepareStep } = await loadNonStreamModule();
+    const prepareStep = buildPrepareStep({
+      stepRules: [{ step: 1, active_tool_ids: ['tool_doesNotExist'] }],
+      logContext: 'non_stream',
+      toolIdToName: {},
+    });
+
+    expect(prepareStep).toBeDefined();
+    // No id resolved to a name — treated as no restriction, not "no tools".
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
+  });
+
   test('runNonStreamGeneration normalizes a wire-shaped tool_choice before calling generateText', async () => {
     // The agent's tool_choice is stored verbatim from the request body
     // ({ type: "tool", tool_name: "..." } on the wire) but the AI SDK expects
@@ -180,6 +251,77 @@ describe('agentNonStreamGeneration', () => {
         toolChoice: { type: 'tool', toolName: 'forced_tool' },
       })
     );
+  });
+
+  test('runNonStreamGeneration resolves a step rule active_tool_ids via resolveToolIdsToNames before calling generateText', async () => {
+    // `active_tool_ids` holds a persisted tool id; `prepareStep`'s `activeTools`
+    // needs the tool's name, so `runNonStreamGeneration` must resolve the id
+    // through `resolveToolIdsToNames` before building `prepareStep` (#809).
+    // `resolveToolIdsToNames` itself is a thin DB query covered end-to-end via
+    // `agentGenerationHelpers.test.ts`'s `runStreamGeneration` suite; mocked
+    // here instead of hitting the real DB because this test's dynamic
+    // `loadNonStreamModule()` re-requires a fresh, uninitialized `src/db`
+    // after the file's `afterEach` `jest.resetModules()`.
+    const mockResolveToolIdsToNamesFn = jest
+      .fn()
+      .mockResolvedValue({ [`tool_abc`]: 'search' });
+    jest.doMock('src/lib/agents', () => {
+      return { resolveToolIdsToNames: mockResolveToolIdsToNamesFn };
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let capturedOpts: Record<string, any> | undefined;
+    jest.doMock('ai', () => {
+      const actual = jest.requireActual('ai');
+      return {
+        ...actual,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        generateText: jest.fn().mockImplementation((opts: any) => {
+          capturedOpts = opts;
+          // Resolves to a pending client-tool call (requires_action) rather
+          // than a completed result, so the run never reaches
+          // `buildCompletedGenerationResult` → `saveTrace` — irrelevant to
+          // this test, and unsafe here since the dynamically re-required
+          // `src/db` (see comment above) has no working DB connection.
+          return Promise.resolve({
+            steps: [
+              {
+                toolCalls: [
+                  { toolCallId: 'tc_1', toolName: 'client_tool', input: {} },
+                ],
+              },
+            ],
+            response: { messages: [], modelId: 'mock-model' },
+            text: 'ignored',
+            finishReason: 'tool-calls',
+          });
+        }),
+      };
+    });
+
+    const { runNonStreamGeneration } = await loadNonStreamModule();
+
+    await runNonStreamGeneration({
+      model: {} as never,
+      allMessages: [{ role: 'user', content: 'hi' }],
+      resolvedTools: { client_tool: {} as Tool },
+      typedAgent: {
+        ...(buildTypedAgent() as object),
+        stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
+      } as never,
+      generationId: 'gen_nonstream_active_tools',
+      traceId: 'trc_nonstream_active_tools',
+      agentId: realAgentPublicId,
+    });
+
+    expect(mockResolveToolIdsToNamesFn).toHaveBeenCalledWith({
+      toolIds: ['tool_abc'],
+      projectId: realProjectId,
+    });
+    expect(capturedOpts?.prepareStep).toBeDefined();
+    expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({
+      activeTools: ['search'],
+    });
   });
 
   test('buildToolResultMessages maps string and object outputs', async () => {

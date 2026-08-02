@@ -49,7 +49,7 @@ const dispatchGeneration = (args: {
 }): Promise<GenerationResult | ReadableStream> => {
   if (args.stream) {
     assertStreamingSupportsOutputSchema(args.ctx.typedAgent.outputSchema);
-    const stream = runStreamGeneration({
+    return runStreamGeneration({
       model: args.ctx.model,
       allMessages: args.ctx.allMessages,
       resolvedTools: args.ctx.resolvedTools,
@@ -60,7 +60,6 @@ const dispatchGeneration = (args: {
       parentTraceId: args.parentTraceId ?? null,
       rootTraceId: args.rootTraceId ?? null,
     });
-    return Promise.resolve(stream);
   }
   return runNonStreamGeneration({
     model: args.ctx.model,

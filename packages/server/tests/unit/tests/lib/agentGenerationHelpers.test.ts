@@ -14,9 +14,11 @@
 import {
   buildAllMessages,
   buildCompletedGenerationResult,
+  collectStepRuleActiveToolIds,
   findPendingClientTools,
   normalizeToolChoice,
   pendingGenerations,
+  resolveStepActiveTools,
   runStreamGeneration,
   savePendingGeneration,
   type TypedAgent,
@@ -480,8 +482,8 @@ describe('buildCompletedGenerationResult', () => {
 });
 
 describe('runStreamGeneration', () => {
-  test('evaluates default branch options before delegating to streamText', () => {
-    expect(() => {
+  test('evaluates default branch options before delegating to streamText', async () => {
+    await expect(
       runStreamGeneration({
         model: {} as never,
         allMessages: [{ role: 'user', content: 'Hello' }],
@@ -495,16 +497,16 @@ describe('runStreamGeneration', () => {
         generationId: 'gen_stream_default',
         traceId: 'trc_stream_default',
         agentId: 'agt_stream_default',
-      });
-    }).toThrow();
+      })
+    ).rejects.toThrow();
   });
 
-  test('evaluates explicit branch options before delegating to streamText', () => {
+  test('evaluates explicit branch options before delegating to streamText', async () => {
     const resolvedTools = {
       clientTool: { inputSchema: {} },
     };
 
-    expect(() => {
+    await expect(
       runStreamGeneration({
         model: {} as never,
         allMessages: [
@@ -521,8 +523,8 @@ describe('runStreamGeneration', () => {
         generationId: 'gen_stream_explicit',
         traceId: 'trc_stream_explicit',
         agentId: 'agt_stream_explicit',
-      });
-    }).toThrow();
+      })
+    ).rejects.toThrow();
   });
 
   describe('onEnd callback and prepareStep via isolateModules', () => {
@@ -535,11 +537,13 @@ describe('runStreamGeneration', () => {
     const mockStreamTextFn = jest.fn();
     const mockSaveTraceFn = jest.fn().mockResolvedValue(undefined as void);
     const mockUpdateGenerationFn = jest.fn().mockResolvedValue(null);
+    const mockResolveToolIdsToNamesFn = jest.fn().mockResolvedValue({});
 
     beforeEach(() => {
       mockStreamTextFn.mockReset();
       mockSaveTraceFn.mockReset().mockResolvedValue(undefined);
       mockUpdateGenerationFn.mockReset().mockResolvedValue(null);
+      mockResolveToolIdsToNamesFn.mockReset().mockResolvedValue({});
 
       jest.isolateModules(() => {
         jest.mock('ai', () => {
@@ -566,6 +570,9 @@ describe('runStreamGeneration', () => {
         jest.mock('src/lib/generations', () => {
           return { updateGenerationRecord: mockUpdateGenerationFn };
         });
+        jest.mock('src/lib/agents', () => {
+          return { resolveToolIdsToNames: mockResolveToolIdsToNamesFn };
+        });
         // jest.isolateModules requires require() for synchronous module loading
         // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
         const mod = require('src/lib/agentGenerationHelpers') as any;
@@ -581,7 +588,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -611,7 +618,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -631,7 +638,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('normalizes a wire-shaped tool_choice before delegating to streamText', () => {
+    test('normalizes a wire-shaped tool_choice before delegating to streamText', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -639,7 +646,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -658,7 +665,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('prepareStep honors the wire-shaped (snake_case) step rule keys', () => {
+    test('prepareStep honors the wire-shaped (snake_case) step rule keys', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -666,7 +673,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -689,7 +696,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('prepareStep returns toolChoice override when a matching step rule matches', () => {
+    test('prepareStep returns toolChoice override when a matching step rule matches', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -697,7 +704,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -720,7 +727,7 @@ describe('runStreamGeneration', () => {
       });
     });
 
-    test('prepareStep honors a string tool_choice, not just a named tool', () => {
+    test('prepareStep honors a string tool_choice, not just a named tool', async () => {
       // See the matching non-stream test: { step: 1, tool_choice: "required" }
       // forces a tool call on the first step without naming which tool, which
       // agent-level "required" cannot express (it never lets the run stop).
@@ -731,7 +738,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -752,7 +759,7 @@ describe('runStreamGeneration', () => {
       expect(capturedOpts?.prepareStep({ stepNumber: 1 })).toEqual({});
     });
 
-    test('prepareStep returns empty object when no step rule matches', () => {
+    test('prepareStep returns empty object when no step rule matches', async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let capturedOpts: Record<string, any> | undefined;
       mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
@@ -760,7 +767,7 @@ describe('runStreamGeneration', () => {
         return { textStream: new ReadableStream() };
       });
 
-      isolatedRunStreamGeneration({
+      await isolatedRunStreamGeneration({
         model: {},
         allMessages: [{ role: 'user', content: 'Hi' }],
         resolvedTools: {},
@@ -778,5 +785,154 @@ describe('runStreamGeneration', () => {
       const result = capturedOpts?.prepareStep({ stepNumber: 0 });
       expect(result).toEqual({});
     });
+
+    test('prepareStep restricts activeTools to a step rule active_tool_ids, resolved via id→name map', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+      mockResolveToolIdsToNamesFn.mockResolvedValue({
+        tool_abc: 'search',
+        tool_def: 'analyze',
+      });
+
+      await isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
+        },
+        generationId: 'gen_steprules_active',
+        traceId: 'trc_steprules_active',
+        agentId: 'agt_steprules_active',
+      });
+
+      expect(mockResolveToolIdsToNamesFn).toHaveBeenCalledWith({
+        toolIds: ['tool_abc'],
+        projectId: 1,
+      });
+      expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({
+        activeTools: ['search'],
+      });
+      // A later step with no matching rule is untouched.
+      expect(capturedOpts?.prepareStep({ stepNumber: 1 })).toEqual({});
+    });
+
+    test('prepareStep combines a forced tool_choice with a step rule active_tool_ids', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+      mockResolveToolIdsToNamesFn.mockResolvedValue({
+        tool_abc: 'search',
+        tool_def: 'analyze',
+      });
+
+      await isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [
+            {
+              step: 1,
+              tool_choice: { type: 'tool', tool_name: 'search' },
+              active_tool_ids: ['tool_abc', 'tool_def'],
+            },
+          ],
+        },
+        generationId: 'gen_steprules_combo',
+        traceId: 'trc_steprules_combo',
+        agentId: 'agt_steprules_combo',
+      });
+
+      expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({
+        toolChoice: { type: 'tool', toolName: 'search' },
+        activeTools: ['search', 'analyze'],
+      });
+    });
+
+    test('prepareStep ignores active_tool_ids that resolve to no known tool', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+      mockResolveToolIdsToNamesFn.mockResolvedValue({});
+
+      await isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: {},
+        typedAgent: {
+          ...mockAgent,
+          stepRules: [{ step: 1, active_tool_ids: ['tool_doesNotExist'] }],
+        },
+        generationId: 'gen_steprules_stale',
+        traceId: 'trc_steprules_stale',
+        agentId: 'agt_steprules_stale',
+      });
+
+      // No id resolved to a name — treated as no restriction, not "no tools".
+      expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({});
+    });
+  });
+});
+
+describe('collectStepRuleActiveToolIds', () => {
+  test('returns an empty array when stepRules is not an array', () => {
+    expect(collectStepRuleActiveToolIds(null)).toEqual([]);
+    expect(collectStepRuleActiveToolIds(undefined)).toEqual([]);
+    expect(collectStepRuleActiveToolIds('nope')).toEqual([]);
+  });
+
+  test('collects and dedupes tool ids across rules and key casings', () => {
+    const ids = collectStepRuleActiveToolIds([
+      { step: 1, active_tool_ids: ['tool_a', 'tool_b'] },
+      { step: 2, activeToolIds: ['tool_b', 'tool_c'] },
+      { step: 3, tool_choice: 'required' },
+    ]);
+
+    expect(ids.sort()).toEqual(['tool_a', 'tool_b', 'tool_c']);
+  });
+});
+
+describe('resolveStepActiveTools', () => {
+  test('returns undefined when activeToolIds is absent, empty, or not an array', () => {
+    expect(
+      resolveStepActiveTools({ activeToolIds: undefined, toolIdToName: {} })
+    ).toBeUndefined();
+    expect(
+      resolveStepActiveTools({ activeToolIds: [], toolIdToName: {} })
+    ).toBeUndefined();
+    expect(
+      resolveStepActiveTools({ activeToolIds: 'nope', toolIdToName: {} })
+    ).toBeUndefined();
+  });
+
+  test('resolves ids to names via the map, dropping unresolvable ids', () => {
+    expect(
+      resolveStepActiveTools({
+        activeToolIds: ['tool_a', 'tool_unknown'],
+        toolIdToName: { tool_a: 'search' },
+      })
+    ).toEqual(['search']);
+  });
+
+  test('returns undefined when every id fails to resolve', () => {
+    expect(
+      resolveStepActiveTools({
+        activeToolIds: ['tool_unknown'],
+        toolIdToName: {},
+      })
+    ).toBeUndefined();
   });
 });

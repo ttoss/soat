@@ -16,13 +16,18 @@ import {
 } from './agentClientToolGuardrail';
 import {
   buildCompletedGenerationResult,
+  collectStepRuleActiveToolIds,
   findPendingClientTools,
   type GenerationResult,
   normalizeToolChoice,
   type PendingGeneration,
+  resolvePrepareStepResult,
+  resolveStepActiveTools,
+  resolveStepRuleToolIdToName,
   savePendingGeneration,
   type TypedAgent,
 } from './agentGenerationHelpers';
+import { resolveToolIdsToNames } from './agents';
 import {
   fireCompletionSideEffects,
   recordGenerationFailure,
@@ -113,11 +118,14 @@ type StepRule = {
   step: number;
   tool_choice?: unknown;
   toolChoice?: unknown;
+  active_tool_ids?: unknown;
+  activeToolIds?: unknown;
 };
 
 export const buildPrepareStep = (args: {
   stepRules: unknown;
   logContext: 'stream' | 'non_stream';
+  toolIdToName?: Record<string, string>;
 }):
   | ((opts: { stepNumber: number }) => {
       toolChoice?: ToolChoice<Record<string, Tool>>;
@@ -129,6 +137,7 @@ export const buildPrepareStep = (args: {
   }
 
   const rules = args.stepRules as StepRule[];
+  const toolIdToName = args.toolIdToName ?? {};
   log('buildPrepareStep (%s): rules=%o', args.logContext, rules);
 
   return ({ stepNumber }) => {
@@ -145,37 +154,17 @@ export const buildPrepareStep = (args: {
       rule
     );
 
-    const ruleToolChoice = normalizeToolChoice(
-      rule?.tool_choice ?? rule?.toolChoice
-    );
-    if (ruleToolChoice === undefined) {
-      return {};
-    }
-    if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
-      log(
-        'prepareStep (%s): forcing toolChoice=%s',
-        args.logContext,
-        ruleToolChoice.toolName
-      );
-
-      return {
-        toolChoice: ruleToolChoice,
-        activeTools: [ruleToolChoice.toolName],
-      };
-    }
-
-    // A string choice ('auto' | 'required' | 'none') overrides the agent's own
-    // tool_choice for this step and nothing else: no tool is named, so the
-    // active tool set is left alone. Skipping this branch made
-    // `{ step: 1, tool_choice: "required" }` a silent no-op, which is the only
-    // way to force a first-step tool call without also forcing one on every
-    // later step (agent-level "required" never lets the run stop).
-    log(
-      'prepareStep (%s): overriding toolChoice=%s',
-      args.logContext,
-      ruleToolChoice
-    );
-    return { toolChoice: ruleToolChoice };
+    const result = resolvePrepareStepResult({
+      ruleToolChoice: normalizeToolChoice(
+        rule?.tool_choice ?? rule?.toolChoice
+      ),
+      ruleActiveTools: resolveStepActiveTools({
+        activeToolIds: rule?.active_tool_ids ?? rule?.activeToolIds,
+        toolIdToName,
+      }),
+    });
+    log('prepareStep (%s): result=%o', args.logContext, result);
+    return result;
   };
 };
 
@@ -421,9 +410,11 @@ export const runNonStreamGeneration = async (args: {
     return message.role !== 'system';
   });
 
+  const toolIdToName = await resolveStepRuleToolIdToName(args.typedAgent);
   const prepareStep = buildPrepareStep({
     stepRules: args.typedAgent.stepRules,
     logContext: 'non_stream',
+    toolIdToName,
   });
 
   log(
@@ -472,6 +463,16 @@ export const runToolOutputsGeneration = async (args: {
   system: string | undefined;
   nonSystemMessages: unknown[];
 }): Promise<GenerateTextResult> => {
+  const stepRuleToolIds = collectStepRuleActiveToolIds(
+    args.pending.agentConfig.stepRules
+  );
+  const toolIdToName =
+    stepRuleToolIds.length > 0
+      ? await resolveToolIdsToNames({
+          toolIds: stepRuleToolIds,
+          projectId: args.pending.projectId,
+        })
+      : {};
   try {
     return await generateText({
       model: args.pending.resolvedModel,
@@ -484,6 +485,7 @@ export const runToolOutputsGeneration = async (args: {
       prepareStep: buildPrepareStep({
         stepRules: args.pending.agentConfig.stepRules,
         logContext: 'non_stream',
+        toolIdToName,
       }),
       stopWhen: isStepCount(args.pending.agentConfig.maxSteps),
       temperature: args.pending.agentConfig.temperature ?? undefined,

@@ -9,6 +9,7 @@ import type {
 import { isStepCount, streamText } from 'ai';
 import createDebug from 'debug';
 
+import { resolveToolIdsToNames } from './agents';
 import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { routedMaxRetries } from './modelRouteExecutor';
@@ -231,10 +232,109 @@ type StepRule = {
   step: number;
   tool_choice?: unknown;
   toolChoice?: unknown;
+  active_tool_ids?: unknown;
+  activeToolIds?: unknown;
+};
+
+/**
+ * Every tool id named by any rule's `active_tool_ids`, deduped. This is the
+ * set `resolveToolIdsToNames` (`agents.ts`) needs resolved to names before
+ * `buildPrepareStep` can honor a step-level restriction — the AI SDK's
+ * `activeTools` option is keyed by tool name, the persisted rule holds tool
+ * ids (`modules/agents.md` — Step Rules, #809).
+ */
+export const collectStepRuleActiveToolIds = (stepRules: unknown): string[] => {
+  if (!Array.isArray(stepRules)) return [];
+  const ids = new Set<string>();
+  for (const rule of stepRules as StepRule[]) {
+    const ruleIds = rule?.active_tool_ids ?? rule?.activeToolIds;
+    if (!Array.isArray(ruleIds)) continue;
+    for (const id of ruleIds) {
+      if (typeof id === 'string') ids.add(id);
+    }
+  }
+  return [...ids];
+};
+
+/**
+ * Translates a single rule's `active_tool_ids` (tool ids) into the tool names
+ * `activeTools` expects, via the id→name map `collectStepRuleActiveToolIds` +
+ * `resolveToolIdsToNames` produced. Returns `undefined` — "no restriction from
+ * this rule" — when the field is absent/empty/not-an-array, or when every id
+ * fails to resolve (mirrors `narrowToActiveTools`'s fail-open stance: an
+ * unresolvable restriction is never read as "make no tools active").
+ */
+export const resolveStepActiveTools = (args: {
+  activeToolIds: unknown;
+  toolIdToName: Record<string, string>;
+}): string[] | undefined => {
+  if (!Array.isArray(args.activeToolIds) || args.activeToolIds.length === 0) {
+    return undefined;
+  }
+  const names = args.activeToolIds
+    .filter((id): id is string => {
+      return typeof id === 'string';
+    })
+    .map((id) => {
+      return args.toolIdToName[id];
+    })
+    .filter((name): name is string => {
+      return typeof name === 'string';
+    });
+  return names.length > 0 ? names : undefined;
+};
+
+/**
+ * Combines a rule's normalized `tool_choice` and resolved `active_tool_ids`
+ * into the shape `prepareStep` returns. Split out of `buildPrepareStep`'s
+ * closure so each closure body stays a thin log-and-delegate wrapper — the
+ * `tool_choice`-shape branching lives here once instead of duplicated (and
+ * counted) in both the stream and non-stream copies.
+ */
+export const resolvePrepareStepResult = (args: {
+  ruleToolChoice: ReturnType<typeof normalizeToolChoice>;
+  ruleActiveTools: string[] | undefined;
+}): {
+  toolChoice?: ToolChoice<Record<string, Tool>>;
+  activeTools?: string[];
+} => {
+  const { ruleToolChoice, ruleActiveTools } = args;
+  if (ruleToolChoice === undefined) {
+    return ruleActiveTools ? { activeTools: ruleActiveTools } : {};
+  }
+  if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
+    return {
+      toolChoice: ruleToolChoice,
+      activeTools: ruleActiveTools ?? [ruleToolChoice.toolName],
+    };
+  }
+  // A string choice ('auto' | 'required' | 'none') overrides the agent's own
+  // tool_choice for this step; no tool is named, so the active tool set is
+  // only narrowed if the rule also sets active_tool_ids.
+  return ruleActiveTools
+    ? { toolChoice: ruleToolChoice, activeTools: ruleActiveTools }
+    : { toolChoice: ruleToolChoice };
+};
+
+/**
+ * Resolves the id→name map `buildPrepareStep` needs for a `TypedAgent`'s
+ * `step_rules[].active_tool_ids`, skipping the DB round trip when no rule
+ * names any tool id.
+ */
+export const resolveStepRuleToolIdToName = async (
+  typedAgent: TypedAgent
+): Promise<Record<string, string>> => {
+  const stepRuleToolIds = collectStepRuleActiveToolIds(typedAgent.stepRules);
+  if (stepRuleToolIds.length === 0) return {};
+  return resolveToolIdsToNames({
+    toolIds: stepRuleToolIds,
+    projectId: typedAgent.project.id as number,
+  });
 };
 
 const buildPrepareStep = (
-  stepRules: unknown
+  stepRules: unknown,
+  toolIdToName: Record<string, string> = {}
 ):
   | ((opts: { stepNumber: number }) => {
       toolChoice?: ToolChoice<Record<string, Tool>>;
@@ -255,31 +355,21 @@ const buildPrepareStep = (
       stepNumber + 1,
       rule
     );
-    const ruleToolChoice = normalizeToolChoice(
-      rule?.tool_choice ?? rule?.toolChoice
-    );
-    if (ruleToolChoice === undefined) {
-      return {};
-    }
-    if (typeof ruleToolChoice === 'object' && ruleToolChoice.type === 'tool') {
-      log(
-        'prepareStep (stream): forcing toolChoice=%s',
-        ruleToolChoice.toolName
-      );
-      return {
-        toolChoice: ruleToolChoice,
-        activeTools: [ruleToolChoice.toolName],
-      };
-    }
-    // A string choice ('auto' | 'required' | 'none') overrides the agent's own
-    // tool_choice for this step and nothing else — see the matching comment in
-    // agentNonStreamGeneration.ts's buildPrepareStep.
-    log('prepareStep (stream): overriding toolChoice=%s', ruleToolChoice);
-    return { toolChoice: ruleToolChoice };
+    const result = resolvePrepareStepResult({
+      ruleToolChoice: normalizeToolChoice(
+        rule?.tool_choice ?? rule?.toolChoice
+      ),
+      ruleActiveTools: resolveStepActiveTools({
+        activeToolIds: rule?.active_tool_ids ?? rule?.activeToolIds,
+        toolIdToName,
+      }),
+    });
+    log('prepareStep (stream): result=%o', result);
+    return result;
   };
 };
 
-export const runStreamGeneration = (args: {
+export const runStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
@@ -289,14 +379,15 @@ export const runStreamGeneration = (args: {
   agentId: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
-}): ReadableStream => {
+}): Promise<ReadableStream> => {
   const system = args.allMessages.find((m) => {
     return m.role === 'system';
   })?.content as string | undefined;
   const nonSystemMessages = args.allMessages.filter((m) => {
     return m.role !== 'system';
   });
-  const prepareStep = buildPrepareStep(args.typedAgent.stepRules);
+  const toolIdToName = await resolveStepRuleToolIdToName(args.typedAgent);
+  const prepareStep = buildPrepareStep(args.typedAgent.stepRules, toolIdToName);
   log(
     'runStreamGeneration: agentId=%s toolCount=%d stepRulesCount=%d',
     args.agentId,
