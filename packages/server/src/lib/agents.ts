@@ -243,6 +243,36 @@ const assertActiveToolsExist = async (args: {
 };
 
 /**
+ * Resolves persisted tool ids to their names, for `step_rules[].active_tool_ids`
+ * (`modules/agents.md` — Step Rules, #809). The AI SDK's `activeTools` option is
+ * keyed by tool **name**, while the persisted rule holds tool **ids** — this is
+ * the id→name map `buildPrepareStep` needs to translate one into the other.
+ *
+ * Unlike `assertActiveToolsExist`, this runs at generation time rather than on
+ * write: an id naming no tool in the project (typo, wrong project, a tool
+ * deleted after the rule was written) is silently dropped from the map instead
+ * of rejected, so a step rule with mixed valid/stale ids still restricts to
+ * the ids that resolve rather than failing the whole generation.
+ */
+export const resolveToolIdsToNames = async (args: {
+  toolIds: string[];
+  projectId: number;
+}): Promise<Record<string, string>> => {
+  if (args.toolIds.length === 0) return {};
+
+  const found = await db.Tool.findAll({
+    where: { publicId: args.toolIds, projectId: args.projectId },
+    attributes: ['publicId', 'name'],
+  });
+
+  const map: Record<string, string> = {};
+  for (const foundTool of found) {
+    map[foundTool.publicId] = foundTool.name;
+  }
+  return map;
+};
+
+/**
  * Every declared cross-resource reference on an agent write, checked together.
  * Both are no-ops for an absent list, so create and update share one call.
  */
