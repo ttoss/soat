@@ -37,11 +37,12 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `type`              | `"http"` \| `"client"` \| `"mcp"` \| `"soat"` \| `"pipeline"` | Tool type — determines execution behaviour                                        |
 | `description`       | `string \| null`                                | Human-readable description sent to the model for tool selection                                                   |
 | `parameters`        | `object \| null`                                | JSON Schema describing the tool's input. Required for `http` and `client` types.                                  |
-| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`). Required for `http` type.                        |
+| `execute`           | `object \| null`                                | HTTP execution config (`url`, `method`, `headers`, `body_mode`, `auth`). Required for `http` type.                |
 | `execute.url`       | `string`                                        | HTTP endpoint. Supports `{paramName}` and `${body.fieldName}` path placeholders replaced at call time with URL-encoded argument values.   |
 | `execute.method`    | `string`                                        | HTTP method (default: `POST`). For `GET`, `HEAD`, `DELETE` the arguments become query-string parameters.          |
 | `execute.headers`   | `object`                                        | Additional headers sent with the execution request.                                                               |
 | `execute.body_mode` | `"json" \| "multipart"`                         | How the request body is encoded for `POST`/`PUT`/`PATCH` (default: `json`). Use `multipart` for APIs that require `multipart/form-data`. |
+| `execute.auth`      | `object \| null`                                | Computed request credential, for targets whose `Authorization` value cannot be a static header. `type` is `aws_sigv4` or `gcp_service_account`. See [Computed credentials](#computed-credentials-executeauth). |
 | `mcp`               | `object \| null`                                | MCP server config (`url`, `headers`). Required for `mcp` type.                                                    |
 | `mcp.url`           | `string`                                        | URL of the MCP server (SSE or Streamable HTTP transport).                                                         |
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
@@ -173,6 +174,76 @@ Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes 
 `{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
 
 Secret references are the **only** valid double-curly syntax: any other `{{...}}` token anywhere in `execute` or `mcp` is rejected at create/update time with `400 INVALID_TEMPLATE_TOKEN` — use single braces (`{param}`) for [URL path placeholders](#http). See [Expressions & Templating](../advanced/expressions-and-templating.md) for the full pattern reference.
+
+#### Computed credentials (`execute.auth`)
+
+`execute.headers` covers every target whose credential is a fixed string. Some are not: AWS expects a Signature Version 4 HMAC computed **per request** over the canonical request, and Google expects a short-lived OAuth 2.0 access token minted from a signed service account assertion. Neither can be expressed as a static header — a `{{secret:...}}` reference in `headers` would send a constant where the target requires a per-request value.
+
+`execute.auth` fills exactly that gap. It is an authentication strategy on the existing `http` transport, not a separate tool type: `parameters`, path placeholders, `body_mode`, `output_mapping`, `preset_parameters`, guardrails, approvals, pipeline steps and `502 TOOL_HTTP_ERROR` mapping all behave identically whether or not `auth` is set.
+
+| `auth.type`             | Required fields                                                        | Optional fields | What is sent |
+| ----------------------- | ---------------------------------------------------------------------- | --------------- | ------------ |
+| `aws_sigv4`             | `region`, `service`, `access_key_id`, `secret_access_key`              | `session_token` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, plus `X-Amz-Security-Token` and `X-Amz-Content-Sha256` when applicable |
+| `gcp_service_account`   | `credentials` (service account key file JSON, as a string), `scopes`    | —               | `Authorization: Bearer <access token>` |
+
+Store credential values as [secret references](./secrets.md#secret-references-secret). `GET /tools/{id}` echoes `execute` back verbatim to anyone with read access, so a pasted key is readable by every project member; the reference is what is stored and returned, and it is resolved only immediately before signing.
+
+```json
+{
+  "name": "get-s3-object",
+  "type": "http",
+  "description": "Reads an object from an S3 bucket",
+  "parameters": {
+    "type": "object",
+    "properties": { "key": { "type": "string" } },
+    "required": ["key"]
+  },
+  "execute": {
+    "url": "https://my-bucket.s3.us-east-1.amazonaws.com/{key}",
+    "method": "GET",
+    "auth": {
+      "type": "aws_sigv4",
+      "region": "us-east-1",
+      "service": "s3",
+      "access_key_id": "{{secret:sec_01HAWSKEYID}}",
+      "secret_access_key": "{{secret:sec_01HAWSSECRET}}"
+    }
+  }
+}
+```
+
+```json
+{
+  "name": "create-bigquery-job",
+  "type": "http",
+  "description": "Submits a BigQuery job",
+  "parameters": {
+    "type": "object",
+    "properties": { "query": { "type": "string" } },
+    "required": ["query"]
+  },
+  "execute": {
+    "url": "https://bigquery.googleapis.com/bigquery/v2/projects/my-gcp-project/jobs",
+    "method": "POST",
+    "auth": {
+      "type": "gcp_service_account",
+      "credentials": "{{secret:sec_01HGCPKEYFILE}}",
+      "scopes": ["https://www.googleapis.com/auth/bigquery"]
+    }
+  }
+}
+```
+
+Behaviour worth knowing:
+
+- **Signing happens last.** The credential is computed over the final method, URL, headers and body, so nothing is added to the request after it. Only headers SOAT itself controls are signed (`host`, `content-type`, `x-amz-*`); [context headers](#context-headers-x-soat-context-) and `Idempotency-Key` are sent unsigned, which AWS permits since verification covers only the headers named in `SignedHeaders`.
+- **`aws_sigv4` is incompatible with `body_mode: "multipart"`,** rejected with `400 VALIDATION_FAILED` at create/update time. SigV4 signs a hash of the exact payload, but in multipart mode `fetch` generates the body and its boundary — the bytes are not knowable at signing time, so any signature would be rejected upstream.
+- **Path encoding follows the service.** Path segments are URI-encoded twice for every service except `s3`, which expects a single encoding, matching the SigV4 specification.
+- **GCP tokens are cached** per service account, token endpoint and scope set, and refreshed shortly before they expire. Two tools sharing one service account and scope set share its token; a different scope set gets its own.
+- **`service` and `region` are part of the signature,** not just routing. A `service` that does not match the host (e.g. `s3` against a Lambda endpoint) produces a signature the target rejects.
+- **Credential failures return `502 TOOL_AUTH_FAILED`** — malformed service account JSON, an unusable private key, or a token endpoint that rejected the assertion. This is distinct from `502 TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call; when the token endpoint responded, its status and body are in the error `meta` as `upstream_status` and `upstream_body`.
+
+Every field in `auth` is validated at create and update time, so a missing `region` or an unknown `type` fails on write with `400 VALIDATION_FAILED` rather than at the first call. The same rule runs during `validate-formation`, so a malformed credential config fails before an apply starts.
 
 #### Request body encoding (`body_mode`)
 
@@ -399,6 +470,8 @@ The model calls `public_doc_update-document` with only the fields it needs to su
 Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`. When the tool has an `output_mapping`, the response is that mapping's result instead of the raw output — see [Output Mapping](#output-mapping).
 
 If an `http` tool's target responds with a non-2xx status, the call fails with `502 TOOL_HTTP_ERROR` instead of the target's own status code. The error `meta` carries the real upstream response: `tool_status_code`, `tool_response_body`, `tool_url`, and `tool_method`.
+
+If the tool declares [`execute.auth`](#computed-credentials-executeauth) and the credential itself cannot be produced — the request never reaches the target — the call fails with `502 TOOL_AUTH_FAILED` instead.
 
 If an `http` tool's target responds with a 2xx status but a body that isn't valid JSON (HTML, plain text, or an empty `204 No Content`), the tool result is the raw response text instead of a parse error.
 

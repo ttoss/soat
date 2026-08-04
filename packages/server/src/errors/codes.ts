@@ -334,6 +334,11 @@ export const ERROR_CODES = {
     description:
       'An http-type tool call returned a non-2xx response. The error `meta` carries the real upstream status code, response body, URL, and method.',
   },
+  TOOL_AUTH_FAILED: {
+    httpStatus: 502,
+    description:
+      "An http-type tool's `execute.auth` credentials could not be turned into a request credential — malformed service account JSON, an unusable private key, or a token endpoint that rejected the assertion. The error `meta` carries the token endpoint's status and body when it responded. Distinct from `TOOL_HTTP_ERROR`, which is the tool's own target rejecting the call.",
+  },
   INVALID_CRON_EXPRESSION: {
     httpStatus: 400,
     description:

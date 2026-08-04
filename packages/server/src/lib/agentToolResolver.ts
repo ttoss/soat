@@ -28,6 +28,12 @@ import {
   resolveSecretRefsInString,
 } from './secrets';
 import {
+  applyHttpToolAuth,
+  type HttpToolAuthConfig,
+  mergeAuthHeaders,
+  parseHttpToolAuthConfig,
+} from './toolAuth';
+import {
   assertValidToolContextKeys,
   buildContextHeaderName,
   buildContextHeaders,
@@ -152,6 +158,7 @@ export type HttpExecuteConfig = {
   method?: string;
   headers?: Record<string, string>;
   bodyMode?: 'json' | 'multipart';
+  auth?: HttpToolAuthConfig;
 };
 
 const isErrorLoggingEnabled = () => {
@@ -234,6 +241,7 @@ export const parseHttpExecuteConfig = (
     method: typeof method === 'string' ? method : undefined,
     headers: parseHeaders({ value: parsedExecute.headers }),
     bodyMode: rawBodyMode === 'multipart' ? 'multipart' : 'json',
+    auth: parseHttpToolAuthConfig(parsedExecute.auth),
   };
 };
 
@@ -339,12 +347,47 @@ export const toHttpToolDomainError = (error: unknown): DomainError | null => {
   );
 };
 
+// Credential fields are resolved field by field rather than by walking the
+// config: an AWS secret access key or a service account JSON blob is opaque
+// text, and nothing here may rewrite what it contains.
+const resolveAuthSecrets = async (args: {
+  auth?: HttpToolAuthConfig;
+  projectId: number;
+}): Promise<HttpToolAuthConfig | undefined> => {
+  const { auth, projectId } = args;
+  if (!auth) return undefined;
+
+  const resolve = (value: string) => {
+    return resolveSecretRefsInString({ value, projectId });
+  };
+
+  if (auth.type === 'aws_sigv4') {
+    return {
+      type: 'aws_sigv4',
+      region: await resolve(auth.region),
+      service: await resolve(auth.service),
+      accessKeyId: await resolve(auth.accessKeyId),
+      secretAccessKey: await resolve(auth.secretAccessKey),
+      sessionToken: auth.sessionToken
+        ? await resolve(auth.sessionToken)
+        : undefined,
+    };
+  }
+
+  return {
+    type: 'gcp_service_account',
+    credentials: await resolve(auth.credentials),
+    scopes: auth.scopes,
+  };
+};
+
 // Resolves {{secret:...}} tokens in the request url and headers at the point
 // of use — the stored config (and anything echoed back by GET/LIST) keeps the
 // reference.
 const resolveHttpRequestSecrets = async (args: {
   url: string;
   headers?: Record<string, string>;
+  auth?: HttpToolAuthConfig;
   projectId: number;
 }) => {
   return {
@@ -354,6 +397,10 @@ const resolveHttpRequestSecrets = async (args: {
     }),
     headers: await resolveSecretRefsInRecord({
       record: args.headers,
+      projectId: args.projectId,
+    }),
+    auth: await resolveAuthSecrets({
+      auth: args.auth,
       projectId: args.projectId,
     }),
   };
@@ -462,6 +509,74 @@ const buildHttpRequestInit = (args: {
   return init;
 };
 
+/**
+ * Adds the `execute.auth` credential headers to an already-built request init.
+ * A no-op when the tool declares no auth, so the unauthenticated http path is
+ * byte-for-byte unchanged.
+ */
+const withHttpToolAuth = async (args: {
+  auth?: HttpToolAuthConfig;
+  method: string;
+  url: string;
+  init: RequestInit;
+}): Promise<RequestInit> => {
+  if (!args.auth) return args.init;
+
+  const headers = (args.init.headers ?? {}) as Record<string, string>;
+  const body = args.init.body;
+
+  // `body` is a string in json mode and a `FormData` in multipart mode. Only
+  // the former is hashable at signing time, which is why `validateExecuteAuth`
+  // rejects aws_sigv4 + multipart at every write path — so a non-string body
+  // can only pair with `gcp_service_account`, which does not sign the payload.
+  const authHeaders = await applyHttpToolAuth({
+    auth: args.auth,
+    method: args.method,
+    url: args.url,
+    headers,
+    body: typeof body === 'string' ? body : undefined,
+  });
+
+  return {
+    ...args.init,
+    headers: mergeAuthHeaders({ headers, authHeaders }),
+  };
+};
+
+/**
+ * Turns the target's response into the tool result, mapping a non-2xx status to
+ * an `HttpToolError` (which the caller maps to `502 TOOL_HTTP_ERROR`).
+ */
+const readHttpToolResponse = async (args: {
+  response: Response;
+  method: string;
+  url: string;
+}): Promise<unknown> => {
+  const { response, method, url } = args;
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new HttpToolError(
+      `HTTP ${response.status} ${method} ${url}: ${body}`,
+      response.status,
+      body,
+      url,
+      method
+    );
+  }
+
+  // The target may return a 2xx with a non-JSON body (HTML, plain text, an
+  // empty 204) — fall back to the raw text instead of letting `SyntaxError`
+  // from a strict `response.json()` escape as an unmapped (and thus opaque
+  // 500) error.
+  const responseText = await response.text();
+  try {
+    return JSON.parse(responseText);
+  } catch {
+    return responseText;
+  }
+};
+
 const ALLOWED_METHODS = [
   'GET',
   'POST',
@@ -510,40 +625,31 @@ export const buildHttpToolExecute = (
       const resolved = await resolveHttpRequestSecrets({
         url,
         headers: args.execute.headers,
+        auth: args.execute.auth,
         projectId: args.projectId,
       });
+      const init = buildHttpRequestInit({
+        method,
+        hasBody,
+        bodyMode: args.execute.bodyMode,
+        resolvedHeaders: resolved.headers,
+        remainingArgs,
+        toolContext,
+        extraHeaders: args.extraHeaders,
+      });
+      // Credentials are computed last, over the final method, url, headers and
+      // body — SigV4 signs a hash of exactly what goes on the wire, so nothing
+      // may be added to the request after this point.
       const response = await fetch(
         resolved.fetchUrl,
-        buildHttpRequestInit({
+        await withHttpToolAuth({
+          auth: resolved.auth,
           method,
-          hasBody,
-          bodyMode: args.execute.bodyMode,
-          resolvedHeaders: resolved.headers,
-          remainingArgs,
-          toolContext,
-          extraHeaders: args.extraHeaders,
+          url: resolved.fetchUrl,
+          init,
         })
       );
-      if (!response.ok) {
-        const body = await response.text();
-        throw new HttpToolError(
-          `HTTP ${response.status} ${method} ${url}: ${body}`,
-          response.status,
-          body,
-          url,
-          method
-        );
-      }
-      // The target may return a 2xx with a non-JSON body (HTML, plain text,
-      // an empty 204) — fall back to the raw text instead of letting
-      // `SyntaxError` from a strict `response.json()` escape as an unmapped
-      // (and thus opaque 500) error.
-      const responseText = await response.text();
-      try {
-        return JSON.parse(responseText);
-      } catch {
-        return responseText;
-      }
+      return await readHttpToolResponse({ response, method, url });
     } catch (error) {
       logToolCallingError({
         toolName: args.toolName,

@@ -72,6 +72,49 @@ paths:
                     body_mode: multipart
                   output_mapping:
                     var: output.text
+              http_aws_sigv4:
+                summary: HTTP tool signed with AWS Signature Version 4
+                value:
+                  name: get-s3-object
+                  type: http
+                  description: Reads an object from an S3 bucket
+                  parameters:
+                    type: object
+                    properties:
+                      key:
+                        type: string
+                    required:
+                      - key
+                  execute:
+                    url: https://my-bucket.s3.us-east-1.amazonaws.com/{key}
+                    method: GET
+                    auth:
+                      type: aws_sigv4
+                      region: us-east-1
+                      service: s3
+                      access_key_id: '{{secret:sec_awsKeyId}}'
+                      secret_access_key: '{{secret:sec_awsSecret}}'
+              http_gcp_service_account:
+                summary: HTTP tool authenticated as a GCP service account
+                value:
+                  name: create-bigquery-job
+                  type: http
+                  description: Submits a BigQuery job
+                  parameters:
+                    type: object
+                    properties:
+                      query:
+                        type: string
+                    required:
+                      - query
+                  execute:
+                    url: https://bigquery.googleapis.com/bigquery/v2/projects/my-gcp-project/jobs
+                    method: POST
+                    auth:
+                      type: gcp_service_account
+                      credentials: '{{secret:sec_gcpServiceAccount}}'
+                      scopes:
+                        - https://www.googleapis.com/auth/bigquery
               client:
                 summary: Client tool
                 value:
@@ -508,6 +551,29 @@ components:
             and attached as a file part (the hardcoded
             `Content-Type: application/json` is dropped so `fetch` sets the
             multipart boundary itself).
+
+
+            `auth` adds a computed request credential, for targets whose
+            `Authorization` value cannot be expressed as a static header.
+            Supported `auth.type` values:
+
+
+            - `aws_sigv4` — signs the request with AWS Signature Version 4.
+            Requires `region`, `service`, `access_key_id` and
+            `secret_access_key`; `session_token` is optional (temporary
+            credentials). Incompatible with `body_mode: multipart`, whose body
+            bytes are not known at signing time.
+
+            - `gcp_service_account` — mints a Google OAuth 2.0 access token from
+            a signed service account assertion and sends it as a bearer token.
+            Requires `credentials` (the service account key file JSON, as a
+            string) and `scopes` (a non-empty array). Tokens are cached per
+            service account and scope set until shortly before they expire.
+
+
+            Credential fields accept `{{secret:...}}` references and should use
+            them — a tool is readable by anyone who can `GET /tools`, and the
+            stored reference is what is echoed back, never the resolved value.
         mcp:
           type: object
           nullable: true
@@ -625,6 +691,29 @@ components:
             and attached as a file part (the hardcoded
             `Content-Type: application/json` is dropped so `fetch` sets the
             multipart boundary itself).
+
+
+            `auth` adds a computed request credential, for targets whose
+            `Authorization` value cannot be expressed as a static header.
+            Supported `auth.type` values:
+
+
+            - `aws_sigv4` — signs the request with AWS Signature Version 4.
+            Requires `region`, `service`, `access_key_id` and
+            `secret_access_key`; `session_token` is optional (temporary
+            credentials). Incompatible with `body_mode: multipart`, whose body
+            bytes are not known at signing time.
+
+            - `gcp_service_account` — mints a Google OAuth 2.0 access token from
+            a signed service account assertion and sends it as a bearer token.
+            Requires `credentials` (the service account key file JSON, as a
+            string) and `scopes` (a non-empty array). Tokens are cached per
+            service account and scope set until shortly before they expire.
+
+
+            Credential fields accept `{{secret:...}}` references and should use
+            them — a tool is readable by anyone who can `GET /tools`, and the
+            stored reference is what is echoed back, never the resolved value.
         mcp:
           type: object
           description: MCP server config (url, headers)
@@ -707,6 +796,29 @@ components:
             and attached as a file part (the hardcoded
             `Content-Type: application/json` is dropped so `fetch` sets the
             multipart boundary itself).
+
+
+            `auth` adds a computed request credential, for targets whose
+            `Authorization` value cannot be expressed as a static header.
+            Supported `auth.type` values:
+
+
+            - `aws_sigv4` — signs the request with AWS Signature Version 4.
+            Requires `region`, `service`, `access_key_id` and
+            `secret_access_key`; `session_token` is optional (temporary
+            credentials). Incompatible with `body_mode: multipart`, whose body
+            bytes are not known at signing time.
+
+            - `gcp_service_account` — mints a Google OAuth 2.0 access token from
+            a signed service account assertion and sends it as a bearer token.
+            Requires `credentials` (the service account key file JSON, as a
+            string) and `scopes` (a non-empty array). Tokens are cached per
+            service account and scope set until shortly before they expire.
+
+
+            Credential fields accept `{{secret:...}}` references and should use
+            them — a tool is readable by anyone who can `GET /tools`, and the
+            stored reference is what is echoed back, never the resolved value.
         mcp:
           type: object
           nullable: true

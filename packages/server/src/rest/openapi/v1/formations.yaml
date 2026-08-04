@@ -844,6 +844,15 @@ components:
               type: object
               nullable: true
               description: Static headers included in every request
+            auth:
+              type: object
+              nullable: true
+              description: >-
+                Computed request credential. `type` is `aws_sigv4` (with
+                `region`, `service`, `access_key_id`, `secret_access_key` and
+                optional `session_token`) or `gcp_service_account` (with
+                `credentials` and `scopes`). Credential fields accept
+                `{{secret:...}}` references.
         mcp:
           type: object
           nullable: true

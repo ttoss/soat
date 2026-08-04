@@ -13,6 +13,7 @@ import {
   assertSecretRefsExist,
 } from './secrets';
 import { soatTools } from './soatTools';
+import { validateExecuteAuth } from './toolAuth';
 import {
   type CallableToolDefinition,
   callResolvedTool,
@@ -209,6 +210,8 @@ export const validateToolDefinition = async (args: {
     validateSoatActions(definition.actions);
   }
 
+  validateExecuteAuth({ execute: definition.execute });
+
   // Reject any {{...}} token that isn't a {{secret:...}} reference before
   // checking whether referenced secrets actually exist.
   assertNoInvalidTemplateTokens({
@@ -371,6 +374,7 @@ const validateToolUpdate = async (params: {
     validateSoatActions(args.actions);
   }
   if (args.execute !== undefined || args.mcp !== undefined) {
+    validateExecuteAuth({ execute: args.execute });
     assertNoInvalidTemplateTokens({ execute: args.execute, mcp: args.mcp });
     await assertSecretRefsExist({
       value: { execute: args.execute, mcp: args.mcp },
