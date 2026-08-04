@@ -3,6 +3,7 @@ import {
   applyOutputMapping,
   applyToolOutputMapping,
   evaluateLogic,
+  findNullVarMappings,
   isLogic,
 } from 'src/lib/jsonLogicMapping';
 
@@ -270,6 +271,72 @@ describe('jsonLogicMapping', () => {
         { text: 'Hi!', language: 'en' }
       );
       expect(result).toEqual({ transcript: 'Hi!', lang: 'en' });
+    });
+
+    test('still returns null for a var that resolves to nothing (logged, not thrown)', () => {
+      const result = applyToolOutputMapping(
+        { document_id: { var: 'output.data.id' } },
+        { data: {} }
+      );
+      expect(result).toEqual({ document_id: null });
+    });
+  });
+
+  describe('findNullVarMappings', () => {
+    test('returns empty when every var resolves', () => {
+      const result = evaluateLogic(
+        { id: { var: 'output.id' } },
+        { output: { id: 'doc_1' } }
+      );
+      expect(findNullVarMappings({ id: { var: 'output.id' } }, result)).toEqual(
+        []
+      );
+    });
+
+    test('flags an object-mapping key whose var resolved to null', () => {
+      const mapping = { document_id: { var: 'output.data.id' } };
+      const result = evaluateLogic(mapping, { output: { data: {} } });
+      expect(findNullVarMappings(mapping, result)).toEqual([
+        { key: 'document_id', path: 'output.data.id' },
+      ]);
+    });
+
+    test('flags the bare top-level var when it resolves to null', () => {
+      const mapping = { var: 'output.missing' };
+      const result = evaluateLogic(mapping, { output: {} });
+      expect(findNullVarMappings(mapping, result)).toEqual([
+        { key: '(root)', path: 'output.missing' },
+      ]);
+    });
+
+    test('does not flag a literal key that is intentionally null', () => {
+      const mapping = { note: null };
+      const result = evaluateLogic(mapping, {});
+      expect(findNullVarMappings(mapping, result)).toEqual([]);
+    });
+
+    test('does not flag a var key whose value is legitimately null', () => {
+      const mapping = { archived_at: { var: 'output.archived_at' } };
+      const result = evaluateLogic(mapping, {
+        output: { archived_at: null },
+      });
+      // Indistinguishable from a miss at this layer — same as #818's proposal
+      // ("loggable event", not a hard error) — but still worth flagging since
+      // a legitimately-null field is rare for an id/reference mapping.
+      expect(findNullVarMappings(mapping, result)).toEqual([
+        { key: 'archived_at', path: 'output.archived_at' },
+      ]);
+    });
+
+    test('only checks top-level keys, not vars nested inside them', () => {
+      const mapping = { data: { nested: { var: 'output.missing' } } };
+      const result = evaluateLogic(mapping, { output: {} });
+      expect(findNullVarMappings(mapping, result)).toEqual([]);
+    });
+
+    test('returns empty array when result is not an object (defensive)', () => {
+      const mapping = { document_id: { var: 'output.data.id' } };
+      expect(findNullVarMappings(mapping, 'not-an-object')).toEqual([]);
     });
   });
 });

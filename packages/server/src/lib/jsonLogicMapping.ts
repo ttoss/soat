@@ -1,4 +1,7 @@
+import createDebug from 'debug';
 import { LogicEngine } from 'json-logic-engine';
+
+const log = createDebug('soat:jsonLogicMapping');
 
 /**
  * Shared synchronous JSON Logic evaluator (https://jsonlogic.com).
@@ -91,6 +94,52 @@ export const applyOutputMapping = (
 };
 
 /**
+ * True when `expr` is specifically a `{ var: <path> }` JSON Logic expression
+ * — narrower than {@link isLogic}, which accepts any registered operator.
+ * Used to tell "this key maps a var that came back empty" apart from "this
+ * key is a literal `null`" (see {@link findNullVarMappings}).
+ */
+const isVarExpression = (
+  expr: unknown
+): expr is { var: string | unknown[] } => {
+  return (
+    typeof expr === 'object' &&
+    expr !== null &&
+    !Array.isArray(expr) &&
+    Object.keys(expr).length === 1 &&
+    'var' in expr
+  );
+};
+
+/**
+ * Scans an outputMapping's top-level `var` expressions for ones whose
+ * evaluated result is `null` — see #818: a `var` path that resolves to
+ * nothing on an otherwise-successful call is meant to be a loggable event,
+ * not a silent `null`. Only the mapping's declared keys (or a bare top-level
+ * expression) are checked; a `var` nested deeper inside a key's value is out
+ * of scope, same as `applyToolOutputMapping`'s own resolution depth.
+ */
+export const findNullVarMappings = (
+  outputMapping: Record<string, unknown>,
+  result: unknown
+): Array<{ key: string; path: string | unknown[] }> => {
+  if (isVarExpression(outputMapping)) {
+    return result === null ? [{ key: '(root)', path: outputMapping.var }] : [];
+  }
+  if (typeof result !== 'object' || result === null || Array.isArray(result)) {
+    return [];
+  }
+  const resultRecord = result as Record<string, unknown>;
+  const misses: Array<{ key: string; path: string | unknown[] }> = [];
+  for (const [key, expr] of Object.entries(outputMapping)) {
+    if (isVarExpression(expr) && resultRecord[key] === null) {
+      misses.push({ key, path: expr.var });
+    }
+  }
+  return misses;
+};
+
+/**
  * Reshapes a tool's raw result via its `outputMapping` (JSON Logic evaluated
  * over `{ output: rawResult }`), e.g. `{ var: "output.text" }` extracts a bare
  * scalar field. When no mapping is configured, the raw result is returned
@@ -101,5 +150,13 @@ export const applyToolOutputMapping = (
   rawResult: unknown
 ): unknown => {
   if (!outputMapping) return rawResult;
-  return evaluateLogic(outputMapping, { output: rawResult });
+  const result = evaluateLogic(outputMapping, { output: rawResult });
+  for (const miss of findNullVarMappings(outputMapping, result)) {
+    log(
+      'applyToolOutputMapping: var path resolved to null key=%s path=%o',
+      miss.key,
+      miss.path
+    );
+  }
+  return result;
 };
