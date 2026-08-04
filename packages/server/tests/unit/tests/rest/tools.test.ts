@@ -1006,6 +1006,411 @@ describe('Tools', () => {
     });
   });
 
+  describe('execute.auth credential strategies', () => {
+    let awsKeyIdSecretId: string;
+    let awsSecretSecretId: string;
+    let authEchoServer: http.Server;
+    let authEchoServerUrl: string;
+    let lastAuthRequest: {
+      authorization: string | undefined;
+      amzDate: string | undefined;
+      amzContentSha256: string | undefined;
+    };
+
+    const header = (
+      req: http.IncomingMessage,
+      name: string
+    ): string | undefined => {
+      const value = req.headers[name];
+      return typeof value === 'string' ? value : undefined;
+    };
+
+    beforeAll(async () => {
+      // The access key id lives in a secret so the signed `Credential=` scope
+      // proves the reference was resolved before signing, not merely stored.
+      const keyIdRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'aws-access-key-id',
+          value: 'AKIARESOLVEDKEYID',
+        });
+      expect(keyIdRes.status).toBe(201);
+      awsKeyIdSecretId = keyIdRes.body.id;
+
+      const secretRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/secrets')
+        .send({
+          project_id: projectId,
+          name: 'aws-secret-access-key',
+          value: 'wJalrXUtnFEMIexampleSigningSecret',
+        });
+      expect(secretRes.status).toBe(201);
+      awsSecretSecretId = secretRes.body.id;
+
+      authEchoServer = http.createServer((req, res) => {
+        lastAuthRequest = {
+          authorization: header(req, 'authorization'),
+          amzDate: header(req, 'x-amz-date'),
+          amzContentSha256: header(req, 'x-amz-content-sha256'),
+        };
+        res.setHeader('Content-Type', 'application/json');
+        res.end(JSON.stringify({ ok: true }));
+      });
+      await new Promise<void>((resolve) => {
+        authEchoServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = authEchoServer.address() as AddressInfo;
+      authEchoServerUrl = `http://127.0.0.1:${port}`;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve) => {
+        authEchoServer.close(() => {
+          resolve();
+        });
+      });
+    });
+
+    test('creating an aws_sigv4 tool stores it and echoes the secret refs unresolved', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-create-tool',
+          type: 'http',
+          execute: {
+            url: 'https://my-bucket.s3.us-east-1.amazonaws.com/{key}',
+            method: 'GET',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 's3',
+              access_key_id: `{{secret:${awsKeyIdSecretId}}}`,
+              secret_access_key: `{{secret:${awsSecretSecretId}}}`,
+            },
+          },
+        });
+
+      expect(createRes.status).toBe(201);
+
+      const getRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${createRes.body.id}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.execute.auth).toEqual({
+        type: 'aws_sigv4',
+        region: 'us-east-1',
+        service: 's3',
+        access_key_id: `{{secret:${awsKeyIdSecretId}}}`,
+        secret_access_key: `{{secret:${awsSecretSecretId}}}`,
+      });
+    });
+
+    test('creating a gcp_service_account tool succeeds', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'gcp-create-tool',
+          type: 'http',
+          execute: {
+            url: 'https://bigquery.googleapis.com/bigquery/v2/projects/p/jobs',
+            method: 'POST',
+            auth: {
+              type: 'gcp_service_account',
+              credentials: `{{secret:${awsSecretSecretId}}}`,
+              scopes: ['https://www.googleapis.com/auth/bigquery'],
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.execute.auth.type).toBe('gcp_service_account');
+    });
+
+    test('an unknown auth type returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'bad-auth-type-tool',
+          type: 'http',
+          execute: {
+            url: 'https://example.com',
+            auth: { type: 'azure_ad', tenant: 'x' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('azure_ad');
+    });
+
+    test('aws_sigv4 missing region returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-no-region-tool',
+          type: 'http',
+          execute: {
+            url: 'https://example.com',
+            auth: {
+              type: 'aws_sigv4',
+              service: 's3',
+              access_key_id: 'AKIA',
+              secret_access_key: 'shh',
+            },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('execute.auth.region');
+    });
+
+    test('gcp_service_account without scopes returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'gcp-no-scopes-tool',
+          type: 'http',
+          execute: {
+            url: 'https://example.com',
+            auth: { type: 'gcp_service_account', credentials: '{}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('execute.auth.scopes');
+    });
+
+    test('aws_sigv4 with body_mode multipart returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-multipart-tool',
+          type: 'http',
+          execute: {
+            url: 'https://example.com',
+            method: 'POST',
+            body_mode: 'multipart',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 's3',
+              access_key_id: 'AKIA',
+              secret_access_key: 'shh',
+            },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('multipart');
+    });
+
+    test('aws_sigv4 with the legacy camelCase bodyMode multipart also returns 400', async () => {
+      // `parseHttpExecuteConfig` honors `bodyMode` as a fallback, so validation
+      // must reject it too or the tool would be signed against a payload hash
+      // that does not match the multipart body actually sent.
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-legacy-multipart-tool',
+          type: 'http',
+          execute: {
+            url: 'https://example.com',
+            method: 'POST',
+            bodyMode: 'multipart',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 's3',
+              access_key_id: 'AKIA',
+              secret_access_key: 'shh',
+            },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('multipart');
+    });
+
+    test('updating a tool to an invalid auth config returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-update-tool',
+          type: 'http',
+          execute: { url: 'https://example.com', method: 'GET' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({
+          execute: {
+            url: 'https://example.com',
+            method: 'GET',
+            auth: { type: 'aws_sigv4', region: 'us-east-1', service: 's3' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('execute.auth.access_key_id');
+    });
+
+    test('calling an aws_sigv4 tool signs the request with resolved credentials', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-call-tool',
+          type: 'http',
+          execute: {
+            url: `${authEchoServerUrl}/objects/report.csv`,
+            method: 'GET',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 's3',
+              access_key_id: `{{secret:${awsKeyIdSecretId}}}`,
+              secret_access_key: `{{secret:${awsSecretSecretId}}}`,
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(lastAuthRequest.authorization).toContain('AWS4-HMAC-SHA256 ');
+      // The signed credential scope carries the *resolved* access key id, which
+      // is only possible if the {{secret:...}} ref was resolved before signing.
+      expect(lastAuthRequest.authorization).toContain(
+        'Credential=AKIARESOLVEDKEYID/'
+      );
+      expect(lastAuthRequest.authorization).toContain(
+        '/us-east-1/s3/aws4_request'
+      );
+      expect(lastAuthRequest.authorization).toContain(
+        'SignedHeaders=host;x-amz-content-sha256;x-amz-date'
+      );
+      expect(lastAuthRequest.authorization).not.toContain('{{secret:');
+      expect(lastAuthRequest.amzDate).toMatch(/^\d{8}T\d{6}Z$/);
+      // Empty GET payload.
+      expect(lastAuthRequest.amzContentSha256).toBe(
+        'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+      );
+    });
+
+    test('an http tool without auth sends no credential headers', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'no-auth-call-tool',
+          type: 'http',
+          execute: { url: `${authEchoServerUrl}/plain`, method: 'GET' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      expect(lastAuthRequest.authorization).toBeUndefined();
+      expect(lastAuthRequest.amzDate).toBeUndefined();
+    });
+
+    test('a gcp_service_account tool call surfaces a bad key as TOOL_AUTH_FAILED', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'gcp-bad-credentials-tool',
+          type: 'http',
+          execute: {
+            url: `${authEchoServerUrl}/gcp`,
+            method: 'GET',
+            auth: {
+              type: 'gcp_service_account',
+              // A valid secret ref whose value is not service account JSON.
+              credentials: `{{secret:${awsSecretSecretId}}}`,
+              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(502);
+      expect(callRes.body.error.code).toBe('TOOL_AUTH_FAILED');
+    });
+
+    test('calling an auth-configured tool without permission returns 404', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'sigv4-forbidden-tool',
+          type: 'http',
+          execute: {
+            url: `${authEchoServerUrl}/forbidden`,
+            method: 'GET',
+            auth: {
+              type: 'aws_sigv4',
+              region: 'us-east-1',
+              service: 's3',
+              access_key_id: 'AKIA',
+              secret_access_key: 'shh',
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(noPermToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+      expect(res.status).toBe(404);
+    });
+
+    test('creating a tool with auth requires authentication', async () => {
+      const res = await testClient.post('/api/v1/tools').send({
+        project_id: projectId,
+        name: 'sigv4-unauthenticated-tool',
+        type: 'http',
+        execute: {
+          url: 'https://example.com',
+          auth: {
+            type: 'aws_sigv4',
+            region: 'us-east-1',
+            service: 's3',
+            access_key_id: 'AKIA',
+            secret_access_key: 'shh',
+          },
+        },
+      });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('Invalid template tokens ({{...}}) in tool configs', () => {
     test('creating an http tool with a non-secret {{...}} token in execute.url returns 400', async () => {
       const res = await authenticatedTestClient(adminToken)

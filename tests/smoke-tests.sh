@@ -312,6 +312,76 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
 echo "Secret reference coverage: OK"
 
+# execute.auth computed credentials: an aws_sigv4 config is accepted and its
+# credential fields are echoed back as {{secret:...}} references, never
+# resolved. Malformed configs must fail at create time, not at first call.
+# The signed request itself is covered by the server suite against a local echo
+# server — there are no cloud credentials in the smoke stack to call for real.
+SIGV4_AUTH_JSON="{\"type\":\"aws_sigv4\",\"region\":\"us-east-1\",\"service\":\"s3\",\"access_key_id\":\"AKIASMOKEEXAMPLE\",\"secret_access_key\":\"{{secret:$SECRET_ID}}\"}"
+SIGV4_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-sigv4-tool \
+  --type http \
+  --execute "{\"url\":\"https://my-bucket.s3.us-east-1.amazonaws.com/{key}\",\"method\":\"GET\",\"auth\":$SIGV4_AUTH_JSON}")
+SIGV4_TOOL_ID=$(printf '%s\n' "$SIGV4_TOOL_RESP" | jq -r '.id')
+if [ -z "$SIGV4_TOOL_ID" ] || [ "$SIGV4_TOOL_ID" = "null" ]; then
+  echo "ERROR: Failed to create an http tool with execute.auth aws_sigv4" >&2
+  echo "$SIGV4_TOOL_RESP" >&2
+  exit 1
+fi
+
+SIGV4_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$SIGV4_TOOL_ID")
+STORED_SIGV4_SECRET=$(printf '%s\n' "$SIGV4_TOOL_GET" | jq -r '.execute.auth.secret_access_key')
+if [ "$STORED_SIGV4_SECRET" != "{{secret:$SECRET_ID}}" ]; then
+  echo "ERROR: Expected execute.auth.secret_access_key to echo the {{secret:...}} token, got '$STORED_SIGV4_SECRET'" >&2
+  echo "$SIGV4_TOOL_GET" >&2
+  exit 1
+fi
+STORED_SIGV4_SERVICE=$(printf '%s\n' "$SIGV4_TOOL_GET" | jq -r '.execute.auth.service')
+if [ "$STORED_SIGV4_SERVICE" != "s3" ]; then
+  echo "ERROR: Expected execute.auth.service to be 's3', got '$STORED_SIGV4_SERVICE'" >&2
+  echo "$SIGV4_TOOL_GET" >&2
+  exit 1
+fi
+
+GCP_AUTH_JSON="{\"type\":\"gcp_service_account\",\"credentials\":\"{{secret:$SECRET_ID}}\",\"scopes\":[\"https://www.googleapis.com/auth/bigquery\"]}"
+GCP_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-gcp-auth-tool \
+  --type http \
+  --execute "{\"url\":\"https://bigquery.googleapis.com/bigquery/v2/projects/p/jobs\",\"method\":\"POST\",\"auth\":$GCP_AUTH_JSON}")
+GCP_TOOL_ID=$(printf '%s\n' "$GCP_TOOL_RESP" | jq -r '.id')
+if [ -z "$GCP_TOOL_ID" ] || [ "$GCP_TOOL_ID" = "null" ]; then
+  echo "ERROR: Failed to create an http tool with execute.auth gcp_service_account" >&2
+  echo "$GCP_TOOL_RESP" >&2
+  exit 1
+fi
+
+# An unknown auth type.
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-bad-auth-type-tool \
+  --type http \
+  --execute '{"url":"https://example.com","auth":{"type":"azure_ad"}}'
+
+# aws_sigv4 missing a required credential field.
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-bad-auth-field-tool \
+  --type http \
+  --execute '{"url":"https://example.com","auth":{"type":"aws_sigv4","region":"us-east-1","service":"s3"}}'
+
+# aws_sigv4 cannot sign a multipart body.
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-bad-auth-multipart-tool \
+  --type http \
+  --execute '{"url":"https://example.com","method":"POST","body_mode":"multipart","auth":{"type":"aws_sigv4","region":"us-east-1","service":"s3","access_key_id":"AKIA","secret_access_key":"shh"}}'
+
+$SOAT_CLI delete-tool --tool-id "$SIGV4_TOOL_ID"
+$SOAT_CLI delete-tool --tool-id "$GCP_TOOL_ID"
+echo "execute.auth coverage: OK"
+
 $SOAT_CLI delete-secret --secret-id "$SECRET_ID"
 
 expect_cli_error_status 404 get-secret --secret-id "$SECRET_ID"

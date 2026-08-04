@@ -14,6 +14,7 @@ import {
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { findInvalidTemplateTokens } from '../secrets';
+import { validateExecuteAuth } from '../toolAuth';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import {
   isObjectRecord,
@@ -64,6 +65,26 @@ const normalizePipelineRefsForValidation = (pipeline: unknown): unknown => {
   };
 };
 
+/**
+ * Applies the same `execute.auth` rule the REST create/update paths enforce, so
+ * a malformed credential config fails at `validate-formation` rather than
+ * part-way through an apply.
+ */
+const pushExecuteAuthErrors = (args: {
+  properties: Record<string, unknown>;
+  basePath: string;
+  errors: ValidationError[];
+}): void => {
+  try {
+    validateExecuteAuth({ execute: args.properties.execute });
+  } catch (error) {
+    args.errors.push({
+      path: `${args.basePath}.execute.auth`,
+      message: error instanceof DomainError ? error.message : String(error),
+    });
+  }
+};
+
 const validateToolProperties = (args: {
   properties: unknown;
   basePath: string;
@@ -104,6 +125,8 @@ const validateToolProperties = (args: {
       errors.push({ path: `${basePath}.pipeline`, message });
     }
   }
+
+  pushExecuteAuthErrors({ properties, basePath, errors });
 
   // Validate execute and mcp separately so each error points at the field
   // that actually carries the offending token.
