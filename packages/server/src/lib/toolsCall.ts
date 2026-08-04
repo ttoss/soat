@@ -287,6 +287,11 @@ export const callResolvedTool = async (args: {
 }): Promise<unknown> => {
   const type = args.tool.type ?? 'http';
 
+  const mergedInput = {
+    ...(args.tool.presetParameters ?? {}),
+    ...(args.input ?? {}),
+  };
+
   if (type === 'pipeline') {
     const rawResult = await runPipeline({
       pipeline: args.tool.pipeline,
@@ -317,14 +322,10 @@ export const callResolvedTool = async (args: {
     });
     return applyToolOutputMapping(
       (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
-      rawResult
+      rawResult,
+      mergedInput
     );
   }
-
-  const mergedInput = {
-    ...(args.tool.presetParameters ?? {}),
-    ...(args.input ?? {}),
-  };
 
   const rawResult = await dispatchDirectTool({
     type,
@@ -338,7 +339,8 @@ export const callResolvedTool = async (args: {
 
   return applyToolOutputMapping(
     (args.tool.outputMapping as Record<string, unknown> | null) ?? null,
-    rawResult
+    rawResult,
+    mergedInput
   );
 };
 

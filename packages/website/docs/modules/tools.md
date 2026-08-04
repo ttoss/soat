@@ -412,7 +412,7 @@ For LLM-decided (rather than fixed) multi-step flows, see [Orchestrations](./orc
 
 ### Output Mapping
 
-`output_mapping` is a universal [JSON Logic](https://jsonlogic.com) mapping applied to a tool's raw result, for **every** tool type (`http`, `mcp`, `soat`, `pipeline`, `client`). It's evaluated over `{ "output": <raw result> }`, so `{ "var": "output.text" }` extracts a bare scalar field without needing a wrapping `pipeline` tool just to reshape a response:
+`output_mapping` is a universal [JSON Logic](https://jsonlogic.com) mapping applied to a tool's raw result, for **every** tool type (`http`, `mcp`, `soat`, `pipeline`, `client`). It's evaluated over `{ "output": <raw result>, "input": <merged input> }`, so `{ "var": "output.text" }` extracts a bare scalar field without needing a wrapping `pipeline` tool just to reshape a response, and `{ "var": "input.title" }` echoes back a field of the request that produced the response — useful for carrying a caller-supplied value into a reshaped result without the target endpoint needing to return it itself:
 
 ```json
 {
@@ -428,9 +428,17 @@ An object mapping reshapes the result instead of extracting a single field, the 
 { "transcript": { "var": "output.text" }, "language": { "var": "output.language" } }
 ```
 
-**Ordering for `pipeline` tools.** A pipeline already has its own `output` mapping over the pipeline's internal `steps.*` context. The tool's top-level `output_mapping` runs *after* that — over the pipeline's final result, wrapped as `{ "output": <pipeline result> }`. In practice a pipeline author can do all the reshaping in `output` directly, but `output_mapping` composes on top when needed (e.g. a shared pipeline tool whose result a specific caller wants to reshape further).
+`input` is the tool's merged input for this call — `preset_parameters` merged with the caller-supplied `input`, the same value the tool execution itself receives:
+
+```json
+{ "document_id": { "var": "output.data.id" }, "title": { "var": "input.title" } }
+```
+
+**Ordering for `pipeline` tools.** A pipeline already has its own `output` mapping over the pipeline's internal `steps.*` context. The tool's top-level `output_mapping` runs *after* that — over the pipeline's final result, wrapped as `{ "output": <pipeline result>, "input": <merged input> }`. In practice a pipeline author can do all the reshaping in `output` directly, but `output_mapping` composes on top when needed (e.g. a shared pipeline tool whose result a specific caller wants to reshape further).
 
 **`client` tools.** Since client tools are executed by the calling application rather than resolved server-side, `output_mapping` is applied when the submitted tool output is materialized back into the generation, keyed by tool name.
+
+**Where `input` is available.** The `input` context key is populated for every call that resolves and executes a tool directly — a direct call (`POST /tools/{id}/call`), a pipeline step, or a workflow/orchestration tool dispatch. It's `{}` for a tool the model calls by name from within an agent's own tool-calling loop, and for a `client` tool's output mapping — those paths don't have a merged input to hand back today.
 
 When no `output_mapping` is configured, a tool's raw result is returned unchanged.
 

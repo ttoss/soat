@@ -628,10 +628,12 @@ components:
           description: >-
             Universal JSON Logic mapping applied to the tool's raw result,
             for every tool type (`http`, `mcp`, `soat`, `pipeline`, `client`).
-            Evaluated over `{ output: <raw result> }`, so `{ "var": "output.text" }`
-            extracts a bare scalar field instead of requiring a wrapping
-            `pipeline` tool. For `pipeline` tools this runs *after* the
-            pipeline's own `output` mapping, over that mapping's result.
+            Evaluated over `{ output: <raw result>, input: <merged input> }`,
+            so `{ "var": "output.text" }` extracts a bare scalar field instead
+            of requiring a wrapping `pipeline` tool, and `{ "var": "input.title" }`
+            echoes back a field of the request that produced the response. For
+            `pipeline` tools this runs *after* the pipeline's own `output`
+            mapping, over that mapping's result.
         guardrail_ids:
           x-soat-ref: guardrails
           type: array

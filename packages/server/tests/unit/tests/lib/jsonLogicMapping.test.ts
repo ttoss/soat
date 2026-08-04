@@ -280,6 +280,40 @@ describe('jsonLogicMapping', () => {
       );
       expect(result).toEqual({ document_id: null });
     });
+
+    // #819 — the mapping context also carries the request's merged input,
+    // so a mapping can echo a field the target endpoint never returns.
+    test('resolves input.* against the merged input passed as the third argument', () => {
+      const result = applyToolOutputMapping(
+        {
+          document_id: { var: 'output.data.id' },
+          title: { var: 'input.title' },
+        },
+        { data: { id: 'doc_1' } },
+        { title: 'my title' }
+      );
+      expect(result).toEqual({ document_id: 'doc_1', title: 'my title' });
+    });
+
+    test('input.* resolves to null when no mergedInput is passed', () => {
+      const result = applyToolOutputMapping(
+        { title: { var: 'input.title' } },
+        { data: {} }
+      );
+      expect(result).toEqual({ title: null });
+    });
+
+    test('output.* and input.* can be combined in the same mapping', () => {
+      const result = applyToolOutputMapping(
+        {
+          text: { var: 'output.text' },
+          echoed_query: { var: 'input.query' },
+        },
+        { text: 'Hi!' },
+        { query: 'hello', unrelatedPreset: 'ignored' }
+      );
+      expect(result).toEqual({ text: 'Hi!', echoed_query: 'hello' });
+    });
   });
 
   describe('findNullVarMappings', () => {
