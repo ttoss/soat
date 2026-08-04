@@ -52,7 +52,22 @@ const meterNodeCompute = async (args: {
  * run (and on each failing node execution).
  */
 const describeThrown = (error: unknown): string => {
-  if (error instanceof Error) return error.message;
+  if (error instanceof Error) {
+    // `fetch` (and other network/runtime errors) throw a generic wrapper —
+    // e.g. `TypeError: fetch failed` — with the actual reason (DNS failure,
+    // connection refused, protocol mismatch, …) only on `.cause`. Dropping it
+    // is what made ttoss/soat#820 unreproducible: a tool-node HTTP dispatch
+    // failure recorded only "fetch failed" on the run, with nothing to
+    // distinguish a plain-HTTP host issue from a timeout or a bad DNS entry.
+    if (error.cause !== undefined) {
+      const causeMessage =
+        error.cause instanceof Error
+          ? error.cause.message
+          : String(error.cause);
+      return `${error.message}: ${causeMessage}`;
+    }
+    return error.message;
+  }
   // A non-Error throw is common from third-party evaluators — e.g.
   // json-logic-engine throws a bare `{ type: 'Unknown Operator' }` object for
   // an unrecognized operator (such as a multi-key object used as a
