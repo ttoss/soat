@@ -2,17 +2,10 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { type SequelizeInstance, type Transaction } from './dbTransaction';
 import { taskLeaseTtlMs } from './orchestration-queue-drivers/config';
 import type { RunTaskKind } from './orchestration-queue-drivers/types';
 import { recordClaimLatency } from './orchestrationQueueMetrics';
-
-type SequelizeInstance = typeof db.sequelize;
-// The transaction type as `sequelize.query` expects it — derived from the query
-// options so it stays correct without importing sequelize's internals directly
-// (`@ttoss/postgresdb` does not re-export `Transaction`).
-type Transaction = NonNullable<
-  NonNullable<Parameters<SequelizeInstance['query']>[1]>['transaction']
->;
 
 // Physical table names — fixed by each model's @Table decorator. The queue
 // claim joins tasks → runs → projects to read the per-project concurrency limit.
