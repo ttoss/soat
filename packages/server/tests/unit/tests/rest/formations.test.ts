@@ -1023,6 +1023,119 @@ resources:
       },
     };
 
+    // `ToolResourceProperties.execute` in formations.yaml documents the inner
+    // keys a tool's execute config may carry. These two assert that the
+    // documented set is actually what an apply carries through to the tool, so
+    // a field present in the tools REST spec but missing from the formation
+    // schema shows up here rather than as a surprise at authoring time.
+    test('carries execute.body_mode through an apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `execute-body-mode-${Date.now()}`,
+          template: {
+            resources: {
+              MultipartTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-multipart-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://api.example.com/stt',
+                    method: 'POST',
+                    body_mode: 'multipart',
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.resources).toHaveLength(1);
+
+      // Read back as admin: this file's policy grants formation actions only,
+      // so `tools:GetTool` would 404 for `userToken` and mask the assertion.
+      const toolRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(toolRes.status).toBe(200);
+      expect(toolRes.body.execute.body_mode).toBe('multipart');
+    });
+
+    test('carries execute.auth through an apply', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `execute-auth-${Date.now()}`,
+          template: {
+            resources: {
+              SignedTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-sigv4-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://my-bucket.s3.us-east-1.amazonaws.com/{key}',
+                    method: 'GET',
+                    auth: {
+                      type: 'aws_sigv4',
+                      region: 'us-east-1',
+                      service: 's3',
+                      access_key_id: 'AKIAFORMATION',
+                      secret_access_key: 'formation-secret',
+                    },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(201);
+
+      // Read back as admin: this file's policy grants formation actions only,
+      // so `tools:GetTool` would 404 for `userToken` and mask the assertion.
+      const toolRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${res.body.resources[0].physical_resource_id}`
+      );
+      expect(toolRes.status).toBe(200);
+      expect(toolRes.body.execute.auth.service).toBe('s3');
+      expect(toolRes.body.execute.auth.region).toBe('us-east-1');
+    });
+
+    test('rejects a malformed execute.auth at validate time', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              BadAuthTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-bad-auth-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://example.com',
+                    auth: { type: 'aws_sigv4', region: 'us-east-1' },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(
+        res.body.errors.some((error: { message: string }) => {
+          return error.message.includes('execute.auth.service');
+        })
+      ).toBe(true);
+    });
+
     test('creates formation with resources having optional properties', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
