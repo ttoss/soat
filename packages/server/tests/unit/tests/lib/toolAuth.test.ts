@@ -5,6 +5,7 @@ import type { AddressInfo } from 'node:net';
 import { DomainError } from '../../../../src/errors';
 import {
   applyHttpToolAuth,
+  mergeAuthHeaders,
   parseHttpToolAuthConfig,
   signAwsSigV4,
   validateHttpToolAuth,
@@ -173,6 +174,44 @@ describe('toolAuth', () => {
       // S3 encodes path segments once; a non-S3 service would double-encode
       // the %20 into %2520.
       expect(result.canonicalRequest).toContain('/folder/a%20b.txt');
+    });
+
+    test('escapes the RFC3986 characters encodeURIComponent leaves alone', () => {
+      // `encodeURIComponent` passes !'()* through, but SigV4's canonical form
+      // requires them percent-encoded — an unescaped one changes the signature
+      // AWS computes and the request is rejected.
+      const result = signAwsSigV4({
+        auth: {
+          type: 'aws_sigv4',
+          region: 'us-east-1',
+          service: 'execute-api',
+          accessKeyId: 'AKIDEXAMPLE',
+          secretAccessKey: 'secret',
+        },
+        method: 'GET',
+        url: "https://api.example.com/?filter=(a)!*'",
+        now: AWS_EXAMPLE.date,
+      });
+
+      expect(result.canonicalRequest).toContain('filter=%28a%29%21%2A%27');
+    });
+
+    test('breaks ties between duplicate query keys by value', () => {
+      const result = signAwsSigV4({
+        auth: {
+          type: 'aws_sigv4',
+          region: 'us-east-1',
+          service: 'execute-api',
+          accessKeyId: 'AKIDEXAMPLE',
+          secretAccessKey: 'secret',
+        },
+        method: 'GET',
+        url: 'https://api.example.com/?id=2&id=1&id=2',
+        now: AWS_EXAMPLE.date,
+      });
+
+      // Same key repeated: SigV4 orders the duplicates by their encoded value.
+      expect(result.canonicalRequest).toContain('id=1&id=2&id=2');
     });
 
     test('double-encodes path segments for non-s3 services', () => {
@@ -531,13 +570,19 @@ describe('toolAuth', () => {
       expect((caught as DomainError).meta?.upstream_status).toBe(400);
     });
 
-    test('rejects malformed service account credentials as TOOL_AUTH_FAILED', async () => {
+    // Each credential/response defect gets its own TOOL_AUTH_FAILED message,
+    // because "the credential could not be produced" is useless on its own —
+    // the operator needs to know which part to fix.
+    const expectAuthFailure = async (args: {
+      credentials: string;
+      message: string;
+    }) => {
       let caught: unknown;
       try {
         await applyHttpToolAuth({
           auth: {
             type: 'gcp_service_account',
-            credentials: 'not-json',
+            credentials: args.credentials,
             scopes: ['https://www.googleapis.com/auth/cloud-platform'],
           },
           method: 'GET',
@@ -551,6 +596,164 @@ describe('toolAuth', () => {
 
       expect(caught).toBeInstanceOf(DomainError);
       expect((caught as DomainError).code).toBe('TOOL_AUTH_FAILED');
+      expect((caught as DomainError).message).toContain(args.message);
+    };
+
+    test('rejects credentials that are not JSON at all', async () => {
+      await expectAuthFailure({
+        credentials: 'not-json',
+        message: 'not valid service account JSON',
+      });
+    });
+
+    test('rejects credentials that are valid JSON but not an object', async () => {
+      await expectAuthFailure({
+        credentials: '["not","an","object"]',
+        message: 'must be a service account JSON object',
+      });
+    });
+
+    test('rejects credentials missing client_email or private_key', async () => {
+      await expectAuthFailure({
+        credentials: JSON.stringify({
+          client_email: 'only@p.iam.gserviceaccount.com',
+        }),
+        message: 'missing client_email or private_key',
+      });
+    });
+
+    test('rejects a private key that cannot sign', async () => {
+      await expectAuthFailure({
+        credentials: JSON.stringify({
+          client_email: 'badkey@p.iam.gserviceaccount.com',
+          private_key:
+            '-----BEGIN PRIVATE KEY-----\nnope\n-----END PRIVATE KEY-----\n',
+          token_uri: tokenUri,
+        }),
+        message: 'Failed to sign the service account assertion',
+      });
+    });
+
+    test('rejects a non-JSON body from the token endpoint', async () => {
+      // The shared stub always JSON-stringifies its body, so a 200 with a
+      // genuinely non-JSON payload needs its own one-off server.
+      const rawServer = http.createServer((req, res) => {
+        req.resume();
+        req.on('end', () => {
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'text/plain');
+          res.end('<html>not json</html>');
+        });
+      });
+      await new Promise<void>((resolve) => {
+        rawServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = rawServer.address() as AddressInfo;
+
+      try {
+        let caught: unknown;
+        try {
+          await applyHttpToolAuth({
+            auth: {
+              type: 'gcp_service_account',
+              credentials: JSON.stringify({
+                client_email: 'rawbody@p.iam.gserviceaccount.com',
+                private_key: privateKey,
+                token_uri: `http://127.0.0.1:${port}/token`,
+              }),
+              scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+            },
+            method: 'GET',
+            url: 'https://compute.googleapis.com/x',
+            headers: {},
+            now: AWS_EXAMPLE.date,
+          });
+        } catch (error) {
+          caught = error;
+        }
+
+        expect(caught).toBeInstanceOf(DomainError);
+        expect((caught as DomainError).code).toBe('TOOL_AUTH_FAILED');
+        expect((caught as DomainError).message).toContain('non-JSON response');
+      } finally {
+        await new Promise<void>((resolve) => {
+          rawServer.close(() => {
+            resolve();
+          });
+        });
+      }
+    });
+
+    test('rejects a token response with no access_token', async () => {
+      tokenResponse = { status: 200, body: { token_type: 'Bearer' } };
+
+      await expectAuthFailure({
+        credentials: JSON.stringify({
+          client_email: 'notoken@p.iam.gserviceaccount.com',
+          private_key: privateKey,
+          token_uri: tokenUri,
+        }),
+        message: 'contained no access_token',
+      });
+    });
+
+    test('falls back to the default lifetime when expires_in is absent', async () => {
+      tokenResponse = {
+        status: 200,
+        body: { access_token: 'ya29.nolifetime' },
+      };
+      const auth = {
+        type: 'gcp_service_account' as const,
+        credentials: credentialsFor('nolifetime@p.iam.gserviceaccount.com'),
+        scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+      };
+      const request = {
+        method: 'GET',
+        url: 'https://compute.googleapis.com/x',
+        headers: {},
+      };
+
+      const first = await applyHttpToolAuth({
+        auth,
+        ...request,
+        now: new Date('2026-02-01T00:00:00Z'),
+      });
+      const cached = await applyHttpToolAuth({
+        auth,
+        ...request,
+        now: new Date('2026-02-01T00:30:00Z'),
+      });
+
+      expect(first['Authorization']).toBe('Bearer ya29.nolifetime');
+      // Cached under the 3600s default, so no second mint.
+      expect(cached['Authorization']).toBe('Bearer ya29.nolifetime');
+      expect(assertions).toHaveLength(1);
+    });
+  });
+
+  describe('mergeAuthHeaders', () => {
+    test('drops an existing header that collides only by case', () => {
+      // Both keys survive an object spread and `Headers` would join their values
+      // with a comma — sending something other than what was signed.
+      const merged = mergeAuthHeaders({
+        headers: {
+          authorization: 'Bearer stale',
+          'x-amz-date': '19700101T000000Z',
+          'X-Trace': 'keep-me',
+        },
+        authHeaders: {
+          Authorization: 'AWS4-HMAC-SHA256 Credential=…',
+          'X-Amz-Date': '20150830T123600Z',
+        },
+      });
+
+      expect(merged).toEqual({
+        'X-Trace': 'keep-me',
+        Authorization: 'AWS4-HMAC-SHA256 Credential=…',
+        'X-Amz-Date': '20150830T123600Z',
+      });
+      expect(merged.authorization).toBeUndefined();
+      expect(merged['x-amz-date']).toBeUndefined();
     });
   });
 
