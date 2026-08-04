@@ -775,6 +775,88 @@ describe('Tasks', () => {
       );
     });
 
+    test('payload_writes survives a second dispatch that overwrites last_result', async () => {
+      mockCreateGeneration
+        .mockResolvedValueOnce({
+          id: 'gen_write',
+          traceId: 'trc_write',
+          status: 'completed',
+          output: { model: 'm', content: 'DOC123', finishReason: 'stop' },
+        })
+        .mockResolvedValueOnce({
+          id: 'gen_read',
+          traceId: 'trc_read',
+          status: 'completed',
+          output: {
+            model: 'm',
+            content: 'second hop done',
+            finishReason: 'stop',
+          },
+        });
+
+      const wf = await dispatchWorkflow({
+        name: 'writes',
+        onEnter: {
+          dispatch: {
+            kind: 'agent',
+            agent_id: agentId,
+            payload_writes: { doc_id: { var: 'result.content' } },
+          },
+          on_complete: [{ when: true, transition: 'to_middle' }],
+        },
+        extraStates: [
+          {
+            name: 'middle',
+            on_enter: {
+              dispatch: {
+                kind: 'agent',
+                agent_id: agentId,
+                input_mapping: {
+                  prompt: {
+                    cat: ['use doc ', { var: 'task.payload.doc_id' }],
+                  },
+                },
+              },
+              on_complete: [{ when: true, transition: 'finish' }],
+            },
+          },
+        ],
+        extraTransitions: [
+          { name: 'to_middle', from: ['writing'], to: 'middle' },
+          { name: 'finish', from: ['middle'], to: 'done' },
+        ],
+      });
+
+      const taskId = await startTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+
+      // The write from the first dispatch survives the second dispatch's
+      // last_result overwrite — it lives in a distinct payload key, not the
+      // one-hop `last_result` channel.
+      expect((settled.payload as { doc_id?: unknown }).doc_id).toBe('DOC123');
+      expect(
+        (settled.payload as { last_result?: unknown }).last_result
+      ).toEqual({
+        model: 'm',
+        content: 'second hop done',
+        finishReason: 'stop',
+      });
+
+      // The second dispatch's input_mapping read the write back deterministically.
+      expect(mockCreateGeneration).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          messages: [{ role: 'user', content: 'use doc DOC123' }],
+        })
+      );
+    });
+
     test('a mapping without prompt/messages is JSON-encoded as one message', async () => {
       mockCreateGeneration.mockResolvedValue({
         id: 'gen_j',

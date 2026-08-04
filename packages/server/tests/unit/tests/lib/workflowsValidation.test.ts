@@ -126,6 +126,15 @@ describe('assertWorkflowValid', () => {
     );
   });
 
+  test('rejects a dispatch payload_writes that is not an object', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x","payloadWrites":"nope"}}}],"transitions":[]}'
+      ),
+      /payload_writes must be an object/
+    );
+  });
+
   test('rejects on_complete referencing an unknown transition', () => {
     expectInvalid(
       {

@@ -159,6 +159,9 @@ run when a task enters it, and routes the outcome back into a transition:
       "agent_id": "agent_x1",
       "input_mapping": {
         "prompt": { "cat": ["Write about ", { "var": "task.payload.topic" }] }
+      },
+      "payload_writes": {
+        "draft_id": { "var": "result.object.document_id" }
       }
     },
     "on_complete": [
@@ -173,7 +176,16 @@ run when a task enters it, and routes the outcome back into a transition:
 - **`dispatch`** — one agent (`kind: agent`, `agent_id`) or orchestration
   (`kind: orchestration`, `orchestration_id`). `input_mapping` is JSON Logic
   over `{task}` that resolves the dispatch input from the task payload — the same
-  expression language orchestrations use.
+  expression language orchestrations use. `payload_writes` (optional) is JSON
+  Logic evaluated over `{task, result}` — the same context `on_complete` sees —
+  and written into named `task.payload` keys atomically with `last_result` when
+  the dispatch completes. Use it to carry a value (e.g. a document id from a
+  `POST` response) past the next state: `last_result` is overwritten by every
+  dispatch and survives exactly one hop, while a `payload_writes` key is a
+  named, deterministic channel with no model in the path. Each write is a raw
+  overwrite of its key — in a workflow that loops back through the same state,
+  a value written by an earlier pass lingers in the payload until the state
+  dispatches again, so pick keys that tolerate that.
 - **`on_complete`** — labeled rules evaluated in order against `{task, result}`;
   the first match fires its transition **as the `automation` principal** (subject to
   the same guards). An agent dispatch exposes its generation output under

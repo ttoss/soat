@@ -299,15 +299,18 @@ const persistRunningDispatchId = async (args: {
   });
 };
 
-// Atomically writes the dispatch completion (provenance, status, last_result),
-// unless the task moved or re-entered since the dispatch started — the stale
-// write is discarded rather than clobbering the new state (#590).
+// Atomically writes the dispatch completion (provenance, status, last_result,
+// and any declared `payload_writes`), unless the task moved or re-entered
+// since the dispatch started — the stale write is discarded rather than
+// clobbering the new state (#590).
 const commitCompletion = async (args: {
   taskPublicId: string;
   stateName: string;
   token: number;
   dispatchKind: ActiveDispatch['kind'];
   dispatched: DispatchResult;
+  context: Record<string, unknown>;
+  payloadWrites: Record<string, unknown> | undefined;
 }): Promise<TaskWithWorkflow | null> => {
   return applyLocked({
     taskPublicId: args.taskPublicId,
@@ -325,9 +328,24 @@ const commitCompletion = async (args: {
         status: 'completed',
       };
       t.automationStatus = 'completed';
+      // `payload_writes` is evaluated over the same `{task, result}` context
+      // `on_complete` rules see, and applied after `last_result` so a
+      // deterministic write is never clobbered by the generic result echo.
+      const writes = applyInputMapping(args.payloadWrites, {
+        ...args.context,
+        result: args.dispatched.result,
+      });
+      if (Object.keys(writes).length > 0) {
+        log(
+          'commitCompletion: task=%s payload_writes=%o',
+          args.taskPublicId,
+          writes
+        );
+      }
       t.payload = {
         ...(t.payload as Record<string, unknown>),
         last_result: args.dispatched.result,
+        ...writes,
       };
     },
   });
@@ -405,6 +423,8 @@ export const runStateAutomation = async (args: {
     token,
     dispatchKind,
     dispatched,
+    context,
+    payloadWrites: dispatch.payloadWrites,
   });
   if (!current) {
     log(

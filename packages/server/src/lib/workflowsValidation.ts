@@ -18,6 +18,16 @@ export type WorkflowDispatch = {
   agentId?: string;
   orchestrationId?: string;
   inputMapping?: Record<string, unknown>;
+  /**
+   * JSON Logic expressions, evaluated over the same `{task, result}` context
+   * `on_complete` rules see, written into `task.payload` atomically with
+   * `last_result` when the dispatch completes. Unlike `last_result` (overwritten
+   * on every dispatch), each key here is a named, deterministic cross-hop
+   * channel — no model in the path. A write is a raw overwrite of its key;
+   * a value written by an earlier pass through a looping state lingers in the
+   * payload until the state runs again.
+   */
+  payloadWrites?: Record<string, unknown>;
 };
 
 export type OnCompleteRule = {
@@ -69,6 +79,8 @@ const OPAQUE_BAG_KEYS = new Set([
   'when',
   'inputMapping',
   'input_mapping',
+  'payloadWrites',
+  'payload_writes',
 ]);
 
 const deepConvertKeys = (
@@ -123,6 +135,14 @@ const validateOnEnterDispatch = (state: WorkflowState): void => {
       state: state.name,
     });
     return;
+  }
+  if (
+    dispatch.payloadWrites != null &&
+    !isPlainObject(dispatch.payloadWrites)
+  ) {
+    fail(`State '${state.name}' dispatch payload_writes must be an object.`, {
+      state: state.name,
+    });
   }
   if (dispatch.kind === 'agent') {
     if (!isNonEmptyString(dispatch.agentId)) {
