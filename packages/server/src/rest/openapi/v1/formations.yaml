@@ -844,6 +844,13 @@ components:
               type: object
               nullable: true
               description: Static headers included in every request
+            body_mode:
+              type: string
+              nullable: true
+              description: >-
+                Request body encoding for `POST`/`PUT`/`PATCH`: `json`
+                (default) or `multipart`. Incompatible with
+                `auth.type: aws_sigv4`.
             auth:
               type: object
               nullable: true
