@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveEndUserAttribution } from './generationAttribution';
+import { findOrCreateTrace } from './generationTrace';
 
 export type PersistedGeneration = {
   id: string;
@@ -160,30 +161,6 @@ const findInitiatorGeneration = async (args: {
   return initiatorGeneration;
 };
 
-const findOrCreateTrace = async (args: {
-  traceId: string;
-  projectId: number;
-  agentDbId: number;
-}) => {
-  const existingTrace = await db.Trace.findOne({
-    where: { publicId: args.traceId, projectId: args.projectId },
-  });
-
-  if (existingTrace) {
-    return existingTrace;
-  }
-
-  return db.Trace.create({
-    publicId: args.traceId,
-    projectId: args.projectId,
-    agentId: args.agentDbId,
-    fileId: null,
-    stepCount: 0,
-    parentTraceId: null,
-    rootTraceId: null,
-  });
-};
-
 export const createGenerationRecord = async (args: {
   publicId: string;
   projectId: number;
@@ -214,34 +191,42 @@ export const createGenerationRecord = async (args: {
     );
   }
 
-  const trace = await findOrCreateTrace({
-    traceId: args.traceId,
-    projectId: args.projectId,
-    agentDbId: agent.id as number,
-  });
-
   const endUser = await resolveEndUserAttribution({
     projectId: args.projectId,
     sessionId: args.sessionId,
   });
 
-  const gen = await db.Generation.create({
-    publicId: args.publicId,
-    projectId: args.projectId,
-    agentId: agent.id,
-    traceId: trace.id,
-    initiatorGenerationId: initiatorGeneration?.id ?? null,
-    startedByPrincipalType: args.startedByPrincipalType ?? null,
-    startedByPrincipalId: args.startedByPrincipalId ?? null,
-    startedByActorId: endUser.actorId,
-    sessionId: endUser.sessionId,
-    status: 'in_progress',
-    startedAt: new Date(),
-    completedAt: null,
-    lastActivityAt: null,
-    stopReason: null,
-    error: null,
-    metadata: args.metadata ?? null,
+  // Trace + Generation must commit together, or a Generation.create failure
+  // orphans an invisible Trace that still blocks deleteAgent (soat#815).
+  const gen = await db.sequelize.transaction(async (transaction) => {
+    const trace = await findOrCreateTrace({
+      traceId: args.traceId,
+      projectId: args.projectId,
+      agentDbId: agent.id as number,
+      transaction,
+    });
+
+    return db.Generation.create(
+      {
+        publicId: args.publicId,
+        projectId: args.projectId,
+        agentId: agent.id,
+        traceId: trace.id,
+        initiatorGenerationId: initiatorGeneration?.id ?? null,
+        startedByPrincipalType: args.startedByPrincipalType ?? null,
+        startedByPrincipalId: args.startedByPrincipalId ?? null,
+        startedByActorId: endUser.actorId,
+        sessionId: endUser.sessionId,
+        status: 'in_progress',
+        startedAt: new Date(),
+        completedAt: null,
+        lastActivityAt: null,
+        stopReason: null,
+        error: null,
+        metadata: args.metadata ?? null,
+      },
+      { transaction }
+    );
   });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {

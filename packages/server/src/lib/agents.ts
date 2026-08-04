@@ -793,7 +793,8 @@ export const deleteAgent = async (args: {
     if (!args.force) {
       throw new DomainError(
         'AGENT_HAS_DEPENDENTS',
-        `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`
+        `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`,
+        { generationCount, traceCount }
       );
     }
 

@@ -320,7 +320,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Agent has dependent generations or traces (pass `force=true` to delete anyway)
+          description: >
+            Agent has dependent generations or traces (pass `force=true` to
+            delete anyway). `error.meta` carries `generationCount` and
+            `traceCount` so a caller can tell which one is nonzero.
           content:
             application/json:
               schema:
