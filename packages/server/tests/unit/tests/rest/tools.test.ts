@@ -1952,6 +1952,61 @@ describe('Tools', () => {
       expect(callRes.body).toEqual({ text: 'Hi!', language: 'en' });
     });
 
+    test('output_mapping can echo a field of the request via input.* (#819)', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'call-with-input-echo-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+          preset_parameters: { title: 'preset-title' },
+          output_mapping: {
+            transcript: { var: 'output.text' },
+            title: { var: 'input.title' },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: {} });
+
+      expect(callRes.status).toBe(200);
+      // preset_parameters is merged into input before dispatch, so `input.title`
+      // in the mapping context resolves to the preset value here.
+      expect(callRes.body).toEqual({
+        transcript: 'Hi!',
+        title: 'preset-title',
+      });
+    });
+
+    test('output_mapping input.* reflects the caller-supplied input, not just preset_parameters (#819)', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'call-with-caller-input-echo-tool',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+          output_mapping: {
+            transcript: { var: 'output.text' },
+            document_title: { var: 'input.title' },
+          },
+        });
+      expect(createRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${createRes.body.id}/call`)
+        .send({ input: { title: 'caller-title' } });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({
+        transcript: 'Hi!',
+        document_title: 'caller-title',
+      });
+    });
+
     test("a pipeline tool output_mapping runs after the pipeline's own output mapping", async () => {
       const stepToolRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -1983,6 +2038,45 @@ describe('Tools', () => {
 
       expect(callRes.status).toBe(200);
       expect(callRes.body).toBe('Hi!');
+    });
+
+    test("a pipeline tool's top-level output_mapping input.* reflects the caller's input to the pipeline call (#819)", async () => {
+      const stepToolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'output-mapping-pipeline-input-step',
+          type: 'http',
+          execute: { url: `${jsonServerUrl}/stt`, method: 'POST' },
+        });
+      expect(stepToolRes.status).toBe(201);
+
+      const pipelineRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'output-mapping-pipeline-input-echo',
+          type: 'pipeline',
+          pipeline: {
+            steps: [{ id: 'call', tool_id: stepToolRes.body.id, input: {} }],
+            output: { transcript: { var: 'steps.call.text' } },
+          },
+          output_mapping: {
+            transcript: { var: 'output.transcript' },
+            title: { var: 'input.title' },
+          },
+        });
+      expect(pipelineRes.status).toBe(201);
+
+      const callRes = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${pipelineRes.body.id}/call`)
+        .send({ input: { title: 'caller-title' } });
+
+      expect(callRes.status).toBe(200);
+      expect(callRes.body).toEqual({
+        transcript: 'Hi!',
+        title: 'caller-title',
+      });
     });
 
     test('a formation applying output_mapping to a tool resource round-trips it', async () => {

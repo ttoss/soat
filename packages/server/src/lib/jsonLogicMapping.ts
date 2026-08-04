@@ -141,16 +141,22 @@ export const findNullVarMappings = (
 
 /**
  * Reshapes a tool's raw result via its `outputMapping` (JSON Logic evaluated
- * over `{ output: rawResult }`), e.g. `{ var: "output.text" }` extracts a bare
- * scalar field. When no mapping is configured, the raw result is returned
- * untouched — unlike {@link applyOutputMapping}, which defaults to `{}`.
+ * over `{ output: rawResult, input: mergedInput }`), e.g. `{ var: "output.text" }`
+ * extracts a bare scalar field and `{ var: "input.title" }` echoes back a field
+ * of the request that produced the response (#819). When no mapping is
+ * configured, the raw result is returned untouched — unlike
+ * {@link applyOutputMapping}, which defaults to `{}`.
  */
 export const applyToolOutputMapping = (
   outputMapping: Record<string, unknown> | null | undefined,
-  rawResult: unknown
+  rawResult: unknown,
+  mergedInput?: Record<string, unknown>
 ): unknown => {
   if (!outputMapping) return rawResult;
-  const result = evaluateLogic(outputMapping, { output: rawResult });
+  const result = evaluateLogic(outputMapping, {
+    output: rawResult,
+    input: mergedInput ?? {},
+  });
   for (const miss of findNullVarMappings(outputMapping, result)) {
     log(
       'applyToolOutputMapping: var path resolved to null key=%s path=%o',
