@@ -434,6 +434,8 @@ An object mapping reshapes the result instead of extracting a single field, the 
 
 When no `output_mapping` is configured, a tool's raw result is returned unchanged.
 
+**A `var` path that resolves to nothing is a loggable event, not a silent failure.** If a top-level mapping key's `var` (e.g. `document_id`, above) evaluates to `null` — commonly a mismatched path against the actual response shape, such as forgetting the `output.` prefix or the response nesting its payload under a key like `data` — the server emits a debug log entry for it instead of only ever returning `null` silently. The mapped result is unchanged (still `null` for that key); the log is a diagnostic aid, not a validation error, since a field can also be genuinely absent from the upstream response.
+
 ### Preset Parameters
 
 `preset_parameters` lets you bake fixed values into a `soat` (or any) tool definition. When a key in `preset_parameters` matches a field in the action's input schema:
