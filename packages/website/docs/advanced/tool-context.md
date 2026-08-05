@@ -88,11 +88,13 @@ You do not need to set these yourself — a session-backed generation already ca
 
 ### Precedence
 
-Later wins, so a caller can override an auto-populated value:
+For every other key, later wins — a per-request `tool_context` overrides the session's stored `tool_context`:
 
 ```
-auto-populated  <  session tool_context  <  per-request tool_context
+session tool_context  <  per-request tool_context
 ```
+
+The three auto-populated keys (`sessionId`, `actorId`, `actorExternalId`) are the exception: they are always taken from the session and its actor, and a caller-supplied value for one of them — in either the stored or the per-request `tool_context` — is ignored. A tool endpoint can rely on these three headers reflecting the real session/actor even if the caller tries to set them.
 
 ## Validation
 
