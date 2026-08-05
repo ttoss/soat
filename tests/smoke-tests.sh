@@ -4427,6 +4427,14 @@ expect_cli_error_status 400 create-workflow \
   --transitions '[]'
 echo "Workflow validation: OK (400 as expected)"
 
+# An out-of-range on_enter retry policy is rejected before anything dispatches.
+expect_cli_error_status 400 create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-workflow-bad-retry \
+  --states '[{"name":"a","initial":true,"on_enter":{"dispatch":{"kind":"agent","agent_id":"agent_smoke"},"retry":{"max_attempts":0}}}]' \
+  --transitions '[]'
+echo "Workflow retry validation: OK (400 as expected)"
+
 # A payload violating payload_schema is rejected.
 expect_cli_error_status 400 create-task \
   --project-id "$PROJECT_PUBLIC_ID" \

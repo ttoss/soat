@@ -999,6 +999,271 @@ describe('Tasks', () => {
         },
       });
       expect(settled.status).toBe('closed');
+      // No `retry` declared: exactly one attempt (#822).
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+    });
+
+    test('an on_enter retry policy round-trips snake_case (#822)', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/workflows')
+        .send({
+          project_id: projectId,
+          name: `retry-shape-${Math.random().toString(36).slice(2)}`,
+          states: [
+            {
+              name: 'writing',
+              initial: true,
+              on_enter: {
+                dispatch: { kind: 'agent', agent_id: agentId },
+                retry: {
+                  max_attempts: 2,
+                  backoff_seconds: 1,
+                  backoff_multiplier: 2,
+                },
+                on_complete: [{ when: true, transition: 'to_done' }],
+              },
+            },
+            { name: 'done', terminal: true },
+          ],
+          transitions: [{ name: 'to_done', from: ['writing'], to: 'done' }],
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.states[0].on_enter.retry).toEqual({
+        max_attempts: 2,
+        backoff_seconds: 1,
+        backoff_multiplier: 2,
+      });
+    });
+
+    test('a retry policy re-dispatches after a transient failure and completes (#822)', async () => {
+      mockCreateGeneration
+        .mockRejectedValueOnce(
+          new DomainError('AI_PROVIDER_ERROR', 'transient 502', {
+            generation_id: 'gen_flake1',
+          })
+        )
+        .mockResolvedValueOnce({
+          id: 'gen_ok2',
+          traceId: 'trc_ok2',
+          status: 'completed',
+          output: { model: 'm', content: 'second try', finishReason: 'stop' },
+        });
+
+      const wf = await dispatchWorkflow({
+        name: 'retrying',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          retry: { max_attempts: 3, backoff_seconds: 0 },
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+
+      // The flake cost an attempt, not the card: two dispatches, the second one
+      // routed through on_complete, and on_failure never fired.
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+      expect(
+        (settled.payload as { last_result?: unknown }).last_result
+      ).toEqual({ model: 'm', content: 'second try', finishReason: 'stop' });
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      expect(
+        history.some((h: { transition: string | null }) => {
+          return h.transition === 'to_failed';
+        })
+      ).toBe(false);
+      const routed = history.find((h: { transition: string | null }) => {
+        return h.transition === 'to_done';
+      });
+      expect(routed.generation_id).toBe('gen_ok2');
+    });
+
+    test('on_failure fires only after the last retry attempt (#822)', async () => {
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'always down', {
+          generation_id: 'gen_down822',
+        })
+      );
+
+      const wf = await dispatchWorkflow({
+        name: 'retry-exhausted',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          retry: { max_attempts: 3, backoff_seconds: 0 },
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'failed';
+        },
+      });
+
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(3);
+      expect(settled.status).toBe('closed');
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      // on_failure routed exactly once — after the last attempt, not per attempt.
+      expect(
+        history.filter((h: { transition: string | null }) => {
+          return h.transition === 'to_failed';
+        })
+      ).toHaveLength(1);
+    });
+
+    test('an exhausted retry policy parks the task with the burned attempt count (#822)', async () => {
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'always down', {
+          generation_id: 'gen_parked822',
+        })
+      );
+
+      const wf = await dispatchWorkflow({
+        name: 'retry-parked',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          retry: { max_attempts: 2, backoff_seconds: 0 },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+      });
+      const taskId = await startTask(wf, {});
+      const parked = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'failed';
+        },
+      });
+
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+      // With no `on_failure` the card parks in place, and the attempt count
+      // sits next to the failed dispatch's provenance so the audit trail shows
+      // how many attempts the flake burned.
+      expect(parked.state).toBe('writing');
+      expect(parked.active_dispatch).toEqual({
+        kind: 'generation',
+        id: 'gen_parked822',
+        status: 'failed',
+        attempt: 2,
+      });
+    });
+
+    test('a dispatch with no retry policy records no attempt counter (#822)', async () => {
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'down', {
+          generation_id: 'gen_noretry822',
+        })
+      );
+
+      const wf = await dispatchWorkflow({
+        name: 'no-retry',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+      });
+      const taskId = await startTask(wf, {});
+      const parked = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'failed';
+        },
+      });
+
+      // Strictly additive: without `retry`, `active_dispatch` keeps exactly the
+      // shape it had before retries existed.
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      expect(parked.active_dispatch).toEqual({
+        kind: 'generation',
+        id: 'gen_noretry822',
+        status: 'failed',
+      });
+    });
+
+    test('a task that leaves the state between attempts abandons its remaining retries (#822)', async () => {
+      mockCreateGeneration.mockRejectedValue(
+        new DomainError('AI_PROVIDER_ERROR', 'transient', {
+          generation_id: 'gen_stale822',
+        })
+      );
+
+      const wf = await dispatchWorkflow({
+        name: 'retry-stale',
+        onEnter: {
+          dispatch: { kind: 'agent', agent_id: agentId },
+          // A backoff long enough to move the task out of the state while the
+          // automation is sleeping between attempts.
+          retry: { max_attempts: 3, backoff_seconds: 3 },
+          on_complete: [{ when: true, transition: 'to_done' }],
+          on_failure: 'to_failed',
+        },
+        extraStates: [{ name: 'failed', terminal: true }],
+        extraTransitions: [
+          { name: 'to_failed', from: ['writing'], to: 'failed' },
+        ],
+      });
+      const taskId = await startTask(wf, {});
+
+      // Wait for the first attempt to fail, then move the card by hand.
+      for (
+        let i = 0;
+        i < 100 && mockCreateGeneration.mock.calls.length < 1;
+        i += 1
+      ) {
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
+      expect((await transition(taskId, 'to_done')).body.state).toBe('done');
+
+      await flushTaskAutomations();
+
+      // The remaining attempts were abandoned rather than re-dispatched against
+      // a task that had already moved on (same staleness rule as a single
+      // attempt), and on_failure never fired.
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      const task = (
+        await authenticatedTestClient(userToken).get(`/api/v1/tasks/${taskId}`)
+      ).body;
+      expect(task.state).toBe('done');
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      expect(
+        history.some((h: { transition: string | null }) => {
+          return h.transition === 'to_failed';
+        })
+      ).toBe(false);
     });
 
     test('a failed dispatch with no recoverable cause id never persists a provenance-less automation transition (#792)', async () => {

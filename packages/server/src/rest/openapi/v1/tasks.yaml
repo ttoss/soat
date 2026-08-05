@@ -323,7 +323,10 @@ components:
         active_dispatch:
           type: object
           nullable: true
-          description: '{ kind, id, status } of the current state''s dispatch, if any.'
+          description: >-
+            { kind, id, status } of the current state's dispatch, if any. Carries
+            an additional `attempt` (1-based) while the state's `on_enter.retry`
+            policy is in effect.
         automation_status:
           type: string
           nullable: true
