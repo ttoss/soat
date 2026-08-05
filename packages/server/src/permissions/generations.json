@@ -15,6 +15,11 @@
       "operationId": "updateGeneration",
       "action": "generations:UpdateGeneration",
       "description": "Attach caller-supplied metadata to a generation record"
+    },
+    {
+      "operationId": "purgeGenerationContent",
+      "action": "generations:PurgeGenerationContent",
+      "description": "Purge a generation's content, clearing its metadata, error and derived summaries"
     }
   ]
 }

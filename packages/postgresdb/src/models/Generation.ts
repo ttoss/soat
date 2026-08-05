@@ -217,6 +217,19 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
+  // Content-purge marker. When set, the generation's content fields (`metadata`,
+  // `error`, `extraction`, `pendingState`) have been cleared. The skeleton the
+  // billing/audit ledger depends on survives: ids, timestamps, status, counters
+  // and the usage-attribution columns above.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare contentRedactedAt: Date | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare contentRedactedByPrincipalType: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare contentRedactedByPrincipalId: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

@@ -1,0 +1,345 @@
+import { Op } from '@ttoss/postgresdb';
+import createDebug from 'debug';
+
+import { db } from '../db';
+import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { deleteStorageObjects } from './fileStorage';
+import { getGeneration, type PersistedGeneration } from './generations';
+import { getTrace, type Trace } from './traces';
+
+const log = createDebug('soat:content-purge');
+
+/**
+ * The principal that performed a purge, resolved from the request's auth
+ * context by the route handler — never read off a request body. Mirrors the
+ * shape `Generation.startedByPrincipal*` already uses.
+ */
+export type RedactionPrincipal = {
+  principalType: string;
+  principalId: string;
+};
+
+/**
+ * Columns a generation content purge clears.
+ *
+ * `metadata` and `error` are caller/provider content, `extraction` is a summary
+ * derived from that content, and `pendingState` holds the full message history
+ * of a paused run. Everything the billing and audit ledger reads — ids,
+ * timestamps, status, stop reason, and the usage-attribution columns — is
+ * deliberately absent, so the row survives as a skeleton that proves the
+ * erasure happened rather than a 404 that proves nothing (#836).
+ */
+const PURGED_GENERATION_CONTENT = {
+  metadata: null,
+  error: null,
+  extraction: null,
+  pendingState: null,
+} as const;
+
+/** Trace columns a content purge clears. `fileId` drops the pointer to the
+ * steps object, whose bytes are deleted after commit; `error` can carry a
+ * tool's request/response bodies, so it is content and not skeleton. */
+const PURGED_TRACE_CONTENT = {
+  fileId: null,
+  error: null,
+} as const;
+
+const redactionColumns = (args: {
+  principal: RedactionPrincipal;
+  redactedAt: Date;
+}) => {
+  return {
+    contentRedactedAt: args.redactedAt,
+    contentRedactedByPrincipalType: args.principal.principalType,
+    contentRedactedByPrincipalId: args.principal.principalId,
+  };
+};
+
+// Fire-and-forget, matching every other emit site: a webhook subscriber must
+// never be able to fail the purge that already committed.
+const emitPurgeEvent = (args: {
+  type: string;
+  projectId: number;
+  resourceType: string;
+  resourceId: string;
+  data: Record<string, unknown>;
+}): void => {
+  resolveProjectPublicId({ projectId: args.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: args.type,
+        projectId: args.projectId,
+        projectPublicId,
+        resourceType: args.resourceType,
+        resourceId: args.resourceId,
+        data: args.data,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+};
+
+/**
+ * Clears a single generation's content in place, leaving the auditable
+ * skeleton.
+ *
+ * Idempotent: an already-redacted generation keeps its original
+ * `contentRedactedAt`, so a retry neither fails nor rewrites when the erasure
+ * happened.
+ *
+ * This does not reach the trace's steps file, which holds this generation's
+ * content alongside its siblings'. Purging one generation is therefore not a
+ * complete erasure of the run — purge the trace for that.
+ *
+ * Returns null when the generation does not exist in the caller's scope.
+ */
+export const purgeGenerationContent = async (args: {
+  publicId: string;
+  projectIds?: number[];
+  principal: RedactionPrincipal;
+}): Promise<PersistedGeneration | null> => {
+  log('purgeGenerationContent: publicId=%s', args.publicId);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { publicId: args.publicId };
+  if (args.projectIds !== undefined) {
+    if (args.projectIds.length === 0) return null;
+    where.projectId = args.projectIds;
+  }
+
+  const gen = await db.Generation.findOne({ where });
+  if (!gen) return null;
+
+  const alreadyRedacted = gen.contentRedactedAt !== null;
+
+  await gen.update({
+    ...PURGED_GENERATION_CONTENT,
+    ...(alreadyRedacted
+      ? {}
+      : redactionColumns({
+          principal: args.principal,
+          redactedAt: new Date(),
+        })),
+  });
+
+  const purged = await getGeneration({
+    publicId: args.publicId,
+    projectIds: args.projectIds,
+  });
+
+  if (purged && !alreadyRedacted) {
+    emitPurgeEvent({
+      type: 'generations.content_purged',
+      projectId: gen.projectId,
+      resourceType: 'generation',
+      resourceId: gen.publicId,
+      data: purged as unknown as Record<string, unknown>,
+    });
+  }
+
+  return purged;
+};
+
+/**
+ * Every trace in the purge set: the named trace plus all of its descendants.
+ *
+ * The cascade is required for the erasure to mean anything. A child trace holds
+ * its own steps file covering the same run, so purging only the named trace
+ * would leave that content readable through the child — the same "deleted but
+ * still reachable" gap #835 was about.
+ *
+ * Descendants are found via `rootTraceId`, then filtered down the parent chain,
+ * so purging a mid-tree trace does not touch its siblings or its parent.
+ */
+const collectTraceSubtree = async (args: {
+  target: InstanceType<(typeof db)['Trace']>;
+  projectIds?: number[];
+}): Promise<InstanceType<(typeof db)['Trace']>[]> => {
+  const targetId = args.target.id as number;
+  const rootDbId = (args.target.rootTraceId ?? targetId) as number;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = {
+    [Op.or]: [{ id: rootDbId }, { rootTraceId: rootDbId }],
+  };
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+
+  const candidates = await db.Trace.findAll({ where });
+
+  const byParent = new Map<number, InstanceType<(typeof db)['Trace']>[]>();
+  for (const row of candidates) {
+    const parentId = row.parentTraceId;
+    if (parentId === null) continue;
+    const siblings = byParent.get(parentId) ?? [];
+    siblings.push(row);
+    byParent.set(parentId, siblings);
+  }
+
+  const subtree = [args.target];
+  const queue = [targetId];
+  while (queue.length > 0) {
+    const current = queue.shift() as number;
+    for (const child of byParent.get(current) ?? []) {
+      subtree.push(child);
+      queue.push(child.id as number);
+    }
+  }
+
+  return subtree;
+};
+
+/**
+ * The transactional half of a trace purge: clear the trace and generation
+ * content columns and destroy the File rows, all or nothing. The skeleton and
+ * its generations must commit together — a partial purge would leave content
+ * readable through the generations API after the trace claimed erasure.
+ */
+const commitTracePurge = async (args: {
+  traceDbIds: number[];
+  fileDbIds: number[];
+  principal: RedactionPrincipal;
+  redactedAt: Date;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  transaction: any;
+}): Promise<void> => {
+  const redaction = redactionColumns({
+    principal: args.principal,
+    redactedAt: args.redactedAt,
+  });
+
+  await db.Trace.update(
+    { ...PURGED_TRACE_CONTENT, ...redaction },
+    {
+      where: { id: args.traceDbIds, contentRedactedAt: null },
+      transaction: args.transaction,
+    }
+  );
+
+  // Already-redacted traces keep their original timestamps but still drop any
+  // pointer a later write could have reattached.
+  await db.Trace.update(PURGED_TRACE_CONTENT, {
+    where: { id: args.traceDbIds },
+    transaction: args.transaction,
+  });
+
+  const [purgedGenerations] = await db.Generation.update(
+    { ...PURGED_GENERATION_CONTENT, ...redaction },
+    {
+      where: { traceId: args.traceDbIds, contentRedactedAt: null },
+      transaction: args.transaction,
+    }
+  );
+  log(
+    'commitTracePurge: traces=%d generations=%d',
+    args.traceDbIds.length,
+    purgedGenerations
+  );
+
+  if (args.fileDbIds.length > 0) {
+    await db.File.destroy({
+      where: { id: args.fileDbIds },
+      transaction: args.transaction,
+    });
+  }
+};
+
+/**
+ * Purges a trace's content: deletes the steps object from storage and clears
+ * the content columns, cascading to every descendant trace and to all of their
+ * generations.
+ *
+ * Ordering follows the storage-aware delete path established in #835/#841:
+ * collect the storage locations first, commit the DB changes in a transaction,
+ * then delete the bytes. `deleteStorageObjects` is best-effort by design — a
+ * failed object delete is logged for reconciliation rather than rolled back,
+ * because the row must be gone before the bytes are so a concurrent read never
+ * references content mid-delete.
+ *
+ * Idempotent: already-redacted traces keep their original timestamps, and a
+ * retry re-attempts the storage delete (whose File rows are already gone, so it
+ * is a no-op).
+ *
+ * Returns null when the trace does not exist in the caller's scope.
+ */
+export const purgeTraceContent = async (args: {
+  traceId: string;
+  projectIds?: number[];
+  principal: RedactionPrincipal;
+}): Promise<Trace | null> => {
+  log('purgeTraceContent: traceId=%s', args.traceId);
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const where: Record<string, any> = { publicId: args.traceId };
+  if (args.projectIds !== undefined) {
+    if (args.projectIds.length === 0) return null;
+    where.projectId = args.projectIds;
+  }
+
+  const target = await db.Trace.findOne({ where });
+  if (!target) return null;
+
+  const subtree = await collectTraceSubtree({
+    target,
+    projectIds: args.projectIds,
+  });
+  const traceDbIds = subtree.map((row) => {
+    return row.id as number;
+  });
+  const fileIds = subtree
+    .map((row) => {
+      return row.fileId;
+    })
+    .filter((fileId): fileId is number => {
+      return fileId !== null;
+    });
+
+  // Read the storage locations before the transaction clears the pointers.
+  const files =
+    fileIds.length > 0
+      ? await db.File.findAll({
+          where: { id: fileIds },
+          attributes: ['id', 'storagePath', 'storageType'],
+        })
+      : [];
+
+  await db.sequelize.transaction(async (transaction) => {
+    return commitTracePurge({
+      traceDbIds,
+      fileDbIds: files.map((file) => {
+        return file.id as number;
+      }),
+      principal: args.principal,
+      redactedAt: new Date(),
+      transaction,
+    });
+  });
+
+  // After commit: the rows no longer reference these objects, so deleting the
+  // bytes cannot strand a live pointer.
+  await deleteStorageObjects(
+    files.map((file) => {
+      return {
+        storagePath: file.storagePath,
+        storageType: file.storageType,
+      };
+    })
+  );
+
+  const purged = await getTrace({
+    traceId: args.traceId,
+    projectIds: args.projectIds,
+  });
+
+  emitPurgeEvent({
+    type: 'traces.content_purged',
+    projectId: target.projectId,
+    resourceType: 'trace',
+    resourceId: target.publicId,
+    data: {
+      ...(purged as unknown as Record<string, unknown>),
+      purged_trace_count: traceDbIds.length,
+    },
+  });
+
+  return purged;
+};

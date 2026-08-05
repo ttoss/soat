@@ -217,6 +217,65 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/generations/{generation_id}/content:
+    delete:
+      tags:
+        - Generations
+      summary: Purge generation content
+      description: >
+        Clears the generation's content — `metadata`, `error`, `extraction`, and
+        the internal recovery state of a paused run — and stamps
+        `content_redacted_at`.
+
+
+        The usage and audit skeleton is preserved: ids, timestamps, status, stop
+        reason, and the attribution fields (`action_id`, `trigger_id`,
+        `orchestration_run_id`, `node_id`, `agent_version`, `routing`) the billing
+        ledger reads. A purged generation reads back as that skeleton, not a 404.
+
+
+        This does **not** delete the parent trace's steps object, which holds
+        this generation's content alongside its siblings'. To erase the run's
+        content completely, purge the trace
+        (`DELETE /api/v1/traces/{trace_id}/content`), which cascades here.
+
+
+        Idempotent — purging an already-purged generation succeeds and leaves the
+        original `content_redacted_at` in place.
+      operationId: purgeGenerationContent
+      parameters:
+        - name: generation_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the generation
+      responses:
+        '200':
+          description: The purged generation skeleton
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Generation'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -407,6 +466,26 @@ components:
           example:
             team: payments
             ticket_id: OPS-4821
+        content_redacted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When the generation's content was purged. Non-null means `metadata`,
+            `error`, `extraction` and the internal recovery state have been
+            cleared, while the usage/audit skeleton — ids, timestamps, status,
+            stop reason and the attribution fields — is preserved.
+        content_redacted_by_principal_type:
+          type: string
+          nullable: true
+          description: Principal kind that purged the content ('user' or 'api_key')
+          example: user
+        content_redacted_by_principal_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the principal that purged the content — the API key's
+            own id for key auth, so the record names which key acted.
         created_at:
           type: string
           format: date-time

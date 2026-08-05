@@ -54,7 +54,10 @@ describe('Traces REST API', () => {
                 'traces:ListTraces',
                 'traces:GetTrace',
                 'traces:GetTraceTree',
+                'traces:PurgeTraceContent',
                 'generations:ListGenerations',
+                'generations:GetGeneration',
+                'files:GetFile',
               ],
             },
           ],
@@ -460,6 +463,177 @@ describe('Traces REST API', () => {
       const childNode = res.body.children[0];
       expect(childNode.id).toBe(childTraceId);
       expect(Array.isArray(childNode.generations)).toBe(true);
+    });
+  });
+
+  describe('DELETE /api/v1/traces/:trace_id/content', () => {
+    // A purge destroys storage bytes, so each test that performs one works on
+    // its own freshly seeded tree rather than the shared fixture.
+    const seedTree = async (args: { suffix: string }) => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const internalProjectId = project?.id as number;
+
+      const rootId = `trc_purge_root_${args.suffix}`;
+      const childId = `trc_purge_child_${args.suffix}`;
+
+      await saveTrace({
+        traceId: rootId,
+        projectId: internalProjectId,
+        projectPublicId: projectId,
+        agentId: 'agt_traces_rest_001',
+        steps: [{ type: 'text-delta', text: 'root secret' }],
+      });
+      await saveTrace({
+        traceId: childId,
+        projectId: internalProjectId,
+        projectPublicId: projectId,
+        agentId: 'agt_traces_rest_002',
+        steps: [{ type: 'text-delta', text: 'child secret' }],
+        parentTraceId: rootId,
+        rootTraceId: rootId,
+      });
+
+      const rootRow = await db.Trace.findOne({ where: { publicId: rootId } });
+      const genId = `gen_purge_${args.suffix}`;
+      await db.Generation.create({
+        publicId: genId,
+        projectId: internalProjectId,
+        agentId: tracesAgentDbId,
+        traceId: rootRow!.id,
+        status: 'completed',
+        startedAt: new Date(),
+        completedAt: new Date(),
+        actionId: 'act_keepme',
+        agentVersion: 3,
+        error: { message: 'boom' },
+        metadata: { ticket_id: 'OPS-1' },
+        extraction: { candidates: 1, created: 1, updated: 0, skipped: 0 },
+        pendingState: { messages: [{ role: 'user', content: 'secret' }] },
+      });
+
+      return { rootId, childId, genId };
+    };
+
+    test('returns 401 when unauthenticated', async () => {
+      const res = await testClient.delete(
+        `/api/v1/traces/${traceId}/content`
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('returns 403 when the user lacks permission', async () => {
+      const res = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/traces/${traceId}/content`
+      );
+      expect(res.status).toBe(403);
+    });
+
+    test('returns 404 when the trace does not exist', async () => {
+      const res = await authenticatedTestClient(userToken).delete(
+        '/api/v1/traces/trc_does_not_exist/content'
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('purges the steps file and marks the trace redacted', async () => {
+      const seeded = await seedTree({ suffix: 'basic' });
+
+      const before = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${seeded.rootId}`
+      );
+      expect(before.status).toBe(200);
+      expect(before.body.file_id).not.toBeNull();
+      expect(before.body.content_redacted_at).toBeNull();
+      const fileId = before.body.file_id;
+
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/traces/${seeded.rootId}/content`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(seeded.rootId);
+      expect(res.body.content_redacted_at).not.toBeNull();
+      expect(res.body.content_redacted_by_principal_type).toBe('user');
+      expect(res.body.file_id).toBeNull();
+      // Skeleton survives: the step counter is still auditable.
+      expect(res.body.step_count).toBe(1);
+
+      // The bytes are gone, not merely unreferenced.
+      const fileRow = await db.File.findOne({ where: { publicId: fileId } });
+      expect(fileRow).toBeNull();
+    });
+
+    test('a purged trace reads back as a skeleton with a redaction marker, not a 404', async () => {
+      const seeded = await seedTree({ suffix: 'marker' });
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/traces/${seeded.rootId}/content`
+      );
+
+      const get = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${seeded.rootId}`
+      );
+      expect(get.status).toBe(200);
+      expect(get.body.content_redacted_at).not.toBeNull();
+      expect(get.body.error).toBeNull();
+
+      const tree = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${seeded.rootId}/tree`
+      );
+      expect(tree.status).toBe(200);
+      expect(tree.body.content_redacted_at).not.toBeNull();
+      expect(tree.body.children[0].content_redacted_at).not.toBeNull();
+    });
+
+    test('cascades to descendant traces and to the generations', async () => {
+      const seeded = await seedTree({ suffix: 'cascade' });
+
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/traces/${seeded.rootId}/content`
+      );
+      expect(res.status).toBe(200);
+
+      // The child trace's own steps file holds the same run's content, so it
+      // must be purged too or the content stays reachable by another path.
+      const child = await authenticatedTestClient(userToken).get(
+        `/api/v1/traces/${seeded.childId}`
+      );
+      expect(child.status).toBe(200);
+      expect(child.body.content_redacted_at).not.toBeNull();
+      expect(child.body.file_id).toBeNull();
+
+      const gen = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${seeded.genId}`
+      );
+      expect(gen.status).toBe(200);
+      expect(gen.body.content_redacted_at).not.toBeNull();
+      // Content is gone...
+      expect(gen.body.metadata).toBeNull();
+      expect(gen.body.error).toBeNull();
+      expect(gen.body.extraction).toBeNull();
+      // ...while the usage/audit skeleton is untouched.
+      expect(gen.body.action_id).toBe('act_keepme');
+      expect(gen.body.agent_version).toBe(3);
+      expect(gen.body.status).toBe('completed');
+    });
+
+    test('is idempotent — a second purge succeeds without moving the timestamp', async () => {
+      const seeded = await seedTree({ suffix: 'idem' });
+
+      const first = await authenticatedTestClient(userToken).delete(
+        `/api/v1/traces/${seeded.rootId}/content`
+      );
+      expect(first.status).toBe(200);
+
+      const second = await authenticatedTestClient(userToken).delete(
+        `/api/v1/traces/${seeded.rootId}/content`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.content_redacted_at).toBe(
+        first.body.content_redacted_at
+      );
     });
   });
 });

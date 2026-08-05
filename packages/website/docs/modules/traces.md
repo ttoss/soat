@@ -35,6 +35,9 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 | `parent_trace_id` | string \| null | ID of the immediate parent trace; `null` when this trace is itself the root            |
 | `root_trace_id`   | string \| null | ID of the root trace in a multi-agent chain; `null` when this trace is itself the root |
 | `error`           | object \| null | Structured error payload recorded when a generation in this trace failed; `null` otherwise |
+| `content_redacted_at` | string \| null | When the trace's content was purged; `null` while content is intact                |
+| `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)     |
+| `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth     |
 | `created_at`      | string         | ISO 8601 creation timestamp                                                            |
 
 ## Key Concepts
@@ -54,6 +57,20 @@ Each trace stores the raw step objects produced by the Vercel AI SDK `generateTe
 ### File Linkage
 
 Trace content (the step array) is stored as a file at the path `/traces/{traceId}.json` inside the project's file storage. The `file_id` field on the trace record points to this file so it can be downloaded directly via the Files API.
+
+### Content Purge
+
+`DELETE /traces/{trace_id}/content` deletes the trace's steps object **from storage** and clears its content columns, so the content is destroyed rather than merely unreachable. It requires the `traces:PurgeTraceContent` action.
+
+Three properties make the operation useful for an erasure obligation:
+
+- **The row survives as a skeleton.** `content_redacted_at`, the ids, timestamps and `step_count` remain, so a purge is *provable*. A 404 would prove nothing — it is indistinguishable from a resource that never existed. Reads of a purged trace (`GET /traces/{id}` and `GET /traces/{id}/tree`) therefore return the skeleton with the redaction marker set, never a 404.
+- **The bytes are deleted, not orphaned.** The purge routes through the storage-aware delete path: it collects the storage locations, commits the row changes, then deletes the objects. A failed object delete is logged for reconciliation rather than rolled back, because the row must stop referencing the bytes before they go — otherwise a concurrent read could reference content mid-delete.
+- **It cascades.** Every descendant trace is purged too, along with all of their generations. A descendant holds its own steps object covering the same run, so purging only the named trace would leave that content readable by another path.
+
+The operation is idempotent: purging an already-purged trace succeeds and leaves the original `content_redacted_at` untouched.
+
+What a purge deliberately does **not** touch is the usage and audit ledger. Each cascaded generation keeps its `action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version` and `routing`, along with its status and timestamps — billing and audit records must outlive a tenant's erasure of the content. See [Generations](./generations.md#content-purge) for the per-generation operation.
 
 ## Debugging Joins (Trace, Generation, Session)
 

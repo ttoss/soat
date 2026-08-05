@@ -1616,6 +1616,7 @@ describe('MCP tools - happy path', () => {
 
   describe('Traces tools', () => {
     let tracesAgentId: string;
+    let tracesProjectDbId: number;
     let mcpTraceId: string;
     let mcpChildTraceId: string;
 
@@ -1631,6 +1632,7 @@ describe('MCP tools - happy path', () => {
         where: { publicId: projectId },
       });
       const internalProjectId = project!.id;
+      tracesProjectDbId = internalProjectId;
 
       mcpTraceId = `trc_mcp_root_${Date.now()}`;
       mcpChildTraceId = `trc_mcp_child_${Date.now()}`;
@@ -1685,6 +1687,30 @@ describe('MCP tools - happy path', () => {
       expect(Array.isArray(result.children)).toBe(true);
       expect(result.children).toHaveLength(1);
       expect(result.children[0].id).toBe(mcpChildTraceId);
+    });
+
+    // Destructive, so it runs on its own trace rather than the shared fixture.
+    test('purge-trace-content redacts the trace and returns the skeleton', async () => {
+      const purgeTraceId = 'trc_mcp_purge_001';
+      await saveTrace({
+        traceId: purgeTraceId,
+        projectId: tracesProjectDbId,
+        projectPublicId: projectId,
+        agentId: tracesAgentId,
+        steps: [{ type: 'text-delta', text: 'purge me' }],
+      });
+
+      const res = await mcpCall('purge-trace-content', {
+        trace_id: purgeTraceId,
+      });
+
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.id).toBe(purgeTraceId);
+      expect(result.content_redacted_at).not.toBeNull();
+      expect(result.file_id).toBeNull();
+      // Skeleton survives — a purged trace is readable, not a 404.
+      expect(result.step_count).toBe(1);
     });
   });
 

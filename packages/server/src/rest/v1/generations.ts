@@ -1,12 +1,15 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import { purgeGenerationContent } from 'src/lib/contentPurge';
+import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {
   getGeneration,
   listGenerations,
   updateGenerationMetadata,
-  validateGenerationMetadata,
 } from 'src/lib/generations';
+
+import { redactionPrincipalFromCtx } from './helpers';
 
 export const generationsRouter = new Router<Context>();
 
@@ -160,3 +163,51 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
 
   ctx.body = generation;
 });
+
+/**
+ * @openapi
+ * DELETE /api/v1/generations/{generation_id}/content
+ * operationId: purgeGenerationContent
+ * Clears the generation's content (`metadata`, `error`, `extraction`, and the
+ * internal recovery state), leaving the usage/audit skeleton — ids, timestamps,
+ * status, and the attribution fields the billing ledger reads. Idempotent.
+ */
+generationsRouter.delete(
+  '/generations/:generation_id/content',
+  async (ctx: Context) => {
+    if (!ctx.authUser) {
+      ctx.status = 401;
+      ctx.body = { error: 'Unauthorized' };
+      return;
+    }
+
+    const projectIds = await ctx.authUser.resolveProjectIds({
+      action: 'generations:PurgeGenerationContent',
+      resourceType: 'generation',
+    });
+
+    if (
+      projectIds === null ||
+      (Array.isArray(projectIds) && projectIds.length === 0)
+    ) {
+      ctx.status = 403;
+      ctx.body = { error: 'Forbidden' };
+      return;
+    }
+
+    const purged = await purgeGenerationContent({
+      publicId: ctx.params.generation_id,
+      projectIds,
+      principal: redactionPrincipalFromCtx(ctx),
+    });
+
+    if (!purged) {
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        `Generation '${ctx.params.generation_id}' not found.`
+      );
+    }
+
+    ctx.body = purged;
+  }
+);

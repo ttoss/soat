@@ -10,7 +10,7 @@ import type { GenerationResult } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
-import { validateGenerationMetadata } from 'src/lib/generations';
+import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {
   type ExtractionMessage,
   fireMemoryExtraction,
