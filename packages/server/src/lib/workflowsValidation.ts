@@ -6,6 +6,10 @@ import {
   isPlainObject,
   snakeToCamelKey,
 } from './resource-inputs/normalizers';
+import {
+  assertRetryPolicyValid,
+  type RetryPolicy,
+} from './workflowsRetryPolicy';
 
 /**
  * Types describing a workflow definition as it is stored (structural keys in
@@ -35,8 +39,11 @@ export type OnCompleteRule = {
   transition: string;
 };
 
+export type { RetryPolicy };
+
 export type OnEnter = {
   dispatch: WorkflowDispatch;
+  retry?: RetryPolicy | null;
   onComplete?: OnCompleteRule[];
   onFailure?: string | null;
 };
@@ -198,7 +205,13 @@ const validateStateEntry = (args: {
       }
     );
   }
-  if (state.onEnter) validateOnEnterDispatch(state);
+  if (state.onEnter) {
+    validateOnEnterDispatch(state);
+    assertRetryPolicyValid({
+      stateName: state.name,
+      retry: state.onEnter.retry,
+    });
+  }
 };
 
 const validateStates = (states: WorkflowState[]): void => {

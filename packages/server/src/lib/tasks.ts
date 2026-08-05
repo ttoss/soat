@@ -33,6 +33,12 @@ export type ActiveDispatch = {
   kind: 'generation' | 'orchestration_run';
   id: string | null;
   status: string;
+  /**
+   * 1-based attempt number, present only while a state's `on_enter.retry`
+   * policy is in effect — so a dispatch with no retry keeps exactly the shape it
+   * had before retries existed (#822).
+   */
+  attempt?: number;
 };
 
 export type TaskInstance = InstanceType<(typeof db)['Task']> & {

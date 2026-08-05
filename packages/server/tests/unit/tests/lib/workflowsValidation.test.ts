@@ -135,6 +135,73 @@ describe('assertWorkflowValid', () => {
     );
   });
 
+  test('accepts an on_enter retry policy', () => {
+    expect(() => {
+      return assertWorkflowValid({
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            onEnter: {
+              dispatch: { kind: 'agent', agentId: 'agent_x' },
+              retry: {
+                maxAttempts: 3,
+                backoffSeconds: 5,
+                backoffMultiplier: 2,
+              },
+            },
+          },
+        ],
+        transitions: [],
+      });
+    }).not.toThrow();
+  });
+
+  test('rejects a retry policy that is not an object', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x"},"retry":"nope"}}],"transitions":[]}'
+      ),
+      /retry must be an object/
+    );
+  });
+
+  test('rejects a retry max_attempts that is not a positive integer', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x"},"retry":{"maxAttempts":0}}}],"transitions":[]}'
+      ),
+      /retry max_attempts must be an integer/
+    );
+  });
+
+  test('rejects a retry max_attempts above the cap', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x"},"retry":{"maxAttempts":99}}}],"transitions":[]}'
+      ),
+      /retry max_attempts must be an integer/
+    );
+  });
+
+  test('rejects a negative retry backoff_seconds', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x"},"retry":{"maxAttempts":2,"backoffSeconds":-1}}}],"transitions":[]}'
+      ),
+      /retry backoff_seconds must be a number/
+    );
+  });
+
+  test('rejects a retry backoff_multiplier below 1', () => {
+    expectInvalid(
+      JSON.parse(
+        '{"states":[{"name":"a","initial":true,"onEnter":{"dispatch":{"kind":"agent","agentId":"agent_x"},"retry":{"maxAttempts":2,"backoffMultiplier":0.5}}}],"transitions":[]}'
+      ),
+      /retry backoff_multiplier must be a number/
+    );
+  });
+
   test('rejects on_complete referencing an unknown transition', () => {
     expectInvalid(
       {

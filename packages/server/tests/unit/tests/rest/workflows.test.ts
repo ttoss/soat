@@ -85,6 +85,29 @@ describe('Workflows', () => {
       expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
     });
 
+    // A nonexistent agent id is fine here: the structural checks (including the
+    // retry policy) run before dispatch targets are resolved, so this asserts
+    // the retry message specifically rather than a missing-agent one.
+    test('rejects an out-of-range retry max_attempts (#822)', async () => {
+      const res = await createWorkflow(userToken, {
+        states: [
+          {
+            name: 'a',
+            initial: true,
+            on_enter: {
+              dispatch: { kind: 'agent', agent_id: 'agt_ghost' },
+              retry: { max_attempts: 0 },
+            },
+          },
+          { name: 'b', terminal: true },
+        ],
+        transitions: [{ name: 'go', from: ['a'], to: 'b' }],
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('WORKFLOW_VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/retry max_attempts/);
+    });
+
     test('rejects a transition referencing an unknown state', async () => {
       const res = await createWorkflow(userToken, {
         states: [{ name: 'a', initial: true }],

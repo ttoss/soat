@@ -1,33 +1,20 @@
 import createDebug from 'debug';
-import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import type { ActiveDispatch } from './tasks';
 import { emitTaskEvent, mapTask, transitionTask } from './tasks';
 import {
-  type DispatchResult,
-  failedDispatchIds,
-  runDispatch,
-} from './tasksDispatch';
+  applyLocked,
+  loadTask,
+  stillInState,
+  type TaskWithWorkflow,
+} from './tasksAutomationLocking';
+import { runDispatchWithRetry } from './tasksAutomationRetry';
+import { type DispatchResult, failedDispatchIds } from './tasksDispatch';
 import type { OnEnter } from './workflowsValidation';
 
 const log = createDebug('soat:tasks');
-
-type TaskWithWorkflow = InstanceType<(typeof db)['Task']> & {
-  project?: InstanceType<(typeof db)['Project']>;
-  workflow?: InstanceType<(typeof db)['Workflow']>;
-};
-
-const loadTask = async (id: string): Promise<TaskWithWorkflow | null> => {
-  return db.Task.findOne({
-    where: { publicId: id },
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Workflow, as: 'workflow' },
-    ],
-  }) as Promise<TaskWithWorkflow | null>;
-};
 
 const buildTaskContext = (task: TaskWithWorkflow) => {
   return {
@@ -40,18 +27,6 @@ const buildTaskContext = (task: TaskWithWorkflow) => {
       assignee: task.assignee,
     },
   };
-};
-
-/** Whether the task is still parked in the state whose automation we launched. */
-const isStale = (args: {
-  task: TaskWithWorkflow | null;
-  stateName: string;
-  token: number;
-}): boolean => {
-  if (!args.task) return true;
-  if (args.task.state !== args.stateName) return true;
-  const enteredAt = args.task.enteredStateAt as Date;
-  return enteredAt.getTime() !== args.token;
 };
 
 const setDispatchState = async (args: {
@@ -79,32 +54,6 @@ const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_TRANSITION_CONFLICT',
 ]);
-
-// Applies a post-dispatch mutation to a task row atomically: locks the row
-// `FOR UPDATE`, re-runs `guard` against the freshly-locked read, and only
-// mutates + saves if it passes — all inside one transaction, so there is no
-// window between the check and the write for a concurrent `transitionTask` to
-// commit into. Returns the saved task, or `null` when the guard rejected
-// (the task moved, re-entered, or was already routed by the time we could
-// write), which is when a plain read-check-write would otherwise clobber the
-// concurrent write with a stale one (#590).
-const applyLocked = async (args: {
-  taskPublicId: string;
-  guard: (task: TaskWithWorkflow) => boolean;
-  mutate: (task: TaskWithWorkflow) => void;
-}): Promise<TaskWithWorkflow | null> => {
-  return db.sequelize.transaction(async (t) => {
-    const task = (await db.Task.findOne({
-      where: { publicId: args.taskPublicId },
-      transaction: t,
-      lock: t.LOCK.UPDATE,
-    })) as TaskWithWorkflow | null;
-    if (!task || !args.guard(task)) return null;
-    args.mutate(task);
-    await task.save({ transaction: t });
-    return task;
-  });
-};
 
 /**
  * Surfaces a dispatch whose outcome did not route: either no `on_complete` rule
@@ -228,6 +177,7 @@ const handleFailure = async (args: {
   onEnter: OnEnter;
   projectId: number;
   dispatchKind: ActiveDispatch['kind'];
+  attempt: number | undefined;
   error: unknown;
 }): Promise<void> => {
   log(
@@ -239,18 +189,13 @@ const handleFailure = async (args: {
   const failedId = generationId ?? orchestrationRunId;
   const task = await applyLocked({
     taskPublicId: args.taskPublicId,
-    guard: (t) => {
-      return !isStale({
-        task: t,
-        stateName: args.stateName,
-        token: args.token,
-      });
-    },
+    guard: stillInState({ stateName: args.stateName, token: args.token }),
     mutate: (t) => {
       t.activeDispatch = {
         kind: args.dispatchKind,
         id: failedId,
         status: 'failed',
+        ...(args.attempt === undefined ? {} : { attempt: args.attempt }),
       };
       t.automationStatus = 'failed';
     },
@@ -268,37 +213,6 @@ const handleFailure = async (args: {
   }
 };
 
-// Persists a dispatch id onto `active_dispatch` while it is still running — used
-// as `runDispatch`'s `onDispatchStarted` so cancellation-on-exit can reach a
-// genuinely in-flight run instead of a null id for the whole wait window (#606).
-// Guarded by the same staleness check as the completion write (#590).
-const persistRunningDispatchId = async (args: {
-  taskPublicId: string;
-  stateName: string;
-  token: number;
-  dispatchKind: ActiveDispatch['kind'];
-  generationId: string | null;
-  orchestrationRunId: string | null;
-}): Promise<void> => {
-  await applyLocked({
-    taskPublicId: args.taskPublicId,
-    guard: (t) => {
-      return !isStale({
-        task: t,
-        stateName: args.stateName,
-        token: args.token,
-      });
-    },
-    mutate: (t) => {
-      t.activeDispatch = {
-        kind: args.dispatchKind,
-        id: args.generationId ?? args.orchestrationRunId,
-        status: 'running',
-      };
-    },
-  });
-};
-
 // Atomically writes the dispatch completion (provenance, status, last_result,
 // and any declared `payload_writes`), unless the task moved or re-entered
 // since the dispatch started — the stale write is discarded rather than
@@ -308,24 +222,20 @@ const commitCompletion = async (args: {
   stateName: string;
   token: number;
   dispatchKind: ActiveDispatch['kind'];
+  attempt: number | undefined;
   dispatched: DispatchResult;
   context: Record<string, unknown>;
   payloadWrites: Record<string, unknown> | undefined;
 }): Promise<TaskWithWorkflow | null> => {
   return applyLocked({
     taskPublicId: args.taskPublicId,
-    guard: (t) => {
-      return !isStale({
-        task: t,
-        stateName: args.stateName,
-        token: args.token,
-      });
-    },
+    guard: stillInState({ stateName: args.stateName, token: args.token }),
     mutate: (t) => {
       t.activeDispatch = {
         kind: args.dispatchKind,
         id: args.dispatched.generationId ?? args.dispatched.orchestrationRunId,
         status: 'completed',
+        ...(args.attempt === undefined ? {} : { attempt: args.attempt }),
       };
       t.automationStatus = 'completed';
       // `payload_writes` is evaluated over the same `{task, result}` context
@@ -377,32 +287,38 @@ export const runStateAutomation = async (args: {
   const context = buildTaskContext(task);
   const inputs = applyInputMapping(dispatch.inputMapping, context);
 
+  // No `retry` declared means one attempt and no `attempt` counter on
+  // `active_dispatch` — exactly today's behavior (#822).
+  const retry = args.onEnter.retry ?? null;
+
   await setDispatchState({
     task,
-    activeDispatch: { kind: dispatchKind, id: null, status: 'running' },
+    activeDispatch: {
+      kind: dispatchKind,
+      id: null,
+      status: 'running',
+      ...(retry ? { attempt: 1 } : {}),
+    },
     automationStatus: 'running',
   });
 
-  let dispatched: DispatchResult;
-  try {
-    dispatched = await runDispatch({
-      dispatch,
-      projectId: args.projectId,
-      inputs,
-      // Persist the dispatch id the moment it is known — before the blocking
-      // wait — so cancellation-on-exit can reach a genuinely in-flight run (#606).
-      onDispatchStarted: ({ generationId, orchestrationRunId }) => {
-        return persistRunningDispatchId({
-          taskPublicId: args.taskPublicId,
-          stateName: args.stateName,
-          token,
-          dispatchKind,
-          generationId,
-          orchestrationRunId,
-        });
-      },
-    });
-  } catch (error) {
+  const outcome = await runDispatchWithRetry({
+    taskPublicId: args.taskPublicId,
+    stateName: args.stateName,
+    token,
+    projectId: args.projectId,
+    dispatch,
+    dispatchKind,
+    inputs,
+    retry,
+  });
+
+  if (outcome.kind === 'abandoned') {
+    return;
+  }
+  if (outcome.kind === 'failed') {
+    // Only the last attempt reaches here, so `on_failure` (or the parked
+    // `automation_status: 'failed'`) fires once per dispatch, never per attempt.
     await handleFailure({
       taskPublicId: args.taskPublicId,
       stateName: args.stateName,
@@ -410,10 +326,12 @@ export const runStateAutomation = async (args: {
       onEnter: args.onEnter,
       projectId: args.projectId,
       dispatchKind,
-      error,
+      attempt: outcome.attempt,
+      error: outcome.error,
     });
     return;
   }
+  const dispatched: DispatchResult = outcome.dispatched;
 
   // Cancellation-on-exit: commit the completion only if the task hasn't moved
   // or re-entered since the dispatch started (#590).
@@ -422,6 +340,7 @@ export const runStateAutomation = async (args: {
     stateName: args.stateName,
     token,
     dispatchKind,
+    attempt: outcome.attempt,
     dispatched,
     context,
     payloadWrites: dispatch.payloadWrites,

@@ -118,7 +118,7 @@ state in `from`) if a workflow needs one.
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
 | `payload`           | object           | Mutable task data; input to guards and dispatch `input_mapping`s        |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
-| `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any          |
+| `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
@@ -164,6 +164,7 @@ run when a task enters it, and routes the outcome back into a transition:
         "draft_id": { "var": "result.object.document_id" }
       }
     },
+    "retry": { "max_attempts": 3, "backoff_seconds": 5, "backoff_multiplier": 2 },
     "on_complete": [
       { "when": { "==": [{ "var": "result.category" }, "simple"] }, "transition": "to_review" },
       { "when": true, "transition": "to_review" }
@@ -198,9 +199,27 @@ run when a task enters it, and routes the outcome back into a transition:
   `automation_status: unrouted` and a `tasks.automation_rejected` event fires
   (carrying the matched `transition` and the rejection `errorCode`) — again,
   never silently stuck.
-- **`on_failure`** — a transition to fire when the dispatch fails terminally.
-  Omitted → the task stays in the state with `automation_status: failed` for a
-  human to resolve.
+- **`retry`** (optional) — a retry policy for the dispatch's **execution**
+  failures (a tool or agent error, an orchestration run that ends `failed`),
+  never for `on_complete` routing. `max_attempts` counts the first attempt (an
+  integer 1–10); the delay before attempt `n` is
+  `backoff_seconds * backoff_multiplier^(n - 2)` — with the example above,
+  5s then 10s. `backoff_seconds` defaults to 0 (immediate) and
+  `backoff_multiplier` to 1 (fixed delay). `on_failure` — or the parked
+  `automation_status: failed` — fires only after the last attempt, so a state
+  with no `retry` behaves exactly as it did before: one attempt, one outcome.
+  Attempts obey the same cancellation-on-exit rule a single dispatch does: if
+  the task leaves the state between attempts, the remaining ones are abandoned.
+  Each attempt is recorded on the task as `active_dispatch.attempt` alongside
+  that attempt's generation/run id, and every retried failure emits a
+  `tasks.automation_retrying` event (carrying `attempt`, `max_attempts`, the
+  error message, and the failed `generation_id`/`orchestration_run_id`) — so a
+  transient flake that a later attempt recovers from is still visible in the
+  activity feed.
+- **`on_failure`** — a transition to fire when the dispatch fails terminally
+  (after the last retry attempt, when a `retry` policy is declared). Omitted →
+  the task stays in the state with `automation_status: failed` for a human to
+  resolve.
 
 Entering a state cancels any dispatch still running from the state the task is
 leaving — task state is the source of truth (an entity that lives). This applies
@@ -330,6 +349,7 @@ resources:
 | `tasks.closed`               | A task enters a terminal state                           |
 | `tasks.automation_unrouted`  | A dispatch completed but no `on_complete` rule matched   |
 | `tasks.automation_rejected`  | A matched `on_complete` transition was rejected (guard or conflict) |
+| `tasks.automation_retrying`  | A dispatch attempt failed and a `retry` attempt remains (carries `attempt`, `max_attempts`, the error, and the failed generation/run id) |
 | `tasks.stalled`              | An open task sat in a state past its `stalled_after` (once per episode) |
 | `tasks.approval_failed`      | An approved gated transition could no longer apply at resolution time (guard or conflict) |
 
