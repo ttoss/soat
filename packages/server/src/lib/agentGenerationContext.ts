@@ -22,6 +22,7 @@ import {
 } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
+import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
@@ -31,6 +32,7 @@ import {
   resolveConsumerModelRoute,
   ROUTED_PROVIDER_LABEL,
 } from './modelRoutes';
+import { pinServerIdentityToolContext } from './toolContext';
 
 const log = createDebug('soat:generation');
 
@@ -154,6 +156,7 @@ const resolveGenerationTools = async (args: {
   rootTraceId?: string | null;
   remainingDepth?: number;
   guardrailContext?: Record<string, unknown> | null;
+  sessionId?: string | null;
 }): Promise<Record<string, Tool>> => {
   // Canonical bindings (legacy rows normalize lazily); no branch on presence —
   // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
@@ -166,7 +169,10 @@ const resolveGenerationTools = async (args: {
     projectPublicId: args.typedAgent.project.publicId,
     projectGuardrailIds: args.typedAgent.project.guardrailIds,
     agentGuardrailIds: args.typedAgent.guardrailIds,
-    sessionId: args.toolContext?.sessionId ?? null,
+    // #851 — the typed argument, never the `tool_context` bag: guard
+    // decisions and their audit records must attribute to a session id the
+    // server derived, not one a caller typed.
+    sessionId: args.sessionId ?? null,
     authHeader: args.authHeader,
     guardrailContext: args.guardrailContext,
   });
@@ -224,6 +230,20 @@ export const buildGenerationContext = async (args: {
   guardrailContext?: Record<string, unknown> | null;
   sessionId?: string | null;
 }): Promise<GenerationContext> => {
+  // #850 — the identity chokepoint. Every fresh generation (direct agent,
+  // conversation, session, trigger, orchestration node, nested `soat` tool
+  // call) builds its context here, so pinning once makes the reserved
+  // `tool_context` identity keys unforgeable on every path — there is no
+  // per-entry-point pin left to forget. The pinned bag is what gets persisted
+  // into `pendingState`, so a recovered generation resumes with the same
+  // trusted identity.
+  const toolContext = pinServerIdentityToolContext({
+    toolContext: args.toolContext,
+    identity: await resolveServerToolContextIdentity({
+      sessionId: args.sessionId,
+    }),
+  });
+
   const liveAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
     projectIds: args.projectIds,
@@ -271,12 +291,13 @@ export const buildGenerationContext = async (args: {
     projectIds: args.projectIds,
     typedAgent,
     authHeader: args.authHeader,
-    toolContext: args.toolContext,
+    toolContext,
     traceId: args.traceId,
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
     guardrailContext: args.guardrailContext,
+    sessionId: args.sessionId,
   });
 
   const allMessages = await assembleContextMessages({
@@ -293,7 +314,7 @@ export const buildGenerationContext = async (args: {
     resolvedTools,
     allMessages,
     generationId,
-    toolContext: args.toolContext ?? null,
+    toolContext: toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
     agentVersion,
   };

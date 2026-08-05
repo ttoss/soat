@@ -1867,26 +1867,20 @@ describe('Sessions', () => {
     });
   });
 
-  // ── buildToolContext: actor keys in generation toolContext ────────────────
+  // ── Identity keys at the session→generation boundary ─────────────────────
+  //
+  // Since #850 the reserved identity keys (`sessionId`, `actorId`,
+  // `actorExternalId`) are stamped inside createGeneration's context builder
+  // (see lib/generationContextPinning.test.ts), not on this path. What this
+  // path owes the chokepoint is (a) the typed, trusted `sessionId` argument
+  // and (b) the caller bags forwarded without inventing identity keys.
 
-  describe('actor context keys in generation toolContext', () => {
-    let noActorSessionId: string;
+  describe('identity keys at the generation boundary', () => {
     let withActorSessionId: string;
     let testActorId: string;
     const testActorExternalId = '+15559876543';
 
     beforeAll(async () => {
-      // Session without an actor
-      const noActorRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/sessions')
-        .send({ agent_id: agentId, name: 'No Actor Context Test' });
-      noActorSessionId = noActorRes.body.id;
-
-      await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${noActorSessionId}/messages`)
-        .send({ message: 'test message' });
-
-      // Create an actor with an external ID, then a session using it
       const actorRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/actors')
         .send({
@@ -1915,40 +1909,10 @@ describe('Sessions', () => {
       jest.clearAllMocks();
     });
 
-    test('actorId and actorExternalId are omitted from toolContext when session has no actor', async () => {
+    test('the trusted sessionId is passed as a typed argument, and the session path invents no identity keys in the bag', async () => {
       mockCreateGeneration.mockResolvedValueOnce({
-        id: 'gen_no_actor_ctx_01',
-        traceId: 'trc_no_actor_ctx_01',
-        status: 'completed',
-        output: {
-          model: 'test-model',
-          content: 'Reply without actor',
-          finishReason: 'stop',
-        },
-      });
-
-      const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${noActorSessionId}/generate`
-      );
-
-      expect(response.status).toBe(200);
-      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
-
-      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
-        toolContext?: Record<string, string>;
-      };
-      expect(callArgs.toolContext).toBeDefined();
-      // sessionId is always present
-      expect(callArgs.toolContext).toHaveProperty('sessionId');
-      // actor keys must be absent (not empty strings) when no actor is set
-      expect(callArgs.toolContext).not.toHaveProperty('actorId');
-      expect(callArgs.toolContext).not.toHaveProperty('actorExternalId');
-    });
-
-    test('actorId and actorExternalId are populated in toolContext when session has an actor', async () => {
-      mockCreateGeneration.mockResolvedValueOnce({
-        id: 'gen_with_actor_ctx_01',
-        traceId: 'trc_with_actor_ctx_01',
+        id: 'gen_typed_session_01',
+        traceId: 'trc_typed_session_01',
         status: 'completed',
         output: {
           model: 'test-model',
@@ -1965,21 +1929,27 @@ describe('Sessions', () => {
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
 
       const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        sessionId?: string;
         toolContext?: Record<string, string>;
       };
-      expect(callArgs.toolContext).toBeDefined();
-      expect(callArgs.toolContext).toHaveProperty('sessionId');
-      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
-      expect(callArgs.toolContext).toHaveProperty(
-        'actorExternalId',
-        testActorExternalId
-      );
+      // Identity travels on the typed argument the chokepoint stamps from —
+      // never invented into the caller bag on this path.
+      expect(callArgs.sessionId).toBe(withActorSessionId);
+      expect(callArgs.toolContext).not.toHaveProperty('sessionId');
+      expect(callArgs.toolContext).not.toHaveProperty('actorId');
+      expect(callArgs.toolContext).not.toHaveProperty('actorExternalId');
     });
 
-    test('per-request toolContext cannot override server-derived identity keys', async () => {
+    test('caller bags merge with per-request values winning, and forged identity keys are left for the chokepoint to strip', async () => {
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${withActorSessionId}`)
+        .send({
+          tool_context: { tenant: 'persisted', region: 'us-east-1' },
+        });
+
       mockCreateGeneration.mockResolvedValueOnce({
-        id: 'gen_spoofed_ctx_01',
-        traceId: 'trc_spoofed_ctx_01',
+        id: 'gen_merge_ctx_01',
+        traceId: 'trc_merge_ctx_01',
         status: 'completed',
         output: {
           model: 'test-model',
@@ -1991,71 +1961,24 @@ describe('Sessions', () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${withActorSessionId}/generate`)
         .send({
-          tool_context: {
-            actorId: 'actor_spoofed',
-            actorExternalId: 'spoofed-external-id',
-            sessionId: 'ses_spoofed',
-          },
+          tool_context: { tenant: 'request', sessionId: 'ses_forged' },
         });
 
       expect(response.status).toBe(200);
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
 
       const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        sessionId?: string;
         toolContext?: Record<string, string>;
       };
-      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
-      expect(callArgs.toolContext).toHaveProperty(
-        'actorExternalId',
-        testActorExternalId
-      );
-      expect(callArgs.toolContext).toHaveProperty(
-        'sessionId',
-        withActorSessionId
-      );
-    });
-
-    test('persisted session toolContext cannot override server-derived identity keys', async () => {
-      await authenticatedTestClient(userToken)
-        .patch(`/api/v1/sessions/${withActorSessionId}`)
-        .send({
-          tool_context: {
-            actorId: 'actor_spoofed_persisted',
-            actorExternalId: 'spoofed-external-id-persisted',
-            sessionId: 'ses_spoofed_persisted',
-          },
-        });
-
-      mockCreateGeneration.mockResolvedValueOnce({
-        id: 'gen_spoofed_ctx_02',
-        traceId: 'trc_spoofed_ctx_02',
-        status: 'completed',
-        output: {
-          model: 'test-model',
-          content: 'Reply with actor',
-          finishReason: 'stop',
-        },
+      expect(callArgs.toolContext).toMatchObject({
+        tenant: 'request',
+        region: 'us-east-1',
       });
-
-      const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${withActorSessionId}/generate`
-      );
-
-      expect(response.status).toBe(200);
-      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
-
-      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
-        toolContext?: Record<string, string>;
-      };
-      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
-      expect(callArgs.toolContext).toHaveProperty(
-        'actorExternalId',
-        testActorExternalId
-      );
-      expect(callArgs.toolContext).toHaveProperty(
-        'sessionId',
-        withActorSessionId
-      );
+      // The forged key is forwarded verbatim here; createGeneration's context
+      // builder strips it and stamps the trusted value from `sessionId`
+      // (asserted end-to-end in lib/generationContextPinning.test.ts).
+      expect(callArgs.sessionId).toBe(withActorSessionId);
 
       // Restore state so it doesn't leak into other tests in this block.
       await authenticatedTestClient(userToken)
