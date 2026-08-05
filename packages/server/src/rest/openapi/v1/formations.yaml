@@ -669,6 +669,13 @@ components:
           type: boolean
           nullable: true
           description: When true, only one open session per actor_id is allowed for this agent.
+        trace_content_mode:
+          type: string
+          nullable: true
+          description: >-
+            Agent-scope zero-retention setting (`full` or `none`). `null`
+            inherits the project's setting. `full` is refused when the project's
+            own mode is `none`.
         knowledge_config:
           type: object
           nullable: true

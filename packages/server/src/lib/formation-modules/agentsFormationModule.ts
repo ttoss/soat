@@ -213,6 +213,9 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
     singleSessionPerActor: toOptionalBoolean(
       properties.single_session_per_actor
     ),
+    traceContentMode: toOptional(
+      toNullableString(properties.trace_content_mode)
+    ),
     knowledgeConfig: toOptional(
       normalizeKnowledgeConfig(properties.knowledge_config)
     ),
@@ -327,6 +330,7 @@ export const agentsFormationModule: FormationModule = {
       singleSessionPerActor: toOptionalBoolean(
         properties.single_session_per_actor
       ),
+      traceContentMode: toNullableString(properties.trace_content_mode),
       knowledgeConfig: normalizeKnowledgeConfig(properties.knowledge_config),
       outputSchema: toNullableObject(properties.output_schema),
     });
@@ -359,6 +363,7 @@ export const agentsFormationModule: FormationModule = {
         temperature: agent.temperature,
         max_context_messages: agent.max_context_messages,
         single_session_per_actor: agent.single_session_per_actor,
+        trace_content_mode: agent.trace_content_mode,
         knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
         output_schema: agent.output_schema,
       };

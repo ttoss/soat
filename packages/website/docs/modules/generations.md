@@ -157,6 +157,13 @@ The operation is idempotent: a second purge succeeds and leaves the original `co
 A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — `DELETE /traces/{trace_id}/content` deletes the steps bytes from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
 :::
 
+### Automatic content lifecycle
+
+Two project settings turn the manual purge into a policy:
+
+- **[Retention](./traces.md#retention-policy)** — `trace_content_retention_days` on the project runs a daily sweep that purges content past the window, through this same purge path.
+- **[Zero-retention](./traces.md#zero-retention-mode)** — `trace_content_mode: "none"` on the project or the agent means the content columns above are never written at all. The generation is still created and still metered; it simply reads back as a skeleton stamped `content_redacted_by_principal_id: "zero_retention"` from the moment it exists.
+
 ### Sub-agent invocations
 
 `initiator_generation_id` is populated only when an agent calls another agent via a SOAT tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.

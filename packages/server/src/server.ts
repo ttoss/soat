@@ -11,6 +11,7 @@ import {
 } from './db';
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
+import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
@@ -53,6 +54,10 @@ const startServer = async () => {
     // Start the audit-log retention sweep so entries older than
     // AUDIT_RETENTION_DAYS are pruned on a daily tick.
     startAuditRetentionScheduler();
+    // Start the trace-content retention sweep so content past a project's
+    // trace_content_retention_days is purged on a daily tick. Projects that
+    // leave the window null are skipped — retention is opt-in.
+    startContentRetentionScheduler();
     // Start the daily storage-metering snapshot (one `storage` usage event per
     // project per UTC day) and the API-request counter flush (aggregated
     // `api_request` events per window).

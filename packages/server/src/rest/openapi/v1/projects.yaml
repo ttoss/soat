@@ -149,8 +149,10 @@ paths:
         the project-scope baseline governing every tool call by every agent in
         the project), its orchestration concurrency limit
         (`max_concurrent_runs`), its inherited model route
-        (`default_model_route_id`), and/or its read-auditing opt-in
-        (`audit_reads_enabled`). At least one field is required. Requires admin
+        (`default_model_route_id`), its read-auditing opt-in
+        (`audit_reads_enabled`), its trace-content retention window
+        (`trace_content_retention_days`), and/or its zero-retention setting
+        (`trace_content_mode`). At least one field is required. Requires admin
         role. Detaching a guardrail (removing an id) additionally requires
         guardrails:DetachGuardrail.
       operationId: updateProject
@@ -209,6 +211,28 @@ paths:
                     Opt the project into read auditing. When true, `GET`
                     requests that name this project are recorded in the audit
                     log alongside mutations. Defaults to `false`.
+                trace_content_retention_days:
+                  type: integer
+                  nullable: true
+                  minimum: 1
+                  example: 90
+                  description: >-
+                    How long trace and generation content is kept before the
+                    daily retention sweep content-purges it. `null` (the
+                    default) disables retention; otherwise an integer >= 1.
+                    The sweep uses the same purge path as
+                    `DELETE /traces/{trace_id}/content`, so the row survives as
+                    an auditable skeleton with `content_redacted_at` set.
+                trace_content_mode:
+                  type: string
+                  enum: [full, none]
+                  example: none
+                  description: >-
+                    Whether trace and generation content is persisted at all.
+                    `full` (the default) stores it; `none` is zero-retention —
+                    content is never written, for every agent in the project.
+                    An agent may tighten this to `none` on its own but cannot
+                    loosen a `none` project back to `full`.
       responses:
         '200':
           description: Project updated successfully
@@ -395,6 +419,23 @@ components:
             Whether `GET` requests naming this project are recorded in the
             audit log. `false` by default — v1 audits mutations only.
           example: false
+        trace_content_retention_days:
+          type: integer
+          nullable: true
+          minimum: 1
+          description: >-
+            Days of trace/generation content retention before the daily sweep
+            purges it. `null` means retention is disabled (the default) and
+            content is kept until purged on demand.
+          example: null
+        trace_content_mode:
+          type: string
+          enum: [full, none]
+          description: >-
+            Whether trace/generation content is persisted. `full` by default;
+            `none` is zero-retention — content is never written for any agent
+            in this project.
+          example: full
         created_at:
           type: string
           format: date-time

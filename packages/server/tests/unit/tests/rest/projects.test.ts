@@ -520,6 +520,97 @@ describe('Projects', () => {
     });
   });
 
+  describe('trace content lifecycle settings', () => {
+    let projectId: string;
+
+    beforeEach(async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Content Lifecycle Project' });
+      projectId = res.body.id;
+    });
+
+    test('a new project stores content with retention disabled', async () => {
+      // The shipped defaults must change nothing for an existing tenant:
+      // retention is opt-in and content is stored, exactly as before #837/#838.
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.trace_content_retention_days).toBeNull();
+      expect(res.body.trace_content_mode).toBe('full');
+    });
+
+    test('admin can set and clear the retention window', async () => {
+      const set = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_retention_days: 90 });
+
+      expect(set.status).toBe(200);
+      expect(set.body.trace_content_retention_days).toBe(90);
+
+      const cleared = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_retention_days: null });
+
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.trace_content_retention_days).toBeNull();
+    });
+
+    test.each([
+      ['zero', 0],
+      ['a negative window', -30],
+      ['a fractional window', 1.5],
+    ])('rejects %s with 400', async (_label, value) => {
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_retention_days: value });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('admin can switch the project to zero-retention', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_mode: 'none' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.trace_content_mode).toBe('none');
+
+      const get = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${projectId}`
+      );
+      expect(get.body.trace_content_mode).toBe('none');
+    });
+
+    test('rejects an unknown mode with 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_mode: 'partial' });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a non-admin cannot change either setting', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_retention_days: 30 });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('an unauthenticated request cannot change either setting', async () => {
+      const res = await testClient
+        .patch(`/api/v1/projects/${projectId}`)
+        .send({ trace_content_mode: 'none' });
+
+      expect(res.status).toBe(401);
+    });
+  });
+
   describe('DELETE /api/v1/projects/:id', () => {
     test('admin can delete a project', async () => {
       const createRes = await authenticatedTestClient(adminToken)

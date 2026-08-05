@@ -1,79 +1,16 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { resolveEndUserAttribution } from './generationAttribution';
+import {
+  buildCreateContentColumns,
+  suppressContentWrites,
+} from './generationContentSuppression';
+import { mapGeneration, type PersistedGeneration } from './generationMapper';
 import { findOrCreateTrace } from './generationTrace';
 
-export type PersistedGeneration = {
-  id: string;
-  project_id: string;
-  agent_id: string;
-  trace_id: string;
-  initiator_generation_id: string | null;
-  started_by_principal_type: string | null;
-  started_by_principal_id: string | null;
-  status: string;
-  started_at: Date;
-  completed_at: Date | null;
-  last_activity_at: Date | null;
-  stop_reason: string | null;
-  error: Record<string, unknown> | null;
-  action_id: string | null;
-  trigger_id: string | null;
-  orchestration_run_id: string | null;
-  node_id: string | null;
-  agent_version: number | null;
-  routing: Record<string, unknown> | null;
-  extraction: Record<string, unknown> | null;
-  metadata: Record<string, unknown> | null;
-  content_redacted_at: Date | null;
-  content_redacted_by_principal_type: string | null;
-  content_redacted_by_principal_id: string | null;
-  created_at: Date;
-  updated_at: Date;
-};
-
-const mapGeneration = (
-  gen: InstanceType<(typeof db)['Generation']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']>;
-    trace?: InstanceType<(typeof db)['Trace']>;
-    initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
-  }
-): PersistedGeneration => {
-  if (!gen.project || !gen.agent || !gen.trace) {
-    throw new Error('Generation associations are required for serialization.');
-  }
-
-  return {
-    id: gen.publicId,
-    project_id: gen.project.publicId,
-    agent_id: gen.agent.publicId,
-    trace_id: gen.trace.publicId,
-    initiator_generation_id: gen.initiatorGeneration?.publicId ?? null,
-    started_by_principal_type: gen.startedByPrincipalType,
-    started_by_principal_id: gen.startedByPrincipalId,
-    status: gen.status,
-    started_at: gen.startedAt,
-    completed_at: gen.completedAt,
-    last_activity_at: gen.lastActivityAt,
-    stop_reason: gen.stopReason,
-    error: gen.error,
-    action_id: gen.actionId,
-    trigger_id: gen.triggerId,
-    orchestration_run_id: gen.orchestrationRunId,
-    node_id: gen.nodeId,
-    agent_version: gen.agentVersion,
-    routing: gen.routing,
-    extraction: gen.extraction,
-    // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
-    metadata: gen.metadata,
-    content_redacted_at: gen.contentRedactedAt,
-    content_redacted_by_principal_type: gen.contentRedactedByPrincipalType,
-    content_redacted_by_principal_id: gen.contentRedactedByPrincipalId,
-    created_at: gen.createdAt,
-    updated_at: gen.updatedAt,
-  };
-};
+// The row → wire mapper lives in its own module; re-exported so the many
+// existing `from './generations'` imports of the type keep working.
+export type { PersistedGeneration } from './generationMapper';
 
 const findInitiatorGeneration = async (args: {
   initiatorGenerationId?: string | null;
@@ -122,6 +59,61 @@ const attributionColumns = (args: GenerationAttribution) => {
   };
 };
 
+/**
+ * Creates the Trace (if needed) and the Generation in one transaction.
+ *
+ * They must commit together, or a `Generation.create` failure orphans an
+ * invisible Trace that still blocks `deleteAgent` (soat#815).
+ */
+const commitGenerationWithTrace = async (helperArgs: {
+  args: GenerationAttribution & {
+    publicId: string;
+    projectId: number;
+    traceId: string;
+    startedByPrincipalType?: string | null;
+    startedByPrincipalId?: string | null;
+  };
+  agentDbId: number;
+  initiatorDbId: number | null;
+  endUser: { actorId: number | null; sessionId: number | null };
+  contentColumns: Record<string, unknown>;
+}) => {
+  const { args, agentDbId, initiatorDbId, endUser, contentColumns } =
+    helperArgs;
+
+  return db.sequelize.transaction(async (transaction) => {
+    const trace = await findOrCreateTrace({
+      traceId: args.traceId,
+      projectId: args.projectId,
+      agentDbId,
+      transaction,
+    });
+
+    return db.Generation.create(
+      {
+        publicId: args.publicId,
+        projectId: args.projectId,
+        agentId: agentDbId,
+        traceId: trace.id,
+        initiatorGenerationId: initiatorDbId,
+        startedByPrincipalType: args.startedByPrincipalType ?? null,
+        startedByPrincipalId: args.startedByPrincipalId ?? null,
+        startedByActorId: endUser.actorId,
+        sessionId: endUser.sessionId,
+        status: 'in_progress',
+        startedAt: new Date(),
+        completedAt: null,
+        lastActivityAt: null,
+        stopReason: null,
+        error: null,
+        ...attributionColumns(args),
+        ...contentColumns,
+      },
+      { transaction }
+    );
+  });
+};
+
 export const createGenerationRecord = async (
   args: GenerationAttribution & {
     publicId: string;
@@ -159,38 +151,20 @@ export const createGenerationRecord = async (
     sessionId: args.sessionId,
   });
 
-  // Trace + Generation must commit together, or a Generation.create failure
-  // orphans an invisible Trace that still blocks deleteAgent (soat#815).
-  const gen = await db.sequelize.transaction(async (transaction) => {
-    const trace = await findOrCreateTrace({
-      traceId: args.traceId,
-      projectId: args.projectId,
-      agentDbId: agent.id as number,
-      transaction,
-    });
+  // Zero-retention (#838): `metadata` is caller content, so it is refused at
+  // creation rather than written and purged later. The row itself is still
+  // created — the skeleton is what metering and audit read.
+  const contentColumns = await buildCreateContentColumns({
+    agentDbId: agent.id as number,
+    metadata: args.metadata,
+  });
 
-    return db.Generation.create(
-      {
-        publicId: args.publicId,
-        projectId: args.projectId,
-        agentId: agent.id,
-        traceId: trace.id,
-        initiatorGenerationId: initiatorGeneration?.id ?? null,
-        startedByPrincipalType: args.startedByPrincipalType ?? null,
-        startedByPrincipalId: args.startedByPrincipalId ?? null,
-        startedByActorId: endUser.actorId,
-        sessionId: endUser.sessionId,
-        status: 'in_progress',
-        startedAt: new Date(),
-        completedAt: null,
-        lastActivityAt: null,
-        stopReason: null,
-        error: null,
-        ...attributionColumns(args),
-        metadata: args.metadata ?? null,
-      },
-      { transaction }
-    );
+  const gen = await commitGenerationWithTrace({
+    args,
+    agentDbId: agent.id as number,
+    initiatorDbId: initiatorGeneration?.id ?? null,
+    endUser,
+    contentColumns,
   });
 
   const fullGeneration = await db.Generation.findByPk(gen.id, {
@@ -252,6 +226,17 @@ export const updateGenerationRecord = async (
   for (const field of UPDATABLE_GENERATION_FIELDS) {
     if (args[field] !== undefined) updates[field] = args[field];
   }
+
+  // Zero-retention (#838): drop the content columns from the write while the
+  // lifecycle columns on the same update still land. Enforced here rather than
+  // at the call sites because this is the only place those columns can be
+  // written — a future caller inherits the guarantee instead of having to
+  // remember it.
+  await suppressContentWrites({
+    agentDbId: gen.agentId,
+    alreadyRedacted: gen.contentRedactedAt !== null,
+    updates,
+  });
 
   await gen.update(updates);
 

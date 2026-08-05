@@ -67,6 +67,32 @@ export class Project extends Model {
   @Column({ type: DataType.BOOLEAN, allowNull: false, defaultValue: false })
   declare auditReadsEnabled: boolean;
 
+  // How long trace/generation content is kept before the daily retention sweep
+  // content-purges it. `null` (the default) disables retention entirely, so
+  // nothing a project already stored is destroyed by shipping this feature —
+  // a tenant opts in (#837).
+  //
+  // Scoped to the project rather than the agent on purpose: a purge cascades
+  // down the trace subtree (`purgeTraceContent`), and nested agent calls create
+  // child traces owned by *other* agents. A per-agent window would therefore
+  // let a short-window root silently purge a child whose own agent asked for a
+  // longer one. Every trace in a subtree shares one project, so the
+  // project-scoped window has no such conflict.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare traceContentRetentionDays: number | null;
+
+  // Zero-retention floor for the project: `'none'` means trace/generation
+  // content is never written in the first place, for every agent in the
+  // project (#838). An agent may tighten this to `'none'` on its own, never
+  // loosen it — the same "project sets the floor, the agent narrows" shape
+  // `guardrailIds` above already uses.
+  @Column({
+    type: DataType.STRING(16),
+    allowNull: false,
+    defaultValue: 'full',
+  })
+  declare traceContentMode: string;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

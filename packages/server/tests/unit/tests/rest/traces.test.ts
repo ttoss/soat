@@ -517,9 +517,7 @@ describe('Traces REST API', () => {
     };
 
     test('returns 401 when unauthenticated', async () => {
-      const res = await testClient.delete(
-        `/api/v1/traces/${traceId}/content`
-      );
+      const res = await testClient.delete(`/api/v1/traces/${traceId}/content`);
       expect(res.status).toBe(401);
     });
 

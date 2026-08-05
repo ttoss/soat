@@ -49,6 +49,7 @@ type CreateAgentBody = {
   max_context_messages?: unknown;
   single_session_per_actor?: unknown;
   guardrail_ids?: unknown;
+  trace_content_mode?: unknown;
   project_id?: string;
   /** Write-only tag for the version this write archives; never stored on the agent. */
   version_label?: unknown;
@@ -170,6 +171,9 @@ const parseUpdateAgentBody = (
         ? body.single_session_per_actor
         : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    // Forwarded unvalidated so the lib rejects a bad value (or a loosening of
+    // a zero-retention project) with a 400 rather than dropping it silently.
+    traceContentMode: parseOptional<string | null>(body.trace_content_mode),
     // Annotates the archived version, not the agent — deliberately absent from
     // the config snapshot, so labelling a change is not itself a change.
     versionLabel: parseNullableString(body.version_label),
@@ -248,6 +252,7 @@ const buildCreateAgentArgs = (args: {
         ? body.single_session_per_actor
         : undefined,
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
+    traceContentMode: body.trace_content_mode as string | null | undefined,
   };
 };
 

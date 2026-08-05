@@ -675,7 +675,9 @@ describe('Agent Generation Routes', () => {
       await updateGenerationRecord({
         publicId: 'gen_recovered',
         pendingState: {
-          pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+          pendingToolCalls: [
+            { toolCallId: 'tc_1', toolName: 'noop', args: {} },
+          ],
           messages: [{ role: 'user', content: 'hello' }],
           steps: [],
           parentTraceId: null,
@@ -712,7 +714,9 @@ describe('Agent Generation Routes', () => {
       await updateGenerationRecord({
         publicId: 'gen_usage_metered',
         pendingState: {
-          pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+          pendingToolCalls: [
+            { toolCallId: 'tc_1', toolName: 'noop', args: {} },
+          ],
           messages: [{ role: 'user', content: 'hello' }],
           steps: [],
           parentTraceId: null,
