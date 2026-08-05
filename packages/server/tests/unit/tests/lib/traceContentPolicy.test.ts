@@ -45,19 +45,28 @@ describe('traceContentPolicy', () => {
 
     test('an agent may tighten a storing project to none', () => {
       expect(
-        validateAgentTraceContentMode({ projectMode: 'full', agentMode: 'none' })
+        validateAgentTraceContentMode({
+          projectMode: 'full',
+          agentMode: 'none',
+        })
       ).toBeNull();
     });
 
     test('an agent may restate none under a zero-retention project', () => {
       expect(
-        validateAgentTraceContentMode({ projectMode: 'none', agentMode: 'none' })
+        validateAgentTraceContentMode({
+          projectMode: 'none',
+          agentMode: 'none',
+        })
       ).toBeNull();
     });
 
     test('an agent may NOT loosen a zero-retention project back to full', () => {
       expect(
-        validateAgentTraceContentMode({ projectMode: 'none', agentMode: 'full' })
+        validateAgentTraceContentMode({
+          projectMode: 'none',
+          agentMode: 'full',
+        })
       ).toMatch(/cannot store content/i);
     });
 

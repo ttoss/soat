@@ -337,7 +337,10 @@ describe('Generations', () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${attributedGenerationId}`)
         .send({
-          metadata: { action_id: 'act_forged', orchestrationRunId: 'run_forged' },
+          metadata: {
+            action_id: 'act_forged',
+            orchestrationRunId: 'run_forged',
+          },
         });
 
       expect(response.status).toBe(200);

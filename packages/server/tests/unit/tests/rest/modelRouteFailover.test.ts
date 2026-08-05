@@ -314,15 +314,9 @@ describe('Model route failover through agent generation', () => {
       fallbacks: 1,
     });
     expect(record.body.routing.attempts).toHaveLength(2);
-    expect(record.body.routing.attempts[0].error_class).toBe(
-      'provider_error'
-    );
-    expect(
-      record.body.routing.attempts[1].error_class
-    ).toBeUndefined();
-    expect(record.body.routing.attempts[1].model).toBe(
-      'healthy-model'
-    );
+    expect(record.body.routing.attempts[0].error_class).toBe('provider_error');
+    expect(record.body.routing.attempts[1].error_class).toBeUndefined();
+    expect(record.body.routing.attempts[1].model).toBe('healthy-model');
   });
 
   test('a streaming generation fails over before the first token', async () => {

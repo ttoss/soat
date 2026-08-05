@@ -254,8 +254,9 @@ describe('sweepExpiredTraceContent', () => {
 
     await sweepExpiredTraceContent({ now: futureNow(40) });
 
-    expect((await db.Trace.findByPk(shortWindow.traceDbId))!.contentRedactedAt)
-      .not.toBeNull();
+    expect(
+      (await db.Trace.findByPk(shortWindow.traceDbId))!.contentRedactedAt
+    ).not.toBeNull();
     expect(
       (await db.Trace.findByPk(longWindow.traceDbId))!.contentRedactedAt
     ).toBeNull();

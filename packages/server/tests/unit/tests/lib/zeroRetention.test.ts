@@ -272,6 +272,36 @@ describe('zero-retention mode', () => {
       expect(gen!.stopReason).toBe('tool-calls');
     });
 
+    test('a content-free lifecycle write is left completely alone', async () => {
+      // Several lifecycle writes (the `requires_action` flip in
+      // savePendingGeneration among them) are dispatched fire-and-forget, and
+      // callers read the row straight after. Suppression must not put a mode
+      // lookup in front of a write that carries no content to suppress —
+      // doing so widens that race for every generation in the system.
+      const publicId = await makeGeneration({
+        projectDbId: zeroProjectDbId,
+        projectPublicId: zeroProjectId,
+        agent: inheritedAgent,
+      });
+
+      const before = await db.Generation.findOne({ where: { publicId } });
+      const originalStamp = before!.contentRedactedAt;
+      expect(originalStamp).not.toBeNull();
+
+      await updateGenerationRecord({
+        publicId,
+        status: 'requires_action',
+        lastActivityAt: new Date(),
+      });
+
+      const after = await db.Generation.findOne({ where: { publicId } });
+      expect(after!.status).toBe('requires_action');
+      // Still redacted, and the stamp did not move — the create-time marker is
+      // what makes skipping the lookup here safe.
+      expect(after!.contentRedactedAt).toEqual(originalStamp);
+      expect(after!.metadata).toBeNull();
+    });
+
     test('a storing agent still persists those same fields', async () => {
       const publicId = await makeGeneration({
         projectDbId: storingProjectDbId,
