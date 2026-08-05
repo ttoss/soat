@@ -24,6 +24,7 @@ import {
   writeAgentVersion,
 } from './agentVersionSnapshot';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { deleteStorageObjects } from './fileStorage';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertModelBindingResolvable,
@@ -698,7 +699,11 @@ export const updateAgent = async (
 
 const findDependentIds = async (args: {
   agentId: number;
-}): Promise<{ generationIds: number[]; traceIds: number[] }> => {
+}): Promise<{
+  generationIds: number[];
+  traceIds: number[];
+  fileIds: number[];
+}> => {
   const [generationRows, traceRows] = await Promise.all([
     db.Generation.findAll({
       where: { agentId: args.agentId },
@@ -706,7 +711,7 @@ const findDependentIds = async (args: {
     }),
     db.Trace.findAll({
       where: { agentId: args.agentId },
-      attributes: ['id'],
+      attributes: ['id', 'fileId'],
     }),
   ]);
 
@@ -717,20 +722,39 @@ const findDependentIds = async (args: {
     traceIds: traceRows.map((row) => {
       return (row as unknown as { id: number }).id;
     }),
+    fileIds: traceRows
+      .map((row) => {
+        return (row as unknown as { fileId: number | null }).fileId;
+      })
+      .filter((fileId): fileId is number => {
+        return fileId !== null;
+      }),
   };
 };
 
 // Deletes an agent's generations/traces along with it. Cross-references from
 // OTHER agents' rows into the ones being deleted (self-referencing FKs on
 // Generation.initiatorGenerationId and Trace.parentTraceId/rootTraceId) are
-// nulled out first, since those FKs are RESTRICT.
+// nulled out first, since those FKs are RESTRICT. Traces own a File holding
+// their serialized steps (see `saveTrace`); those File rows are destroyed
+// alongside the traces, and their storage objects are cleaned up once the
+// transaction commits (see #835 — the row must be gone before the object is,
+// otherwise a concurrent read could reference bytes mid-delete).
 const forceDeleteAgentWithDependents = async (args: {
   agent: InstanceType<typeof db.Agent>;
   agentId: number;
 }): Promise<void> => {
-  const { generationIds, traceIds } = await findDependentIds({
+  const { generationIds, traceIds, fileIds } = await findDependentIds({
     agentId: args.agentId,
   });
+
+  const files =
+    fileIds.length > 0
+      ? await db.File.findAll({
+          where: { id: fileIds },
+          attributes: ['storagePath', 'storageType'],
+        })
+      : [];
 
   await db.sequelize.transaction(async (transaction) => {
     if (generationIds.length > 0) {
@@ -755,6 +779,9 @@ const forceDeleteAgentWithDependents = async (args: {
       transaction,
     });
     await db.Trace.destroy({ where: { agentId: args.agentId }, transaction });
+    if (fileIds.length > 0) {
+      await db.File.destroy({ where: { id: fileIds }, transaction });
+    }
     // Archived configs are owned by the agent; remove them before the parent so
     // no orphan version rows are left behind.
     await db.AgentVersion.destroy({
@@ -763,6 +790,12 @@ const forceDeleteAgentWithDependents = async (args: {
     });
     await args.agent.destroy({ transaction });
   });
+
+  await deleteStorageObjects(
+    files.map((file) => {
+      return { storagePath: file.storagePath, storageType: file.storageType };
+    })
+  );
 };
 
 export const deleteAgent = async (args: {

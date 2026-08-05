@@ -579,7 +579,7 @@ Two agent fields are read from the live agent even during a rollout, because the
 
 ### Deletion
 
-By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generationCount` / `meta.traceCount` so a caller can tell which one is nonzero. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are owned by it and are removed with it.
+By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generationCount` / `meta.traceCount` so a caller can tell which one is nonzero. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are owned by it and are removed with it. Each deleted trace's backing [file](./files.md) (the serialized steps) and its stored bytes are removed too, so no orphaned content is left behind in storage.
 
 ## Examples
 

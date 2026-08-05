@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
 import { type Transaction } from './dbTransaction';
+import { deleteStorageObjects } from './fileStorage';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertDefaultModelRouteInProject,
@@ -275,7 +276,10 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
       }),
       db.Generation.findAll({ where: { projectId }, attributes: ['id'] }),
       db.Trace.findAll({ where: { projectId }, attributes: ['id'] }),
-      db.File.findAll({ where: { projectId }, attributes: ['id'] }),
+      db.File.findAll({
+        where: { projectId },
+        attributes: ['id', 'storagePath', 'storageType'],
+      }),
       db.Agent.findAll({ where: { projectId }, attributes: ['id'] }),
     ]);
 
@@ -294,6 +298,12 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
     generationIds: collectIds(generationRows),
     traceIds: collectIds(traceRows),
     fileIds,
+    files: fileRows.map((row) => {
+      return {
+        storagePath: (row as unknown as { storagePath: string }).storagePath,
+        storageType: (row as unknown as { storageType: string }).storageType,
+      };
+    }),
     documentIds: collectIds(documentRows),
     agentIds: collectIds(agentRows),
   };
@@ -349,6 +359,7 @@ const forceDeleteProjectWithDependents = async (args: {
     traceIds,
     documentIds,
     agentIds,
+    files,
   } = await findProjectDependentIds({ projectId });
 
   await db.sequelize.transaction(async (transaction) => {
@@ -435,6 +446,11 @@ const forceDeleteProjectWithDependents = async (args: {
 
     await args.project.destroy({ transaction });
   });
+
+  // Storage cleanup happens after the transaction commits, once the File rows
+  // are truly gone — a failed object delete is logged and retryable, never a
+  // reason to roll back the DB (see #835).
+  await deleteStorageObjects(files);
 };
 
 export const deleteProject = async (args: {
