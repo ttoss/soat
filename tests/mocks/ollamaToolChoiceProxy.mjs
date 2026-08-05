@@ -313,9 +313,12 @@ const forward = async (args) => {
  * - `toolNames` — tools whose forcing is honored deterministically. Anything not
  *   listed goes to the model untouched, so the default (no list) is a pure
  *   pass-through proxy.
+ * - `maxCompletionTokens` — optional output-token cap injected as `max_tokens`
+ *   into every forwarded chat completion (a caller-set value below the cap is
+ *   kept). Unset = bodies are forwarded verbatim.
  */
 export const createToolChoiceProxy = (args) => {
-  const { upstreamBaseUrl } = args;
+  const { upstreamBaseUrl, maxCompletionTokens } = args;
   const toolNames = new Set(args.toolNames ?? []);
 
   return createServer((req, res) => {
@@ -347,6 +350,23 @@ export const createToolChoiceProxy = (args) => {
 
       const forcedTool = resolveForcedTool({ body, toolNames });
       if (!forcedTool) {
+        // Agents carry no max_tokens field, so nothing else bounds how many
+        // tokens the model emits per completion — the dominant, and wildly
+        // variable, cost of the CI suites. Cap it here, at the provider
+        // boundary; a caller-set value below the cap is respected.
+        if (maxCompletionTokens) {
+          body.max_tokens = Math.min(
+            body.max_tokens ?? maxCompletionTokens,
+            maxCompletionTokens
+          );
+          await forward({
+            req,
+            res,
+            body: Buffer.from(JSON.stringify(body)),
+            upstreamBaseUrl,
+          });
+          return;
+        }
         await forward({ req, res, body: rawBody, upstreamBaseUrl });
         return;
       }
@@ -381,16 +401,25 @@ if (isMain) {
       return name.trim();
     })
     .filter(Boolean);
+  // Output-token cap injected into every forwarded chat completion, e.g.
+  // MAX_COMPLETION_TOKENS=256. Unset = no cap.
+  const maxCompletionTokens =
+    Number(process.env.MAX_COMPLETION_TOKENS) || undefined;
   if (!upstreamBaseUrl) {
     // eslint-disable-next-line no-console
     console.error('OLLAMA_UPSTREAM_URL is required');
     process.exit(1);
   }
-  createToolChoiceProxy({ upstreamBaseUrl, toolNames }).listen(port, () => {
+  createToolChoiceProxy({
+    upstreamBaseUrl,
+    toolNames,
+    maxCompletionTokens,
+  }).listen(port, () => {
     // eslint-disable-next-line no-console
     console.log(
       `[tool-choice-proxy] listening on :${port} → ${upstreamBaseUrl} ` +
-        `(forcing: ${toolNames.join(', ') || 'none'})`
+        `(forcing: ${toolNames.join(', ') || 'none'}; ` +
+        `max_tokens cap: ${maxCompletionTokens ?? 'none'})`
     );
   });
 }

@@ -65,6 +65,12 @@ services:
       # Only these tools have their forcing honored deterministically — the client-tool smoke step.
       # Every other forced tool still goes to the real model.
       TOOL_CHOICE_TOOLS: 'get_weather'
+      # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
+      # have no max_tokens field), and the smoke assertions are structural, never
+      # about content — so cap the output here. 256 leaves ample room for a
+      # volunteered tool call's JSON while bounding the runaway generations that
+      # made the job swing by minutes between identical runs.
+      MAX_COMPLETION_TOKENS: '256'
     healthcheck:
       test:
         - CMD
