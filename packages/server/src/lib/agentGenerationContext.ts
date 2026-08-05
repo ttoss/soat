@@ -215,6 +215,25 @@ const resolveGenerationTools = async (args: {
   return resolvedTools;
 };
 
+// #850 — the identity chokepoint. Every fresh generation (direct agent,
+// conversation, session, trigger, orchestration node, nested `soat` tool
+// call) builds its context in buildGenerationContext, so pinning once here
+// makes the reserved `tool_context` identity keys unforgeable on every path —
+// there is no per-entry-point pin left to forget. The pinned bag is what gets
+// persisted into `pendingState`, so a recovered generation resumes with the
+// same trusted identity.
+const resolvePinnedToolContext = async (args: {
+  toolContext?: Record<string, string>;
+  sessionId?: string | null;
+}): Promise<Record<string, string> | undefined> => {
+  return pinServerIdentityToolContext({
+    toolContext: args.toolContext,
+    identity: await resolveServerToolContextIdentity({
+      sessionId: args.sessionId,
+    }),
+  });
+};
+
 export const buildGenerationContext = async (args: {
   agentId: string;
   projectIds?: number[];
@@ -230,19 +249,7 @@ export const buildGenerationContext = async (args: {
   guardrailContext?: Record<string, unknown> | null;
   sessionId?: string | null;
 }): Promise<GenerationContext> => {
-  // #850 — the identity chokepoint. Every fresh generation (direct agent,
-  // conversation, session, trigger, orchestration node, nested `soat` tool
-  // call) builds its context here, so pinning once makes the reserved
-  // `tool_context` identity keys unforgeable on every path — there is no
-  // per-entry-point pin left to forget. The pinned bag is what gets persisted
-  // into `pendingState`, so a recovered generation resumes with the same
-  // trusted identity.
-  const toolContext = pinServerIdentityToolContext({
-    toolContext: args.toolContext,
-    identity: await resolveServerToolContextIdentity({
-      sessionId: args.sessionId,
-    }),
-  });
+  const toolContext = await resolvePinnedToolContext(args);
 
   const liveAgent = await resolveAgentForGeneration({
     agentId: args.agentId,
