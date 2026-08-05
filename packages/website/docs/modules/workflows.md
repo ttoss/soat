@@ -54,8 +54,11 @@ A workflow's two lists are the whole model:
   point, not an error**, which is exactly what an orchestration DAG rejects by
   design.
 
-You create a task against a workflow; it is placed in that workflow's `initial`
-state and that state's `on_enter` automation fires. From then on, every state
+You create a task against a workflow; by default it is placed in that
+workflow's `initial` state and that state's `on_enter` automation fires.
+Passing `state` on create places it directly in that named state instead — an
+alternate entry point for starting a task mid-flow. See
+[Alternate entry points](#alternate-entry-points). From then on, every state
 change — human, API, agent (via MCP), or automation outcome — routes through the
 single **transition** operation, so guards and the audit trail can never be
 bypassed. A task's `state` is **never directly writable**; only a transition
@@ -256,6 +259,25 @@ task the moment the run is created, so a transition out cancels the live run.
   validated against `payload_schema`. Transitions are the audited contract;
   payload writes are not versioned.
 
+### Alternate entry points
+
+`POST /tasks` accepts an optional `state`, naming a declared state of the
+workflow to create the task in directly instead of the `initial` state. This
+is not a second lifecycle: entering the named state behaves exactly like
+arriving there via a transition — `entered_state_at` is set, `on_enter`
+automation fires, and the stall clock arms — and the append-only history
+still records the placement as a single entry (`from_state: null`,
+`transition: null`), just naming the given state instead of the workflow's
+`initial` one.
+
+This is the deterministic counterpart to re-submitting from the initial state
+and hoping a guard or similarity gate recognizes an existing entity: a caller
+that already knows which state and payload a task belongs at (e.g. "a new
+recorte for an existing theme by id") can start it there directly, with no
+race against probabilistic matching. An unknown `state` name is rejected with
+`TASK_STATE_NOT_FOUND` (400); omitting it keeps the existing `initial`-state
+behavior.
+
 ### Approval-gated transitions
 
 A transition with `requires_approval: true` is a **human gate**. Firing it (by a
@@ -335,6 +357,7 @@ resources:
 | `WORKFLOW_HAS_OPEN_TASKS`  | 409    | The workflow has open tasks and cannot be deleted              |
 | `TASK_NOT_FOUND`           | 404    | The task does not exist or is not accessible                   |
 | `TASK_PAYLOAD_INVALID`     | 400    | The payload violates the workflow's `payload_schema`           |
+| `TASK_STATE_NOT_FOUND`     | 400    | `POST /tasks` `state` does not name a declared state of the workflow |
 | `TASK_TRANSITION_NOT_FOUND`| 400    | The named transition does not exist in the workflow            |
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |

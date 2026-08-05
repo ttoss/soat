@@ -247,7 +247,60 @@ export const dispatchOnEnter = (args: {
   pendingAutomations.add(promise);
 };
 
+/**
+ * Resolves a task's entry state: the named `state` when given (an alternate
+ * entry point, #821), otherwise the workflow's `initial` state. Throws
+ * `TASK_STATE_NOT_FOUND` when `state` names no declared state.
+ */
+const resolveEntryState = (args: {
+  states: WorkflowState[];
+  workflowId: string;
+  state?: string | null;
+}): WorkflowState => {
+  if (!args.state) return findInitialState(args.states);
+  const found = stateByName({ states: args.states, name: args.state });
+  if (!found) {
+    throw new DomainError(
+      'TASK_STATE_NOT_FOUND',
+      `Workflow '${args.workflowId}' has no state named '${args.state}'.`,
+      { state: args.state }
+    );
+  }
+  return found;
+};
+
 // ── Create ────────────────────────────────────────────────────────────────────
+
+/** Emits `tasks.created`/`tasks.closed`, kicks off `on_enter`, and returns the mapped task. */
+const finalizeCreatedTask = async (args: {
+  taskPublicId: string;
+  projectId: number;
+  entryState: WorkflowState;
+  closed: boolean;
+}) => {
+  const created = await findTaskInstance({ id: args.taskPublicId });
+  const mapped = mapTask(created!);
+  await emitTaskEvent({
+    type: 'tasks.created',
+    projectId: args.projectId,
+    task: mapped,
+  });
+  if (args.closed) {
+    await emitTaskEvent({
+      type: 'tasks.closed',
+      projectId: args.projectId,
+      task: mapped,
+    });
+  }
+
+  dispatchOnEnter({
+    taskPublicId: args.taskPublicId,
+    projectId: args.projectId,
+    state: args.entryState,
+  });
+
+  return mapped;
+};
 
 export const createTask = async (args: {
   projectId: number;
@@ -255,13 +308,22 @@ export const createTask = async (args: {
   title: string;
   payload?: Record<string, unknown> | null;
   assignee?: string | null;
+  /**
+   * Alternate entry point: name a declared state to place the task there
+   * instead of the workflow's `initial` state. Entering it behaves exactly
+   * like arriving via a transition — `on_enter` fires, the stall clock arms —
+   * so mid-flow entry is a different first state, not a second lifecycle.
+   * Defaults to the `initial` state.
+   */
+  state?: string | null;
   principal: TaskPrincipal;
 }) => {
   log(
-    'createTask: projectId=%d workflowId=%s title=%s',
+    'createTask: projectId=%d workflowId=%s title=%s state=%s',
     args.projectId,
     args.workflowId,
-    args.title
+    args.title,
+    args.state
   );
 
   const workflow = await db.Workflow.findOne({
@@ -274,19 +336,22 @@ export const createTask = async (args: {
     );
   }
 
-  const states = workflow.states as WorkflowState[];
-  const initial = findInitialState(states);
+  const entryState = resolveEntryState({
+    states: workflow.states as WorkflowState[],
+    workflowId: args.workflowId,
+    state: args.state,
+  });
   const payload = (args.payload ?? {}) as Record<string, unknown>;
   validatePayload({ payloadSchema: workflow.payloadSchema, payload });
 
-  const closed = initial.terminal === true;
+  const closed = entryState.terminal === true;
   const enteredStateAt = new Date();
 
   const task = await db.Task.create({
     projectId: args.projectId,
     workflowId: workflow.id as number,
     title: args.title,
-    state: initial.name,
+    state: entryState.name,
     status: closed ? 'closed' : 'open',
     payload,
     assignee: args.assignee ?? null,
@@ -295,16 +360,16 @@ export const createTask = async (args: {
     pendingTransition: null,
     pendingApprovalId: null,
     enteredStateAt,
-    // A terminal initial state never stalls; otherwise arm the sweeper.
+    // A terminal entry state never stalls; otherwise arm the sweeper.
     stallDeadlineAt: closed
       ? null
-      : computeStallDeadline({ state: initial, enteredStateAt }),
+      : computeStallDeadline({ state: entryState, enteredStateAt }),
   });
 
   await db.TaskTransition.create({
     taskId: task.id as number,
     fromState: null,
-    toState: initial.name,
+    toState: entryState.name,
     transition: null,
     principalKind: args.principal.kind,
     principalId: args.principal.id,
@@ -313,28 +378,12 @@ export const createTask = async (args: {
     note: null,
   });
 
-  const created = await findTaskInstance({ id: task.publicId });
-  const mapped = mapTask(created!);
-  await emitTaskEvent({
-    type: 'tasks.created',
-    projectId: args.projectId,
-    task: mapped,
-  });
-  if (closed) {
-    await emitTaskEvent({
-      type: 'tasks.closed',
-      projectId: args.projectId,
-      task: mapped,
-    });
-  }
-
-  dispatchOnEnter({
+  return finalizeCreatedTask({
     taskPublicId: task.publicId,
     projectId: args.projectId,
-    state: initial,
+    entryState,
+    closed,
   });
-
-  return mapped;
 };
 
 // ── Update (payload / title / assignee — never state) ─────────────────────────
