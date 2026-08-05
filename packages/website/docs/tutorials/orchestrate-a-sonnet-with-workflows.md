@@ -145,10 +145,10 @@ Eight states model the card's life. The four composing states — `create_text` 
 `stanza_1`…`stanza_4` — each carry `on_enter` automation: when the task enters one,
 the workflow **dispatches the agent**, and on completion routes the card to the
 next state. `create_text` turns the theme into a short plan; each stanza reads the
-**poem-so-far** from `task.payload.last_result.content` and asks the agent to
+**poem-so-far** from `task.last_result.content` and asks the agent to
 append the next quatrain, returning the whole poem — so the card carries the
 growing sonnet forward. (An `on_enter` dispatch writes its output to
-`payload.last_result`; see [Workflows & Tasks](/docs/modules/workflows) for the
+`last_result`; see [Workflows & Tasks](/docs/modules/workflows) for the
 automation model.)
 
 `review` is a `human` state — the card parks there until a person acts.
@@ -183,7 +183,7 @@ STATES='[
         "kind": "agent",
         "agent_id": "'"$AGENT_ID"'",
         "input_mapping": {
-          "prompt": { "cat": ["Plan: ", { "var": "task.payload.last_result.content" }, "\nWrite the FIRST quatrain (4 lines) of a sonnet about ", { "var": "task.payload.theme" }, ". Reply with only those 4 lines."] }
+          "prompt": { "cat": ["Plan: ", { "var": "task.last_result.content" }, "\nWrite the FIRST quatrain (4 lines) of a sonnet about ", { "var": "task.payload.theme" }, ". Reply with only those 4 lines."] }
         }
       },
       "on_complete": [ { "when": true, "transition": "to_stanza_2" } ]
@@ -195,7 +195,7 @@ STATES='[
         "kind": "agent",
         "agent_id": "'"$AGENT_ID"'",
         "input_mapping": {
-          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.payload.last_result.content" }, "\nAppend the SECOND quatrain (4 more lines). Reply with the complete poem so far, nothing else."] }
+          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.last_result.content" }, "\nAppend the SECOND quatrain (4 more lines). Reply with the complete poem so far, nothing else."] }
         }
       },
       "on_complete": [ { "when": true, "transition": "to_stanza_3" } ]
@@ -207,7 +207,7 @@ STATES='[
         "kind": "agent",
         "agent_id": "'"$AGENT_ID"'",
         "input_mapping": {
-          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.payload.last_result.content" }, "\nAppend the THIRD quatrain (4 more lines). Reply with the complete poem so far, nothing else."] }
+          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.last_result.content" }, "\nAppend the THIRD quatrain (4 more lines). Reply with the complete poem so far, nothing else."] }
         }
       },
       "on_complete": [ { "when": true, "transition": "to_stanza_4" } ]
@@ -219,7 +219,7 @@ STATES='[
         "kind": "agent",
         "agent_id": "'"$AGENT_ID"'",
         "input_mapping": {
-          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.payload.last_result.content" }, "\nAppend the closing COUPLET (2 final lines). Reply with the complete 14-line poem, nothing else."] }
+          "prompt": { "cat": ["Sonnet so far:\n", { "var": "task.last_result.content" }, "\nAppend the closing COUPLET (2 final lines). Reply with the complete 14-line poem, nothing else."] }
         }
       },
       "on_complete": [ { "when": true, "transition": "to_review" } ]
@@ -263,10 +263,10 @@ WORKFLOW_ID=$(curl -s -X POST "$SOAT_URL/api/v1/workflows" \
     \"states\": [
       {\"name\":\"triage\",\"initial\":true},
       {\"name\":\"create_text\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"In two sentences, sketch the imagery and argument for a sonnet about \",{\"var\":\"task.payload.theme\"},\". Reply with only the plan.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_1\"}]}},
-      {\"name\":\"stanza_1\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Plan: \",{\"var\":\"task.payload.last_result.content\"},\"\\nWrite the FIRST quatrain (4 lines) of a sonnet about \",{\"var\":\"task.payload.theme\"},\". Reply with only those 4 lines.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_2\"}]}},
-      {\"name\":\"stanza_2\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.payload.last_result.content\"},\"\\nAppend the SECOND quatrain (4 more lines). Reply with the complete poem so far, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_3\"}]}},
-      {\"name\":\"stanza_3\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.payload.last_result.content\"},\"\\nAppend the THIRD quatrain (4 more lines). Reply with the complete poem so far, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_4\"}]}},
-      {\"name\":\"stanza_4\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.payload.last_result.content\"},\"\\nAppend the closing COUPLET (2 final lines). Reply with the complete 14-line poem, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_review\"}]}},
+      {\"name\":\"stanza_1\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Plan: \",{\"var\":\"task.last_result.content\"},\"\\nWrite the FIRST quatrain (4 lines) of a sonnet about \",{\"var\":\"task.payload.theme\"},\". Reply with only those 4 lines.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_2\"}]}},
+      {\"name\":\"stanza_2\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.last_result.content\"},\"\\nAppend the SECOND quatrain (4 more lines). Reply with the complete poem so far, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_3\"}]}},
+      {\"name\":\"stanza_3\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.last_result.content\"},\"\\nAppend the THIRD quatrain (4 more lines). Reply with the complete poem so far, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_stanza_4\"}]}},
+      {\"name\":\"stanza_4\",\"on_enter\":{\"dispatch\":{\"kind\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"input_mapping\":{\"prompt\":{\"cat\":[\"Sonnet so far:\\n\",{\"var\":\"task.last_result.content\"},\"\\nAppend the closing COUPLET (2 final lines). Reply with the complete 14-line poem, nothing else.\"]}}},\"on_complete\":[{\"when\":true,\"transition\":\"to_review\"}]}},
       {\"name\":\"review\",\"kind\":\"human\"},
       {\"name\":\"published\",\"terminal\":true}
     ],
@@ -332,7 +332,7 @@ Firing `start` moves the card into `create_text`, whose `on_enter` **dispatches 
 agent**. From there the card walks the chain on its own: each state's `on_complete`
 rule fires the next transition **as the `automation` principal**, re-entering a new
 state that dispatches the agent again. While a generation runs the card shows
-`automation_status: running`; the poem-so-far accumulates in `payload.last_result`
+`automation_status: running`; the poem-so-far accumulates in `last_result`
 until the card lands in `review`.
 
 <Tabs groupId="client">
@@ -344,7 +344,7 @@ soat transition-task --task-id "$TASK_ID" --transition start | jq '{ state, auto
 # Poll until the card finishes composing and parks in the human review state.
 for i in $(seq 1 60); do STATE=$(soat get-task --task-id "$TASK_ID" | jq -r '.state'); echo "poll: state=$STATE"; [ "$STATE" = "review" ] && break; [ "$STATE" = "published" ] && break; sleep 2; done
 
-soat get-task --task-id "$TASK_ID" | jq '{ state, status, sonnet: .payload.last_result.content }'
+soat get-task --task-id "$TASK_ID" | jq '{ state, status, sonnet: .last_result.content }'
 ```
 
 </TabItem>
@@ -406,7 +406,7 @@ before approving is **rejected** (`TASK_GUARD_REJECTED`) with no state change.
 Approve via a payload patch, then publish — entering the `terminal` state closes
 the task. [`PATCH /tasks/{id}`](/docs/modules/workflows) shallow-merges the
 patch, so setting `approved` alone keeps the composed sonnet in
-`payload.last_result`.
+`last_result`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -415,7 +415,7 @@ patch, so setting `approved` alone keeps the composed sonnet in
 soat transition-task --task-id "$TASK_ID" --transition publish
 # → 400
 
-soat update-task --task-id "$TASK_ID" --payload '{"approved":true}' | jq '{ approved: .payload.approved, sonnet_kept: (.payload.last_result.content != null) }'
+soat update-task --task-id "$TASK_ID" --payload '{"approved":true}' | jq '{ approved: .payload.approved, sonnet_kept: (.last_result.content != null) }'
 
 soat transition-task --task-id "$TASK_ID" --transition publish | jq '{ state, status }'
 ```
@@ -431,7 +431,7 @@ curl -s -o /dev/null -w "%{http_code}\n" -X POST "$SOAT_URL/api/v1/tasks/$TASK_I
 
 curl -s -X PATCH "$SOAT_URL/api/v1/tasks/$TASK_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"payload":{"approved":true}}' | jq '{ approved: .payload.approved, sonnet_kept: (.payload.last_result.content != null) }'
+  -d '{"payload":{"approved":true}}' | jq '{ approved: .payload.approved, sonnet_kept: (.last_result.content != null) }'
 
 curl -s -X POST "$SOAT_URL/api/v1/tasks/$TASK_ID/transitions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \

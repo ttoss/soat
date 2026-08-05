@@ -31,6 +31,9 @@ const buildTaskContext = (task: TaskInstance) => {
     status: task.status,
     payload: task.payload,
     assignee: task.assignee,
+    // Server-owned, in its own namespace: a guard on `task.last_result` can
+    // only be satisfied by a value an automation wrote (#846).
+    last_result: task.lastResult ?? null,
   };
 };
 

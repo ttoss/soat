@@ -20,10 +20,10 @@ export type WorkflowDispatch = {
   inputMapping?: Record<string, unknown>;
   /**
    * JSON Logic expressions, evaluated over the same `{task, result}` context
-   * `on_complete` rules see, written into `task.payload` atomically with
-   * `last_result` when the dispatch completes. Unlike `last_result` (overwritten
-   * on every dispatch), each key here is a named, deterministic cross-hop
-   * channel — no model in the path. A write is a raw overwrite of its key;
+   * `on_complete` rules see, written into `task.payload` atomically with the
+   * `last_result` column when the dispatch completes. Unlike `last_result`
+   * (overwritten on every dispatch), each key here is a named, deterministic
+   * cross-hop channel — no model in the path. A write is a raw overwrite of its key;
    * a value written by an earlier pass through a looping state lingers in the
    * payload until the state runs again.
    */

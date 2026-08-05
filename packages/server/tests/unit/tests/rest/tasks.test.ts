@@ -733,6 +733,177 @@ describe('Tasks', () => {
     });
   });
 
+  // #846 — `last_result` is the record of what an automation actually did, so
+  // it lives in its own server-owned column, exposed to guards as
+  // `task.last_result`. `payload` is 100% caller-owned: a caller can write a
+  // `last_result` key into it, but nothing server-side reads it back.
+  describe('last_result is server-owned (#846)', () => {
+    let lrWorkflowId: string;
+
+    beforeAll(async () => {
+      lrWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'last-result-pipeline',
+            states: [
+              {
+                name: 'writing',
+                initial: true,
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: { prompt: 'Write.' },
+                  },
+                  on_complete: [{ when: true, transition: 'to_review' }],
+                },
+              },
+              { name: 'review', kind: 'human' },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_review', from: ['writing'], to: 'review' },
+              {
+                name: 'approve',
+                from: ['review'],
+                to: 'done',
+                // The guard asks "did the automation succeed?" — it must only
+                // ever be satisfiable by an automation-written value.
+                guard: {
+                  '==': [{ var: 'task.last_result.finishReason' }, 'stop'],
+                },
+              },
+            ],
+          })
+      ).body.id;
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('a dispatch result lands in the last_result field, not in the caller payload', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_lr_1',
+        traceId: 'trc_lr_1',
+        status: 'completed',
+        output: { model: 'm', content: 'a sonnet', finishReason: 'stop' },
+      });
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: lrWorkflowId,
+          title: 'lr card',
+          payload: { topic: 'spring' },
+        });
+      expect(created.status).toBe(201);
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId: created.body.id,
+        predicate: (t) => {
+          return t.state === 'review';
+        },
+      });
+
+      expect(settled.last_result).toEqual({
+        model: 'm',
+        content: 'a sonnet',
+        finishReason: 'stop',
+      });
+      // The caller bag carries no server key anymore.
+      expect(settled.payload).toEqual({ topic: 'spring' });
+    });
+
+    test('a caller-written payload.last_result cannot satisfy a guard on task.last_result', async () => {
+      // A workflow whose task never dispatched: last_result is unset, and the
+      // caller tries to forge it through the one write path they own.
+      const wf = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: 'lr-guard-forge',
+            states: [
+              { name: 'review', initial: true, kind: 'human' },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              {
+                name: 'approve',
+                from: ['review'],
+                to: 'done',
+                guard: {
+                  '==': [{ var: 'task.last_result.finishReason' }, 'stop'],
+                },
+              },
+            ],
+          })
+      ).body;
+
+      const task = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: wf.id,
+          title: 'forge card',
+        })
+      ).body;
+
+      const patched = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/tasks/${task.id}`)
+        .send({ payload: { last_result: { finishReason: 'stop' } } });
+      expect(patched.status).toBe(200);
+      // The patch lands in the caller-owned payload...
+      expect(patched.body.payload).toEqual({
+        last_result: { finishReason: 'stop' },
+      });
+      // ...but never in the server-owned field the guard reads.
+      expect(patched.body.last_result).toBeNull();
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${task.id}/transitions`)
+        .send({ transition: 'approve' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TASK_GUARD_REJECTED');
+    });
+
+    test('an automation-written last_result satisfies the same guard', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_lr_2',
+        traceId: 'trc_lr_2',
+        status: 'completed',
+        output: { model: 'm', content: 'ok', finishReason: 'stop' },
+      });
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: lrWorkflowId,
+          title: 'lr guard card',
+        });
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId: created.body.id,
+        predicate: (t) => {
+          return t.state === 'review';
+        },
+      });
+      expect(settled.last_result).toBeDefined();
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${created.body.id}/transitions`)
+        .send({ transition: 'approve' });
+      expect(res.status).toBe(200);
+      expect(res.body.state).toBe('done');
+    });
+  });
+
   describe('on_enter agent dispatch (Phase 2)', () => {
     let dispatchWorkflowId: string;
 
@@ -797,10 +968,12 @@ describe('Tasks', () => {
         },
       });
       expect(settled.status).toBe('closed');
-      // The generation output is written to payload.last_result verbatim.
-      expect(
-        (settled.payload as { last_result?: unknown }).last_result
-      ).toEqual({ model: 'm', content: 'a sonnet', finishReason: 'stop' });
+      // The generation output is written to the last_result field verbatim.
+      expect(settled.last_result).toEqual({
+        model: 'm',
+        content: 'a sonnet',
+        finishReason: 'stop',
+      });
 
       // The prompt was resolved from the task payload via input_mapping.
       expect(mockCreateGeneration).toHaveBeenCalledWith(
@@ -970,9 +1143,7 @@ describe('Tasks', () => {
       // last_result overwrite — it lives in a distinct payload key, not the
       // one-hop `last_result` channel.
       expect((settled.payload as { doc_id?: unknown }).doc_id).toBe('DOC123');
-      expect(
-        (settled.payload as { last_result?: unknown }).last_result
-      ).toEqual({
+      expect(settled.last_result).toEqual({
         model: 'm',
         content: 'second hop done',
         finishReason: 'stop',
@@ -1204,9 +1375,11 @@ describe('Tasks', () => {
       // The flake cost an attempt, not the card: two dispatches, the second one
       // routed through on_complete, and on_failure never fired.
       expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
-      expect(
-        (settled.payload as { last_result?: unknown }).last_result
-      ).toEqual({ model: 'm', content: 'second try', finishReason: 'stop' });
+      expect(settled.last_result).toEqual({
+        model: 'm',
+        content: 'second try',
+        finishReason: 'stop',
+      });
 
       const history = (
         await authenticatedTestClient(userToken).get(
@@ -1589,9 +1762,7 @@ describe('Tasks', () => {
       });
       expect(settled.status).toBe('closed');
       // The failed run's partial state must never be presented as a result.
-      expect(
-        (settled.payload as { last_result?: unknown }).last_result
-      ).toBeUndefined();
+      expect(settled.last_result).toBeNull();
 
       const history = (
         await authenticatedTestClient(userToken).get(
@@ -1654,9 +1825,7 @@ describe('Tasks', () => {
       expect((settled.active_dispatch as { status?: string }).status).toBe(
         'failed'
       );
-      expect(
-        (settled.payload as { last_result?: unknown }).last_result
-      ).toBeUndefined();
+      expect(settled.last_result).toBeNull();
     });
 
     test('cancellation-on-exit cancels a genuinely in-flight orchestration run (#606)', async () => {
@@ -1807,8 +1976,8 @@ describe('Tasks', () => {
         `/api/v1/tasks/${taskId}`
       );
       expect(after.body.state).toBe('parked');
-      // The stale result never landed in payload.
-      expect(after.body.payload.last_result).toBeUndefined();
+      // The stale result never landed on the task.
+      expect(after.body.last_result).toBeNull();
     });
 
     test('a concurrent transition committing between the automation completion read and write is not clobbered (#590)', async () => {

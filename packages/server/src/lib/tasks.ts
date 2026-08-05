@@ -55,6 +55,7 @@ export const mapTask = (instance: TaskInstance) => {
     state: instance.state,
     status: instance.status,
     payload: instance.payload,
+    last_result: instance.lastResult ?? null,
     assignee: instance.assignee,
     active_dispatch: instance.activeDispatch,
     automation_status: instance.automationStatus,
@@ -403,9 +404,11 @@ export const updateTask = async (args: {
 
   if (args.payload !== undefined) {
     // PATCH semantics: shallow-merge the patch over the existing payload so a
-    // caller setting one key (e.g. `approved`) does not discard keys an
-    // on_enter automation wrote (e.g. `last_result`). The merged result is
-    // what gets validated and persisted.
+    // caller setting one key (e.g. `approved`) does not discard the others
+    // (including any `payload_writes` the workflow declared). The payload is
+    // caller-owned; the automation result lives in the `last_result` column,
+    // which no patch can reach (#846). The merged result is what gets
+    // validated and persisted.
     const merged = {
       ...((task.payload as Record<string, unknown> | null) ?? {}),
       ...args.payload,
