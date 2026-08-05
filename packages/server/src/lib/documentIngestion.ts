@@ -20,10 +20,7 @@ import {
   SUPPORTED_CONTENT_TYPES,
 } from './sourcePageResolver';
 
-export {
-  finalizeIngestedPages,
-  parseDocMetadata,
-} from './documentIngestionCore';
+export { finalizeIngestedPages } from './documentIngestionCore';
 
 const log = createDebug('soat:documents');
 
@@ -122,7 +119,6 @@ const createDocumentOrThrowConflict = async (args: {
       fileId: args.file.id,
       title: args.filename,
       status: 'pending',
-      metadata: JSON.stringify({ source_file_id: args.fileId }),
       tags: args.tags ?? null,
     });
   } catch (error) {
@@ -166,10 +162,7 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   if (!file) {
     await doc.update({
       status: 'failed',
-      metadata: JSON.stringify({
-        source_file_id: args.fileId,
-        failure_reason: 'FILE_NOT_FOUND',
-      }),
+      failureReason: 'FILE_NOT_FOUND',
     });
     return;
   }
@@ -186,21 +179,17 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
       );
     }
 
+    // Stash the effective chunk config on the document's own chunk columns
+    // now — finalizeIngestedPages will overwrite them with the same values
+    // once the callback arrives, but the callback needs to read them back in
+    // the meantime (readConversionContext in ingestionCallback.ts).
     const chunkConfig = resolveChunkConfig(args, resolved.rule);
     await doc.update({
       conversionAttemptId: attemptId,
-      metadata: JSON.stringify({
-        source_file_id: args.fileId,
-        doc_path: args.docPath,
-        conversion: {
-          converter_id: resolved.converterId,
-          attempt_id: attemptId,
-          submitted_at: resolved.submittedAt,
-          chunk_strategy: chunkConfig.strategy,
-          chunk_size: chunkConfig.chunkSize ?? null,
-          chunk_overlap: chunkConfig.chunkOverlap ?? null,
-        },
-      }),
+      pendingDocPath: args.docPath,
+      chunkStrategy: chunkConfig.strategy,
+      chunkSize: chunkConfig.chunkSize ?? null,
+      chunkOverlap: chunkConfig.chunkOverlap ?? null,
     });
     log(
       'runIngestionPipeline: awaiting async conversion docId=%d attemptId=%s',
@@ -213,7 +202,6 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
   await finalizeIngestedPages({
     doc,
     docId,
-    fileId: args.fileId,
     docPath: args.docPath,
     pages: resolved.pages,
     rule: resolved.rule,
@@ -253,10 +241,8 @@ const processDocumentIngestion = async (args: {
       await doc.update({
         status: 'failed',
         conversionAttemptId: null,
-        metadata: JSON.stringify({
-          source_file_id: args.fileId,
-          failure_reason: describeError(error),
-        }),
+        pendingDocPath: null,
+        failureReason: describeError(error),
       });
     } catch {
       // ignore secondary failure
@@ -397,7 +383,11 @@ export const reingestDocument = async (args: {
   await doc.update({
     status: 'pending',
     conversionAttemptId: null,
-    metadata: JSON.stringify({ source_file_id: file.publicId }),
+    pendingDocPath: null,
+    failureReason: null,
+    totalPages: null,
+    totalChunks: null,
+    indexedChunks: null,
   });
 
   const docPath = file.path ?? `/${file.filename ?? 'document'}`;

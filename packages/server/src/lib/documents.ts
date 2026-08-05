@@ -158,20 +158,6 @@ export const listDocuments = async (args: {
   return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
-const parseDocMetadata = (
-  metadata: string | null | undefined
-): Record<string, unknown> => {
-  if (!metadata) return {};
-  try {
-    const parsed: unknown = JSON.parse(metadata);
-    return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-};
-
 /**
  * Compute an ingestion progress percentage (0–100) from the live chunk count
  * and the planned total. `null` when progress is not meaningful (failed, or
@@ -218,40 +204,29 @@ export const getDocumentStatus = async (args: { id: string }) => {
 
   await recoverStaleDocument(doc);
 
-  const metadata = parseDocMetadata(doc.metadata);
   const mapped = mapDocument(doc);
 
   // Always report the live count so the value is meaningful while processing,
-  // not just after metadata is written on completion.
+  // not just after the total is persisted on completion.
   const chunkCount = await db.DocumentChunk.count({
     where: { documentId: doc.id },
   });
 
-  const totalChunks =
-    typeof metadata.total_chunks === 'number'
-      ? metadata.total_chunks
-      : undefined;
-
-  const totalPages =
-    typeof metadata.total_pages === 'number' ? metadata.total_pages : null;
-
-  const failureReason =
-    typeof metadata.failure_reason === 'string'
-      ? metadata.failure_reason
-      : undefined;
+  const totalChunks = doc.totalChunks ?? undefined;
 
   return {
     id: mapped.id,
     status: doc.status,
     chunk_count: chunkCount,
     total_chunks: totalChunks ?? null,
-    total_pages: totalPages,
+    total_pages: doc.totalPages ?? null,
     progress: computeIngestionProgress({
       status: doc.status,
       chunkCount,
       totalChunks,
     }),
-    error: doc.status === 'failed' ? failureReason : undefined,
+    error:
+      doc.status === 'failed' ? (doc.failureReason ?? undefined) : undefined,
     // Context for the route's permission check — not part of the public
     // status response shape. Named as the wire names it (`project_id`, not
     // `projectId`): every consumer of a lib return reads the snake_case key,

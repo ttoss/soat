@@ -42,7 +42,7 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `size`       | number         | File size in bytes                                                                                                 |
 | `status`     | string         | Ingestion lifecycle state: `pending` → `processing` → `ready` \| `failed`. Plain-text documents are always `ready`. |
 | `title`      | string \| null | Human-readable title (auto-set to filename for PDF ingestion)                                                      |
-| `metadata`   | object \| null | Arbitrary JSON metadata. After ingestion: `source_file_id`, `total_pages`, `chunk_count`. On failure: `failure_reason`. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. |
+| `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on `GET /documents/:id/status` instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
 | `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
 | `chunk_strategy` | string \| null | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). `null` when the default (`whole`) was used. |
@@ -116,7 +116,7 @@ Because chunks are persisted incrementally as their embeddings complete, `chunk_
 
 ### Stuck Ingestion Recovery
 
-If an ingestion worker dies mid-processing, a document can be left in `processing` (or `pending`) indefinitely. Such a document is **self-recovered**: when it is read via `GET /documents/:id` or `GET /documents/:id/status` and has made no progress for longer than `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it is transitioned to `failed` with `metadata.failure_reason = INGESTION_TIMEOUT`. From there it can be re-processed with the re-ingest endpoint below.
+If an ingestion worker dies mid-processing, a document can be left in `processing` (or `pending`) indefinitely. Such a document is **self-recovered**: when it is read via `GET /documents/:id` or `GET /documents/:id/status` and has made no progress for longer than `INGESTION_STALL_TIMEOUT_MS` (default 5 minutes), it is transitioned to `failed` with `error = INGESTION_TIMEOUT` on the status response. From there it can be re-processed with the re-ingest endpoint below.
 
 ### Re-ingesting a Document
 
@@ -129,9 +129,9 @@ If an ingestion worker dies mid-processing, a document can be left in `processin
 | `pending`    | Enqueued; background worker has not started yet                                   |
 | `processing` | Actively extracting pages, chunking, and generating embeddings                    |
 | `ready`      | Fully indexed; content and chunk embeddings are available for search              |
-| `failed`     | Processing encountered an error. The `metadata.failure_reason` field describes it |
+| `failed`     | Processing encountered an error. The `error` field on `GET /documents/:id/status` describes it |
 
-Common `failure_reason` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)). When conversion via an [Ingestion Rule](./ingestion-rules.md) is involved, `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT` may also appear.
+Common `error` values: `FILE_PARSE_FAILED` (no extractable text and no matching converter rule), `FILE_NOT_FOUND`, `INGESTION_TIMEOUT` (ingestion stalled and was auto-recovered — see [Stuck Ingestion Recovery](#stuck-ingestion-recovery)). When conversion via an [Ingestion Rule](./ingestion-rules.md) is involved, `CONVERTER_FAILED`, `CONVERTER_OUTPUT_INVALID`, and `CONVERSION_TIMEOUT` may also appear.
 
 Embedding concurrency is bounded (default: 5 simultaneous requests) to avoid overwhelming the embedding service on large documents.
 
@@ -160,7 +160,7 @@ The same `chunk_strategy` / `chunk_size` / `chunk_overlap` options are also acce
 
 Each chunk gets its own embedding vector, enabling fine-grained semantic search that can cite specific page numbers. Embeddings are computed concurrently across chunks, and an embedding failure is non-fatal — the chunk is stored without a vector.
 
-After ingestion completes, `metadata.chunk_count` records the number of chunks created. Note this can differ from the source's `total_pages` (recorded in `metadata`): with `whole` it is always `1`, and with `size` it depends on the text length.
+After ingestion completes, `GET /documents/:id/status` reports the number of chunks created as `chunk_count`. Note this can differ from `total_pages`: with `whole` it is always `1`, and with `size` it depends on the text length.
 
 The chunk configuration a document was last (re-)ingested with is persisted on the document itself and returned as `chunk_strategy` / `chunk_size` / `chunk_overlap`. This lets a [Formation](./formations.md) `document` resource read its chunk settings back, so a re-plan of an unchanged template converges to a no-op instead of perpetually re-reporting these fields as changed. Updating a formation document's `chunk_strategy` re-chunks the stored source text on the next `update-formation` (no out-of-band re-ingest required).
 
@@ -326,25 +326,17 @@ const { data, error } = await soat.documents.ingestDocument({
 if (error) throw new Error(JSON.stringify(error));
 console.log(`Enqueued document ${data.id}, status=${data.status}`);
 
-// Step 3: poll until ready
-let doc = data;
-while (doc.status === 'pending' || doc.status === 'processing') {
+// Step 3: poll the lightweight status endpoint until ready
+let status = data;
+while (status.status === 'pending' || status.status === 'processing') {
   await new Promise((r) => setTimeout(r, 500));
-  const { data: polled } = await soat.documents.getDocument({ path: { document_id: doc.id } });
-  doc = polled!;
+  const { data: polled } = await soat.documents.getDocumentStatus({ path: { document_id: data.id } });
+  status = polled!;
 }
-if (doc.status === 'failed') {
-  const reason =
-    doc.metadata && 'failure_reason' in doc.metadata
-      ? doc.metadata.failure_reason
-      : 'unknown';
-  throw new Error(`Ingestion failed: ${String(reason)}`);
+if (status.status === 'failed') {
+  throw new Error(`Ingestion failed: ${status.error ?? 'unknown'}`);
 }
-const chunkCount =
-  doc.metadata && 'chunk_count' in doc.metadata
-    ? doc.metadata.chunk_count
-    : undefined;
-console.log(`Ready — ${String(chunkCount)} chunks`);
+console.log(`Ready — ${status.chunk_count} chunks`);
 ```
 
 </TabItem>

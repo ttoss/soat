@@ -384,6 +384,13 @@ describe('IngestionRules', () => {
       return res.body.id as string;
     };
 
+    const getDocumentStatus = async (docId: string) => {
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+      return res.body as { chunk_count?: number; error?: string };
+    };
+
     let callToolSpy: jest.SpyInstance;
     let pdfSpy: jest.SpyInstance;
     let pdfRuleId: string;
@@ -470,11 +477,10 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
-      expect(res.body.metadata).not.toHaveProperty('failure_reason');
       expect(res.body.status).toBe('ready');
-      expect((res.body.metadata as Record<string, unknown>).chunk_count).toBe(
-        1
-      );
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBeUndefined();
+      expect(status.chunk_count).toBe(1);
 
       const search = await authenticatedTestClient(adminToken)
         .post('/api/v1/knowledge/search')
@@ -590,9 +596,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('CONVERTER_OUTPUT_INVALID');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('CONVERTER_OUTPUT_INVALID');
     });
 
     test('a non-native file with no matching rule is rejected (UNSUPPORTED_FILE_TYPE)', async () => {
@@ -627,9 +632,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('ready');
-      expect((res.body.metadata as Record<string, unknown>).chunk_count).toBe(
-        1
-      );
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.chunk_count).toBe(1);
     });
 
     test('a { status: "pending" } deferral fails (async callback unsupported)', async () => {
@@ -649,9 +653,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('CONVERTER_FAILED');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('CONVERTER_FAILED');
     });
 
     test('a converter tool error fails the document (CONVERTER_FAILED)', async () => {
@@ -671,9 +674,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('CONVERTER_FAILED');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('CONVERTER_FAILED');
     });
 
     test('a scanned PDF (no text layer) falls back to the converter', async () => {
@@ -715,9 +717,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('CONVERTER_FAILED');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('CONVERTER_FAILED');
     });
 
     test('paged output honors page_number/pageNumber and drops empty pages', async () => {
@@ -743,9 +744,8 @@ describe('IngestionRules', () => {
       expect(res.body.status).toBe('ready');
       // The 'size' strategy re-chunks the joined text, so assert the parse ran
       // (a ready document) rather than a specific page count.
-      expect(
-        (res.body.metadata as Record<string, unknown>).chunk_count
-      ).toBeGreaterThanOrEqual(1);
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.chunk_count).toBeGreaterThanOrEqual(1);
     });
 
     test('a non-numeric page_number fails the document (CONVERTER_OUTPUT_INVALID)', async () => {
@@ -765,9 +765,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('CONVERTER_OUTPUT_INVALID');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('CONVERTER_OUTPUT_INVALID');
     });
 
     test('a native text file with no rule uses native extraction', async () => {
@@ -799,9 +798,8 @@ describe('IngestionRules', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.status).toBe('failed');
-      expect(
-        (res.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('FILE_PARSE_FAILED');
+      const status = await getDocumentStatus(res.body.id);
+      expect(status.error).toBe('FILE_PARSE_FAILED');
     });
 
     test('a born-digital PDF uses native extraction (converter not called)', async () => {
@@ -939,6 +937,43 @@ describe('IngestionRules', () => {
           `/api/v1/documents/${docId}`
         );
         expect(getRes.body.content).toBe('Async transcript delivered later.');
+      });
+
+      test('a metadata PATCH mid-ingestion does not corrupt the pending conversion (#845)', async () => {
+        const docId = await ingestPendingAudio('callback-patch-race.mp3');
+
+        // A caller annotates the document while the async conversion is still
+        // in flight. Before #845 this replaced the whole metadata bag, which
+        // is where the pending doc_path / conversion config used to live —
+        // corrupting the callback's file-resolution state.
+        const patchRes = await authenticatedTestClient(adminToken)
+          .patch(`/api/v1/documents/${docId}`)
+          .send({ metadata: { reviewed_by: 'alice' } });
+        expect(patchRes.status).toBe(200);
+
+        const callbackRes = await testClient
+          .post(
+            `/api/v1/documents/${docId}/ingestion-callback?token=${latestCallbackToken()}`
+          )
+          .send({ text: 'Delivered after a concurrent metadata patch.' });
+        expect(callbackRes.status).toBe(204);
+
+        const finalStatus = await waitForTerminalStatus(docId);
+        expect(finalStatus.status).toBe('ready');
+        expect(finalStatus.chunk_count).toBe(1);
+
+        const getRes = await authenticatedTestClient(adminToken).get(
+          `/api/v1/documents/${docId}`
+        );
+        expect(getRes.body.content).toBe(
+          'Delivered after a concurrent metadata patch.'
+        );
+        // Resolved against the real pending doc_path column, not a metadata
+        // key a concurrent PATCH could have wiped.
+        expect(getRes.body.path).toBe('/callback-patch-race.mp3');
+        // The caller's own annotation survives — metadata is never touched by
+        // ingestion machinery.
+        expect(getRes.body.metadata).toEqual({ reviewed_by: 'alice' });
       });
 
       test('a replayed callback is rejected with 409 INGESTION_CALLBACK_CONFLICT', async () => {

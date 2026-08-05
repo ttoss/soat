@@ -821,7 +821,7 @@ components:
         status:
           type: string
           enum: [pending, processing, ready, failed]
-          description: Ingestion lifecycle state. `pending` — enqueued; `processing` — chunks being extracted and embedded; `ready` — fully indexed; `failed` — processing error (see `metadata.failure_reason`).
+          description: Ingestion lifecycle state. `pending` — enqueued; `processing` — chunks being extracted and embedded; `ready` — fully indexed; `failed` — processing error (see the `error` field on `GET /documents/{id}/status`).
           example: 'ready'
         content:
           type: string

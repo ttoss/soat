@@ -466,7 +466,7 @@ soat ingest-document \
   --path-prefix "/images/" \
   --async false | jq -e '.status == "ready"'
 # prints `true` once the image is OCR'd, chunked, and embedded
-# (chunk_count is reported under .metadata; Step 14 confirms the text is searchable)
+# (chunk_count is reported by `soat get-document-status`; Step 14 confirms the text is searchable)
 ```
 
 </TabItem>
@@ -493,7 +493,10 @@ const { data: imageDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
   body: { project_id: PROJECT_ID, file_id: imageFile.id, path_prefix: '/images/' },
 });
-console.log(imageDoc.status, imageDoc.metadata?.chunk_count); // "ready" 1
+const { data: imageStatus } = await adminSoat.documents.getDocumentStatus({
+  path: { document_id: imageDoc.id },
+});
+console.log(imageStatus.status, imageStatus.chunk_count); // "ready" 1
 ```
 
 </TabItem>
@@ -508,11 +511,14 @@ IMAGE_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"receipt.png\",\"content_type\":\"image/png\",\"content\":\"$RECEIPT_PNG_B64\"}" \
   | jq -r '.id')
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
+IMAGE_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$IMAGE_FILE_ID\",\"path_prefix\":\"/images/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  | jq -r '.id')
+curl -s "$SOAT_BASE_URL/api/v1/documents/$IMAGE_DOC_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
@@ -816,7 +822,7 @@ soat ingest-document \
   --path-prefix "/audio/" \
   --async false | jq -e '.status == "ready"'
 # prints `true` once the audio is transcribed, chunked, and embedded
-# (chunk_count is reported under .metadata; Step 14 confirms the text is searchable)
+# (chunk_count is reported by `soat get-document-status`; Step 14 confirms the text is searchable)
 ```
 
 </TabItem>
@@ -843,7 +849,10 @@ const { data: audioDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
   body: { project_id: PROJECT_ID, file_id: audioFile.id, path_prefix: '/audio/' },
 });
-console.log(audioDoc.status, audioDoc.metadata?.chunk_count);
+const { data: audioStatus } = await adminSoat.documents.getDocumentStatus({
+  path: { document_id: audioDoc.id },
+});
+console.log(audioStatus.status, audioStatus.chunk_count);
 ```
 
 </TabItem>
@@ -858,11 +867,14 @@ AUDIO_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"meeting.mp3\",\"content_type\":\"audio/mpeg\",\"content\":\"$MEETING_MP3_B64\"}" \
   | jq -r '.id')
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
+AUDIO_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$AUDIO_FILE_ID\",\"path_prefix\":\"/audio/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  | jq -r '.id')
+curl -s "$SOAT_BASE_URL/api/v1/documents/$AUDIO_DOC_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>

@@ -302,29 +302,35 @@ to the whole subtree later with a single `document_paths` prefix.
 Ingestion is **asynchronous by default**: the endpoint returns `202 Accepted` with
 `status: pending` and processing runs in the background (see
 [Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion)). Here
-we pass `--async false` so the call blocks until the document is `ready` and the
-response carries the final `chunk_count` (under `.metadata`) — that way the next steps
-can search the chunks immediately without polling.
+we pass `--async false` so the call blocks until the document is `ready` — that way the
+next steps can search the chunks immediately without polling. The final `chunk_count` is
+read separately from [`GET /documents/:id/status`](/docs/modules/documents#polling-ingestion-status),
+which reports live ingestion progress rather than the document's own (caller-owned)
+`metadata`.
 
 The default `page` chunk strategy produces **one chunk per page** — these PDFs are one
-page each, so `metadata.chunk_count` is `1`.
+page each, so `chunk_count` is `1`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat ingest-document \
+PRINTER_DOC_ID=$(soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$PRINTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  --async false | jq -r '.id')
+soat get-document-status --document-id "$PRINTER_DOC_ID" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 
-soat ingest-document \
+ROUTER_DOC_ID=$(soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$ROUTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  --async false | jq -r '.id')
+soat get-document-status --document-id "$ROUTER_DOC_ID" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
 ```
 
@@ -340,7 +346,10 @@ const { data: printerDoc } = await adminSoat.documents.ingestDocument({
     path_prefix: '/manuals/',
   },
 });
-console.log(printerDoc.status, printerDoc.metadata?.chunk_count); // "ready" 1
+const { data: printerStatus } = await adminSoat.documents.getDocumentStatus({
+  path: { document_id: printerDoc.id },
+});
+console.log(printerStatus.status, printerStatus.chunk_count); // "ready" 1
 
 const { data: routerDoc } = await adminSoat.documents.ingestDocument({
   query: { async: false },
@@ -350,24 +359,33 @@ const { data: routerDoc } = await adminSoat.documents.ingestDocument({
     path_prefix: '/manuals/',
   },
 });
-console.log(routerDoc.status, routerDoc.metadata?.chunk_count); // "ready" 1
+const { data: routerStatus } = await adminSoat.documents.getDocumentStatus({
+  path: { document_id: routerDoc.id },
+});
+console.log(routerStatus.status, routerStatus.chunk_count); // "ready" 1
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+PRINTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  | jq -r '.id')
+curl -s "$SOAT_URL/api/v1/documents/$PRINTER_DOC_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+ROUTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$ROUTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
-  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  | jq -r '.id')
+curl -s "$SOAT_URL/api/v1/documents/$ROUTER_DOC_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
@@ -399,14 +417,16 @@ PRINTER_FILE_ID_SIZE=$(soat upload-file-base64 \
   --content-type "application/pdf" \
   --content "$PRINTER_PDF_B64" | jq -r '.id')
 
-soat ingest-document \
+SIZED_DOC_ID=$(soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$PRINTER_FILE_ID_SIZE" \
   --path-prefix "/manuals-size/" \
   --chunk-strategy "size" \
   --chunk-size 60 \
   --chunk-overlap 10 \
-  --async false | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  --async false | jq -r '.id')
+soat get-document-status --document-id "$SIZED_DOC_ID" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 3 }   # multiple windows from one page
 ```
 
@@ -434,7 +454,10 @@ const { data: sized } = await adminSoat.documents.ingestDocument({
     chunk_overlap: 10,
   },
 });
-console.log(sized.status, sized.metadata?.chunk_count); // "ready" > 1
+const { data: sizedStatus } = await adminSoat.documents.getDocumentStatus({
+  path: { document_id: sized.id },
+});
+console.log(sizedStatus.status, sizedStatus.chunk_count); // "ready" > 1
 ```
 
 </TabItem>
@@ -447,11 +470,14 @@ PRINTER_FILE_ID_SIZE=$(curl -s -X POST "$SOAT_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"printer-x1000.pdf\",\"content_type\":\"application/pdf\",\"content\":\"$PRINTER_PDF_B64\"}" \
   | jq -r '.id')
 
-curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+SIZED_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID_SIZE\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \
-  | jq '{id: .id, status: .status, chunk_count: .metadata.chunk_count}'
+  | jq -r '.id')
+curl -s "$SOAT_URL/api/v1/documents/$SIZED_DOC_ID/status" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 ```
 
 </TabItem>
