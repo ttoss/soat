@@ -238,6 +238,136 @@ describe('Tasks', () => {
     });
   });
 
+  describe('POST /api/v1/tasks — alternate entry point via `state` (#821)', () => {
+    test('creates the task directly in a named non-initial state', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'mid-flow card',
+          state: 'draft',
+          payload: { topic: 'spring' },
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.state).toBe('draft');
+      expect(res.body.status).toBe('open');
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${res.body.id}/history`
+        )
+      ).body;
+      // Mid-flow entry is a different first state, not a second lifecycle: a
+      // single synthetic placement entry, same shape as the initial-state one.
+      expect(history).toHaveLength(1);
+      expect(history[0].from_state).toBeNull();
+      expect(history[0].to_state).toBe('draft');
+      expect(history[0].transition).toBeNull();
+      expect(history[0].principal_kind).toBe('user');
+    });
+
+    test('creating directly in a terminal state closes the task', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'already published',
+          state: 'published',
+        });
+      expect(res.status).toBe(201);
+      expect(res.body.state).toBe('published');
+      expect(res.body.status).toBe('closed');
+    });
+
+    test('400 TASK_STATE_NOT_FOUND for a state the workflow does not declare', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowId,
+          title: 'bad state',
+          state: 'not-a-real-state',
+        });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TASK_STATE_NOT_FOUND');
+    });
+
+    test('on_enter automation fires for the named entry state, not the initial one', async () => {
+      const dispatchWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `alt-entry-${Math.random().toString(36).slice(2)}`,
+            states: [
+              { name: 'idea', initial: true },
+              {
+                name: 'writing',
+                on_enter: {
+                  dispatch: {
+                    kind: 'agent',
+                    agent_id: agentId,
+                    input_mapping: {
+                      prompt: {
+                        cat: ['Write about ', { var: 'task.payload.topic' }],
+                      },
+                    },
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'to_writing', from: ['idea'], to: 'writing' },
+              { name: 'to_done', from: ['writing'], to: 'done' },
+            ],
+          })
+      ).body.id;
+
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_alt_entry',
+        traceId: 'trc_alt_entry',
+        status: 'completed',
+        output: { model: 'm', content: 'a post', finishReason: 'stop' },
+      });
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: dispatchWorkflowId,
+          title: 'skip idea, start writing',
+          state: 'writing',
+          payload: { topic: 'autumn' },
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.state).toBe('writing');
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId: created.body.id,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
+
+      // The `idea` state's on_enter (none declared) never fired — only
+      // `writing`'s did, proving entry landed on the named state directly.
+      expect(mockCreateGeneration).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId,
+          messages: [{ role: 'user', content: 'Write about autumn' }],
+        })
+      );
+
+      jest.clearAllMocks();
+    });
+  });
+
   describe('POST /api/v1/tasks/:id/transitions', () => {
     test('a backward move (review → draft → review) works and is fully audited', async () => {
       const task = (await createTask()).body;

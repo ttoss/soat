@@ -449,6 +449,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The named transition does not exist in the workflow.',
   },
+  TASK_STATE_NOT_FOUND: {
+    httpStatus: 400,
+    description:
+      "A task create request's `state` does not name a declared state of the workflow.",
+  },
   TASK_GUARD_REJECTED: {
     httpStatus: 400,
     description: 'The transition guard evaluated to false for this task.',

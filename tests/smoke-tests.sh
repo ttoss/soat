@@ -4449,6 +4449,31 @@ if [ "$TASK_ID" = "null" ] || [ "$TASK_STATE" != "triage" ]; then
 fi
 echo "Task created in initial state: $TASK_ID"
 
+# Alternate entry point (#821): `state` places a new task directly in a named
+# non-initial state, skipping the workflow's `initial` state entirely.
+ALT_ENTRY_RESP=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "mid-flow card" \
+  --state "drafting" \
+  --payload '{"theme":"the river"}')
+ALT_ENTRY_STATE=$(printf '%s\n' "$ALT_ENTRY_RESP" | jq -r '.state')
+if [ "$ALT_ENTRY_STATE" != "drafting" ]; then
+  echo "ERROR: alternate-entry create-task expected state 'drafting', got '$ALT_ENTRY_STATE'" >&2
+  printf '%s\n' "$ALT_ENTRY_RESP"
+  exit 1
+fi
+$SOAT_CLI delete-task --task-id "$(printf '%s\n' "$ALT_ENTRY_RESP" | jq -r '.id')" >/dev/null
+echo "Alternate entry point: OK (task created directly in 'drafting')"
+
+# An unknown state name is rejected instead of silently falling back to initial.
+expect_cli_error_status 400 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "bad state" \
+  --state "not-a-real-state"
+echo "Alternate entry point, unknown state: OK (400 TASK_STATE_NOT_FOUND as expected)"
+
 # Forward, then a backward move (review -> drafting) a DAG would reject.
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition start >/dev/null
 $SOAT_CLI transition-task --task-id "$TASK_ID" --transition to_review >/dev/null

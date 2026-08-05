@@ -348,6 +348,19 @@ describe('MCP tools - happy path', () => {
       })
     ).toBe(true);
 
+    // Alternate entry point (#821): `state` places the task directly in a
+    // named non-initial state instead of the workflow's `initial` state.
+    const midFlow = parseResult(
+      await mcpCall('create-task', {
+        project_id: projectId,
+        workflow_id: workflow.id,
+        title: 'skip todo, start doing',
+        state: 'doing',
+      })
+    );
+    expect(midFlow.state).toBe('doing');
+    expect(midFlow.status).toBe('open');
+
     const history = parseResult(
       await mcpCall('get-task-history', { task_id: task.id })
     );

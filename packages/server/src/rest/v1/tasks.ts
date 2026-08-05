@@ -118,6 +118,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     title: string;
     payload?: Record<string, unknown> | null;
     assignee?: string | null;
+    state?: string | null;
   };
 
   const projectId = await resolveWriteProjectId({
@@ -134,6 +135,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     title: body.title,
     payload: body.payload,
     assignee: body.assignee,
+    state: body.state,
     principal: principalFromCtx(ctx),
   });
 
