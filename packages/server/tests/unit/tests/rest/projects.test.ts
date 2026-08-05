@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import jwt from 'jsonwebtoken';
 import { db } from 'src/db';
 import { JWT_SECRET } from 'src/middleware/auth';
@@ -738,6 +740,40 @@ describe('Projects', () => {
       expect(
         await db.File.findOne({ where: { publicId: fileRes.body.id } })
       ).toBeNull();
+    });
+
+    test('force=true removes uploaded files from storage, not just their DB rows', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Force Delete Storage Project' });
+      const forceStorageProjectId = projRes.body.id;
+
+      const uploadRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/files/upload/base64')
+        .send({
+          project_id: forceStorageProjectId,
+          content: Buffer.from('force delete storage bytes').toString('base64'),
+          filename: 'force-delete-storage.txt',
+          content_type: 'text/plain',
+        });
+      expect(uploadRes.status).toBe(201);
+
+      const file = await db.File.findOne({
+        where: { publicId: uploadRes.body.id },
+      });
+      const storagePath = file!.storagePath;
+
+      expect(fs.existsSync(storagePath)).toBe(true);
+
+      const forcedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${forceStorageProjectId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.File.findOne({ where: { id: file!.id as number } })
+      ).toBeNull();
+      expect(fs.existsSync(storagePath)).toBe(false);
     });
 
     test('returns 409 PROJECT_HAS_DEPENDENTS when the project only has usage history', async () => {

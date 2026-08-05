@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import { db } from 'src/db';
 import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
@@ -1117,6 +1119,47 @@ describe('Agents', () => {
       expect(
         await db.Agent.findOne({ where: { publicId: forceAgentId } })
       ).toBeNull();
+    });
+
+    test('force=true removes the trace file row and its storage object', async () => {
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProviderId,
+          project_id: projectId,
+          name: 'Agent Force Delete Storage',
+        });
+      const forceAgentId = createRes.body.id as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      const traceId = `trc_frc_storage_${Date.now()}`;
+      await saveTrace({
+        traceId,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: forceAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+      const trace = await db.Trace.findOne({ where: { publicId: traceId } });
+      const file = await db.File.findOne({
+        where: { id: trace!.fileId as number },
+      });
+      const storagePath = file!.storagePath;
+
+      expect(fs.existsSync(storagePath)).toBe(true);
+
+      const forcedResponse = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${forceAgentId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.File.findOne({ where: { id: file!.id as number } })
+      ).toBeNull();
+      expect(fs.existsSync(storagePath)).toBe(false);
     });
 
     test('force=true preserves unrelated agents while nulling cross-agent trace/generation references', async () => {

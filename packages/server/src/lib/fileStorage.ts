@@ -276,3 +276,36 @@ export const readFileBuffer = async (args: {
   if (!object) return null;
   return streamToBuffer(object.stream);
 };
+
+/**
+ * Best-effort storage cleanup for File rows already removed from the DB.
+ * Used by bulk cascades (agent/project force-delete) where the row is gone
+ * by the time storage cleanup runs, so a failed object delete must never
+ * roll back or re-throw — it is logged for a future reconciliation sweep
+ * instead (see #835).
+ */
+export const deleteStorageObjects = async (
+  files: { storagePath: string; storageType: string }[]
+): Promise<void> => {
+  await Promise.all(
+    files
+      .filter((file) => {
+        return file.storagePath;
+      })
+      .map(async (file) => {
+        try {
+          const provider = getStorageProvider({
+            storageType: file.storageType,
+          });
+          await provider.delete({ storagePath: file.storagePath });
+        } catch (error) {
+          log(
+            'deleteStorageObjects: failed to delete storagePath=%s storageType=%s error=%s',
+            file.storagePath,
+            file.storageType,
+            error instanceof Error ? error.message : String(error)
+          );
+        }
+      })
+  );
+};

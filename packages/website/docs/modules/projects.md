@@ -96,6 +96,8 @@ By default, deleting a project that has any dependent resource (agents, AI provi
 
 Usage history counts as a dependent for the same reason as every other resource above: `force=true` is the explicit acknowledgment that billing history for the project is being destroyed, not a silent side effect of an unrelated cleanup.
 
+Deleting the project's [files](./files.md) — including trace content and uploaded documents — also removes their stored bytes from the active storage backend, not just their database rows, so a force-deleted project leaves nothing behind in storage.
+
 ### Common Errors
 
 | Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |

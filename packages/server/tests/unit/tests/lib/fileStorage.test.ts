@@ -11,6 +11,7 @@ import {
 import {
   createLocalStorageProvider,
   createS3StorageProvider,
+  deleteStorageObjects,
   getActiveStorageProvider,
   getStorageProvider,
   readFileBuffer,
@@ -312,6 +313,46 @@ describe('fileStorage', () => {
       process.env.FILES_S3_FORCE_PATH_STYLE = 'true';
       // Exercises the env-driven S3Client construction branches.
       expect(getActiveStorageProvider().storageType).toBe('s3');
+    });
+
+    test('deleteStorageObjects removes every object from its recorded backend', async () => {
+      const dir = fs.mkdtempSync(
+        path.join(os.tmpdir(), 'soat-delete-objects-')
+      );
+      process.env.FILES_STORAGE_DIR = dir;
+      const provider = createLocalStorageProvider({ storageDir: dir });
+      const a = await provider.write({
+        objectPath: 'a.txt',
+        buffer: Buffer.from('a'),
+      });
+      const b = await provider.write({
+        objectPath: 'b.txt',
+        buffer: Buffer.from('b'),
+      });
+
+      await deleteStorageObjects([
+        { storagePath: a.storagePath, storageType: 'local' },
+        { storagePath: b.storagePath, storageType: 'local' },
+      ]);
+
+      expect(fs.existsSync(a.storagePath)).toBe(false);
+      expect(fs.existsSync(b.storagePath)).toBe(false);
+
+      fs.rmSync(dir, { recursive: true, force: true });
+    });
+
+    test('deleteStorageObjects skips rows with no storagePath', async () => {
+      await expect(
+        deleteStorageObjects([{ storagePath: '', storageType: 'local' }])
+      ).resolves.toBeUndefined();
+    });
+
+    test('deleteStorageObjects logs and resolves when a delete fails', async () => {
+      await expect(
+        deleteStorageObjects([
+          { storagePath: '/tmp/unreachable.txt', storageType: 'gcs' },
+        ])
+      ).resolves.toBeUndefined();
     });
   });
 
