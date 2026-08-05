@@ -6,13 +6,17 @@ import {
 } from 'node:http';
 
 import { models } from '@soat/postgresdb';
-import type { StartedPostgreSqlContainer } from '@testcontainers/postgresql';
-import { PostgreSqlContainer } from '@testcontainers/postgresql';
 import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 import { app } from 'src/app';
 import { initializeDatabase } from 'src/db';
 import * as agentsModule from 'src/lib/agents';
+
+import {
+  createTestDatabase,
+  dropTestDatabase,
+  readTestDatabaseConnection,
+} from './testDatabase';
 
 beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -82,53 +86,31 @@ afterAll(async () => {
 });
 
 export let sequelize: Sequelize;
-let postgresContainer: StartedPostgreSqlContainer;
+
+const connection = readTestDatabaseConnection();
+let database: string | undefined;
 
 jest.setTimeout(120000);
 
+/**
+ * Each test file gets a private database cloned from the template `globalSetup`
+ * built — the same isolation a per-file container gave, without paying for a
+ * container start and a schema `sync()` 167 times over.
+ */
 beforeAll(async () => {
-  let dbConfig: {
-    username: string;
-    password: string;
-    database: string;
-    host: string;
-    port: number;
-  };
-
-  if (process.env.TEST_DB_HOST) {
-    dbConfig = {
-      username: process.env.TEST_DB_USERNAME ?? 'postgres',
-      password: process.env.TEST_DB_PASSWORD ?? '',
-      database: process.env.TEST_DB_NAME ?? 'soat_test',
-      host: process.env.TEST_DB_HOST,
-      port: Number(process.env.TEST_DB_PORT ?? 5432),
-    };
-  } else {
-    postgresContainer = await new PostgreSqlContainer(
-      'pgvector/pgvector:0.8.2-pg18-trixie'
-    ).start();
-
-    dbConfig = {
-      username: postgresContainer.getUsername(),
-      password: postgresContainer.getPassword(),
-      database: postgresContainer.getDatabase(),
-      host: postgresContainer.getHost(),
-      port: postgresContainer.getPort(),
-    };
-  }
-
   try {
+    database = await createTestDatabase({ connection });
+
     const db = await initialize({
       models,
       logging: false,
-      ...dbConfig,
+      ...connection,
+      database,
     });
 
     await initializeDatabase(app);
 
     sequelize = db.sequelize;
-
-    await sequelize.sync({ force: !!process.env.TEST_DB_HOST });
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error('Error during database initialization:', error);
@@ -138,5 +120,8 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await sequelize?.close();
-  await postgresContainer?.stop();
+
+  if (database) {
+    await dropTestDatabase({ connection, database });
+  }
 });

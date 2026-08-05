@@ -2,9 +2,9 @@
 
 ## Running Tests
 
-Running the **entire** suite locally (`pnpm --filter @soat/server test` with no pattern) spins up a full Postgres testcontainer and runs every integration test — this is slow and should not be your default while iterating.
+Running the **entire** suite locally (`pnpm --filter @soat/server test` with no pattern) starts a Postgres testcontainer and runs every integration test — this is slow and should not be your default while iterating.
 
-**Preferred local workflow:** run only the test file(s) relevant to the module you're changing, using `--testPathPatterns` (plural), then push and let GitHub Actions run the full suite (`build-and-test`) against the complete matrix:
+**Preferred local workflow:** run only the test file(s) relevant to the module you're changing, using `--testPathPatterns` (plural), then push and let GitHub Actions run the full suite (the `server-tests` shard matrix) against the complete matrix:
 
 ```bash
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
@@ -17,6 +17,51 @@ pnpm --filter @soat/server test --testPathPatterns="projects.test.ts|agents.test
 ```
 
 Only fall back to running the full local suite (`pnpm --filter @soat/server test`) when you need to sanity-check a change that plausibly affects many modules (e.g. a shared model, migration, or middleware) before pushing — do not run it as a matter of course for every change.
+
+### How the suite gets its database
+
+`globalSetup` starts **one** PostgreSQL for the whole run and builds the schema
+once, into a database (`soat_test_template`) that no test ever connects to.
+Each test file's `beforeAll` then clones it — `CREATE DATABASE ... TEMPLATE` —
+and drops the clone in `afterAll`.
+
+Every file still gets a private, pristine database, exactly as when each one
+started its own container; it just costs tens of milliseconds instead of a
+container start plus a schema `sync()`. Nothing about writing a test changes:
+set up state through the API in `beforeAll` as before.
+
+Two consequences worth knowing:
+
+- **Never connect to the template.** PostgreSQL refuses to clone a database
+  that has a session attached, so a stray connection to `soat_test_template`
+  would fail every test file that starts afterwards.
+- **`TEST_DB_HOST` reuses a running server** instead of starting a container
+  (handy when Docker isn't available). The account it names needs `CREATEDB`,
+  since the run creates a database per test file:
+
+  ```bash
+  TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=5432 \
+    TEST_DB_USERNAME=postgres TEST_DB_PASSWORD=postgres \
+    pnpm --filter @soat/server test
+  ```
+
+### How CI runs it
+
+The server suite runs as a 4-way shard matrix (`server-tests` in `pr.yml`), one
+`jest --shard=N/4` per job. Because no shard sees the whole source tree, the
+shards run with `--coverageThreshold={}` and upload raw coverage; the
+`server-coverage` job merges the four reports and enforces the thresholds once
+over the union, via `scripts/mergeCoverage.mjs`.
+
+That script reads the thresholds from `jest --showConfig`, so
+`tests/unit/jest.config.ts` stays the only place they are defined. Its
+replication of Jest's grouping rules is pinned by
+`tests/harness/mergeCoverage.test.mjs` (`pnpm run test:harness`) — change one
+and the other must follow.
+
+To raise or lower the shard count, edit `matrix.shard` in `pr.yml`; the job
+reads `strategy.job-total` for the denominator, so the list is the only thing
+to change.
 
 ## Test File Location and Naming
 
@@ -70,7 +115,7 @@ point. In particular:
 
 ## Test Infrastructure
 
-Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers in `globalSetup.ts` — once for the whole run — and each test file clones a pristine database from it in `setupTestsAfterEnv.ts` (see [How the suite gets its database](#how-the-suite-gets-its-database)). No mocking of the database layer is needed.
 
 ## Mocking Philosophy — Never Mock What You Own
 

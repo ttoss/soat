@@ -145,7 +145,7 @@ Do **not** use `npx jest` directly or `--testPathPattern` (singular).
 
 ### Test Infrastructure
 
-Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers in `globalSetup.ts` — once for the whole run — and each test file clones a pristine database from it in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
 
 #### Helpers (from `tests/unit/testClient.ts`)
 
