@@ -231,8 +231,9 @@ paths:
                   enum: [base64, download_url]
                 chunk_strategy:
                   type: string
-                  enum: [page, whole, size]
+                  enum: [page, whole, size, null]
                   nullable: true
+                  description: Send `null` to clear the rule's override and fall back to the per-request default.
                 chunk_size:
                   type: integer
                   nullable: true

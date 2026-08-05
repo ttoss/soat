@@ -831,18 +831,15 @@ components:
         chunk_strategy:
           type: string
           enum: [page, whole, size]
-          nullable: true
-          description: The chunk strategy the document was last (re-)ingested with. `null` when the default (`whole`) was used.
+          description: The chunk strategy the document was last (re-)ingested with. Absent when the default (`whole`) was used — the mapper omits the key rather than sending `null`.
           example: 'size'
         chunk_size:
           type: integer
-          nullable: true
-          description: Window size in characters used when `chunk_strategy=size`.
+          description: Window size in characters used when `chunk_strategy=size`. Absent otherwise.
           example: 800
         chunk_overlap:
           type: integer
-          nullable: true
-          description: Overlap in characters between consecutive windows used when `chunk_strategy=size`.
+          description: Overlap in characters between consecutive windows used when `chunk_strategy=size`. Absent otherwise.
           example: 120
         created_at:
           type: string

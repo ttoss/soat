@@ -542,7 +542,7 @@ components:
           nullable: true
         effort:
           type: string
-          enum: [low, medium, high]
+          enum: [low, medium, high, null]
           nullable: true
           description: Provider-native reasoning effort for this participant's turns.
     ParticipantRecord:

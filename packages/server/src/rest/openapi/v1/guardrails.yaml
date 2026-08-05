@@ -503,6 +503,7 @@ components:
           enum:
             - merge
             - replace
+            - null
           description: >
             How tool-fetched context combines with the caller-supplied context.
         created_at:
@@ -647,6 +648,7 @@ components:
           enum:
             - merge
             - replace
+            - null
     ErrorResponse:
       type: object
       properties:
