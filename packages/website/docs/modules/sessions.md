@@ -181,7 +181,7 @@ When a generation is triggered through a session, the server automatically injec
 | `actorExternalId` | `X-Soat-Context-actorExternalId` | External ID of the session's actor; omitted if not set |
 | `sessionId`       | `X-Soat-Context-sessionId`       | Public ID of the session; always present               |
 
-Any values provided by the caller in `tool_context` take precedence over the auto-populated values — the session's own `tool_context` overrides the auto-populated keys, and a per-request `tool_context` overrides both.
+These three keys are always taken from the session and actor, regardless of what the caller supplies — a caller-provided `actorId`, `actorExternalId` or `sessionId` in either the session's stored `tool_context` or a per-request `tool_context` is ignored in favor of the auto-populated value. Any other key a caller sets in `tool_context` is unaffected and still wins in the usual way (a per-request value overrides the session's stored value).
 
 Note that `actorExternalId` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
 

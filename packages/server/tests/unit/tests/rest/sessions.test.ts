@@ -1978,6 +1978,93 @@ describe('Sessions', () => {
         testActorExternalId
       );
     });
+
+    test('per-request toolContext cannot override server-derived identity keys', async () => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_spoofed_ctx_01',
+        traceId: 'trc_spoofed_ctx_01',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply with actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/sessions/${withActorSessionId}/generate`)
+        .send({
+          tool_context: {
+            actorId: 'actor_spoofed',
+            actorExternalId: 'spoofed-external-id',
+            sessionId: 'ses_spoofed',
+          },
+        });
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
+      expect(callArgs.toolContext).toHaveProperty(
+        'actorExternalId',
+        testActorExternalId
+      );
+      expect(callArgs.toolContext).toHaveProperty(
+        'sessionId',
+        withActorSessionId
+      );
+    });
+
+    test('persisted session toolContext cannot override server-derived identity keys', async () => {
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${withActorSessionId}`)
+        .send({
+          tool_context: {
+            actorId: 'actor_spoofed_persisted',
+            actorExternalId: 'spoofed-external-id-persisted',
+            sessionId: 'ses_spoofed_persisted',
+          },
+        });
+
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: 'gen_spoofed_ctx_02',
+        traceId: 'trc_spoofed_ctx_02',
+        status: 'completed',
+        output: {
+          model: 'test-model',
+          content: 'Reply with actor',
+          finishReason: 'stop',
+        },
+      });
+
+      const response = await authenticatedTestClient(userToken).post(
+        `/api/v1/sessions/${withActorSessionId}/generate`
+      );
+
+      expect(response.status).toBe(200);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const callArgs = mockCreateGeneration.mock.calls[0][0] as {
+        toolContext?: Record<string, string>;
+      };
+      expect(callArgs.toolContext).toHaveProperty('actorId', testActorId);
+      expect(callArgs.toolContext).toHaveProperty(
+        'actorExternalId',
+        testActorExternalId
+      );
+      expect(callArgs.toolContext).toHaveProperty(
+        'sessionId',
+        withActorSessionId
+      );
+
+      // Restore state so it doesn't leak into other tests in this block.
+      await authenticatedTestClient(userToken)
+        .patch(`/api/v1/sessions/${withActorSessionId}`)
+        .send({ tool_context: {} });
+    });
   });
 
   // ── Inactivity TTL ─────────────────────────────────────────────────────

@@ -202,10 +202,14 @@ export const generateSessionResponse = async (args: {
   const agent = (
     session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
   ).agent;
+  // Server-derived identity keys are spread last so neither the persisted
+  // session bag nor a per-request caller value can occupy `sessionId`,
+  // `actorId` or `actorExternalId` — see #843. Both caller layers stay free
+  // to set any other key; only these three are pinned to the session/actor.
   const mergedToolContext = {
-    ...buildToolContext(session),
     ...(session.toolContext ?? {}),
     ...(args.toolContext ?? {}),
+    ...buildToolContext(session),
   };
 
   const controller = new AbortController();
