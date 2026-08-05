@@ -159,10 +159,11 @@ paths:
         Attaches caller-supplied key/value metadata to a generation record for
         per-run audit attribution (e.g. recording which knowledge-corpus version
         produced an AI action). The provided keys are shallow-merged over the
-        existing metadata, so repeated patches accumulate and system-owned keys
-        are preserved. Reserved keys (`action_id`, `trigger_id`, `orchestration_run_id`,
-        `node_id`, `extraction`, and internal recovery state) cannot be set and
-        are rejected with 400.
+        existing `metadata`, so repeated patches accumulate. The bag is
+        caller-owned and no key is reserved: server-owned state (usage
+        attribution, the served agent version, the route's record, the
+        extraction summary) lives in its own top-level fields and cannot be
+        written from here.
       operationId: updateGeneration
       parameters:
         - name: generation_id
@@ -192,7 +193,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Generation'
         '400':
-          description: Bad Request (e.g. metadata is not an object or uses reserved keys)
+          description: Bad Request (e.g. metadata is not a JSON object)
           content:
             application/json:
               schema:
@@ -296,94 +297,116 @@ components:
               example: 'Provider returned 402: insufficient credits'
             meta:
               type: object
+        action_id:
+          type: string
+          nullable: true
+          description: >
+            Logical action label supplied on the generate request. Recorded on
+            the generation's usage event for per-action spend rollups.
+        trigger_id:
+          x-soat-ref: triggers
+          type: string
+          nullable: true
+          description: Trigger that initiated the generation, when applicable
+        orchestration_run_id:
+          x-soat-ref: orchestration-runs
+          type: string
+          nullable: true
+          description: >
+            Orchestration run that dispatched the generation. Null for a
+            standalone generation.
+        node_id:
+          type: string
+          nullable: true
+          description: >
+            Node within `orchestration_run_id` that dispatched the generation.
+            Together with the run it forms the usage event's replay identity.
+        agent_version:
+          type: integer
+          nullable: true
+          description: >
+            Agent config version that served this generation, resolved by the
+            served-version resolver (see
+            [agent versions](/docs/modules/agents#versions-and-releases)).
+        extraction:
+          type: object
+          nullable: true
+          description: >
+            Memory-extraction summary recorded for this generation. Set when the
+            agent's `knowledge_config.extraction` produced one for this turn.
+          properties:
+            candidates:
+              type: integer
+              description: Number of extraction candidates considered
+            created:
+              type: integer
+              description: Number of new memory entries created
+            updated:
+              type: integer
+              description: Number of existing memory entries updated
+            skipped:
+              type: integer
+              description: Number of candidates skipped (e.g. duplicates)
+        routing:
+          type: object
+          nullable: true
+          description: >
+            What the model route did for this generation. Present only when the
+            agent resolves its model through a `model_route_id`.
+          properties:
+            route_id:
+              x-soat-ref: model-routes
+              type: string
+              description: The route that resolved the model
+            target_index:
+              type: integer
+              nullable: true
+              description: >
+                Position in the route's `targets` of the target that served the
+                last LLM call; null when every attempt failed.
+            fallbacks:
+              type: integer
+              description: >
+                How many times the route moved past a target during this
+                generation (cumulative across a multi-step run).
+            attempts:
+              type: array
+              description: >
+                Every attempt, in order, across every LLM call of the run. An
+                attempt with no `error_class` succeeded.
+              items:
+                type: object
+                properties:
+                  target_index:
+                    type: integer
+                  ai_provider_id:
+                    x-soat-ref: ai-providers
+                    type: string
+                  model:
+                    type: string
+                  error_class:
+                    type: string
+                    enum: [provider_error, timeout, rate_limited]
+                    description: >
+                      Why the attempt failed. Absent on the serving attempt, and
+                      absent on a deterministic failure (which fails the
+                      generation instead of failing over).
         metadata:
           type: object
           nullable: true
           additionalProperties: true
           description: >
-            Non-sensitive metadata recorded about the generation. May include
-            caller-supplied key/value pairs attached at create time (via the
+            Caller-owned key/value annotations, attached at create time (via the
             `metadata` field on the create-agent-generation request) or
-            afterwards (via the update-generation request), plus
-            server-owned keys: `action_id` (the logical action label supplied on
-            the generate request), `trigger_id` (set when a trigger initiated
-            the generation), `extraction` — set when the agent's
-            `knowledge_config.extraction` produced a memory-extraction summary
-            for this turn (`candidates`, `created`, `updated`, `skipped`) — and
-            `routing`, set when the agent resolved its model through a
-            [model route](/docs/modules/model-routes). Internal recovery state is
-            never included here.
-          properties:
-            action_id:
-              type: string
-              nullable: true
-              description: Logical action label supplied on the generate request
-            trigger_id:
-              x-soat-ref: triggers
-              type: string
-              nullable: true
-              description: Trigger that initiated the generation, when applicable
-            extraction:
-              type: object
-              nullable: true
-              description: Memory-extraction summary recorded for this generation
-              properties:
-                candidates:
-                  type: integer
-                  description: Number of extraction candidates considered
-                created:
-                  type: integer
-                  description: Number of new memory entries created
-                updated:
-                  type: integer
-                  description: Number of existing memory entries updated
-                skipped:
-                  type: integer
-                  description: Number of candidates skipped (e.g. duplicates)
-            routing:
-              type: object
-              nullable: true
-              description: >
-                What the model route did for this generation. Present only when
-                the agent resolves its model through a `model_route_id`.
-              properties:
-                route_id:
-                  x-soat-ref: model-routes
-                  type: string
-                  description: The route that resolved the model
-                target_index:
-                  type: integer
-                  nullable: true
-                  description: >
-                    Position in the route's `targets` of the target that served
-                    the last LLM call; null when every attempt failed.
-                fallbacks:
-                  type: integer
-                  description: >
-                    How many times the route moved past a target during this
-                    generation (cumulative across a multi-step run).
-                attempts:
-                  type: array
-                  description: >
-                    Every attempt, in order, across every LLM call of the run.
-                    An attempt with no `error_class` succeeded.
-                  items:
-                    type: object
-                    properties:
-                      target_index:
-                        type: integer
-                      ai_provider_id:
-                        x-soat-ref: ai-providers
-                        type: string
-                      model:
-                        type: string
-                      error_class:
-                        type: string
-                        enum: [provider_error, timeout, rate_limited]
-                        description: >
-                          Why the attempt failed. Absent on the serving attempt,
-                          and absent on a deterministic failure (which fails the
-                          generation instead of failing over).
+            afterwards (via the update-generation request), and returned
+            verbatim. The server writes nothing here: every piece of state it
+            owns — usage attribution, the served agent version, the route's
+            record, the extraction summary, internal recovery state — is a field
+            of its own, so no key written here can reach platform state. Keys are
+            never transformed, and no key is reserved.
+          example:
+            team: payments
+            ticket_id: OPS-4821
         created_at:
           type: string
           format: date-time
@@ -401,9 +424,9 @@ components:
           additionalProperties: true
           description: >
             Caller-supplied key/value metadata to shallow-merge into the
-            generation record. Reserved server-owned keys (`action_id`,
-            `trigger_id`, `orchestration_run_id`, `node_id`, `extraction`, and internal
-            recovery state) are rejected with 400.
+            generation record's caller-owned `metadata` bag. No key is reserved:
+            server-owned state lives in its own top-level fields and cannot be
+            written from here.
           example:
             team: payments
             ticket_id: OPS-4821

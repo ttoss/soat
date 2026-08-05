@@ -266,20 +266,13 @@ describe('Generations', () => {
       expect(typeof response.body.project_id).toBe('string');
     });
 
-    test('exposes metadata.extraction but strips internal pendingState', async () => {
+    test('exposes the extraction summary but never the internal pending state', async () => {
       await updateGenerationRecord({
         publicId: failedGenerationId,
-        metadata: {
-          pendingState: {
-            messages: [{ role: 'user', content: 'secret internal message' }],
-          },
-          extraction: {
-            candidates: 2,
-            created: 1,
-            updated: 0,
-            skipped: 1,
-          },
+        pendingState: {
+          messages: [{ role: 'user', content: 'secret internal message' }],
         },
+        extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
       });
 
       const response = await authenticatedTestClient(userToken).get(
@@ -287,29 +280,86 @@ describe('Generations', () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.body.metadata.extraction).toEqual({
+      expect(response.body.extraction).toEqual({
         candidates: 2,
         created: 1,
         updated: 0,
         skipped: 1,
       });
+      // `pendingState` has no mapper entry at all, so it cannot leak under its
+      // own name, inside the caller bag, or via any serialization of the row.
+      expect(response.body.pending_state).toBeUndefined();
+      expect(response.body.pendingState).toBeUndefined();
+      expect(JSON.stringify(response.body)).not.toContain(
+        'secret internal message'
+      );
+    });
+  });
+
+  // Server-owned generation state (usage attribution, the served agent version,
+  // the model route's record, the extraction summary, internal recovery state)
+  // lives in typed columns and is exposed as top-level snake_case fields.
+  // `metadata` is 100% caller-owned, so there is no reserved-key blocklist to
+  // maintain and a caller cannot forge attribution by writing into the bag.
+  describe('server-owned state is stored in columns, not metadata', () => {
+    let attributedGenerationId: string;
+
+    beforeAll(async () => {
+      const genResponse = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'hello' }],
+          action_id: 'act_attribution_probe',
+          metadata: { ticket_id: 'OPS-4821' },
+        });
+
+      expect(genResponse.status).toBe(502);
+      attributedGenerationId = genResponse.body.error.meta.generation_id;
+      expect(attributedGenerationId).toBeDefined();
+    }, 60000);
+
+    test('exposes usage attribution as a top-level field, not a metadata key', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${attributedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.action_id).toBe('act_attribution_probe');
+      // The caller's own bag is untouched and holds only what the caller sent.
+      expect(response.body.metadata).toEqual({ ticket_id: 'OPS-4821' });
+    });
+
+    test('accepts a caller metadata key that collides with an attribution field name', async () => {
+      // Previously rejected as "reserved". Now harmless: the bag cannot reach
+      // the column, so there is nothing to protect and nothing to reject.
+      const response = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/generations/${attributedGenerationId}`)
+        .send({
+          metadata: { action_id: 'act_forged', orchestrationRunId: 'run_forged' },
+        });
+
+      expect(response.status).toBe(200);
+      // The bag stored the caller's keys verbatim...
+      expect(response.body.metadata.action_id).toBe('act_forged');
+      expect(response.body.metadata.orchestrationRunId).toBe('run_forged');
+      // ...and the real attribution is unchanged.
+      expect(response.body.action_id).toBe('act_attribution_probe');
+      expect(response.body.orchestration_run_id).toBeNull();
+    });
+
+    test('never exposes internal recovery state under any key', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${attributedGenerationId}`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.pending_state).toBeUndefined();
+      expect(response.body.pendingState).toBeUndefined();
       expect(response.body.metadata.pendingState).toBeUndefined();
     });
   });
 
   describe('caller-supplied metadata on POST /api/v1/agents/:agent_id/generate', () => {
-    test('rejects reserved metadata keys with 400', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
-        .send({
-          messages: [{ role: 'user', content: 'hello' }],
-          metadata: { extraction: { candidates: 1 } },
-        });
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/reserved/i);
-    });
-
     test('rejects non-object metadata with 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/agents/${agentId}/generate`)
@@ -377,26 +427,23 @@ describe('Generations', () => {
       expect(response.body.error).toMatch(/object/i);
     });
 
-    test('rejects reserved metadata keys with 400', async () => {
+    // Was: "rejects reserved metadata keys with 400", in both the wire and the
+    // stored camelCase spelling. Usage attribution is a column now, so neither
+    // spelling can reach it and there is nothing left to reject — the guard the
+    // blocklist provided is structural. `metadata` cannot forge attribution is
+    // asserted in the "server-owned state" describe above.
+    test('does not let a metadata write reach usage attribution', async () => {
       const response = await authenticatedTestClient(userToken)
         .patch(`/api/v1/generations/${failedGenerationId}`)
-        .send({ metadata: { orchestration_run_id: 'run_hijack' } });
-      expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/reserved/i);
-    });
+        .send({
+          metadata: {
+            orchestration_run_id: 'run_hijack',
+            orchestrationRunId: 'run_hijack',
+          },
+        });
 
-    // Regression: usage/billing attribution (usageRecording.ts) reads the
-    // *stored* camelCase keys (actionId/triggerId/orchestrationRunId/nodeId), but the
-    // reserved-key guard only blocked the wire (snake_case) spellings. A
-    // caller sending the camelCase spelling directly passed validation and
-    // updateGenerationMetadata's shallow merge overwrote real attribution
-    // with a forged one.
-    test('rejects the stored camelCase spelling of a reserved key with 400', async () => {
-      const response = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/generations/${failedGenerationId}`)
-        .send({ metadata: { orchestrationRunId: 'run_hijack' } });
-      expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/reserved/i);
+      expect(response.status).toBe(200);
+      expect(response.body.orchestration_run_id).toBeNull();
     });
 
     test('attaches caller metadata and round-trips it on GET', async () => {
@@ -419,15 +466,12 @@ describe('Generations', () => {
       expect(getResponse.body.metadata.team).toBe('payments');
     });
 
-    test('merges over existing metadata and preserves server-owned keys', async () => {
-      // Seed a system-owned key and an internal (never-exposed) key directly.
+    test('merges over existing caller metadata and leaves server state untouched', async () => {
       await updateGenerationRecord({
         publicId: failedGenerationId,
-        metadata: {
-          extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
-          pendingState: { messages: [] },
-          ticket_id: 'OPS-4821',
-        },
+        metadata: { ticket_id: 'OPS-4821' },
+        extraction: { candidates: 2, created: 1, updated: 0, skipped: 1 },
+        pendingState: { messages: [] },
       });
 
       const patchResponse = await authenticatedTestClient(userToken)
@@ -439,15 +483,18 @@ describe('Generations', () => {
       expect(patchResponse.body.metadata.reviewer).toBe('alice');
       // Pre-existing caller key is preserved (merge, not replace).
       expect(patchResponse.body.metadata.ticket_id).toBe('OPS-4821');
-      // Server-owned key is preserved and still exposed.
-      expect(patchResponse.body.metadata.extraction).toEqual({
+      // Server state sits in its own columns, so a metadata merge cannot touch
+      // it — and the bag holds nothing but the caller's two keys.
+      expect(patchResponse.body.extraction).toEqual({
         candidates: 2,
         created: 1,
         updated: 0,
         skipped: 1,
       });
-      // Internal recovery state is preserved in the column but never exposed.
-      expect(patchResponse.body.metadata.pendingState).toBeUndefined();
+      expect(patchResponse.body.metadata).toEqual({
+        ticket_id: 'OPS-4821',
+        reviewer: 'alice',
+      });
     });
   });
 });

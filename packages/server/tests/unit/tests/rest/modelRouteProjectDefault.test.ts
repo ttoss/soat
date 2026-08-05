@@ -530,7 +530,7 @@ describe('Project default model route', () => {
       const record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${generated.body.id}`
       );
-      expect(record.body.metadata.routing.route_id).toBe(secondRouteId);
+      expect(record.body.routing.route_id).toBe(secondRouteId);
 
       trackInheritor('agents', agent.body.id);
       await clearDefault();
@@ -721,7 +721,7 @@ describe('Project default model route', () => {
       const record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${res.body.id}`
       );
-      expect(record.body.metadata.routing).toMatchObject({
+      expect(record.body.routing).toMatchObject({
         route_id: defaultRouteId,
         target_index: 1,
         fallbacks: 1,

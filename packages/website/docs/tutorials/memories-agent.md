@@ -878,7 +878,7 @@ curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
 </TabItem>
 </Tabs>
 
-You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"`. Unlike Step 10, this did not rely on the model choosing to call a tool — the server captured the fact unconditionally. The extraction summary (`{ candidates, created, updated, skipped }`) is recorded on the generation's `metadata.extraction` field for debugging via the [Generations](/docs/modules/generations) API.
+You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"`. Unlike Step 10, this did not rely on the model choosing to call a tool — the server captured the fact unconditionally. The extraction summary (`{ candidates, created, updated, skipped }`) is recorded on the generation's `extraction` field for debugging via the [Generations](/docs/modules/generations) API.
 
 ---
 

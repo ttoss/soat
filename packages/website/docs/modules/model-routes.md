@@ -142,7 +142,7 @@ Fallback applies **before the first token only**. Once a stream has started, a m
 
 The [generation](./generations.md) records the model that actually served it, so [usage metering](./usage.md) prices the completion against the provider that answered — no metering change, and no wrong attribution.
 
-Every routed call writes a `routing` object into the generation's `metadata`, so a trace explains which provider actually answered and what the earlier attempts failed with:
+Every routed call writes a `routing` object onto the generation, so a trace explains which provider actually answered and what the earlier attempts failed with:
 
 ```json
 {
@@ -158,9 +158,9 @@ Every routed call writes a `routing` object into the generation's `metadata`, so
 }
 ```
 
-`target_index` is the target that served the call, `fallbacks` is how many targets were exhausted before it, and each entry in `attempts` carries the [`error_class`](#error-classification) it failed with — absent on the attempt that succeeded. `routing` is a reserved generation-metadata key, so a caller cannot forge it.
+`target_index` is the target that served the call, `fallbacks` is how many targets were exhausted before it, and each entry in `attempts` carries the [`error_class`](#error-classification) it failed with — absent on the attempt that succeeded. `routing` is a server-owned field on the generation, not a `metadata` key, so a caller cannot forge it.
 
-Internal completions (chats, discussions, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing metadata once the call returns, so a routed chat or discussion turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
+Internal completions (chats, discussions, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing record once the call returns, so a routed chat or discussion turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
 
 **Known gap:** a *failed* attempt that burned tokens before erroring is not metered. Providers typically return no usage alongside an error, so the data to price it does not exist; the attempt is still visible rather than silent.
 

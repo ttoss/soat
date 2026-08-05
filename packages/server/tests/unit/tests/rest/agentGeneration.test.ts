@@ -423,28 +423,55 @@ describe('Agent Generation Routes', () => {
     let stubBaseUrl: string;
     let userToken: string;
     let agentId: string;
+    let pausingAgentId: string;
     let projectDbId: number;
     let projectPublicId: string;
+
+    // When set, the stub answers the next completion with this tool call
+    // instead of text, so a generation can be made to pause on a client tool.
+    let nextToolCall: { name: string; args: unknown } | undefined;
+
+    const stubBody = () => {
+      const toolCall = nextToolCall;
+      nextToolCall = undefined;
+
+      const message = toolCall
+        ? {
+            role: 'assistant',
+            content: null,
+            tool_calls: [
+              {
+                id: 'call_stub_1',
+                type: 'function',
+                function: {
+                  name: toolCall.name,
+                  arguments: JSON.stringify(toolCall.args),
+                },
+              },
+            ],
+          }
+        : { role: 'assistant', content: 'final answer' };
+
+      return {
+        id: 'chatcmpl-stub',
+        object: 'chat.completion',
+        created: 0,
+        model: 'stub-model',
+        choices: [
+          {
+            index: 0,
+            message,
+            finish_reason: toolCall ? 'tool_calls' : 'stop',
+          },
+        ],
+        usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
+      };
+    };
 
     const startStubServer = async (): Promise<string> => {
       stubServer = createServer((req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(
-          JSON.stringify({
-            id: 'chatcmpl-stub',
-            object: 'chat.completion',
-            created: 0,
-            model: 'stub-model',
-            choices: [
-              {
-                index: 0,
-                message: { role: 'assistant', content: 'final answer' },
-                finish_reason: 'stop',
-              },
-            ],
-            usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 },
-          })
-        );
+        res.end(JSON.stringify(stubBody()));
       });
       await new Promise<void>((resolve) => {
         stubServer.listen(0, '127.0.0.1', resolve);
@@ -479,6 +506,8 @@ describe('Agent Generation Routes', () => {
                 action: [
                   'agents:CreateAgent',
                   'agents:CreateAgentGeneration',
+                  'generations:GetGeneration',
+                  'tools:CreateTool',
                   'usage:ListUsageMeters',
                   'usage:GetReceipt',
                 ],
@@ -518,6 +547,31 @@ describe('Agent Generation Routes', () => {
           name: 'Stub Agent',
         });
       agentId = agentRes.body.id;
+
+      // A client tool pauses the generation with `requires_action` instead of
+      // executing server-side, which is the path that persists pending state.
+      const toolRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectPublicId,
+          name: 'show_dialog',
+          type: 'client',
+          description: 'Displays a confirmation dialog to the user',
+          parameters: {
+            type: 'object',
+            properties: { message: { type: 'string' } },
+          },
+        });
+
+      const pausingAgentRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectPublicId,
+          name: 'Stub Pausing Agent',
+          tool_ids: [toolRes.body.id],
+        });
+      pausingAgentId = pausingAgentRes.body.id;
     });
 
     afterAll(async () => {
@@ -574,11 +628,43 @@ describe('Agent Generation Routes', () => {
       expect(pendingGenerations.has('gen_stub_pending')).toBe(false);
     });
 
+    // Regression: pausing on a client tool used to persist recovery state by
+    // *replacing* the generation's metadata bag (`metadata: { pendingState }`),
+    // which is where usage attribution lived. Every generation that paused lost
+    // its action/trigger/run/node attribution and all caller metadata, so its
+    // usage event was billed unattributed. Attribution is a column now, so the
+    // pending-state write cannot reach it.
+    test('a generation that pauses on a client tool keeps its usage attribution', async () => {
+      nextToolCall = { name: 'show_dialog', args: { message: 'confirm?' } };
+
+      const paused = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${pausingAgentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: 'ask me' }],
+          action_id: 'act_pause_probe',
+          metadata: { ticket_id: 'OPS-9001' },
+        });
+
+      expect(paused.status).toBe(200);
+      expect(paused.body.status).toBe('requires_action');
+
+      const record = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${paused.body.id}`
+      );
+
+      expect(record.status).toBe(200);
+      expect(record.body.status).toBe('requires_action');
+      expect(record.body.action_id).toBe('act_pause_probe');
+      expect(record.body.metadata).toEqual({ ticket_id: 'OPS-9001' });
+      // The persisted recovery state is not reachable through the API.
+      expect(record.body.pending_state).toBeUndefined();
+    }, 60000);
+
     test('tool-outputs recovers a pending generation from the DB when not in memory', async () => {
       // Simulates a server restart: no pendingGenerations map entry exists,
       // so submitToolOutputs must fall back to recoverPendingFromDb, which
       // rebuilds the pending state from the generation record's
-      // metadata.pendingState — real DB, real aiProviders/agentModel
+      // `pendingState` column — real DB, real aiProviders/agentModel
       // resolution, no mocking.
       await createGenerationRecord({
         publicId: 'gen_recovered',
@@ -588,18 +674,14 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_recovered',
-        metadata: {
-          pendingState: {
-            pendingToolCalls: [
-              { toolCallId: 'tc_1', toolName: 'noop', args: {} },
-            ],
-            messages: [{ role: 'user', content: 'hello' }],
-            steps: [],
-            parentTraceId: null,
-            rootTraceId: null,
-            toolContext: null,
-            remainingDepth: null,
-          },
+        pendingState: {
+          pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+          messages: [{ role: 'user', content: 'hello' }],
+          steps: [],
+          parentTraceId: null,
+          rootTraceId: null,
+          toolContext: null,
+          remainingDepth: null,
         },
       });
 
@@ -629,18 +711,14 @@ describe('Agent Generation Routes', () => {
       });
       await updateGenerationRecord({
         publicId: 'gen_usage_metered',
-        metadata: {
-          pendingState: {
-            pendingToolCalls: [
-              { toolCallId: 'tc_1', toolName: 'noop', args: {} },
-            ],
-            messages: [{ role: 'user', content: 'hello' }],
-            steps: [],
-            parentTraceId: null,
-            rootTraceId: null,
-            toolContext: null,
-            remainingDepth: null,
-          },
+        pendingState: {
+          pendingToolCalls: [{ toolCallId: 'tc_1', toolName: 'noop', args: {} }],
+          messages: [{ role: 'user', content: 'hello' }],
+          steps: [],
+          parentTraceId: null,
+          rootTraceId: null,
+          toolContext: null,
+          remainingDepth: null,
         },
       });
 

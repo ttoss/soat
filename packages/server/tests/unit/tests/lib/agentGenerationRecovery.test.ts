@@ -9,7 +9,7 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 // `recoverPendingFromDb` rebuilds the in-memory `PendingGeneration` from a
-// generation record's `metadata.pendingState` after a server restart, when the
+// generation record's `pendingState` column after a server restart, when the
 // pending map is empty. Its happy path is exercised end-to-end through the REST
 // tool-outputs route in `rest/agentGeneration.test.ts`; every failure branch,
 // however, collapses to an indistinguishable `GENERATION_NOT_FOUND` (404) at
@@ -108,7 +108,7 @@ describe('recoverPendingFromDb (real DB)', () => {
     if (args.withPendingState) {
       await updateGenerationRecord({
         publicId: args.publicId,
-        metadata: { pendingState: buildPendingState() },
+        pendingState: buildPendingState(),
       });
     }
   };

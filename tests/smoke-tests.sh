@@ -2349,7 +2349,7 @@ if [ -z "$VER_GEN_ID" ] || [ "$VER_GEN_ID" = "null" ]; then
   exit 1
 fi
 VER_GEN_RECORD=$($SOAT_CLI get-generation --generation-id "$VER_GEN_ID")
-VER_SERVED=$(printf '%s\n' "$VER_GEN_RECORD" | jq -r '.metadata.agent_version')
+VER_SERVED=$(printf '%s\n' "$VER_GEN_RECORD" | jq -r '.agent_version')
 if [ "$VER_SERVED" != "2" ]; then
   echo "ERROR: expected the 100% canary (version 2) to serve, got '$VER_SERVED'" >&2
   printf '%s\n' "$VER_GEN_RECORD" >&2

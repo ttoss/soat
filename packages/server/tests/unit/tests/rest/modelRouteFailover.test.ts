@@ -308,19 +308,19 @@ describe('Model route failover through agent generation', () => {
       `/api/v1/generations/${res.body.id}`
     );
     expect(record.status).toBe(200);
-    expect(record.body.metadata.routing).toMatchObject({
+    expect(record.body.routing).toMatchObject({
       route_id: routeId,
       target_index: 1,
       fallbacks: 1,
     });
-    expect(record.body.metadata.routing.attempts).toHaveLength(2);
-    expect(record.body.metadata.routing.attempts[0].error_class).toBe(
+    expect(record.body.routing.attempts).toHaveLength(2);
+    expect(record.body.routing.attempts[0].error_class).toBe(
       'provider_error'
     );
     expect(
-      record.body.metadata.routing.attempts[1].error_class
+      record.body.routing.attempts[1].error_class
     ).toBeUndefined();
-    expect(record.body.metadata.routing.attempts[1].model).toBe(
+    expect(record.body.routing.attempts[1].model).toBe(
       'healthy-model'
     );
   });
@@ -416,11 +416,11 @@ describe('Model route failover through agent generation', () => {
     );
     expect(record.status).toBe(200);
     expect(record.body.status).toBe('failed');
-    expect(record.body.metadata.routing.route_id).toBe(routeId);
-    expect(record.body.metadata.routing.target_index).toBeNull();
-    expect(record.body.metadata.routing.attempts).toHaveLength(2);
+    expect(record.body.routing.route_id).toBe(routeId);
+    expect(record.body.routing.target_index).toBeNull();
+    expect(record.body.routing.attempts).toHaveLength(2);
     expect(
-      record.body.metadata.routing.attempts.every(
+      record.body.routing.attempts.every(
         (attempt: { error_class?: string }) => {
           return attempt.error_class === 'provider_error';
         }

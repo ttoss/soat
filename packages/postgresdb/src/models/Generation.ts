@@ -168,6 +168,52 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
 
+  // Usage attribution. These are read back at metering time (usageRecording.ts)
+  // and copied onto the UsageEvent, which already carries them as its own
+  // columns — this mirrors that shape. They live in typed columns rather than
+  // the `metadata` bag because they are billing identity the platform enforces:
+  // a caller must not be able to attribute spend to another action, trigger or
+  // orchestration run. `orchestrationRunId` holds the run's *public* id and is
+  // resolved to the internal FK at persist time.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare actionId: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare triggerId: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare orchestrationRunId: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare nodeId: string | null;
+
+  // The agent config version that served this generation
+  // (docs/prd-agent-versions.md, Phase 2). Forging it would misattribute a
+  // canary's behavior to the stable version in every downstream comparison.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare agentVersion: number | null;
+
+  // The model route's own record of which target served the generation and
+  // every attempt it burned getting there. Written by modelRouteMetadata.ts.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare routing: Record<string, unknown> | null;
+
+  // Memory-extraction summary written on completion (memoryExtraction.ts).
+  // Derived from the generation's content, so a content purge clears it.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare extraction: Record<string, unknown> | null;
+
+  // Internal recovery state for a generation paused on a client tool: the full
+  // message history, tool context and agent config needed by
+  // agentGenerationRecovery.ts to resume after a restart. Never serialized to
+  // any API response — it is not in the mapper at all, which is why it gets its
+  // own column instead of an exclusion rule on `metadata`.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare pendingState: Record<string, unknown> | null;
+
+  // Caller-owned annotation bag (F-15). The server writes nothing here, so
+  // there is no reserved-key list to maintain and no key a caller can set that
+  // reaches platform state.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 

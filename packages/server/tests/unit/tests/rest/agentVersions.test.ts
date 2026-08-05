@@ -751,9 +751,9 @@ describe('Agent versions', () => {
      * Runs a generation and returns the version stamped on its record.
      *
      * The AI provider is unreachable in unit CI so the call fails with 502 —
-     * but the record, and its metadata, are written before the model is ever
-     * contacted, which is exactly the part under test. The error body carries
-     * the generation id for this reason.
+     * but the record, and its served-version stamp, are written before the
+     * model is ever contacted, which is exactly the part under test. The error
+     * body carries the generation id for this reason.
      */
     const servedVersionOf = async (agentId: string): Promise<number> => {
       const generated = await authenticatedTestClient(userToken)
@@ -768,7 +768,7 @@ describe('Agent versions', () => {
         `/api/v1/generations/${generationId}`
       );
       expect(record.status).toBe(200);
-      return record.body.metadata.agent_version;
+      return record.body.agent_version;
     };
 
     test('stamps the live version when there is no rollout', async () => {
@@ -814,7 +814,7 @@ describe('Agent versions', () => {
         );
         expect(list.status).toBe(200);
         // Newest first.
-        return list.body.data[0].metadata.agent_version;
+        return list.body.data[0].agent_version;
       };
 
       const generateInSession = async (sessionId: string): Promise<void> => {
@@ -902,10 +902,18 @@ describe('Agent versions', () => {
           metadata: { agent_version: 99 },
         });
 
-      // Attributing a canary's behavior to the stable version (or the reverse)
-      // would corrupt every downstream comparison, so the key is reserved.
-      expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/reserved/i);
+      // The request is accepted — `agent_version` in the caller's bag is just
+      // an annotation now. Attributing a canary's behavior to the stable
+      // version (or the reverse) would corrupt every downstream comparison, so
+      // what matters is that the served-version field is the resolver's, not
+      // the caller's. It is a column the request body cannot address.
+      expect(res.status).toBe(502);
+      const record = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${res.body.error.meta.generation_id}`
+      );
+      expect(record.status).toBe(200);
+      expect(record.body.agent_version).toBe(1);
+      expect(record.body.metadata).toEqual({ agent_version: 99 });
     });
   });
 

@@ -125,27 +125,20 @@ const recordExtractionSummary = async (args: {
   generationId: string;
   summary: ExtractionSummary;
 }): Promise<void> => {
-  // Generation records are created by the real generation pipeline; merge so
-  // existing metadata (e.g. pendingState) is preserved. Missing records are
+  // Writes the summary's own column, so there is no read-modify-write and
+  // nothing else on the generation can be clobbered. A missing record is
   // tolerated — extraction must never fail because observability is missing.
-  const generation = await db.Generation.findOne({
-    where: { publicId: args.generationId },
+  const updated = await updateGenerationRecord({
+    publicId: args.generationId,
+    extraction: { ...args.summary },
   });
-  if (!generation) {
+
+  if (!updated) {
     log(
       'recordExtractionSummary: generation not found generationId=%s',
       args.generationId
     );
-    return;
   }
-
-  await updateGenerationRecord({
-    publicId: args.generationId,
-    metadata: {
-      ...(generation.metadata ?? {}),
-      extraction: args.summary,
-    },
-  });
 };
 
 type ExtractionTarget = {
