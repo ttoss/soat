@@ -97,6 +97,11 @@ export const ERROR_CODES = {
     description:
       'The secret is referenced by one or more AI providers and cannot be deleted. Use force=true to delete dependents as well.',
   },
+  AI_PROVIDER_MISCONFIGURED: {
+    httpStatus: 400,
+    description:
+      'The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret.',
+  },
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

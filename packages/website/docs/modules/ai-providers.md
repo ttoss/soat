@@ -52,6 +52,7 @@ Valid values for the `provider` field:
 | `ollama`    | Ollama (local)             |
 | `azure`     | Azure OpenAI               |
 | `bedrock`   | Amazon Bedrock             |
+| `vertex`    | Google Vertex AI           |
 | `gateway`   | Generic API gateway        |
 | `custom`    | Custom / self-hosted model |
 
@@ -83,11 +84,47 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 
 If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`.
 
-You can also pass the API key directly in the provider's `config` object as `api_key` (without linking a secret). This is useful for quick testing but the secret-linked approach is recommended for production.
+You can also pass the API key directly in the provider's `config` object as `apiKey` (without linking a secret). This is useful for quick testing but the secret-linked approach is recommended for production.
 
 ```json
-{ "api_key": "ABSK..." }
+{ "apiKey": "ABSK..." }
 ```
+
+### Vertex AI authentication
+
+The `vertex` provider reaches Gemini models through [Google Vertex AI](https://cloud.google.com/vertex-ai/generative-ai/docs), which is a different surface from the `google` provider — `google` calls the Gemini Developer API with a plain API key, while `vertex` calls a Google Cloud project's regional endpoint and bills through that project. Use `vertex` when the models must run under your own GCP project, VPC, and quota.
+
+Like `bedrock`, the authentication mode is determined by the shape of the linked secret's value:
+
+**Service account** — store the JSON key file verbatim as the secret value. The key file already names its project, so no extra configuration is needed:
+
+```json
+{
+  "type": "service_account",
+  "project_id": "my-gcp-project",
+  "client_email": "vertex@my-gcp-project.iam.gserviceaccount.com",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+}
+```
+
+**Express-mode API key** — store the key on its own (no JSON wrapper), or as `{ "apiKey": "AIza..." }`. [Vertex AI in express mode](https://cloud.google.com/vertex-ai/generative-ai/docs/start/express-mode/overview) targets a global, project-less endpoint, so `project` and `location` are ignored for this mode.
+
+**Application Default Credentials** — link no secret at all. The server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. This is the recommended mode when SOAT itself runs on Google Cloud, because no key material is stored anywhere.
+
+The provider's `config` object accepts two fields:
+
+| Field      | Default       | Description                                                                                               |
+| ---------- | ------------- | --------------------------------------------------------------------------------------------------------- |
+| `project`  | —             | Google Cloud project ID. Falls back to the `project_id` of a service-account secret. Required otherwise. |
+| `location` | `us-central1` | Vertex region serving the model, e.g. `europe-west4` or `global`.                                          |
+
+```json
+{ "project": "my-gcp-project", "location": "europe-west4" }
+```
+
+`config.project` overrides the key file's `project_id`, which is how one service account can serve models from several projects. When no project can be resolved — no `config.project`, and either no secret or one without `project_id` — creating a generation fails with `AI_PROVIDER_MISCONFIGURED` (`400`) rather than a generic error.
+
+An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, the same as for `bedrock`.
 
 ### Price overrides
 
@@ -182,6 +219,60 @@ curl -X POST https://api.example.com/api/v1/ai-providers \
     "provider": "openai",
     "default_model": "gpt-4o",
     "secret_id": "sec_01"
+  }'
+```
+
+</TabItem>
+</Tabs>
+
+### Create a Google Vertex AI provider
+
+Assumes `sec_01` holds a service-account key file. See [Vertex AI authentication](#vertex-ai-authentication) for the other two modes.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat create-ai-provider \
+  --project-id proj_ABC \
+  --name "Vertex Gemini" \
+  --provider vertex \
+  --default-model gemini-2.0-flash \
+  --secret-id sec_01 \
+  --config '{"location":"europe-west4"}'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.aiProviders.createAiProvider({
+  body: {
+    project_id: 'proj_ABC',
+    name: 'Vertex Gemini',
+    provider: 'vertex',
+    default_model: 'gemini-2.0-flash',
+    secret_id: 'sec_01',
+    config: { location: 'europe-west4' },
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/ai-providers \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project_id": "proj_ABC",
+    "name": "Vertex Gemini",
+    "provider": "vertex",
+    "default_model": "gemini-2.0-flash",
+    "secret_id": "sec_01",
+    "config": { "location": "europe-west4" }
   }'
 ```
 

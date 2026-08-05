@@ -20,6 +20,7 @@ export const AI_PROVIDER_SLUGS = [
   'ollama',
   'azure',
   'bedrock',
+  'vertex',
   'gateway',
   'custom',
 ] as const;
