@@ -4,7 +4,7 @@ import { DomainError } from 'src/errors';
 import { purgeTraceContent } from 'src/lib/contentPurge';
 import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
 
-import { redactionPrincipalFromCtx } from './helpers';
+import { requestPrincipalFromCtx } from './helpers';
 
 export const tracesRouter = new Router<Context>();
 
@@ -132,7 +132,7 @@ tracesRouter.delete('/traces/:trace_id/content', async (ctx: Context) => {
   const purged = await purgeTraceContent({
     traceId: ctx.params.trace_id,
     projectIds,
-    principal: redactionPrincipalFromCtx(ctx),
+    principal: requestPrincipalFromCtx(ctx),
   });
 
   if (!purged) {

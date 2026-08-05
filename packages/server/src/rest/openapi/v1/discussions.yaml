@@ -654,14 +654,21 @@ components:
           x-soat-ref: documents
           type: string
           nullable: true
-        started_by:
-          type: object
-          nullable: true
-          additionalProperties: true
-        initiator_generation_id:
+        started_by_principal_type:
           type: string
           nullable: true
-          description: Reserved for the generation that started this run. Not currently populated.
+          enum: [user, api_key, null]
+          description: >-
+            Type of the principal that invoked the run. Read-only: derived from
+            the authenticated caller, never accepted from a request body.
+        started_by_principal_id:
+          type: string
+          nullable: true
+          example: 'user_V1StGXR8Z5jdHi6B'
+          description: >-
+            Public id of the principal that invoked the run — the API key's own
+            id (`key_…`) when a key was used, otherwise the user's (`user_…`).
+            Read-only, like `started_by_principal_type`.
         completed_at:
           type: string
           format: date-time

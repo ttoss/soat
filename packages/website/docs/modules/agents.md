@@ -100,7 +100,8 @@ A generation is a persisted lifecycle record for a single agent execution. While
 | `completed_at`            | string/null | ISO 8601 timestamp when execution finished              |
 | `last_activity_at`        | string/null | ISO 8601 timestamp of last step activity                |
 | `stop_reason`             | string/null | Why the generation ended — see [Stop Reason](#stop-reason) |
-| `started_by`              | object/null | Identity of the principal that triggered the generation |
+| `started_by_principal_type` | string/null | Type of the principal that triggered the generation |
+| `started_by_principal_id` | string/null | Public id of that principal |
 | `created_at`              | string      | ISO 8601 creation timestamp                             |
 
 #### Generation Status

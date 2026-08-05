@@ -71,8 +71,8 @@ A run is a single invocation of a discussion.
 | `outcome`                 | string/null | The synthesized outcome text (the tool-result contract)            |
 | `conversation_id`         | string/null | The persisted transcript as a [Conversation](./conversations.md)   |
 | `outcome_document_id`     | string/null | The stored outcome as a [Document](./documents.md)                 |
-| `started_by`              | object/null | Identity that triggered the run                                    |
-| `initiator_generation_id` | string/null | Generation that invoked this run (when triggered by an agent tool) |
+| `started_by_principal_type` | string/null | Type of the principal that invoked the run — `user` or `api_key` (read-only) |
+| `started_by_principal_id` | string/null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` (read-only) |
 | `completed_at`            | string/null | ISO 8601 completion timestamp                                      |
 | `created_at`              | string      | ISO 8601 creation timestamp                                        |
 
@@ -119,6 +119,12 @@ Because the call goes through the REST route, it is authorized like any other: t
 The full transcript and outcome persist on the run (Conversation + Document).
 
 The discussion's own internal deliberation/synthesis calls do not themselves create generations or traces (they are not currently visible in [`get-trace-tree`](./traces.md)).
+
+### Run attribution
+
+Every run records who invoked it in `started_by_principal_type` / `started_by_principal_id`, derived from the authenticated caller. When a request is authenticated with an API key the principal is the **key itself** (`key_…`), so a run names which key acted rather than only the user that owns it; a JWT-authenticated request records the user (`user_…`).
+
+Both fields are read-only. They are not accepted in the request body — `POST /discussions/{id}/runs` takes only `topic`, and any other field is rejected with a `400` — so attribution cannot be forged by a caller.
 
 ### Migrating from agent reasoning
 

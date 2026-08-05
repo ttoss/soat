@@ -49,8 +49,8 @@ const mapRunArtifacts = (run: RunModel) => {
     outcome: run.outcome ?? null,
     conversation_id: run.conversation?.publicId ?? null,
     outcome_document_id: run.outcomeDocument?.publicId ?? null,
-    started_by: run.startedBy ?? null,
-    initiator_generation_id: run.initiatorGenerationId ?? null,
+    started_by_principal_type: run.startedByPrincipalType,
+    started_by_principal_id: run.startedByPrincipalId,
     completed_at: run.completedAt ?? null,
   };
 };
@@ -328,8 +328,16 @@ const loadDiscussionForRun = async (
 export const runDiscussion = async (args: {
   discussionId: string;
   topic: string;
-  startedBy?: Record<string, unknown> | null;
-  initiatorGenerationId?: string | null;
+  /**
+   * Attribution for the principal that invoked the run. Server-derived at the
+   * route boundary (#858) — there is no wire field a caller could set.
+   *
+   * Required, not optional: a new entry point has to state who is invoking the
+   * run (passing `null` for a system-initiated one) rather than silently
+   * recording an unattributed run by leaving the field off.
+   */
+  startedByPrincipalType: string | null;
+  startedByPrincipalId: string | null;
 }) => {
   log('runDiscussion: discussionId=%s', args.discussionId);
 
@@ -341,8 +349,8 @@ export const runDiscussion = async (args: {
     projectId,
     topic: args.topic,
     status: 'running',
-    startedBy: args.startedBy ?? null,
-    initiatorGenerationId: args.initiatorGenerationId ?? null,
+    startedByPrincipalType: args.startedByPrincipalType,
+    startedByPrincipalId: args.startedByPrincipalId,
   });
 
   const participants = sortedParticipants(discussion);

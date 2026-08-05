@@ -3,7 +3,6 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import type { RedactionPrincipal } from 'src/lib/contentPurge';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -228,13 +227,24 @@ export const resolveWriteProjectId = async (args: {
   return projectIds![0];
 };
 
+export type RequestPrincipal = {
+  principalType: 'user' | 'api_key';
+  principalId: string;
+};
+
 /**
- * The principal credited with a content purge (#836). For API-key auth the id
- * is the key's own public id (`key_…`) so an erasure record names which key
- * acted, not just that a key did — the same rule `tasks.ts` and the audit
- * middleware apply. Resolved from the auth context only; never from a body.
+ * The principal to credit for an action, resolved from the auth context only —
+ * never from a body. For API-key auth the id is the key's own public id
+ * (`key_…`) so the record names *which* key acted, not just that a key did;
+ * `apiKeyPublicId` is set for both scoped and unscoped keys, so it (not
+ * `apiKeyProjectId`) decides the type.
+ *
+ * One definition for a rule that is repeated verbatim wherever attribution is
+ * stamped: content purges (#836), discussion runs (#858), task transitions, and
+ * the audit middleware. Attribution that a caller cannot address is the whole
+ * point (#853), so the derivation lives here rather than per handler.
  */
-export const redactionPrincipalFromCtx = (ctx: Context): RedactionPrincipal => {
+export const requestPrincipalFromCtx = (ctx: Context): RequestPrincipal => {
   const apiKeyPublicId = ctx.authUser!.apiKeyPublicId;
   if (apiKeyPublicId) {
     return { principalType: 'api_key', principalId: apiKeyPublicId };
