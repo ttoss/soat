@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.5](https://github.com/ttoss/soat/compare/v0.18.4...v0.18.5) (2026-08-05)
+
+### Bug Fixes
+
+* **agents:** honor step_rules[].active_tool_ids at generation time ([#814](https://github.com/ttoss/soat/issues/814)) ([587eb11](https://github.com/ttoss/soat/commit/587eb116eee0b21b7becb7c7b04da64f57d186ee)), closes [#809](https://github.com/ttoss/soat/issues/809) [#811](https://github.com/ttoss/soat/issues/811)
+* **agents:** make Trace/Generation creation atomic to prevent orphaned traces ([#817](https://github.com/ttoss/soat/issues/817)) ([779946c](https://github.com/ttoss/soat/commit/779946c0ad9b6fb880f627db5bfed23b393ce0bb)), closes [#815](https://github.com/ttoss/soat/issues/815)
+* **orchestrations:** surface an Error's cause in recorded run/node failures ([#828](https://github.com/ttoss/soat/issues/828)) ([6804509](https://github.com/ttoss/soat/commit/6804509c63025f3a68a7b468bf7b29630ca74600)), closes [#820](https://github.com/ttoss/soat/issues/820) [ttoss/soat#820](https://github.com/ttoss/soat/issues/820)
+* **tools:** log when output_mapping var resolves to null ([#818](https://github.com/ttoss/soat/issues/818)) ([#826](https://github.com/ttoss/soat/issues/826)) ([739562b](https://github.com/ttoss/soat/commit/739562b87749fbd25ad8bd6d412ccfa83d34c422))
+
+### Features
+
+* **tasks:** allow creating a task in a named non-initial state ([#821](https://github.com/ttoss/soat/issues/821)) ([#830](https://github.com/ttoss/soat/issues/830)) ([c94687c](https://github.com/ttoss/soat/commit/c94687cd18d200ad23dd91ccac552ce906d6e29b))
+* **tools:** add execute.auth with aws_sigv4 and gcp_service_account ([#823](https://github.com/ttoss/soat/issues/823)) ([cb06791](https://github.com/ttoss/soat/commit/cb06791835a6c5e10c2595ec24039bf69e484b1d))
+* **tools:** include the merged request input in output_mapping context ([#819](https://github.com/ttoss/soat/issues/819)) ([#827](https://github.com/ttoss/soat/issues/827)) ([5142f6d](https://github.com/ttoss/soat/commit/5142f6d74725ee429b792630ba5c6db3795d03bf))
+* **workflows:** deterministic payload_writes on task-automation dispatches ([#824](https://github.com/ttoss/soat/issues/824)) ([2b03612](https://github.com/ttoss/soat/commit/2b0361236cf76540ce2430349fa1f175d2f9c360)), closes [ttoss/soat#816](https://github.com/ttoss/soat/issues/816) [ttoss/soat#816](https://github.com/ttoss/soat/issues/816)
+* **workflows:** retry/backoff policy for task-automation dispatches ([#822](https://github.com/ttoss/soat/issues/822)) ([#829](https://github.com/ttoss/soat/issues/829)) ([a45ea36](https://github.com/ttoss/soat/commit/a45ea360c3b6764bb3ce64a827105d848c040ab8))
+
 ## [0.18.4](https://127.0.0.1/41729/git/ttoss/compare/v0.18.3...v0.18.4) (2026-08-01)
 
 ### Bug Fixes
