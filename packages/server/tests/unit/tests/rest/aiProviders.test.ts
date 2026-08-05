@@ -94,6 +94,7 @@ describe('AI Providers', () => {
       'ollama',
       'azure',
       'bedrock',
+      'vertex',
       'gateway',
       'custom',
     ])('can create an AI provider with runtime slug %s', async (provider) => {

@@ -1,4 +1,9 @@
-import { buildModel, resolveBedrockCredentials } from 'src/lib/agentModel';
+import { DomainError } from 'src/errors';
+import {
+  buildModel,
+  resolveBedrockCredentials,
+  resolveVertexSettings,
+} from 'src/lib/agentModel';
 
 // The AI SDK's returned LanguageModel exposes `modelId` and `config.provider`
 // regardless of provider, plus (for OpenAI-compatible builders) a
@@ -10,6 +15,16 @@ const asConfigured = (model: unknown) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return model as any;
 };
+
+// A GCP service-account key file, pasted verbatim as the secret value. The
+// private key is a syntactically shaped placeholder — `resolveVertexSettings`
+// only forwards it to google-auth-library, it never parses or signs with it.
+const SERVICE_ACCOUNT_SECRET = JSON.stringify({
+  type: 'service_account',
+  project_id: 'sa-project',
+  client_email: 'vertex@sa-project.iam.gserviceaccount.com',
+  private_key: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
+});
 
 describe('buildModel', () => {
   test('throws for unsupported provider', () => {
@@ -175,6 +190,159 @@ describe('buildModel', () => {
     expect(model.config.baseUrl()).toBe(
       'https://bedrock-runtime.us-west-2.amazonaws.com'
     );
+  });
+
+  test('builds vertex model wired to the configured project and location', () => {
+    const model = asConfigured(
+      buildModel({
+        provider: 'vertex',
+        secretValue: SERVICE_ACCOUNT_SECRET,
+        model: 'gemini-2.0-flash',
+        config: { project: 'my-gcp-project', location: 'europe-west4' },
+      })
+    );
+    expect(model.modelId).toBe('gemini-2.0-flash');
+    expect(model.config.provider).toBe('google.vertex.chat');
+    expect(model.config.baseURL).toBe(
+      'https://europe-west4-aiplatform.googleapis.com/v1beta1/projects/my-gcp-project/locations/europe-west4/publishers/google'
+    );
+  });
+
+  test('builds vertex model taking the project from the service-account secret', () => {
+    const model = asConfigured(
+      buildModel({
+        provider: 'vertex',
+        secretValue: SERVICE_ACCOUNT_SECRET,
+        model: 'gemini-2.0-flash',
+      })
+    );
+    // project_id comes from the key file, location falls back to the default
+    expect(model.config.baseURL).toBe(
+      'https://us-central1-aiplatform.googleapis.com/v1beta1/projects/sa-project/locations/us-central1/publishers/google'
+    );
+  });
+
+  test('builds vertex model in express mode from a plain API-key secret', () => {
+    const model = asConfigured(
+      buildModel({
+        provider: 'vertex',
+        secretValue: 'AIzaSyExpressModeKey',
+        model: 'gemini-2.0-flash',
+      })
+    );
+    // Express mode is project-less: it targets the global aiplatform endpoint
+    expect(model.config.baseURL).toBe(
+      'https://aiplatform.googleapis.com/v1/publishers/google'
+    );
+  });
+
+  test('throws a DomainError when a vertex project cannot be resolved', () => {
+    expect(() => {
+      buildModel({
+        provider: 'vertex',
+        secretValue: null,
+        model: 'gemini-2.0-flash',
+      });
+    }).toThrow(DomainError);
+    expect(() => {
+      buildModel({
+        provider: 'vertex',
+        secretValue: null,
+        model: 'gemini-2.0-flash',
+      });
+    }).toThrow(/config\.project/);
+  });
+});
+
+// Mirrors the `resolveBedrockCredentials` rationale: the model object the AI
+// SDK returns does not expose which credential branch was taken (auth happens
+// at request time), so the precedence rules are asserted on the resolver.
+describe('resolveVertexSettings', () => {
+  test('treats a plain non-JSON secret as an express-mode API key', () => {
+    expect(
+      resolveVertexSettings({ secretValue: 'AIzaSyExpressModeKey' })
+    ).toEqual({ apiKey: 'AIzaSyExpressModeKey' });
+  });
+
+  test('uses apiKey from a JSON secret', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: JSON.stringify({ apiKey: 'AIzaFromJson' }),
+      })
+    ).toEqual({ apiKey: 'AIzaFromJson' });
+  });
+
+  test('falls back to config.apiKey when no secret is provided', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: null,
+        config: { apiKey: 'AIzaFromConfig' },
+      })
+    ).toEqual({ apiKey: 'AIzaFromConfig' });
+  });
+
+  test('a secret apiKey takes precedence over config.apiKey', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: JSON.stringify({ apiKey: 'AIzaFromSecret' }),
+        config: { apiKey: 'AIzaFromConfig' },
+      })
+    ).toEqual({ apiKey: 'AIzaFromSecret' });
+  });
+
+  test('uses service-account credentials from a JSON key file secret', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: SERVICE_ACCOUNT_SECRET,
+        config: { location: 'europe-west4' },
+      })
+    ).toEqual({
+      project: 'sa-project',
+      location: 'europe-west4',
+      googleAuthOptions: {
+        credentials: {
+          client_email: 'vertex@sa-project.iam.gserviceaccount.com',
+          private_key: '-----BEGIN PRIVATE KEY-----\nnot-a-real-key\n-----END',
+        },
+      },
+    });
+  });
+
+  test('config.project takes precedence over the key file project_id', () => {
+    const settings = resolveVertexSettings({
+      secretValue: SERVICE_ACCOUNT_SECRET,
+      config: { project: 'override-project' },
+    });
+    expect(settings).toMatchObject({
+      project: 'override-project',
+      location: 'us-central1',
+    });
+  });
+
+  test('falls back to Application Default Credentials when no secret is linked', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: null,
+        config: { project: 'adc-project', location: 'global' },
+      })
+    ).toEqual({ project: 'adc-project', location: 'global' });
+  });
+
+  test('ignores an incomplete service-account key file and falls back to ADC', () => {
+    expect(
+      resolveVertexSettings({
+        secretValue: JSON.stringify({
+          project_id: 'sa-project',
+          client_email: 'vertex@sa-project.iam.gserviceaccount.com',
+        }),
+      })
+    ).toEqual({ project: 'sa-project', location: 'us-central1' });
+  });
+
+  test('throws when no project can be resolved for a non-express provider', () => {
+    expect(() => {
+      return resolveVertexSettings({ secretValue: null });
+    }).toThrow(DomainError);
   });
 });
 

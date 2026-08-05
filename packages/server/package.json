@@ -21,6 +21,7 @@
     "@ai-sdk/anthropic": "^4.0.14",
     "@ai-sdk/azure": "^4.0.13",
     "@ai-sdk/google": "^4.0.14",
+    "@ai-sdk/google-vertex": "5.0.39",
     "@ai-sdk/groq": "^4.0.10",
     "@ai-sdk/openai": "^4.0.13",
     "@ai-sdk/xai": "^4.0.12",
