@@ -3,6 +3,38 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.18.6](https://github.com/ttoss/soat/compare/v0.18.5...v0.18.6) (2026-08-05)
+
+* Close the free-form-bag epic structurally: chokepoint identity pin, explicit workflow wire mappers, server-owned task last_result (#853) (#856) ([c9b5266](https://github.com/ttoss/soat/commit/c9b526644a2252ab6c14f42f84359d15be726d82)), closes [#853](https://github.com/ttoss/soat/issues/853) [#856](https://github.com/ttoss/soat/issues/856) [#850](https://github.com/ttoss/soat/issues/850) [#851](https://github.com/ttoss/soat/issues/851) [729/#737](https://github.com/ttoss/soat/issues/737) [#852](https://github.com/ttoss/soat/issues/852) [#846](https://github.com/ttoss/soat/issues/846)
+* refactor(generations)!: move server-owned state out of the metadata bag into columns (#842) ([3d866bd](https://github.com/ttoss/soat/commit/3d866bd2a52ce14aea6a6e2e12d02cde93e2e805)), closes [#842](https://github.com/ttoss/soat/issues/842) [#651](https://github.com/ttoss/soat/issues/651) [#690](https://github.com/ttoss/soat/issues/690) [#729](https://github.com/ttoss/soat/issues/729) [#737](https://github.com/ttoss/soat/issues/737)
+
+### Bug Fixes
+
+* **conversations:** move server-recorded tool-call chain out of caller-writable metadata ([#844](https://github.com/ttoss/soat/issues/844)) ([#849](https://github.com/ttoss/soat/issues/849)) ([2c6cd29](https://github.com/ttoss/soat/commit/2c6cd29cc63ffbe540d8fbc54f51872b2f589247)), closes [#842](https://github.com/ttoss/soat/issues/842)
+* **documents:** promote server-owned ingestion state out of caller-writable metadata ([#845](https://github.com/ttoss/soat/issues/845)) ([#854](https://github.com/ttoss/soat/issues/854)) ([5907882](https://github.com/ttoss/soat/commit/590788273b03cd31d5b836dbcacfe3a7b1e1082f)), closes [#842](https://github.com/ttoss/soat/issues/842)
+
+### Features
+
+* **ai-providers:** add google vertex ai as an llm provider ([#832](https://github.com/ttoss/soat/issues/832)) ([155c2e7](https://github.com/ttoss/soat/commit/155c2e7d23fe32bfd6a7404abd3582b731e96595))
+* **traces,generations:** content purge endpoints — delete content, preserve the skeleton ([#847](https://github.com/ttoss/soat/issues/847)) ([d5bfdfa](https://github.com/ttoss/soat/commit/d5bfdfa2f933a45e698df1fad43f5ba2bcc67cd4)), closes [#836](https://github.com/ttoss/soat/issues/836) [#842](https://github.com/ttoss/soat/issues/842)
+
+### BREAKING CHANGES
+
+* **documents:** `chunk_count`, `total_pages`, and `failure_reason` no
+  longer appear inside a document's `metadata` field on any endpoint. Clients
+  reading `document.metadata.chunk_count` (or `.total_pages`, `.failure_reason`)
+  must read the equivalent fields from `GET /documents/:id/status`
+  (`chunk_count`, `total_pages`, `error`) instead.
+* guards and expressions referencing task.payload.last_result
+  must be rewritten to task.last_result; the dispatch result no longer appears
+  inside payload.
+* server-owned generation state has moved from inside `metadata`
+  to top-level snake_case fields on the generation. Clients reading
+  `generation.metadata.action_id`, `.trigger_id`, `.extraction`, `.routing` or
+  `.agent_version` must read `generation.action_id` etc. instead. `metadata` now
+  returns only caller-supplied keys, and no key is reserved — a PATCH carrying
+  `action_id` is accepted as an annotation instead of rejected with 400.
+
 ## [0.18.5](https://github.com/ttoss/soat/compare/v0.18.4...v0.18.5) (2026-08-05)
 
 **Note:** Version bump only for package @soat/postgresdb
