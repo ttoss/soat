@@ -500,10 +500,14 @@ Profiled from the 2026-08-05 CI run, the ~9.5 min job split roughly:
 463 `$SOAT_CLI` invocations, each a Node process start (~150 ms) plus its HTTP
 round trip.
 
-**That cost is also extremely variable.** Nothing bounds how many tokens
-`qwen2.5:0.5b` emits, so the same step can take 24 s in one run and 121 s in the
-next. Between the 2026-08-05 runs, total chat time swung 219 s → 406 s with no
-change to the suite. Treat any single-run smoke timing as ±2 min; compare phases
+**That cost used to be extremely variable.** Nothing in SOAT bounds how many
+tokens `qwen2.5:0.5b` emits (agents have no `max_tokens` field), so the same
+step could take 24 s in one run and 121 s in the next; between the 2026-08-05
+runs, total chat time swung 219 s → 406 s with no change to the suite. The smoke
+stack now caps every forwarded chat completion at 256 output tokens via
+`MAX_COMPLETION_TOKENS` on the `ollama-tool-choice` proxy service (see
+`tests/docker-compose.smoke.yml`), which bounds both the total and the variance.
+Still treat any single-run smoke timing as noisy; compare phases
 (build / startup / script / teardown), not job totals.
 
 > When profiling from CI logs, note that Ollama's `[GIN]` lines use Go duration
@@ -635,7 +639,11 @@ assertions in both suites probabilistic, and a single flake blocked a release (#
 The proxy implements that one missing field, for the tools named in
 `TOOL_CHOICE_TOOLS` (one per stack today: `get_order_status` in tutorials, `get_weather`
 in smoke), and forwards everything else — an unlisted tool, no `tool_choice`, `"auto"`,
-`"none"`, embeddings, every other route — to the real Ollama verbatim. A forced-tool
+`"none"`, embeddings, every other route — to the real Ollama verbatim. It also owns the
+optional `MAX_COMPLETION_TOKENS` output cap: when set (the smoke stack sets 256), every
+forwarded chat completion gets `max_tokens` injected — a caller value below the cap is
+kept — because agents have no `max_tokens` field of their own and the sandbox model's
+unbounded output is the dominant, highly variable cost of these jobs. A forced-tool
 assertion on an allowlisted tool is therefore deterministic, and a failure is a real
 regression in the pause/resume path.
 

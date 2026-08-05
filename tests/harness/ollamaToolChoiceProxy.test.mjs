@@ -301,6 +301,84 @@ describe('ollamaToolChoiceProxy', () => {
     assert.equal(upstreamRequests.at(-1).url, '/v1/embeddings');
   });
 
+  // Output-token cap. Agents have no max_tokens field, so nothing bounds how
+  // many tokens the sandbox model emits per completion — the dominant, and
+  // wildly variable, cost of the smoke job. The cap is applied here, at the
+  // provider boundary, exactly like the tool_choice shim above.
+  describe('maxCompletionTokens', () => {
+    let capped;
+    let cappedUrl;
+
+    before(async () => {
+      capped = createToolChoiceProxy({
+        upstreamBaseUrl: upstreamUrl,
+        maxCompletionTokens: 64,
+      });
+      cappedUrl = await listen(capped);
+    });
+
+    after(async () => {
+      await close(capped);
+    });
+
+    const cappedChat = (body) => {
+      return fetch(`${cappedUrl}/v1/chat/completions`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    };
+
+    test('injects max_tokens into a forwarded chat completion', async () => {
+      const res = await cappedChat({
+        model: 'qwen2.5:0.5b',
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+
+      assert.equal(res.status, 200);
+      const forwarded = JSON.parse(upstreamRequests.at(-1).body);
+      assert.equal(forwarded.max_tokens, 64);
+      assert.equal(forwarded.model, 'qwen2.5:0.5b');
+    });
+
+    test('lowers a caller max_tokens above the cap, keeps one below it', async () => {
+      await cappedChat({
+        model: 'qwen2.5:0.5b',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 1000,
+      });
+      assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 64);
+
+      await cappedChat({
+        model: 'qwen2.5:0.5b',
+        messages: [{ role: 'user', content: 'Hello' }],
+        max_tokens: 16,
+      });
+      assert.equal(JSON.parse(upstreamRequests.at(-1).body).max_tokens, 16);
+    });
+
+    test('leaves non-chat routes such as embeddings untouched', async () => {
+      const body = { model: 'qwen3-embedding:0.6b', input: 'hi' };
+      await fetch(`${cappedUrl}/v1/embeddings`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
+    });
+
+    test('without the option the body is forwarded verbatim', async () => {
+      const body = {
+        model: 'qwen2.5:0.5b',
+        messages: [{ role: 'user', content: 'Hello' }],
+      };
+      await chat(body);
+
+      assert.deepEqual(JSON.parse(upstreamRequests.at(-1).body), body);
+    });
+  });
+
   test('serves a health endpoint without touching the model', async () => {
     const before = upstreamRequests.length;
     const res = await fetch(`${proxyUrl}/health`);
