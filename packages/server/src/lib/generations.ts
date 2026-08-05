@@ -25,6 +25,9 @@ export type PersistedGeneration = {
   routing: Record<string, unknown> | null;
   extraction: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
+  content_redacted_at: Date | null;
+  content_redacted_by_principal_type: string | null;
+  content_redacted_by_principal_id: string | null;
   created_at: Date;
   updated_at: Date;
 };
@@ -62,31 +65,14 @@ const mapGeneration = (
     agent_version: gen.agentVersion,
     routing: gen.routing,
     extraction: gen.extraction,
-    // Caller-owned bag, verbatim. `pendingState` has no entry here at all — it
-    // is its own column, so there is no filter step to forget a field from.
+    // Caller-owned bag, verbatim. `pendingState` has no entry here at all.
     metadata: gen.metadata,
+    content_redacted_at: gen.contentRedactedAt,
+    content_redacted_by_principal_type: gen.contentRedactedByPrincipalType,
+    content_redacted_by_principal_id: gen.contentRedactedByPrincipalId,
     created_at: gen.createdAt,
     updated_at: gen.updatedAt,
   };
-};
-
-// Validates caller-supplied generation metadata. Shared by the create-agent-
-// generation route and the update-generation route. Returns an error message,
-// or null when valid. There is no reserved-key list: every piece of state the
-// server owns is its own typed column, so nothing written into this bag can
-// reach platform state — a key spelled `action_id` is just an annotation.
-export const validateGenerationMetadata = (
-  metadata: unknown
-): string | null => {
-  if (
-    typeof metadata !== 'object' ||
-    metadata === null ||
-    Array.isArray(metadata)
-  ) {
-    return 'metadata must be a JSON object';
-  }
-
-  return null;
 };
 
 const findInitiatorGeneration = async (args: {

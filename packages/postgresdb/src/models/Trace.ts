@@ -116,9 +116,25 @@ export class Trace extends Model {
   declare stepCount: number;
 
   // Structured error payload recorded when a generation in this trace fails
-  // (e.g. upstream AI provider errors).
+  // (e.g. upstream AI provider errors). Cleared by a content purge: an error
+  // payload can carry a tool's request/response bodies, so it is content and
+  // not part of the auditable skeleton.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare error: Record<string, unknown> | null;
+
+  // Content-purge marker. When set, the trace's steps file has been deleted
+  // from storage and its content fields cleared; the row survives as an
+  // auditable skeleton (ids, timestamps, step count) so a purge is provable
+  // rather than indistinguishable from a resource that never existed.
+  // The principal pair mirrors Generation's `startedByPrincipal*` columns.
+  @Column({ type: DataType.DATE, allowNull: true })
+  declare contentRedactedAt: Date | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare contentRedactedByPrincipalType: string | null;
+
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare contentRedactedByPrincipalId: string | null;
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

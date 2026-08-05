@@ -34,7 +34,17 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `last_activity_at`          | string \| null | Last activity timestamp                                                                              |
 | `stop_reason`               | string \| null | Why the generation stopped (e.g. `stop`, `error`, `depth_guard`)                                     |
 | `error`                     | object \| null | Structured error payload recorded when the generation failed (see [Error Recording](#error-recording)) |
-| `metadata`                  | object \| null | Non-sensitive structured metadata: caller-supplied key/value pairs plus server-written keys (see [Metadata](#metadata)) |
+| `metadata`                  | object \| null | Caller-owned key/value annotations, returned verbatim (see [Metadata](#metadata))                    |
+| `action_id`                 | string \| null | Logical action label supplied on the generate request                                                |
+| `trigger_id`                | string \| null | Trigger that initiated the generation                                                                |
+| `orchestration_run_id`      | string \| null | Orchestration run that dispatched the generation                                                     |
+| `node_id`                   | string \| null | Node within that run                                                                                 |
+| `agent_version`             | number \| null | Agent config version that served the generation                                                      |
+| `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
+| `extraction`                | object \| null | Memory-extraction summary for this turn (see [`extraction`](#extraction--memory-extraction-summary))  |
+| `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |
+| `content_redacted_by_principal_type` | string \| null | Principal kind that purged the content (`user` or `api_key`)                                |
+| `content_redacted_by_principal_id` | string \| null | Public ID of that principal — the key's own id for API-key auth                               |
 | `created_at`                | string         | ISO 8601 creation timestamp                                                                          |
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
 
@@ -134,6 +144,18 @@ When an agent is configured with `knowledge_config.extraction` and `write_memory
 | `skipped`    | Number of candidates skipped (e.g. duplicates)           |
 
 See [Knowledge](./knowledge.md) for how `write_memory_id` and `extraction` are configured on an agent.
+
+### Content Purge
+
+`DELETE /generations/{generation_id}/content` clears the generation's content — `metadata`, `error`, `extraction`, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
+
+The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
+
+The operation is idempotent: a second purge succeeds and leaves the original `content_redacted_at` untouched.
+
+:::warning
+A generation purge does **not** delete the parent trace's steps object, which holds this generation's content alongside its siblings'. To erase a run's content completely, purge the trace — `DELETE /traces/{trace_id}/content` deletes the steps bytes from storage and cascades the content purge to every generation in the tree. See [Traces](./traces.md#content-purge).
+:::
 
 ### Sub-agent invocations
 

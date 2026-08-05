@@ -1,3 +1,4 @@
+import { getGenerationPendingState } from 'src/lib/generationPendingState';
 import { updateGenerationRecord } from 'src/lib/generations';
 
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
@@ -57,6 +58,7 @@ describe('Generations', () => {
                 'generations:GetGeneration',
                 'generations:ListGenerations',
                 'generations:UpdateGeneration',
+                'generations:PurgeGenerationContent',
                 'traces:GetTrace',
               ],
             },
@@ -496,5 +498,103 @@ describe('Generations', () => {
         reviewer: 'alice',
       });
     });
+  });
+
+  describe('DELETE /api/v1/generations/:generation_id/content', () => {
+    // Each purge is destructive, so seed a dedicated generation per test.
+    const seedGeneration = async (suffix: string): Promise<string> => {
+      const genResponse = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({
+          messages: [{ role: 'user', content: `hello ${suffix}` }],
+          action_id: `act_${suffix}`,
+          metadata: { ticket_id: `OPS-${suffix}` },
+        });
+      expect(genResponse.status).toBe(502);
+      const id = genResponse.body.error.meta.generation_id;
+      await updateGenerationRecord({
+        publicId: id,
+        extraction: { candidates: 1, created: 1, updated: 0, skipped: 0 },
+        pendingState: { messages: [{ role: 'user', content: 'secret' }] },
+      });
+      return id;
+    };
+
+    test('returns 401 when unauthenticated', async () => {
+      const response = await testClient.delete(
+        `/api/v1/generations/${failedGenerationId}/content`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('returns 403 when user lacks permission', async () => {
+      const response = await authenticatedTestClient(noPermToken).delete(
+        `/api/v1/generations/${failedGenerationId}/content`
+      );
+      expect(response.status).toBe(403);
+    });
+
+    test('returns 404 when generation does not exist', async () => {
+      const response = await authenticatedTestClient(userToken).delete(
+        '/api/v1/generations/gen_does_not_exist/content'
+      );
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('clears content and preserves the usage/audit skeleton', async () => {
+      const genId = await seedGeneration('purge1');
+
+      const response = await authenticatedTestClient(userToken).delete(
+        `/api/v1/generations/${genId}/content`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.id).toBe(genId);
+      expect(response.body.content_redacted_at).not.toBeNull();
+      expect(response.body.content_redacted_by_principal_type).toBe('user');
+
+      // Content fields are cleared.
+      expect(response.body.metadata).toBeNull();
+      expect(response.body.error).toBeNull();
+      expect(response.body.extraction).toBeNull();
+
+      // Usage attribution and the lifecycle skeleton survive — the billing
+      // ledger must outlive a tenant's erasure of the content.
+      expect(response.body.action_id).toBe('act_purge1');
+      expect(response.body.status).toBe('failed');
+      expect(response.body.started_at).toBeDefined();
+      expect(response.body.agent_id).toBeDefined();
+    }, 60000);
+
+    test('destroys the internal recovery state, not just the response view', async () => {
+      const genId = await seedGeneration('purge2');
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/generations/${genId}/content`
+      );
+
+      // Read the column directly: `pendingState` never appears in a response,
+      // so asserting on the body could not prove the history is gone.
+      const stored = await getGenerationPendingState({ publicId: genId });
+      expect(stored).toBeNull();
+    }, 60000);
+
+    test('is idempotent — a second purge succeeds without moving the timestamp', async () => {
+      const genId = await seedGeneration('purge3');
+
+      const first = await authenticatedTestClient(userToken).delete(
+        `/api/v1/generations/${genId}/content`
+      );
+      expect(first.status).toBe(200);
+
+      const second = await authenticatedTestClient(userToken).delete(
+        `/api/v1/generations/${genId}/content`
+      );
+      expect(second.status).toBe(200);
+      expect(second.body.content_redacted_at).toBe(
+        first.body.content_redacted_at
+      );
+    }, 60000);
   });
 });

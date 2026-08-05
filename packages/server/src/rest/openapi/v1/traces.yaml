@@ -181,6 +181,62 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/traces/{trace_id}/content:
+    delete:
+      tags:
+        - Traces
+      summary: Purge trace content
+      description: >
+        Deletes the trace's steps object from storage and clears its content
+        columns (`file_id`, `error`), cascading to every descendant trace and to
+        all of their generations. A descendant holds its own steps object
+        covering the same run, so the cascade is what makes the erasure
+        complete rather than merely partial.
+
+
+        The rows survive as auditable skeletons with `content_redacted_at` set —
+        ids, timestamps, step counts, and the generations' usage-attribution
+        fields are preserved, because the billing and audit ledger must outlive a
+        tenant's erasure of the content. A purged trace therefore reads back as a
+        skeleton, not a 404: a 404 would prove nothing.
+
+
+        Idempotent — purging an already-purged trace succeeds and leaves the
+        original `content_redacted_at` in place.
+      operationId: purgeTraceContent
+      parameters:
+        - name: trace_id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Public ID of the trace
+      responses:
+        '200':
+          description: The purged trace skeleton
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Trace'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Trace not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -246,6 +302,27 @@ components:
               example: 'Provider returned 402: insufficient credits'
             meta:
               type: object
+        content_redacted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When the trace's content was purged. Non-null means the steps object
+            has been deleted from storage and the content columns cleared, while
+            this row survives as an auditable skeleton (ids, timestamps, step
+            count). A purged trace still reads back as a skeleton with this
+            marker set rather than as a 404, so the erasure is provable.
+        content_redacted_by_principal_type:
+          type: string
+          nullable: true
+          description: Principal kind that purged the content ('user' or 'api_key')
+          example: user
+        content_redacted_by_principal_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the principal that purged the content — the API key's
+            own id for key auth, so the record names which key acted.
         created_at:
           type: string
           format: date-time
@@ -284,6 +361,27 @@ components:
         created_at:
           type: string
           format: date-time
+        content_redacted_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >
+            When the trace's content was purged. Non-null means the steps object
+            has been deleted from storage and the content columns cleared, while
+            this row survives as an auditable skeleton (ids, timestamps, step
+            count). A purged trace still reads back as a skeleton with this
+            marker set rather than as a 404, so the erasure is provable.
+        content_redacted_by_principal_type:
+          type: string
+          nullable: true
+          description: Principal kind that purged the content ('user' or 'api_key')
+          example: user
+        content_redacted_by_principal_id:
+          type: string
+          nullable: true
+          description: >
+            Public ID of the principal that purged the content — the API key's
+            own id for key auth, so the record names which key acted.
         children:
           type: array
           description: Child traces triggered by sub-agent calls from this trace

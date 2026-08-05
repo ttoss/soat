@@ -15,6 +15,11 @@
       "operationId": "getTraceTree",
       "action": "traces:GetTraceTree",
       "description": "Get the full execution tree for a trace"
+    },
+    {
+      "operationId": "purgeTraceContent",
+      "action": "traces:PurgeTraceContent",
+      "description": "Purge a trace's content, deleting its steps file from storage and cascading to descendants and generations"
     }
   ]
 }

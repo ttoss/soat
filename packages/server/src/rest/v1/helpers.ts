@@ -3,6 +3,7 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import type { RedactionPrincipal } from 'src/lib/contentPurge';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -225,4 +226,18 @@ export const resolveWriteProjectId = async (args: {
   }
 
   return projectIds![0];
+};
+
+/**
+ * The principal credited with a content purge (#836). For API-key auth the id
+ * is the key's own public id (`key_…`) so an erasure record names which key
+ * acted, not just that a key did — the same rule `tasks.ts` and the audit
+ * middleware apply. Resolved from the auth context only; never from a body.
+ */
+export const redactionPrincipalFromCtx = (ctx: Context): RedactionPrincipal => {
+  const apiKeyPublicId = ctx.authUser!.apiKeyPublicId;
+  if (apiKeyPublicId) {
+    return { principalType: 'api_key', principalId: apiKeyPublicId };
+  }
+  return { principalType: 'user', principalId: ctx.authUser!.publicId };
 };

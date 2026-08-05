@@ -18,6 +18,9 @@ export type Trace = {
   parent_trace_id: string | null;
   root_trace_id: string | null;
   error: Record<string, unknown> | null;
+  content_redacted_at: Date | null;
+  content_redacted_by_principal_type: string | null;
+  content_redacted_by_principal_id: string | null;
   created_at: Date;
 };
 
@@ -46,7 +49,7 @@ export const serializeSteps = (steps: unknown[]): unknown[] => {
   ) as unknown[];
 };
 
-const mapTrace = (
+export const mapTrace = (
   row: InstanceType<(typeof db)['Trace']> & {
     project?: InstanceType<(typeof db)['Project']>;
     agent?: InstanceType<(typeof db)['Agent']>;
@@ -68,6 +71,13 @@ const mapTrace = (
     parent_trace_id: row.parentTrace?.publicId ?? null,
     root_trace_id: row.rootTrace?.publicId ?? null,
     error: row.error,
+    // Redaction marker. A purged trace still reads back as a skeleton — with
+    // `file_id` null and this timestamp set — rather than as a 404, so the
+    // erasure is provable instead of indistinguishable from a resource that
+    // never existed (#836).
+    content_redacted_at: row.contentRedactedAt,
+    content_redacted_by_principal_type: row.contentRedactedByPrincipalType,
+    content_redacted_by_principal_id: row.contentRedactedByPrincipalId,
     created_at: row.createdAt,
   };
 };

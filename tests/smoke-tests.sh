@@ -3082,6 +3082,84 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
     exit 1
   fi
   echo "Generation retrieval endpoint: OK (status: $GENERATION_RETURNED_STATUS)"
+
+  # 34a2. Content purge (#836) — the trace's steps bytes are deleted from
+  # storage and the content purge cascades to the trace's generations, while
+  # the auditable skeleton (ids, counters, usage attribution) survives.
+  echo "--- Purging trace content for $CLIENT_TRACE_ID ---"
+  TRACE_FILE_ID=$(printf '%s\n' "$TRACE_GET_RESP" | jq -r '.file_id // empty')
+
+  PURGE_RESP=$($SOAT_CLI purge-trace-content --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
+  PURGED_AT=$(printf '%s\n' "$PURGE_RESP" | jq -r '.content_redacted_at // empty')
+  PURGED_FILE_ID=$(printf '%s\n' "$PURGE_RESP" | jq -r '.file_id')
+  PURGED_BY=$(printf '%s\n' "$PURGE_RESP" | jq -r '.content_redacted_by_principal_type // empty')
+  if [ -z "$PURGED_AT" ] || [ "$PURGED_FILE_ID" != "null" ] || [ -z "$PURGED_BY" ]; then
+    echo "ERROR: purge-trace-content did not redact the trace" >&2
+    echo "$PURGE_RESP" >&2
+    exit 1
+  fi
+  echo "Trace content purge: OK (redacted by $PURGED_BY)"
+
+  # A purged trace must still read back as a skeleton — a 404 would prove
+  # nothing about the erasure.
+  PURGED_GET=$($SOAT_CLI get-trace --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
+  PURGED_GET_AT=$(printf '%s\n' "$PURGED_GET" | jq -r '.content_redacted_at // empty')
+  if [ -z "$PURGED_GET_AT" ]; then
+    echo "ERROR: purged trace did not read back as a skeleton with a redaction marker" >&2
+    echo "$PURGED_GET" >&2
+    exit 1
+  fi
+  echo "Purged trace reads back as a skeleton: OK"
+
+  # The bytes are gone, not merely unreferenced: the backing File row no longer
+  # resolves through the Files API.
+  if [ -n "$TRACE_FILE_ID" ]; then
+    if $SOAT_CLI get-file --file-id "$TRACE_FILE_ID" >/dev/null 2>&1; then
+      echo "ERROR: trace steps file '$TRACE_FILE_ID' still resolves after a purge" >&2
+      exit 1
+    fi
+    echo "Trace steps file removed from storage: OK"
+  fi
+
+  # The cascade reached the generation, and its usage attribution survived.
+  PURGED_GEN=$($SOAT_CLI get-generation --generation-id "$FIRST_GENERATION_ID" | sanitize_json)
+  PURGED_GEN_AT=$(printf '%s\n' "$PURGED_GEN" | jq -r '.content_redacted_at // empty')
+  PURGED_GEN_STATUS=$(printf '%s\n' "$PURGED_GEN" | jq -r '.status // empty')
+  if [ -z "$PURGED_GEN_AT" ] || [ -z "$PURGED_GEN_STATUS" ]; then
+    echo "ERROR: trace purge did not cascade to generation '$FIRST_GENERATION_ID'" >&2
+    echo "$PURGED_GEN" >&2
+    exit 1
+  fi
+  echo "Purge cascaded to generations, skeleton intact: OK"
+
+  # Idempotent: a second purge succeeds and does not move the timestamp.
+  REPURGE_RESP=$($SOAT_CLI purge-trace-content --trace-id "$CLIENT_TRACE_ID" | sanitize_json)
+  REPURGED_AT=$(printf '%s\n' "$REPURGE_RESP" | jq -r '.content_redacted_at // empty')
+  if [ "$REPURGED_AT" != "$PURGED_AT" ]; then
+    echo "ERROR: repeated purge moved content_redacted_at ('$PURGED_AT' -> '$REPURGED_AT')" >&2
+    exit 1
+  fi
+  echo "Trace content purge is idempotent: OK"
+
+  # 34a3. Standalone generation content purge. Uses the earlier generation
+  # ($GEN_ID, from a different trace) so it exercises the endpoint on its own
+  # rather than through the trace cascade above.
+  echo "--- Purging generation content for $GEN_ID ---"
+  GEN_PURGE_RESP=$($SOAT_CLI purge-generation-content --generation-id "$GEN_ID" | sanitize_json)
+  GEN_PURGED_AT=$(printf '%s\n' "$GEN_PURGE_RESP" | jq -r '.content_redacted_at // empty')
+  GEN_PURGED_METADATA=$(printf '%s\n' "$GEN_PURGE_RESP" | jq -r '.metadata')
+  GEN_PURGED_STATUS=$(printf '%s\n' "$GEN_PURGE_RESP" | jq -r '.status // empty')
+  if [ -z "$GEN_PURGED_AT" ] || [ "$GEN_PURGED_METADATA" != "null" ]; then
+    echo "ERROR: purge-generation-content did not clear the generation's content" >&2
+    echo "$GEN_PURGE_RESP" >&2
+    exit 1
+  fi
+  if [ -z "$GEN_PURGED_STATUS" ]; then
+    echo "ERROR: purge-generation-content dropped the lifecycle skeleton" >&2
+    echo "$GEN_PURGE_RESP" >&2
+    exit 1
+  fi
+  echo "Generation content purge: OK (status preserved: $GEN_PURGED_STATUS)"
 else
   echo "ERROR: Generation response did not include trace_id" >&2
   exit 1
