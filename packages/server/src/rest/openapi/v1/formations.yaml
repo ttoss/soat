@@ -1017,7 +1017,6 @@ components:
         source_type:
           type: string
           enum: [manual, agent, extraction, orchestration]
-          nullable: true
           description: How this entry was created (defaults to manual)
         tags:
           type: array
@@ -1645,7 +1644,6 @@ components:
             - type: object
         default_class:
           type: string
-          nullable: true
           enum: [A, B, C, D]
           description: >-
             Applied when the `class` expression returns anything other than a
@@ -1670,7 +1668,7 @@ components:
         context_mode:
           type: string
           nullable: true
-          enum: [merge, replace]
+          enum: [merge, replace, null]
           description: >-
             How tool-fetched context combines with the caller-supplied context.
 
@@ -1755,8 +1753,8 @@ components:
             Controls what happens to the physical resource when it is removed
             from the stack. `delete` (default) deletes the physical resource.
             `retain` keeps the physical resource alive and only removes the
-            formation record.
-          nullable: true
+            formation record. Omit it to get `delete`; an explicit `null` is
+            rejected.
         metadata:
           type: object
           additionalProperties: true

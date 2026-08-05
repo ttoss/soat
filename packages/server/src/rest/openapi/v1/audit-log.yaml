@@ -228,6 +228,7 @@ components:
           enum:
             - user
             - api_key
+            - null
           description: >-
             Principal kind; null for platform-originated entries (those are
             identified by their `action`, e.g. `quotas:MonitorBreach`)
