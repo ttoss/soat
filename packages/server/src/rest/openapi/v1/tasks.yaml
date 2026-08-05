@@ -355,6 +355,10 @@ components:
             - completed
             - failed
             - unrouted
+            - null
+          description: >-
+            Status of the current state's dispatch. `null` until a state with an
+            automation is entered.
         pending_transition:
           type: string
           nullable: true

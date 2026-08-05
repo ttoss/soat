@@ -39,7 +39,7 @@ A guardrail is a **reusable template**: defined once, it can govern many tools a
 | `version`     | integer | Incremented on every `document` write; prior versions are archived |
 | `document`    | object  | The action-class document (see below)                              |
 | `context_tool_id` | string | Optional [tool](./tools.md) the platform calls at evaluation time to fetch fresh [guardrail context](#guards-and-guardrail-context) |
-| `context_mode` | string | How tool-fetched context combines with the caller-supplied context: `merge` (default) or `replace` |
+| `context_mode` | string \| null | How tool-fetched context combines with the caller-supplied context: `merge` (default) or `replace`. `null` when explicitly cleared |
 | `created_at`  | string  | ISO 8601 creation timestamp                                        |
 | `updated_at`  | string  | ISO 8601 last-updated timestamp                                    |
 

@@ -45,9 +45,9 @@ See the [Permissions Reference](../permissions.md) for the IAM action strings fo
 | `metadata`   | object \| null | Arbitrary caller-supplied JSON metadata — never written or read by the server. Key casing is preserved verbatim — unlike other response fields, `metadata` keys are not converted between `snake_case` and `camelCase`. Ingestion progress (`chunk_count`, `total_pages`) and failure info (`error`) live on `GET /documents/:id/status` instead — see [Polling Ingestion Status](#polling-ingestion-status). |
 | `tags`       | object \| null | Key-value string tags                                                                                              |
 | `content`    | string \| null | Joined chunk content — only present in `GET /documents/:id` responses when `status` is `ready`                     |
-| `chunk_strategy` | string \| null | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). `null` when the default (`whole`) was used. |
-| `chunk_size`   | number \| null | Window size in characters used when `chunk_strategy` is `size`. `null` otherwise.                                |
-| `chunk_overlap`| number \| null | Overlap in characters between consecutive windows used when `chunk_strategy` is `size`. `null` otherwise.        |
+| `chunk_strategy` | string | The chunk strategy the document was last (re-)ingested with (`page` \| `whole` \| `size`). Absent when the default (`whole`) was used — the key is omitted rather than sent as `null`. |
+| `chunk_size`   | number | Window size in characters used when `chunk_strategy` is `size`. Absent otherwise.                                |
+| `chunk_overlap`| number | Overlap in characters between consecutive windows used when `chunk_strategy` is `size`. Absent otherwise.        |
 | `created_at` | string         | ISO 8601 creation timestamp                                                                                        |
 | `updated_at` | string         | ISO 8601 last-updated timestamp                                                                                    |
 
