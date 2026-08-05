@@ -34,6 +34,10 @@ import {
 import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { type InlineToolDefinition } from './tools';
+import {
+  invalidateTraceContentModeCache,
+  validateAgentTraceContentMode,
+} from './traceContentPolicy';
 
 const log = createDebug('soat:agents');
 
@@ -73,6 +77,7 @@ export type MappedAgent = {
   output_schema: object | null;
   max_context_messages: number | null;
   single_session_per_actor: boolean;
+  trace_content_mode: string | null;
   guardrail_ids: string[] | null;
   /** Current config version; starts at 1 and bumps on every config change. */
   version: number;
@@ -127,6 +132,7 @@ const mapAgent = (
     max_context_messages: agent.maxContextMessages,
     single_session_per_actor: agent.singleSessionPerActor,
     guardrail_ids: agent.guardrailIds,
+    trace_content_mode: agent.traceContentMode,
     version: agent.version,
     // Normalized rather than echoed raw, so the release the API reports is
     // exactly the one the generation path will act on.
@@ -159,6 +165,7 @@ type AgentUpdateFields = {
   maxContextMessages?: number | null;
   singleSessionPerActor?: boolean;
   guardrailIds?: string[] | null;
+  traceContentMode?: string | null;
 };
 
 /**
@@ -277,9 +284,34 @@ export const resolveToolIdsToNames = async (args: {
  * Every declared cross-resource reference on an agent write, checked together.
  * Both are no-ops for an absent list, so create and update share one call.
  */
+/**
+ * Enforces the project's zero-retention floor: an agent may tighten to `none`
+ * but never loosen a `none` project back to `full` (#838). Checked on every
+ * write path (create and update alike), so a project-wide mandate cannot be
+ * escaped by an agent created afterwards.
+ */
+const assertTraceContentModeAllowed = async (args: {
+  traceContentMode: string | null | undefined;
+  projectId: number;
+}): Promise<void> => {
+  if (args.traceContentMode === undefined) return;
+
+  const project = await db.Project.findByPk(args.projectId, {
+    attributes: ['id', 'traceContentMode'],
+  });
+
+  const message = validateAgentTraceContentMode({
+    projectMode: project?.traceContentMode ?? 'none',
+    agentMode: args.traceContentMode,
+  });
+
+  if (message) throw new DomainError('VALIDATION_FAILED', message);
+};
+
 const assertAgentReferencesExist = async (args: {
   guardrailIds: string[] | null | undefined;
   activeToolIds: string[] | null | undefined;
+  traceContentMode?: string | null;
   projectId: number;
 }): Promise<void> => {
   await assertGuardrailsExist({
@@ -288,6 +320,10 @@ const assertAgentReferencesExist = async (args: {
   });
   await assertActiveToolsExist({
     activeToolIds: args.activeToolIds,
+    projectId: args.projectId,
+  });
+  await assertTraceContentModeAllowed({
+    traceContentMode: args.traceContentMode,
     projectId: args.projectId,
   });
 };
@@ -310,6 +346,7 @@ const AGENT_SCALAR_FIELDS = [
   'maxContextMessages',
   'singleSessionPerActor',
   'guardrailIds',
+  'traceContentMode',
 ] as const;
 
 const buildAgentUpdates = (
@@ -398,6 +435,21 @@ const resolveCreateModelBinding = async (args: {
 
 // ── Agent CRUD ───────────────────────────────────────────────────────────
 
+/** Column defaults applied to a new agent, before the caller's own fields. */
+const AGENT_CREATE_DEFAULTS = {
+  name: null,
+  instructions: null,
+  model: null,
+  maxSteps: 20,
+  toolChoice: null,
+  stopConditions: null,
+  activeToolIds: null,
+  stepRules: null,
+  boundaryPolicy: null,
+  temperature: null,
+  maxContextMessages: null,
+};
+
 export const createAgent = async (
   args: {
     projectId: number;
@@ -421,6 +473,7 @@ export const createAgent = async (
     maxContextMessages?: number;
     singleSessionPerActor?: boolean;
     guardrailIds?: string[] | null;
+    traceContentMode?: string | null;
   } & AgentVersionAuthorship
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
@@ -430,26 +483,14 @@ export const createAgent = async (
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
     activeToolIds: args.activeToolIds,
+    traceContentMode: args.traceContentMode,
     projectId: args.projectId,
   });
 
   const toolBindings = await resolveBindingsForCreate(args);
 
-  const defaults = {
-    name: null,
-    instructions: null,
-    model: null,
-    maxSteps: 20,
-    toolChoice: null,
-    stopConditions: null,
-    activeToolIds: null,
-    stepRules: null,
-    boundaryPolicy: null,
-    temperature: null,
-    maxContextMessages: null,
-  };
   const agent = await db.Agent.create({
-    ...defaults,
+    ...AGENT_CREATE_DEFAULTS,
     ...buildAgentUpdates(args),
     // Canonical storage only — the legacy columns stay null on new rows.
     toolBindings,
@@ -642,6 +683,7 @@ export const updateAgent = async (
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
     activeToolIds: args.activeToolIds,
+    traceContentMode: args.traceContentMode,
     projectId: (agent as unknown as { projectId: number }).projectId,
   });
 
@@ -665,6 +707,14 @@ export const updateAgent = async (
   await applyModelBindingUpdates({ agent, args, updates });
 
   await agent.update(updates);
+
+  // Tightening an agent to `none` must stop content writes on its next
+  // generation, not once the 30s cache entry expires.
+  invalidateTraceContentModeCache({
+    agentDbId: (agent as unknown as { id: number }).id,
+    projectDbId: (agent as unknown as { projectId: number }).projectId,
+    agentPublicId: args.id,
+  });
 
   const updated = (await db.Agent.findOne({
     where: { id: (agent as unknown as { id: number }).id },

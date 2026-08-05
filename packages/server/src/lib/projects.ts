@@ -12,6 +12,11 @@ import {
   assertProjectDefaultNotInherited,
 } from './modelRouteDefaults';
 import { paginatedList, resolvePagination } from './pagination';
+import {
+  clearTraceContentModeCache,
+  validateTraceContentMode,
+  validateTraceContentRetentionDays,
+} from './traceContentPolicy';
 
 const log = createDebug('soat:projects');
 
@@ -23,6 +28,8 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
     default_model_route_id: project.defaultModelRouteId,
     max_concurrent_runs: project.maxConcurrentRuns,
     audit_reads_enabled: project.auditReadsEnabled,
+    trace_content_retention_days: project.traceContentRetentionDays,
+    trace_content_mode: project.traceContentMode,
     created_at: project.createdAt,
     updated_at: project.updatedAt,
   };
@@ -163,6 +170,51 @@ const assertDefaultModelRouteWritable = async (args: {
   });
 };
 
+/** Every column a project update may set. Listed once so "provided means
+ * write it, absent means leave it" is one rule rather than one branch per
+ * field. */
+const PROJECT_UPDATABLE_FIELDS = [
+  'name',
+  'guardrailIds',
+  'defaultModelRouteId',
+  'maxConcurrentRuns',
+  'auditReadsEnabled',
+  'traceContentRetentionDays',
+  'traceContentMode',
+] as const;
+
+type ProjectUpdatableField = (typeof PROJECT_UPDATABLE_FIELDS)[number];
+
+type ProjectUpdateFields = Partial<Record<ProjectUpdatableField, unknown>>;
+
+const buildProjectUpdates = (
+  args: ProjectUpdateFields
+): Record<string, unknown> => {
+  const updates: Record<string, unknown> = {};
+  for (const field of PROJECT_UPDATABLE_FIELDS) {
+    if (args[field] !== undefined) updates[field] = args[field];
+  }
+  return updates;
+};
+
+/** Pure per-field validators, applied only to the fields a write provides. */
+const PROJECT_SCALAR_VALIDATORS: Partial<
+  Record<ProjectUpdatableField, (value: unknown) => string | null>
+> = {
+  maxConcurrentRuns: validateMaxConcurrentRuns,
+  traceContentRetentionDays: validateTraceContentRetentionDays,
+  traceContentMode: validateTraceContentMode,
+};
+
+const assertProjectScalarsValid = (args: ProjectUpdateFields): void => {
+  for (const [field, validate] of Object.entries(PROJECT_SCALAR_VALIDATORS)) {
+    const value = args[field as ProjectUpdatableField];
+    if (value === undefined) continue;
+    const error = validate(value);
+    if (error) throw new DomainError('VALIDATION_FAILED', error);
+  }
+};
+
 export const updateProject = async (args: {
   id: string;
   name?: string;
@@ -170,6 +222,8 @@ export const updateProject = async (args: {
   defaultModelRouteId?: string | null;
   maxConcurrentRuns?: number | null;
   auditReadsEnabled?: boolean;
+  traceContentRetentionDays?: number | null;
+  traceContentMode?: string;
 }) => {
   log('updateProject: id=%s name=%s', args.id, args.name);
 
@@ -190,31 +244,21 @@ export const updateProject = async (args: {
     });
   }
 
-  if (args.maxConcurrentRuns !== undefined) {
-    const error = validateMaxConcurrentRuns(args.maxConcurrentRuns);
-    if (error) {
-      throw new DomainError('VALIDATION_FAILED', error);
-    }
-  }
+  assertProjectScalarsValid(args);
 
-  const updates: Record<string, unknown> = {};
-  if (args.name !== undefined) updates.name = args.name;
-  if (args.guardrailIds !== undefined) updates.guardrailIds = args.guardrailIds;
-  if (args.defaultModelRouteId !== undefined) {
-    updates.defaultModelRouteId = args.defaultModelRouteId;
-  }
-  if (args.maxConcurrentRuns !== undefined) {
-    updates.maxConcurrentRuns = args.maxConcurrentRuns;
-  }
-  if (args.auditReadsEnabled !== undefined) {
-    updates.auditReadsEnabled = args.auditReadsEnabled;
-  }
-
-  await project.update(updates);
+  await project.update(buildProjectUpdates(args));
 
   // The audit middleware caches this flag to keep reads off its queue, so a
   // flip must take effect on the next request rather than after the TTL.
   invalidateReadAuditCache(args.id);
+
+  // The content-mode cache is keyed by agent, and a project flip changes the
+  // effective mode of every agent under it, so there is no narrower key to
+  // drop. Flipping to `none` must stop content writes on the next generation,
+  // not 30 seconds later.
+  if (args.traceContentMode !== undefined) {
+    clearTraceContentModeCache();
+  }
 
   return mapProject(project);
 };

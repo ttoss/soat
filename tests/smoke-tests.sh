@@ -107,6 +107,34 @@ if [ "$(printf '%s\n' "$PROJECT_LIMIT_RESP" | jq -r '.max_concurrent_runs')" != 
 fi
 echo "Project concurrency limit: OK"
 
+# 3a-ii-b. Trace-content lifecycle settings (#837/#838). Retention is opt-in,
+# so a fresh project must start with the window disabled and content stored.
+echo "--- Project trace-content lifecycle settings ---"
+PROJECT_LIFECYCLE_DEFAULTS=$($SOAT_CLI get-project --project-id "$PROJECT_PUBLIC_ID")
+if [ "$(printf '%s\n' "$PROJECT_LIFECYCLE_DEFAULTS" | jq -r '.trace_content_retention_days')" != "null" ] ||
+  [ "$(printf '%s\n' "$PROJECT_LIFECYCLE_DEFAULTS" | jq -r '.trace_content_mode')" != "full" ]; then
+  echo "ERROR: a new project did not default to retention-disabled + content-stored" >&2
+  echo "$PROJECT_LIFECYCLE_DEFAULTS" >&2
+  exit 1
+fi
+
+PROJECT_RETENTION_RESP=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --trace_content_retention_days 90)
+if [ "$(printf '%s\n' "$PROJECT_RETENTION_RESP" | jq -r '.trace_content_retention_days')" != "90" ]; then
+  echo "ERROR: update-project did not set trace_content_retention_days" >&2
+  echo "$PROJECT_RETENTION_RESP" >&2
+  exit 1
+fi
+
+# Cleared again so the rest of the suite runs with retention off — a 90-day
+# window would never fire here, but leaving it set would be misleading.
+PROJECT_RETENTION_CLEARED=$($SOAT_CLI update-project --project-id "$PROJECT_PUBLIC_ID" --trace_content_retention_days null)
+if [ "$(printf '%s\n' "$PROJECT_RETENTION_CLEARED" | jq -r '.trace_content_retention_days')" != "null" ]; then
+  echo "ERROR: update-project did not clear trace_content_retention_days" >&2
+  echo "$PROJECT_RETENTION_CLEARED" >&2
+  exit 1
+fi
+echo "Project retention window set/cleared: OK"
+
 # 3a-iii. Orchestration queue stats endpoint
 echo "--- Orchestration queue stats ---"
 QUEUE_STATS_RESP=$($SOAT_CLI get-queue-stats)
@@ -3154,6 +3182,50 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
     exit 1
   fi
   echo "Trace content purge is idempotent: OK"
+
+  # 34a2b. Zero-retention (#838) — an agent tightened to `none` never writes
+  # its content in the first place, so there is nothing to purge afterwards.
+  echo "--- Zero-retention agent ---"
+  ZR_AGENT_RESP=$($SOAT_CLI create-agent \
+    --project_id "$PROJECT_PUBLIC_ID" \
+    --ai_provider_id "$AI_PROVIDER_ID" \
+    --model "qwen2.5:0.5b" \
+    --name smoke-zero-retention-agent \
+    --instructions "Answer in one short sentence." \
+    --trace_content_mode none)
+  ZR_AGENT_ID=$(printf '%s\n' "$ZR_AGENT_RESP" | jq -r '.id')
+  if [ "$(printf '%s\n' "$ZR_AGENT_RESP" | jq -r '.trace_content_mode')" != "none" ]; then
+    echo "ERROR: create-agent did not persist trace_content_mode=none" >&2
+    echo "$ZR_AGENT_RESP" >&2
+    exit 1
+  fi
+
+  ZR_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$ZR_AGENT_ID" \
+    --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
+  ZR_TRACE_ID=$(printf '%s\n' "$ZR_GEN_RESP" | jq -r '.trace_id')
+
+  ZR_TRACE=$($SOAT_CLI get-trace --trace-id "$ZR_TRACE_ID" | sanitize_json)
+  ZR_FILE_ID=$(printf '%s\n' "$ZR_TRACE" | jq -r '.file_id')
+  ZR_REDACTED_AT=$(printf '%s\n' "$ZR_TRACE" | jq -r '.content_redacted_at // empty')
+  ZR_REDACTED_BY=$(printf '%s\n' "$ZR_TRACE" | jq -r '.content_redacted_by_principal_id // empty')
+  if [ "$ZR_FILE_ID" != "null" ] || [ -z "$ZR_REDACTED_AT" ] ||
+    [ "$ZR_REDACTED_BY" != "zero_retention" ]; then
+    echo "ERROR: zero-retention agent still wrote trace content" >&2
+    echo "$ZR_TRACE" >&2
+    exit 1
+  fi
+  echo "Zero-retention agent wrote no steps file: OK"
+
+  # The skeleton survives — a zero-retention run is still auditable and still
+  # metered, which is what makes the mode usable in production.
+  if [ "$(printf '%s\n' "$ZR_TRACE" | jq -r '.id')" != "$ZR_TRACE_ID" ]; then
+    echo "ERROR: zero-retention trace did not read back as a skeleton" >&2
+    echo "$ZR_TRACE" >&2
+    exit 1
+  fi
+  echo "Zero-retention skeleton readable: OK"
+
+  $SOAT_CLI delete-agent --agent-id "$ZR_AGENT_ID" --force true
 
   # 34a3. Standalone generation content purge. Uses the earlier generation
   # ($GEN_ID, from a different trace) so it exercises the endpoint on its own

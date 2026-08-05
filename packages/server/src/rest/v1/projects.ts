@@ -129,31 +129,48 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
       typeof body.audit_reads_enabled === 'boolean'
         ? body.audit_reads_enabled
         : undefined,
+    // An explicit `null` disables retention. Any other non-conforming value is
+    // forwarded so the lib rejects it with a 400 rather than being dropped.
+    traceContentRetentionDays: Object.prototype.hasOwnProperty.call(
+      body,
+      'trace_content_retention_days'
+    )
+      ? (body.trace_content_retention_days as number | null)
+      : undefined,
+    traceContentMode: Object.prototype.hasOwnProperty.call(
+      body,
+      'trace_content_mode'
+    )
+      ? (body.trace_content_mode as string)
+      : undefined,
   };
 };
 
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
   if (!requireAdmin(ctx, 'projects:UpdateProject')) return;
 
+  const fields = parseProjectPatchFields(
+    ctx.request.body as Record<string, unknown>
+  );
   const {
     name,
     guardrailIds,
     maxConcurrentRuns,
     defaultModelRouteId,
     auditReadsEnabled,
-  } = parseProjectPatchFields(ctx.request.body as Record<string, unknown>);
+    traceContentRetentionDays,
+    traceContentMode,
+  } = fields;
 
   if (
-    name === undefined &&
-    guardrailIds === undefined &&
-    maxConcurrentRuns === undefined &&
-    defaultModelRouteId === undefined &&
-    auditReadsEnabled === undefined
+    Object.values(fields).every((value) => {
+      return value === undefined;
+    })
   ) {
     ctx.status = 400;
     ctx.body = {
       error:
-        'name, guardrail_ids, max_concurrent_runs, default_model_route_id, or audit_reads_enabled is required',
+        'name, guardrail_ids, max_concurrent_runs, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required',
     };
     return;
   }
@@ -178,6 +195,8 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
     maxConcurrentRuns,
     defaultModelRouteId,
     auditReadsEnabled,
+    traceContentRetentionDays,
+    traceContentMode,
   });
 
   ctx.body = project;

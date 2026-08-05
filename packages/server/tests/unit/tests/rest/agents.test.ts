@@ -1968,4 +1968,95 @@ describe('Agents', () => {
       expect(res.status).toBe(400);
     });
   });
+  describe('trace_content_mode (zero-retention)', () => {
+    test('defaults to null — the agent inherits its project', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'zr-default',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.trace_content_mode).toBeNull();
+    });
+
+    test('an agent can tighten a storing project to none', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'zr-tightened',
+          trace_content_mode: 'none',
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.trace_content_mode).toBe('none');
+    });
+
+    test('an existing agent can be tightened by update', async () => {
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'zr-to-tighten',
+        });
+
+      const res = await authenticatedTestClient(userToken)
+        .patch(`/api/v1/agents/${created.body.id}`)
+        .send({ trace_content_mode: 'none' });
+
+      expect(res.status).toBe(200);
+      expect(res.body.trace_content_mode).toBe('none');
+    });
+
+    test('rejects an unknown mode with 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: projectId,
+          ai_provider_id: aiProviderId,
+          name: 'zr-bogus',
+          trace_content_mode: 'partial',
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('an agent cannot loosen a zero-retention project back to full', async () => {
+      // The project is a floor. Without this, a project-wide zero-retention
+      // mandate could be escaped simply by creating another agent under it.
+      const zeroProject = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Agent ZR Floor Project' });
+      await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/projects/${zeroProject.body.id}`)
+        .send({ trace_content_mode: 'none' });
+
+      const provider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: zeroProject.body.id,
+          name: 'ZR Floor Provider',
+          provider: 'openai',
+          default_model: 'gpt-4o-mini',
+        });
+
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          project_id: zeroProject.body.id,
+          ai_provider_id: provider.body.id,
+          name: 'zr-escapee',
+          trace_content_mode: 'full',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toMatch(/cannot store content/i);
+    });
+  });
 });

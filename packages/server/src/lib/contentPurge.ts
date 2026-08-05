@@ -5,6 +5,10 @@ import { db } from '../db';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
+import {
+  PURGED_GENERATION_CONTENT,
+  PURGED_TRACE_CONTENT,
+} from './traceContentPolicy';
 import { getTrace, type Trace } from './traces';
 
 const log = createDebug('soat:content-purge');
@@ -18,31 +22,6 @@ export type RedactionPrincipal = {
   principalType: string;
   principalId: string;
 };
-
-/**
- * Columns a generation content purge clears.
- *
- * `metadata` and `error` are caller/provider content, `extraction` is a summary
- * derived from that content, and `pendingState` holds the full message history
- * of a paused run. Everything the billing and audit ledger reads — ids,
- * timestamps, status, stop reason, and the usage-attribution columns — is
- * deliberately absent, so the row survives as a skeleton that proves the
- * erasure happened rather than a 404 that proves nothing (#836).
- */
-const PURGED_GENERATION_CONTENT = {
-  metadata: null,
-  error: null,
-  extraction: null,
-  pendingState: null,
-} as const;
-
-/** Trace columns a content purge clears. `fileId` drops the pointer to the
- * steps object, whose bytes are deleted after commit; `error` can carry a
- * tool's request/response bodies, so it is content and not skeleton. */
-const PURGED_TRACE_CONTENT = {
-  fileId: null,
-  error: null,
-} as const;
 
 const redactionColumns = (args: {
   principal: RedactionPrincipal;

@@ -53,6 +53,7 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 | `output_schema`            | object        | JSON Schema constraining the model's final answer to a structured object — see [Structured Output](#structured-output)          |
 | `max_context_messages`     | number        | Maximum number of recent messages sent to the model per generation — see [Context Window Limiting](#context-window-limiting)     |
 | `single_session_per_actor` | boolean       | When `true`, only one open session per `actor_id` is allowed — see [Single Session Per Actor](#single-session-per-actor)         |
+| `trace_content_mode` | string \| null | `null` (default) inherits the project's setting; `none` opts this agent into [zero-retention](#zero-retention) — its trace and generation content is never written |
 | `version`                  | number        | Current config version, starting at `1` — see [Versioning and Staged Rollout](#versioning-and-staged-rollout)                    |
 | `active_release`            | object/null   | Staged rollout in progress, or `null` when all traffic serves this config — see [Staged Rollout](#staged-rollout)                |
 | `created_at`               | string        | ISO 8601 creation timestamp                                                                                                      |
@@ -374,6 +375,18 @@ Set `max_context_messages` to cap how many recent messages are sent to the model
 
 When `null` (default), all messages are included.
 
+### Zero-Retention
+
+`trace_content_mode: "none"` stops this agent's trace and generation content from ever being written — useful when one agent in an otherwise ordinary project handles regulated content.
+
+```bash
+soat patch-agent --agent_id agent_xyz --trace_content_mode none
+```
+
+`null` (the default) inherits the project's `trace_content_mode`. The agent may only **tighten**: setting `full` on an agent whose project is `none` is refused with `400 VALIDATION_FAILED`, so a project-wide mandate cannot be escaped by a new agent.
+
+The skeleton, usage attribution and cost metering are unaffected. The trade-off is that a generation paused on a client tool cannot be recovered after a server restart, because the state that would resume it is itself content. See [Traces — Zero-Retention Mode](./traces.md#zero-retention-mode) for the precise field list and the reasoning.
+
 ### Single Session Per Actor
 
 When `single_session_per_actor` is `true`, the server enforces that only one open session per `actor_id` exists at a time for that agent. A second `POST /agents/:id/sessions` with the same `actor_id` returns `409 Conflict` with error code `SINGLE_SESSION_CONFLICT` and `meta.session_id` pointing to the existing session.
@@ -532,7 +545,7 @@ soat update-agent --agent-id agent_V1StGXR8Z5jdHi6B \
 
 #### What a version captures
 
-A version's `config` holds every mutable field of the agent — `instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `max_context_messages`, `single_session_per_actor`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name` — and none of its identity or bookkeeping fields (`id`, `project_id`, `version`, `active_release`, timestamps).
+A version's `config` holds every mutable field of the agent — `instructions`, `model`, `tool_bindings`, `max_steps`, `tool_choice`, `stop_conditions`, `active_tool_ids`, `step_rules`, `boundary_policy`, `temperature`, `knowledge_config`, `output_schema`, `max_context_messages`, `single_session_per_actor`, `trace_content_mode`, `guardrail_ids`, `ai_provider_id`, `model_route_id`, `name` — and none of its identity or bookkeeping fields (`id`, `project_id`, `version`, `active_release`, timestamps).
 
 Runtime-injected context is **not** part of a snapshot. A version records which `knowledge_config` applied, not the documents or memories it resolves: those keep their own histories and are pinned at generation time.
 

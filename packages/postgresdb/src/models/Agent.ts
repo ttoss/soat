@@ -139,6 +139,18 @@ export class Agent extends Model {
   declare guardrailIds: string[] | null;
 
   /**
+   * Agent-scope zero-retention setting (#838). `null` (the default) inherits
+   * the project's `traceContentMode`; `'none'` opts this agent out of content
+   * persistence even when the project stores content.
+   *
+   * The agent may only tighten: with a `'none'` project, `'full'` here is
+   * refused on write, so a project-wide zero-retention mandate cannot be
+   * escaped by an agent created later. Mirrors the project-guardrail floor.
+   */
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare traceContentMode: string | null;
+
+  /**
    * Current config version, starting at 1. Bumped by the shared lib update path
    * only when a write actually changes the config; each bump archives an
    * `AgentVersion` row.

@@ -72,6 +72,63 @@ The operation is idempotent: purging an already-purged trace succeeds and leaves
 
 What a purge deliberately does **not** touch is the usage and audit ledger. Each cascaded generation keeps its `action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version` and `routing`, along with its status and timestamps — billing and audit records must outlive a tenant's erasure of the content. See [Generations](./generations.md#content-purge) for the per-generation operation.
 
+### Retention Policy
+
+A purge on request still depends on someone remembering to ask. Setting `trace_content_retention_days` on a [project](./projects.md) makes it automatic: a daily sweep content-purges every trace in that project older than the window.
+
+```bash
+soat update-project --project_id proj_abc --trace_content_retention_days 90
+```
+
+- **Opt-in.** `null` is the default and disables retention entirely, so nothing a project already stored is destroyed by enabling the feature elsewhere. Clear it with `--trace_content_retention_days null`.
+- **Same purge path.** The sweep calls the same lib function `DELETE /traces/{id}/content` does — the same cascade, the same storage-aware byte deletion, the same `content_redacted_at` semantics, the same audit entries and `traces.content_purged` events. There is no second purge implementation to drift.
+- **Scoped to the project, not the agent.** A purge cascades down the trace subtree, and a nested agent call creates a child trace owned by a *different* agent. A per-agent window would therefore let a short-window root silently purge a child whose own agent asked for a longer one. Every trace in a subtree shares one project, so the project-scoped window has no such conflict.
+- **A run is purged as a unit.** The sweep selects root traces; when a root crosses the window, its whole subtree goes with it, including children written minutes later. Leaving a child behind would leave the same run's content readable by another path.
+- **Auditable, not anonymous.** Sweep-driven purges are stamped `content_redacted_by_principal_type: "system"`, `content_redacted_by_principal_id: "retention_sweep"`, so an automated erasure is distinguishable from one a user requested.
+
+Already-redacted traces are excluded from the due set, so a steady-state sweep costs work proportional to what is newly due rather than to all history.
+
+### Zero-Retention Mode
+
+Retention deletes content after the fact. Zero-retention never writes it. For a regulated tenant, "we never stored it" is a stronger claim than "we deleted it" — content that was never written cannot leak, cannot be missed by a sweep, and cannot sit in a backup.
+
+Set `trace_content_mode` to `none` on a [project](./projects.md) (every agent in it) or on a single [agent](./agents.md#zero-retention):
+
+```bash
+soat update-project --project_id proj_abc --trace_content_mode none   # whole project
+soat patch-agent --agent_id agent_xyz --trace_content_mode none          # one agent
+```
+
+**The project is a floor, the agent may only tighten.** An agent can set `none` under a storing project, but setting `full` under a `none` project is refused with `400`. Otherwise a project-wide mandate could be escaped by creating a new agent under it. An agent's `null` (the default) inherits the project.
+
+#### What is not written
+
+Exactly the field set a [content purge](#content-purge) clears — the two features share one definition, so a field can never be one a purge erases but zero-retention still persists:
+
+| Record | Not written |
+| --- | --- |
+| Trace | the steps object (no `File` row, no bytes), `error` |
+| Generation | `metadata`, `error`, `extraction`, `pending_state` |
+
+#### What is still written
+
+The skeleton, unchanged: ids, timestamps, `status`, `stop_reason`, `step_count`, and every usage-attribution column. Metering never depends on content, so cost, quotas and the audit ledger behave identically in this mode.
+
+Rows written in this mode carry `content_redacted_at` with `content_redacted_by_principal_id: "zero_retention"`. Reusing the purge marker means every existing reader already handles "content is unavailable here"; the principal id is what distinguishes never-stored from stored-then-erased.
+
+#### Trade-off: no recovery after a restart
+
+`pending_state` is the full message history of a generation paused on a client tool, and it is content — so it is not persisted in this mode. A generation still pauses and resumes normally within a running server (that state is held in memory), but **a generation paused when the server restarts cannot be recovered** and will not resume. This is the accepted cost of the mode; if restart-recovery matters more than never-stored, use [retention](#retention-policy) instead.
+
+## Configuration
+
+The retention sweep's schedule (not its per-project window, which is a project field):
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `CONTENT_RETENTION_SWEEP_INTERVAL_MS` | No | Sweep interval in milliseconds (default `86400000`, i.e. daily). |
+| `CONTENT_RETENTION_SWEEP_DISABLED` | No | Set to `true` to disable the sweep entirely. Projects keep their `trace_content_retention_days`; nothing is purged while it is off. |
+
 ## Debugging Joins (Trace, Generation, Session)
 
 When debugging a user flow, there are three related IDs:
