@@ -34,21 +34,6 @@ export const fetchIngestedDocById = (
   }) as Promise<IngestedDoc | null>;
 };
 
-/** Shared JSON parse for `Document.metadata` — never throws. */
-export const parseDocMetadata = (
-  metadata: string | null | undefined
-): Record<string, unknown> => {
-  if (!metadata) return {};
-  try {
-    const parsed: unknown = JSON.parse(metadata);
-    return parsed && typeof parsed === 'object'
-      ? (parsed as Record<string, unknown>)
-      : {};
-  } catch {
-    return {};
-  }
-};
-
 export type ChunkConfigInput = {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
@@ -70,26 +55,24 @@ export const resolveChunkConfig = (
 };
 
 /**
- * Persist chunks while keeping the document's progress metadata current.
+ * Persist chunks while keeping the document's progress state current.
  * Records the totals up front (so the status endpoint has a denominator) and
- * periodically rewrites `indexed_chunks`, which also bumps `updatedAt` to keep
- * a long-running ingestion from looking stalled (issue #4).
+ * periodically rewrites `indexedChunks`, which also bumps `updatedAt` to keep
+ * a long-running ingestion from looking stalled (issue #4). These are typed
+ * columns, not `metadata` — that bag is caller-owned and a `PATCH` replacing
+ * it must never disturb ingestion progress (#845).
  */
 const persistChunksWithProgress = async (args: {
   doc: InstanceType<(typeof db)['Document']>;
   docId: number;
-  fileId: string;
   totalPages: number;
   chunks: { content: string; chunkIndex: number; pageNumber?: number }[];
 }): Promise<void> => {
   const writeProgress = (indexed: number) => {
     return args.doc.update({
-      metadata: JSON.stringify({
-        source_file_id: args.fileId,
-        total_pages: args.totalPages,
-        total_chunks: args.chunks.length,
-        indexed_chunks: indexed,
-      }),
+      totalPages: args.totalPages,
+      totalChunks: args.chunks.length,
+      indexedChunks: indexed,
     });
   };
 
@@ -120,7 +103,6 @@ export const finalizeIngestedPages = async (
   args: ChunkConfigInput & {
     doc: InstanceType<(typeof db)['Document']>;
     docId: number;
-    fileId: string;
     docPath: string;
     pages: { text: string; pageNumber?: number }[];
     rule: MappedIngestionRule | null;
@@ -132,10 +114,8 @@ export const finalizeIngestedPages = async (
     await doc.update({
       status: 'failed',
       conversionAttemptId: null,
-      metadata: JSON.stringify({
-        source_file_id: args.fileId,
-        failure_reason: 'FILE_PARSE_FAILED',
-      }),
+      pendingDocPath: null,
+      failureReason: 'FILE_PARSE_FAILED',
     });
     log('finalizeIngestedPages: no extractable text docId=%d', docId);
     return;
@@ -150,7 +130,6 @@ export const finalizeIngestedPages = async (
   await persistChunksWithProgress({
     doc,
     docId,
-    fileId: args.fileId,
     totalPages: args.pages.length,
     chunks,
   });
@@ -163,17 +142,15 @@ export const finalizeIngestedPages = async (
   await doc.update({
     status: 'ready',
     conversionAttemptId: null,
+    pendingDocPath: null,
+    failureReason: null,
     // Persist the effective chunk config so the document reads back the settings
     // it was ingested with (formation round-trip / drift convergence).
     chunkStrategy: chunkConfig.strategy,
     chunkSize: chunkConfig.chunkSize ?? null,
     chunkOverlap: chunkConfig.chunkOverlap ?? null,
-    metadata: JSON.stringify({
-      source_file_id: args.fileId,
-      total_pages: args.pages.length,
-      total_chunks: chunks.length,
-      chunk_count: chunks.length,
-    }),
+    totalPages: args.pages.length,
+    totalChunks: chunks.length,
   });
 
   log('finalizeIngestedPages: ready docId=%d chunks=%d', docId, chunks.length);

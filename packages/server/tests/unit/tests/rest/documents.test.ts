@@ -645,6 +645,16 @@ describe('Documents', () => {
       );
     };
 
+    const getDocumentStatus = async (docId: string) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+      return res.body as {
+        chunk_count?: number;
+        error?: string;
+      };
+    };
+
     beforeAll(async () => {
       // unpdf uses ESM dynamic imports that don't work in Jest's CJS VM context.
       // Spy on extractPdfPages so the rest of the ingestion flow runs for real.
@@ -712,7 +722,8 @@ describe('Documents', () => {
         'ready'
       );
       expect(doc.status).toBe('ready');
-      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.chunk_count).toBe(1);
     });
 
     test('re-ingesting the same file_id into a different path returns 409 FILE_ALREADY_INGESTED (issue #797)', async () => {
@@ -775,7 +786,8 @@ describe('Documents', () => {
         ingestRes.body.id as string,
         'ready'
       );
-      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(3);
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.chunk_count).toBe(3);
     });
 
     test('chunk_strategy=whole collapses a multi-page PDF into one chunk', async () => {
@@ -801,7 +813,8 @@ describe('Documents', () => {
         ingestRes.body.id as string,
         'ready'
       );
-      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.chunk_count).toBe(1);
     });
 
     test('chunk_strategy=size splits text into overlapping windows', async () => {
@@ -828,7 +841,8 @@ describe('Documents', () => {
         ingestRes.body.id as string,
         'ready'
       );
-      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(3);
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.chunk_count).toBe(3);
     });
 
     test('ingests a text/markdown file as a single chunk by default', async () => {
@@ -848,7 +862,8 @@ describe('Documents', () => {
         ingestRes.body.id as string,
         'ready'
       );
-      expect((doc.metadata as Record<string, unknown>).chunk_count).toBe(1);
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.chunk_count).toBe(1);
     });
 
     test('document status is failed when file has no extractable text', async () => {
@@ -871,9 +886,8 @@ describe('Documents', () => {
         'failed'
       );
       expect(doc.status).toBe('failed');
-      expect((doc.metadata as Record<string, unknown>).failure_reason).toBe(
-        'FILE_PARSE_FAILED'
-      );
+      const status = await getDocumentStatus(doc.id as string);
+      expect(status.error).toBe('FILE_PARSE_FAILED');
     });
 
     test('GET /documents/:id returns status while processing', async () => {
@@ -961,9 +975,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).chunk_count
-      ).toBeGreaterThan(0);
+      const status = await getDocumentStatus(ingestRes.body.id);
+      expect(status.chunk_count).toBeGreaterThan(0);
     });
 
     test('?async=false sets failure reason on unparseable file', async () => {
@@ -981,9 +994,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('FILE_PARSE_FAILED');
+      const status = await getDocumentStatus(ingestRes.body.id);
+      expect(status.error).toBe('FILE_PARSE_FAILED');
     });
 
     test('?async=false sets failure reason RESOURCE_NOT_FOUND when file bytes are missing from storage', async () => {
@@ -1006,9 +1018,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('RESOURCE_NOT_FOUND');
+      const status = await getDocumentStatus(ingestRes.body.id);
+      expect(status.error).toBe('RESOURCE_NOT_FOUND');
     });
 
     test('failure_reason never serializes to [object Object] (issue #3)', async () => {
@@ -1027,8 +1038,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
-      const reason = (ingestRes.body.metadata as Record<string, unknown>)
-        .failure_reason;
+      const status = await getDocumentStatus(ingestRes.body.id);
+      const reason = status.error;
       expect(reason).not.toBe('[object Object]');
       expect(typeof reason).toBe('string');
       expect((reason as string).length).toBeGreaterThan(0);
@@ -1049,9 +1060,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('boom while parsing');
+      const status = await getDocumentStatus(ingestRes.body.id);
+      expect(status.error).toBe('boom while parsing');
     });
 
     test('?async=false on a file over the sync limit returns 413 (issue #3)', async () => {
@@ -1161,9 +1171,8 @@ describe('Documents', () => {
 
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('failed');
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).failure_reason
-      ).toBe('FILE_PARSE_FAILED');
+      const status = await getDocumentStatus(ingestRes.body.id);
+      expect(status.error).toBe('FILE_PARSE_FAILED');
     });
   });
 
@@ -1370,6 +1379,13 @@ describe('Documents', () => {
       throw new Error(`Timed out waiting for ${docId} -> ${targetStatus}`);
     };
 
+    const getDocumentStatus = async (docId: string) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/documents/${docId}/status`
+      );
+      return res.body as { chunk_count?: number; error?: string };
+    };
+
     beforeAll(() => {
       extractSpy = jest
         .spyOn(pdfModule, 'extractPdfPages')
@@ -1393,9 +1409,8 @@ describe('Documents', () => {
         .send({ file_id: fileId, project_id: projectId });
       expect(ingestRes.status).toBe(201);
       const docId = ingestRes.body.id as string;
-      expect(
-        (ingestRes.body.metadata as Record<string, unknown>).chunk_count
-      ).toBe(3);
+      const firstStatus = await getDocumentStatus(docId);
+      expect(firstStatus.chunk_count).toBe(3);
 
       extractSpy.mockResolvedValueOnce(['Page 1', 'Page 2', 'Page 3']);
       const reRes = await authenticatedTestClient(userToken)
@@ -1405,9 +1420,8 @@ describe('Documents', () => {
       expect(reRes.status).toBe(201);
       expect(reRes.body.id).toBe(docId);
       expect(reRes.body.status).toBe('ready');
-      expect((reRes.body.metadata as Record<string, unknown>).chunk_count).toBe(
-        1
-      );
+      const secondStatus = await getDocumentStatus(docId);
+      expect(secondStatus.chunk_count).toBe(1);
     });
 
     test('async re-ingest returns 202 then transitions to ready', async () => {

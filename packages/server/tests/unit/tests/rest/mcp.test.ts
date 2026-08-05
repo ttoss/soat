@@ -670,9 +670,12 @@ describe('MCP tools - happy path', () => {
           doc = parseResult(pollRes);
         }
         expect(doc.status).toBe('ready');
-        expect(
-          (doc.metadata as { chunk_count?: number })?.chunk_count
-        ).toBeGreaterThan(0);
+
+        const statusRes = await mcpCall('get-document-status', {
+          document_id: docId,
+        });
+        const status = parseResult(statusRes);
+        expect(status.chunk_count).toBeGreaterThan(0);
       } finally {
         spy.mockRestore();
       }

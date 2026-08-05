@@ -115,6 +115,53 @@ export class Document extends Model {
   })
   declare conversionAttemptId: string | null;
 
+  /**
+   * Destination path to apply to the backing File once ingestion completes.
+   * Computed at enqueue time and must survive the async-converter round trip
+   * (submitted here, read back by the ingestion callback), so it cannot live
+   * in `metadata` — that bag is caller-owned and callers may overwrite it
+   * mid-ingestion via `PATCH /documents/:id`.
+   */
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'pending_doc_path',
+  })
+  declare pendingDocPath: string | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'total_pages',
+  })
+  declare totalPages: number | null;
+
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'total_chunks',
+  })
+  declare totalChunks: number | null;
+
+  /**
+   * Live progress counter, rewritten periodically during chunk persistence
+   * purely to bump `updatedAt` so a long-running ingestion doesn't look
+   * stalled (see `isIngestionStale`). Not read back anywhere else.
+   */
+  @Column({
+    type: DataType.INTEGER,
+    allowNull: true,
+    field: 'indexed_chunks',
+  })
+  declare indexedChunks: number | null;
+
+  @Column({
+    type: DataType.STRING,
+    allowNull: true,
+    field: 'failure_reason',
+  })
+  declare failureReason: string | null;
+
   @Column({ type: DataType.DATE })
   declare createdAt: Date;
 

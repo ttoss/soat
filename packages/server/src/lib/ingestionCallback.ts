@@ -4,10 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { ChunkStrategy } from './chunking';
 import { parseConverterOutput } from './converterInvocation';
-import {
-  finalizeIngestedPages,
-  parseDocMetadata,
-} from './documentIngestionCore';
+import { finalizeIngestedPages } from './documentIngestionCore';
 import { verifyIngestionCallbackToken } from './ingestionCallbackToken';
 
 const log = createDebug('soat:documents');
@@ -66,18 +63,15 @@ export const isIngestionStale = (
  * ingestion-callback that completes first leaves this a no-op (`false`).
  */
 const failStaleConversion = async (
-  doc: InstanceType<(typeof db)['Document']>,
-  meta: Record<string, unknown>
+  doc: InstanceType<(typeof db)['Document']>
 ): Promise<boolean> => {
   const attemptId = doc.conversionAttemptId;
   const [affected] = await db.Document.update(
     {
       status: 'failed',
       conversionAttemptId: null,
-      metadata: JSON.stringify({
-        ...meta,
-        failure_reason: 'CONVERSION_TIMEOUT',
-      }),
+      pendingDocPath: null,
+      failureReason: 'CONVERSION_TIMEOUT',
     },
     {
       where: {
@@ -115,15 +109,13 @@ export const recoverStaleDocument = async (
 ): Promise<boolean> => {
   if (!isIngestionStale(doc)) return false;
 
-  const meta = parseDocMetadata(doc.metadata);
-
   if (doc.conversionAttemptId) {
-    return failStaleConversion(doc, meta);
+    return failStaleConversion(doc);
   }
 
   await doc.update({
     status: 'failed',
-    metadata: JSON.stringify({ ...meta, failure_reason: 'INGESTION_TIMEOUT' }),
+    failureReason: 'INGESTION_TIMEOUT',
   });
   log(
     'recoverStaleDocument: marked stalled ingestion failed id=%s',
@@ -153,44 +145,6 @@ const claimConversionAttempt = async (args: {
     }
   );
   return claimed > 0;
-};
-
-type ConversionContext = {
-  fileId: string;
-  docPath: string;
-  chunkStrategy?: ChunkStrategy;
-  chunkSize?: number;
-  chunkOverlap?: number;
-};
-
-/** Reads back the chunk config computed when the conversion was submitted. */
-const readConversionContext = (
-  doc: InstanceType<(typeof db)['Document']>
-): ConversionContext => {
-  const meta = parseDocMetadata(doc.metadata);
-  const fileId =
-    typeof meta.source_file_id === 'string' ? meta.source_file_id : '';
-  const conversion =
-    meta.conversion && typeof meta.conversion === 'object'
-      ? (meta.conversion as Record<string, unknown>)
-      : {};
-
-  return {
-    fileId,
-    docPath: typeof meta.doc_path === 'string' ? meta.doc_path : `/${fileId}`,
-    chunkStrategy:
-      typeof conversion.chunk_strategy === 'string'
-        ? (conversion.chunk_strategy as ChunkStrategy)
-        : undefined,
-    chunkSize:
-      typeof conversion.chunk_size === 'number'
-        ? conversion.chunk_size
-        : undefined,
-    chunkOverlap:
-      typeof conversion.chunk_overlap === 'number'
-        ? conversion.chunk_overlap
-        : undefined,
-  };
 };
 
 /**
@@ -253,16 +207,14 @@ export const completeIngestionCallback = async (args: {
     );
   }
 
-  const context = readConversionContext(doc);
   await finalizeIngestedPages({
     doc,
     docId: doc.id as number,
-    fileId: context.fileId,
-    docPath: context.docPath,
+    docPath: doc.pendingDocPath ?? `/${doc.publicId}`,
     pages: outcome.pages,
     rule: null,
-    chunkStrategy: context.chunkStrategy,
-    chunkSize: context.chunkSize,
-    chunkOverlap: context.chunkOverlap,
+    chunkStrategy: (doc.chunkStrategy as ChunkStrategy) ?? undefined,
+    chunkSize: doc.chunkSize ?? undefined,
+    chunkOverlap: doc.chunkOverlap ?? undefined,
   });
 };
