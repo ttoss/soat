@@ -1,20 +1,71 @@
+import { db } from '../db';
 import { DomainError } from '../errors';
 import type { GenerationResult } from './agentGenerationHelpers';
 import { createGeneration } from './agents';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
+import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from './orchestrations';
 import type { WorkflowDispatch } from './workflowsValidation';
 
-// Terminal statuses `startOrchestrationRun({ wait: true })` can settle a run
-// into other than success. Unlike a failed agent generation (which throws),
-// a failed/cancelled/expired orchestration run resolves normally with its
-// partial state — so runDispatch must check for these explicitly rather than
-// relying on a rejected promise, or a failed dispatch would look identical to
-// a successful one to its caller.
+// Terminal statuses a settled orchestration run can end in. Unlike a failed
+// agent generation (which throws), a failed/cancelled/expired orchestration
+// run resolves normally with its partial state — so runDispatch must check
+// for these explicitly rather than relying on a rejected promise, or a
+// failed dispatch would look identical to a successful one to its caller.
 const NON_SUCCESS_TERMINAL_STATUSES: ReadonlySet<
   MappedOrchestrationRun['status']
 > = new Set(['failed', 'cancelled', 'expired']);
+
+// A run has reached a resting point once it leaves these — `queued`/`running`
+// are transient, `sleeping` is a durable, scheduler-owned wait (#855).
+const IN_FLIGHT_STATUSES: ReadonlySet<MappedOrchestrationRun['status']> =
+  new Set(['queued', 'running', 'sleeping']);
+
+const sleep = (ms: number): Promise<void> => {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+};
+
+const pollIntervalMs = (): number => {
+  const envMs = Number(process.env.ORCHESTRATION_DISPATCH_POLL_INTERVAL_MS);
+  return Number.isFinite(envMs) && envMs > 0 ? envMs : 250;
+};
+
+/**
+ * Awaits a task-dispatched orchestration run's eventual resting point
+ * (`succeeded`/`failed`/`cancelled`/`expired`/`awaiting_input`) without ever
+ * blocking in-process for the wait itself. The run is started in durable,
+ * scheduler-driven mode (`startOrchestrationRun` without `wait`), so a
+ * `poll`/`delay` node's actual wait is offloaded to
+ * `orchestrationScheduler.ts` exactly like any other orchestration run
+ * (`persistScheduledWait` → `sleeping` → the scheduler wakes it) — this loop
+ * only checks whether that durable machinery has reached a resting point yet,
+ * it never itself holds a `setTimeout` open for the wait's duration (#855).
+ */
+const waitForOrchestrationRunSettlement = async (args: {
+  orchestrationRunId: string;
+}): Promise<MappedOrchestrationRun> => {
+  for (;;) {
+    const row = await db.OrchestrationRun.findOne({
+      where: { publicId: args.orchestrationRunId },
+      attributes: ['id', 'status'],
+    });
+    if (!row) {
+      throw new DomainError(
+        'ORCHESTRATION_RUN_NOT_FOUND',
+        `Run '${args.orchestrationRunId}' not found.`
+      );
+    }
+    if (
+      !IN_FLIGHT_STATUSES.has(row.status as MappedOrchestrationRun['status'])
+    ) {
+      return mapRunWithIncludes(row.id as number);
+    }
+    await sleep(pollIntervalMs());
+  }
+};
 
 export type DispatchResult = {
   result: unknown;
@@ -68,11 +119,17 @@ export const runDispatch = async (args: {
     };
   }
 
-  const run = await startOrchestrationRun({
+  // Started in durable/async mode (`wait` omitted) rather than `wait: true`:
+  // a task dispatch must never force the underlying run through the
+  // in-process `inlineWaits` path, or a poll/delay node sleeps the whole
+  // interval in this process instead of parking `sleeping` for the scheduler
+  // to wake (#855). `runDispatch` still resolves once the run settles — only
+  // *how* it waits changes, so callers (retry, on_complete/on_failure
+  // routing) are unaffected.
+  const started = await startOrchestrationRun({
     orchestrationPublicId: args.dispatch.orchestrationId!,
     projectIds: [args.projectId],
     input: args.inputs,
-    wait: true,
     onRunCreated: args.onDispatchStarted
       ? ({ orchestrationRunId }) => {
           return args.onDispatchStarted!({
@@ -81,6 +138,9 @@ export const runDispatch = async (args: {
           });
         }
       : undefined,
+  });
+  const run = await waitForOrchestrationRunSettlement({
+    orchestrationRunId: started.id,
   });
 
   if (NON_SUCCESS_TERMINAL_STATUSES.has(run.status)) {

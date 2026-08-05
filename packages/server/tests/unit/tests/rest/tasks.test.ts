@@ -3,6 +3,7 @@ import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
 import { sweepStalledTasks } from 'src/lib/tasksScheduler';
@@ -1928,6 +1929,83 @@ describe('Tasks', () => {
       }
       await flushTaskAutomations();
       genSpy.mockRestore();
+    });
+
+    test('a task-dispatched orchestration with a delay node parks durably as `sleeping` and resumes via the scheduler, without an in-process sleep (#855)', async () => {
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `delay-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'wait',
+                type: 'delay',
+                duration: '1s',
+                state_mapping: { 'state.waited': { var: 'output.waited' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      const wf = await dispatchWorkflow({
+        name: 'orch-delay-855',
+        onEnter: {
+          dispatch: {
+            kind: 'orchestration',
+            orchestration_id: orchestrationId,
+          },
+          on_complete: [{ when: true, transition: 'to_done' }],
+        },
+      });
+      const taskId = await startTask(wf, {});
+
+      const running = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          const ad = t.active_dispatch as {
+            id?: unknown;
+            status?: unknown;
+          } | null;
+          return (
+            !!ad && typeof ad.id === 'string' && ad.id.startsWith('orch_run_')
+          );
+        },
+      });
+      const orchestrationRunId = (running.active_dispatch as { id: string }).id;
+
+      // The run must durably park as `sleeping` — its wake persisted, not held
+      // open by an in-process timer — before the scheduler ever ticks. This is
+      // exactly what #855 reports missing: `wait: true` used to `sleep()`
+      // through the whole delay in-process and never reach this state, so the
+      // scheduler-driven wake sweep never even saw the run.
+      let parked: InstanceType<typeof db.OrchestrationRun> | null = null;
+      for (let i = 0; i < 100; i += 1) {
+        parked = await db.OrchestrationRun.findOne({
+          where: { publicId: orchestrationRunId },
+        });
+        if (parked?.status === 'sleeping') break;
+        await new Promise((resolve) => {
+          setTimeout(resolve, 20);
+        });
+      }
+      expect(parked?.status).toBe('sleeping');
+
+      // Nothing wakes it until the scheduler's sweep picks up the due run.
+      const claimed = await wakeDueRuns({ now: new Date(Date.now() + 5000) });
+      expect(claimed).toBeGreaterThanOrEqual(1);
+
+      const settled = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+      expect(settled.status).toBe('closed');
     });
 
     test('a result that arrives after the task left the state is discarded', async () => {
