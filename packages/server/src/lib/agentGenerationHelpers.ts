@@ -539,9 +539,14 @@ const storePendingGenerationState = (args: {
     toolContext: args.toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,
   };
+  // Writes `pendingState`'s own column. This used to be
+  // `metadata: { pendingState }` — a full replace of the bag that also held
+  // usage attribution, so every generation that paused for a client tool lost
+  // its action/trigger/run/node attribution and all caller metadata, and its
+  // usage event was recorded unattributed.
   updateGenerationRecord({
     publicId: args.generationId,
-    metadata: { pendingState },
+    pendingState,
   }).catch(() => {});
 };
 
@@ -617,7 +622,7 @@ export const buildCompletedGenerationResult = async (args: {
   };
   typedAgent: TypedAgent;
   agentId: string;
-  /** The model the turn ran on — routed models stamp `metadata.routing`. */
+  /** The model the turn ran on — routed models stamp the `routing` column. */
   model?: LanguageModel;
 }): Promise<GenerationResult> => {
   await saveRoutingMetadata({

@@ -88,40 +88,40 @@ The `meta` field includes the `generation_id` and `trace_id` of the failed run s
 
 ### Metadata
 
-The `metadata` field is a JSONB bag that holds both **caller-supplied** key/value pairs and **server-written** keys. It is a place to attach per-run audit attribution — for example, which knowledge-corpus version produced an AI action.
+The `metadata` field is a **caller-owned** bag: it holds only what the caller put there, and it is returned verbatim. It is a place to attach per-run audit attribution — for example, which knowledge-corpus version produced an AI action.
 
 Callers can write metadata two ways:
 
 - **At create time** — pass a `metadata` object on `POST /agents/:id/generate`.
-- **After creation** — `PATCH /generations/:generation_id` with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate and server-written keys are preserved.
+- **After creation** — `PATCH /generations/:generation_id` with a `metadata` object. The provided keys are **shallow-merged** over the existing metadata, so repeated patches accumulate.
 
 Both paths require the `generations:UpdateGeneration` action for PATCH and `agents:CreateAgentGeneration` for the create path.
 
-Server-owned keys are **reserved** and cannot be set or overwritten by callers — a write that includes any of them is rejected with `400`:
+**No key is reserved.** Every piece of state the server owns is a field of its own on the generation, so nothing written into `metadata` can reach it. A caller key that happens to be spelled `action_id` is just an annotation; it does not affect the `action_id` field.
 
-| Reserved key   | Written by                                                        |
-| -------------- | ----------------------------------------------------------------- |
-| `action_id`    | The logical action label supplied on the generate request          |
-| `trigger_id`   | Set when a trigger initiated the generation                        |
-| `orchestration_run_id`       | Orchestration run attribution (usage rollup)                       |
-| `node_id`      | Orchestration node attribution (usage rollup)                      |
-| `extraction`   | The memory-extraction summary (see below)                          |
+| Server-owned field      | Written by                                                        |
+| ----------------------- | ----------------------------------------------------------------- |
+| `action_id`             | The logical action label supplied on the generate request          |
+| `trigger_id`            | Set when a trigger initiated the generation                        |
+| `orchestration_run_id`  | Orchestration run attribution (usage rollup)                       |
+| `node_id`               | Orchestration node attribution (usage rollup)                      |
+| `agent_version`         | The agent config version that served the generation                |
+| `routing`               | What the [model route](./model-routes.md) did for this generation  |
+| `extraction`            | The memory-extraction summary (see below)                          |
 
-Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored under the same DB column but is never exposed through the API.
+Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API under any name.
 
-#### `metadata.extraction` — memory-extraction summary
+#### `extraction` — memory-extraction summary
 
-When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes a `metadata.extraction` summary describing what the auto-extraction pass did with the turn:
+When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary describing what the auto-extraction pass did with the turn:
 
 ```json
 {
-  "metadata": {
-    "extraction": {
-      "candidates": 3,
-      "created": 2,
-      "updated": 1,
-      "skipped": 0
-    }
+  "extraction": {
+    "candidates": 3,
+    "created": 2,
+    "updated": 1,
+    "skipped": 0
   }
 }
 ```

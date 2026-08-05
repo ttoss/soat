@@ -17,6 +17,13 @@ export type PersistedGeneration = {
   last_activity_at: Date | null;
   stop_reason: string | null;
   error: Record<string, unknown> | null;
+  action_id: string | null;
+  trigger_id: string | null;
+  orchestration_run_id: string | null;
+  node_id: string | null;
+  agent_version: number | null;
+  routing: Record<string, unknown> | null;
+  extraction: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
   created_at: Date;
   updated_at: Date;
@@ -48,58 +55,26 @@ const mapGeneration = (
     last_activity_at: gen.lastActivityAt,
     stop_reason: gen.stopReason,
     error: gen.error,
+    action_id: gen.actionId,
+    trigger_id: gen.triggerId,
+    orchestration_run_id: gen.orchestrationRunId,
+    node_id: gen.nodeId,
+    agent_version: gen.agentVersion,
+    routing: gen.routing,
+    extraction: gen.extraction,
+    // Caller-owned bag, verbatim. `pendingState` has no entry here at all — it
+    // is its own column, so there is no filter step to forget a field from.
     metadata: gen.metadata,
     created_at: gen.createdAt,
     updated_at: gen.updatedAt,
   };
 };
 
-// Generation.metadata also carries internal recovery state (`pendingState`:
-// full message history, tool context, agent config) needed by
-// agentGenerationRecovery.ts to resume paused generations after a restart.
-// That must never reach API clients; only externally-meaningful keys (e.g.
-// `extraction`, written by recordExtractionSummary) are safe to expose.
-const INTERNAL_METADATA_KEYS = ['pendingState'];
-
-// Keys the server owns inside the metadata bag. Callers may attach arbitrary
-// key/value metadata for their own auditing (F-15), but must not clobber these:
-// `pendingState` is internal recovery state; `action_id`/`trigger_id`/`orchestration_run_id`/
-// `node_id` are the wire names (see generations.yaml) for the usage-attribution
-// keys read back by usageRecording.ts (stored internally as `actionId`/
-// `triggerId`/`orchestrationRunId`/`nodeId`); `extraction` is the memory-extraction
-// summary written on completion; and `routing` is the model route's own record of
-// which target served the generation. Writes that include any of these are rejected
-// so caller metadata can never corrupt system bookkeeping or usage rollups.
-// Reserved-key validation runs against the raw wire request body (there is no
-// recursive case-transform middleware anymore), so both the wire (snake_case)
-// names AND the internal camelCase storage names must be blocked here —
-// updateGenerationMetadata shallow-merges caller metadata directly over the
-// stored object, so a caller sending the camelCase spelling verbatim would
-// otherwise overwrite real attribution with a forged one.
-export const RESERVED_GENERATION_METADATA_KEYS = [
-  'pendingState',
-  'action_id',
-  'actionId',
-  'trigger_id',
-  'triggerId',
-  'orchestration_run_id',
-  'orchestrationRunId',
-  'node_id',
-  'nodeId',
-  'extraction',
-  // Written by the served-version resolver: the agent config version this
-  // generation ran against. Forging it would misattribute a canary's behavior
-  // to the stable version (or the reverse) in every downstream comparison.
-  'agent_version',
-  'agentVersion',
-  // Written by the model-route executor: which target actually served the
-  // generation, and every attempt it burned getting there.
-  'routing',
-];
-
 // Validates caller-supplied generation metadata. Shared by the create-agent-
-// generation route and the update-generation route so both enforce the same
-// rule. Returns an error message string, or null when the metadata is valid.
+// generation route and the update-generation route. Returns an error message,
+// or null when valid. There is no reserved-key list: every piece of state the
+// server owns is its own typed column, so nothing written into this bag can
+// reach platform state — a key spelled `action_id` is just an annotation.
 export const validateGenerationMetadata = (
   metadata: unknown
 ): string | null => {
@@ -111,29 +86,7 @@ export const validateGenerationMetadata = (
     return 'metadata must be a JSON object';
   }
 
-  const reserved = Object.keys(metadata).filter((key) => {
-    return RESERVED_GENERATION_METADATA_KEYS.includes(key);
-  });
-
-  if (reserved.length > 0) {
-    return `metadata contains reserved keys that cannot be set by callers: ${reserved.join(', ')}`;
-  }
-
   return null;
-};
-
-export const toPublicGenerationMetadata = (
-  metadata: Record<string, unknown> | null
-): Record<string, unknown> | null => {
-  if (!metadata) return null;
-
-  const publicMetadata = Object.fromEntries(
-    Object.entries(metadata).filter(([key]) => {
-      return !INTERNAL_METADATA_KEYS.includes(key);
-    })
-  );
-
-  return Object.keys(publicMetadata).length > 0 ? publicMetadata : null;
 };
 
 const findInitiatorGeneration = async (args: {
@@ -161,19 +114,43 @@ const findInitiatorGeneration = async (args: {
   return initiatorGeneration;
 };
 
-export const createGenerationRecord = async (args: {
-  publicId: string;
-  projectId: number;
-  agentId: string;
-  traceId: string;
-  initiatorGenerationId?: string | null;
-  startedByPrincipalType?: string | null;
-  startedByPrincipalId?: string | null;
-  // Public id of the session this generation serves. The end-user actor is
-  // derived from it (see resolveEndUserAttribution), never passed separately.
-  sessionId?: string | null;
-  metadata?: Record<string, unknown> | null;
-}) => {
+type GenerationAttribution = {
+  // Usage attribution, stored as typed columns. Server-supplied on every path
+  // that has them; a caller cannot reach these.
+  actionId?: string | null;
+  triggerId?: string | null;
+  orchestrationRunId?: string | null;
+  nodeId?: string | null;
+  agentVersion?: number | null;
+};
+
+// Normalizes the optional attribution args to their column values, so the
+// create call below states each column once.
+const attributionColumns = (args: GenerationAttribution) => {
+  return {
+    actionId: args.actionId ?? null,
+    triggerId: args.triggerId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
+    nodeId: args.nodeId ?? null,
+    agentVersion: args.agentVersion ?? null,
+  };
+};
+
+export const createGenerationRecord = async (
+  args: GenerationAttribution & {
+    publicId: string;
+    projectId: number;
+    agentId: string;
+    traceId: string;
+    initiatorGenerationId?: string | null;
+    startedByPrincipalType?: string | null;
+    startedByPrincipalId?: string | null;
+    // Public id of the session this generation serves. The end-user actor is
+    // derived from it (see resolveEndUserAttribution), never passed separately.
+    sessionId?: string | null;
+    metadata?: Record<string, unknown> | null;
+  }
+) => {
   const [agent, initiatorGeneration] = await Promise.all([
     db.Agent.findOne({
       where: { publicId: args.agentId, projectId: args.projectId },
@@ -223,6 +200,7 @@ export const createGenerationRecord = async (args: {
         lastActivityAt: null,
         stopReason: null,
         error: null,
+        ...attributionColumns(args),
         metadata: args.metadata ?? null,
       },
       { transaction }
@@ -248,28 +226,46 @@ export const createGenerationRecord = async (args: {
   return mapGeneration(fullGeneration);
 };
 
-export const updateGenerationRecord = async (args: {
+type UpdateGenerationRecordArgs = {
   publicId: string;
   status?: string;
   completedAt?: Date | null;
   lastActivityAt?: Date | null;
   stopReason?: string | null;
   error?: Record<string, unknown> | null;
+  routing?: Record<string, unknown> | null;
+  extraction?: Record<string, unknown> | null;
+  pendingState?: Record<string, unknown> | null;
   metadata?: Record<string, unknown> | null;
-}) => {
+};
+
+// Every column an update may set, besides the selecting `publicId`. Listed once
+// so "provided means write it, absent means leave it" is one rule, not one
+// branch per field.
+const UPDATABLE_GENERATION_FIELDS = [
+  'status',
+  'completedAt',
+  'lastActivityAt',
+  'stopReason',
+  'error',
+  'routing',
+  'extraction',
+  'pendingState',
+  'metadata',
+] as const satisfies ReadonlyArray<keyof UpdateGenerationRecordArgs>;
+
+export const updateGenerationRecord = async (
+  args: UpdateGenerationRecordArgs
+) => {
   const gen = await db.Generation.findOne({
     where: { publicId: args.publicId },
   });
   if (!gen) return null;
 
   const updates: Record<string, unknown> = {};
-  if (args.status !== undefined) updates.status = args.status;
-  if (args.completedAt !== undefined) updates.completedAt = args.completedAt;
-  if (args.lastActivityAt !== undefined)
-    updates.lastActivityAt = args.lastActivityAt;
-  if (args.stopReason !== undefined) updates.stopReason = args.stopReason;
-  if (args.error !== undefined) updates.error = args.error;
-  if (args.metadata !== undefined) updates.metadata = args.metadata;
+  for (const field of UPDATABLE_GENERATION_FIELDS) {
+    if (args[field] !== undefined) updates[field] = args[field];
+  }
 
   await gen.update(updates);
 
@@ -454,11 +450,11 @@ export const getGeneration = async (args: {
 };
 
 // Attaches caller-supplied metadata to a generation (F-15). The provided keys
-// are shallow-merged over the existing metadata, so system-owned keys
-// (`pendingState`, attribution, `extraction`) are preserved and repeated
-// patches accumulate. Callers cannot set reserved keys — enforce
-// validateGenerationMetadata before calling. Returns null when the generation
-// does not exist within the caller's project scope.
+// are shallow-merged over the existing metadata so repeated patches accumulate.
+// The bag holds only caller keys — server-owned state is in its own columns — so
+// a merge here cannot touch attribution, and there is nothing to preserve
+// against. Returns null when the generation does not exist within the caller's
+// project scope.
 export const updateGenerationMetadata = async (args: {
   publicId: string;
   projectIds?: number[];

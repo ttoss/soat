@@ -4,7 +4,6 @@ import { DomainError } from 'src/errors';
 import {
   getGeneration,
   listGenerations,
-  toPublicGenerationMetadata,
   updateGenerationMetadata,
   validateGenerationMetadata,
 } from 'src/lib/generations';
@@ -58,12 +57,7 @@ generationsRouter.get('/generations', async (ctx: Context) => {
     offset: offset ? Number(offset) : undefined,
   });
 
-  ctx.body = {
-    ...result,
-    data: result.data.map((gen) => {
-      return { ...gen, metadata: toPublicGenerationMetadata(gen.metadata) };
-    }),
-  };
+  ctx.body = result;
 });
 
 /**
@@ -107,10 +101,7 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
     );
   }
 
-  ctx.body = {
-    ...generation,
-    metadata: toPublicGenerationMetadata(generation.metadata),
-  };
+  ctx.body = generation;
 });
 
 /**
@@ -119,9 +110,10 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
  * operationId: updateGeneration
  * Attaches caller-supplied key/value metadata to a generation, for per-run
  * audit attribution (e.g. which knowledge-corpus version produced an action).
- * The provided keys are shallow-merged over the existing metadata; system-owned
- * keys (usage attribution, memory-extraction summary) are preserved and cannot
- * be overwritten.
+ * The provided keys are shallow-merged over the existing metadata. The bag is
+ * caller-owned: server state (usage attribution, the served agent version, the
+ * model route's record, the memory-extraction summary) lives in its own
+ * top-level fields and cannot be reached from here.
  */
 generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
   if (!ctx.authUser) {
@@ -166,8 +158,5 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
     );
   }
 
-  ctx.body = {
-    ...generation,
-    metadata: toPublicGenerationMetadata(generation.metadata),
-  };
+  ctx.body = generation;
 });

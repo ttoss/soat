@@ -7,15 +7,15 @@ import { readRoutingMetadata } from './modelRouteExecutor';
 const log = createDebug('soat:model-routes');
 
 /**
- * Stamps what the route actually did onto the generation's `metadata.routing`:
+ * Stamps what the route actually did onto the generation's `routing` column:
  * `{ route_id, target_index, attempts: [{ target_index, ai_provider_id, model,
  * error_class? }], fallbacks }`. A trace can then explain which provider
  * answered, and a failed attempt that burned tokens is at least *visible* even
  * though the provider's error carried no usage to meter.
  *
  * No-ops for a non-routed model, so every completion path can call it
- * unconditionally. Merges rather than replaces: `metadata.pendingState` for a
- * paused client-tool generation lives in the same column.
+ * unconditionally. Writes its own column, so it cannot clobber (or be clobbered
+ * by) caller metadata or a concurrent pending-state write.
  */
 export const saveRoutingMetadata = async (args: {
   generationId: string;
@@ -33,18 +33,13 @@ export const saveRoutingMetadata = async (args: {
   /* istanbul ignore next */
   if (!generation) return;
 
-  const metadata = (generation.metadata ?? {}) as Record<string, unknown>;
-
   await generation.update({
-    metadata: {
-      ...metadata,
-      routing: {
-        route_id: routing.route_id,
-        target_index: routing.target_index,
-        // Snapshot: the composite keeps appending for the life of the run.
-        attempts: [...routing.attempts],
-        fallbacks: routing.fallbacks,
-      },
+    routing: {
+      route_id: routing.route_id,
+      target_index: routing.target_index,
+      // Snapshot: the composite keeps appending for the life of the run.
+      attempts: [...routing.attempts],
+      fallbacks: routing.fallbacks,
     },
   });
 

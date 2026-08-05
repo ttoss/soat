@@ -14,14 +14,6 @@ import {
 
 const log = createDebug('soat:usage');
 
-const metadataString = (
-  metadata: Record<string, unknown>,
-  key: string
-): string | null => {
-  const value = metadata[key];
-  return typeof value === 'string' ? value : null;
-};
-
 type GenerationWithAgent = InstanceType<(typeof db)['Generation']> & {
   agent?:
     | (InstanceType<(typeof db)['Agent']> & {
@@ -36,34 +28,33 @@ type Attribution = {
   actionId: string | null;
   triggerId: string | null;
   // Public id of the orchestration run that dispatched the generation, and the
-  // node within it. Both arrive via generation metadata; `runPublicId` is
-  // resolved to the internal FK at persist time. Null for standalone generations.
+  // node within it. `runPublicId` is resolved to the internal FK at persist
+  // time. Null for standalone generations.
   runPublicId: string | null;
   nodeId: string | null;
 };
 
 // Pulls the event's attribution off the loaded generation: the billed AI
 // provider (internal id + slug), the caller-supplied action / initiating
-// trigger, and the orchestration run/node — all carried in the generation's
-// metadata.
+// trigger, and the orchestration run/node — each a typed column on the
+// generation, so a caller cannot bill another action, trigger or run.
 const resolveEventAttribution = (
   generation: GenerationWithAgent
 ): Attribution => {
   const aiProvider = generation.agent?.aiProvider ?? null;
-  const metadata = generation.metadata ?? {};
   return {
     aiProviderId: aiProvider?.id ?? null,
     provider: aiProvider?.provider ?? 'unknown',
-    actionId: metadataString(metadata, 'actionId'),
-    triggerId: metadataString(metadata, 'triggerId'),
-    runPublicId: metadataString(metadata, 'orchestrationRunId'),
-    nodeId: metadataString(metadata, 'nodeId'),
+    actionId: generation.actionId,
+    triggerId: generation.triggerId,
+    runPublicId: generation.orchestrationRunId,
+    nodeId: generation.nodeId,
   };
 };
 
-// Resolves the run's public id (carried in generation metadata) to its internal
-// FK. Returns null when absent or the run no longer exists — the event is still
-// recorded, just without the run association.
+// Resolves the run's public id to its internal FK. Returns null when absent or
+// the run no longer exists — the event is still recorded, just without the run
+// association.
 const resolveRunId = async (
   runPublicId: string | null
 ): Promise<number | null> => {

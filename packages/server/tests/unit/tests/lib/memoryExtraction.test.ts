@@ -106,7 +106,7 @@ describe('memoryExtraction lib', () => {
       expect(mockRunExtractionCompletion).not.toHaveBeenCalled();
     });
 
-    test('writes facts and records the summary on the generation metadata', async () => {
+    test('writes facts and records the summary on the generation', async () => {
       const memoryRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/memories')
         .send({ project_id: projectId, name: 'Lib Extraction Memory' });
@@ -151,7 +151,7 @@ describe('memoryExtraction lib', () => {
       });
 
       const persisted = await getGeneration({ publicId: generation.id });
-      expect(persisted?.metadata?.extraction).toEqual({
+      expect(persisted?.extraction).toEqual({
         candidates: 1,
         created: 1,
         updated: 0,

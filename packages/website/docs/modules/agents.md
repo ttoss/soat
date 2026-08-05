@@ -569,7 +569,7 @@ Both write the winning version's config to the agent and clear the release. Each
 
 #### Which version served a generation
 
-Every generation record carries the version that served it as `metadata.agent_version`, so [traces](./traces.md) and post-hoc comparisons can attribute behavior to a specific config. The key is reserved: callers cannot set it in their own `metadata`.
+Every generation record carries the version that served it as the top-level `agent_version` field, so [traces](./traces.md) and post-hoc comparisons can attribute behavior to a specific config. It is a server-owned field, not a `metadata` key, so a caller cannot set it.
 
 ```bash
 soat get-generation --generation-id gen_V1StGXR8Z5jdHi6B

@@ -1584,11 +1584,13 @@ components:
           description: >-
             Caller-supplied key/value metadata attached to the generation
             record for per-run audit attribution (e.g. the knowledge-corpus
-            version that produced this action). Round-trips when the generation
-            is fetched via the generations API. Reserved server-owned keys
-            (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `extraction`, and
-            internal recovery state) cannot be set here and are rejected with
-            400.
+            version that produced this action). Round-trips verbatim when the
+            generation is fetched via the generations API. The bag is
+            caller-owned and no key is reserved: server-owned state (usage
+            attribution, the served agent version, the model route's record, the
+            extraction summary) lives in its own top-level generation fields and
+            cannot be written from here. Use the request's own `action_id` field
+            to set the usage-attribution label.
         extract:
           type: boolean
           description: >-

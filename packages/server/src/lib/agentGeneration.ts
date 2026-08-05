@@ -77,37 +77,6 @@ const dispatchGeneration = (args: {
   });
 };
 
-// Builds the generation's creation-time metadata from usage-attribution
-// inputs. Only defined keys are stored; returns null when there is nothing to
-// attribute, preserving the previous `metadata: null` default.
-const buildGenerationMetadata = (args: {
-  actionId?: string;
-  triggerId?: string;
-  orchestrationRunId?: string;
-  nodeId?: string;
-  agentVersion?: number;
-  metadata?: Record<string, unknown> | null;
-}): Record<string, unknown> | null => {
-  // Caller-supplied metadata (F-15) seeds the bag; system attribution keys are
-  // layered on top. Reserved keys are rejected upstream, so they never collide.
-  const metadata: Record<string, unknown> = { ...(args.metadata ?? {}) };
-  if (args.actionId !== undefined) metadata.actionId = args.actionId;
-  if (args.triggerId !== undefined) metadata.triggerId = args.triggerId;
-  // Orchestration attribution: the public run id and the node id that
-  // dispatched this generation, so its usage event can be rolled up per run and
-  // per node. Read back off the generation metadata in `usageRecording.ts`.
-  if (args.orchestrationRunId !== undefined)
-    metadata.orchestrationRunId = args.orchestrationRunId;
-  if (args.nodeId !== undefined) metadata.nodeId = args.nodeId;
-  // The agent config version that served this generation
-  // (docs/prd-agent-versions.md, Phase 2). Keyed snake_case — it is a new
-  // system key, and the wire contract is snake_case — so a client reading the
-  // metadata bag sees the same spelling the spec documents.
-  if (args.agentVersion !== undefined)
-    metadata.agent_version = args.agentVersion;
-  return Object.keys(metadata).length > 0 ? metadata : null;
-};
-
 const resolveContextAndRecord = async (args: {
   agentId: string;
   projectIds?: number[];
@@ -163,14 +132,14 @@ const resolveContextAndRecord = async (args: {
     // it must not live in the caller-writable metadata bag. The actor is
     // derived from the session, so only the session id travels.
     sessionId: args.sessionId ?? null,
-    metadata: buildGenerationMetadata({
-      actionId: args.actionId,
-      triggerId: args.triggerId,
-      orchestrationRunId: args.orchestrationRunId,
-      nodeId: args.nodeId,
-      agentVersion: ctx.agentVersion,
-      metadata: args.metadata,
-    }),
+    // Usage attribution and the served agent version: typed columns, for the
+    // same reason. `metadata` carries only what the caller sent (F-15).
+    actionId: args.actionId ?? null,
+    triggerId: args.triggerId ?? null,
+    orchestrationRunId: args.orchestrationRunId ?? null,
+    nodeId: args.nodeId ?? null,
+    agentVersion: ctx.agentVersion ?? null,
+    metadata: args.metadata ?? null,
   }).catch((error) => {
     log(
       'resolveContextAndRecord: failed to create generation record generationId=%s error=%s',

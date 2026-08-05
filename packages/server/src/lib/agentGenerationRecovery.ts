@@ -15,6 +15,7 @@ import {
 } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
+import { getGenerationPendingState } from './generationPendingState';
 import { getGeneration, updateGenerationRecord } from './generations';
 import { buildRoutedModel, resolveConsumerModelRoute } from './modelRoutes';
 import { saveTrace } from './traces';
@@ -250,9 +251,11 @@ export const recoverPendingFromDb = async (args: {
   projectIds?: number[];
   authHeader?: string;
 }): Promise<PendingGeneration | undefined> => {
-  const gen = await getGeneration({ publicId: args.generationId });
-  const pendingState = gen?.metadata?.pendingState as
-    PendingStateDb | undefined;
+  const [gen, storedState] = await Promise.all([
+    getGeneration({ publicId: args.generationId }),
+    getGenerationPendingState({ publicId: args.generationId }),
+  ]);
+  const pendingState = (storedState ?? undefined) as PendingStateDb | undefined;
 
   if (!gen || !pendingState || gen.agent_id !== args.agentId) {
     return undefined;
