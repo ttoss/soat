@@ -62,13 +62,11 @@ jobs:
 
       - uses: pnpm/action-setup@v5
 
+      # See the note in pr.yml: `pnpm run smoke-tests` is a `docker compose up`,
+      # so the workspace install here read nothing.
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama

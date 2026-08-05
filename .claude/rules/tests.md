@@ -2,9 +2,9 @@
 
 ## Running Tests
 
-Running the **entire** suite locally (`pnpm --filter @soat/server test` with no pattern) spins up a full Postgres testcontainer and runs every integration test — this is slow and should not be your default while iterating.
+Running the **entire** suite locally (`pnpm --filter @soat/server test` with no pattern) starts a Postgres testcontainer and runs every integration test — this is slow and should not be your default while iterating.
 
-**Preferred local workflow:** run only the test file(s) relevant to the module you're changing, using `--testPathPatterns` (plural), then push and let GitHub Actions run the full suite (`build-and-test`) against the complete matrix:
+**Preferred local workflow:** run only the test file(s) relevant to the module you're changing, using `--testPathPatterns` (plural), then push and let GitHub Actions run the full suite (the `server-tests` shard matrix) against the complete matrix:
 
 ```bash
 pnpm --filter @soat/server test --testPathPatterns=users.test.ts
@@ -17,6 +17,51 @@ pnpm --filter @soat/server test --testPathPatterns="projects.test.ts|agents.test
 ```
 
 Only fall back to running the full local suite (`pnpm --filter @soat/server test`) when you need to sanity-check a change that plausibly affects many modules (e.g. a shared model, migration, or middleware) before pushing — do not run it as a matter of course for every change.
+
+### How the suite gets its database
+
+`globalSetup` starts **one** PostgreSQL for the whole run and builds the schema
+once, into a database (`soat_test_template`) that no test ever connects to.
+Each test file's `beforeAll` then clones it — `CREATE DATABASE ... TEMPLATE` —
+and drops the clone in `afterAll`.
+
+Every file still gets a private, pristine database, exactly as when each one
+started its own container; it just costs tens of milliseconds instead of a
+container start plus a schema `sync()`. Nothing about writing a test changes:
+set up state through the API in `beforeAll` as before.
+
+Two consequences worth knowing:
+
+- **Never connect to the template.** PostgreSQL refuses to clone a database
+  that has a session attached, so a stray connection to `soat_test_template`
+  would fail every test file that starts afterwards.
+- **`TEST_DB_HOST` reuses a running server** instead of starting a container
+  (handy when Docker isn't available). The account it names needs `CREATEDB`,
+  since the run creates a database per test file:
+
+  ```bash
+  TEST_DB_HOST=127.0.0.1 TEST_DB_PORT=5432 \
+    TEST_DB_USERNAME=postgres TEST_DB_PASSWORD=postgres \
+    pnpm --filter @soat/server test
+  ```
+
+### How CI runs it
+
+The server suite runs as a 4-way shard matrix (`server-tests` in `pr.yml`), one
+`jest --shard=N/4` per job. Because no shard sees the whole source tree, the
+shards run with `--coverageThreshold={}` and upload raw coverage; the
+`server-coverage` job merges the four reports and enforces the thresholds once
+over the union, via `scripts/mergeCoverage.mjs`.
+
+That script reads the thresholds from `jest --showConfig`, so
+`tests/unit/jest.config.ts` stays the only place they are defined. Its
+replication of Jest's grouping rules is pinned by
+`tests/harness/mergeCoverage.test.mjs` (`pnpm run test:harness`) — change one
+and the other must follow.
+
+To raise or lower the shard count, edit `matrix.shard` in `pr.yml`; the job
+reads `strategy.job-total` for the denominator, so the list is the only thing
+to change.
 
 ## Test File Location and Naming
 
@@ -70,7 +115,7 @@ point. In particular:
 
 ## Test Infrastructure
 
-Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers, configured in `setupTestsAfterEnv.ts`. No mocking of the database layer is needed.
+Tests are integration tests that run against `app.callback()` via supertest. A real PostgreSQL instance is spun up via testcontainers in `globalSetup.ts` — once for the whole run — and each test file clones a pristine database from it in `setupTestsAfterEnv.ts` (see [How the suite gets its database](#how-the-suite-gets-its-database)). No mocking of the database layer is needed.
 
 ## Mocking Philosophy — Never Mock What You Own
 
@@ -437,6 +482,45 @@ pnpm --filter @soat/server test --testPathPatterns=mcp.test.ts
 ## Smoke Tests
 
 The smoke tests (`tests/smoke-tests.sh`) are end-to-end shell scripts that run against a live server. They require `curl` and `jq`.
+
+### Where the time goes (and why it is not sharded)
+
+Profiled from the 2026-08-05 CI run, the ~9.5 min job split roughly:
+
+| Phase | Time |
+|---|---|
+| Job setup (checkout, free disk, Ollama image + model cache) | ~1.5 min |
+| `docker compose` build | ~1 min |
+| Stack startup to the first script step | ~20 s |
+| `smoke-tests.sh` itself | ~5.5 min |
+| Teardown + post steps | ~50 s |
+
+**The script is Ollama-bound.** Of its ~5.5 min, Ollama accounted for ~240 s
+(24 chat completions, ~219 s; 31 embeddings, ~21 s) — about 73%. The rest is the
+463 `$SOAT_CLI` invocations, each a Node process start (~150 ms) plus its HTTP
+round trip.
+
+**That cost is also extremely variable.** Nothing bounds how many tokens
+`qwen2.5:0.5b` emits, so the same step can take 24 s in one run and 121 s in the
+next. Between the 2026-08-05 runs, total chat time swung 219 s → 406 s with no
+change to the suite. Treat any single-run smoke timing as ±2 min; compare phases
+(build / startup / script / teardown), not job totals.
+
+> When profiling from CI logs, note that Ollama's `[GIN]` lines use Go duration
+> format — `1m23s`, not `83s`. A regex that only handles `s`/`ms`/`µs` silently
+> drops exactly the slow requests you are looking for, which is how an earlier
+> version of this table understated Ollama by 40%.
+
+**Do not shard this job the way `server-tests` is sharded.** The per-job fixed
+cost — setup, image build, stack startup, teardown — is close to 4 minutes, so a
+2-way split of a 5.5-minute script lands around 7 minutes against ~8.5 minutes
+whole, while doubling runner cost and Ollama pulls. The unit suite shards well
+because its fixed cost is ~40 s; this one does not.
+
+The productive levers, in order, are: bound or reduce the LLM generations, cut
+fixed overhead, then cut CLI invocations. Inference *speed* is not a lever — the
+models load once (~0.55 s each, verified in the Ollama logs) and the runner is
+CPU-only.
 
 ### CLI-first rule
 

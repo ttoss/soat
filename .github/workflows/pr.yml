@@ -86,8 +86,21 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      # The server suite runs in the `server-tests` shard matrix instead — it is
+      # the long pole, and sharding it is what keeps this job off the critical
+      # path. Its build, typecheck and lint still run here; only its `test` is
+      # elsewhere.
+      #
+      # `deploy` needs the same filter, not just `test`: turbo's `deploy` task
+      # declares `dependsOn: ["build", "test"]`, so an unfiltered `run deploy`
+      # would schedule `@soat/server#test` as a dependency and run the whole
+      # suite here anyway. `@soat/server` has no deploy script and nothing
+      # deployable depends on it, so excluding it drops nothing.
       - name: Build, test and deploy
-        run: pnpm turbo run build typecheck lint test deploy
+        run: |
+          pnpm turbo run build typecheck lint
+          pnpm turbo run test --filter='!@soat/server'
+          pnpm turbo run deploy --filter='!@soat/server'
         env:
           CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
 
@@ -97,6 +110,93 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           CARLIN_BRANCH: ${{ github.event.pull_request.head.ref }}
+
+  server-tests:
+    name: Server Tests (${{ matrix.shard }}/${{ strategy.job-total }})
+    runs-on: ubuntu-latest
+    needs: changes
+    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+
+    strategy:
+      # Every shard should report, so one failure does not hide the others.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The tests import the server from `src`, so only its workspace
+      # dependencies need building — not the server bundle itself.
+      - name: Build workspace dependencies
+        run: pnpm turbo run build --filter='@soat/server^...'
+
+      # `--coverageThreshold={}` disables the gate *per shard*: no shard sees
+      # more than its slice of the source, so every one of them would fail it.
+      # The thresholds are enforced once over the merged coverage, in
+      # `server-coverage`.
+      - name: Run tests
+        run: >
+          pnpm --filter @soat/server exec jest --projects tests/unit
+          --shard=${{ matrix.shard }}/${{ strategy.job-total }}
+          --coverageReporters=json
+          --coverageThreshold={}
+
+      - name: Upload shard coverage
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-shard-${{ matrix.shard }}
+          path: packages/server/tests/unit/coverage/coverage-final.json
+          retention-days: 1
+
+  server-coverage:
+    name: Server Coverage
+    runs-on: ubuntu-latest
+    needs: [changes, server-tests]
+    if: "!startsWith(github.event.pull_request.title, 'chore(release):') && needs.changes.outputs.code == 'true'"
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # No `merge-multiple`: every shard's file is named `coverage-final.json`,
+      # so they need one directory each.
+      - name: Download shard coverage
+        uses: actions/download-artifact@v8
+        with:
+          pattern: coverage-shard-*
+          path: coverage-shards
+
+      # The thresholds come from jest.config.ts, never a copy of it.
+      - name: Resolve Jest config
+        working-directory: packages/server
+        run: pnpm exec jest --projects tests/unit --showConfig > "$RUNNER_TEMP/jest-config.json"
+
+      - name: Enforce coverage thresholds
+        run: >
+          node scripts/mergeCoverage.mjs
+          --config "$RUNNER_TEMP/jest-config.json"
+          --cwd packages/server
+          coverage-shards/*/coverage-final.json
 
   smoke-test:
     name: Smoke Tests
@@ -119,13 +219,13 @@ jobs:
 
       - uses: pnpm/action-setup@v5
 
+      # No `cache: 'pnpm'` and no install step: `pnpm run smoke-tests` is a
+      # `docker compose up`, and every dependency it needs is installed inside
+      # the images. Installing the workspace here cost ~24s plus a ~11s store
+      # save on teardown, for a `node_modules` nothing read.
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama
@@ -170,6 +270,8 @@ jobs:
     needs:
       - docs-lint
       - build-test-and-deploy
+      - server-tests
+      - server-coverage
       - smoke-test
       - tutorials-test
     if: always()
@@ -180,6 +282,8 @@ jobs:
           for result in \
             "${{ needs.docs-lint.result }}" \
             "${{ needs.build-test-and-deploy.result }}" \
+            "${{ needs.server-tests.result }}" \
+            "${{ needs.server-coverage.result }}" \
             "${{ needs.smoke-test.result }}" \
             "${{ needs.tutorials-test.result }}"; do
             if [[ "$result" != "success" && "$result" != "skipped" ]]; then

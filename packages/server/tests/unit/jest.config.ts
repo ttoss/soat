@@ -23,6 +23,10 @@ export default jestUnitConfig({
     },
   },
   maxWorkers: 4,
+  // One PostgreSQL for the whole run, with a pre-built schema every test file
+  // clones. See `testDatabase.ts`.
+  globalSetup: '<rootDir>/globalSetup.ts',
+  globalTeardown: '<rootDir>/globalTeardown.ts',
   setupFiles: ['<rootDir>/setupTests.ts'],
   setupFilesAfterEnv: ['<rootDir>/setupTestsAfterEnv.ts'],
   transformIgnorePatterns: getTransformIgnorePatterns({
