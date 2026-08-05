@@ -92,7 +92,9 @@ The route must belong to this project. An explicit binding on a consumer always 
 
 ### Deletion
 
-By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
+By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, [usage](./usage.md) history, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
+
+Usage history counts as a dependent for the same reason as every other resource above: `force=true` is the explicit acknowledgment that billing history for the project is being destroyed, not a silent side effect of an unrelated cleanup.
 
 ### Common Errors
 
