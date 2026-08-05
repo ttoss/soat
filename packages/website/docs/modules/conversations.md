@@ -83,6 +83,8 @@ When listing messages, each entry includes the full text `content` of the underl
 
 Removing a message from a conversation also deletes its underlying Document and the associated File on disk, preventing orphaned records.
 
+When a generation includes tool calls, the full tool-call chain (the assistant's tool invocations and their results, alongside the final text) is preserved internally so later turns see the complete exchange. This internal state is stored separately from `metadata` — it is never part of the caller-supplied bag and is not returned by any API response.
+
 #### Message ordering
 
 The unique index `(conversation_id, position)` enforces that no two messages share a slot.

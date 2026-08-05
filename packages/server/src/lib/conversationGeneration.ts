@@ -45,11 +45,8 @@ const buildMessageEntry = async (args: {
   const meta = (args.msg as { metadata?: Record<string, unknown> | null })
     .metadata;
   const metadataStr =
-    meta && Object.keys(meta).length > 0 && !meta.responseMessages
+    meta && Object.keys(meta).length > 0
       ? ` [${Object.entries(meta)
-          .filter(([k]) => {
-            return k !== 'responseMessages';
-          })
           .map(([k, v]) => {
             return `${k}: ${v}`;
           })
@@ -66,9 +63,7 @@ const buildConversationHistory = async (args: {
 }): Promise<Array<{ role: string; content: unknown }>> => {
   const entries = await Promise.all(
     args.messages.map(async (msg) => {
-      const meta = (msg as { metadata?: Record<string, unknown> | null })
-        .metadata;
-      const responseMessages = meta?.responseMessages;
+      const responseMessages = msg.responseMessages;
       // Expand stored AI SDK response messages (tool calls, tool results, final
       // text) so the LLM sees the full tool-use chain on subsequent turns.
       if (Array.isArray(responseMessages) && responseMessages.length > 0) {
@@ -326,9 +321,9 @@ export const generateConversationMessage = async (args: {
     role: 'assistant',
     agentId: args.agentId,
     position: snapshotPosition + 1,
-    metadata:
+    responseMessages:
       responseMessages && responseMessages.length > 0
-        ? { responseMessages }
+        ? responseMessages
         : undefined,
   });
 

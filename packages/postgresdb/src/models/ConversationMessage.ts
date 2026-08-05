@@ -97,4 +97,11 @@ export class ConversationMessage extends Model {
 
   @Column({ type: DataType.STRING, allowNull: true, field: 'idempotency_key' })
   declare idempotencyKey: string | null;
+
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    field: 'response_messages',
+  })
+  declare responseMessages: unknown[] | null;
 }
