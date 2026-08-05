@@ -4,6 +4,7 @@ import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { invalidateReadAuditCache } from './auditLog';
+import { type Transaction } from './dbTransaction';
 import { assertGuardrailsExist } from './guardrails';
 import {
   assertDefaultModelRouteInProject,
@@ -223,11 +224,14 @@ const collectIds = (rows: { id?: number }[]): number[] => {
   });
 };
 
-// Only counts models whose projectId FK is RESTRICT/NO ACTION, i.e. those
-// that would actually block `project.destroy()`. Webhook and ApiKey have
-// `onDelete: 'CASCADE'` straight to Project, so they never block deletion
-// and are intentionally excluded here (they're still cleaned up, by the DB
-// itself, whether or not force is used).
+// Counts models whose projectId FK is RESTRICT/NO ACTION, i.e. those that
+// would actually block `project.destroy()`, plus UsageEvent as a deliberate
+// exception: its FK is `onDelete: 'CASCADE'` like Webhook/ApiKey (which stay
+// excluded, since they carry no financial meaning), but UsageEvent is the
+// project's billing history. Counting it here forces `force=true` before a
+// project with usage history can be deleted, so the cascade can no longer
+// happen invisibly (see #834).
+
 const countProjectDependents = async (args: {
   projectId: number;
 }): Promise<number> => {
@@ -252,6 +256,7 @@ const countProjectDependents = async (args: {
     db.OrchestrationRun.count({ where: { projectId } }),
     db.UploadToken.count({ where: { projectId } }),
     db.IngestionRule.count({ where: { projectId } }),
+    db.UsageEvent.count({ where: { projectId } }),
   ]);
 
   return counts.reduce((sum: number, count: number) => {
@@ -294,6 +299,33 @@ const findProjectDependentIds = async (args: { projectId: number }) => {
   };
 };
 
+// Nulls self-referencing RESTRICT FKs before the rows they may point at are
+// destroyed, mirroring the deleteAgent force-delete pattern.
+const nullifyProjectSelfReferences = async (args: {
+  generationIds: number[];
+  traceIds: number[];
+  transaction: Transaction;
+}): Promise<void> => {
+  const { generationIds, traceIds, transaction } = args;
+
+  if (generationIds.length > 0) {
+    await db.Generation.update(
+      { initiatorGenerationId: null },
+      { where: { initiatorGenerationId: generationIds }, transaction }
+    );
+  }
+  if (traceIds.length > 0) {
+    await db.Trace.update(
+      { parentTraceId: null },
+      { where: { parentTraceId: traceIds }, transaction }
+    );
+    await db.Trace.update(
+      { rootTraceId: null },
+      { where: { rootTraceId: traceIds }, transaction }
+    );
+  }
+};
+
 // Cascades every project-scoped resource inside a single transaction. Models
 // with a direct `projectId` FK are destroyed in an order that respects the
 // RESTRICT foreign keys between them (e.g. Chat before AiProvider, Actor
@@ -320,24 +352,11 @@ const forceDeleteProjectWithDependents = async (args: {
   } = await findProjectDependentIds({ projectId });
 
   await db.sequelize.transaction(async (transaction) => {
-    // Null self-referencing FKs (RESTRICT) before destroying the rows they
-    // may point at, mirroring the deleteAgent force-delete pattern.
-    if (generationIds.length > 0) {
-      await db.Generation.update(
-        { initiatorGenerationId: null },
-        { where: { initiatorGenerationId: generationIds }, transaction }
-      );
-    }
-    if (traceIds.length > 0) {
-      await db.Trace.update(
-        { parentTraceId: null },
-        { where: { parentTraceId: traceIds }, transaction }
-      );
-      await db.Trace.update(
-        { rootTraceId: null },
-        { where: { rootTraceId: traceIds }, transaction }
-      );
-    }
+    await nullifyProjectSelfReferences({
+      generationIds,
+      traceIds,
+      transaction,
+    });
 
     if (orchestrationRunIds.length > 0) {
       await db.OrchestrationCheckpoint.destroy({
@@ -410,6 +429,9 @@ const forceDeleteProjectWithDependents = async (args: {
     // destroyed explicitly here for consistency with the rest of the graph.
     await db.Webhook.destroy({ where: { projectId }, transaction });
     await db.ApiKey.destroy({ where: { projectId }, transaction });
+    // UsageComponent cascades from UsageEvent at the DB level; force=true is
+    // the deliberate opt-in to erase billing history (see #834).
+    await db.UsageEvent.destroy({ where: { projectId }, transaction });
 
     await args.project.destroy({ transaction });
   });

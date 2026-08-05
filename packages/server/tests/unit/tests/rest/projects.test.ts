@@ -740,6 +740,84 @@ describe('Projects', () => {
       ).toBeNull();
     });
 
+    test('returns 409 PROJECT_HAS_DEPENDENTS when the project only has usage history', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Usage Only Project' });
+      const usageProjectId = projRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: usageProjectId },
+      });
+
+      await db.UsageEvent.create({
+        projectId: project?.get('id'),
+        meterType: 'llm_tokens',
+        provider: 'openai',
+        model: 'gpt-4o',
+        costUsd: '0.01',
+        idempotencyKey: `usage-only-${usageProjectId}`,
+      });
+
+      const response = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${usageProjectId}`
+      );
+
+      expect(response.status).toBe(409);
+      expect(response.body.error.code).toBe('PROJECT_HAS_DEPENDENTS');
+
+      const getProjectRes = await authenticatedTestClient(adminToken).get(
+        `/api/v1/projects/${usageProjectId}`
+      );
+      expect(getProjectRes.status).toBe(200);
+    });
+
+    test('force=true deletes a project along with its usage history', async () => {
+      const projRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'Force Delete Usage Project' });
+      const forceUsageProjectId = projRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: forceUsageProjectId },
+      });
+      const internalProjectId = project?.get('id') as number;
+
+      const usageEvent = await db.UsageEvent.create({
+        projectId: internalProjectId,
+        meterType: 'llm_tokens',
+        provider: 'openai',
+        model: 'gpt-4o',
+        costUsd: '0.02',
+        idempotencyKey: `force-usage-${forceUsageProjectId}`,
+      });
+
+      await db.UsageComponent.create({
+        usageEventId: usageEvent.get('id'),
+        component: 'input_tokens',
+        quantity: '100',
+        unit: 'token',
+        unitPrice: '0.0001',
+        costUsd: '0.01',
+      });
+
+      const forcedResponse = await authenticatedTestClient(adminToken).delete(
+        `/api/v1/projects/${forceUsageProjectId}?force=true`
+      );
+      expect(forcedResponse.status).toBe(204);
+
+      expect(
+        await db.UsageEvent.findOne({
+          where: { publicId: usageEvent.get('publicId') as string },
+        })
+      ).toBeNull();
+      expect(
+        await db.UsageComponent.findOne({
+          where: { usageEventId: usageEvent.get('id') as number },
+        })
+      ).toBeNull();
+    });
+
     test('force=true on a project without dependents just deletes it', async () => {
       const projRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/projects')
