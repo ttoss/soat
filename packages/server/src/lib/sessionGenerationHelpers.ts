@@ -82,9 +82,9 @@ export const processToolOutputResult = async (args: {
       message: args.result.output.content,
       role: 'assistant',
       agentId: args.agentPublicId,
-      metadata:
+      responseMessages:
         responseMessages && responseMessages.length > 0
-          ? { responseMessages }
+          ? responseMessages
           : undefined,
     });
   }

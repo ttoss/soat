@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { readFileBuffer } from './fileStorage';
@@ -54,6 +55,43 @@ const resolveParticipantDbIds = async (args: {
   };
 };
 
+const resolveMessagePosition = async (args: {
+  conversationId: number;
+  position?: number;
+  transaction: Transaction;
+}): Promise<number> => {
+  if (args.position === undefined) {
+    const maxMessage = await db.ConversationMessage.findOne({
+      where: { conversationId: args.conversationId },
+      order: [['position', 'DESC']],
+      transaction: args.transaction,
+    });
+    return maxMessage ? maxMessage.position + 1 : 0;
+  }
+
+  const collision = await db.ConversationMessage.findOne({
+    where: { conversationId: args.conversationId, position: args.position },
+    transaction: args.transaction,
+  });
+  if (collision) {
+    const toShift = await db.ConversationMessage.findAll({
+      where: { conversationId: args.conversationId },
+      order: [['position', 'DESC']],
+      transaction: args.transaction,
+    });
+    for (const m of toShift) {
+      if (m.position >= args.position) {
+        await m.update(
+          { position: m.position + 1 },
+          { transaction: args.transaction }
+        );
+      }
+    }
+  }
+
+  return args.position;
+};
+
 const insertMessage = async (args: {
   conversationId: number;
   documentId: number;
@@ -62,36 +100,15 @@ const insertMessage = async (args: {
   agentId?: number | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  responseMessages?: unknown[];
   idempotencyKey: string | null;
 }) => {
   return db.sequelize.transaction(async (t) => {
-    let position = args.position;
-
-    if (position === undefined) {
-      const maxMessage = await db.ConversationMessage.findOne({
-        where: { conversationId: args.conversationId },
-        order: [['position', 'DESC']],
-        transaction: t,
-      });
-      position = maxMessage ? maxMessage.position + 1 : 0;
-    } else {
-      const collision = await db.ConversationMessage.findOne({
-        where: { conversationId: args.conversationId, position },
-        transaction: t,
-      });
-      if (collision) {
-        const toShift = await db.ConversationMessage.findAll({
-          where: { conversationId: args.conversationId },
-          order: [['position', 'DESC']],
-          transaction: t,
-        });
-        for (const m of toShift) {
-          if (m.position >= (args.position ?? 0)) {
-            await m.update({ position: m.position + 1 }, { transaction: t });
-          }
-        }
-      }
-    }
+    const position = await resolveMessagePosition({
+      conversationId: args.conversationId,
+      position: args.position,
+      transaction: t,
+    });
 
     return db.ConversationMessage.create(
       {
@@ -102,6 +119,7 @@ const insertMessage = async (args: {
         agentId: args.agentId ?? null,
         position,
         metadata: args.metadata ?? null,
+        responseMessages: args.responseMessages ?? null,
         idempotencyKey: args.idempotencyKey,
       },
       { transaction: t }
@@ -133,6 +151,29 @@ const findIdempotentMessage = async (args: {
     : null;
 };
 
+const emitMessageCreated = (args: {
+  conversationId: string;
+  projectId: number;
+  mapped: Awaited<ReturnType<typeof mapMessage>>;
+}) => {
+  resolveProjectPublicId({ projectId: args.projectId }).then(
+    (projectPublicId) => {
+      emitEvent({
+        type: 'conversations.message.created',
+        projectId: args.projectId,
+        projectPublicId,
+        resourceType: 'conversation_message',
+        resourceId: args.mapped.document_id,
+        data: {
+          ...args.mapped,
+          conversationId: args.conversationId,
+        } as unknown as Record<string, unknown>,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  );
+};
+
 export const addConversationMessage = async (args: {
   conversationId: string;
   message: string;
@@ -141,6 +182,7 @@ export const addConversationMessage = async (args: {
   agentId?: string | null;
   position?: number;
   metadata?: Record<string, unknown>;
+  responseMessages?: unknown[];
   idempotencyKey?: string | null;
 }) => {
   const conversation = await db.Conversation.findOne({
@@ -187,6 +229,7 @@ export const addConversationMessage = async (args: {
     agentId: agentDbId,
     position: args.position,
     metadata: args.metadata,
+    responseMessages: args.responseMessages,
     idempotencyKey: args.idempotencyKey ?? null,
   });
 
@@ -205,22 +248,11 @@ export const addConversationMessage = async (args: {
 
   const mapped = await mapMessage(messageWithAssociations!);
 
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.created',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: mapped.document_id,
-        data: {
-          ...mapped,
-          conversationId: args.conversationId,
-        } as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitMessageCreated({
+    conversationId: args.conversationId,
+    projectId: conversation.projectId,
+    mapped,
+  });
 
   return mapped;
 };
@@ -286,22 +318,11 @@ export const addConversationDocumentMessage = async (args: {
 
   const mapped = await mapMessage(messageWithAssociations!);
 
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.created',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: mapped.document_id,
-        data: {
-          ...mapped,
-          conversationId: args.conversationId,
-        } as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitMessageCreated({
+    conversationId: args.conversationId,
+    projectId: conversation.projectId,
+    mapped,
+  });
 
   return mapped;
 };

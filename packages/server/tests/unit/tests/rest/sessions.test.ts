@@ -1702,7 +1702,7 @@ describe('Sessions', () => {
       );
     });
 
-    test('persists response_messages in metadata after tool-output completion', async () => {
+    test('does not leak response_messages into metadata after tool-output completion (#844)', async () => {
       const responseMessages = [
         {
           role: 'assistant',
@@ -1758,13 +1758,10 @@ describe('Sessions', () => {
         }
       );
       expect(assistantMsg).toBeDefined();
-      expect(assistantMsg.metadata).not.toBeNull();
-      // metadata is an opaque bag (conversationMessages.ts passes it through
-      // verbatim, uncased) — responseMessages is the spelling the sibling
-      // conversationGeneration.ts writer and its only reader
-      // (conversationGeneration.ts's history builder) both use.
-      expect(assistantMsg.metadata.responseMessages).toBeDefined();
-      expect(assistantMsg.metadata.responseMessages).toHaveLength(3);
+      // response_messages is server-owned state stored on its own column
+      // (#844), not in the caller-owned metadata bag — metadata stays
+      // untouched by this write.
+      expect(assistantMsg.metadata).toBeNull();
     });
 
     test('returns requires_action result when more tool outputs are needed', async () => {
