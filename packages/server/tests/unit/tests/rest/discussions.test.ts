@@ -6,6 +6,7 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 describe('Discussions', () => {
   let adminToken: string;
   let userToken: string;
+  let userId: string;
   let projectId: string;
   let policyId: string;
   let aiProviderId: string;
@@ -33,6 +34,7 @@ describe('Discussions', () => {
 
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userId = setup.userId;
     projectId = setup.projectId;
     policyId = setup.policyId;
     noPermToken = setup.noPermToken as string;
@@ -337,6 +339,77 @@ describe('Discussions', () => {
         .post(`/api/v1/discussions/${created.body.id}/runs`)
         .send({ topic: 'x' });
       expect(res.status).toBe(401);
+    });
+
+    // #858: attribution is a typed, explicitly serialized principal pair — the
+    // same vocabulary `Generation.started_by_principal_*` uses — not an opaque
+    // `started_by` bag whose inner keys escaped the snake_case contract.
+    describe('run attribution (#858)', () => {
+      test('credits the JWT user as a typed principal pair', async () => {
+        const created = await createDiscussion();
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/discussions/${created.body.id}/runs`)
+          .send({ topic: 'Who started this?' });
+
+        expect(res.status).toBe(201);
+        expect(res.body.started_by_principal_type).toBe('user');
+        expect(res.body.started_by_principal_id).toBe(userId);
+        // The opaque bag and the never-populated reserved field are both gone.
+        expect(res.body.started_by).toBeUndefined();
+        expect(res.body.initiator_generation_id).toBeUndefined();
+      });
+
+      test('credits the API key itself when a key starts the run', async () => {
+        const created = await createDiscussion();
+        const res = await authenticatedTestClient(scopedApiKey)
+          .post(`/api/v1/discussions/${created.body.id}/runs`)
+          .send({ topic: 'Started by a key' });
+
+        expect(res.status).toBe(201);
+        expect(res.body.started_by_principal_type).toBe('api_key');
+        expect(res.body.started_by_principal_id).toMatch(/^key_/);
+      });
+
+      test('attribution survives on the read paths', async () => {
+        const created = await createDiscussion();
+        const runRes = await authenticatedTestClient(userToken)
+          .post(`/api/v1/discussions/${created.body.id}/runs`)
+          .send({ topic: 'Readback' });
+        expect(runRes.status).toBe(201);
+
+        const getRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/discussions/runs/${runRes.body.id}`
+        );
+        expect(getRes.status).toBe(200);
+        expect(getRes.body.started_by_principal_type).toBe('user');
+        expect(getRes.body.started_by_principal_id).toBe(userId);
+
+        const listRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/discussions/${created.body.id}/runs`
+        );
+        expect(listRes.status).toBe(200);
+        const listed = listRes.body.data.find((run: { id: string }) => {
+          return run.id === runRes.body.id;
+        });
+        expect(listed.started_by_principal_type).toBe('user');
+        expect(listed.started_by_principal_id).toBe(userId);
+      });
+
+      test('a caller cannot forge the attribution through the request body', async () => {
+        const created = await createDiscussion();
+        const res = await authenticatedTestClient(userToken)
+          .post(`/api/v1/discussions/${created.body.id}/runs`)
+          .send({
+            topic: 'Forgery attempt',
+            started_by_principal_type: 'api_key',
+            started_by_principal_id: 'key_forged',
+            started_by: { userId: 'usr_forged' },
+          });
+
+        // `strictFields` rejects the undeclared fields outright; the point is
+        // that no path exists for a caller to set the attribution.
+        expect(res.status).toBe(400);
+      });
     });
   });
 

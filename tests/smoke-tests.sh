@@ -2426,9 +2426,23 @@ if [ -z "$RUN_ID" ]; then
   echo "$RUN_RESP" >&2
   exit 1
 fi
-$SOAT_CLI get-discussion-run --run-id "$RUN_ID" >/dev/null
+RUN_GET_RESP=$($SOAT_CLI get-discussion-run --run-id "$RUN_ID")
 $SOAT_CLI list-discussion-runs --discussion-id "$DISCUSSION_ID" >/dev/null
-echo "discussion run: OK"
+
+# Attribution is server-derived from the caller's credentials, so it is
+# deterministic even though the outcome text is not. These calls run under
+# $SOAT_TOKEN (a login JWT), so the principal is the user, not a key. Matched
+# with grep rather than jq for the same reason the run id is: the response
+# inlines the model's free-form outcome.
+if ! printf '%s' "$RUN_GET_RESP" | grep -q '"started_by_principal_type": *"user"'; then
+  echo "ERROR: discussion run did not record the user as the starting principal" >&2
+  exit 1
+fi
+if ! printf '%s' "$RUN_GET_RESP" | grep -qE '"started_by_principal_id": *"user_'; then
+  echo "ERROR: discussion run did not record a user_ principal id" >&2
+  exit 1
+fi
+echo "discussion run: OK (attribution recorded)"
 
 # An agent invokes a discussion through a soat tool bound to
 # create-discussion-run, with the discussion pinned in preset_parameters.

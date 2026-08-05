@@ -17,7 +17,11 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  requestPrincipalFromCtx,
+  resolveWriteProjectId,
+} from './helpers';
 
 const discussionsRouter = new Router<Context>();
 
@@ -358,13 +362,13 @@ discussionsRouter.post(
       return;
     }
 
+    const principal = requestPrincipalFromCtx(ctx);
+
     const run = await runDiscussion({
       discussionId: ctx.params.discussion_id,
       topic: body.topic,
-      startedBy: {
-        userId: ctx.authUser.publicId,
-        username: ctx.authUser.username,
-      },
+      startedByPrincipalType: principal.principalType,
+      startedByPrincipalId: principal.principalId,
     });
 
     ctx.status = 201;

@@ -9,7 +9,7 @@ import {
   updateGenerationMetadata,
 } from 'src/lib/generations';
 
-import { redactionPrincipalFromCtx } from './helpers';
+import { requestPrincipalFromCtx } from './helpers';
 
 export const generationsRouter = new Router<Context>();
 
@@ -198,7 +198,7 @@ generationsRouter.delete(
     const purged = await purgeGenerationContent({
       publicId: ctx.params.generation_id,
       projectIds,
-      principal: redactionPrincipalFromCtx(ctx),
+      principal: requestPrincipalFromCtx(ctx),
     });
 
     if (!purged) {
