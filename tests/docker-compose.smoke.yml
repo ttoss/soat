@@ -17,7 +17,17 @@ services:
     image: ollama/ollama:0.20.6
     volumes:
       - ${HOME}/.ollama:/root/.ollama
+    # Ollama ignores SIGTERM until its default timeout; nothing here is worth
+    # draining.
+    stop_grace_period: 2s
     environment:
+      # NOTE: Ollama does not read `OLLAMA_NUM_CTX` — the variable it honours is
+      # `OLLAMA_CONTEXT_LENGTH`. This setting has therefore never taken effect:
+      # the 2026-08-05 run logged `OLLAMA_CONTEXT_LENGTH:0` and a runner
+      # `n_ctx = 4096` (the default). Left in place deliberately rather than
+      # "fixed" — raising the real context to 16384 would slow every generation
+      # on a CPU-only runner, and no smoke assertion is known to need it. Decide
+      # what context the suite actually wants before renaming this.
       OLLAMA_NUM_CTX: '16384'
     entrypoint:
       - /bin/sh
@@ -48,6 +58,7 @@ services:
     volumes:
       - ./mocks/ollamaToolChoiceProxy.mjs:/ollamaToolChoiceProxy.mjs:ro
     command: ['node', '/ollamaToolChoiceProxy.mjs']
+    stop_grace_period: 2s
     environment:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
@@ -68,6 +79,11 @@ services:
       retries: 10
 
   server:
+    # Named so `worker` can reuse this exact image instead of declaring its own
+    # identical `build:`. Two build blocks with the same context and target
+    # produce byte-identical images, but Compose still builds and exports both —
+    # ~20s of the job spent writing the same layers to the daemon twice.
+    image: soat-smoke-server
     build:
       context: ..
       target: production
@@ -75,6 +91,10 @@ services:
         - type=gha
       cache_to:
         - type=gha,mode=max
+    # The API tier does not exit on SIGTERM within Compose's default 10s grace
+    # period, so teardown waited the full timeout for it (and for both Ollama
+    # services below). This is a throwaway stack — nothing here needs to drain.
+    stop_grace_period: 2s
     depends_on:
       database:
         condition: service_healthy
@@ -121,13 +141,13 @@ services:
   # on the API service, this process is the only thing draining the queue —
   # which is exactly what the worker-fleet smoke steps assert.
   worker:
-    build:
-      context: ..
-      target: production
-      cache_from:
-        - type=gha
-      cache_to:
-        - type=gha,mode=max
+    # Same image as `server` — only the entrypoint differs, and `command`
+    # overrides that at runtime. Compose builds it once, under `server`.
+    image: soat-smoke-server
+    # The tag is local-only, produced by `server`'s build. Without this Compose
+    # would try the registry when it is missing and fail with a misleading
+    # "pull access denied" instead of naming the real problem.
+    pull_policy: never
     command: ['node', '--enable-source-maps', 'packages/server/dist/worker.mjs']
     depends_on:
       database:

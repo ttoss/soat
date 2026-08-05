@@ -483,6 +483,33 @@ pnpm --filter @soat/server test --testPathPatterns=mcp.test.ts
 
 The smoke tests (`tests/smoke-tests.sh`) are end-to-end shell scripts that run against a live server. They require `curl` and `jq`.
 
+### Where the time goes (and why it is not sharded)
+
+Profiled from the 2026-08-05 CI run, the ~9.5 min job split roughly:
+
+| Phase | Time |
+|---|---|
+| Job setup (checkout, free disk, Ollama image + model cache) | ~1.5 min |
+| `docker compose` build | ~1 min |
+| Stack startup to the first script step | ~20 s |
+| `smoke-tests.sh` itself | ~5.5 min |
+| Teardown + post steps | ~50 s |
+
+Inside the script, Ollama accounts for ~166 s (23 chat completions, ~145 s;
+31 embeddings, ~21 s) and the remaining ~163 s is the 463 `$SOAT_CLI`
+invocations — each one a Node process start (~150 ms) plus its HTTP round trip.
+
+**Do not shard this job the way `server-tests` is sharded.** The per-job fixed
+cost — setup, image build, stack startup, teardown — is close to 4 minutes, so a
+2-way split of a 5.5-minute script lands around 7 minutes against ~8.5 minutes
+whole, while doubling runner cost and Ollama pulls. The unit suite shards well
+because its fixed cost is ~40 s; this one does not.
+
+The productive levers here, in order, are: cut fixed overhead, cut the number of
+LLM generations, and cut CLI invocations. Inference speed itself is not a lever
+worth pulling — the models load once (~0.55 s each, verified in the Ollama logs)
+and the runner is CPU-only.
+
 ### CLI-first rule
 
 **All operations in `smoke-tests.sh` must be performed via the `$SOAT_CLI` wrapper** (e.g. `$SOAT_CLI create-agent`, `$SOAT_CLI create-agent-session`). The only permitted exception is the MCP JSON-RPC protocol check (`POST /mcp`), which uses `curl` because the `/mcp` endpoint is not a REST API operation and has no CLI equivalent. Do **not** use `curl` to call any `/api/v1/*` endpoint — if the CLI does not yet support an operation, add it to the CLI first.

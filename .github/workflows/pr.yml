@@ -219,13 +219,13 @@ jobs:
 
       - uses: pnpm/action-setup@v5
 
+      # No `cache: 'pnpm'` and no install step: `pnpm run smoke-tests` is a
+      # `docker compose up`, and every dependency it needs is installed inside
+      # the images. Installing the workspace here cost ~24s plus a ~11s store
+      # save on teardown, for a `node_modules` nothing read.
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
 
       - name: Setup Ollama
         uses: ./.github/actions/setup-ollama
