@@ -92,6 +92,69 @@ export const assertValidToolContextKeys = (
   }
 };
 
+/**
+ * The identity keys the server owns. They are derived from trusted state (the
+ * session record and its actor) and stamped at the generation chokepoint
+ * (`buildGenerationContext`), so a caller cannot address them from any
+ * generation entry point — direct agent, conversation, session, trigger,
+ * orchestration or nested `soat` tool call (#843, #850, #851).
+ */
+export const RESERVED_TOOL_CONTEXT_KEYS = [
+  'sessionId',
+  'actorId',
+  'actorExternalId',
+] as const;
+
+export type ServerToolContextIdentity = {
+  sessionId: string;
+  actorId?: string;
+  actorExternalId?: string;
+};
+
+// Header names are case-insensitive (RFC 9110 §5.1), so `sessionID` lands on
+// the same outbound header as `sessionId` — the strip must match by lowercased
+// key or a casing variant smuggles the forged header through.
+const RESERVED_LOWER = new Set(
+  RESERVED_TOOL_CONTEXT_KEYS.map((key) => {
+    return key.toLowerCase();
+  })
+);
+
+/**
+ * Makes the reserved identity keys unaddressable by a caller: every reserved
+ * key (in any casing) is dropped from the caller bag, then the server-derived
+ * identity — when the generation runs for a session — is stamped on top. A
+ * generation with no session carries no identity keys at all, so a downstream
+ * tool can trust that an `X-Soat-Context-SessionId` header is always
+ * server-derived.
+ */
+export const pinServerIdentityToolContext = (args: {
+  toolContext?: Record<string, string>;
+  identity: ServerToolContextIdentity | null;
+}): Record<string, string> | undefined => {
+  if (!args.toolContext && !args.identity) return undefined;
+
+  const stripped = Object.fromEntries(
+    Object.entries(args.toolContext ?? {}).filter(([key]) => {
+      return !RESERVED_LOWER.has(key.toLowerCase());
+    })
+  );
+
+  if (!args.identity) return stripped;
+
+  const identity: Record<string, string> = {
+    sessionId: args.identity.sessionId,
+  };
+  if (args.identity.actorId) {
+    identity.actorId = args.identity.actorId;
+  }
+  if (args.identity.actorExternalId) {
+    identity.actorExternalId = args.identity.actorExternalId;
+  }
+
+  return { ...stripped, ...identity };
+};
+
 export const buildContextHeaders = (
   toolContext?: Record<string, string>
 ): Record<string, string> => {

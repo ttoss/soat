@@ -57,30 +57,6 @@ export const findSessionRecord = async (args: {
   });
 };
 
-const buildToolContext = (
-  session: InstanceType<(typeof db)['Session']>
-): Record<string, string> => {
-  const actor = (
-    session as unknown as {
-      actor?: InstanceType<(typeof db)['Actor']> | null;
-    }
-  ).actor;
-
-  const context: Record<string, string> = {
-    sessionId: session.publicId,
-  };
-
-  if (actor?.publicId) {
-    context.actorId = actor.publicId;
-  }
-
-  if (actor?.externalId) {
-    context.actorExternalId = actor.externalId;
-  }
-
-  return context;
-};
-
 /**
  * Abort any in-flight generation and check the DB-based concurrency guard.
  * Returns `'already_generating'` if the caller should bail out, `null` otherwise.
@@ -202,14 +178,16 @@ export const generateSessionResponse = async (args: {
   const agent = (
     session as unknown as { agent: InstanceType<(typeof db)['Agent']> }
   ).agent;
-  // Server-derived identity keys are spread last so neither the persisted
-  // session bag nor a per-request caller value can occupy `sessionId`,
-  // `actorId` or `actorExternalId` — see #843. Both caller layers stay free
-  // to set any other key; only these three are pinned to the session/actor.
+  // Both layers here are caller-owned (the persisted session bag and the
+  // per-request bag); a request value wins the merge. The server-derived
+  // identity keys (`sessionId`, `actorId`, `actorExternalId`) are NOT pinned
+  // here — since #850 they are stamped at the generation chokepoint
+  // (buildGenerationContext) from the `sessionId` passed below, which covers
+  // this path and every other entry point uniformly (#843's per-path pin
+  // lived here and left the sibling paths open).
   const mergedToolContext = {
     ...(session.toolContext ?? {}),
     ...(args.toolContext ?? {}),
-    ...buildToolContext(session),
   };
 
   const controller = new AbortController();

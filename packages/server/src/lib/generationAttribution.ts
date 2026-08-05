@@ -1,4 +1,5 @@
 import { db } from '../db';
+import type { ServerToolContextIdentity } from './toolContext';
 
 export type EndUserAttribution = {
   actorId: number | null;
@@ -36,5 +37,30 @@ export const resolveEndUserAttribution = async (args: {
   return {
     actorId: session?.actorId ?? null,
     sessionId: (session?.id as number | undefined) ?? null,
+  };
+};
+
+/**
+ * Resolves the trusted identity `pinServerIdentityToolContext` stamps into a
+ * generation's `tool_context` (#850). `sessionId` is a typed argument set only
+ * by server code (the session and conversation dispatch paths), never read
+ * from a caller bag, so it is stamped even when the session row has already
+ * been deleted mid-flight; the actor keys come from the session's actor link.
+ */
+export const resolveServerToolContextIdentity = async (args: {
+  sessionId?: string | null;
+}): Promise<ServerToolContextIdentity | null> => {
+  if (!args.sessionId) return null;
+
+  const session = await db.Session.findOne({
+    where: { publicId: args.sessionId },
+    include: [{ model: db.Actor, as: 'actor' }],
+  });
+  const actor = session?.actor ?? null;
+
+  return {
+    sessionId: args.sessionId,
+    actorId: actor?.publicId,
+    actorExternalId: actor?.externalId ?? undefined,
   };
 };

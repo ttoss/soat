@@ -108,9 +108,17 @@ export class Task extends Model {
   })
   declare status: 'open' | 'closed';
 
-  // Mutable task data; input to guards and dispatch mappings.
+  // Mutable task data; input to guards and dispatch mappings. 100%
+  // caller-owned — the engine never writes a key into it except the workflow
+  // author's declared `payload_writes` (#846).
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: {} })
   declare payload: Record<string, unknown>;
+
+  // Server-owned: the result of the current state's last completed dispatch,
+  // overwritten on every dispatch. Exposed to guards as `task.last_result` —
+  // a namespace callers cannot write, unlike the payload bag (#846).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare lastResult: unknown;
 
   // Informational in v1: a user or actor public ID, not interpreted by the engine.
   @Column({ type: DataType.STRING, allowNull: true })

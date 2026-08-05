@@ -25,6 +25,9 @@ const buildTaskContext = (task: TaskWithWorkflow) => {
       status: task.status,
       payload: task.payload,
       assignee: task.assignee,
+      // Server-owned, in its own namespace: a guard on `task.last_result`
+      // can only be satisfied by a value an automation wrote (#846).
+      last_result: task.lastResult ?? null,
     },
   };
 };
@@ -38,10 +41,9 @@ const setDispatchState = async (args: {
   args.task.activeDispatch = args.activeDispatch;
   args.task.automationStatus = args.automationStatus;
   if (args.lastResult !== undefined) {
-    args.task.payload = {
-      ...(args.task.payload as Record<string, unknown>),
-      last_result: args.lastResult,
-    };
+    // Typed column, never the payload bag — the payload is caller-owned and a
+    // caller-writable `last_result` key must not feed transition guards (#846).
+    args.task.lastResult = args.lastResult;
   }
   await args.task.save();
 };
@@ -252,11 +254,13 @@ const commitCompletion = async (args: {
           writes
         );
       }
-      t.payload = {
-        ...(t.payload as Record<string, unknown>),
-        last_result: args.dispatched.result,
-        ...writes,
-      };
+      t.lastResult = args.dispatched.result;
+      if (Object.keys(writes).length > 0) {
+        t.payload = {
+          ...(t.payload as Record<string, unknown>),
+          ...writes,
+        };
+      }
     },
   });
 };

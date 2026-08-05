@@ -1,11 +1,7 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import {
-  camelToSnakeKey,
-  isPlainObject,
-  snakeToCamelKey,
-} from './resource-inputs/normalizers';
+import { isPlainObject } from './resource-inputs/normalizers';
 import {
   assertRetryPolicyValid,
   type RetryPolicy,
@@ -24,10 +20,10 @@ export type WorkflowDispatch = {
   inputMapping?: Record<string, unknown>;
   /**
    * JSON Logic expressions, evaluated over the same `{task, result}` context
-   * `on_complete` rules see, written into `task.payload` atomically with
-   * `last_result` when the dispatch completes. Unlike `last_result` (overwritten
-   * on every dispatch), each key here is a named, deterministic cross-hop
-   * channel — no model in the path. A write is a raw overwrite of its key;
+   * `on_complete` rules see, written into `task.payload` atomically with the
+   * `last_result` column when the dispatch completes. Unlike `last_result`
+   * (overwritten on every dispatch), each key here is a named, deterministic
+   * cross-hop channel — no model in the path. A write is a raw overwrite of its key;
    * a value written by an earlier pass through a looping state lingers in the
    * payload until the state runs again.
    */
@@ -67,65 +63,10 @@ export type WorkflowTransition = {
   requiresApproval?: boolean;
 };
 
-// ── Wire <-> internal conversion ─────────────────────────────────────────
-//
-// A workflow's `states`/`transitions` carry structural keys in camelCase
-// internally (`stalledAfter`, `onEnter`, `onComplete`, `requiresApproval`,
-// `agentId`) but are authored and read back snake_case on the wire — REST and
-// formation templates alike. Deep-convert every key while leaving opaque,
-// author-authored bags verbatim: a transition's `guard`, an on_complete
-// rule's `when` (JSON Logic bodies — a JSON-Logic operator like
-// `missing_some` is not a SOAT field name), and a dispatch's `input_mapping`
-// (its keys are the *target* orchestration/agent's own input field names,
-// chosen by the workflow author, not SOAT's — renaming them would silently
-// change which input key the dispatched run receives). Shared by
-// `rest/v1/workflows.ts` and `formation-modules/workflowsFormationModule.ts`
-// — both boundaries face the identical shape.
-const OPAQUE_BAG_KEYS = new Set([
-  'guard',
-  'when',
-  'inputMapping',
-  'input_mapping',
-  'payloadWrites',
-  'payload_writes',
-]);
-
-const deepConvertKeys = (
-  value: unknown,
-  transform: (key: string) => string
-): unknown => {
-  if (Array.isArray(value)) {
-    return value.map((item) => {
-      return deepConvertKeys(item, transform);
-    });
-  }
-  if (isPlainObject(value)) {
-    return Object.fromEntries(
-      Object.entries(value).map(([key, val]) => {
-        const newKey = transform(key);
-        if (OPAQUE_BAG_KEYS.has(newKey)) {
-          return [newKey, val];
-        }
-        return [newKey, deepConvertKeys(val, transform)];
-      })
-    );
-  }
-  return value;
-};
-
-/** Converts a raw wire `states`/`transitions` array (snake_case) to the internal camelCase shape. */
-export const workflowCollectionToCamel = <T>(
-  value: unknown
-): T[] | undefined => {
-  if (!Array.isArray(value)) return undefined;
-  return deepConvertKeys(value, snakeToCamelKey) as T[];
-};
-
-/** Reverses {@link workflowCollectionToCamel} for a response body. */
-export const workflowCollectionToSnake = (value: unknown): unknown[] => {
-  if (!Array.isArray(value)) return [];
-  return deepConvertKeys(value, camelToSnakeKey) as unknown[];
-};
+export {
+  workflowCollectionToCamel,
+  workflowCollectionToSnake,
+} from './workflowsWire';
 
 const fail = (message: string, meta?: Record<string, unknown>): never => {
   throw new DomainError('WORKFLOW_VALIDATION_FAILED', message, meta);

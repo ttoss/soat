@@ -144,6 +144,10 @@ const resolveRecoveryTools = async (args: {
       projectPublicId: args.typedAgent.project.publicId,
       projectGuardrailIds: args.typedAgent.project.guardrailIds,
       agentGuardrailIds: args.typedAgent.guardrailIds,
+      // Trusted read: `pendingState.toolContext` is persisted AFTER the
+      // chokepoint pin in buildGenerationContext (#850), so a `sessionId` key
+      // here is always server-stamped — a caller-forged value never reaches
+      // the persisted state.
       sessionId: args.pendingState.toolContext?.sessionId ?? null,
       authHeader: args.authHeader,
     }),

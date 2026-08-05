@@ -3,6 +3,8 @@ import {
   assertWorkflowValid,
   findValidTransition,
   validatePayload,
+  workflowCollectionToCamel,
+  workflowCollectionToSnake,
   type WorkflowState,
   type WorkflowTransition,
 } from 'src/lib/workflowsValidation';
@@ -31,6 +33,123 @@ const expectInvalid = (
     if (match) expect((error as DomainError).message).toMatch(match);
   }
 };
+
+// #852 — the wire↔internal conversion must be an explicit field-by-field
+// mapper, not a key-blind recursive transform: only the named structural keys
+// change case, and every author-owned value — JSON Logic bodies, mapping
+// bags, and any key the mapper does not name — is copied verbatim, so its
+// inner keys can never be rewritten.
+describe('workflowCollectionToCamel / workflowCollectionToSnake', () => {
+  test('renames the structural keys and leaves author-owned bags verbatim', () => {
+    const wire = [
+      {
+        name: 'triage',
+        initial: true,
+        stalled_after: 60,
+        on_enter: {
+          dispatch: {
+            kind: 'orchestration',
+            orchestration_id: 'orc_1',
+            input_mapping: {
+              customer_id: { var: 'task.payload.customer_id' },
+            },
+            payload_writes: {
+              review_notes: { var: 'result.output.review_notes' },
+            },
+          },
+          retry: { max_attempts: 3, backoff_seconds: 5 },
+          on_complete: [
+            { when: { missing_some: [1, ['a_b', 'c_d']] }, transition: 'go' },
+          ],
+          on_failure: 'fail',
+        },
+      },
+    ];
+
+    const camel = workflowCollectionToCamel<WorkflowState>(wire)!;
+    const state = camel[0] as WorkflowState & Record<string, unknown>;
+
+    expect(state.stalledAfter).toBe(60);
+    expect(state).not.toHaveProperty('stalled_after');
+    expect(state.onEnter?.dispatch.orchestrationId).toBe('orc_1');
+    expect(state.onEnter?.retry).toEqual({ maxAttempts: 3, backoffSeconds: 5 });
+    expect(state.onEnter?.onFailure).toBe('fail');
+    // Author-owned bags round through untouched, inner keys included.
+    expect(state.onEnter?.dispatch.inputMapping).toEqual({
+      customer_id: { var: 'task.payload.customer_id' },
+    });
+    expect(state.onEnter?.dispatch.payloadWrites).toEqual({
+      review_notes: { var: 'result.output.review_notes' },
+    });
+    expect(state.onEnter?.onComplete?.[0].when).toEqual({
+      missing_some: [1, ['a_b', 'c_d']],
+    });
+  });
+
+  test('a transition guard is opaque; requires_approval is renamed', () => {
+    const camel = workflowCollectionToCamel<WorkflowTransition>([
+      {
+        name: 'go',
+        from: ['a'],
+        to: 'b',
+        requires_approval: true,
+        guard: { '==': [{ var: 'task.payload.review_state' }, 'ok'] },
+      },
+    ])!;
+
+    expect(camel[0].requiresApproval).toBe(true);
+    expect(camel[0].guard).toEqual({
+      '==': [{ var: 'task.payload.review_state' }, 'ok'],
+    });
+  });
+
+  test('an unrecognized key is copied verbatim, never deep-rewritten (the deepConvertKeys regression)', () => {
+    const wire = [
+      {
+        name: 'a',
+        future_bag: { inner_key: { deep_key: 1 } },
+      },
+    ];
+
+    const camel = workflowCollectionToCamel<Record<string, unknown>>(wire)!;
+    // The mapper does not know `future_bag`, so it must not touch it — not
+    // its name, and above all not its inner keys. deepConvertKeys rewrote
+    // both unless someone remembered to extend a skip list.
+    expect(camel[0]).toHaveProperty('future_bag');
+    expect(camel[0].future_bag).toEqual({ inner_key: { deep_key: 1 } });
+
+    const snake = workflowCollectionToSnake(camel) as Record<string, unknown>[];
+    expect(snake[0].future_bag).toEqual({ inner_key: { deep_key: 1 } });
+  });
+
+  test('toSnake reverses toCamel exactly for a full workflow definition', () => {
+    const wire = [
+      {
+        name: 'triage',
+        stalled_after: 120,
+        on_enter: {
+          dispatch: {
+            kind: 'agent',
+            agent_id: 'agt_1',
+            input_mapping: { some_key: 'x' },
+          },
+          retry: {
+            max_attempts: 2,
+            backoff_seconds: 1,
+            backoff_multiplier: 2,
+          },
+          on_complete: [{ when: { var: 'result.ok' }, transition: 'go' }],
+          on_failure: null,
+        },
+      },
+      { name: 'done', terminal: true },
+    ];
+
+    expect(workflowCollectionToSnake(workflowCollectionToCamel(wire))).toEqual(
+      wire
+    );
+  });
+});
 
 describe('assertWorkflowValid', () => {
   test('accepts a well-formed definition with a cycle (a→b→a)', () => {

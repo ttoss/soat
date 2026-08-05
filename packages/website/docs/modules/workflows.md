@@ -119,7 +119,8 @@ state in `from`) if a workflow needs one.
 | `title`             | string           | Human-readable label                                                    |
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
-| `payload`           | object           | Mutable task data; input to guards and dispatch `input_mapping`s        |
+| `payload`           | object           | Caller-owned task data; input to guards and dispatch `input_mapping`s. The engine never writes into it except declared `payload_writes` |
+| `last_result`       | any \| null      | Server-owned, read-only: the result of the current state's last completed dispatch, overwritten on every dispatch. Guards read it as `task.last_result` |
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
@@ -182,7 +183,8 @@ run when a task enters it, and routes the outcome back into a transition:
   over `{task}` that resolves the dispatch input from the task payload — the same
   expression language orchestrations use. `payload_writes` (optional) is JSON
   Logic evaluated over `{task, result}` — the same context `on_complete` sees —
-  and written into named `task.payload` keys atomically with `last_result` when
+  and written into named `task.payload` keys atomically with the `last_result`
+  field when
   the dispatch completes. Use it to carry a value (e.g. a document id from a
   `POST` response) past the next state: `last_result` is overwritten by every
   dispatch and survives exactly one hop, while a `payload_writes` key is a
@@ -194,7 +196,9 @@ run when a task enters it, and routes the outcome back into a transition:
   the first match fires its transition **as the `automation` principal** (subject to
   the same guards). An agent dispatch exposes its generation output under
   `{result}`; an orchestration dispatch exposes its final run state. The result
-  is also written to `task.payload.last_result` for downstream states. No rule
+  is also written to the server-owned `task.last_result` field for downstream
+  states — its own namespace, not a payload key, so a caller `PATCH` can never
+  forge it. No rule
   matches → the task stays put with `automation_status: completed` and a
   `tasks.automation_unrouted` event fires (never silently stuck). A rule
   matches but its transition is rejected (its guard fails for the `automation`
@@ -240,7 +244,7 @@ task the moment the run is created, so a transition out cancels the live run.
   valid from the committed state — or a transition on a `closed` task — returns
   `TASK_TRANSITION_CONFLICT` (409).
 - **Automation completion is atomic too.** The post-dispatch write (`active_dispatch`,
-  `automation_status`, and the `payload.last_result` merge) re-validates under the
+  `automation_status`, `last_result`, and any `payload_writes`) re-validates under the
   same row lock immediately before writing. A concurrent transition that already
   moved the task — or re-entered the same state — is detected there, and the
   stale write is discarded instead of clobbering the new state's data.
@@ -255,8 +259,10 @@ task the moment the run is created, so a transition out cancels the live run.
 - **Payload is working data.** `PATCH /tasks/{id}` updates `payload`, `title`, or
   `assignee`. `payload` is **shallow-merged** over the current payload (PATCH
   semantics): keys the request omits are kept, so setting `approved` never
-  discards a `last_result` an on_enter automation wrote. The merged payload is
-  validated against `payload_schema`. Transitions are the audited contract;
+  discards other working data. The payload is 100% caller-owned; the automation
+  result lives in the read-only `last_result` field, which no patch can reach —
+  a guard on `task.last_result` is only ever satisfied by a value an automation
+  wrote. The merged payload is validated against `payload_schema`. Transitions are the audited contract;
   payload writes are not versioned.
 
 ### Alternate entry points
