@@ -495,9 +495,21 @@ Profiled from the 2026-08-05 CI run, the ~9.5 min job split roughly:
 | `smoke-tests.sh` itself | ~5.5 min |
 | Teardown + post steps | ~50 s |
 
-Inside the script, Ollama accounts for ~166 s (23 chat completions, ~145 s;
-31 embeddings, ~21 s) and the remaining ~163 s is the 463 `$SOAT_CLI`
-invocations — each one a Node process start (~150 ms) plus its HTTP round trip.
+**The script is Ollama-bound.** Of its ~5.5 min, Ollama accounted for ~240 s
+(24 chat completions, ~219 s; 31 embeddings, ~21 s) — about 73%. The rest is the
+463 `$SOAT_CLI` invocations, each a Node process start (~150 ms) plus its HTTP
+round trip.
+
+**That cost is also extremely variable.** Nothing bounds how many tokens
+`qwen2.5:0.5b` emits, so the same step can take 24 s in one run and 121 s in the
+next. Between the 2026-08-05 runs, total chat time swung 219 s → 406 s with no
+change to the suite. Treat any single-run smoke timing as ±2 min; compare phases
+(build / startup / script / teardown), not job totals.
+
+> When profiling from CI logs, note that Ollama's `[GIN]` lines use Go duration
+> format — `1m23s`, not `83s`. A regex that only handles `s`/`ms`/`µs` silently
+> drops exactly the slow requests you are looking for, which is how an earlier
+> version of this table understated Ollama by 40%.
 
 **Do not shard this job the way `server-tests` is sharded.** The per-job fixed
 cost — setup, image build, stack startup, teardown — is close to 4 minutes, so a
@@ -505,10 +517,10 @@ cost — setup, image build, stack startup, teardown — is close to 4 minutes, 
 whole, while doubling runner cost and Ollama pulls. The unit suite shards well
 because its fixed cost is ~40 s; this one does not.
 
-The productive levers here, in order, are: cut fixed overhead, cut the number of
-LLM generations, and cut CLI invocations. Inference speed itself is not a lever
-worth pulling — the models load once (~0.55 s each, verified in the Ollama logs)
-and the runner is CPU-only.
+The productive levers, in order, are: bound or reduce the LLM generations, cut
+fixed overhead, then cut CLI invocations. Inference *speed* is not a lever — the
+models load once (~0.55 s each, verified in the Ollama logs) and the runner is
+CPU-only.
 
 ### CLI-first rule
 
