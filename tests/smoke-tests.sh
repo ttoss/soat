@@ -2716,12 +2716,23 @@ echo "Agent tool deleted."
 
 # 25. Create an MCP agent tool pointing at the SOAT MCP server
 echo "--- Creating MCP agent tool ---"
+# Scoped to the one action the agent below is asked to call. Unscoped, this tool
+# puts the entire SOAT MCP surface — every tool schema the server exposes — into
+# the agent's prompt, and prefilling that on a CPU-only runner made this the most
+# expensive generation in the suite (~75s, routinely past the 30s timeout below,
+# at which point the step skipped its own assertions). One schema instead of
+# hundreds keeps the assertions enforced rather than warned past.
+#
+# Nothing is lost by scoping: this tool is only ever used by the MCP agent, and
+# whole-surface exposure is still exercised by the `soat-mcp-denylist` tool
+# created further down.
 MCP_TOOL_RESP=$($SOAT_CLI create-tool \
   --project_id "$PROJECT_PUBLIC_ID" \
   --name soat-mcp \
   --type mcp \
-  --description "SOAT MCP server - exposes all SOAT tools over the MCP protocol." \
-  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}")
+  --description "SOAT MCP server - exposes the list-agents tool over MCP." \
+  --mcp "{\"url\":\"$SERVER_URL/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}" \
+  --actions '["list-agents"]')
 MCP_TOOL_ID=$(printf '%s\n' "$MCP_TOOL_RESP" | jq -r '.id')
 echo "MCP Agent Tool id: $MCP_TOOL_ID"
 
