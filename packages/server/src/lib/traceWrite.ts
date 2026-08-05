@@ -4,6 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { upsertFileByPath } from './files';
 import {
+  resolveAgentTraceContentMode,
   resolveTraceContentModeForAgent,
   ZERO_RETENTION_PRINCIPAL,
 } from './traceContentPolicy';
@@ -30,9 +31,28 @@ export const serializeSteps = (steps: unknown[]): unknown[] => {
   ) as unknown[];
 };
 
+/** Redaction columns stamped on a row whose content was never written. Reuses
+ * the purge marker deliberately: a reader that already handles "content was
+ * erased" needs no new concept, and the principal id says which it was. */
+const zeroRetentionColumns = (zeroRetention?: boolean) => {
+  if (!zeroRetention) return {};
+  return {
+    contentRedactedAt: new Date(),
+    contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
+    contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
+  };
+};
+
 /**
  * Records a structured error payload on a trace so failed generations are
  * distinguishable from pending ones. Fire-and-forget safe.
+ *
+ * Suppressed in zero-retention mode (#838). An error payload can carry a
+ * tool's request/response bodies — which is exactly why a purge clears
+ * `error` — so a mode that promises nothing is written must refuse it here
+ * too, or every failed generation would leak the content the mode exists to
+ * keep off disk. The row is still stamped, so the failure stays visible as a
+ * skeleton even though its payload is not.
  */
 export const recordTraceError = async (args: {
   traceId: string;
@@ -41,6 +61,23 @@ export const recordTraceError = async (args: {
   log('recordTraceError: traceId=%s', args.traceId);
   const trace = await db.Trace.findOne({ where: { publicId: args.traceId } });
   if (!trace) return;
+
+  const mode = await resolveAgentTraceContentMode({
+    agentDbId: trace.agentId,
+  });
+
+  if (mode === 'none') {
+    log(
+      'recordTraceError: zero-retention, dropping payload for %s',
+      args.traceId
+    );
+    await trace.update({
+      error: null,
+      ...zeroRetentionColumns(trace.contentRedactedAt === null),
+    });
+    return;
+  }
+
   await trace.update({ error: args.error });
 };
 
@@ -69,18 +106,6 @@ type CreateTraceArgs = {
   parentTraceId: number | null;
   rootTraceId: number | null;
   zeroRetention?: boolean;
-};
-
-/** Redaction columns stamped on a row whose content was never written. Reuses
- * the purge marker deliberately: a reader that already handles "content was
- * erased" needs no new concept, and the principal id says which it was. */
-const zeroRetentionColumns = (zeroRetention?: boolean) => {
-  if (!zeroRetention) return {};
-  return {
-    contentRedactedAt: new Date(),
-    contentRedactedByPrincipalType: ZERO_RETENTION_PRINCIPAL.principalType,
-    contentRedactedByPrincipalId: ZERO_RETENTION_PRINCIPAL.principalId,
-  };
 };
 
 const createTraceOrFallback = async (args: CreateTraceArgs): Promise<void> => {

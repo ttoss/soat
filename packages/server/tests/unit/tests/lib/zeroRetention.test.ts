@@ -4,7 +4,7 @@ import {
   updateGenerationRecord,
 } from 'src/lib/generations';
 import { clearTraceContentModeCache } from 'src/lib/traceContentPolicy';
-import { saveTrace } from 'src/lib/traces';
+import { recordTraceError, saveTrace } from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -289,6 +289,48 @@ describe('zero-retention mode', () => {
       const gen = await db.Generation.findOne({ where: { publicId } });
       expect(gen!.error).toEqual({ message: 'boom' });
       expect(gen!.pendingState).toEqual({ messages: [] });
+    });
+  });
+
+  describe('recordTraceError', () => {
+    test('a storing agent records the error payload', async () => {
+      const seeded = await seedTrace({
+        projectDbId: storingProjectDbId,
+        projectPublicId: storingProjectId,
+        agentPublicId: storingAgent.publicId,
+      });
+
+      await recordTraceError({
+        traceId: seeded.traceId,
+        error: { message: 'upstream 500' },
+      });
+
+      const row = await db.Trace.findOne({
+        where: { publicId: seeded.traceId },
+      });
+      expect(row!.error).toEqual({ message: 'upstream 500' });
+    });
+
+    test('a zero-retention agent records no error payload', async () => {
+      // `error` can carry a tool's request/response bodies, which is why a
+      // purge clears it — so the never-write path must refuse it too, or the
+      // one mode that promises nothing is stored would leak on every failure.
+      const seeded = await seedTrace({
+        projectDbId: zeroProjectDbId,
+        projectPublicId: zeroProjectId,
+        agentPublicId: inheritedAgent.publicId,
+      });
+
+      await recordTraceError({
+        traceId: seeded.traceId,
+        error: { message: 'upstream 500', body: 'confidential case text' },
+      });
+
+      const row = await db.Trace.findOne({
+        where: { publicId: seeded.traceId },
+      });
+      expect(row!.error).toBeNull();
+      expect(row!.contentRedactedAt).not.toBeNull();
     });
   });
 

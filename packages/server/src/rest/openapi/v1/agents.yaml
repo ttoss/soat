@@ -1016,7 +1016,9 @@ components:
         trace_content_mode:
           type: string
           nullable: true
-          enum: [full, none]
+          # `null` is a real value here (inherit the project), so it belongs in
+          # the enum — otherwise the generated SDK type omits it (#861).
+          enum: [full, none, null]
           description: >-
             Agent-scope zero-retention setting. `null` (the default) inherits
             the project's `trace_content_mode`; `none` means this agent's trace
@@ -1334,7 +1336,9 @@ components:
         trace_content_mode:
           type: string
           nullable: true
-          enum: [full, none]
+          # `null` is a real value here (inherit the project), so it belongs in
+          # the enum — otherwise the generated SDK type omits it (#861).
+          enum: [full, none, null]
           description: >-
             Zero-retention opt-in for this agent. `null` inherits the project's
             setting; `none` means trace and generation content is never
@@ -1511,7 +1515,9 @@ components:
         trace_content_mode:
           type: string
           nullable: true
-          enum: [full, none]
+          # `null` is a real value here (inherit the project), so it belongs in
+          # the enum — otherwise the generated SDK type omits it (#861).
+          enum: [full, none, null]
           description: >-
             Zero-retention opt-in for this agent. `null` inherits the project's
             setting; `none` means trace and generation content is never
