@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.19.0](https://github.com/ttoss/soat/compare/v0.18.6...v0.19.0) (2026-08-06)
+
+### Bug Fixes
+
+* **discussions:** type DiscussionRun attribution instead of a free-form bag ([#858](https://github.com/ttoss/soat/issues/858)) ([#862](https://github.com/ttoss/soat/issues/862)) ([6d6fdaf](https://github.com/ttoss/soat/commit/6d6fdafc6f3cd1ca5389e2f7983b733689227f99)), closes [#842](https://github.com/ttoss/soat/issues/842) [#807](https://github.com/ttoss/soat/issues/807) [#856](https://github.com/ttoss/soat/issues/856)
+
+### Features
+
+* **traces,projects,agents:** content retention sweep and zero-retention mode ([#864](https://github.com/ttoss/soat/issues/864)) ([a51fae9](https://github.com/ttoss/soat/commit/a51fae9c413f2fac2df0b14a7af4c38b2affb4ab)), closes [#837](https://github.com/ttoss/soat/issues/837) [#838](https://github.com/ttoss/soat/issues/838) [#839](https://github.com/ttoss/soat/issues/839) [#836](https://github.com/ttoss/soat/issues/836) [#837](https://github.com/ttoss/soat/issues/837) [#838](https://github.com/ttoss/soat/issues/838) [861/#863](https://github.com/ttoss/soat/issues/863)
+
+### BREAKING CHANGES
+
+* **discussions:** `DiscussionRunRecord.started_by` is replaced by
+  `started_by_principal_type` / `started_by_principal_id`, and
+  `initiator_generation_id` is removed. Readers of `started_by.userId`
+  should read `started_by_principal_id` (note it is the API key's id when a
+  key made the call). Breaking accepted per the #856 precedent — SOAT is in
+  beta.
+
+  The old `started_by` and `initiator_generation_id` columns are nullable
+  and no longer mapped, so existing databases need no migration; drop them
+  at leisure with
+  `ALTER TABLE discussion_runs DROP COLUMN IF EXISTS started_by, DROP COLUMN IF EXISTS initiator_generation_id`.
+
 ## [0.18.6](https://github.com/ttoss/soat/compare/v0.18.5...v0.18.6) (2026-08-05)
 
 * Close the free-form-bag epic structurally: chokepoint identity pin, explicit workflow wire mappers, server-owned task last_result (#853) (#856) ([c9b5266](https://github.com/ttoss/soat/commit/c9b526644a2252ab6c14f42f84359d15be726d82)), closes [#853](https://github.com/ttoss/soat/issues/853) [#856](https://github.com/ttoss/soat/issues/856) [#850](https://github.com/ttoss/soat/issues/850) [#851](https://github.com/ttoss/soat/issues/851) [729/#737](https://github.com/ttoss/soat/issues/737) [#852](https://github.com/ttoss/soat/issues/852) [#846](https://github.com/ttoss/soat/issues/846)
