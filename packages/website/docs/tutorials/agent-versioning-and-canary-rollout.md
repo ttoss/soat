@@ -130,7 +130,7 @@ AGENT_ID=$(soat create-agent \
   --instructions "You are a formal support assistant. Answer in one short sentence." | jq -r '.id')
 
 soat get-agent --agent-id "$AGENT_ID" | jq '{id, version, active_release}'
-soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version, label})'
+soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version: .version, label: .label})'
 ```
 
 </TabItem>
@@ -187,7 +187,7 @@ curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, version, active_release}'
 
 curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({version, label})'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({version: .version, label: .label})'
 ```
 
 </TabItem>
@@ -214,7 +214,7 @@ soat update-agent --agent-id "$AGENT_ID" \
   --version-label "friendly-tone" \
   | jq '{version}'
 
-soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version, label})'
+soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version: .version, label: .label})'
 soat get-agent-version --agent-id "$AGENT_ID" --version 1 | jq '{version, config: {instructions: .config.instructions}}'
 ```
 
@@ -248,7 +248,7 @@ curl -s -X PUT "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID" \
   | jq '{version}'
 
 curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions/1" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version, label}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version: .version, label: .label}'
 ```
 
 </TabItem>
@@ -596,7 +596,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/abort" \
 soat restore-agent-version --agent-id "$AGENT_ID" --version 1 \
   | jq '{version, instructions}'
 
-soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version, label})'
+soat list-agent-versions --agent-id "$AGENT_ID" | jq '.data | map({version: .version, label: .label})'
 ```
 
 </TabItem>
@@ -617,7 +617,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions/1/restore" \
   -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version, instructions}'
 
 curl -s "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/versions" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({version, label})'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.data | map({version: .version, label: .label})'
 ```
 
 </TabItem>
