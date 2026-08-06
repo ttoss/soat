@@ -42,7 +42,9 @@ export const getWrapperHelpFlags = (commandName: string): HelpFlag[] => {
 };
 
 export {
+  buildArrayFlagValue,
   extractPositionalArgs,
+  parseFlagValue,
   parseUnknownWithRepeats,
 } from './flagParser.js';
 export type { HelpFlag, ParsedFlags, Wrapper } from './types.js';

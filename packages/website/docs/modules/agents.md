@@ -24,6 +24,7 @@ To run an agent automatically — on a cron schedule, from an inbound webhook, o
 - [Execute Agent Tool Calls in Your Own App - Step 6 (The generation pauses)](/docs/tutorials/client-tools#step-6--ask-about-an-order-the-generation-pauses)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 6 (Create stanza agents)](/docs/tutorials/multi-agent-orchestration#step-6--create-the-four-stanza-agents)
 - [Create an Agent Squad - Step 4 (Write the formation template)](/docs/tutorials/create-an-agent-squad#step-4--write-the-formation-template)
+- [Agent Versioning and Canary Rollout - Step 5 (Start a canary release)](/docs/tutorials/agent-versioning-and-canary-rollout#step-5--start-a-canary-release)
 
 ## Data Model
 

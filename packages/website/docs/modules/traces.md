@@ -22,6 +22,7 @@ Traces support **parent-child relationships**: when an agent spawns a sub-agent 
 - [Debug Session, Generation, and Trace History - Step 5 (Inspect traces for each generation)](/docs/tutorials/debug-session-generation-trace-history#step-5---inspect-traces-for-each-generation)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 12 (Inspect the trace tree)](/docs/tutorials/multi-agent-orchestration#step-12--inspect-the-trace-tree)
 - [Deploy a Multi-Agent App with Agent Formation - Step 9 (Inspect the trace tree)](/docs/tutorials/formations#step-9--inspect-the-trace-tree)
+- [Data Retention and Zero-Retention - Step 4 (Purge the trace on request)](/docs/tutorials/data-retention-and-zero-retention#step-4--purge-the-trace-on-request)
 
 ## Data Model
 

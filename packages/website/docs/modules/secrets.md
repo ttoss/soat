@@ -21,6 +21,7 @@ Secrets can be linked to [AI Providers](./ai-providers.md) to supply credentials
 
 - [Connect Third-Party LLMs - Step 3 (Store provider credentials as secrets)](/docs/tutorials/connect-third-party-llms#step-3--store-provider-credentials-as-secrets)
 - [Connect Third-Party LLMs - Step 4 (Create provider records)](/docs/tutorials/connect-third-party-llms#step-4--create-provider-records)
+- [Call AWS and GCP APIs from an Agent - Step 2 (Store the AWS credentials as secrets)](/docs/tutorials/call-aws-and-gcp-apis-from-an-agent#step-2--store-the-aws-credentials-as-secrets)
 
 ## Data Model
 

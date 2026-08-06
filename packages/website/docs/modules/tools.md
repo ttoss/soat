@@ -26,6 +26,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 - [Orchestrate a Sonnet - Step 4 (Create the fixed write tool)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool)
 - [Multi-Agent Sonnet with Nested Agent Calls - Step 5 (Create fixed SOAT tools)](/docs/tutorials/multi-agent-orchestration#step-5--create-fixed-soat-tools-for-stanza-agents)
 - [Agent over a Library of PDFs - Step 12 (Give the agent a knowledge tool)](/docs/tutorials/agent-with-pdfs#step-12--give-the-agent-a-knowledge-tool-plan-d)
+- [Call AWS and GCP APIs from an Agent - Step 3 (Create a SigV4-signed S3 tool)](/docs/tutorials/call-aws-and-gcp-apis-from-an-agent#step-3--create-a-sigv4-signed-s3-tool)
 
 ## Data Model
 
