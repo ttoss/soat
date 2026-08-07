@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.19.1](https://github.com/ttoss/soat/compare/v0.19.0...v0.19.1) (2026-08-07)
+
+### Bug Fixes
+
+* **server:** enforce agent output_schema on model output ([#867](https://github.com/ttoss/soat/issues/867)) ([155a4d1](https://github.com/ttoss/soat/commit/155a4d1c417fb302f3c5be14727ec16665093393))
+
 # [0.19.0](https://github.com/ttoss/soat/compare/v0.18.6...v0.19.0) (2026-08-06)
 
 ### Bug Fixes
