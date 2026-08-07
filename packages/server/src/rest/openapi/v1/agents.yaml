@@ -413,8 +413,11 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR). The error `meta`
-            includes the `generation_id` and `trace_id` of the failed
+            Upstream AI provider error (AI_PROVIDER_ERROR), or model output that
+            does not satisfy the agent's `output_schema`
+            (OUTPUT_SCHEMA_VALIDATION_FAILED — the violated field is named in
+            the message). The error `meta` includes the `generation_id` and
+            `trace_id` of the failed
             generation for post-mortem debugging via GET /api/v1/generations/{generation_id}.
           content:
             application/json:
@@ -1005,7 +1008,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true
@@ -1326,7 +1329,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           description: Maximum number of recent messages included in the context window. Null means no limit.
@@ -1503,7 +1506,7 @@ components:
         output_schema:
           type: object
           nullable: true
-          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations use the AI SDK to constrain output to this schema; the parsed value is returned as `output.object` in the generation response. See the Structured Output section in the Agents module docs.'
+          description: 'JSON Schema describing the structured object the model must return. When set, non-streaming generations constrain output to this schema and the parsed value is returned as `output.object`. The schema is enforced on the way back, not just sent to the model: an object that violates it fails the generation with 502 `OUTPUT_SCHEMA_VALIDATION_FAILED`, naming the violated field. Constraints beyond `required`/`type` (`minLength`, `enum`, `pattern`, `minItems`) are honored and are what reject a structurally valid but degenerate answer. See the Structured Output section in the Agents module docs.'
         max_context_messages:
           type: integer
           nullable: true

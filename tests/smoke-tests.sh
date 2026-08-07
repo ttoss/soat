@@ -2224,6 +2224,36 @@ if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.team == "payments" and .me
 fi
 echo "Generation metadata round-trip: OK"
 
+# 22a3. output_schema is enforced on the way back, not just sent to the provider.
+# Deterministic without pinning model behavior: the schema demands 5000+
+# characters, which no completion under the stack's output cap can satisfy, so
+# any conforming-looking answer still violates it. Asserts the failure is the
+# specific 502 OUTPUT_SCHEMA_VALIDATION_FAILED rather than a generic upstream
+# error — a generation that *completes* here means enforcement is off, which is
+# invisible from any other assertion in this suite.
+echo "--- Verifying output_schema enforcement ---"
+SCHEMA_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name schema-enforced \
+  --instructions "Answer with a JSON object containing a single key 'verdict'." \
+  --output_schema '{"type":"object","required":["verdict"],"properties":{"verdict":{"type":"string","minLength":5000}}}')
+SCHEMA_AGENT_ID=$(printf '%s\n' "$SCHEMA_AGENT_RESP" | jq -r '.id')
+if [ -z "$SCHEMA_AGENT_ID" ] || [ "$SCHEMA_AGENT_ID" = "null" ]; then
+  echo "ERROR: could not create the output_schema agent" >&2
+  printf '%s\n' "$SCHEMA_AGENT_RESP" >&2
+  exit 1
+fi
+SCHEMA_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$SCHEMA_AGENT_ID" \
+  --messages '[{"role":"user","content":"Give your verdict."}]' 2>&1 || true)
+if ! printf '%s\n' "$SCHEMA_GEN_RESP" | jq -e '.error.code == "OUTPUT_SCHEMA_VALIDATION_FAILED"' >/dev/null 2>&1; then
+  echo "ERROR: expected OUTPUT_SCHEMA_VALIDATION_FAILED for output violating output_schema" >&2
+  printf '%s\n' "$SCHEMA_GEN_RESP" >&2
+  exit 1
+fi
+echo "output_schema enforcement OK (502 OUTPUT_SCHEMA_VALIDATION_FAILED)"
+$SOAT_CLI delete-agent --agent-id "$SCHEMA_AGENT_ID" --force >/dev/null 2>&1 || true
+
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
 AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \

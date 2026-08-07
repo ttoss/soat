@@ -10,6 +10,7 @@ import { generateText, isStepCount } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { DomainError } from '../errors';
 import {
   gatePendingClientTools,
   type SynthesizedClientResult,
@@ -441,6 +442,17 @@ export const runNonStreamGeneration = async (args: {
     });
   } catch (error) {
     if (Object.keys(args.resolvedTools).length === 0) {
+      throw error;
+    }
+    // The fallback exists for a provider that chokes on our *tool definitions*.
+    // A schema violation is the model's output, not the tool surface: retrying
+    // without tools would burn a second call to hit the same schema, and worse,
+    // it could succeed — completing an answer the agent was required to use a
+    // tool to reach (exactly the reviewer that never read its source).
+    if (
+      error instanceof DomainError &&
+      error.code === 'OUTPUT_SCHEMA_VALIDATION_FAILED'
+    ) {
       throw error;
     }
     log(
