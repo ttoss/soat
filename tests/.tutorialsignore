@@ -27,3 +27,12 @@ review-panel-discussion
 # workflows/tasks module is covered deterministically by the server unit suite
 # (rest/workflows, rest/tasks, mcp) and the smoke tests.
 orchestrate-a-sonnet-with-workflows
+
+# call-aws-and-gcp-apis-from-an-agent creates tools whose `execute.auth` signs
+# requests with real AWS credentials or mints a GCP service account token. The
+# CI sandbox has neither, and the point of the tutorial is the live call, so
+# there is nothing meaningful left to assert once the credentials are removed.
+# The parts that do not need a cloud account — auth-config validation, the
+# aws_sigv4 + multipart rejection — are covered by the server unit suite
+# (rest/tools, lib/toolAuth).
+call-aws-and-gcp-apis-from-an-agent

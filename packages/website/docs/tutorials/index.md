@@ -26,6 +26,8 @@ All tutorials assume:
 - **Retrieval and RAG?** Generate [embeddings](/docs/tutorials/embeddings), build an [agent over a library of PDFs](/docs/tutorials/agent-with-pdfs), and [ingest images and audio](/docs/tutorials/ingest-images-and-audio).
 - **Coordinating multiple agents?** Compare a direct [orchestration pipeline](/docs/tutorials/orchestrate-a-sonnet), a [workflow state machine](/docs/tutorials/orchestrate-a-sonnet-with-workflows), and [nested agent calls](/docs/tutorials/multi-agent-orchestration) — then add [branching](/docs/tutorials/conditional-orchestration), [control flow](/docs/tutorials/orchestration-control-flow), [human approval gates](/docs/tutorials/approval-gate), or a [review panel discussion](/docs/tutorials/review-panel-discussion).
 - **Shipping to production?** Deploy a whole stack declaratively with [Formations](/docs/tutorials/formations) and an [agent squad](/docs/tutorials/create-an-agent-squad), automate it with [Triggers](/docs/tutorials/automate-a-flow-with-triggers), gate risky calls with [Guardrails](/docs/tutorials/gate-a-tool-with-guardrails), and control cost with [metering and budgets](/docs/tutorials/metering-and-budgets) and [per-end-user spend caps](/docs/tutorials/cap-spend-per-end-user).
+- **Under compliance pressure?** Erase, expire, or never store prompt content with [data retention and zero-retention](/docs/tutorials/data-retention-and-zero-retention), and ship prompt changes safely with [agent versioning and canary rollout](/docs/tutorials/agent-versioning-and-canary-rollout).
+- **Calling a cloud API?** Sign requests as AWS or authenticate as a GCP service account with [Call AWS and GCP APIs from an Agent](/docs/tutorials/call-aws-and-gcp-apis-from-an-agent).
 
 ---
 

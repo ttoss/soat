@@ -20,6 +20,7 @@ A Project is a top-level container that scopes all resources. Users access proje
 - [Chat with an LLM - Step 2 (Create a project)](/docs/tutorials/chat-with-llm#step-2--create-a-project)
 - [Permissions in Practice - Step 3 (Create the Analytics project)](/docs/tutorials/permissions#step-3--create-the-analytics-project)
 - [Deploy a Multi-Agent App with Agent Formation - Step 2 (Create a project)](/docs/tutorials/formations#step-2--create-a-project)
+- [Data Retention and Zero-Retention - Step 7 (Automate it with a retention window)](/docs/tutorials/data-retention-and-zero-retention#step-7--automate-it-with-a-retention-window)
 
 ## Data Model
 

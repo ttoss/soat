@@ -12,8 +12,10 @@ import { program } from 'commander';
 import pkg from '../package.json' with { type: 'json' };
 import {
   applyWrapperForCommand,
+  buildArrayFlagValue,
   extractPositionalArgs,
   getWrapperHelpFlags,
+  parseFlagValue,
   parseUnknownWithRepeats,
 } from './cli-wrappers/index.js';
 import { resolveClient, writeProfile } from './config.js';
@@ -65,46 +67,6 @@ const formatResultData = async (data: unknown): Promise<string> => {
   return JSON.stringify(data, null, 2);
 };
 
-const parseFlagValue = (value: string): unknown => {
-  const trimmed = value.trim();
-
-  if (
-    trimmed.startsWith('{') ||
-    trimmed.startsWith('[') ||
-    trimmed === 'true' ||
-    trimmed === 'false' ||
-    trimmed === 'null' ||
-    /^-?\d+(\.\d+)?$/.test(trimmed)
-  ) {
-    try {
-      return JSON.parse(trimmed);
-    } catch {
-      return value;
-    }
-  }
-
-  return value;
-};
-
-/**
- * Build the value for an array-typed flag. Collects repeated occurrences
- * (`--document_paths /a/ --document_paths /b/`) into a list, coercing each
- * element with `parseFlagValue`. A single JSON-array literal
- * (`--document_ids '["doc_1","doc_2"]'`) is passed through as-is rather than
- * being wrapped again, and a single scalar (`--document_paths /playbooks/`)
- * becomes a one-element array.
- */
-const buildArrayFlagValue = (rawValues: string[]): unknown => {
-  const parsed = rawValues.map((v) => {
-    return parseFlagValue(v);
-  });
-  if (parsed.length === 1 && Array.isArray(parsed[0])) {
-    return parsed[0];
-  }
-  return parsed;
-};
-
-/** Normalize symbol names to compare exports across acronym casing differences. */
 const normalizeSymbol = (name: string) => {
   return name.toLowerCase().replace(/[^a-z0-9]/g, '');
 };
@@ -400,10 +362,11 @@ program
     for (const [flagKey, val] of Object.entries(flags)) {
       if (flagKey === 'profile' || flagKey === 'id') continue;
       const canonical = toCanonical(flagKey);
+      const declaredType = flagTypeByCanonical.get(canonical);
       const parsedValue =
-        flagTypeByCanonical.get(canonical) === 'array'
+        declaredType === 'array'
           ? buildArrayFlagValue(repeatedFlags[flagKey] ?? [val])
-          : parseFlagValue(val);
+          : parseFlagValue(val, declaredType);
       const pathParam = route.pathParams.find((p) => {
         return toCanonical(p) === canonical;
       });
@@ -438,7 +401,10 @@ program
       solePathParam &&
       !(solePathParam in pathArgs)
     ) {
-      pathArgs[solePathParam] = parseFlagValue(idAlias);
+      pathArgs[solePathParam] = parseFlagValue(
+        idAlias,
+        flagTypeByCanonical.get(toCanonical(solePathParam))
+      );
     }
 
     // Never send a request with an unresolved `{param}` placeholder still in

@@ -161,6 +161,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/client-tools',
         'tutorials/memories-agent',
         'tutorials/debug-session-generation-trace-history',
+        'tutorials/call-aws-and-gcp-apis-from-an-agent',
       ],
     },
     {
@@ -192,12 +193,16 @@ const sidebars: SidebarsConfig = {
       items: [
         'tutorials/formations',
         'tutorials/automate-a-flow-with-triggers',
+        'tutorials/agent-versioning-and-canary-rollout',
       ],
     },
     {
       type: 'category',
       label: 'Governance & Safety',
-      items: ['tutorials/gate-a-tool-with-guardrails'],
+      items: [
+        'tutorials/gate-a-tool-with-guardrails',
+        'tutorials/data-retention-and-zero-retention',
+      ],
     },
     {
       type: 'category',

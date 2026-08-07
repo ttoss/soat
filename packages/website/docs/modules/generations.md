@@ -17,6 +17,12 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Debug Session, Generation, and Trace History - Step 3 (Run two generations)](/docs/tutorials/debug-session-generation-trace-history#step-3---run-two-generations-and-capture-generation_id--trace_id)
+- [Data Retention and Zero-Retention - Step 5 (Purge a single generation)](/docs/tutorials/data-retention-and-zero-retention#step-5--purge-a-single-generation)
+- [Agent Versioning and Canary Rollout - Step 6 (Read which version served a generation)](/docs/tutorials/agent-versioning-and-canary-rollout#step-6--run-traffic-and-read-which-version-served-it)
+
 ## Data Model
 
 | Field                       | Type           | Description                                                                                          |
