@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.19.2](https://github.com/ttoss/soat/compare/v0.19.1...v0.19.2) (2026-08-07)
+
+### Bug Fixes
+
+* **agents:** fail a generation whose answer is a tool call written as text ([#870](https://github.com/ttoss/soat/issues/870)) ([b759bce](https://github.com/ttoss/soat/commit/b759bceb74489caac71a6a04d28b724a9ecb8e4c))
+
 ## [0.19.1](https://github.com/ttoss/soat/compare/v0.19.0...v0.19.1) (2026-08-07)
 
 ### Bug Fixes
