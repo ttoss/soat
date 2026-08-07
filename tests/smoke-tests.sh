@@ -2225,19 +2225,31 @@ fi
 echo "Generation metadata round-trip: OK"
 
 # 22a3. output_schema is enforced on the way back, not just sent to the provider.
-# Deterministic without pinning model behavior: the schema demands 5000+
-# characters, which no completion under the stack's output cap can satisfy, so
-# any conforming-looking answer still violates it. Asserts the failure is the
-# specific 502 OUTPUT_SCHEMA_VALIDATION_FAILED rather than a generic upstream
-# error — a generation that *completes* here means enforcement is off, which is
-# invisible from any other assertion in this suite.
+# A generation that *completes* here means enforcement is off, which is invisible
+# from every other assertion in this suite.
+#
+# The schema contradicts itself on purpose: `enum` admits only "ok", which can
+# never match `pattern` "^zzz$". That makes the violation deterministic without
+# pinning model behavior — whichever way the provider treats the schema, the
+# value violates it. If the grammar honors `enum` the value is exactly "ok"; if
+# the provider ignores the schema entirely, free-form prose does not match
+# "^zzz$" either. Both branches fail validation, so nothing here depends on the
+# sandbox model choosing to misbehave.
+#
+# Do NOT express this as a large `minLength` instead. The schema is handed to the
+# provider as a generation constraint, so an unsatisfiable one is unsatisfiable
+# for the generator too: llama.cpp's JSON-schema-to-grammar implements
+# `minLength` by repeating its character rule, and `minLength: 5000` expanded the
+# grammar until the Ollama model runner segfaulted — the request then failed as
+# AI_PROVIDER_ERROR before validation ever ran, testing nothing. Keep any
+# violated keyword cheap to compile.
 echo "--- Verifying output_schema enforcement ---"
 SCHEMA_AGENT_RESP=$($SOAT_CLI create-agent \
   --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name schema-enforced \
   --instructions "Answer with a JSON object containing a single key 'verdict'." \
-  --output_schema '{"type":"object","required":["verdict"],"properties":{"verdict":{"type":"string","minLength":5000}}}')
+  --output_schema '{"type":"object","required":["verdict"],"properties":{"verdict":{"type":"string","enum":["ok"],"pattern":"^zzz$"}}}')
 SCHEMA_AGENT_ID=$(printf '%s\n' "$SCHEMA_AGENT_RESP" | jq -r '.id')
 if [ -z "$SCHEMA_AGENT_ID" ] || [ "$SCHEMA_AGENT_ID" = "null" ]; then
   echo "ERROR: could not create the output_schema agent" >&2
