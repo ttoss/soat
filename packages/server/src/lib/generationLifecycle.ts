@@ -92,15 +92,20 @@ export const recordContinuationFailure = async (args: {
   steps: unknown[];
   error: unknown;
 }): Promise<unknown> => {
-  await saveTrace({
-    traceId: args.pending.traceId,
-    projectId: args.pending.projectId,
-    projectPublicId: args.pending.projectPublicId,
-    agentId: args.pending.agentId,
-    steps: [...(args.pending.steps ?? []), ...serializeSteps(args.steps)],
-    parentTraceId: args.pending.parentTraceId ?? undefined,
-    rootTraceId: args.pending.rootTraceId ?? undefined,
-  }).catch(() => {});
+  // `allSettled` rather than `.catch()`: a trace write that fails must not
+  // mask the failure being recorded — the same reason `recordGenerationFailure`
+  // above settles its writes instead of awaiting them bare.
+  await Promise.allSettled([
+    saveTrace({
+      traceId: args.pending.traceId,
+      projectId: args.pending.projectId,
+      projectPublicId: args.pending.projectPublicId,
+      agentId: args.pending.agentId,
+      steps: [...(args.pending.steps ?? []), ...serializeSteps(args.steps)],
+      parentTraceId: args.pending.parentTraceId ?? undefined,
+      rootTraceId: args.pending.rootTraceId ?? undefined,
+    }),
+  ]);
 
   return recordGenerationFailure({
     generationId: args.generationId,
