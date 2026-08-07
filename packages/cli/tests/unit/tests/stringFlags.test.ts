@@ -47,6 +47,25 @@ describe('string-typed flags are not JSON-coerced', () => {
     expect(body.value).toBe('4455');
   });
 
+  // `null` must survive as JSON null even on a string-typed flag: "set it to
+  // null to clear" is the documented way to detach a nullable reference
+  // (`--default_model_route_id null`, `--ai_provider_id null`). Passing the
+  // literal string through made the server look up a route *named* "null" and
+  // answer 400 MODEL_ROUTE_NOT_FOUND instead of clearing the field — caught by
+  // the smoke suite, not by unit tests.
+  test('the literal null clears a nullable string flag', async () => {
+    const requests = await cli.call([
+      'update-project',
+      '--project_id',
+      'proj_1',
+      '--default_model_route_id',
+      'null',
+    ]);
+
+    const body = requests[0]?.body as { default_model_route_id?: unknown };
+    expect(body.default_model_route_id).toBeNull();
+  });
+
   test('an object-typed flag is still parsed as JSON', async () => {
     const requests = await cli.call([
       'create-tool',
