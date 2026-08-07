@@ -270,6 +270,11 @@ export const ERROR_CODES = {
     description:
       'The model returned an object that does not satisfy the agent output_schema (or was not valid JSON at all). Upstream-caused like AI_PROVIDER_ERROR: the request was well-formed, the model output was not.',
   },
+  TEXT_ENCODED_TOOL_CALL: {
+    httpStatus: 502,
+    description:
+      'The model wrote a tool invocation as plain assistant text (e.g. a ```json block containing {"name": "<a bound tool>", "arguments": {…}}) instead of making a structured tool call, so the tool never ran. Upstream-caused like AI_PROVIDER_ERROR: returning that text as the answer would be a silent data-integrity failure, so the generation fails instead.',
+  },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:

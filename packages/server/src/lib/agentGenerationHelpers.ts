@@ -14,7 +14,14 @@ import { emitEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
-import { saveTrace, serializeSteps } from './traces';
+import { isPlainObject } from './outputSchema';
+import { buildGenerationErrorPayload } from './providerError';
+import {
+  assertNoTextEncodedToolCall,
+  findTextEncodedToolCall,
+  textEncodedToolCallError,
+} from './textEncodedToolCall';
+import { recordTraceError, saveTrace, serializeSteps } from './traces';
 import { recordGenerationUsage } from './usage';
 
 const log = createDebug('soat:generation');
@@ -369,6 +376,111 @@ const buildPrepareStep = (
   };
 };
 
+/**
+ * Text of the step the run ended on. `generateText` exposes this as
+ * `result.text` already; a stream's `onEnd` only gets the step array, so the
+ * same "final step, never an earlier one" rule is spelled out here.
+ */
+const finalStepText = (steps: unknown[]): string => {
+  const finalStep = steps.at(-1);
+  if (!isPlainObject(finalStep)) return '';
+  return typeof finalStep.text === 'string' ? finalStep.text : '';
+};
+
+/**
+ * Records a streamed generation that ended on a text-encoded tool call as
+ * failed, on both the generation record and the trace. Fire-and-forget like
+ * every other `onEnd` write: the stream has already been delivered, so there
+ * is no caller left to throw at.
+ */
+const recordStreamedTextEncodedToolCall = async (args: {
+  generationId: string;
+  traceId: string;
+  toolName: string;
+}): Promise<void> => {
+  const error = buildGenerationErrorPayload(
+    textEncodedToolCallError(args.toolName)
+  );
+  await Promise.allSettled([
+    updateGenerationRecord({
+      publicId: args.generationId,
+      status: 'failed',
+      completedAt: new Date(),
+      stopReason: 'error',
+      error,
+    }),
+    recordTraceError({ traceId: args.traceId, error }),
+  ]);
+};
+
+/**
+ * Everything a finished stream persists: the trace, the terminal status, the
+ * routing stamp and the usage event. All fire-and-forget — the stream has
+ * already been delivered, so there is no caller left to throw at.
+ */
+const fireStreamEndSideEffects = (args: {
+  generationId: string;
+  traceId: string;
+  parentTraceId: string | null;
+  rootTraceId: string | null;
+  agentId: string;
+  typedAgent: TypedAgent;
+  model: LanguageModel;
+  resolvedTools: Record<string, Tool>;
+  steps: unknown[];
+  finishReason: string;
+  usage?: LanguageModelUsage;
+}): void => {
+  saveTrace({
+    traceId: args.traceId,
+    projectId: args.typedAgent.project.id as number,
+    projectPublicId: args.typedAgent.project.publicId,
+    agentId: args.agentId,
+    steps: serializeSteps(args.steps),
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+  }).catch(() => {});
+
+  // The blob has already gone down the wire — a stream cannot be recalled —
+  // but the record of it can still tell the truth. Recording `failed` is what
+  // makes this findable on the generation and the trace instead of only in
+  // whatever consumed the stream. (`output_schema` never reaches here:
+  // streaming rejects it upfront.)
+  const streamedToolCall = findTextEncodedToolCall({
+    text: finalStepText(args.steps),
+    toolNames: Object.keys(args.resolvedTools),
+  });
+  if (streamedToolCall) {
+    void recordStreamedTextEncodedToolCall({
+      generationId: args.generationId,
+      traceId: args.traceId,
+      toolName: streamedToolCall,
+    });
+  } else {
+    updateGenerationRecord({
+      publicId: args.generationId,
+      status: 'completed',
+      completedAt: new Date(),
+      stopReason: args.finishReason,
+    }).catch(() => {});
+  }
+
+  saveRoutingMetadata({
+    generationId: args.generationId,
+    model: args.model,
+  }).catch(
+    /* istanbul ignore next -- fire-and-forget alongside the trace write */
+    () => {}
+  );
+  // recordGenerationUsage never rejects (it catches internally), so `void`
+  // marks the intentional fire-and-forget without an extra no-op handler.
+  void recordGenerationUsage({
+    generationId: args.generationId,
+    model: args.typedAgent.model ?? '',
+    usage: args.usage,
+  });
+};
+
 export const runStreamGeneration = async (args: {
   model: LanguageModel;
   allMessages: Array<{ role: string; content: unknown }>;
@@ -412,33 +524,17 @@ export const runStreamGeneration = async (args: {
     stopWhen: isStepCount((args.typedAgent.maxSteps as number) ?? 20),
     temperature: (args.typedAgent.temperature as number) ?? undefined,
     onEnd: ({ steps, finishReason, usage }) => {
-      saveTrace({
+      fireStreamEndSideEffects({
+        generationId: args.generationId,
         traceId: args.traceId,
-        projectId: args.typedAgent.project.id as number,
-        projectPublicId: args.typedAgent.project.publicId,
-        agentId: args.agentId,
-        steps: serializeSteps(steps as unknown[]),
         parentTraceId: args.parentTraceId ?? null,
         rootTraceId: args.rootTraceId ?? null,
-      }).catch(() => {});
-      updateGenerationRecord({
-        publicId: args.generationId,
-        status: 'completed',
-        completedAt: new Date(),
-        stopReason: finishReason,
-      }).catch(() => {});
-      saveRoutingMetadata({
-        generationId: args.generationId,
+        agentId: args.agentId,
+        typedAgent: args.typedAgent,
         model: args.model,
-      }).catch(
-        /* istanbul ignore next -- fire-and-forget alongside the trace write */
-        () => {}
-      );
-      // recordGenerationUsage never rejects (it catches internally), so `void`
-      // marks the intentional fire-and-forget without an extra no-op handler.
-      void recordGenerationUsage({
-        generationId: args.generationId,
-        model: args.typedAgent.model ?? '',
+        resolvedTools: args.resolvedTools,
+        steps: steps as unknown[],
+        finishReason,
         usage,
       });
     },
@@ -624,6 +720,8 @@ export const buildCompletedGenerationResult = async (args: {
   agentId: string;
   /** The model the turn ran on — routed models stamp the `routing` column. */
   model?: LanguageModel;
+  /** Names of the tools bound to this turn, for the text-encoded-call guard. */
+  toolNames?: string[];
 }): Promise<GenerationResult> => {
   await saveRoutingMetadata({
     generationId: args.generationId,
@@ -640,6 +738,17 @@ export const buildCompletedGenerationResult = async (args: {
     steps: serializedStepsCompleted,
     parentTraceId: args.parentTraceId ?? null,
     rootTraceId: args.rootTraceId ?? null,
+  });
+  // After the trace is written and before the generation is marked completed:
+  // the offending text is the whole evidence for this failure, so it must be
+  // on the trace, and a generation that throws here must never have been
+  // recorded `completed`. The caller's `recordGenerationFailure` stamps the
+  // failure onto both records from here.
+  assertNoTextEncodedToolCall({
+    text: args.result.text,
+    toolNames: args.toolNames ?? [],
+    outputSchema: args.typedAgent.outputSchema,
+    generationId: args.generationId,
   });
   updateGenerationRecord({
     publicId: args.generationId,

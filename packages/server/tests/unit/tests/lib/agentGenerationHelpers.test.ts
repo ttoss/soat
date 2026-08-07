@@ -536,12 +536,16 @@ describe('runStreamGeneration', () => {
     let isolatedRunStreamGeneration: (...args: any[]) => any;
     const mockStreamTextFn = jest.fn();
     const mockSaveTraceFn = jest.fn().mockResolvedValue(undefined as void);
+    const mockRecordTraceErrorFn = jest
+      .fn()
+      .mockResolvedValue(undefined as void);
     const mockUpdateGenerationFn = jest.fn().mockResolvedValue(null);
     const mockResolveToolIdsToNamesFn = jest.fn().mockResolvedValue({});
 
     beforeEach(() => {
       mockStreamTextFn.mockReset();
       mockSaveTraceFn.mockReset().mockResolvedValue(undefined);
+      mockRecordTraceErrorFn.mockReset().mockResolvedValue(undefined);
       mockUpdateGenerationFn.mockReset().mockResolvedValue(null);
       mockResolveToolIdsToNamesFn.mockReset().mockResolvedValue({});
 
@@ -562,6 +566,7 @@ describe('runStreamGeneration', () => {
         jest.mock('src/lib/traces', () => {
           return {
             saveTrace: mockSaveTraceFn,
+            recordTraceError: mockRecordTraceErrorFn,
             serializeSteps: (s: unknown) => {
               return s;
             },
@@ -603,6 +608,88 @@ describe('runStreamGeneration', () => {
 
       expect(mockSaveTraceFn).toHaveBeenCalledTimes(1);
       expect(mockUpdateGenerationFn).toHaveBeenCalledTimes(1);
+    });
+
+    // A stream that ends on a tool call the model wrote out as text has
+    // already delivered the blob — it cannot be recalled. What can still be
+    // true is the record: `failed` on both the generation and the trace,
+    // rather than a `completed` that says the blob was an answer.
+    test('onEnd records a streamed text-encoded tool call as failed', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      await isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: { get_weather: { inputSchema: {} } },
+        typedAgent: mockAgent,
+        generationId: 'gen_stream_text_encoded',
+        traceId: 'trc_stream_text_encoded',
+        agentId: 'agt_stream_text_encoded',
+      });
+
+      await capturedOpts?.onEnd({
+        steps: [
+          { text: '```json\n{"name": "get_weather", "arguments": {}}\n```' },
+        ],
+        finishReason: 'stop',
+      });
+
+      // The status write and the trace error are fire-and-forget.
+      await new Promise((resolve) => {
+        return setTimeout(resolve, 0);
+      });
+
+      expect(mockUpdateGenerationFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          publicId: 'gen_stream_text_encoded',
+          status: 'failed',
+          stopReason: 'error',
+          error: expect.objectContaining({ code: 'TEXT_ENCODED_TOOL_CALL' }),
+        })
+      );
+      expect(mockRecordTraceErrorFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          traceId: 'trc_stream_text_encoded',
+          error: expect.objectContaining({ code: 'TEXT_ENCODED_TOOL_CALL' }),
+        })
+      );
+    });
+
+    test('onEnd leaves an ordinary streamed answer completed', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let capturedOpts: Record<string, any> | undefined;
+      mockStreamTextFn.mockImplementation((opts: Record<string, unknown>) => {
+        capturedOpts = opts;
+        return { textStream: new ReadableStream() };
+      });
+
+      await isolatedRunStreamGeneration({
+        model: {},
+        allMessages: [{ role: 'user', content: 'Hi' }],
+        resolvedTools: { get_weather: { inputSchema: {} } },
+        typedAgent: mockAgent,
+        generationId: 'gen_stream_ok',
+        traceId: 'trc_stream_ok',
+        agentId: 'agt_stream_ok',
+      });
+
+      await capturedOpts?.onEnd({
+        steps: [{ text: 'It is sunny in Lisbon.' }],
+        finishReason: 'stop',
+      });
+
+      expect(mockUpdateGenerationFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          publicId: 'gen_stream_ok',
+          status: 'completed',
+        })
+      );
+      expect(mockRecordTraceErrorFn).not.toHaveBeenCalled();
     });
 
     test('onEnd callback swallows saveTrace and updateGenerationRecord failures', async () => {

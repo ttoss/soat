@@ -507,6 +507,30 @@ Two deliberate limits:
 - **`format` is not asserted.** JSON Schema treats `format` as an annotation unless a validator opts in, and asserting it would reject output whose author never claimed it was invalid. Use `pattern` when you need the constraint enforced.
 - **A schema the validator cannot compile is skipped, not fatal.** Unknown keywords (vendor `x-*` hints, `$comment`) are ignored, and a malformed schema leaves the generation unvalidated with a `soat:generation` debug log rather than failing every call — one bad agent config must not read as an outage. Enforcement therefore depends on the schema being well-formed; check the log if a constraint you expected is not biting.
 
+### A tool call written out as text
+
+Some models — reasoning models on tool-call APIs in particular — occasionally **write** a tool invocation instead of **making** one, ending the turn with assistant text like:
+
+````text
+```json
+{"name": "get_weather", "arguments": {}}
+```
+````
+
+Nothing in the provider response marks this: the turn finishes with `stop`, carries no tool-call part, and the tool never runs. Returned as an answer it is a silent corruption — a caller, a [workflow](./workflows.md) column, or a downstream agent consumes the blob as if it were the agent's work.
+
+A generation whose final assistant text is entirely such a call is recorded **`failed`** with error code `TEXT_ENCODED_TOOL_CALL` (`502`); `meta.tool_name` names the tool. The steps are kept on the trace, so the text that caused it is there to read. On a streaming generation the text has already been delivered and cannot be recalled — the generation and its trace are still recorded `failed`.
+
+The check is deliberately narrow, since a false positive fails a generation that was fine. It fires only when all of these hold:
+
+- the text, after a wrapping markdown fence is stripped, is **entirely** one JSON object (or an array of them) — prose around the JSON leaves it alone;
+- every key of that object is tool-call vocabulary (`name` / `tool` / `tool_name` / `function`, `arguments` / `args` / `parameters` / `input`, `id`, `type`) — one key outside it and the text is read as a JSON answer;
+- the name is a tool **bound to that agent** — an agent with no tools is never affected.
+
+Agents with an `output_schema` are exempt: that path validates the model output itself and already fails loudly (above), and its `content` is the serialized object.
+
+An agent that keeps hitting this is usually better served by an `output_schema`, which turns the same model misbehavior into a schema violation naming the offending field.
+
 ### SOAT Action Permissions
 
 When an agent executes a `soat` tool action, two policies are evaluated — both must allow the action:

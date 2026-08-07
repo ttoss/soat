@@ -75,6 +75,46 @@ export const recordGenerationFailure = async (args: {
   });
 };
 
+/**
+ * Fails a continuation turn (the tool-outputs path) the way
+ * `runCompletionSideEffects` completes one: the trace keeps every step of the
+ * run — the earlier ones the pending state carried plus this turn's — so the
+ * text that caused the failure is there to read, and only then is the failure
+ * stamped on both records. Returns the error to rethrow.
+ *
+ * The continuation has no `try`/`catch` above it the way `createGeneration`
+ * does, so a throw from that path would otherwise leave the generation stuck
+ * in `requires_action` with nothing recorded.
+ */
+export const recordContinuationFailure = async (args: {
+  generationId: string;
+  pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
+  steps: unknown[];
+  error: unknown;
+}): Promise<unknown> => {
+  // `allSettled` rather than `.catch()`: a trace write that fails must not
+  // mask the failure being recorded — the same reason `recordGenerationFailure`
+  // above settles its writes instead of awaiting them bare.
+  await Promise.allSettled([
+    saveTrace({
+      traceId: args.pending.traceId,
+      projectId: args.pending.projectId,
+      projectPublicId: args.pending.projectPublicId,
+      agentId: args.pending.agentId,
+      steps: [...(args.pending.steps ?? []), ...serializeSteps(args.steps)],
+      parentTraceId: args.pending.parentTraceId ?? undefined,
+      rootTraceId: args.pending.rootTraceId ?? undefined,
+    }),
+  ]);
+
+  return recordGenerationFailure({
+    generationId: args.generationId,
+    traceId: args.pending.traceId,
+    error: args.error,
+    model: args.pending.resolvedModel,
+  });
+};
+
 type CompletionSideEffectsArgs = {
   generationId: string;
   pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
