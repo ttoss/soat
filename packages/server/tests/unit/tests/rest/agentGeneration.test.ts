@@ -2,6 +2,7 @@ import type { Server } from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
+import { jsonSchema, tool } from 'ai';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
@@ -424,12 +425,18 @@ describe('Agent Generation Routes', () => {
     let userToken: string;
     let agentId: string;
     let pausingAgentId: string;
+    let aiProviderId: string;
+    let showDialogToolId: string;
     let projectDbId: number;
     let projectPublicId: string;
 
     // When set, the stub answers the next completion with this tool call
     // instead of text, so a generation can be made to pause on a client tool.
     let nextToolCall: { name: string; args: unknown } | undefined;
+
+    // When set, replaces the assistant text every completion returns — used to
+    // reproduce a model that writes a tool call out instead of making one.
+    let nextContent: string | undefined;
 
     const stubBody = () => {
       const toolCall = nextToolCall;
@@ -450,7 +457,7 @@ describe('Agent Generation Routes', () => {
               },
             ],
           }
-        : { role: 'assistant', content: 'final answer' };
+        : { role: 'assistant', content: nextContent ?? 'final answer' };
 
       return {
         id: 'chatcmpl-stub',
@@ -539,6 +546,8 @@ describe('Agent Generation Routes', () => {
           base_url: stubBaseUrl,
         });
 
+      aiProviderId = aiProvRes.body.id;
+
       const agentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
@@ -562,6 +571,8 @@ describe('Agent Generation Routes', () => {
             properties: { message: { type: 'string' } },
           },
         });
+
+      showDialogToolId = toolRes.body.id;
 
       const pausingAgentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
@@ -768,6 +779,182 @@ describe('Agent Generation Routes', () => {
       expect(receiptRes.body.line_items).toHaveLength(1);
       expect(receiptRes.body.total_input_tokens).toBe(1);
       expect(receiptRes.body.total_output_tokens).toBe(1);
+    });
+
+    // A model that writes its tool invocation out as assistant text instead of
+    // making a structured call used to be indistinguishable from a real
+    // answer: `finish_reason: stop`, one step, `status: completed`,
+    // `error: null`, and the JSON blob as `output.content` — with the tool
+    // never executed. Downstream consumers ran on the blob as if it were the
+    // agent's work, and nothing anywhere said otherwise.
+    describe('a tool call written out as text', () => {
+      const blob =
+        '```json\n{"name": "show_dialog", "arguments": {"message": "hi"}}\n```';
+
+      afterEach(() => {
+        nextContent = undefined;
+      });
+
+      test('fails the generation instead of completing it', async () => {
+        nextContent = blob;
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .send({ messages: [{ role: 'user', content: 'write a theme' }] });
+
+        expect(response.status).toBe(502);
+        expect(response.body.error.code).toBe('TEXT_ENCODED_TOOL_CALL');
+        expect(response.body.error.meta.tool_name).toBe('show_dialog');
+
+        const generationId: string = response.body.error.meta.generation_id;
+        const generation = await db.Generation.findOne({
+          where: { publicId: generationId },
+        });
+        expect(generation?.status).toBe('failed');
+        expect(generation?.stopReason).toBe('error');
+        expect(generation?.error).toMatchObject({
+          code: 'TEXT_ENCODED_TOOL_CALL',
+        });
+      });
+
+      test('keeps the offending step on the trace', async () => {
+        // The text is the whole evidence for this failure; a trace without it
+        // leaves nothing to diagnose from.
+        nextContent = blob;
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .send({ messages: [{ role: 'user', content: 'write a theme' }] });
+
+        const trace = await db.Trace.findOne({
+          where: { publicId: response.body.error.meta.trace_id },
+        });
+        expect(trace?.stepCount).toBe(1);
+        expect(trace?.error).toMatchObject({
+          code: 'TEXT_ENCODED_TOOL_CALL',
+        });
+      });
+
+      test('an ordinary answer from the same tool-bound agent still completes', async () => {
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .send({ messages: [{ role: 'user', content: 'write a theme' }] });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('completed');
+        expect(response.body.output.content).toBe('final answer');
+      });
+
+      test('an agent with no tools bound is left alone', async () => {
+        // Nothing to have called, so the blob is just text the model wrote.
+        nextContent = blob;
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${agentId}/generate`)
+          .send({ messages: [{ role: 'user', content: 'write a theme' }] });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('completed');
+        expect(response.body.output.content).toBe(blob);
+      });
+
+      test('an agent with an output_schema is left to the schema validator', async () => {
+        // With a schema, `content` is the serialized object — text this
+        // detector has no business second-guessing. A schema whose own shape
+        // happens to look like a tool call must still complete.
+        const schemaAgentRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/agents')
+          .send({
+            ai_provider_id: aiProviderId,
+            project_id: projectPublicId,
+            name: 'Stub Schema Agent',
+            tool_ids: [showDialogToolId],
+            output_schema: {
+              type: 'object',
+              required: ['name'],
+              properties: { name: { type: 'string' } },
+            },
+          });
+        nextContent = JSON.stringify({ name: 'show_dialog' });
+
+        const response = await authenticatedTestClient(userToken)
+          .post(`/api/v1/agents/${schemaAgentRes.body.id}/generate`)
+          .send({ messages: [{ role: 'user', content: 'write a theme' }] });
+
+        expect(response.status).toBe(200);
+        expect(response.body.status).toBe('completed');
+        expect(response.body.output.object).toEqual({ name: 'show_dialog' });
+      });
+
+      // The continuation is a separate completion path — it does not go
+      // through `buildCompletedGenerationResult` — and it ends on model text
+      // just the same.
+      test('the tool-outputs continuation fails on it too', async () => {
+        nextContent = blob;
+
+        const pending: PendingGeneration = {
+          agentId: pausingAgentId,
+          projectId: projectDbId,
+          projectPublicId,
+          traceId: 'trc_text_encoded_continuation',
+          parentTraceId: null,
+          rootTraceId: null,
+          generationId: 'gen_text_encoded_continuation',
+          initiatorGenerationId: null,
+          pendingToolCalls: [
+            { toolCallId: 'tc_1', toolName: 'show_dialog', args: {} },
+          ],
+          messages: [{ role: 'user', content: 'hello' }],
+          steps: [],
+          resolvedModel: buildModel({
+            provider: 'ollama',
+            secretValue: null,
+            model: 'stub-model',
+            baseUrl: stubBaseUrl,
+          }),
+          agentConfig: {
+            instructions: null,
+            maxSteps: 5,
+            toolChoice: 'auto',
+            stopConditions: null,
+            activeToolIds: null,
+            stepRules: null,
+            temperature: null,
+            outputSchema: null,
+          },
+          // A client tool: bound to the turn, with no `execute` of its own.
+          resolvedTools: {
+            show_dialog: tool({
+              description: 'Displays a confirmation dialog to the user',
+              inputSchema: jsonSchema({
+                type: 'object',
+                properties: { message: { type: 'string' } },
+              }),
+            }),
+          },
+        };
+        await createGenerationRecord({
+          publicId: 'gen_text_encoded_continuation',
+          projectId: projectDbId,
+          agentId: pausingAgentId,
+          traceId: 'trc_text_encoded_continuation',
+        });
+        pendingGenerations.set('gen_text_encoded_continuation', pending);
+
+        const response = await authenticatedTestClient(userToken)
+          .post(
+            `/api/v1/agents/${pausingAgentId}/generate/gen_text_encoded_continuation/tool-outputs`
+          )
+          .send({ tool_outputs: [{ tool_call_id: 'tc_1', output: 'ok' }] });
+
+        expect(response.status).toBe(502);
+        expect(response.body.error.code).toBe('TEXT_ENCODED_TOOL_CALL');
+
+        const generation = await db.Generation.findOne({
+          where: { publicId: 'gen_text_encoded_continuation' },
+        });
+        expect(generation?.status).toBe('failed');
+      });
     });
   });
 });

@@ -413,10 +413,13 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '502':
           description: >
-            Upstream AI provider error (AI_PROVIDER_ERROR), or model output that
+            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
             does not satisfy the agent's `output_schema`
             (OUTPUT_SCHEMA_VALIDATION_FAILED — the violated field is named in
-            the message). The error `meta` includes the `generation_id` and
+            the message); or a model that wrote a tool invocation out as plain
+            assistant text instead of calling the tool, so the tool never ran
+            (TEXT_ENCODED_TOOL_CALL — `meta.tool_name` names the tool). The
+            error `meta` includes the `generation_id` and
             `trace_id` of the failed
             generation for post-mortem debugging via GET /api/v1/generations/{generation_id}.
           content:
@@ -477,6 +480,18 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Agent or generation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '502':
+          description: >
+            Upstream AI provider error (AI_PROVIDER_ERROR); model output that
+            does not satisfy the agent's `output_schema`
+            (OUTPUT_SCHEMA_VALIDATION_FAILED); or a model that wrote a tool
+            invocation out as plain assistant text instead of calling the tool
+            (TEXT_ENCODED_TOOL_CALL — `meta.tool_name` names the tool). The
+            resumed generation is recorded `failed`.
           content:
             application/json:
               schema:

@@ -31,12 +31,17 @@ import {
 import { resolveToolIdsToNames } from './agents';
 import {
   fireCompletionSideEffects,
+  recordContinuationFailure,
   recordGenerationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
+import {
+  findTextEncodedToolCall,
+  textEncodedToolCallError,
+} from './textEncodedToolCall';
 import { serializeSteps } from './traces';
 
 // Bounds the server-side auto-resume loop for the "every pending client call was
@@ -386,6 +391,7 @@ const resolveGenerationResult = async (args: {
     typedAgent: args.typedAgent,
     agentId: args.agentId,
     model: args.model,
+    toolNames: Object.keys(args.resolvedTools),
   });
 };
 
@@ -546,11 +552,30 @@ const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
 // Builds the completed result for a continuation turn and fires its side effects
 // (trace, usage, completion event) — the terminal path once no client calls
 // remain (or the resume cap is hit).
-const completeContinuation = (args: {
+const completeContinuation = async (args: {
   generationId: string;
   pending: PendingGeneration;
   result: ToolOutputsGenerationResult;
-}): GenerationResult => {
+}): Promise<GenerationResult> => {
+  // Same guard as the initial turn: a continuation ends on model text too, and
+  // a call written out as text is no more an answer here than there. Failing
+  // before `fireCompletionSideEffects` is what keeps the generation off
+  // `completed`; the trace is written by the failure path instead.
+  const textEncodedToolCall = args.pending.agentConfig.outputSchema
+    ? null
+    : findTextEncodedToolCall({
+        text: args.result.text,
+        toolNames: Object.keys(args.pending.resolvedTools),
+      });
+  if (textEncodedToolCall) {
+    throw await recordContinuationFailure({
+      generationId: args.generationId,
+      pending: args.pending,
+      steps: args.result.steps,
+      error: textEncodedToolCallError(textEncodedToolCall),
+    });
+  }
+
   const completedResult: GenerationResult = {
     id: args.generationId,
     traceId: args.pending.traceId,
