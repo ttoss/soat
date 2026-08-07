@@ -478,7 +478,34 @@ When set, a completed non-streaming generation returns the parsed value as `outp
 
 **Streaming is not supported.** Setting `stream: true` on a generation for an agent with `output_schema` returns `400` with error code `OUTPUT_SCHEMA_STREAMING_UNSUPPORTED`. Use non-streaming generation when structured output is required.
 
-`output_schema` must be a plain object (validated at agent create/update time as `INVALID_OUTPUT_SCHEMA`); the shape of the schema itself is validated by the model provider at generation time.
+`output_schema` must be a plain object (validated at agent create/update time as `INVALID_OUTPUT_SCHEMA`).
+
+#### The schema is enforced, not advisory
+
+The returned object is validated against the schema on the way back. A generation whose object violates it — or whose final text is not JSON at all — is recorded `failed` with error code `OUTPUT_SCHEMA_VALIDATION_FAILED` (`502`), and the violated field is named in the error message. It never completes with an object that does not satisfy the schema.
+
+The whole schema is enforced, not just `required` and `type`, and **that is where the value is**. A model under load can return an object whose keys and types are all correct and whose values are filler — a field echoing the name of one of the agent's own tools, a one-word placeholder, a repeated instruction fragment. Nothing structural distinguishes that from a real answer, so constrain what a real answer looks like:
+
+```json
+{
+  "output_schema": {
+    "type": "object",
+    "properties": {
+      "summary": { "type": "string", "minLength": 200 },
+      "sentiment": { "type": "string", "enum": ["positive", "neutral", "negative"] },
+      "sources": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+    },
+    "required": ["summary", "sentiment", "sources"]
+  }
+}
+```
+
+This matters most in a [workflow](./workflows.md): a column's `payload_writes` and `on_complete` rules read `result.object.<field>` and propagate it downstream with no further inspection, so an unconstrained schema lets a degenerate value travel the whole board with every column reporting success. A `minLength` that reflects the shortest genuine answer converts that silent corruption into a `failed` dispatch the column's `on_failure` can route.
+
+Two deliberate limits:
+
+- **`format` is not asserted.** JSON Schema treats `format` as an annotation unless a validator opts in, and asserting it would reject output whose author never claimed it was invalid. Use `pattern` when you need the constraint enforced.
+- **A schema the validator cannot compile is skipped, not fatal.** Unknown keywords (vendor `x-*` hints, `$comment`) are ignored, and a malformed schema leaves the generation unvalidated with a `soat:generation` debug log rather than failing every call — one bad agent config must not read as an outage. Enforcement therefore depends on the schema being well-formed; check the log if a constraint you expected is not biting.
 
 ### SOAT Action Permissions
 

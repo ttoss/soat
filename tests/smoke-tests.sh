@@ -2224,6 +2224,48 @@ if ! printf '%s\n' "$GEN_GET_RESP" | jq -e '.metadata.team == "payments" and .me
 fi
 echo "Generation metadata round-trip: OK"
 
+# 22a3. output_schema is enforced on the way back, not just sent to the provider.
+# A generation that *completes* here means enforcement is off, which is invisible
+# from every other assertion in this suite.
+#
+# The schema contradicts itself on purpose: `enum` admits only "ok", which can
+# never match `pattern` "^zzz$". That makes the violation deterministic without
+# pinning model behavior — whichever way the provider treats the schema, the
+# value violates it. If the grammar honors `enum` the value is exactly "ok"; if
+# the provider ignores the schema entirely, free-form prose does not match
+# "^zzz$" either. Both branches fail validation, so nothing here depends on the
+# sandbox model choosing to misbehave.
+#
+# Do NOT express this as a large `minLength` instead. The schema is handed to the
+# provider as a generation constraint, so an unsatisfiable one is unsatisfiable
+# for the generator too: llama.cpp's JSON-schema-to-grammar implements
+# `minLength` by repeating its character rule, and `minLength: 5000` expanded the
+# grammar until the Ollama model runner segfaulted — the request then failed as
+# AI_PROVIDER_ERROR before validation ever ran, testing nothing. Keep any
+# violated keyword cheap to compile.
+echo "--- Verifying output_schema enforcement ---"
+SCHEMA_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name schema-enforced \
+  --instructions "Answer with a JSON object containing a single key 'verdict'." \
+  --output_schema '{"type":"object","required":["verdict"],"properties":{"verdict":{"type":"string","enum":["ok"],"pattern":"^zzz$"}}}')
+SCHEMA_AGENT_ID=$(printf '%s\n' "$SCHEMA_AGENT_RESP" | jq -r '.id')
+if [ -z "$SCHEMA_AGENT_ID" ] || [ "$SCHEMA_AGENT_ID" = "null" ]; then
+  echo "ERROR: could not create the output_schema agent" >&2
+  printf '%s\n' "$SCHEMA_AGENT_RESP" >&2
+  exit 1
+fi
+SCHEMA_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$SCHEMA_AGENT_ID" \
+  --messages '[{"role":"user","content":"Give your verdict."}]' 2>&1 || true)
+if ! printf '%s\n' "$SCHEMA_GEN_RESP" | jq -e '.error.code == "OUTPUT_SCHEMA_VALIDATION_FAILED"' >/dev/null 2>&1; then
+  echo "ERROR: expected OUTPUT_SCHEMA_VALIDATION_FAILED for output violating output_schema" >&2
+  printf '%s\n' "$SCHEMA_GEN_RESP" >&2
+  exit 1
+fi
+echo "output_schema enforcement OK (502 OUTPUT_SCHEMA_VALIDATION_FAILED)"
+$SOAT_CLI delete-agent --agent-id "$SCHEMA_AGENT_ID" --force >/dev/null 2>&1 || true
+
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
 AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \

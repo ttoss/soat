@@ -265,6 +265,11 @@ export const ERROR_CODES = {
     description:
       'Streaming generation does not support output_schema. Set stream to false, or remove output_schema from the agent/request.',
   },
+  OUTPUT_SCHEMA_VALIDATION_FAILED: {
+    httpStatus: 502,
+    description:
+      'The model returned an object that does not satisfy the agent output_schema (or was not valid JSON at all). Upstream-caused like AI_PROVIDER_ERROR: the request was well-formed, the model output was not.',
+  },
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:
