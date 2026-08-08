@@ -95,6 +95,12 @@ Because the two steps are decoupled, the party that authorizes the upload (step 
 
 The token is invalidated after a single successful upload. Subsequent uploads return `409`; expired tokens return `410`; unknown tokens return `404`.
 
+### Downloading from a tool
+
+`GET /api/v1/files/{file_id}/download` streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response.
+
+The same payload consideration as uploads applies in reverse: a large file returned as a base64 tool-call result is subject to the client's payload limit, so for large files an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
+
 #### Large files via MCP
 
 This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, step 1 (`create-presigned-url`) is a small request with a small response that always fits.

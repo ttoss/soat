@@ -1,6 +1,3 @@
-import type http from 'node:http';
-
-import { app } from 'src/app';
 import { db } from 'src/db';
 import { emitActivityEntry } from 'src/lib/activity';
 import { flushAuditQueue } from 'src/lib/auditQueue';
@@ -13,29 +10,17 @@ import { saveTrace } from 'src/lib/traces';
 import { ONE_PAGE_PDF_BUFFER } from '../../fixtures/pdf';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
-let httpServer: http.Server;
-
-beforeAll(async () => {
-  // Bind the worker's own port (set per Jest worker in setupTests.ts) so this
-  // matches the base URL src/mcp/server.ts froze at import — the MCP tools'
-  // soat self-calls target it. The per-worker port keeps this listener from
-  // colliding with tools.test.ts, which needs its worker's port unbound.
-  const port = parseInt(process.env.PORT || '15047', 10);
-  await new Promise<void>((resolve, reject) => {
-    httpServer = app.listen(port, resolve);
-    httpServer.once('error', reject);
-  });
-});
-
-afterAll(async () => {
-  await new Promise<void>((resolve, reject) => {
-    if (!httpServer) return resolve();
-    httpServer.close((err) => {
-      return err ? reject(err) : resolve();
-    });
-  });
-});
-
+/**
+ * **The absence of a listener is this file's primary assertion.** Every tool
+ * exercised below reaches the platform through the app's own middleware chain
+ * in this process; nothing is bound to a port, so a tool that went back over
+ * the loopback would fail with `ECONNREFUSED` rather than pass quietly.
+ *
+ * This file used to bind `app.listen(process.env.PORT)` to match the base URL
+ * `src/mcp/server.ts` froze at import time. That requirement is gone with the
+ * `fetch` it existed for — the same move `soatInProcessDispatch.test.ts` pins
+ * for the agent-side `soat` tool.
+ */
 describe('MCP tools - happy path', () => {
   let adminToken: string;
   let projectId: string;
@@ -2395,5 +2380,157 @@ describe('MCP OAuth discovery (RFC 9728)', () => {
         params: { name: 'list-agents', arguments: {} },
       });
     expect(res.status).toBe(401);
+  });
+});
+
+/**
+ * What the in-process dispatch must keep true now that the loopback is gone.
+ *
+ * Sharing a process with the API is not the same as being authorized by it, and
+ * a rejected action is not a result. Both were properties of the network hop
+ * that are now properties of `dispatchApiRequestOrThrow`, so both are pinned
+ * here — at the entry point, where a client actually observes them.
+ */
+describe('MCP in-process dispatch', () => {
+  let adminToken: string;
+  let unprivilegedToken: string;
+  let projectId: string;
+
+  const rpc = (token: string | null, body: Record<string, unknown>) => {
+    const req = testClient
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream');
+    if (token) req.set('Authorization', `Bearer ${token}`);
+    return req.send({ jsonrpc: '2.0', id: 7, ...body });
+  };
+
+  const callTool = (token: string | null, name: string, args = {}) => {
+    return rpc(token, {
+      method: 'tools/call',
+      params: { name, arguments: args },
+    });
+  };
+
+  /** A JSON-RPC response carrying either a tool result or a call error. */
+  type ToolCallResponse = {
+    body: {
+      result?: { content?: Array<{ text?: string }>; isError?: boolean };
+      error?: { message?: string };
+    };
+  };
+
+  /** The text of a tool result, whether it came back as a result or an error. */
+  const resultText = (res: ToolCallResponse): string => {
+    return res.body.result?.content?.[0]?.text ?? res.body.error?.message ?? '';
+  };
+
+  /** Whether the call failed, on either of the two shapes a failure can take. */
+  const failed = (res: ToolCallResponse): boolean => {
+    return Boolean(res.body.result?.isError) || Boolean(res.body.error);
+  };
+
+  beforeAll(async () => {
+    adminToken = await loginAs('mcphappy', 'mcphappypass');
+
+    const projRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/projects')
+      .send({ name: 'MCP Dispatch Guards' });
+    projectId = projRes.body.id;
+
+    await authenticatedTestClient(adminToken)
+      .post('/api/v1/users')
+      .send({ username: 'mcpnoperm', password: 'mcpnopermpass' });
+    unprivilegedToken = await loginAs('mcpnoperm', 'mcpnopermpass');
+  });
+
+  test('a caller without permission is refused, not served', async () => {
+    // The dispatch carries the caller's own credential into the app's real auth
+    // and permission middleware. If it ever dispatched with ambient authority
+    // — the process's, or the token that happened to open the MCP session —
+    // this would return the admin's project list instead.
+    const res = await callTool(unprivilegedToken, 'get-project', {
+      project_id: projectId,
+    });
+
+    expect(resultText(res)).not.toContain('MCP Dispatch Guards');
+    expect(failed(res)).toBe(true);
+  });
+
+  test('a failed action surfaces as an error, never as tool data', async () => {
+    // A non-2xx used to come back as the response body rendered into the tool
+    // result, so an agent read "unauthorized" or "not found" as the answer and
+    // carried on. The status is what decides, and it decides in one place for
+    // both tool surfaces (`dispatchApiRequestOrThrow`).
+    const res = await callTool(adminToken, 'get-project', {
+      project_id: 'prj_does_not_exist',
+    });
+
+    expect(failed(res)).toBe(true);
+    // The real DomainError message, not the "[object Object]" the framework's
+    // own apiCall would have produced.
+    expect(resultText(res)).toMatch(/not found/i);
+    expect(resultText(res)).not.toContain('[object Object]');
+  });
+
+  test('a successful action still returns its body', async () => {
+    const res = await callTool(adminToken, 'get-project', {
+      project_id: projectId,
+    });
+
+    expect(res.status).toBe(200);
+    expect(JSON.parse(resultText(res)).id).toBe(projectId);
+  });
+});
+
+/**
+ * The tool surface is derived from the OpenAPI specs, so an operation that
+ * cannot work as a tool has to be excluded *there* — otherwise every client
+ * pays for its schema and discovers the problem by calling it.
+ */
+describe('MCP tool surface excludes what a tool call cannot carry', () => {
+  let adminToken: string;
+  let tools: Array<{
+    name: string;
+    inputSchema?: { properties?: Record<string, unknown> };
+  }>;
+
+  beforeAll(async () => {
+    adminToken = await loginAs('mcphappy', 'mcphappypass');
+    const res = await authenticatedTestClient(adminToken)
+      .post('/mcp')
+      .set('Content-Type', 'application/json')
+      .set('Accept', 'application/json, text/event-stream')
+      .send({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} });
+    expect(res.status).toBe(200);
+    tools = res.body.result.tools;
+  });
+
+  const toolNames = () => {
+    return tools.map((t) => {
+      return t.name;
+    });
+  };
+
+  test('download-file is absent; the base64 form that a tool can carry is present', () => {
+    expect(toolNames()).not.toContain('download-file');
+    expect(toolNames()).toContain('download-file-base64');
+  });
+
+  test('export-audit-entries is absent; the paged list form is present', () => {
+    expect(toolNames()).not.toContain('export-audit-entries');
+    expect(toolNames()).toContain('list-audit-entries');
+  });
+
+  test('create-agent-generation is offered without its stream field', () => {
+    const generate = tools.find((t) => {
+      return t.name === 'create-agent-generation';
+    });
+
+    expect(generate).toBeDefined();
+    expect(generate?.inputSchema?.properties?.messages).toBeDefined();
+    // A tool call is one request and one result; there is no channel to stream
+    // deltas over, so the field is not offered rather than refused on use.
+    expect(generate?.inputSchema?.properties?.stream).toBeUndefined();
   });
 });

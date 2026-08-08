@@ -213,3 +213,42 @@ export const dispatchApiRequest = async (args: {
     body: toWireBody({ body: ctx.body, method, path: args.path }),
   };
 };
+
+/**
+ * Dispatches an API request and resolves with its body **only** when the status
+ * says the action succeeded.
+ *
+ * A non-2xx self-call is a failed call, not a result. Returning the error body
+ * as though it were data is what made an unauthorized or rejected action
+ * indistinguishable from a successful one: an orchestration tool node stored the
+ * error object as its artifact and the run carried on as though the action had
+ * happened, and the MCP surface rendered a `401` as a tool result for years
+ * (#888).
+ *
+ * The rule lives here, once, because both callers reach the platform the same
+ * way and would otherwise each own a copy of it. What differs between them is
+ * only *how a failure is spelled* — an `HttpToolError` carrying the status for
+ * the agent's retry logic, a plain `Error` carrying the extracted message for
+ * MCP — so that, and only that, is what `wrapError` supplies.
+ */
+export const dispatchApiRequestOrThrow = async (args: {
+  method: string;
+  path: string;
+  headers?: Record<string, string | undefined>;
+  body?: unknown;
+  /** Builds the error thrown for a non-2xx response, in the caller's own vocabulary. */
+  wrapError: (response: InProcessApiResponse) => Error;
+}): Promise<unknown> => {
+  const response = await dispatchApiRequest({
+    method: args.method,
+    path: args.path,
+    headers: args.headers,
+    body: args.body,
+  });
+
+  if (response.status < 200 || response.status >= 300) {
+    throw args.wrapError(response);
+  }
+
+  return response.body;
+};

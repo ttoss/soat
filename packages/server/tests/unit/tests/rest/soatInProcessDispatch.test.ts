@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { dispatchApiRequest } from 'src/lib/inProcessApi';
 import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
 import { callTool } from 'src/lib/tools';
 
@@ -167,7 +168,37 @@ describe('SOAT in-process dispatch', () => {
     expect(deleted).toBeNull();
   });
 
-  test('a streaming action is refused rather than answered with a mangled result', async () => {
+  test('a streaming action is not a bindable action at all', async () => {
+    const toolRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'soat-inproc-download',
+        type: 'soat',
+        actions: ['download-file'],
+      });
+
+    // `downloadFile` carries `x-soat-mcp-exclude`, so it is not among the
+    // actions a tool may bind. Refusing the binding beats refusing the call: an
+    // action that can only ever fail is never offered to a model, never spends
+    // its schema's tokens, and the failure lands on the author at create time
+    // instead of mid-generation.
+    expect(toolRes.status).toBe(400);
+    expect(toolRes.body.error.code).toBe('VALIDATION_FAILED');
+    expect(toolRes.body.error.message).toMatch(/download-file/);
+
+    const callable = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'soat-inproc-download-base64',
+        type: 'soat',
+        actions: ['download-file-base64'],
+      });
+    expect(callable.status).toBe(201);
+  });
+
+  test('a stream body is still refused if a route ever returns one', async () => {
     const uploadRes = await authenticatedTestClient(userToken)
       .post('/api/v1/files/upload')
       .attach('file', Buffer.from('not json at all'), {
@@ -177,30 +208,22 @@ describe('SOAT in-process dispatch', () => {
       .field('project_id', projectId);
     expect(uploadRes.status).toBe(201);
 
-    const toolRes = await authenticatedTestClient(adminToken)
-      .post('/api/v1/tools')
-      .send({
-        project_id: projectId,
-        name: 'soat-inproc-download',
-        type: 'soat',
-        actions: ['download-file'],
-      });
-    expect(toolRes.status).toBe(201);
-
-    const response = await authenticatedTestClient(userToken)
-      .post(`/api/v1/tools/${toolRes.body.id}/call`)
-      .send({
-        action: 'download-file',
-        input: { file_id: uploadRes.body.id },
-      });
-
+    // Dispatched directly because the seam's last reachable stream body was
+    // just removed from the action surface: no entry point leads here any more,
+    // and the guard has to keep holding for whatever route grows one next.
     // Binary content has no JSON projection, and the alternative to refusing it
     // is a result built out of a stream's internals — plus the stream's own
-    // file descriptor left open. Over the loopback this already failed, as an
-    // opaque parse error after the bytes had crossed the wire.
-    expect(response.status).toBe(422);
-    expect(response.body.error.code).toBe('TOOL_CALL_NOT_SUPPORTED');
-    expect(response.body.error.message).toMatch(/base64/);
+    // file descriptor left open.
+    await expect(
+      dispatchApiRequest({
+        method: 'GET',
+        path: `/api/v1/files/${uploadRes.body.id}/download`,
+        headers: { Authorization: `Bearer ${userToken}` },
+      })
+    ).rejects.toMatchObject({
+      code: 'TOOL_CALL_NOT_SUPPORTED',
+      message: expect.stringMatching(/base64/),
+    });
   });
 
   test('permission is evaluated per call against the caller policies of the moment', async () => {

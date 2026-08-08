@@ -12,10 +12,8 @@ import { soatTools } from '../lib/soatTools';
 import { buildSoatActionTarget } from '../lib/soatToolsHelpers';
 import { verifyApiKeyToken } from '../middleware/auth';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
-import { callApi, mcpAuthorizationStore } from './callApi';
+import { dispatchMcpApiRequest, mcpAuthorizationStore } from './dispatchApi';
 import { toMcpText } from './toMcpText';
-
-const apiBaseUrl = `http://localhost:${process.env.PORT || 5047}`;
 
 const mcpServer = new McpServer({
   name: 'soat',
@@ -40,8 +38,7 @@ for (const tool of soatTools) {
     inputSchema: tool.inputSchema,
     handler: async (args: Record<string, unknown>) => {
       const url = buildSoatActionTarget({ def: tool, args });
-      const data = await callApi({
-        apiBaseUrl,
+      const data = await dispatchMcpApiRequest({
         method: tool.method,
         url,
         body: tool.body ? tool.body(args) : undefined,
@@ -87,11 +84,14 @@ registerToolFromSchema(mcpServer, {
 
 const mcpRouter = createMcpRouter(mcpServer, {
   aliases: ['/'],
-  apiBaseUrl,
+  // No `apiBaseUrl`: it configures the framework's own `apiCall`, and no tool
+  // here calls the API over HTTP any more (#888). Leaving a loopback URL in
+  // place would be a live-looking template for the next tool someone adds.
   getApiHeaders: (ctx) => {
     const authorization = (ctx.headers.authorization as string) ?? '';
-    // Populates callApi's AsyncLocalStorage for the remainder of this
-    // request's async chain, including the tool handlers above.
+    // Populates the AsyncLocalStorage that dispatchMcpApiRequest reads, for the
+    // remainder of this request's async chain — including the tool handlers
+    // above, which receive tool arguments and no context of their own.
     mcpAuthorizationStore.enterWith(authorization);
     return { authorization };
   },
@@ -99,8 +99,10 @@ const mcpRouter = createMcpRouter(mcpServer, {
     verifyToken: async (token) => {
       // Project-scoped `sk_` API keys are a first-class MCP credential (the
       // headless-agent path), verified against the ApiKey table. Per-request
-      // authorization is still enforced when the tool handler forwards this same
-      // bearer token to the REST API (see callApi + resolveProjectKey).
+      // authorization is still enforced when the tool handler dispatches with
+      // this same bearer token (see dispatchMcpApiRequest + resolveProjectKey):
+      // verifying the token here admits the caller to the MCP surface, it does
+      // not authorize the action.
       if (token.startsWith(API_KEY_RAW_PREFIX)) {
         const apiKeyPayload = await verifyApiKeyToken(token);
         if (!apiKeyPayload) throw new Error('Invalid token');

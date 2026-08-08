@@ -3,7 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { HttpToolError } from './httpToolError';
-import { dispatchApiRequest, withCallTimeout } from './inProcessApi';
+import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
 import { buildSoatActionTarget } from './soatToolsHelpers';
 
@@ -309,8 +309,11 @@ export const executeSoatTool = async (args: {
   const toolId = `${args.toolName}_${args.def.name}`;
   try {
     log('soat tool execute: %s %s %s', toolId, args.def.method, path);
-    const response = await withCallTimeout({
-      promise: dispatchApiRequest({
+    // The non-2xx rule is `dispatchApiRequestOrThrow`'s, shared with the MCP
+    // surface; only the error type is this caller's — `HttpToolError` carries
+    // the status that `isRetriableError` reads to keep a 4xx from being retried.
+    return await withCallTimeout({
+      promise: dispatchApiRequestOrThrow({
         method: args.def.method,
         path,
         headers: {
@@ -318,26 +321,20 @@ export const executeSoatTool = async (args: {
           ...args.buildContextHeaders(args.toolContext),
         },
         body,
+        wrapError: (response) => {
+          log('soat tool result: %s status=%d', toolId, response.status);
+          return new HttpToolError(
+            `SOAT action '${args.def.name}' failed`,
+            response.status,
+            JSON.stringify(response.body) ?? '',
+            path,
+            args.def.method
+          );
+        },
       }),
       ms: SOAT_TOOL_CALL_TIMEOUT_MS,
       label: `SOAT action '${args.def.name}'`,
     });
-    log('soat tool result: %s status=%d', toolId, response.status);
-    // A non-2xx self-call is a failed tool call, not a result. Returning the
-    // error body here used to make an unauthorized or rejected platform action
-    // indistinguishable from data: an orchestration tool node stored the error
-    // object as its artifact and the run carried on as though the action had
-    // happened (#801-shaped, but on the call path).
-    if (response.status < 200 || response.status >= 300) {
-      throw new HttpToolError(
-        `SOAT action '${args.def.name}' failed`,
-        response.status,
-        JSON.stringify(response.body) ?? '',
-        path,
-        args.def.method
-      );
-    }
-    return response.body;
   } catch (error) {
     log('soat tool error: %s', toolId);
     args.logToolCallingError({

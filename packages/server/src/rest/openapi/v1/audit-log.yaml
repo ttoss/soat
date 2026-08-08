@@ -124,6 +124,12 @@ paths:
         required: the export is per-project by design. Filters behave exactly as
         they do on the list endpoint.
       operationId: exportAuditEntries
+      # Not a tool, for two independent reasons. The response is a stream, which
+      # has no JSON projection; and an export is deliberately unbounded — it has
+      # no `limit` — so the callable form of "read the audit log" is
+      # `listAuditEntries`, which is paged. Bulk export stays a REST/CLI/SDK
+      # operation, where the caller controls where the bytes go.
+      x-soat-mcp-exclude: true
       parameters:
         - name: project_id
           in: query

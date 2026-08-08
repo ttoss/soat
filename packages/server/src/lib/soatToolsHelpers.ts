@@ -12,6 +12,7 @@ import {
   buildPathFn,
   buildQueryFn,
   dereferenceSchema,
+  isHiddenFromToolSchema,
   normalizeSubschema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
@@ -356,19 +357,16 @@ export const extractBodyProps = (args: {
   if (!bodySchema?.properties) return [];
   const allEntries = Object.entries(bodySchema.properties);
   const filtered = allEntries.filter(([, value]: [string, unknown]) => {
-    const val = value as { 'x-soat-server-managed'?: unknown };
-    return !val['x-soat-server-managed'];
+    return !isHiddenFromToolSchema(value);
   });
   const excluded = allEntries.length - filtered.length;
   if (excluded > 0) {
     log(
-      'extractBodyProps: excluded %d server-managed field(s): %s',
+      'extractBodyProps: excluded %d non-callable field(s): %s',
       excluded,
       allEntries
         .filter(([, v]: [string, unknown]) => {
-          return (v as { 'x-soat-server-managed'?: unknown })[
-            'x-soat-server-managed'
-          ];
+          return isHiddenFromToolSchema(v);
         })
         .map(([k]) => {
           return k;

@@ -385,6 +385,12 @@ paths:
       summary: Download a file
       description: Streams the file content to the client
       operationId: downloadFile
+      # Not a tool: a tool result is a JSON value, and this route's is a stream
+      # of raw bytes. Advertising it would offer callers — MCP clients and
+      # agents alike — an action that can only ever fail, and spend a tool slot
+      # and its schema tokens doing so. `downloadFileBase64` is the callable
+      # form and returns the same content.
+      x-soat-mcp-exclude: true
       parameters:
         - name: file_id
           in: path
