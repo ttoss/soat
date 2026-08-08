@@ -28,6 +28,7 @@ export const PUBLIC_ID_PREFIXES = {
   memoryEntry: 'mem_entry_',
   modelRoute: 'route_',
   orchestration: 'orch_',
+  orchestrationVersion: 'orch_ver_',
   orchestrationRun: 'orch_run_',
   orchestrationRunTask: 'orch_task_',
   formation: 'form_',

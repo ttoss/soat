@@ -51,6 +51,22 @@ export class OrchestrationRun extends Model {
   })
   declare orchestration: Orchestration;
 
+  // The orchestration version this run executes, stamped at start and never
+  // changed afterwards (#872). Every execution entry point — the first drive of
+  // a queued run, a wake from `sleeping`, a human/approval resume, and a redrive
+  // after a lease expiry — resolves the graph through this number rather than
+  // reading the live `Orchestration` row, so editing the orchestration cannot
+  // re-shape a run already in flight, including one parked for days.
+  //
+  // A version *number* rather than a foreign key to `orchestration_versions`:
+  // the number is what the run response exposes and what an audit reader cites,
+  // it matches `Generation.agentVersion`, and the archive row is reachable from
+  // it with no join. Null only for runs created before pinning existed, which
+  // fall back to the live row — the pre-#872 behavior, and the only thing there
+  // is to fall back to.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare orchestrationVersion: number | null;
+
   @ForeignKey(() => {
     return Project;
   })

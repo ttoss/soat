@@ -1,0 +1,185 @@
+import createDebug from 'debug';
+
+import { db } from '../db';
+import { DomainError } from '../errors';
+import { parseOrchestrationGraph } from './orchestrationGraphWire';
+import {
+  type MappedOrchestration,
+  updateOrchestration,
+} from './orchestrations';
+import { orchestrationVersionStore } from './orchestrationVersionSnapshot';
+import {
+  type ArchivedVersionRow,
+  configObject,
+  makeVersionArchive,
+  mapArchivedVersionFields,
+  type VersionedResourceRef,
+} from './resourceVersions';
+
+const log = createDebug('soat:orchestrations');
+
+/**
+ * Orchestration graph version history (issue #872).
+ *
+ * The archive mechanics live in `resourceVersions.ts` and are shared with agents
+ * and guardrails; this module supplies the orchestration-specific adapters.
+ * Versions are never written from here — they are archived by the shared write
+ * path in `orchestrations.ts`, so a REST edit and a formation apply leave
+ * identical history.
+ *
+ * Orchestrations have no release/canary layer: a run is pinned at
+ * `start-orchestration-run` and stays on that version for its whole life, which
+ * can be days. Splitting *new* runs across two graphs is a coherent idea but
+ * nothing has asked for it (#883), and the mechanism is already extracted and
+ * pure in `releaseAssignment.ts` for when something does.
+ */
+
+type OrchestrationInstance = InstanceType<(typeof db)['Orchestration']>;
+
+// ── Mapping ──────────────────────────────────────────────────────────────
+
+export const mapOrchestrationVersion = (
+  version: ArchivedVersionRow,
+  orchestrationPublicId: string
+) => {
+  return {
+    orchestration_id: orchestrationPublicId,
+    ...mapArchivedVersionFields(version),
+  };
+};
+
+// ── Lookup helpers ───────────────────────────────────────────────────────
+
+const findOrchestrationInstance = async (args: {
+  projectIds?: number[];
+  id: string;
+}): Promise<OrchestrationInstance> => {
+  const where: Record<string, unknown> = { publicId: args.id };
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+
+  const orchestration = await db.Orchestration.findOne({ where });
+  // Cross-project access resolves here as "not found" rather than a 403, so an
+  // orchestration's existence never leaks across a tenant boundary.
+  if (!orchestration) {
+    throw new DomainError(
+      'ORCHESTRATION_NOT_FOUND',
+      `Orchestration '${args.id}' not found.`
+    );
+  }
+  return orchestration as OrchestrationInstance;
+};
+
+const toResourceRef = (
+  orchestration: OrchestrationInstance
+): VersionedResourceRef => {
+  return {
+    dbId: orchestration.id as number,
+    publicId: orchestration.publicId,
+    version: orchestration.version,
+  };
+};
+
+/**
+ * The orchestration adapter over the shared archive. `applyConfig` routes through
+ * `updateOrchestration` rather than touching columns, so a restored graph goes
+ * through the same static validation as an authored one and is archived by the
+ * same choke point as any other edit — and a graph identical to the live one is
+ * recognised as a no-op.
+ *
+ * Unlike a guardrail document, that validation cannot start failing over time:
+ * `assertOrchestrationValid` is a pure check on the graph's shape, and a node's
+ * resource references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a
+ * run reaches the node. A target deleted since the snapshot was taken therefore
+ * restores cleanly and surfaces as a failed run — the same place it surfaces when
+ * the graph is authored that way in the first place.
+ */
+const orchestrationVersionArchive = makeVersionArchive({
+  store: orchestrationVersionStore,
+  loadResource: async (args) => {
+    return toResourceRef(await findOrchestrationInstance(args));
+  },
+  mapVersion: mapOrchestrationVersion,
+  applyConfig: async (args): Promise<MappedOrchestration> => {
+    // The archived graph is wire-shaped, so it goes back through the same
+    // snake_case → camelCase boundary an inbound request does.
+    const graph = parseOrchestrationGraph({
+      nodes: args.config.nodes,
+      edges: args.config.edges,
+    });
+
+    return updateOrchestration({
+      projectIds: args.projectIds,
+      id: args.id,
+      nodes: graph.nodes,
+      edges: graph.edges,
+      // A version replaces the whole graph, so an absent schema means "cleared",
+      // never "leave as is".
+      stateSchema: configObject(args.config.state_schema),
+      inputSchema: configObject(args.config.input_schema),
+      versionLabel: args.label,
+      createdByUserId: args.createdByUserId,
+    });
+  },
+});
+
+// ── Read endpoints ───────────────────────────────────────────────────────
+
+export const listOrchestrationVersions = async (args: {
+  projectIds?: number[];
+  orchestrationId: string;
+  limit?: number;
+  offset?: number;
+}) => {
+  log('listOrchestrationVersions: orchestrationId=%s', args.orchestrationId);
+
+  return orchestrationVersionArchive.listVersions({
+    projectIds: args.projectIds,
+    resourceId: args.orchestrationId,
+    limit: args.limit,
+    offset: args.offset,
+  });
+};
+
+export const getOrchestrationVersion = async (args: {
+  projectIds?: number[];
+  orchestrationId: string;
+  version: number;
+}) => {
+  log(
+    'getOrchestrationVersion: orchestrationId=%s version=%d',
+    args.orchestrationId,
+    args.version
+  );
+
+  return orchestrationVersionArchive.getVersion({
+    projectIds: args.projectIds,
+    resourceId: args.orchestrationId,
+    version: args.version,
+  });
+};
+
+export const restoreOrchestrationVersion = async (args: {
+  projectIds?: number[];
+  orchestrationId: string;
+  version: number;
+  label?: string | null;
+  createdByUserId?: number | null;
+}): Promise<MappedOrchestration> => {
+  log(
+    'restoreOrchestrationVersion: orchestrationId=%s version=%d',
+    args.orchestrationId,
+    args.version
+  );
+
+  // Appends a new version rather than rewinding the counter, so a run pinned to
+  // any version in between still resolves the graph it started on. Runs already
+  // in flight are untouched: a restore is an ordinary graph edit, and pinning is
+  // what keeps it from reaching them.
+  return orchestrationVersionArchive.restoreVersion({
+    projectIds: args.projectIds,
+    resourceId: args.orchestrationId,
+    version: args.version,
+    label: args.label,
+    createdByUserId: args.createdByUserId,
+  });
+};

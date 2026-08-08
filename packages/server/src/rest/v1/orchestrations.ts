@@ -25,12 +25,15 @@ import {
 import {
   parseRunInput,
   parseUpdateBody,
+  parseVersionLabel,
   type RawCreateBody,
   type RawUpdateBody,
   validateCreateBody,
 } from './orchestrationsRequestBody';
+import { orchestrationVersionsRouter } from './orchestrationVersions';
 
 export const orchestrationsRouter = new Router<Context>();
+
 const resolveAuth = async (
   ctx: Context,
   action: string,
@@ -123,6 +126,8 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
       body.input_schema != null && typeof body.input_schema === 'object'
         ? body.input_schema
         : undefined,
+    versionLabel: parseVersionLabel(body.version_label),
+    createdByUserId: ctx.authUser?.id,
   });
 
   ctx.status = 201;
@@ -239,6 +244,7 @@ orchestrationsRouter.patch(
       id: orchestrationId,
       projectIds: projectIds ?? undefined,
       ...parseUpdateBody(body),
+      createdByUserId: ctx.authUser?.id,
     });
 
     ctx.body = result;
@@ -468,3 +474,8 @@ orchestrationsRouter.post(
     ctx.body = result;
   }
 );
+
+// The version-history surface lives in its own file and hangs off this router,
+// mirroring `agentVersions.ts` under the agents router.
+orchestrationsRouter.use(orchestrationVersionsRouter.routes());
+orchestrationsRouter.use(orchestrationVersionsRouter.allowedMethods());

@@ -32,6 +32,21 @@
       "description": "Delete an orchestration"
     },
     {
+      "operationId": "listOrchestrationVersions",
+      "action": "orchestrations:ListOrchestrationVersions",
+      "description": "List an orchestration's archived graph versions"
+    },
+    {
+      "operationId": "getOrchestrationVersion",
+      "action": "orchestrations:GetOrchestrationVersion",
+      "description": "Fetch one archived orchestration graph version"
+    },
+    {
+      "operationId": "restoreOrchestrationVersion",
+      "action": "orchestrations:RestoreOrchestrationVersion",
+      "description": "Restore an archived orchestration graph as a new version"
+    },
+    {
       "operationId": "startRun",
       "action": "orchestrations:StartRun",
       "description": "Start a new orchestration run"

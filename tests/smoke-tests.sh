@@ -1231,7 +1231,7 @@ echo "=== Orchestrations ==="
 echo "--- Creating orchestration-scoped auth ---"
 ORCH_POLICY_RESP=$($SOAT_CLI create-policy \
   --name smoke-orchestration-policy \
-  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
+  --document '{"statement":[{"effect":"Allow","action":["orchestrations:CreateOrchestration","orchestrations:ValidateOrchestration","orchestrations:ListOrchestrations","orchestrations:GetOrchestration","orchestrations:UpdateOrchestration","orchestrations:DeleteOrchestration","orchestrations:ListOrchestrationVersions","orchestrations:GetOrchestrationVersion","orchestrations:RestoreOrchestrationVersion","orchestrations:StartRun","orchestrations:ListRuns","orchestrations:GetRun","orchestrations:CancelRun","orchestrations:SubmitHumanInput","orchestrations:ResumeRun"]}]}' )
 ORCH_POLICY_ID=$(printf '%s\n' "$ORCH_POLICY_RESP" | jq -r '.id')
 if [ -z "$ORCH_POLICY_ID" ] || [ "$ORCH_POLICY_ID" = "null" ]; then
   echo "Failed to create orchestration policy"
@@ -1363,6 +1363,54 @@ if ! printf '%s\n' "$ORCH_UPDATE_RESP" | jq -e '.description == "Smoke orchestra
 fi
 echo "Update orchestration: OK"
 
+# Graph versioning (#872). The version endpoints are exercised here; that a
+# parked run keeps executing its pinned graph is covered by the unit suite,
+# which can park a run without waiting on a real timer.
+echo "--- Listing orchestration versions ---"
+ORCH_VER_LIST_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI list-orchestration-versions --orchestration-id "$ORCH_ID")
+# The description-only update above changed no graph field, so the
+# orchestration is still at version 1 with exactly one archived version.
+if ! printf '%s\n' "$ORCH_VER_LIST_RESP" | jq -e '.total == 1 and .data[0].version == 1' >/dev/null 2>&1; then
+  echo "list-orchestration-versions did not report the create-time version"
+  printf '%s\n' "$ORCH_VER_LIST_RESP"
+  exit 1
+fi
+echo "List orchestration versions: OK"
+
+echo "--- Getting an archived orchestration version ---"
+ORCH_VER_GET_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI get-orchestration-version \
+  --orchestration-id "$ORCH_ID" \
+  --version 1)
+if ! printf '%s\n' "$ORCH_VER_GET_RESP" | jq -e --arg id "$ORCH_ID" '.orchestration_id == $id and .version == 1 and (.config.nodes | length) == 2' >/dev/null 2>&1; then
+  echo "get-orchestration-version returned unexpected response"
+  printf '%s\n' "$ORCH_VER_GET_RESP"
+  exit 1
+fi
+echo "Get orchestration version: OK"
+
+echo "--- Bumping the graph and restoring version 1 ---"
+ORCH_BUMP_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI update-orchestration \
+  --orchestration-id "$ORCH_ID" \
+  --nodes '[{"id":"seed","type":"transform","expression":{"var":"input.theme"},"state_mapping":{"state.theme":{"var":"output.result"}}}]' \
+  --edges '[]' \
+  --version-label smoke-rewire)
+if ! printf '%s\n' "$ORCH_BUMP_RESP" | jq -e '.version == 2 and (.nodes | length) == 1' >/dev/null 2>&1; then
+  echo "update-orchestration did not bump the version on a graph change"
+  printf '%s\n' "$ORCH_BUMP_RESP"
+  exit 1
+fi
+# A restore appends rather than rewinding, so v1's graph comes back as v3.
+ORCH_RESTORE_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI restore-orchestration-version \
+  --orchestration-id "$ORCH_ID" \
+  --version 1 \
+  --label smoke-rollback)
+if ! printf '%s\n' "$ORCH_RESTORE_RESP" | jq -e '.version == 3 and (.nodes | length) == 2' >/dev/null 2>&1; then
+  echo "restore-orchestration-version did not append the restored graph"
+  printf '%s\n' "$ORCH_RESTORE_RESP"
+  exit 1
+fi
+echo "Restore orchestration version: OK"
+
 echo "--- Starting completed run (synchronous wait) ---"
 ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
@@ -1371,8 +1419,15 @@ ORCH_RUN_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run
 ORCH_RUN_ID=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.id')
 ORCH_RUN_STATUS=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.status')
 ORCH_RUN_TITLE=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.state.title')
+ORCH_RUN_VERSION=$(printf '%s\n' "$ORCH_RUN_RESP" | jq -r '.orchestration_version')
 if [ "$ORCH_RUN_STATUS" != "succeeded" ] || [ "$ORCH_RUN_TITLE" != "orchestration sonnet" ]; then
   echo "start-orchestration-run did not complete as expected"
+  printf '%s\n' "$ORCH_RUN_RESP"
+  exit 1
+fi
+# The run is pinned to the graph it started on — version 3 after the restore.
+if [ "$ORCH_RUN_VERSION" != "3" ]; then
+  echo "start-orchestration-run did not pin the run to the current version (got: $ORCH_RUN_VERSION)"
   printf '%s\n' "$ORCH_RUN_RESP"
   exit 1
 fi
