@@ -185,6 +185,7 @@ const sidebars: SidebarsConfig = {
         'tutorials/approval-gate',
         'tutorials/create-an-agent-squad',
         'tutorials/review-panel-discussion',
+        'tutorials/close-the-monthly-books',
       ],
     },
     {

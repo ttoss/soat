@@ -57,6 +57,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 - [Orchestrate a Sonnet - Step 7 (Start a run)](/docs/tutorials/orchestrate-a-sonnet#step-7--start-a-run)
 - [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state)
 - [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — a team of agents plus a coordinating orchestration, deployed and run as one stack
+- [Close the Monthly Books - Step 4 (Validate and create the reconciliation graph)](/docs/tutorials/close-the-monthly-books#step-4--validate-and-create-the-reconciliation-graph) — parallel start nodes, an `activation_group` join, and a branch decided by arithmetic rather than a model
 
 ## Data Model
 
