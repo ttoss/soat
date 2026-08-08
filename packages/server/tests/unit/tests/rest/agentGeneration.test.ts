@@ -659,9 +659,24 @@ describe('Agent Generation Routes', () => {
       expect(paused.status).toBe(200);
       expect(paused.body.status).toBe('requires_action');
 
-      const record = await authenticatedTestClient(userToken).get(
+      // `buildRequiresActionGenerationResult` persists `requires_action`
+      // fire-and-forget, so the record can still read `in_progress` for a moment
+      // after the response returns — the generation lifecycle is poll-based by
+      // design. Poll a bounded predicate rather than reading once: a single read
+      // passes on a fast machine and fails under CI load, which is how this went
+      // red on one shard while passing everywhere else.
+      let record = await authenticatedTestClient(userToken).get(
         `/api/v1/generations/${paused.body.id}`
       );
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if (record.body.status === 'requires_action') break;
+        await new Promise((resolve) => {
+          return setTimeout(resolve, 50);
+        });
+        record = await authenticatedTestClient(userToken).get(
+          `/api/v1/generations/${paused.body.id}`
+        );
+      }
 
       expect(record.status).toBe(200);
       expect(record.body.status).toBe('requires_action');
