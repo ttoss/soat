@@ -28,7 +28,9 @@ import {
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
+import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
+import { startedByPrincipalColumns } from './principals';
 import { checkGenerationQuota, quotaBreachError } from './quotaEnforcement';
 import { assertValidToolContextKeys } from './toolContext';
 
@@ -117,6 +119,16 @@ const resolveContextAndRecord = async (args: {
     sessionId: args.sessionId,
   });
 
+  // The identity this generation runs as, persisted rather than left to the
+  // request: work that resumes *after* the request is gone — an approved tool
+  // call's continuation, days later (#894) — re-mints its credential from this
+  // pair. Nothing is recorded for a trigger- or OAuth-bounded caller; see
+  // `resolveStartingPrincipal`.
+  const principal = resolveStartingPrincipal({
+    authUser: args.authUser,
+    authHeader: args.authHeader,
+  });
+
   // Awaited so the record reliably exists before the generation runs and a
   // failure can be persisted on it. Creation failures are non-fatal.
   await createGenerationRecord({
@@ -125,8 +137,7 @@ const resolveContextAndRecord = async (args: {
     agentId: args.agentId,
     traceId: args.traceId,
     initiatorGenerationId: args.initiatorGenerationId ?? null,
-    startedByPrincipalType: null,
-    startedByPrincipalId: null,
+    ...startedByPrincipalColumns(principal),
     // End-user attribution is stored as typed FK columns rather than metadata
     // keys: it is identity the platform enforces (and later caps spend on), so
     // it must not live in the caller-writable metadata bag. The actor is

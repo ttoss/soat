@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 
 import { db } from '../db';
 import { JWT_SECRET } from '../middleware/auth';
-import type { RequestPrincipal } from './principals';
+import { principalFromAuthUser, type RequestPrincipal } from './principals';
 
 const log = createDebug('soat:orchestrations');
 
@@ -147,4 +147,42 @@ export const readRunTokenPrincipal = (
   } catch {
     return null;
   }
+};
+
+/**
+ * The principal to persist as having *started* a piece of work, given whatever
+ * credential reached it. Two sources, in order:
+ *
+ * - the authenticated caller, when a request started the work;
+ * - the run-as token an internal caller was handed, when no request did — a task
+ *   dispatch, an orchestration node, a continuation of a continuation. This is
+ *   what makes a chain durable across arbitrarily many hops: each segment reads
+ *   back the identity the previous one re-minted.
+ *
+ * A **trigger** token and an **OAuth** access token deliberately record nothing.
+ * Each carries its boundary in the *token* — the trigger's attached policy, the
+ * consented scope — not in the principal, so re-minting a plain run token from
+ * one later would drop that boundary and hand the work the whole of the owning
+ * user's access. Recording no principal keeps today's behaviour instead: no
+ * credential, self-calls unauthenticated, exactly as before.
+ *
+ * OAuth is identified by elimination — the only project-scoped JWT carrying
+ * neither marker claim — mirroring how `resolveScopedBoundaryDocs` treats it as
+ * the fallback branch after every other kind has been matched.
+ */
+export const resolveStartingPrincipal = (args: {
+  authUser?: {
+    publicId: string;
+    apiKeyPublicId?: string;
+    oauthProjectPublicId?: string;
+    isTriggerToken?: boolean;
+    isRunToken?: boolean;
+  };
+  authHeader?: string;
+}): RequestPrincipal | null => {
+  const { authUser } = args;
+  if (!authUser) return readRunTokenPrincipal(args.authHeader);
+  if (authUser.isTriggerToken) return null;
+  if (authUser.oauthProjectPublicId && !authUser.isRunToken) return null;
+  return principalFromAuthUser(authUser);
 };

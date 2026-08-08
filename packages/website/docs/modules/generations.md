@@ -32,8 +32,8 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `agent_id`                  | string         | Agent that ran the generation                                                                        |
 | `trace_id`                  | string         | Trace this generation belongs to                                                                     |
 | `initiator_generation_id`   | string \| null | Generation that triggered this one. Set only for sub-agent invocations; `null` for top-level generations |
-| `started_by_principal_type` | string \| null | Type of the principal that started the generation                                                    |
-| `started_by_principal_id`   | string \| null | ID of the principal that started the generation                                                      |
+| `started_by_principal_type` | string \| null | Principal kind that started the generation — `user` or `api_key` (see [Starting principal](#starting-principal)) |
+| `started_by_principal_id`   | string \| null | Public id of that principal — the key's own `key_…` when a key was used, else `user_…` |
 | `status`                    | string         | Lifecycle status: `in_progress`, `requires_action`, `completed`, or `failed`                         |
 | `started_at`                | string         | When the generation started                                                                          |
 | `completed_at`              | string \| null | When the generation reached a terminal state                                                         |
@@ -55,6 +55,30 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `updated_at`                | string         | ISO 8601 last-update timestamp                                                                       |
 
 ## Key Concepts
+
+### Starting principal
+
+Every generation records who started it in `started_by_principal_type` /
+`started_by_principal_id`. When the request was authenticated with an API key the
+principal is the **key itself** (`key_…`), so a generation names which key acted
+rather than only the user that owns it; a JWT-authenticated request records the
+user (`user_…`).
+
+The pair is durable identity, not a log line: work that resumes after the
+original request is gone re-mints a short-lived credential from it. That is what
+lets an [approval continuation](./approvals.md#continuation-identity) — possibly
+days later — authenticate its `soat` tools as the principal that started the
+chain, and it is why a generation started by a request-less drive (a
+[workflow dispatch](./workflows.md), an
+[orchestration node](./orchestrations.md#durable-background-execution)) records
+the drive's principal rather than nothing.
+
+Both fields are `null` when the chain has no re-mintable principal — a
+generation started by a [trigger](./triggers.md) or an
+[OAuth](./oauth.md) token. Each of those carries its authority in the token (the
+trigger's attached policy, the consented scope) rather than in the principal, so
+recording one would let a later re-mint drop that boundary and act with the whole
+of the owning user's access.
 
 ### Lifecycle
 

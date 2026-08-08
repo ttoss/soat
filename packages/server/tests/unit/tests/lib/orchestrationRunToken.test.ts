@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import {
   buildRunAuthHeader,
   readRunTokenPrincipal,
+  resolveStartingPrincipal,
   signRunToken,
 } from 'src/lib/orchestrationRunToken';
 import { JWT_SECRET } from 'src/middleware/auth';
@@ -208,4 +209,100 @@ describe('orchestration run-as token', () => {
       expect(readRunTokenPrincipal(header)).toBeNull();
     });
   });
+
+  /**
+   * What a generation records as having started it (#894). The two exclusions
+   * below are the security-relevant half and are the reason this is tested
+   * directly: reaching the trigger and OAuth branches through an entry point
+   * means standing up a trigger dispatch or a consented OAuth token *and* an
+   * approval on the generation it produced, and the failure signal at the far
+   * end — a continuation that quietly acts with too much access — would not
+   * name which branch let it through.
+   */
+  describe('resolveStartingPrincipal', () => {
+    test('names the acting user for a plain authenticated caller', () => {
+      expect(
+        resolveStartingPrincipal({ authUser: { publicId: userPublicId } })
+      ).toEqual({ principalType: 'user', principalId: userPublicId });
+    });
+
+    test('names the key, not its owner, for a key-authenticated caller', () => {
+      expect(
+        resolveStartingPrincipal({
+          authUser: { publicId: userPublicId, apiKeyPublicId: 'key_abc' },
+        })
+      ).toEqual({ principalType: 'api_key', principalId: 'key_abc' });
+    });
+
+    test('a run token names the same principal it was minted for', () => {
+      // A run token is project-scoped, so it carries `oauthProjectPublicId`
+      // like an OAuth token does — the `isRunToken` marker is what separates
+      // the two, and getting that wrong would strand every nested chain.
+      expect(
+        resolveStartingPrincipal({
+          authUser: {
+            publicId: userPublicId,
+            apiKeyPublicId: 'key_abc',
+            oauthProjectPublicId: projectId,
+            isRunToken: true,
+          },
+        })
+      ).toEqual({ principalType: 'api_key', principalId: 'key_abc' });
+    });
+
+    test('a trigger-token caller records no principal', () => {
+      // Its authority is the trigger's attached policy, which the principal
+      // does not name; re-minting from it would widen the chain to everything
+      // the owning user may do.
+      expect(
+        resolveStartingPrincipal({
+          authUser: {
+            publicId: userPublicId,
+            oauthProjectPublicId: projectId,
+            isTriggerToken: true,
+          },
+        })
+      ).toBeNull();
+    });
+
+    test('an OAuth caller records no principal', () => {
+      // Same reasoning, with the consented scope as the boundary.
+      expect(
+        resolveStartingPrincipal({
+          authUser: {
+            publicId: userPublicId,
+            oauthProjectPublicId: projectId,
+          },
+        })
+      ).toBeNull();
+    });
+
+    test('with no caller it falls back to the run token it was handed', () => {
+      const authHeader = `Bearer ${signRunToken({
+        publicId: userPublicId,
+        role: 'user',
+        projectPublicId: projectId,
+        workPublicId: 'orun_start1',
+      })}`;
+      expect(resolveStartingPrincipal({ authHeader })).toEqual({
+        principalType: 'user',
+        principalId: userPublicId,
+      });
+    });
+
+    test('with neither a caller nor a run token there is no principal', () => {
+      expect(resolveStartingPrincipal({})).toBeNull();
+      expect(
+        resolveStartingPrincipal({
+          authHeader: bearerTriggerToken(userPublicId, projectId),
+        })
+      ).toBeNull();
+    });
+  });
 });
+
+// A trigger run-as token, as an internal caller would forward it: it must not
+// become a starting principal on the `authHeader` path either.
+const bearerTriggerToken = (publicId: string, prj: string): string => {
+  return `Bearer ${jwt.sign({ publicId, role: 'user', prj, trg: 'trg_abc' }, JWT_SECRET, { expiresIn: '5m' })}`;
+};

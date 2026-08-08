@@ -6,6 +6,8 @@ import { buildGenerationContext } from './agentGenerationContext';
 import { savePendingGeneration } from './agentGenerationHelpers';
 import type { MappedApproval } from './approvals';
 import { createGenerationRecord } from './generations';
+import { readRunTokenPrincipal } from './orchestrationRunToken';
+import { startedByPrincipalColumns } from './principals';
 
 const log = createDebug('soat:approvals');
 
@@ -86,6 +88,12 @@ const seedReHandoffPending = (args: {
 export const emitClientToolReHandoff = async (args: {
   item: MappedApproval;
   projectInternalId: number;
+  // The chain's re-minted credential (see `agentToolApprovalContinuation`). The
+  // re-handoff generation resolves its tool surface here and is resumed later by
+  // the client, so it needs the same identity as the other two continuation
+  // branches — and records the same principal, so a further approval on it
+  // re-mints from its own row.
+  authHeader?: string;
 }): Promise<boolean> => {
   const proposed = args.item.proposed_action;
   const agentId = args.item.agent_id;
@@ -117,6 +125,7 @@ export const emitClientToolReHandoff = async (args: {
     agentId,
     projectIds: [args.projectInternalId],
     messages: [{ role: 'user', content: note }],
+    authHeader: args.authHeader,
     toolContext: args.item.session_id
       ? { sessionId: args.item.session_id }
       : undefined,
@@ -133,8 +142,7 @@ export const emitClientToolReHandoff = async (args: {
     agentId,
     traceId,
     initiatorGenerationId: args.item.generation_id ?? null,
-    startedByPrincipalType: null,
-    startedByPrincipalId: null,
+    ...startedByPrincipalColumns(readRunTokenPrincipal(args.authHeader)),
     // Keeps the continuation's usage attributed to the same end user as the
     // turn that produced the approval; the actor is derived from the session.
     sessionId: args.item.session_id,

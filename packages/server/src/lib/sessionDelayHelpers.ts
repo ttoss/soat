@@ -5,6 +5,7 @@ type GenerateSessionResponseFn = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
+  authHeader?: string;
 }) => Promise<unknown>;
 
 // ── In-memory delay timer map ─────────────────────────────────────────────
@@ -28,6 +29,7 @@ export const scheduleDelayedGeneration = (args: {
   sessionId: string;
   delayMs: number;
   toolContext?: Record<string, string>;
+  authHeader?: string;
   generateFn: GenerateSessionResponseFn;
 }) => {
   cancelDelayTimer(args.sessionKey);
@@ -38,6 +40,7 @@ export const scheduleDelayedGeneration = (args: {
         agentId: args.agentId,
         sessionId: args.sessionId,
         toolContext: args.toolContext,
+        authHeader: args.authHeader,
       })
       .catch(() => {});
   }, args.delayMs);
@@ -54,6 +57,7 @@ export const triggerOrScheduleGeneration = (args: {
   savedContent: string | null;
   savedDocumentId: string | undefined;
   toolContext?: Record<string, string>;
+  authHeader?: string;
   generateFn: GenerateSessionResponseFn;
 }) => {
   const delayMs = (args.session.messageDelaySeconds ?? 0) * 1000;
@@ -66,6 +70,7 @@ export const triggerOrScheduleGeneration = (args: {
       sessionId: args.sessionId,
       delayMs,
       toolContext: args.toolContext,
+      authHeader: args.authHeader,
       generateFn: args.generateFn,
     });
     return {
@@ -80,6 +85,7 @@ export const triggerOrScheduleGeneration = (args: {
     agentId: args.agentId,
     sessionId: args.sessionId,
     toolContext: args.toolContext,
+    authHeader: args.authHeader,
     savedContent: args.savedContent,
     savedDocumentId: args.savedDocumentId,
     generateFn: args.generateFn,
