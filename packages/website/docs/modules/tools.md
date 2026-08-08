@@ -501,7 +501,7 @@ Presets and model-supplied arguments reach the action wherever the OpenAPI opera
   "name": "list_support_agents",
   "type": "soat",
   "actions": ["list-agents"],
-  "preset_parameters": { "project_id": "prj_abc123" }
+  "preset_parameters": { "project_id": "proj_abc123" }
 }
 ```
 
