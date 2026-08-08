@@ -32,11 +32,17 @@ export const workflowsFormationModule = defineFormationModule({
       projectId,
       name: properties.name as string,
       description: toNullableString(properties.description),
-      states: (toCamelCollection<WorkflowState>(properties.states) ??
-        []) as WorkflowState[],
-      transitions: (toCamelCollection<WorkflowTransition>(
+      // `states`/`transitions` are required and declared `array`, so a create
+      // that reaches here has been type-checked against the schema — the
+      // converter cannot return undefined. The `?? []` these used to carry was
+      // an unreachable guard, not a default (`.claude/rules/tests.md`: delete
+      // the branch no entry point can take rather than test it).
+      states: toCamelCollection<WorkflowState>(
+        properties.states
+      ) as WorkflowState[],
+      transitions: toCamelCollection<WorkflowTransition>(
         properties.transitions
-      ) ?? []) as WorkflowTransition[],
+      ) as WorkflowTransition[],
       payloadSchema: toNullableObject(properties.payload_schema),
     });
   },
