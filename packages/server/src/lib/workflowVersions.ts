@@ -52,14 +52,22 @@ export const mapWorkflowVersion = (
 
 // ── Lookup helpers ───────────────────────────────────────────────────────
 
+/**
+ * Deliberately unscoped by project, unlike the orchestration archive's lookup:
+ * every workflow route — these three included — resolves the workflow first and
+ * then authorizes the action against its SRN (`rest/v1/workflows.ts`), so a
+ * `projectIds` filter here would be a second, never-exercised access check.
+ */
 const findWorkflowInstance = async (args: {
-  projectIds?: number[];
   id: string;
 }): Promise<WorkflowInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const workflow = await db.Workflow.findOne({ where });
+  const workflow = await db.Workflow.findOne({
+    where: { publicId: args.id },
+  });
+  /* istanbul ignore next -- the router resolves the workflow (and answers 404)
+     before the archive runs, so only a delete racing between those two lookups
+     reaches this. It stays because the archive must not be reachable with a
+     dangling id through any future caller. */
   if (!workflow) {
     throw new DomainError(
       'WORKFLOW_NOT_FOUND',
@@ -67,6 +75,21 @@ const findWorkflowInstance = async (args: {
     );
   }
   return workflow as WorkflowInstance;
+};
+
+/**
+ * An archived `states` / `transitions` collection, converted back to the
+ * internal camelCase shape.
+ *
+ * The empty-array fallback is unreachable: the archive is only ever written from
+ * `buildWorkflowConfigSnapshot`, whose mapper emits an array for both keys. It
+ * exists because a version replaces the **whole** definition, so an unreadable
+ * collection must mean "empty" and never "leave as is" — which is what passing
+ * `undefined` to `updateWorkflow` would mean.
+ */
+/* istanbul ignore next -- see above: no write path can produce the fallback. */
+const archivedCollection = <T>(value: unknown): T[] => {
+  return workflowCollectionToCamel<T>(value) ?? [];
 };
 
 const toResourceRef = (workflow: WorkflowInstance): VersionedResourceRef => {
@@ -101,12 +124,10 @@ const workflowVersionArchive = makeVersionArchive({
     // snake_case → camelCase boundary an inbound request does.
     return updateWorkflow({
       id: args.id,
-      states:
-        workflowCollectionToCamel<WorkflowState>(args.config.states) ?? [],
-      transitions:
-        workflowCollectionToCamel<WorkflowTransition>(
-          args.config.transitions
-        ) ?? [],
+      states: archivedCollection<WorkflowState>(args.config.states),
+      transitions: archivedCollection<WorkflowTransition>(
+        args.config.transitions
+      ),
       // A version replaces the whole definition, so an absent schema means
       // "cleared", never "leave as is".
       payloadSchema: configObject(args.config.payload_schema),
@@ -119,7 +140,6 @@ const workflowVersionArchive = makeVersionArchive({
 // ── Read endpoints ───────────────────────────────────────────────────────
 
 export const listWorkflowVersions = async (args: {
-  projectIds?: number[];
   workflowId: string;
   limit?: number;
   offset?: number;
@@ -127,7 +147,6 @@ export const listWorkflowVersions = async (args: {
   log('listWorkflowVersions: workflowId=%s', args.workflowId);
 
   return workflowVersionArchive.listVersions({
-    projectIds: args.projectIds,
     resourceId: args.workflowId,
     limit: args.limit,
     offset: args.offset,
@@ -135,7 +154,6 @@ export const listWorkflowVersions = async (args: {
 };
 
 export const getWorkflowVersion = async (args: {
-  projectIds?: number[];
   workflowId: string;
   version: number;
 }) => {
@@ -146,14 +164,12 @@ export const getWorkflowVersion = async (args: {
   );
 
   return workflowVersionArchive.getVersion({
-    projectIds: args.projectIds,
     resourceId: args.workflowId,
     version: args.version,
   });
 };
 
 export const restoreWorkflowVersion = async (args: {
-  projectIds?: number[];
   workflowId: string;
   version: number;
   label?: string | null;
@@ -170,7 +186,6 @@ export const restoreWorkflowVersion = async (args: {
   // already in flight are untouched: a restore is an ordinary definition edit,
   // and pinning is what keeps it from reaching them.
   return workflowVersionArchive.restoreVersion({
-    projectIds: args.projectIds,
     resourceId: args.workflowId,
     version: args.version,
     label: args.label,
