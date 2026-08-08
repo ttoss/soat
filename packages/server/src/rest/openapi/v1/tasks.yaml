@@ -315,6 +315,16 @@ components:
           type: string
         workflow_id:
           type: string
+        workflow_version:
+          type: integer
+          nullable: true
+          description: >-
+            The workflow version this task runs on, fixed when the task was
+            created. Transitions, approval gates and payload validation all
+            resolve through it, so editing the workflow never re-shapes a task
+            already in flight. `null` for tasks created before pinning existed,
+            which run on the live definition.
+          example: 1
         title:
           type: string
         state:

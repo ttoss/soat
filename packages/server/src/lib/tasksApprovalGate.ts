@@ -43,8 +43,9 @@ const REJECTION_CODES: ReadonlySet<string> = new Set([
 const assertParkable = (args: {
   task: TaskInstance;
   transition: WorkflowTransition;
+  transitions: WorkflowTransition[];
 }): void => {
-  const { task, transition } = args;
+  const { task, transition, transitions } = args;
   if (task.status === 'closed') {
     throw new DomainError(
       'TASK_TRANSITION_CONFLICT',
@@ -58,7 +59,6 @@ const assertParkable = (args: {
       { pendingTransition: task.pendingTransition }
     );
   }
-  const transitions = task.workflow!.transitions as WorkflowTransition[];
   if (
     !findValidTransition({
       transitions,
@@ -120,9 +120,16 @@ const emitGateApproval = async (args: {
 export const parkTransitionForApproval = async (args: {
   task: TaskInstance;
   transition: WorkflowTransition;
+  /**
+   * The transitions of the version the task is pinned to (#882), resolved by
+   * the caller. Taking them as an argument rather than reading
+   * `task.workflow.transitions` is what keeps the gate on the same machine the
+   * transition was validated against a moment earlier.
+   */
+  transitions: WorkflowTransition[];
   note: string | null;
 }): Promise<ReturnType<typeof mapTask>> => {
-  const { task, transition } = args;
+  const { task, transition, transitions } = args;
   const taskPublicId = task.publicId;
   log(
     'parkTransitionForApproval: task=%s transition=%s',
@@ -130,7 +137,7 @@ export const parkTransitionForApproval = async (args: {
     transition.name
   );
 
-  assertParkable({ task, transition });
+  assertParkable({ task, transition, transitions });
 
   // Atomically claim the gate: at most one pending transition per task, and only
   // while it is still open and in the from-state we validated. A concurrent park

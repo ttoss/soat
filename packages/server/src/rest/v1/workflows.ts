@@ -18,8 +18,14 @@ import {
   resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
+import { workflowVersionsRouter } from './workflowVersions';
 
 const workflowsRouter = new Router<Context>();
+
+/** The tag to attach to the version a write archives, when one was given. */
+const parseVersionLabel = (raw: unknown): string | undefined => {
+  return typeof raw === 'string' ? raw : undefined;
+};
 
 /**
  * @openapi
@@ -76,6 +82,7 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     states: unknown;
     transitions: unknown;
     payload_schema?: object | null;
+    version_label?: unknown;
   };
 
   const projectId = await resolveWriteProjectId({
@@ -94,6 +101,8 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     transitions:
       workflowCollectionToCamel<WorkflowTransition>(body.transitions) ?? [],
     payloadSchema: body.payload_schema,
+    versionLabel: parseVersionLabel(body.version_label),
+    createdByUserId: ctx.authUser?.id,
   });
 
   ctx.status = 201;
@@ -126,6 +135,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     states?: unknown;
     transitions?: unknown;
     payload_schema?: object | null;
+    version_label?: unknown;
   };
 
   ctx.body = await updateWorkflow({
@@ -137,6 +147,8 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
       body.transitions
     ),
     payloadSchema: body.payload_schema,
+    versionLabel: parseVersionLabel(body.version_label),
+    createdByUserId: ctx.authUser?.id,
   });
 });
 
@@ -163,5 +175,10 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
   await deleteWorkflow({ id: ctx.params.workflow_id });
   ctx.status = 204;
 });
+
+// The version-history surface lives in its own file and hangs off this router,
+// mirroring `orchestrationVersions.ts` under the orchestrations router.
+workflowsRouter.use(workflowVersionsRouter.routes());
+workflowsRouter.use(workflowVersionsRouter.allowedMethods());
 
 export { workflowsRouter };

@@ -49,6 +49,7 @@ export const PUBLIC_ID_PREFIXES = {
   price: 'price_',
   approval: 'apr_',
   workflow: 'wfl_',
+  workflowVersion: 'wfl_ver_',
   task: 'task_',
   taskTransition: 'task_tr_',
   guardrail: 'guard_',

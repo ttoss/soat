@@ -90,6 +90,7 @@ application-side state.
 | `project_id`     | string          | Owning project (hard security boundary)            |
 | `name`           | string          | Human-readable name, unique per project            |
 | `description`    | string \| null  | Optional description                               |
+| `version`        | integer         | Incremented on every write that changes the state machine; prior versions are archived (see [Versioning](#versioning)) |
 | `states`         | array           | State definitions (see below)                      |
 | `transitions`    | array           | Allowed moves (see below)                          |
 | `payload_schema` | object \| null  | Optional JSON Schema validated against task payloads |
@@ -128,6 +129,7 @@ state in `from`) if a workflow needs one.
 | `id`                | string           | Public identifier (`task_…`)                                            |
 | `project_id`        | string           | Owning project (hard security boundary)                                 |
 | `workflow_id`       | string           | The workflow definition this task is bound to                           |
+| `workflow_version`  | integer \| null  | The workflow version this task runs on, fixed when the task was created (see [Versioning](#versioning)). `null` for tasks created before pinning existed, which run on the live definition |
 | `title`             | string           | Human-readable label                                                    |
 | `state`             | string           | Current state name. Read-only — moved only via a transition             |
 | `status`            | `open` \| `closed` | `closed` once the task enters a `terminal` state                      |
@@ -260,10 +262,11 @@ task the moment the run is created, so a transition out cancels the live run.
   same row lock immediately before writing. A concurrent transition that already
   moved the task — or re-entered the same state — is detected there, and the
   stale write is discarded instead of clobbering the new state's data.
-- **Definition updates re-validate.** Structural changes (states/transitions)
-  are validated on `PATCH`. Existing tasks in a state a new definition removes
-  stay put but can only leave via transitions valid in the new definition — the
-  definition is the sole authority at fire time.
+- **Definition updates re-validate, and never reach tasks already in flight.**
+  Structural changes (states/transitions) are validated on `PATCH` and archived as
+  a new version. A task keeps running on the version it was created on, so an edit
+  can neither strand it in a state the new definition removed nor refuse it a move
+  that was legal when it was created — see [Versioning](#versioning).
 - **Delete is guarded.** A workflow with one or more **open** tasks cannot be
   deleted (`WORKFLOW_HAS_OPEN_TASKS`). Once every task is closed (terminal),
   deleting the workflow also removes those closed tasks and their transition
@@ -276,6 +279,74 @@ task the moment the run is created, so a transition out cancels the live run.
   a guard on `task.last_result` is only ever satisfied by a value an automation
   wrote. The merged payload is validated against `payload_schema`. Transitions are the audited contract;
   payload writes are not versioned.
+
+### Versioning
+
+A workflow's state machine is versioned by the same append-only archive that
+backs [agent versions](./agents.md#versioning-and-staged-rollout),
+[guardrail versions](./guardrails.md#versioning) and
+[orchestration versions](./orchestrations.md#versioning). Version 1 is written on
+create, and every subsequent write that **changes** the definition increments
+`version` and archives the new definition as a `WorkflowVersion`. The versioned
+surface is `states`, `transitions` and `payload_schema` — the machine the engine
+runs, and nothing else.
+
+**A task runs on the version it entered on.** `POST /tasks` stamps the workflow's
+current `version` onto the task as `workflow_version`, and every later read of the
+definition — validating a transition, parking an approval gate, validating a
+payload patch — resolves it from that version rather than from the live workflow.
+Editing a workflow therefore never re-shapes a task already in flight, including
+one parked for weeks in a `human` state. The live columns are a **draft** for
+tasks created from now on.
+
+Before this, every one of those paths re-read the live row, so removing a state
+could strand a task on its way to it, and a task could be refused a transition
+that was legal when it was created — `Transition '…' does not exist in this
+workflow`, raised against a workflow the task never ran on.
+
+Three writes archive nothing, and all three follow from the same rule — a version
+exists to name a distinct state machine:
+
+- a metadata-only edit (`name`, `description`);
+- re-writing the definition the workflow already holds (compared structurally, so
+  key order does not matter);
+- restoring the version that is already live.
+
+`version_label` on a create or update annotates the version that write archives.
+It is not stored on the workflow and is not part of the config, so labelling a
+change is never itself a change.
+
+| Operation | Endpoint |
+| --- | --- |
+| List versions, newest first | `GET /api/v1/workflows/{workflow_id}/versions` |
+| Fetch one version | `GET /api/v1/workflows/{workflow_id}/versions/{version}` |
+| Roll back to a version | `POST /api/v1/workflows/{workflow_id}/versions/{version}/restore` |
+
+To read the machine a given task is being validated against, fetch the version its
+`workflow_version` names:
+
+```bash
+soat get-task --task-id "$TASK_ID"
+# → { "workflow_version": 3, ... }
+
+soat get-workflow-version --workflow-id "$WORKFLOW_ID" --version 3
+```
+
+**Restore appends, it does not rewind.** Restoring v1 of a workflow at v2 writes
+v1's definition back as **v3**, so a task pinned to v2 still runs on the machine it
+entered on. Only the definition rolls back: `name` and `description` are left
+exactly as they are. Tasks already in flight are unaffected either way — a restore
+is an ordinary definition edit, and pinning is what keeps it from reaching them.
+
+A restored definition goes through the same validation as an authored one, which
+includes resolving every `on_enter` dispatch target. Restoring a version whose
+agent or orchestration has since been deleted therefore fails with
+`WORKFLOW_VALIDATION_FAILED` (400) rather than writing a definition that would
+strand a task the moment it entered that state.
+
+There is no release/canary layer: a workflow release would mean "the version new
+tasks are created into", with no mid-life reassignment, and nothing has asked for
+it yet.
 
 ### Alternate entry points
 
@@ -312,7 +383,7 @@ Resolve the gate through the standard [approvals](./approvals.md) endpoints:
   same single transition path. Its guard is **re-evaluated at resolution time**
   against the committed state, so a gate can be filed before the payload that
   satisfies its guard is set. If the move is no longer valid then (its guard now
-  rejects it, or a definition change invalidated it), the gate is cleared and a
+  rejects it, or a concurrent move invalidated it), the gate is cleared and a
   `tasks.approval_failed` event fires carrying the `transition` and `errorCode` —
   surfaced, never silently dropped.
 - **Reject** → the gate is cleared and a note is appended to the task's history

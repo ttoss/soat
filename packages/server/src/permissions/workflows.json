@@ -25,6 +25,21 @@
       "operationId": "deleteWorkflow",
       "action": "workflows:DeleteWorkflow",
       "description": "Delete a workflow"
+    },
+    {
+      "operationId": "listWorkflowVersions",
+      "action": "workflows:ListWorkflowVersions",
+      "description": "List a workflow's archived state-machine versions"
+    },
+    {
+      "operationId": "getWorkflowVersion",
+      "action": "workflows:GetWorkflowVersion",
+      "description": "Fetch one archived workflow state-machine version"
+    },
+    {
+      "operationId": "restoreWorkflowVersion",
+      "action": "workflows:RestoreWorkflowVersion",
+      "description": "Restore an archived workflow state machine as a new version"
     }
   ]
 }

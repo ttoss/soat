@@ -16,6 +16,7 @@ import {
   type TaskPrincipal,
 } from './tasks';
 import { parkTransitionForApproval } from './tasksApprovalGate';
+import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import {
   findValidTransition,
   type WorkflowState,
@@ -280,9 +281,11 @@ export const transitionTask = async (args: TransitionArgs) => {
   if (!loaded) {
     throw new DomainError('TASK_NOT_FOUND', `Task '${args.id}' not found.`);
   }
-  const workflow = loaded.workflow!;
-  const transitions = workflow.transitions as WorkflowTransition[];
-  const states = workflow.states as WorkflowState[];
+  // The machine the task entered on, not the one the workflow holds now (#882).
+  const { states, transitions } = await resolveTaskDefinition({
+    task: loaded,
+    workflow: loaded.workflow!,
+  });
   const projectId = loaded.projectId as number;
 
   // The transition must exist in the definition at all (else 400 NOT_FOUND).
@@ -309,6 +312,9 @@ export const transitionTask = async (args: TransitionArgs) => {
     return parkTransitionForApproval({
       task: loaded,
       transition: definition,
+      // The gate re-checks validity against the same pinned machine this
+      // transition was resolved from, never the live workflow row.
+      transitions,
       note: args.note ?? null,
     });
   }

@@ -373,6 +373,71 @@ describe('MCP tools - happy path', () => {
     ).toEqual(['todo', 'doing', 'done']);
   });
 
+  test('workflow version tools list, fetch and restore a definition', async () => {
+    const states = [
+      { name: 'todo', initial: true },
+      { name: 'done', terminal: true },
+    ];
+    const transitions = [{ name: 'finish', from: ['todo'], to: 'done' }];
+
+    const workflow = parseResult(
+      await mcpCall('create-workflow', {
+        project_id: projectId,
+        name: 'mcp-versioned-pipeline',
+        states,
+        transitions,
+      })
+    );
+    expect(workflow.version).toBe(1);
+
+    // A task is pinned to the version it entered on (#882).
+    const task = parseResult(
+      await mcpCall('create-task', {
+        project_id: projectId,
+        workflow_id: workflow.id,
+        title: 'pinned card',
+      })
+    );
+    expect(task.workflow_version).toBe(1);
+
+    const bumped = parseResult(
+      await mcpCall('update-workflow', {
+        workflow_id: workflow.id,
+        states: [...states, { name: 'blocked' }],
+        version_label: 'mcp-rewire',
+      })
+    );
+    expect(bumped.version).toBe(2);
+
+    const versions = parseResult(
+      await mcpCall('list-workflow-versions', { workflow_id: workflow.id })
+    );
+    expect(
+      versions.data.map((v: { version: number }) => {
+        return v.version;
+      })
+    ).toEqual([2, 1]);
+
+    const v1 = parseResult(
+      await mcpCall('get-workflow-version', {
+        workflow_id: workflow.id,
+        version: 1,
+      })
+    );
+    expect(v1.workflow_id).toBe(workflow.id);
+    expect(v1.config.states).toEqual(states);
+
+    // Restore appends rather than rewinding, so v1's definition comes back as v3.
+    const restored = parseResult(
+      await mcpCall('restore-workflow-version', {
+        workflow_id: workflow.id,
+        version: 1,
+      })
+    );
+    expect(restored.version).toBe(3);
+    expect(restored.states).toEqual(states);
+  });
+
   // ── Files ────────────────────────────────────────────────────────────────
 
   describe('Files tools', () => {
