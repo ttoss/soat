@@ -6,10 +6,14 @@ import {
   createGuardrail,
   deleteGuardrail,
   getGuardrail,
-  getGuardrailVersion,
   listGuardrails,
   updateGuardrail,
 } from 'src/lib/guardrails';
+import {
+  getGuardrailVersion,
+  listGuardrailVersions,
+  restoreGuardrailVersion,
+} from 'src/lib/guardrailVersions';
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
@@ -29,6 +33,18 @@ const parseNullableString = (v: unknown): string | null | undefined => {
 };
 
 const DOCUMENT_ERROR = 'document must be a JSON object';
+
+/** Path-param `{version}` is a version *number*, not a public ID. */
+const parseVersionParam = (raw: string): number => {
+  const version = Number(raw);
+  if (!Number.isInteger(version) || version < 1) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'version must be a positive integer.'
+    );
+  }
+  return version;
+};
 
 const resolveGuardrailProjectId = async (
   ctx: Context,
@@ -121,6 +137,8 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
     document,
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
+    versionLabel: parseStringOrUndefined(body.version_label),
+    createdByUserId: ctx.authUser?.id,
   });
 
   ctx.status = 201;
@@ -206,6 +224,8 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
     document: document ?? undefined,
     contextToolId: parseNullableString(body.context_tool_id),
     contextMode: parseNullableString(body.context_mode),
+    versionLabel: parseStringOrUndefined(body.version_label),
+    createdByUserId: ctx.authUser?.id,
   });
 });
 
@@ -280,6 +300,29 @@ guardrailsRouter.post(
 
 /**
  * @openapi
+ * /api/v1/guardrails/{guardrail_id}/versions:
+ *   get:
+ *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}~1versions/get'
+ */
+guardrailsRouter.get(
+  '/guardrails/:guardrail_id/versions',
+  async (ctx: Context) => {
+    const projectIds = await checkGuardrailsAccess(
+      ctx,
+      'guardrails:ListGuardrailVersions'
+    );
+    if (projectIds === null) return;
+
+    ctx.body = await listGuardrailVersions({
+      projectIds,
+      guardrailId: ctx.params.guardrail_id,
+      ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
  * /api/v1/guardrails/{guardrail_id}/versions/{version}:
  *   get:
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}~1versions~1{version}/get'
@@ -293,18 +336,37 @@ guardrailsRouter.get(
     );
     if (projectIds === null) return;
 
-    const version = Number(ctx.params.version);
-    if (!Number.isInteger(version) || version < 1) {
-      throw new DomainError(
-        'VALIDATION_FAILED',
-        'version must be a positive integer.'
-      );
-    }
-
     ctx.body = await getGuardrailVersion({
       projectIds,
       guardrailId: ctx.params.guardrail_id,
-      version,
+      version: parseVersionParam(ctx.params.version),
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/guardrails/{guardrail_id}/versions/{version}/restore:
+ *   post:
+ *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}~1versions~1{version}~1restore/post'
+ */
+guardrailsRouter.post(
+  '/guardrails/:guardrail_id/versions/:version/restore',
+  async (ctx: Context) => {
+    const projectIds = await checkGuardrailsAccess(
+      ctx,
+      'guardrails:RestoreGuardrailVersion'
+    );
+    if (projectIds === null) return;
+
+    const body = (ctx.request.body ?? {}) as { label?: unknown };
+
+    ctx.body = await restoreGuardrailVersion({
+      projectIds,
+      guardrailId: ctx.params.guardrail_id,
+      version: parseVersionParam(ctx.params.version),
+      label: typeof body.label === 'string' ? body.label : undefined,
+      createdByUserId: ctx.authUser?.id,
     });
   }
 );

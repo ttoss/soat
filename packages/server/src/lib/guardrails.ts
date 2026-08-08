@@ -5,6 +5,10 @@ import { DomainError } from '../errors';
 import type { CollectedGuardrail } from './guardrailCollection';
 import type { GuardrailDocument } from './guardrailDocument';
 import { validateGuardrailDocument } from './guardrailDocument';
+import {
+  buildGuardrailConfigSnapshot,
+  guardrailVersionStore,
+} from './guardrailVersionSnapshot';
 import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:guardrails');
@@ -12,11 +16,22 @@ const log = createDebug('soat:guardrails');
 const CONTEXT_MODES = ['merge', 'replace'];
 
 type GuardrailInstance = InstanceType<(typeof db)['Guardrail']>;
-type GuardrailVersionInstance = InstanceType<(typeof db)['GuardrailVersion']>;
+
+/**
+ * Who caused a config write, and an optional tag for the version it archives.
+ * Threaded through every write path so a REST edit, a restore and a formation
+ * apply all leave the same history.
+ */
+export type GuardrailVersionAuthorship = {
+  createdByUserId?: number | null;
+  versionLabel?: string | null;
+};
 
 const getGuardrailIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
+
+export type MappedGuardrail = ReturnType<typeof mapGuardrail>;
 
 export const mapGuardrail = (guardrail: GuardrailInstance) => {
   return {
@@ -30,18 +45,6 @@ export const mapGuardrail = (guardrail: GuardrailInstance) => {
     context_mode: guardrail.contextMode,
     created_at: guardrail.createdAt,
     updated_at: guardrail.updatedAt,
-  };
-};
-
-export const mapGuardrailVersion = (
-  version: GuardrailVersionInstance,
-  guardrailPublicId: string
-) => {
-  return {
-    guardrail_id: guardrailPublicId,
-    version: version.version,
-    document: version.document,
-    created_at: version.createdAt,
   };
 };
 
@@ -176,14 +179,16 @@ const reloadWithIncludes = async (id: number) => {
   return reloaded as GuardrailInstance;
 };
 
-export const createGuardrail = async (args: {
-  projectId: number;
-  name: string;
-  description?: string;
-  document: object;
-  contextToolId?: string | null;
-  contextMode?: string | null;
-}): Promise<ReturnType<typeof mapGuardrail>> => {
+export const createGuardrail = async (
+  args: {
+    projectId: number;
+    name: string;
+    description?: string;
+    document: object;
+    contextToolId?: string | null;
+    contextMode?: string | null;
+  } & GuardrailVersionAuthorship
+): Promise<MappedGuardrail> => {
   log(
     'createGuardrail: projectId=%d name=%s contextToolId=%s',
     args.projectId,
@@ -204,10 +209,14 @@ export const createGuardrail = async (args: {
     contextMode: args.contextMode ?? 'merge',
   });
 
-  await db.GuardrailVersion.create({
-    guardrailId: (guardrail as unknown as { id: number }).id,
+  // Version 1 is archived on create, so a guardrail has recoverable history from
+  // the moment it exists rather than from its first edit.
+  await guardrailVersionStore.writeVersion({
+    resourceDbId: (guardrail as unknown as { id: number }).id,
     version: 1,
-    document: args.document,
+    config: buildGuardrailConfigSnapshot({ document: args.document }),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
   });
 
   log('createGuardrail: created id=%s', guardrail.publicId);
@@ -282,15 +291,17 @@ export const getGuardrail = async (args: {
   return mapGuardrail(guardrail);
 };
 
-export const updateGuardrail = async (args: {
-  projectIds?: number[];
-  id: string;
-  name?: string;
-  description?: string | null;
-  document?: object;
-  contextToolId?: string | null;
-  contextMode?: string | null;
-}): Promise<ReturnType<typeof mapGuardrail>> => {
+export const updateGuardrail = async (
+  args: {
+    projectIds?: number[];
+    id: string;
+    name?: string;
+    description?: string | null;
+    document?: object;
+    contextToolId?: string | null;
+    contextMode?: string | null;
+  } & GuardrailVersionAuthorship
+): Promise<MappedGuardrail> => {
   log(
     'updateGuardrail: id=%s documentWrite=%s',
     args.id,
@@ -300,6 +311,10 @@ export const updateGuardrail = async (args: {
   const guardrail = await findGuardrailInstance({
     projectIds: args.projectIds,
     id: args.id,
+  });
+
+  const beforeConfig = buildGuardrailConfigSnapshot({
+    document: guardrail.document,
   });
 
   const updates: Record<string, unknown> = {};
@@ -312,28 +327,30 @@ export const updateGuardrail = async (args: {
     validateContextMode(args.contextMode);
     updates.contextMode = args.contextMode;
   }
-
-  // A `document` write bumps the version and archives the prior document as a
-  // GuardrailVersion, so the audit chain survives edits. Metadata-only edits
-  // (name / description / context) leave the version untouched.
   if (args.document !== undefined) {
     validateGuardrailDocument(args.document);
-    const nextVersion = guardrail.version + 1;
     updates.document = args.document;
-    updates.version = nextVersion;
-
-    await guardrail.update(updates);
-
-    await db.GuardrailVersion.create({
-      guardrailId: (guardrail as unknown as { id: number }).id,
-      version: nextVersion,
-      document: args.document,
-    });
-
-    log('updateGuardrail: id=%s bumped to version=%d', args.id, nextVersion);
-  } else {
-    await guardrail.update(updates);
   }
+
+  await guardrail.update(updates);
+
+  // A `document` write bumps the version and archives the new document, so the
+  // audit chain survives edits. Metadata-only edits (name / description /
+  // context) leave the version untouched — as does re-writing the document the
+  // guardrail already holds, which is what makes restoring the live policy a
+  // genuine no-op rather than an endless version chain.
+  await guardrailVersionStore.archiveConfigChange({
+    resourceDbId: (guardrail as unknown as { id: number }).id,
+    currentVersion: guardrail.version,
+    before: beforeConfig,
+    after: buildGuardrailConfigSnapshot({ document: guardrail.document }),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+    bumpVersion: async (nextVersion) => {
+      await guardrail.update({ version: nextVersion });
+      log('updateGuardrail: id=%s bumped to version=%d', args.id, nextVersion);
+    },
+  });
 
   return mapGuardrail(guardrail);
 };
@@ -377,8 +394,8 @@ export const deleteGuardrail = async (args: {
 
   // Archived versions are owned by the guardrail; remove them before the parent
   // so no orphan version rows are left behind.
-  await db.GuardrailVersion.destroy({
-    where: { guardrailId: (guardrail as unknown as { id: number }).id },
+  await guardrailVersionStore.deleteVersions({
+    resourceDbId: (guardrail as unknown as { id: number }).id,
   });
 
   await guardrail.destroy();
@@ -411,36 +428,4 @@ export const loadGuardrailForEvaluation = async (args: {
     projectId: instance.projectId,
     projectPublicId: instance.project.publicId,
   };
-};
-
-export const getGuardrailVersion = async (args: {
-  projectIds?: number[];
-  guardrailId: string;
-  version: number;
-}): Promise<ReturnType<typeof mapGuardrailVersion>> => {
-  log('getGuardrailVersion: id=%s version=%d', args.guardrailId, args.version);
-
-  const guardrail = await findGuardrailInstance({
-    projectIds: args.projectIds,
-    id: args.guardrailId,
-  });
-
-  const version = await db.GuardrailVersion.findOne({
-    where: {
-      guardrailId: (guardrail as unknown as { id: number }).id,
-      version: args.version,
-    },
-  });
-
-  if (!version) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Guardrail '${args.guardrailId}' has no version ${args.version}.`
-    );
-  }
-
-  return mapGuardrailVersion(
-    version as GuardrailVersionInstance,
-    guardrail.publicId
-  );
 };

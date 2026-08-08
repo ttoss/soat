@@ -2707,6 +2707,59 @@ if ! printf '%s\n' "$RECURRENCES_RESP" \
 fi
 echo "Approval recurrence view: OK"
 
+# 22g-bis. Guardrail versioning on the shared archive engine. Version 1 is
+# written on create; a document change archives a new version; a metadata-only
+# edit and a no-op document re-write archive nothing; restore appends rather
+# than rewinding the counter.
+echo "--- Guardrail version archive ---"
+GUARD_V1=$($SOAT_CLI get-guardrail-version \
+  --guardrail-id "$GATED_GUARDRAIL_ID" --version 1)
+if [ "$(printf '%s\n' "$GUARD_V1" | jq -r '.config.document.class')" != "C" ]; then
+  echo "ERROR: guardrail version 1 did not archive the created document" >&2
+  echo "$GUARD_V1" >&2
+  exit 1
+fi
+echo "Guardrail version 1 archived: OK"
+
+# A metadata-only edit must not archive a version.
+$SOAT_CLI update-guardrail \
+  --guardrail-id "$GATED_GUARDRAIL_ID" \
+  --description "renamed, same policy" >/dev/null
+GUARD_VERSIONS=$($SOAT_CLI list-guardrail-versions \
+  --guardrail-id "$GATED_GUARDRAIL_ID")
+if [ "$(printf '%s\n' "$GUARD_VERSIONS" | jq -r '.total')" != "1" ]; then
+  echo "ERROR: a metadata-only edit archived a guardrail version" >&2
+  echo "$GUARD_VERSIONS" >&2
+  exit 1
+fi
+echo "Guardrail metadata-only edit archives nothing: OK"
+
+# A document change archives version 2.
+$SOAT_CLI update-guardrail \
+  --guardrail-id "$GATED_GUARDRAIL_ID" \
+  --document '{"class":"D"}' \
+  --version_label smoke-tightened >/dev/null
+GUARD_V2=$($SOAT_CLI get-guardrail-version \
+  --guardrail-id "$GATED_GUARDRAIL_ID" --version 2)
+if [ "$(printf '%s\n' "$GUARD_V2" | jq -r '.config.document.class')" != "D" ] ||
+  [ "$(printf '%s\n' "$GUARD_V2" | jq -r '.label')" != "smoke-tightened" ]; then
+  echo "ERROR: guardrail version 2 was not archived as expected" >&2
+  echo "$GUARD_V2" >&2
+  exit 1
+fi
+echo "Guardrail document change archives version 2: OK"
+
+# Restore appends version 3 rather than rewinding to version 1.
+GUARD_RESTORED=$($SOAT_CLI restore-guardrail-version \
+  --guardrail-id "$GATED_GUARDRAIL_ID" --version 1)
+if [ "$(printf '%s\n' "$GUARD_RESTORED" | jq -r '.version')" != "3" ] ||
+  [ "$(printf '%s\n' "$GUARD_RESTORED" | jq -r '.document.class')" != "C" ]; then
+  echo "ERROR: guardrail restore did not append a new version" >&2
+  echo "$GUARD_RESTORED" >&2
+  exit 1
+fi
+echo "Guardrail restore appends version 3: OK"
+
 # Cleanup — delete gated agent (force through dependent generations), tool, and
 # guardrail (must be detached first: the agent delete drops the attachment).
 $SOAT_CLI delete-agent --agent-id "$GATED_AGENT_ID" --force >/dev/null 2>&1 || true

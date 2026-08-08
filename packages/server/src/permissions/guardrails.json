@@ -27,9 +27,19 @@
       "description": "Delete a guardrail"
     },
     {
+      "operationId": "listGuardrailVersions",
+      "action": "guardrails:ListGuardrailVersions",
+      "description": "List a guardrail's archived config versions"
+    },
+    {
       "operationId": "getGuardrailVersion",
       "action": "guardrails:GetGuardrailVersion",
-      "description": "Fetch an archived guardrail document version"
+      "description": "Fetch one archived guardrail config version"
+    },
+    {
+      "operationId": "restoreGuardrailVersion",
+      "action": "guardrails:RestoreGuardrailVersion",
+      "description": "Restore an archived guardrail config as a new version"
     },
     {
       "operationId": "evaluateGuardrail",

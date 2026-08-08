@@ -371,7 +371,7 @@ describe('Guardrails', () => {
       expect(response.status).toBe(200);
       expect(response.body.guardrail_id).toBe(versionedId);
       expect(response.body.version).toBe(1);
-      expect(response.body.document.class).toBe('C');
+      expect(response.body.config.document.class).toBe('C');
     });
 
     test('fetches a later archived version', async () => {
@@ -379,7 +379,7 @@ describe('Guardrails', () => {
         `/api/v1/guardrails/${versionedId}/versions/2`
       );
       expect(response.status).toBe(200);
-      expect(response.body.document.class).toBe('B');
+      expect(response.body.config.document.class).toBe('B');
     });
 
     test('unknown version returns 404', async () => {

@@ -2,7 +2,7 @@ import {
   assignReleaseVersion,
   bucketForKey,
   parseActiveRelease,
-} from 'src/lib/agentReleaseAssignment';
+} from 'src/lib/releaseAssignment';
 
 /**
  * Deterministic canary assignment (docs/prd-agent-versions.md, Phase 2).
@@ -14,7 +14,7 @@ import {
  * live provider call per case, and the observable signal (which prompt the model
  * saw) is far lower resolution than the returned version number.
  */
-describe('agentReleaseAssignment', () => {
+describe('releaseAssignment', () => {
   const release = {
     stable_version: 3,
     canary_version: 4,

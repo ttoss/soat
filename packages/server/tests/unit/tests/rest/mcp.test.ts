@@ -2120,6 +2120,49 @@ describe('MCP tools - happy path', () => {
       expect(updated.document.default_class).toBe('C');
     });
 
+    test('list-guardrail-versions returns the archive newest first', async () => {
+      const res = await mcpCall('list-guardrail-versions', {
+        guardrail_id: guardrailId,
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.total).toBeGreaterThanOrEqual(1);
+      expect(result.data[0].guardrail_id).toBe(guardrailId);
+      // The archived config carries the document as a value — its contract keys
+      // survive the MCP round trip uncased, same as the live read above.
+      expect(result.data[0].config.document.default_class).toBe('C');
+      expect(result.data[0].config.document.defaultClass).toBeUndefined();
+    });
+
+    test('get-guardrail-version returns one archived config', async () => {
+      const res = await mcpCall('get-guardrail-version', {
+        guardrail_id: guardrailId,
+        version: 1,
+      });
+      expect(res.status).toBe(200);
+      const result = parseResult(res);
+      expect(result.version).toBe(1);
+      expect(result.config.document.default_class).toBe('C');
+    });
+
+    test('restore-guardrail-version appends rather than rewinding', async () => {
+      const tightened = await mcpCall('update-guardrail', {
+        guardrail_id: guardrailId,
+        document: { class: 'D' },
+      });
+      expect(tightened.status).toBe(200);
+      const bumped = parseResult(tightened).version;
+
+      const res = await mcpCall('restore-guardrail-version', {
+        guardrail_id: guardrailId,
+        version: 1,
+      });
+      expect(res.status).toBe(200);
+      const restored = parseResult(res);
+      expect(restored.version).toBe(bumped + 1);
+      expect(restored.document.default_class).toBe('C');
+    });
+
     test('evaluate-guardrail keeps context_snapshot var-path keys verbatim', async () => {
       const res = await mcpCall('evaluate-guardrail', {
         guardrail_id: guardrailId,

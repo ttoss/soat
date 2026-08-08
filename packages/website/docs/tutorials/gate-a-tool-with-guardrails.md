@@ -881,7 +881,7 @@ Other projects — which don't carry the attachment — are untouched. A tenant 
 
 ## Step 13 — Edits are versioned, detach is gated
 
-Every write to a `document` increments `version` and archives the prior one, so an approval item's `policy_version` always resolves to the exact text that governed it. See [Versioning](/docs/modules/guardrails#versioning).
+Every write that changes a `document` increments `version` and archives the new one, so an approval item's `policy_version` always resolves to the exact text that governed it. A version's `config` holds the archived policy as `{ document }`. Metadata-only edits — and re-writing the document the guardrail already holds — archive nothing. See [Versioning](/docs/modules/guardrails#versioning).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -894,7 +894,7 @@ soat update-guardrail --guardrail-id "$GUARDRAIL_ID" --document '{
 }' | jq '{version}'
 
 soat get-guardrail-version --guardrail-id "$GUARDRAIL_ID" --version 1 \
-  | jq '{version, guard: .document.guard}'
+  | jq '{version, guard: .config.document.guard}'
 ```
 
 Expected output — the live guardrail is now `version: 2`, and version 1's original `< 200` guard is still retrievable:
@@ -950,7 +950,7 @@ console.log(updated.version); // 2
 const { data: v1 } = await adminSoat.guardrails.getGuardrailVersion({
   path: { guardrail_id: GUARDRAIL_ID, version: 1 },
 });
-console.log(v1.document.guard); // { '<': [{ var: 'args.amount' }, 200] }
+console.log(v1.config.document.guard); // { '<': [{ var: 'args.amount' }, 200] }
 
 // Deleting while attached fails with 409 GUARDRAIL_HAS_REFERENCES.
 await adminSoat.tools.updateTool({
@@ -973,7 +973,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID" \
   | jq '{version}'
 
 curl -s "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID/versions/1" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version, guard: .document.guard}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{version, guard: .config.document.guard}'
 
 # 409 while still attached
 curl -s -X DELETE "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID" \
