@@ -20,6 +20,7 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 import {
   checkAuth,
   requestPrincipalFromCtx,
+  resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -140,16 +141,13 @@ discussionsRouter.get('/discussions', async (ctx: Context) => {
   const projectPublicId = ctx.query.project_id as string | undefined;
   const { limit, offset } = parsePage(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'discussions:ListDiscussions',
     resourceType: 'discussion',
   });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {

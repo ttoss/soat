@@ -15,7 +15,12 @@ import {
   updateWebhook,
 } from 'src/lib/webhooks';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const resolvePolicyId = async (
   policyPublicId: string | undefined
@@ -44,17 +49,14 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'webhooks:ListWebhooks',
     resourceType: 'webhook',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listWebhooks({
     projectIds: projectIds ?? [],

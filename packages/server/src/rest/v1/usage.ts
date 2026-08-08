@@ -19,6 +19,7 @@ import {
   checkAuth,
   parsePagination,
   requireAdmin,
+  resolveProjectIdsWithAction,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -126,7 +127,8 @@ usageRouter.get('/usage', async (ctx: Context) => {
     );
   }
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'usage:GetUsage',
     resourceType: 'usage',

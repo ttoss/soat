@@ -13,7 +13,12 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const aiProvidersRouter = new Router<Context>();
 
@@ -48,17 +53,14 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'ai-providers:ListAiProviders',
     resourceType: 'aiProvider',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listAiProviders({
     projectIds: projectIds ?? [],

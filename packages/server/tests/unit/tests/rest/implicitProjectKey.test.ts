@@ -306,4 +306,65 @@ describe('Implicit projectId via project-scoped API key', () => {
       expect(res.body.id).toBeDefined();
     });
   });
+
+  /**
+   * #906: the write path was consistent — 18 route files resolved through
+   * `resolveWriteProjectId`, which runs the scope assertion. Reads had drifted:
+   * only 4 of 25 route files that name a project on a read went through
+   * `resolveProjectIdsWithAction`, so the other 21 answered the *same*
+   * condition with a bare `{"error":"Forbidden"}` while `GET /chats` answered
+   * with a message naming both projects and the fix.
+   *
+   * The table covers one route per module family that reads a `project_id`, so
+   * the diagnostic is asserted as a property of the read contract rather than of
+   * whichever handler someone remembered to migrate.
+   */
+  describe('cross-project reads report the same actionable scope error', () => {
+    const READ_ROUTES = [
+      '/api/v1/agents',
+      '/api/v1/actors',
+      '/api/v1/activity',
+      '/api/v1/ai-providers',
+      '/api/v1/approvals',
+      '/api/v1/audit-log',
+      '/api/v1/conversations',
+      '/api/v1/discussions',
+      '/api/v1/documents',
+      '/api/v1/exceptions',
+      '/api/v1/formations',
+      '/api/v1/guardrails',
+      '/api/v1/memories',
+      '/api/v1/model-routes',
+      '/api/v1/orchestrations',
+      '/api/v1/quotas',
+      '/api/v1/secrets',
+      '/api/v1/tools',
+      '/api/v1/traces',
+      '/api/v1/triggers',
+      '/api/v1/webhooks',
+    ];
+
+    test.each(READ_ROUTES)(
+      'GET %s names both projects and the fix',
+      async (route) => {
+        const res = await authenticatedTestClient(scopedKey).get(
+          `${route}?project_id=${projectBId}`
+        );
+
+        expect(res.status).toBe(403);
+        expect(res.body.error.code).toBe('API_KEY_PROJECT_SCOPE');
+        expect(res.body.error.meta.scoped_project).toBe(projectAId);
+        expect(res.body.error.meta.requested_project).toBe(projectBId);
+      }
+    );
+
+    test('a read naming the key own project is unaffected', async () => {
+      const res = await authenticatedTestClient(scopedKey).get(
+        `/api/v1/files?project_id=${projectAId}`
+      );
+
+      expect(res.status).toBe(200);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+  });
 });

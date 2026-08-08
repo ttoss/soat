@@ -10,7 +10,12 @@ import {
 } from 'src/lib/quotas';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const quotasRouter = new Router<Context>();
 
@@ -93,17 +98,14 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'quotas:ListQuotas',
     resourceType: 'quota',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listQuotas({ projectIds, ...parsePagination(ctx) });
 });

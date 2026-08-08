@@ -21,7 +21,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination } from './helpers';
+import { parsePagination, resolveProjectIdsWithAction } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
@@ -181,10 +181,12 @@ const parseUpdateAgentBody = (
 };
 
 const resolveAgentProjectId = async (
-  authUser: NonNullable<Context['authUser']>,
+  ctx: Context,
   projectPublicId: string | undefined
 ): Promise<number | 403 | 400> => {
-  const projectIds = await authUser.resolveProjectIds({
+  const authUser = ctx.authUser!;
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'agents:CreateAgent',
     resourceType: 'agent',
@@ -306,10 +308,7 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
   }
 
-  const targetProjectId = await resolveAgentProjectId(
-    ctx.authUser,
-    reqBody.project_id
-  );
+  const targetProjectId = await resolveAgentProjectId(ctx, reqBody.project_id);
 
   if (targetProjectId === 403) {
     ctx.status = 403;
@@ -346,17 +345,14 @@ agentsRouter.get('/agents', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'agents:ListAgents',
     resourceType: 'agent',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listAgents({ projectIds, ...parsePagination(ctx) });
 });

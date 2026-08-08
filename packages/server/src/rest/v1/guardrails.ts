@@ -17,7 +17,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { parsePagination } from './helpers';
+import { parsePagination, resolveProjectIdsWithAction } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const guardrailsRouter = new Router<Context>();
@@ -56,16 +56,13 @@ const resolveGuardrailProjectId = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action,
     resourceType: 'guardrail',
   });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
+  if (projectIds === null) return null;
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
     ctx.status = 400;
@@ -160,17 +157,14 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'guardrails:ListGuardrails',
     resourceType: 'guardrail',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listGuardrails({ projectIds, ...parsePagination(ctx) });
 });
