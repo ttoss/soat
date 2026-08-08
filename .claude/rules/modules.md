@@ -62,19 +62,35 @@ Any module that has a corresponding formation resource type (i.e. a `*FormationM
 |---|---|
 | New field added to a resource via the REST API | Add the same field (snake_case) to the matching `*ResourceProperties` schema in `packages/server/src/rest/openapi/v1/formations.yaml` |
 | Field removed or renamed | Remove or rename the corresponding property in `formations.yaml` |
-| Field added to `*ResourceProperties` | Add handling in the formation module (`build*Args`, `update`, and `read`) |
+| Field added to `*ResourceProperties` | Add handling in the formation module's `create` / `update`, and in its `read` if it declares one |
 
-### Formation modules and their schema names
+### How a formation module is written
 
-| Module | Formation module file | Schema name in `formations.yaml` |
-|---|---|---|
-| agents | `agentsFormationModule.ts` | `AgentResourceProperties` |
-| actors | `actorsFormationModule.ts` | `ActorResourceProperties` |
-| chats | `chatsFormationModule.ts` | `ChatResourceProperties` |
-| conversations | `conversationsFormationModule.ts` | `ConversationResourceProperties` |
-| tools | `toolsFormationModule.ts` | `ToolResourceProperties` |
-| ai-providers | `aiProvidersFormationModule.ts` | `AiProviderResourceProperties` |
-| (others) | `*FormationModule.ts` | `*ResourceProperties` |
+Every module is a `defineFormationModule({ … })` config object
+(`packages/server/src/lib/formation-modules/defineFormationModule.ts`). The
+factory owns the mechanical half — the object guard, the schema load, the
+unknown/required/type checks, the apply-time re-validation and `errors[0]`
+throw, the camelCase normalization, the `read` drift contract, and the log
+lines. A module declares only its genuine content:
+
+| Key | What it is |
+|---|---|
+| `resourceType` | the type a template declares (`model_route`) |
+| `extraChecks` / `warnChecks` | the resource-specific validation only |
+| `create` / `update` / `remove` | the property→lib-arg mapping |
+| `fetch` + optional `read` | how to load the live resource and view it |
+
+Do **not** hand-write the skeleton again — that is exactly how #900 and #901
+happened. The schema name is **derived** from `resourceType`
+(`model_route` → `ModelRouteResourceProperties`), so there is no per-module
+`SCHEMA_NAME` to keep in sync; `formationsResourceTypeContract.test.ts` asserts
+the rule holds for every registered type.
+
+Omit `read` when the template view is exactly the schema's declared fields taken
+verbatim from an already-snake_case lib mapper — `pickSpecFields` selects them.
+Declare `read` when any field is transformed (a Date to ISO, a nested document
+flattened). `pickSpecFields` **selects** declared keys; it never rewrites a name
+(`.claude/rules/case-convention.md`).
 
 ### How the validator works
 
@@ -92,8 +108,8 @@ When adding or changing a resource field:
 
 - [ ] Field added/updated in the module's REST OpenAPI spec (`packages/server/src/rest/openapi/v1/<module>.yaml`)
 - [ ] Same field added/updated in `AgentResourceProperties` (or equivalent) in `packages/server/src/rest/openapi/v1/formations.yaml`
-- [ ] Formation module updated: `build*Args` / `update` handler passes the new field to the lib function
-- [ ] Formation module `read` method returns the new field (snake_case)
+- [ ] Formation module updated: its `create` / `update` pass the new field to the lib function
+- [ ] If the module declares an explicit `read`, it returns the new field (snake_case); a module without one picks it up from the schema automatically
 
 ## Shared Business Rules
 

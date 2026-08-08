@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import { db } from '../../db';
 import {
   denormalizeKnowledgeConfig,
@@ -9,11 +7,10 @@ import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import { bindingsFromLegacyFields } from '../agentToolBindings';
 import { lookupProjectOwnerUserId } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
+import type { ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
 import { validateModelRouteExclusivity } from '../modelRoutes';
 import {
-  normalizePropertyKeys,
   toNullableArray,
   toNullableNumber,
   toNullableObject,
@@ -21,18 +18,8 @@ import {
   toNullableStringOrObject,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:agents');
-
-const SCHEMA_NAME = 'AgentResourceProperties';
-const RESOURCE_LABEL = 'agent';
+import { defineFormationModule } from './defineFormationModule';
+import { isObjectRecord } from './formationSpecLoader';
 
 // ── Property validation ──────────────────────────────────────────────────
 
@@ -76,7 +63,7 @@ const pushModelBindingErrors = (args: {
   properties: Record<string, unknown>;
   basePath: string;
   errors: ValidationError[];
-  forUpdate?: boolean;
+  forUpdate: boolean;
 }): void => {
   const { properties, basePath, errors, forUpdate } = args;
   const declaresBinding =
@@ -90,55 +77,6 @@ const pushModelBindingErrors = (args: {
     model: properties.model,
   });
   if (message) errors.push({ path: basePath, message });
-};
-
-const validateAgentProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      { path: basePath, message: 'Agent `properties` must be an object' },
-    ];
-  }
-  // Accept camelCase top-level keys (e.g. `aiProviderId`) like every other
-  // formation module, normalizing to the snake_case the OpenAPI schema and the
-  // property readers below expect.
-  const properties = normalizePropertyKeys(args.properties);
-
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  // A `boundary_policy` gates the agent's SOAT-native tool actions, so its
-  // action strings must be real and enforceable — otherwise a mis-named `Deny`
-  // silently no-ops and the boundary fails open. Validate the action names here
-  // (only when it is shaped as a policy object); structural validation is
-  // applied by the boundary evaluator at generation time.
-  const boundaryPolicy = properties.boundary_policy;
-  if (boundaryPolicy != null && isObjectRecord(boundaryPolicy)) {
-    for (const message of validatePolicyActions(boundaryPolicy).errors) {
-      errors.push({ path: `${basePath}.boundary_policy`, message });
-    }
-  }
-
-  pushToolBindingErrors({ properties, basePath, errors });
-
-  pushModelBindingErrors({ properties, basePath, errors, forUpdate });
-
-  return errors;
 };
 
 // ── tool_bindings ↔ template shape ───────────────────────────────────────
@@ -185,8 +123,6 @@ const toOptional = <T>(value: T | null | undefined): T | undefined => {
   return value ?? undefined;
 };
 
-// ── Module export ────────────────────────────────────────────────────────
-
 const mapAgentProperties = (properties: Record<string, unknown>) => {
   return {
     aiProviderId: toOptionalString(properties.ai_provider_id),
@@ -223,18 +159,6 @@ const mapAgentProperties = (properties: Record<string, unknown>) => {
   };
 };
 
-const buildCreateAgentArgs = (args: {
-  properties: Record<string, unknown>;
-  projectId: number;
-  createdByUserId: number;
-}) => {
-  return {
-    projectId: args.projectId,
-    createdByUserId: args.createdByUserId,
-    ...mapAgentProperties(args.properties),
-  };
-};
-
 /**
  * The principal an apply is attributed to. A formation deploy has no request
  * user, so — exactly as trigger firings do — it resolves to the project's owning
@@ -262,48 +186,35 @@ const resolveApplyingPrincipalForAgent = async (
   return resolveApplyingPrincipal({ projectId: agent.projectId });
 };
 
-export const agentsFormationModule: FormationModule = {
+export const agentsFormationModule = defineFormationModule({
   resourceType: 'agent',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateAgentProperties({ properties, basePath });
+  extraChecks: ({ properties, basePath, forUpdate, errors }) => {
+    // A `boundary_policy` gates the agent's SOAT-native tool actions, so its
+    // action strings must be real and enforceable — otherwise a mis-named `Deny`
+    // silently no-ops and the boundary fails open. Validate the action names here
+    // (only when it is shaped as a policy object); structural validation is
+    // applied by the boundary evaluator at generation time.
+    const boundaryPolicy = properties.boundary_policy;
+    if (boundaryPolicy != null && isObjectRecord(boundaryPolicy)) {
+      for (const message of validatePolicyActions(boundaryPolicy).errors) {
+        errors.push({ path: `${basePath}.boundary_policy`, message });
+      }
+    }
+
+    pushToolBindingErrors({ properties, basePath, errors });
+    pushModelBindingErrors({ properties, basePath, errors, forUpdate });
   },
 
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateAgentProperties({
-      properties: rawProperties,
-      basePath: 'resources.<agent>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-    const properties = normalizePropertyKeys(rawProperties);
-    const result = await createAgent(
-      buildCreateAgentArgs({
-        properties,
-        projectId,
-        createdByUserId: await resolveApplyingPrincipal({ projectId }),
-      })
-    );
-    log(
-      'created agent from formation: projectId=%d agentId=%s',
+  create: async ({ properties, projectId }) => {
+    return createAgent({
       projectId,
-      result.id
-    );
-    return result.id;
+      createdByUserId: await resolveApplyingPrincipal({ projectId }),
+      ...mapAgentProperties(properties),
+    });
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateAgentProperties({
-      properties: rawProperties,
-      basePath: 'resources.<agent>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
+  update: async ({ properties, physicalResourceId }) => {
     await updateAgent({
       id: physicalResourceId,
       createdByUserId:
@@ -336,39 +247,40 @@ export const agentsFormationModule: FormationModule = {
     });
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteAgent({ id: physicalResourceId });
+  remove: ({ physicalResourceId }) => {
+    return deleteAgent({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const agent = await getAgent({ id: physicalResourceId });
-      return {
-        ai_provider_id: agent.ai_provider_id,
-        model_route_id: agent.model_route_id,
-        name: agent.name,
-        instructions: agent.instructions,
-        model: agent.model,
-        // Both views: the diff only compares keys the template declares, so a
-        // template using either form converges against its own key.
-        tool_bindings: agent.tool_bindings,
-        tool_ids: agent.tool_ids,
-        max_steps: agent.max_steps,
-        tool_choice: agent.tool_choice,
-        stop_conditions: agent.stop_conditions,
-        active_tool_ids: agent.active_tool_ids,
-        guardrail_ids: agent.guardrail_ids,
-        step_rules: agent.step_rules,
-        boundary_policy: agent.boundary_policy,
-        temperature: agent.temperature,
-        max_context_messages: agent.max_context_messages,
-        single_session_per_actor: agent.single_session_per_actor,
-        trace_content_mode: agent.trace_content_mode,
-        knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
-        output_schema: agent.output_schema,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getAgent({ id: physicalResourceId });
   },
-};
+
+  // `knowledge_config` is stored normalized and read back denormalized, so this
+  // view is a mapping rather than a plain field selection.
+  read: (agent) => {
+    return {
+      ai_provider_id: agent.ai_provider_id,
+      model_route_id: agent.model_route_id,
+      name: agent.name,
+      instructions: agent.instructions,
+      model: agent.model,
+      // Both views: the diff only compares keys the template declares, so a
+      // template using either form converges against its own key.
+      tool_bindings: agent.tool_bindings,
+      tool_ids: agent.tool_ids,
+      max_steps: agent.max_steps,
+      tool_choice: agent.tool_choice,
+      stop_conditions: agent.stop_conditions,
+      active_tool_ids: agent.active_tool_ids,
+      guardrail_ids: agent.guardrail_ids,
+      step_rules: agent.step_rules,
+      boundary_policy: agent.boundary_policy,
+      temperature: agent.temperature,
+      max_context_messages: agent.max_context_messages,
+      single_session_per_actor: agent.single_session_per_actor,
+      trace_content_mode: agent.trace_content_mode,
+      knowledge_config: denormalizeKnowledgeConfig(agent.knowledge_config),
+      output_schema: agent.output_schema,
+    };
+  },
+});
