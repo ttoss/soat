@@ -1,6 +1,3 @@
-import createDebug from 'debug';
-
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import type { OrchestrationEdge, OrchestrationNode } from '../orchestrations';
 import {
   createOrchestration,
@@ -11,24 +8,13 @@ import {
 import {
   camelToSnakeKey,
   convertKeys,
-  normalizePropertyKeys,
   snakeToCamelKey,
   toNullableObject,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:orchestrations');
-
-const SCHEMA_NAME = 'OrchestrationResourceProperties';
-const RESOURCE_LABEL = 'orchestration';
+import { defineFormationModule } from './defineFormationModule';
+import { isObjectRecord } from './formationSpecLoader';
 
 // ── Key normalization ────────────────────────────────────────────────────
 
@@ -51,62 +37,11 @@ const convertCollectionKeys = (
   });
 };
 
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateOrchestrationProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Orchestration `properties` must be an object',
-      },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const orchestrationsFormationModule: FormationModule = {
+export const orchestrationsFormationModule = defineFormationModule({
   resourceType: 'orchestration',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateOrchestrationProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateOrchestrationProperties({
-      properties: rawProperties,
-      basePath: 'resources.<orchestration>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-
-    const result = await createOrchestration({
+  create: ({ properties, projectId }) => {
+    return createOrchestration({
       projectId,
       name: properties.name as string,
       description: toNullableString(properties.description),
@@ -121,27 +56,9 @@ export const orchestrationsFormationModule: FormationModule = {
       stateSchema: toNullableObject(properties.state_schema),
       inputSchema: toNullableObject(properties.input_schema),
     });
-
-    log(
-      'created orchestration from formation: projectId=%d orchestrationId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateOrchestrationProperties({
-      properties: rawProperties,
-      basePath: 'resources.<orchestration>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-
+  update: async ({ properties, physicalResourceId }) => {
     await updateOrchestration({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
@@ -163,29 +80,24 @@ export const orchestrationsFormationModule: FormationModule = {
       stateSchema: toNullableObject(properties.state_schema),
       inputSchema: toNullableObject(properties.input_schema),
     });
-
-    log('updated orchestration from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteOrchestration({ id: physicalResourceId });
-    log('deleted orchestration from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteOrchestration({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const orch = await findOrchestration({ id: physicalResourceId });
-      if (!orch) return null;
-      return {
-        name: orch.name,
-        description: orch.description,
-        nodes: convertCollectionKeys(orch.nodes, camelToSnakeKey),
-        edges: convertCollectionKeys(orch.edges, camelToSnakeKey),
-        state_schema: orch.state_schema,
-        input_schema: orch.input_schema,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return findOrchestration({ id: physicalResourceId });
   },
-};
+
+  read: (orch) => {
+    return {
+      name: orch.name,
+      description: orch.description,
+      nodes: convertCollectionKeys(orch.nodes, camelToSnakeKey),
+      edges: convertCollectionKeys(orch.edges, camelToSnakeKey),
+      state_schema: orch.state_schema,
+      input_schema: orch.input_schema,
+    };
+  },
+});

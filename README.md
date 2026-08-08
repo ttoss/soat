@@ -9,13 +9,15 @@
 [![Docker Image Version](https://img.shields.io/docker/v/ttoss/soat?label=docker)](https://hub.docker.com/r/ttoss/soat)
 [![Docker Pulls](https://img.shields.io/docker/pulls/ttoss/soat)](https://hub.docker.com/r/ttoss/soat)
 
-**SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, multimodal ingestion, conversational memory, agent orchestration, DAG-based multi-agent workflows, retrieval-augmented generation, declarative stack deployment, a built-in web console, and a full Model Context Protocol server with first-party OAuth — backed by PostgreSQL.
+**SOAT** is open-source infrastructure for building AI applications. One self-hostable Node.js server gives you IAM, file and document storage with vector search, multimodal ingestion, conversational memory, agent orchestration, DAG-based multi-agent workflows, retrieval-augmented generation, guardrails and human approvals, usage metering and quotas, versioned agents with canary rollout, declarative stack deployment, a built-in web console, and a full Model Context Protocol server with first-party OAuth — backed by PostgreSQL.
 
 You bring the product. SOAT handles the infrastructure layer.
 
 ## Why SOAT?
 
 Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through five equivalent surfaces — REST, MCP, CLI, TypeScript SDK, and a built-in web app — so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, the bundled UI, or your own frontend.
+
+SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/getting-started/harness-loop-graph-ratchet): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). The first three are shipped in depth; the ratchet is where the platform is heading — see [What SOAT is becoming](#what-soat-is-becoming).
 
 ## Highlights
 
@@ -29,7 +31,22 @@ Shipping AI applications means rebuilding the same infrastructure on every proje
 - **Direct LLM completions** — an OpenAI-compatible chat completions endpoint with SSE streaming, stateless or with stored per-chat configuration, for when you don't need an agent at all. See [Chats](https://soat.ttoss.dev/docs/modules/chats).
 - **Async generations** — kick off long-running agent runs, poll for status, or fire a webhook on completion.
 - **Operations** — encrypted secrets, HMAC-signed webhooks with event-pattern subscriptions, and trace records for every generation. See [Webhooks](https://soat.ttoss.dev/docs/modules/webhooks) and [Traces](https://soat.ttoss.dev/docs/modules/traces).
+- **Guardrails & approvals** — [Guardrails](https://soat.ttoss.dev/docs/modules/guardrails) classify every agent tool call from its actual arguments, deterministically, before anything touches the outside world; risky actions land in a human [Approvals](https://soat.ttoss.dev/docs/modules/approvals) queue with frozen evidence and hard expiry.
+- **Budgets & metering** — [Quotas](https://soat.ttoss.dev/docs/modules/quotas) fail closed on request, token, or cost caps; [Usage](https://soat.ttoss.dev/docs/modules/usage) meters every LLM call, node execution, and stored byte with alert thresholds.
+- **Versioned agents with canary rollout** — every config change is archived as an append-only [agent version](https://soat.ttoss.dev/docs/modules/agents), a deterministic stable/canary split stages rollouts, and every generation records the version that served it.
 - **MCP native** — every operation is automatically available as an MCP tool, and SOAT acts as a first-party OAuth 2.1 authorization server so MCP clients like Claude Desktop, Cursor, and VS Code connect with the standard authorize + PKCE flow. See [MCP docs](https://soat.ttoss.dev/docs/mcp) and [OAuth](https://soat.ttoss.dev/docs/modules/oauth).
+
+## What SOAT is becoming
+
+An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's direction is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [Harness, Loop, Graph, and Ratchet](https://soat.ttoss.dev/docs/getting-started/harness-loop-graph-ratchet).
+
+Shipped today: append-only agent versions with staged canary rollout, served-version stamping on every generation, and the approvals recurrence view that surfaces repeated human corrections. In design and coming next (see [`docs/roadmap.md`](./docs/roadmap.md)):
+
+- **[Evaluations](https://soat.ttoss.dev/docs/modules/evaluations)** — datasets, deterministic and LLM-judge scorers, and scored runs of the real agent, comparable against a baseline: "did this change make the agent worse?" as a pass/fail verdict.
+- **Eval-gated promotion** — a canary that promotes on a passing eval run instead of a hunch.
+- **[Learned Rules](https://soat.ttoss.dev/docs/modules/learned-rules)** — human corrections captured from approval decisions, clustered when they recur, and promoted (by a human, always) into versioned, scoped rules — with a graduation path to hard guardrail enforcement.
+
+The stance behind all of it: the platform owns the queue, the recurrence signal, and the verdict; a human owns the judgment. Promotion is never automatic.
 
 ## Documentation
 
@@ -48,13 +65,13 @@ Follow the **[Getting Started Guide](https://soat.ttoss.dev/docs/getting-started
 
 ## Client surfaces
 
-| Surface               | Best for                                                | Docs                              |
-| --------------------- | ------------------------------------------------------- | --------------------------------- |
-| **REST API**          | Backend services and custom integrations                | https://soat.ttoss.dev/docs/api   |
-| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware AI runtimes | https://soat.ttoss.dev/docs/mcp   |
-| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration            | https://soat.ttoss.dev/docs/cli   |
-| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications                  | https://soat.ttoss.dev/docs/sdk   |
-| **Web app**           | Browsing and managing resources from the browser        | Served by the server at `/app`    |
+| Surface               | Best for                                                | Docs                            |
+| --------------------- | ------------------------------------------------------- | ------------------------------- |
+| **REST API**          | Backend services and custom integrations                | https://soat.ttoss.dev/docs/api |
+| **MCP server**        | Claude Desktop, Cursor, and other MCP-aware AI runtimes | https://soat.ttoss.dev/docs/mcp |
+| **CLI** (`soat`)      | Scripts, CI pipelines, and local exploration            | https://soat.ttoss.dev/docs/cli |
+| **SDK** (`@soat/sdk`) | TypeScript and JavaScript applications                  | https://soat.ttoss.dev/docs/sdk |
+| **Web app**           | Browsing and managing resources from the browser        | Served by the server at `/app`  |
 
 All five hit the same business logic and the same permission engine.
 

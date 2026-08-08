@@ -131,6 +131,10 @@ const config: Config = {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
           },
+          {
+            from: '/docs/getting-started/harness-loop-graph',
+            to: '/docs/getting-started/harness-loop-graph-ratchet',
+          },
         ],
       },
     ],

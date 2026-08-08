@@ -295,3 +295,29 @@ export const normalizeSubschema = (value: unknown): unknown => {
 
   return result;
 };
+
+/**
+ * Whether a request-body property is kept out of the tool input schema.
+ *
+ * Two distinct markers, deliberately not merged — they say different things to
+ * the next person reading the spec:
+ *
+ * - `x-soat-server-managed` — the platform supplies the value (trace lineage,
+ *   call depth). A caller *may not* set it, but the field is honored when the
+ *   server injects it (see `extractAcceptedBodyFields`, which keeps them).
+ * - `x-soat-tool-unsupported` — the field selects a response mode a tool call
+ *   cannot receive at all, such as an SSE stream. Nothing injects it later; it
+ *   is simply not reachable from a tool.
+ *
+ * Both are invisible to REST, SDK and CLI callers, which read the spec's
+ * schemas rather than this projection of them.
+ */
+export const isHiddenFromToolSchema = (property: unknown): boolean => {
+  const val = property as {
+    'x-soat-server-managed'?: unknown;
+    'x-soat-tool-unsupported'?: unknown;
+  };
+  return Boolean(
+    val['x-soat-server-managed'] || val['x-soat-tool-unsupported']
+  );
+};

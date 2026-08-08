@@ -1,10 +1,6 @@
-import createDebug from 'debug';
-
 import { db } from '../../db';
 import { lookupAgentInternalId } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  normalizePropertyKeys,
   toNullableObject,
   toNullableString,
   toOptionalString,
@@ -15,55 +11,7 @@ import {
   getSession,
   updateSession,
 } from '../sessions';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:sessions');
-
-const SCHEMA_NAME = 'SessionResourceProperties';
-const RESOURCE_LABEL = 'session';
-
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateSessionProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Session `properties` must be an object',
-      },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Helpers ──────────────────────────────────────────────────────────────
+import { defineFormationModule } from './defineFormationModule';
 
 const getSessionAgentInternalId = async (
   sessionPublicId: string
@@ -74,34 +22,16 @@ const getSessionAgentInternalId = async (
   if (!session) {
     throw new Error(`Session not found: ${sessionPublicId}`);
   }
-  return (session as unknown as { agentId: number }).agentId;
+  return session.agentId;
 };
 
-// ── Module export ────────────────────────────────────────────────────────
-
-export const sessionsFormationModule: FormationModule = {
+export const sessionsFormationModule = defineFormationModule({
   resourceType: 'session',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateSessionProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateSessionProperties({
-      properties: rawProperties,
-      basePath: 'resources.<session>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  create: async ({ properties, projectId }) => {
     const agentId = await lookupAgentInternalId(properties.agent_id as string);
 
-    const result = await createSession({
+    return createSession({
       projectId,
       agentId,
       name: toNullableString(properties.name),
@@ -120,29 +50,9 @@ export const sessionsFormationModule: FormationModule = {
           string
         > | null) ?? undefined,
     });
-
-    log(
-      'created session from formation: projectId=%d sessionId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateSessionProperties({
-      properties: rawProperties,
-      basePath: 'resources.<session>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  update: async ({ properties, physicalResourceId }) => {
     const agentId = await getSessionAgentInternalId(physicalResourceId);
 
     await updateSession({
@@ -160,35 +70,17 @@ export const sessionsFormationModule: FormationModule = {
           string
         > | null) ?? undefined,
     });
-
-    log('updated session from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
+  remove: async ({ physicalResourceId }) => {
     const agentId = await getSessionAgentInternalId(physicalResourceId);
     await deleteSession({ agentId, sessionId: physicalResourceId });
-    log('deleted session from formation: id=%s', physicalResourceId);
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const agentId = await getSessionAgentInternalId(physicalResourceId);
-      const session = await getSession({
-        agentId,
-        sessionId: physicalResourceId,
-      });
-      // `getSession` already returns the snake_case read contract, so the
-      // formation view is a subset of it rather than a second transcription.
-      return {
-        agent_id: session.agent_id,
-        name: session.name,
-        actor_id: session.actor_id,
-        auto_generate: session.auto_generate,
-        inactivity_ttl_seconds: session.inactivity_ttl_seconds,
-        tool_context: session.tool_context,
-      };
-    } catch {
-      return null;
-    }
+  // `getSession` already returns the snake_case read contract, so the formation
+  // view is a selection of it rather than a second transcription.
+  fetch: async ({ physicalResourceId }) => {
+    const agentId = await getSessionAgentInternalId(physicalResourceId);
+    return getSession({ agentId, sessionId: physicalResourceId });
   },
-};
+});

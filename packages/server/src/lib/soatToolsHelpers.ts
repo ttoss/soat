@@ -12,6 +12,7 @@ import {
   buildPathFn,
   buildQueryFn,
   dereferenceSchema,
+  isHiddenFromToolSchema,
   normalizeSubschema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
@@ -32,6 +33,26 @@ export interface ToolDefinition {
   /** snake_case names of every top-level request body property this operation's schema declares, including server-managed ones. */
   acceptedBodyFields: string[];
 }
+
+/**
+ * The request target an action is called with: its path with the path
+ * parameters substituted, followed by the query string its `in: query`
+ * parameters build.
+ *
+ * Both halves live here rather than at each call site because keeping them
+ * apart is exactly how #924 happened — the SOAT tool path built the path alone
+ * and dropped every query parameter the action advertised, while the MCP
+ * handler for the same registry appended both. There is now one way to address
+ * an action, so a third caller cannot repeat the omission.
+ */
+export const buildSoatActionTarget = (args: {
+  def: ToolDefinition;
+  args: Record<string, unknown>;
+}): string => {
+  return (
+    args.def.path(args.args) + (args.def.query ? args.def.query(args.args) : '')
+  );
+};
 
 export interface OpenApiSpec {
   paths?: Record<string, Record<string, unknown>>;
@@ -316,32 +337,6 @@ export const extractAcceptedBodyFields = (args: {
 }): string[] => {
   const bodySchema = resolveBodySchema(args);
   return Object.keys(bodySchema?.properties ?? {});
-};
-
-/**
- * Whether a request-body property is kept out of the tool input schema.
- *
- * Two distinct markers, deliberately not merged — they say different things to
- * the next person reading the spec:
- *
- * - `x-soat-server-managed` — the platform supplies the value (trace lineage,
- *   call depth). A caller *may not* set it, but the field is honored when the
- *   server injects it (see `extractAcceptedBodyFields`, which keeps them).
- * - `x-soat-tool-unsupported` — the field selects a response mode a tool call
- *   cannot receive at all, such as an SSE stream. Nothing injects it later; it
- *   is simply not reachable from a tool.
- *
- * Both are invisible to REST, SDK and CLI callers, which read the spec's
- * schemas rather than this projection of them.
- */
-const isHiddenFromToolSchema = (property: unknown): boolean => {
-  const val = property as {
-    'x-soat-server-managed'?: unknown;
-    'x-soat-tool-unsupported'?: unknown;
-  };
-  return Boolean(
-    val['x-soat-server-managed'] || val['x-soat-tool-unsupported']
-  );
 };
 
 export const extractBodyProps = (args: {

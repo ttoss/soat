@@ -8,7 +8,7 @@ sidebar_label: Platform Overview
 
 SOAT's functionality is organized into **modules** — named resources exposed through the [REST API](/docs/api), the [MCP server](/docs/mcp), the [CLI](/docs/cli), and the [SDK](/docs/sdk). Each module page describes what the resource does, its data model, key concepts, and usage examples on every client surface.
 
-The modules fall into six groups:
+The modules fall into seven groups:
 
 ## Identity & Access
 
@@ -60,6 +60,15 @@ Composing agents into workflows and reacting to events.
 ## Declarative Deployment
 
 - [Formations](./formations.md) — define full agent stacks (providers, memories, tools, agents) in JSON/YAML and deploy them with dependency-aware provisioning. See the [Formation Types reference](/docs/formations-types) for every resource type.
+
+## Improvement & Adaptation
+
+How the system changes, and what proves a change was an improvement. See
+[Harness, Loop, Graph, and Ratchet](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet)
+for how this group fits the rest of the platform.
+
+- [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)
+- [Learned Rules](./learned-rules.md) — human corrections captured, clustered, and promoted into versioned scoped rules (coming soon)
 
 ## Operations
 

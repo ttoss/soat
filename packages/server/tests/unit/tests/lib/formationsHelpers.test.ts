@@ -13,7 +13,6 @@ import {
   isSub,
   lookupActorInternalId,
   lookupAgentInternalId,
-  lookupChatInternalId,
   lookupPolicyInternalIds,
   lookupToolInternalId,
   parseRefAttr,
@@ -783,21 +782,6 @@ describe('formationsHelpers', () => {
       });
 
       await expect(lookupToolInternalId(tool.publicId)).resolves.toBe(tool.id);
-    });
-
-    test('lookupChatInternalId resolves a public id to its internal id', async () => {
-      const chat = await db.Chat.create({
-        projectId,
-        aiProviderId,
-      });
-
-      await expect(lookupChatInternalId(chat.publicId)).resolves.toBe(chat.id);
-    });
-
-    test('lookupChatInternalId throws for an unknown public id', async () => {
-      await expect(
-        lookupChatInternalId('chat_doesnotexist000')
-      ).rejects.toThrow('Chat not found: chat_doesnotexist000');
     });
 
     test('lookupPolicyInternalIds resolves multiple public ids to internal ids', async () => {

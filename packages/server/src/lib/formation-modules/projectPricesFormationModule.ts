@@ -1,93 +1,24 @@
-import createDebug from 'debug';
-
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
   createFormationProjectPrice,
   deleteFormationProjectPrice,
   getFormationProjectPrice,
   updateFormationProjectPrice,
 } from '../priceBookFormation';
-import {
-  normalizePropertyKeys,
-  toOptionalString,
-} from '../resource-inputs/normalizers';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:projectPrices');
-
-const SCHEMA_NAME = 'ProjectPriceResourceProperties';
-const RESOURCE_LABEL = 'project price';
-
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateProjectPriceProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Project price `properties` must be an object',
-      },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
+import { toOptionalString } from '../resource-inputs/normalizers';
+import { defineFormationModule } from './defineFormationModule';
 
 // Narrows a property to a number, or undefined when absent/other type. The
-// OpenAPI type validation above has already rejected wrong-typed values.
+// OpenAPI type validation in the factory has already rejected wrong-typed values.
 const toOptionalNumber = (value: unknown): number | undefined => {
   return typeof value === 'number' ? value : undefined;
 };
 
-// ── Module export ────────────────────────────────────────────────────────
-
-export const projectPricesFormationModule: FormationModule = {
+export const projectPricesFormationModule = defineFormationModule({
   resourceType: 'project_price',
+  resourceLabel: 'project price',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateProjectPriceProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateProjectPriceProperties({
-      properties: rawProperties,
-      basePath: 'resources.<project_price>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    // Validation above guarantees an object; `rawProperties` is already typed
-    // Record<string, unknown>, so normalize its keys directly.
-    const properties = normalizePropertyKeys(rawProperties);
-
-    const result = await createFormationProjectPrice({
+  create: ({ properties, projectId }) => {
+    return createFormationProjectPrice({
       projectId,
       provider: properties.provider as string,
       model: properties.model as string,
@@ -98,27 +29,9 @@ export const projectPricesFormationModule: FormationModule = {
       meterType: toOptionalString(properties.meter_type),
       effectiveFrom: toOptionalString(properties.effective_from),
     });
-
-    log(
-      'created project price from formation: projectId=%d priceId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateProjectPriceProperties({
-      properties: rawProperties,
-      basePath: 'resources.<project_price>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-
+  update: async ({ properties, physicalResourceId }) => {
     await updateFormationProjectPrice({
       id: physicalResourceId,
       provider: toOptionalString(properties.provider),
@@ -129,18 +42,19 @@ export const projectPricesFormationModule: FormationModule = {
       meterType: toOptionalString(properties.meter_type),
       effectiveFrom: toOptionalString(properties.effective_from),
     });
-
-    log('updated project price from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteFormationProjectPrice({ id: physicalResourceId });
-    log('deleted project price from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteFormationProjectPrice({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    const price = await getFormationProjectPrice({ id: physicalResourceId });
-    if (!price) return null;
+  fetch: ({ physicalResourceId }) => {
+    return getFormationProjectPrice({ id: physicalResourceId });
+  },
+
+  // `effective_from` is a Date on the row and an ISO string in the template, so
+  // this view is a mapping rather than a plain field selection.
+  read: (price) => {
     return {
       provider: price.provider,
       model: price.model,
@@ -151,4 +65,4 @@ export const projectPricesFormationModule: FormationModule = {
       effective_from: price.effective_from.toISOString(),
     };
   },
-};
+});

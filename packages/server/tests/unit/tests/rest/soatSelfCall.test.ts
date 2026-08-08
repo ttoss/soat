@@ -127,6 +127,108 @@ describe('SOAT self-call', () => {
     });
   });
 
+  /**
+   * The action's query string (#924). `buildPathFn` substitutes path params
+   * only; every `in: query` parameter is built separately by `buildQueryFn`, and
+   * the SOAT tool path used to drop it entirely — so a `list-*` action returned
+   * everything the credential could see no matter what the model asked for, and
+   * a `preset_parameters` value targeting a query parameter had no effect at
+   * all. The failure was silent: the call succeeded with a superset.
+   *
+   * Asserted through `POST /tools/:id/call` because that is where both halves
+   * are observable — the model-supplied argument and the preset — and one shape
+   * per case: supplied, preset, and omitted.
+   */
+  describe('query parameters on a soat action (#924)', () => {
+    let otherProjectId: string;
+    let soatToolId: string;
+    let presetSoatToolId: string;
+
+    const listedToolNames = async (args: {
+      toolId: string;
+      input: Record<string, unknown>;
+    }): Promise<string[]> => {
+      const res = await authenticatedTestClient(adminToken)
+        .post(`/api/v1/tools/${args.toolId}/call`)
+        .send({ action: 'list-tools', input: args.input });
+      expect(res.status).toBe(200);
+      const listing = res.body as { data?: { name?: string }[] };
+      expect(Array.isArray(listing.data)).toBe(true);
+      return listing.data!.map((entry) => {
+        return entry.name as string;
+      });
+    };
+
+    const createTool = async (body: Record<string, unknown>) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send(body);
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    beforeAll(async () => {
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'soatselfcall-query-other' });
+      expect(projectRes.status).toBe(201);
+      otherProjectId = projectRes.body.id as string;
+
+      // One marker tool per project: which of the two comes back is the whole
+      // assertion, and the admin can see both when nothing scopes the call.
+      await createTool({
+        project_id: projectId,
+        name: 'q924-in-scope',
+        type: 'client',
+      });
+      await createTool({
+        project_id: otherProjectId,
+        name: 'q924-out-of-scope',
+        type: 'client',
+      });
+
+      soatToolId = await createTool({
+        project_id: projectId,
+        name: 'q924-soat',
+        type: 'soat',
+        actions: ['list-tools'],
+      });
+      presetSoatToolId = await createTool({
+        project_id: projectId,
+        name: 'q924-soat-preset',
+        type: 'soat',
+        actions: ['list-tools'],
+        preset_parameters: { project_id: projectId },
+      });
+    });
+
+    test('a query parameter supplied by the caller scopes the action', async () => {
+      const names = await listedToolNames({
+        toolId: soatToolId,
+        input: { project_id: otherProjectId },
+      });
+      expect(names).toContain('q924-out-of-scope');
+      expect(names).not.toContain('q924-in-scope');
+    });
+
+    test('a query parameter supplied via preset_parameters scopes the action', async () => {
+      const names = await listedToolNames({
+        toolId: presetSoatToolId,
+        input: {},
+      });
+      expect(names).toContain('q924-in-scope');
+      expect(names).not.toContain('q924-out-of-scope');
+    });
+
+    test('an omitted query parameter is absent rather than sent as a literal', async () => {
+      // Nothing scopes this call, so the admin sees both projects — which also
+      // pins that no `project_id=undefined` reached the route.
+      const names = await listedToolNames({ toolId: soatToolId, input: {} });
+      expect(names).toContain('q924-in-scope');
+      expect(names).toContain('q924-out-of-scope');
+    });
+  });
+
   describe('background-driven runs', () => {
     const createSoatToolNodeOrchestration = async (args: {
       token: string;
