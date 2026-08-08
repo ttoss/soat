@@ -6,6 +6,7 @@ import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
 import type { MappedOrchestrationRun } from './orchestrations';
+import type { RequestPrincipal } from './principals';
 import type { WorkflowDispatch } from './workflowsValidation';
 
 // Terminal statuses a settled orchestration run can end in. Unlike a failed
@@ -97,6 +98,8 @@ export const runDispatch = async (args: {
   dispatch: WorkflowDispatch;
   projectId: number;
   inputs: Record<string, unknown>;
+  // The identity an orchestration dispatch runs as; see `dispatchOnEnter`.
+  principal?: RequestPrincipal;
   // Called as soon as a dispatch id is known but before the (blocking) wait
   // completes. For orchestration dispatches this fires at run creation, so the
   // run id can be persisted while the run is still in flight (#606).
@@ -130,6 +133,7 @@ export const runDispatch = async (args: {
     orchestrationPublicId: args.dispatch.orchestrationId!,
     projectIds: [args.projectId],
     input: args.inputs,
+    principal: args.principal,
     onRunCreated: args.onDispatchStarted
       ? ({ orchestrationRunId }) => {
           return args.onDispatchStarted!({

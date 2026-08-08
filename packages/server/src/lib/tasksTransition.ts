@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { evaluateLogic } from './jsonLogicMapping';
+import type { RequestPrincipal } from './principals';
 import {
   type ActiveDispatch,
   computeStallDeadline,
@@ -236,6 +237,37 @@ const performTransitionTxn = async (args: {
  * cancels any dispatch the task is leaving, emits events, and fires the new
  * state's on_enter automation.
  */
+/**
+ * The identity the *next* state's automation runs as.
+ *
+ * A human or API-key move names itself. An `automation` move names nobody — its
+ * cause is the generation or run recorded alongside it — so the identity is
+ * inherited from the orchestration run that routed the task here. That is what
+ * keeps a chain alive across states: a user fires the first transition, and
+ * every automated hop after it continues to act as that user rather than
+ * decaying to no principal at the second state.
+ *
+ * `approval` is deliberately not mapped: an approver resolving a gate is not
+ * lending their credential to the work the next state does.
+ */
+const resolveDispatchPrincipal = async (
+  args: TransitionArgs
+): Promise<RequestPrincipal | undefined> => {
+  const { kind, id } = args.principal;
+  if ((kind === 'user' || kind === 'api_key') && id) {
+    return { principalType: kind, principalId: id };
+  }
+  if (!args.orchestrationRunId) return undefined;
+  const run = await db.OrchestrationRun.findOne({
+    where: { publicId: args.orchestrationRunId },
+    attributes: ['principalKind', 'principalId'],
+  });
+  const runKind = run?.principalKind;
+  const runId = run?.principalId;
+  if ((runKind !== 'user' && runKind !== 'api_key') || !runId) return undefined;
+  return { principalType: runKind, principalId: runId };
+};
+
 export const transitionTask = async (args: TransitionArgs) => {
   log(
     'transitionTask: id=%s transition=%s principal=%s',
@@ -307,7 +339,12 @@ export const transitionTask = async (args: TransitionArgs) => {
 
   const toStateDef = stateByName({ states, name: result.toState });
   if (toStateDef) {
-    dispatchOnEnter({ taskPublicId: args.id, projectId, state: toStateDef });
+    dispatchOnEnter({
+      taskPublicId: args.id,
+      projectId,
+      state: toStateDef,
+      principal: await resolveDispatchPrincipal(args),
+    });
   }
 
   return mapped;

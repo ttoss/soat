@@ -22,6 +22,7 @@ import {
   resolveMcpTools,
   resolveSoatTools,
 } from './agentToolResolverExternalTools';
+import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import {
   resolveSecretRefsInRecord,
@@ -43,6 +44,8 @@ import {
   callTool,
   type InlineToolDefinition,
 } from './tools';
+// Re-exported from its own module (both http and soat tool paths throw it).
+export { HttpToolError } from './httpToolError';
 
 const log = createDebug('soat:toolResolver');
 
@@ -287,39 +290,6 @@ const buildHttpRequestUrl = (args: {
   const sep = args.resolvedUrl.includes('?') ? '&' : '?';
   return qs ? `${args.resolvedUrl}${sep}${qs}` : args.resolvedUrl;
 };
-
-export class HttpToolError extends Error {
-  status: number;
-  body: string;
-  url: string;
-  method: string;
-
-  constructor(
-    message: string,
-    status: number,
-    body: string,
-    url: string,
-    method: string
-  ) {
-    super(message);
-    this.name = 'HttpToolError';
-    this.status = status;
-    this.body = body;
-    this.url = url;
-    this.method = method;
-  }
-
-  toJSON() {
-    return {
-      message: this.message,
-      name: this.name,
-      status: this.status,
-      url: this.url,
-      method: this.method,
-      body: this.body,
-    };
-  }
-}
 
 /**
  * Maps an `HttpToolError` (thrown when an http-type tool's target returns a

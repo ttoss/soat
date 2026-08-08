@@ -2,6 +2,7 @@ import createDebug from 'debug';
 
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
+import type { RequestPrincipal } from './principals';
 import type { ActiveDispatch } from './tasks';
 import { emitTaskEvent, mapTask, transitionTask } from './tasks';
 import {
@@ -274,15 +275,19 @@ const commitCompletion = async (args: {
  * already left the state by the time the dispatch resolves, the result is
  * discarded (cancellation-on-exit).
  */
+const dispatchKindOf = (kind: string): ActiveDispatch['kind'] => {
+  return kind === 'agent' ? 'generation' : 'orchestration_run';
+};
+
 export const runStateAutomation = async (args: {
   taskPublicId: string;
   projectId: number;
   stateName: string;
   onEnter: OnEnter;
+  principal?: RequestPrincipal;
 }): Promise<void> => {
   const dispatch = args.onEnter.dispatch;
-  const dispatchKind: ActiveDispatch['kind'] =
-    dispatch.kind === 'agent' ? 'generation' : 'orchestration_run';
+  const dispatchKind = dispatchKindOf(dispatch.kind);
 
   const task = await loadTask(args.taskPublicId);
   if (!task || task.state !== args.stateName) return;
@@ -315,6 +320,7 @@ export const runStateAutomation = async (args: {
     dispatchKind,
     inputs,
     retry,
+    principal: args.principal,
   });
 
   if (outcome.kind === 'abandoned') {

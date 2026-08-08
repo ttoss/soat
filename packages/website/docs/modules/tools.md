@@ -376,6 +376,10 @@ A `soat` tool exposes actions from the SOAT platform itself (documents, conversa
 
 Creating or updating a `soat` tool validates every entry in `actions` against the platform's action registry. An unrecognized action name returns `400 VALIDATION_FAILED` immediately; if the name looks like an operationId (camelCase) that matches a known action once converted to kebab-case, the error message includes a suggestion (e.g. `"searchKnowledge" (did you mean "search-knowledge"?)`).
 
+A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HTTP_ERROR`, with the real status in `meta.tool_status_code` — exactly as an `http` tool's target rejecting a call does. The error body is never returned as a result, so a rejected or unauthorized action can't be mistaken for data by an agent or stored as an orchestration node's artifact.
+
+Called from an orchestration, a `soat` tool acts as the run's own identity — see [Run identity](./orchestrations.md#durable-background-execution).
+
 When a `soat` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`, for nested agent-to-agent calls). Actions with no such fields — e.g. `search-knowledge` — are called as-is, so this bookkeeping never leaks into their request body as an unknown field.
 
 ### pipeline

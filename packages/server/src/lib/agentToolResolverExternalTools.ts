@@ -2,6 +2,7 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { HttpToolError } from './httpToolError';
 import { soatTools } from './soatTools';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
@@ -291,6 +292,20 @@ export const executeSoatTool = async (args: {
     });
     const responseBody = await response.json();
     log('soat tool result: %s status=%d', toolId, response.status);
+    // A non-2xx self-call is a failed tool call, not a result. Returning the
+    // error body here used to make an unauthorized or rejected platform action
+    // indistinguishable from data: an orchestration tool node stored the error
+    // object as its artifact and the run carried on as though the action had
+    // happened (#801-shaped, but on the call path).
+    if (!response.ok) {
+      throw new HttpToolError(
+        `SOAT action '${args.def.name}' failed`,
+        response.status,
+        JSON.stringify(responseBody),
+        url,
+        args.def.method
+      );
+    }
     return responseBody;
   } catch (error) {
     log('soat tool error: %s', `${args.toolName}_${args.def.name}`);

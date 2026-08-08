@@ -16,7 +16,7 @@ import {
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 
-import { parsePagination } from './helpers';
+import { parsePagination, requestPrincipalFromCtx } from './helpers';
 import {
   hintAuditResourceForOrchestration,
   resolveRunAuth,
@@ -309,6 +309,9 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     projectIds: scope.projectIds,
     input,
     authHeader,
+    // Persisted on the run so a worker driving it later can act as the same
+    // principal; the request's own header only reaches `wait` mode.
+    principal: requestPrincipalFromCtx(ctx),
     wait: body.wait === true,
   });
 

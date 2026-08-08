@@ -18,7 +18,24 @@ An **orchestration is a pipeline that _ends_** — a directed acyclic graph that
 | A deterministic, forward-only sequence of steps that runs and completes | **Orchestration** (this module) |
 | Statuses, transitions, guards, a kanban board, or an entity that revisits states | **[Workflows](./workflows.md)** |
 
-The two compose: when a task enters a state, it may _dispatch_ an orchestration (or an agent) to do that state's work. See [Workflows & Tasks](./workflows.md).
+The two compose in both directions. A task's state _dispatches_ an orchestration (or an agent) to do that state's work — see [Workflows & Tasks](./workflows.md). Going the other way, a graph moves a task on with an ordinary `tool` node bound to a [`soat` tool](./tools.md#soat) for `create-task` or `transition-task`; there is no dedicated node type, and none is needed:
+
+```json
+{
+  "id": "advance",
+  "type": "tool",
+  "tool_id": "tool_transition",
+  "operation_id": "transition-task",
+  "input_mapping": {
+    "task_id": { "var": "input.task_id" },
+    "transition": "finish"
+  }
+}
+```
+
+Keep that edge **fire-and-forget**. A graph that instead waits for a task to reach some state inverts the two lifetimes — a run is bounded and holds a lease and a queue slot, while a task lives for days and can move backward. Let the run end and let the task's own state machine carry things forward.
+
+> A state whose orchestration transitions the task back into that same state loops forever. Cycle detection is per-graph and workflow cycles are deliberate, so nothing rejects the composed cycle for you — bound it in the graph you write.
 
 ## Overview
 
@@ -271,6 +288,15 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 - `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — **no node executes inside the request**. A worker claims the task and drives the run; observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
 - `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler enqueues a `wake` task when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
 - `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
+
+**Run identity.** A run outlives the request that started it, so it cannot borrow that request's credential when a worker drives it minutes or days later. Each run persists the principal that started it (the user or API key), and every background drive — a queued start, a scheduler wake, a redrive after a crash, an `awaiting_input` resume — re-mints a short-lived **run-as token** from it, confined to the run's project. This is what lets a [`soat` tool](./tools.md#soat) node call the platform from a durable run at all.
+
+- **Identity only, not permissions.** The token asserts who the run is; authorization is evaluated per call against policies as they stand at that moment, so revoking access takes effect on a run already in flight.
+- **Never wider than the starting credential.** A run started by an API key is bounded by that key's own policies, so it can do no more than the key could. Revoke the key and the run stops acting rather than falling back to its owner's access.
+- **Trigger- and OAuth-started runs record no principal.** Their boundary — the trigger's attached policy, the consented scope — lives in the token rather than in the principal, so re-minting would drop it. Those runs execute inline with the original token, as they always have.
+- **A run with no principal still runs.** Only its platform self-calls are unauthenticated, and they now fail loudly (`TOOL_HTTP_ERROR` carrying the upstream 401) instead of storing the error body as a node artifact.
+
+Nested `loop` and `sub_orchestration` children inherit their parent's identity, so a whole tree of runs acts as one principal.
 
 **Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
 
@@ -591,6 +617,14 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 - `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once its scheduled wake (or the node's backoff delay) elapses. `active_nodes` names the node being waited on; the wake time itself is persisted with the run but is not exposed on the API, so use the node's declared `duration`/`interval` to know when to expect it. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
 - `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
 - `running` for far longer than expected — the process driving it may have crashed or been redeployed mid-execution. The background reaper reclaims any run whose lease (`lease_expires_at`) has expired and resumes it from the last checkpoint; a healthy run refreshes its lease every round, so this self-heals within `ORCHESTRATION_RUN_LEASE_TTL_MS` without intervention — see [Durable Background Execution](#durable-background-execution).
+
+## Configuration
+
+| Environment Variable | Required | Description |
+| --- | --- | --- |
+| `SOAT_RUN_TOKEN_TTL` | No | Lifetime of the run-as token minted for each background drive segment (default `1h`). It covers one drive, not the whole run, so a run sleeping for days never holds a long-lived credential. See [Run identity](#durable-background-execution). |
+| `ORCHESTRATION_QUEUE_DRIVER` | No | `postgres` (default) or `sqs` — see [Pluggable queue drivers](#durable-background-execution). |
+| `ORCHESTRATION_WORKER_DISABLED` | No | `true` keeps the API process request-only, leaving the queue to a dedicated worker. |
 
 ## Examples
 

@@ -3,6 +3,7 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
+import type { RequestPrincipal } from 'src/lib/principals';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -227,10 +228,7 @@ export const resolveWriteProjectId = async (args: {
   return projectIds![0];
 };
 
-export type RequestPrincipal = {
-  principalType: 'user' | 'api_key';
-  principalId: string;
-};
+export type { RequestPrincipal } from 'src/lib/principals';
 
 /**
  * The principal to credit for an action, resolved from the auth context only —
