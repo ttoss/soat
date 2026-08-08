@@ -228,9 +228,10 @@ export const dispatchOnEnter = (args: {
   taskPublicId: string;
   projectId: number;
   state: WorkflowState;
-  // The identity an `orchestration` dispatch runs as. A task-dispatched run is
-  // always durable (never `wait`), so without one its `soat` tool nodes have no
-  // credential — see `orchestrationRunToken.ts`.
+  // The identity the dispatch runs as, whichever kind it is. A task dispatch is
+  // request-less — a run is always durable (never `wait`), and an agent
+  // generation is fire-and-forget — so without one its `soat` tool nodes and
+  // tools have no credential; see `orchestrationRunToken.ts`.
   principal?: RequestPrincipal;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;

@@ -5,6 +5,7 @@ import { createGeneration } from './agents';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';
+import { buildRunAuthHeader } from './orchestrationRunToken';
 import type { MappedOrchestrationRun } from './orchestrations';
 import type { RequestPrincipal } from './principals';
 import type { WorkflowDispatch } from './workflowsValidation';
@@ -91,14 +92,56 @@ const buildAgentMessages = (
   return [{ role: 'user', content: JSON.stringify(inputs) }];
 };
 
+/**
+ * Runs an `agent` dispatch and exposes the generation's output.
+ *
+ * An agent dispatch is as request-less as an orchestration one: nothing awaits
+ * it and there is no inbound request to borrow a credential from. So it re-mints
+ * the same run-as token, keyed to the task, or the agent's `soat` tools reach
+ * the loopback unauthenticated and the model is handed a 401 in place of a tool
+ * result (#884). The header is `undefined` when the chain has no principal — a
+ * trigger- or OAuth-started task deliberately records none, and the generation
+ * then behaves exactly as it did before, self-calls included (see
+ * `orchestrationRunToken.ts`).
+ */
+const runAgentDispatch = async (args: {
+  agentId: string;
+  projectId: number;
+  taskPublicId: string;
+  inputs: Record<string, unknown>;
+  principal?: RequestPrincipal;
+}): Promise<DispatchResult> => {
+  const authHeader = await buildRunAuthHeader({
+    principalKind: args.principal?.principalType ?? null,
+    principalId: args.principal?.principalId ?? null,
+    projectId: args.projectId,
+    workPublicId: args.taskPublicId,
+  });
+
+  const gen = (await createGeneration({
+    agentId: args.agentId,
+    projectIds: [args.projectId],
+    messages: buildAgentMessages(args.inputs),
+    authHeader,
+    stream: false,
+  })) as GenerationResult;
+
+  return {
+    result: gen.output ?? {},
+    generationId: gen.id,
+    orchestrationRunId: null,
+  };
+};
+
 // Runs one dispatch and returns its exposed `{result}` and provenance ids. A
 // generation exposes its output; an orchestration run exposes its final state
 // (matching sub-orchestration semantics, PRD D2).
 export const runDispatch = async (args: {
   dispatch: WorkflowDispatch;
   projectId: number;
+  taskPublicId: string;
   inputs: Record<string, unknown>;
-  // The identity an orchestration dispatch runs as; see `dispatchOnEnter`.
+  // The identity the dispatch runs as, for both kinds; see `dispatchOnEnter`.
   principal?: RequestPrincipal;
   // Called as soon as a dispatch id is known but before the (blocking) wait
   // completes. For orchestration dispatches this fires at run creation, so the
@@ -109,17 +152,13 @@ export const runDispatch = async (args: {
   }) => Promise<void> | void;
 }): Promise<DispatchResult> => {
   if (args.dispatch.kind === 'agent') {
-    const gen = (await createGeneration({
+    return runAgentDispatch({
       agentId: args.dispatch.agentId!,
-      projectIds: [args.projectId],
-      messages: buildAgentMessages(args.inputs),
-      stream: false,
-    })) as GenerationResult;
-    return {
-      result: gen.output ?? {},
-      generationId: gen.id,
-      orchestrationRunId: null,
-    };
+      projectId: args.projectId,
+      taskPublicId: args.taskPublicId,
+      inputs: args.inputs,
+      principal: args.principal,
+    });
   }
 
   // Started in durable/async mode (`wait` omitted) rather than `wait: true`:

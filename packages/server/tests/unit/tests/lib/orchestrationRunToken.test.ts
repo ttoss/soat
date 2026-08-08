@@ -44,7 +44,7 @@ describe('orchestration run-as token', () => {
         principalKind: 'user',
         principalId: userPublicId,
         projectId: projectPk,
-        runPublicId: 'orun_test1',
+        workPublicId: 'orun_test1',
       });
       expect(header).toMatch(/^Bearer /);
       const payload = jwt.verify(header!.slice(7), JWT_SECRET) as {
@@ -69,7 +69,7 @@ describe('orchestration run-as token', () => {
         principalKind: 'api_key',
         principalId: keyRes.body.id,
         projectId: projectPk,
-        runPublicId: 'orun_test2',
+        workPublicId: 'orun_test2',
       });
       const payload = jwt.verify(header!.slice(7), JWT_SECRET) as {
         key?: string;
@@ -83,7 +83,7 @@ describe('orchestration run-as token', () => {
           principalKind: null,
           principalId: null,
           projectId: projectPk,
-          runPublicId: 'orun_test3',
+          workPublicId: 'orun_test3',
         })
       ).resolves.toBeUndefined();
     });
@@ -105,7 +105,7 @@ describe('orchestration run-as token', () => {
           principalKind: 'api_key',
           principalId: keyRes.body.id,
           projectId: projectPk,
-          runPublicId: 'orun_test4',
+          workPublicId: 'orun_test4',
         })
       ).resolves.toBeUndefined();
     });
@@ -116,7 +116,7 @@ describe('orchestration run-as token', () => {
           principalKind: 'user',
           principalId: 'user_goneforever',
           projectId: projectPk,
-          runPublicId: 'orun_test5',
+          workPublicId: 'orun_test5',
         })
       ).resolves.toBeUndefined();
     });
@@ -127,7 +127,7 @@ describe('orchestration run-as token', () => {
           principalKind: 'user',
           principalId: userPublicId,
           projectId: -1,
-          runPublicId: 'orun_test6',
+          workPublicId: 'orun_test6',
         })
       ).resolves.toBeUndefined();
     });
@@ -143,7 +143,7 @@ describe('orchestration run-as token', () => {
         publicId: userPublicId,
         role: 'user',
         projectPublicId: projectId,
-        runPublicId: 'orun_read1',
+        workPublicId: 'orun_read1',
       })}`;
       expect(readRunTokenPrincipal(header)).toEqual({
         principalType: 'user',
@@ -156,7 +156,7 @@ describe('orchestration run-as token', () => {
         publicId: userPublicId,
         role: 'user',
         projectPublicId: projectId,
-        runPublicId: 'orun_read2',
+        workPublicId: 'orun_read2',
         apiKeyPublicId: 'key_abc',
       })}`;
       expect(readRunTokenPrincipal(header)).toEqual({

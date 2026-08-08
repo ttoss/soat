@@ -163,6 +163,7 @@ const runOneAttempt = async (args: {
   return runDispatch({
     dispatch: ctx.dispatch,
     projectId: ctx.projectId,
+    taskPublicId: ctx.taskPublicId,
     inputs: ctx.inputs,
     principal: ctx.principal,
     onDispatchStarted: async ({ generationId, orchestrationRunId }) => {

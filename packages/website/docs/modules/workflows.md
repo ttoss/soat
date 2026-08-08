@@ -35,11 +35,13 @@ _drives_ one.
 The return edge is an ordinary tool call, not a second mechanism: a dispatched
 orchestration moves its task on with a `tool` node bound to a
 [`soat` tool](./tools.md#soat) for `transition-task`, passing the task id in
-through the dispatch's `input_mapping`. The run acts as the principal that
-started the chain — the person or key that created the task or fired the
-transition — and each automated hop inherits that identity, so a chain of
-states keeps acting as whoever set it going rather than decaying to no
-principal at the second state. See
+through the dispatch's `input_mapping`. A dispatched **agent** does the same
+thing with a `soat` tool of its own.
+
+Both kinds of dispatch act as the principal that started the chain — the person
+or key that created the task or fired the transition — and each automated hop
+inherits that identity, so a chain of states keeps acting as whoever set it
+going rather than decaying to no principal at the second state. See
 [Run identity](./orchestrations.md#durable-background-execution).
 
 > A support ticket that reopens. A lead that goes `qualified → negotiating →
