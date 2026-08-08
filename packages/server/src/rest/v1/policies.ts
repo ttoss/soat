@@ -14,17 +14,7 @@ import { parsePagination, requireAdmin } from './helpers';
 const policiesRouter = new Router<Context>();
 
 policiesRouter.get('/policies', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'policies:ListPolicies')) return;
 
   const userId = ctx.query.user_id as string | undefined;
   ctx.body = await listPolicies({ userId, ...parsePagination(ctx) });
@@ -56,17 +46,7 @@ policiesRouter.post('/policies', async (ctx: Context) => {
 });
 
 policiesRouter.get('/policies/:policy_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'policies:GetPolicy')) return;
 
   const policy = await getPolicy({ policyId: ctx.params.policy_id });
 

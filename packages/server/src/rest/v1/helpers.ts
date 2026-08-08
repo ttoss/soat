@@ -138,6 +138,39 @@ export const requireAdmin = (ctx: Context, action: string): boolean => {
 };
 
 /**
+ * Gates a route on the caller either owning the resource or being an admin —
+ * the API-key rule, where a user administers their own keys and an admin
+ * administers everyone's. Unlike {@link requireAdmin} this is not a pure role
+ * gate, so it needs the owner to compare against.
+ *
+ * Shared for the same reason `requireAdmin` is: the comparison bypasses
+ * `isAllowed`/`resolveProjectIds`, so the decision is invisible to the audit log
+ * unless it is recorded explicitly. `apiKeys.ts` open-coded this three times and
+ * two of the three remembered the record — the read did not.
+ *
+ * Sets `401`/`403` and returns `false` when the caller should stop; the route
+ * should `return` immediately in that case.
+ */
+export const isOwnerOrAdmin = (
+  ctx: Context,
+  args: { ownerPublicId: string | null | undefined; action: string }
+): boolean => {
+  if (!checkAuth(ctx)) return false;
+
+  const authUser = ctx.authUser!;
+  const allowed =
+    args.ownerPublicId === authUser.publicId || authUser.role === 'admin';
+  recordAuthorizationDecision(ctx, { action: args.action, allowed });
+
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return false;
+  }
+  return true;
+};
+
+/**
  * Resolves project IDs for an action with permission check
  */
 export const resolveProjectIdsWithAction = async (args: {
