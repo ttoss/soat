@@ -392,52 +392,48 @@ export const topologicalSort = (
 
 // ── Internal ID Lookups ───────────────────────────────────────────────────
 
-export const lookupSecretInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const secret = await db.Secret.findOne({ where: { publicId } });
-  if (!secret) throw new Error(`Secret not found: ${publicId}`);
-  return (secret as unknown as { id: number }).id;
+/**
+ * Resolves a resource's public id to the internal primary key a lib argument
+ * needs, or throws with the resource named.
+ *
+ * One body for what used to be six copies differing only by the model and the
+ * noun — each of which also carried an `as unknown as { id: number }` double
+ * cast that the model types make unnecessary.
+ */
+const lookupInternalId = async (args: {
+  model: {
+    findOne: (options: {
+      where: { publicId: string };
+    }) => Promise<{ id: number } | null>;
+  };
+  label: string;
+  publicId: string;
+}): Promise<number> => {
+  const row = await args.model.findOne({
+    where: { publicId: args.publicId },
+  });
+  if (!row) throw new Error(`${args.label} not found: ${args.publicId}`);
+  return row.id;
 };
 
-export const lookupMemoryInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const memory = await db.Memory.findOne({ where: { publicId } });
-  if (!memory) throw new Error(`Memory not found: ${publicId}`);
-  return (memory as unknown as { id: number }).id;
+export const lookupSecretInternalId = (publicId: string): Promise<number> => {
+  return lookupInternalId({ model: db.Secret, label: 'Secret', publicId });
 };
 
-export const lookupActorInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const actor = await db.Actor.findOne({ where: { publicId } });
-  if (!actor) throw new Error(`Actor not found: ${publicId}`);
-  return (actor as unknown as { id: number }).id;
+export const lookupMemoryInternalId = (publicId: string): Promise<number> => {
+  return lookupInternalId({ model: db.Memory, label: 'Memory', publicId });
 };
 
-export const lookupAgentInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const agent = await db.Agent.findOne({ where: { publicId } });
-  if (!agent) throw new Error(`Agent not found: ${publicId}`);
-  return (agent as unknown as { id: number }).id;
+export const lookupActorInternalId = (publicId: string): Promise<number> => {
+  return lookupInternalId({ model: db.Actor, label: 'Actor', publicId });
 };
 
-export const lookupToolInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const tool = await db.Tool.findOne({ where: { publicId } });
-  if (!tool) throw new Error(`Tool not found: ${publicId}`);
-  return (tool as unknown as { id: number }).id;
+export const lookupAgentInternalId = (publicId: string): Promise<number> => {
+  return lookupInternalId({ model: db.Agent, label: 'Agent', publicId });
 };
 
-export const lookupChatInternalId = async (
-  publicId: string
-): Promise<number> => {
-  const chat = await db.Chat.findOne({ where: { publicId } });
-  if (!chat) throw new Error(`Chat not found: ${publicId}`);
-  return (chat as unknown as { id: number }).id;
+export const lookupToolInternalId = (publicId: string): Promise<number> => {
+  return lookupInternalId({ model: db.Tool, label: 'Tool', publicId });
 };
 
 export const lookupProjectOwnerUserId = async (
@@ -448,11 +444,11 @@ export const lookupProjectOwnerUserId = async (
   // the system (the bootstrap admin).
   const existingKey = await db.ApiKey.findOne({ where: { projectId } });
   if (existingKey) {
-    return (existingKey as unknown as { userId: number }).userId;
+    return existingKey.userId;
   }
   const adminUser = await db.User.findOne({ order: [['id', 'ASC']] });
   if (!adminUser) throw new Error('No users found in the system.');
-  return (adminUser as unknown as { id: number }).id;
+  return adminUser.id;
 };
 
 export const lookupPolicyInternalIds = async (
@@ -462,8 +458,8 @@ export const lookupPolicyInternalIds = async (
   const policies = await db.Policy.findAll({ where: { publicId: publicIds } });
   if (policies.length !== publicIds.length) {
     const foundIds = new Set(
-      policies.map((p) => {
-        return (p as unknown as { publicId: string }).publicId;
+      policies.map((policy) => {
+        return policy.publicId;
       })
     );
     const missing = publicIds.find((id) => {
@@ -471,7 +467,7 @@ export const lookupPolicyInternalIds = async (
     });
     throw new Error(`Policy not found: ${missing}`);
   }
-  return policies.map((p) => {
-    return (p as unknown as { id: number }).id;
+  return policies.map((policy) => {
+    return policy.id;
   });
 };

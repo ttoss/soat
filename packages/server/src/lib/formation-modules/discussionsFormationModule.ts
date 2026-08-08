@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import {
   createDiscussion,
   deleteDiscussion,
@@ -8,54 +6,13 @@ import {
   type SynthesisConfig,
   updateDiscussion,
 } from '../discussions';
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  normalizePropertyKeys,
   toNullableNumber,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:discussions');
-
-const SCHEMA_NAME = 'DiscussionResourceProperties';
-const RESOURCE_LABEL = 'discussion';
-
-const validateDiscussionProperties = (args: {
-  properties: unknown;
-  basePath: string;
-}): ValidationError[] => {
-  const { basePath } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      { path: basePath, message: 'Discussion `properties` must be an object' },
-    ];
-  }
-  // Accept camelCase top-level keys (e.g. `aiProviderId`, `maxRounds`) like
-  // every other formation module, normalizing to the snake_case the OpenAPI
-  // schema and the property readers below expect.
-  const properties = normalizePropertyKeys(args.properties);
-
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-  return errors;
-};
+import { defineFormationModule } from './defineFormationModule';
+import { isObjectRecord } from './formationSpecLoader';
 
 const EFFORTS = new Set(['low', 'medium', 'high']);
 
@@ -105,24 +62,14 @@ const requireString = (args: { value: unknown; fieldName: string }): string => {
   return args.value;
 };
 
-export const discussionsFormationModule: FormationModule = {
+export const discussionsFormationModule = defineFormationModule({
   resourceType: 'discussion',
+  // A discussion's `name` is required on update too — `updateDiscussion` has no
+  // way to identify the resource from a bag that omits it.
+  requiredOnUpdate: true,
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateDiscussionProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateDiscussionProperties({
-      properties: rawProperties,
-      basePath: 'resources.<discussion>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-    const created = await createDiscussion({
+  create: ({ properties, projectId }) => {
+    return createDiscussion({
       projectId,
       name: requireString({ value: properties.name, fieldName: 'name' }),
       // Absent means the discussion inherits the project's default model route.
@@ -133,25 +80,9 @@ export const discussionsFormationModule: FormationModule = {
       synthesis: toSynthesis(properties.synthesis),
       participants: toParticipants(properties.participants),
     });
-
-    log(
-      'create discussion from formation: projectId=%d discussionId=%s',
-      projectId,
-      created.id
-    );
-    return created.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateDiscussionProperties({
-      properties: rawProperties,
-      basePath: 'resources.<discussion>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
+  update: async ({ properties, physicalResourceId }) => {
     await updateDiscussion({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
@@ -164,50 +95,42 @@ export const discussionsFormationModule: FormationModule = {
     });
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteDiscussion({ id: physicalResourceId });
+  remove: ({ physicalResourceId }) => {
+    return deleteDiscussion({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const discussion = await getDiscussion({ id: physicalResourceId });
-      return {
-        name: discussion.name,
-        description: discussion.description,
-        max_rounds: discussion.max_rounds,
-        ai_provider_id: discussion.ai_provider_id,
-        model: discussion.model,
-        synthesis: discussion.synthesis,
-        // Mapped to the same snake_case shape the template declares, omitting
-        // `position` (derived from array order, never authored in a
-        // template) and any field left at its null default, so a template
-        // that only sets the fields it cares about still diffs as a no-op
-        // instead of always reporting 'update' (the array was previously
-        // omitted from `read` entirely).
-        participants: discussion.participants.map(
-          (
-            participant: Awaited<
-              ReturnType<typeof getDiscussion>
-            >['participants'][number]
-          ) => {
-            const mapped: Record<string, unknown> = {
-              name: participant.name,
-              prompt: participant.prompt,
-              actor_id: participant.actor_id,
-              ai_provider_id: participant.ai_provider_id,
-              model: participant.model,
-              temperature: participant.temperature,
-              effort: participant.effort,
-            };
-            for (const [key, value] of Object.entries(mapped)) {
-              if (value === null) delete mapped[key];
-            }
-            return mapped;
-          }
-        ),
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getDiscussion({ id: physicalResourceId });
   },
-};
+
+  read: (discussion) => {
+    return {
+      name: discussion.name,
+      description: discussion.description,
+      max_rounds: discussion.max_rounds,
+      ai_provider_id: discussion.ai_provider_id,
+      model: discussion.model,
+      synthesis: discussion.synthesis,
+      // Mapped to the same snake_case shape the template declares, omitting
+      // `position` (derived from array order, never authored in a template)
+      // and any field left at its null default, so a template that only sets
+      // the fields it cares about still diffs as a no-op instead of always
+      // reporting 'update'.
+      participants: discussion.participants.map((participant) => {
+        const mapped: Record<string, unknown> = {
+          name: participant.name,
+          prompt: participant.prompt,
+          actor_id: participant.actor_id,
+          ai_provider_id: participant.ai_provider_id,
+          model: participant.model,
+          temperature: participant.temperature,
+          effort: participant.effort,
+        };
+        for (const [key, value] of Object.entries(mapped)) {
+          if (value === null) delete mapped[key];
+        }
+        return mapped;
+      }),
+    };
+  },
+});

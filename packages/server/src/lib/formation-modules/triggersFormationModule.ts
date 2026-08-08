@@ -1,10 +1,8 @@
-import createDebug from 'debug';
-
 import {
   lookupPolicyInternalIds,
   lookupProjectOwnerUserId,
 } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
+import type { ValidationError } from '../formationsTypes';
 import {
   toNullableString,
   toOptionalString,
@@ -18,19 +16,8 @@ import {
   validateCronExpression,
   validateTriggerShape,
 } from '../triggers';
-import {
-  isFormationExpression,
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:triggers');
-
-const SCHEMA_NAME = 'TriggerResourceProperties';
-const RESOURCE_LABEL = 'trigger';
+import { defineFormationModule } from './defineFormationModule';
+import { isFormationExpression } from './formationSpecLoader';
 
 /** Narrows an untyped template value to a plain input object, else undefined. */
 const toInputObject = (value: unknown): Record<string, unknown> | undefined => {
@@ -43,15 +30,7 @@ const toOptionalBoolean = (value: unknown): boolean | undefined => {
   return value != null ? Boolean(value) : undefined;
 };
 
-// ── Property validation ──────────────────────────────────────────────────
-
 /**
- * Reuses the transport-independent business rules from the lib so formation
- * templates enforce the same invariants as the REST API (cron iff schedule,
- * action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
- * type-dependent fields are present, well-typed, and schema-valid — so it is a
- * no-op when `errors` already has entries.
- *
  * A field supplied as an unresolved formation expression (`{ sub }`, `{ param }`,
  * `{ ref }`) is treated as *present* for the presence/exclusivity checks — its
  * literal value only exists after parameter/ref resolution at apply time, where
@@ -66,6 +45,13 @@ const shapeFieldValue = (value: unknown): string | null => {
   return toNullableString(value) ?? null;
 };
 
+/**
+ * Reuses the transport-independent business rules from the lib so formation
+ * templates enforce the same invariants as the REST API (cron iff schedule,
+ * action iff tool, and a parseable 5-field UTC cron). Only meaningful once the
+ * type-dependent fields are present, well-typed, and schema-valid — so it is a
+ * no-op when `errors` already has entries.
+ */
 const pushShapeRuleErrors = (args: {
   properties: Record<string, unknown>;
   basePath: string;
@@ -99,55 +85,12 @@ const pushShapeRuleErrors = (args: {
   }
 };
 
-const validateTriggerProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      { path: basePath, message: 'Trigger `properties` must be an object' },
-    ];
-  }
-
-  const properties = args.properties;
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-  pushShapeRuleErrors({ properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const triggersFormationModule: FormationModule = {
+export const triggersFormationModule = defineFormationModule({
   resourceType: 'trigger',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateTriggerProperties({ properties, basePath });
-  },
+  extraChecks: pushShapeRuleErrors,
 
   create: async ({ properties, projectId }) => {
-    const errors = validateTriggerProperties({
-      properties,
-      basePath: 'resources.<trigger>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
     // Firings run as the project owner (there is no request user in a
     // formation deploy); this is the run-as identity re-checked at fire time.
     const createdByUserId = await lookupProjectOwnerUserId(projectId);
@@ -156,7 +99,7 @@ export const triggersFormationModule: FormationModule = {
       ? (await lookupPolicyInternalIds([policyPublicId]))[0]
       : null;
 
-    const result = await createTrigger({
+    return createTrigger({
       projectId,
       createdByUserId,
       policyId,
@@ -170,25 +113,9 @@ export const triggersFormationModule: FormationModule = {
       cron: toOptionalString(properties.cron) ?? undefined,
       active: toOptionalBoolean(properties.active),
     });
-
-    log(
-      'created trigger from formation: projectId=%d triggerId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
   update: async ({ properties, physicalResourceId }) => {
-    const errors = validateTriggerProperties({
-      properties,
-      basePath: 'resources.<trigger>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
     const policyPublicId = toOptionalString(properties.policy_id);
     const policyId = policyPublicId
       ? (await lookupPolicyInternalIds([policyPublicId]))[0]
@@ -206,30 +133,14 @@ export const triggersFormationModule: FormationModule = {
       cron: toNullableString(properties.cron),
       active: toOptionalBoolean(properties.active),
     });
-
-    log('updated trigger from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteTrigger({ id: physicalResourceId });
-    log('deleted trigger from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteTrigger({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    const trigger = await findTrigger({ id: physicalResourceId });
-    if (!trigger) return null;
-    return {
-      name: trigger.name,
-      description: trigger.description,
-      type: trigger.type,
-      target_type: trigger.target_type,
-      target_id: trigger.target_id,
-      action: trigger.action,
-      input: trigger.input,
-      cron: trigger.cron,
-      active: trigger.active,
-      policy_id: trigger.policy_id,
-    };
+  fetch: ({ physicalResourceId }) => {
+    return findTrigger({ id: physicalResourceId });
   },
 
   getAttributes: async ({ physicalResourceId }) => {
@@ -238,4 +149,4 @@ export const triggersFormationModule: FormationModule = {
     if (result) attrs.secret = result.secret;
     return attrs;
   },
-};
+});

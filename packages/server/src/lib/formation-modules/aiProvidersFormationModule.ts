@@ -1,5 +1,4 @@
 import type { AiProviderSlug } from '@soat/postgresdb';
-import createDebug from 'debug';
 
 import {
   createAiProvider,
@@ -8,89 +7,24 @@ import {
   updateAiProvider,
 } from '../aiProviders';
 import { lookupSecretInternalId } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  normalizePropertyKeys,
   toNullableObject,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
+import { defineFormationModule } from './defineFormationModule';
 
-const log = createDebug('soat:formations:aiProviders');
-
-const SCHEMA_NAME = 'AiProviderResourceProperties';
-const RESOURCE_LABEL = 'ai_provider';
-
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateAiProviderProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'AI provider `properties` must be an object',
-      },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const aiProvidersFormationModule: FormationModule = {
+export const aiProvidersFormationModule = defineFormationModule({
   resourceType: 'ai_provider',
+  propertiesLabel: 'AI provider',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateAiProviderProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateAiProviderProperties({
-      properties: rawProperties,
-      basePath: 'resources.<ai_provider>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  create: async ({ properties, projectId }) => {
     const secretPublicId = toNullableString(properties.secret_id);
     const secretId = secretPublicId
       ? await lookupSecretInternalId(secretPublicId)
       : undefined;
 
-    const result = await createAiProvider({
+    return createAiProvider({
       projectId,
       secretId,
       name: properties.name as string,
@@ -101,29 +35,9 @@ export const aiProvidersFormationModule: FormationModule = {
         (toNullableObject(properties.config) as Record<string, unknown>) ??
         undefined,
     });
-
-    log(
-      'created AI provider from formation: projectId=%d providerId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateAiProviderProperties({
-      properties: rawProperties,
-      basePath: 'resources.<ai_provider>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  update: async ({ properties, physicalResourceId }) => {
     let secretId: number | undefined;
     const rawSecretId = properties.secret_id;
     if (rawSecretId !== undefined) {
@@ -144,35 +58,13 @@ export const aiProvidersFormationModule: FormationModule = {
       config: toNullableObject(properties.config) as
         Record<string, unknown> | null | undefined,
     });
-
-    log(
-      'updated AI provider from formation: providerId=%s',
-      physicalResourceId
-    );
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteAiProvider({ id: physicalResourceId });
-    log(
-      'deleted AI provider from formation: providerId=%s',
-      physicalResourceId
-    );
+  remove: ({ physicalResourceId }) => {
+    return deleteAiProvider({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const provider = await getAiProvider({ id: physicalResourceId });
-      if (!provider) return null;
-      return {
-        name: provider.name,
-        provider: provider.provider,
-        default_model: provider.default_model,
-        base_url: provider.base_url,
-        config: provider.config,
-        secret_id: provider.secret_id,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getAiProvider({ id: physicalResourceId });
   },
-};
+});

@@ -1,8 +1,6 @@
-import createDebug from 'debug';
-
 import { DomainError } from '../../errors';
 import { isRef } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
+import type { ValidationError } from '../formationsTypes';
 import {
   findUnreferencedPipelineParams,
   validatePipelineConfig,
@@ -16,18 +14,8 @@ import {
 import { findInvalidTemplateTokens } from '../secrets';
 import { validateExecuteAuth } from '../toolAuth';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:tools');
-
-const SCHEMA_NAME = 'ToolResourceProperties';
-const RESOURCE_LABEL = 'tool';
+import { defineFormationModule } from './defineFormationModule';
+import { isObjectRecord } from './formationSpecLoader';
 
 // The lib `createTool` args are `undefined`-absent, while the normalizers yield
 // `null`-absent — bridge the two without a `??` at every call site (keeps
@@ -35,8 +23,6 @@ const RESOURCE_LABEL = 'tool';
 const optional = <T>(value: T | null): T | undefined => {
   return value ?? undefined;
 };
-
-// ── Property validation ──────────────────────────────────────────────────
 
 // A pipeline step's `tool_id` may be a formation `{ ref: ResourceName }`
 // reference, which is resolved to the physical tool id at deploy time (by
@@ -85,125 +71,72 @@ const pushExecuteAuthErrors = (args: {
   }
 };
 
-const validateToolProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { properties, basePath, forUpdate } = args;
-  if (!isObjectRecord(properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Tool `properties` must be an object',
-      },
-    ];
-  }
-
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
-    try {
-      validatePipelineConfig(
-        normalizePipelineRefsForValidation(properties.pipeline)
-      );
-    } catch (error) {
-      const message =
-        error instanceof DomainError ? error.message : String(error);
-      errors.push({ path: `${basePath}.pipeline`, message });
-    }
-  }
-
-  pushExecuteAuthErrors({ properties, basePath, errors });
-
-  // Validate execute and mcp separately so each error points at the field
-  // that actually carries the offending token.
-  for (const field of ['execute', 'mcp'] as const) {
-    const invalidTokens = findInvalidTemplateTokens(properties[field]);
-    for (const token of new Set(invalidTokens)) {
-      errors.push({
-        path: `${basePath}.${field}`,
-        message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
-      });
-    }
-  }
-
-  return errors;
-};
-
-/**
- * Warns when a pipeline tool declares a `parameters` property that no step's
- * `input` mapping (nor the pipeline's `output` mapping) ever reads via
- * `{ var: 'input.<name>' }`. Such a caller-supplied value never reaches any
- * step — it is silently dropped rather than causing a runtime error — so
- * this is a warning, not a validation error.
- */
-const warnToolProperties = (args: {
-  properties: unknown;
-  basePath: string;
-}): ValidationError[] => {
-  const { properties, basePath } = args;
-  if (!isObjectRecord(properties)) return [];
-  if (properties.type !== 'pipeline' || properties.pipeline === undefined) {
-    return [];
-  }
-
-  let config;
-  try {
-    config = validatePipelineConfig(properties.pipeline);
-  } catch {
-    // Already reported by validateToolProperties; nothing more to warn about.
-    return [];
-  }
-
-  const unreferenced = findUnreferencedPipelineParams({
-    config,
-    parameters: properties.parameters,
-  });
-
-  return unreferenced.map((name) => {
-    return {
-      path: `${basePath}.pipeline`,
-      message: `Pipeline parameter '${name}' is declared but never referenced by any step's \`input\` (or the pipeline \`output\`) as \`{ "var": "input.${name}" }\` — it will never reach a step.`,
-    };
-  });
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const toolsFormationModule: FormationModule = {
+export const toolsFormationModule = defineFormationModule({
   resourceType: 'tool',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateToolProperties({ properties, basePath });
-  },
-
-  warnProperties: ({ properties, basePath }) => {
-    return warnToolProperties({ properties, basePath });
-  },
-
-  create: async ({ properties, projectId }) => {
-    const errors = validateToolProperties({
-      properties,
-      basePath: 'resources.<tool>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
+  extraChecks: ({ properties, basePath, errors }) => {
+    if (properties.type === 'pipeline' && properties.pipeline !== undefined) {
+      try {
+        validatePipelineConfig(
+          normalizePipelineRefsForValidation(properties.pipeline)
+        );
+      } catch (error) {
+        const message =
+          error instanceof DomainError ? error.message : String(error);
+        errors.push({ path: `${basePath}.pipeline`, message });
+      }
     }
 
-    const result = await createTool({
+    pushExecuteAuthErrors({ properties, basePath, errors });
+
+    // Validate execute and mcp separately so each error points at the field
+    // that actually carries the offending token.
+    for (const field of ['execute', 'mcp'] as const) {
+      const invalidTokens = findInvalidTemplateTokens(properties[field]);
+      for (const token of new Set(invalidTokens)) {
+        errors.push({
+          path: `${basePath}.${field}`,
+          message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
+        });
+      }
+    }
+  },
+
+  /**
+   * Warns when a pipeline tool declares a `parameters` property that no step's
+   * `input` mapping (nor the pipeline's `output` mapping) ever reads via
+   * `{ var: 'input.<name>' }`. Such a caller-supplied value never reaches any
+   * step — it is silently dropped rather than causing a runtime error — so
+   * this is a warning, not a validation error.
+   */
+  warnChecks: ({ properties, basePath }) => {
+    if (properties.type !== 'pipeline' || properties.pipeline === undefined) {
+      return [];
+    }
+
+    let config;
+    try {
+      config = validatePipelineConfig(properties.pipeline);
+    } catch {
+      // Already reported by the validation checks; nothing more to warn about.
+      return [];
+    }
+
+    const unreferenced = findUnreferencedPipelineParams({
+      config,
+      parameters: properties.parameters,
+    });
+
+    return unreferenced.map((name) => {
+      return {
+        path: `${basePath}.pipeline`,
+        message: `Pipeline parameter '${name}' is declared but never referenced by any step's \`input\` (or the pipeline \`output\`) as \`{ "var": "input.${name}" }\` — it will never reach a step.`,
+      };
+    });
+  },
+
+  create: ({ properties, projectId }) => {
+    return createTool({
       projectId,
       name: properties.name as string,
       type: toOptionalString(properties.type),
@@ -222,25 +155,9 @@ export const toolsFormationModule: FormationModule = {
       outputMapping: optional(toNullableObject(properties.output_mapping)),
       guardrailIds: optional(toNullableArray<string>(properties.guardrail_ids)),
     });
-
-    log(
-      'created tool from formation: projectId=%d toolId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
   update: async ({ properties, physicalResourceId }) => {
-    const errors = validateToolProperties({
-      properties,
-      basePath: 'resources.<tool>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
     await updateTool({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
@@ -258,29 +175,11 @@ export const toolsFormationModule: FormationModule = {
     });
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteTool({ id: physicalResourceId });
+  remove: ({ physicalResourceId }) => {
+    return deleteTool({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const tool = await getTool({ id: physicalResourceId });
-      return {
-        name: tool.name,
-        type: tool.type,
-        description: tool.description,
-        parameters: tool.parameters,
-        execute: tool.execute,
-        mcp: tool.mcp,
-        actions: tool.actions,
-        denied_actions: tool.denied_actions,
-        preset_parameters: tool.preset_parameters,
-        pipeline: tool.pipeline,
-        output_mapping: tool.output_mapping,
-        guardrail_ids: tool.guardrail_ids,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getTool({ id: physicalResourceId });
   },
-};
+});

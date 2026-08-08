@@ -1,10 +1,7 @@
-import createDebug from 'debug';
-
 import {
   lookupAgentInternalId,
   lookupToolInternalId,
 } from '../formationsHelpers';
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import type { FileDelivery, NativeExtraction } from '../ingestionRules';
 import {
   createIngestionRule,
@@ -18,19 +15,8 @@ import {
   toNullableObject,
   toNullableString,
 } from '../resource-inputs/normalizers';
-import {
-  isFormationExpression,
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:ingestionRules');
-
-const SCHEMA_NAME = 'IngestionRuleResourceProperties';
-const RESOURCE_LABEL = 'ingestion rule';
+import { defineFormationModule } from './defineFormationModule';
+import { isFormationExpression } from './formationSpecLoader';
 
 // ── Business rule validation ─────────────────────────────────────────────
 // `validateIngestionRule` needs the converter's tool type to enforce the
@@ -43,74 +29,6 @@ const RESOURCE_LABEL = 'ingestion rule';
 const asRefPresence = (value: unknown): string | undefined => {
   if (value === undefined || value === null) return undefined;
   return typeof value === 'string' ? value : 'unresolved-ref';
-};
-
-const pushBusinessRuleErrors = (args: {
-  properties: Record<string, unknown>;
-  basePath: string;
-  errors: ValidationError[];
-  forUpdate?: boolean;
-}): void => {
-  const { properties, basePath, errors, forUpdate } = args;
-  const rawGlob = properties.content_type_glob;
-
-  const msg = validateIngestionRule({
-    toolId: asRefPresence(properties.tool_id),
-    agentId: asRefPresence(properties.agent_id),
-    toolType: null,
-    action: toNullableString(properties.action) ?? undefined,
-    contentTypeGlob:
-      typeof rawGlob === 'string' && !isFormationExpression(rawGlob)
-        ? rawGlob
-        : '*/*',
-    presetParameters:
-      toNullableObject(properties.preset_parameters) ?? undefined,
-    chunkStrategy: toNullableString(properties.chunk_strategy) ?? undefined,
-  });
-
-  if (!msg) return;
-  // A PATCH-style update payload may omit both tool_id and agent_id to mean
-  // "leave the converter unchanged" — only the "not both" half of the rule
-  // applies on update, not "exactly one is required".
-  if (forUpdate && msg === 'exactly one of tool_id or agent_id is required') {
-    return;
-  }
-  errors.push({ path: basePath, message: msg });
-};
-
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateIngestionRuleProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { properties, basePath, forUpdate } = args;
-  if (!isObjectRecord(properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Ingestion rule `properties` must be an object',
-      },
-    ];
-  }
-
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-  pushBusinessRuleErrors({ properties, basePath, errors, forUpdate });
-
-  return errors;
 };
 
 // ── Ref resolution ────────────────────────────────────────────────────────
@@ -154,24 +72,41 @@ const asFileDelivery = (value: unknown): FileDelivery | undefined => {
   return undefined;
 };
 
-// ── Module export ────────────────────────────────────────────────────────
-
-export const ingestionRulesFormationModule: FormationModule = {
+export const ingestionRulesFormationModule = defineFormationModule({
   resourceType: 'ingestion_rule',
+  resourceLabel: 'ingestion rule',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateIngestionRuleProperties({ properties, basePath });
+  extraChecks: ({ properties, basePath, forUpdate, errors }) => {
+    const rawGlob = properties.content_type_glob;
+
+    const message = validateIngestionRule({
+      toolId: asRefPresence(properties.tool_id),
+      agentId: asRefPresence(properties.agent_id),
+      toolType: null,
+      action: toNullableString(properties.action) ?? undefined,
+      contentTypeGlob:
+        typeof rawGlob === 'string' && !isFormationExpression(rawGlob)
+          ? rawGlob
+          : '*/*',
+      presetParameters:
+        toNullableObject(properties.preset_parameters) ?? undefined,
+      chunkStrategy: toNullableString(properties.chunk_strategy) ?? undefined,
+    });
+
+    if (!message) return;
+    // A PATCH-style update payload may omit both tool_id and agent_id to mean
+    // "leave the converter unchanged" — only the "not both" half of the rule
+    // applies on update, not "exactly one is required".
+    if (
+      forUpdate &&
+      message === 'exactly one of tool_id or agent_id is required'
+    ) {
+      return;
+    }
+    errors.push({ path: basePath, message });
   },
 
   create: async ({ properties, projectId }) => {
-    const errors = validateIngestionRuleProperties({
-      properties,
-      basePath: 'resources.<ingestion_rule>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
     const contentTypeGlob = requireString({
       value: properties.content_type_glob,
       fieldName: 'content_type_glob',
@@ -182,7 +117,7 @@ export const ingestionRulesFormationModule: FormationModule = {
       resolveAgentId(properties.agent_id),
     ]);
 
-    const created = await createIngestionRule({
+    return createIngestionRule({
       projectId,
       contentTypeGlob,
       toolId,
@@ -196,25 +131,9 @@ export const ingestionRulesFormationModule: FormationModule = {
       chunkOverlap: toNullableNumber(properties.chunk_overlap),
       metadata: toNullableObject(properties.metadata),
     });
-
-    log(
-      'created ingestion rule from formation: projectId=%d id=%s',
-      projectId,
-      created.id
-    );
-    return created.id;
   },
 
   update: async ({ properties, physicalResourceId }) => {
-    const errors = validateIngestionRuleProperties({
-      properties,
-      basePath: 'resources.<ingestion_rule>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
     const [toolId, agentId] = await Promise.all([
       resolveToolId(properties.tool_id),
       resolveAgentId(properties.agent_id),
@@ -235,33 +154,13 @@ export const ingestionRulesFormationModule: FormationModule = {
       chunkOverlap: toNullableNumber(properties.chunk_overlap),
       metadata: toNullableObject(properties.metadata),
     });
-
-    log('updated ingestion rule from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteIngestionRule({ id: physicalResourceId });
-    log('deleted ingestion rule from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteIngestionRule({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const rule = await getIngestionRule({ id: physicalResourceId });
-      return {
-        content_type_glob: rule.content_type_glob,
-        tool_id: rule.tool_id,
-        agent_id: rule.agent_id,
-        action: rule.action,
-        preset_parameters: rule.preset_parameters,
-        native_extraction: rule.native_extraction,
-        file_delivery: rule.file_delivery,
-        chunk_strategy: rule.chunk_strategy,
-        chunk_size: rule.chunk_size,
-        chunk_overlap: rule.chunk_overlap,
-        metadata: rule.metadata,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getIngestionRule({ id: physicalResourceId });
   },
-};
+});
