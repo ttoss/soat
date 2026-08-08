@@ -11,31 +11,11 @@ DAG-based pipeline definitions for chaining agents, tools, and knowledge lookups
 
 ## Orchestration or workflow?
 
-An **orchestration is a pipeline that _ends_** — a directed acyclic graph that starts, flows forward through its nodes, and terminates. A **[workflow](./workflows.md) is a state graph a task _lives_ in** — a long-lived entity that moves between named states over days or weeks, including backward.
+An **orchestration is a pipeline that _ends_** — a directed acyclic graph that starts, flows forward through its nodes, and terminates. A **[workflow](./workflows.md) is a state graph a task _lives_ in** — a long-lived entity that moves between named states over days or weeks, including backward. Use an orchestration for a deterministic, forward-only sequence of steps that runs and completes; use a workflow for statuses, transitions, guards, a kanban board, or an entity that revisits states.
 
-| You want… | Use |
-| --- | --- |
-| A deterministic, forward-only sequence of steps that runs and completes | **Orchestration** (this module) |
-| Statuses, transitions, guards, a kanban board, or an entity that revisits states | **[Workflows](./workflows.md)** |
+The two compose in both directions: a task's state _dispatches_ an orchestration to do that state's work, and a graph moves a task on with a `tool` node bound to a [`soat` tool](./tools.md#soat) for `transition-task`.
 
-The two compose in both directions. A task's state _dispatches_ an orchestration (or an agent) to do that state's work — see [Workflows & Tasks](./workflows.md). Going the other way, a graph moves a task on with an ordinary `tool` node bound to a [`soat` tool](./tools.md#soat) for `create-task` or `transition-task`; there is no dedicated node type, and none is needed:
-
-```json
-{
-  "id": "advance",
-  "type": "tool",
-  "tool_id": "tool_transition",
-  "operation_id": "transition-task",
-  "input_mapping": {
-    "task_id": { "var": "input.task_id" },
-    "transition": "finish"
-  }
-}
-```
-
-Keep that edge **fire-and-forget**. A graph that instead waits for a task to reach some state inverts the two lifetimes — a run is bounded and holds a lease and a queue slot, while a task lives for days and can move backward. Let the run end and let the task's own state machine carry things forward.
-
-> A state whose orchestration transitions the task back into that same state loops forever. Cycle detection is per-graph and workflow cycles are deliberate, so nothing rejects the composed cycle for you — bound it in the graph you write.
+> See **[Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model)** for the full comparison, the composition patterns in both directions, and the two rules that keep a composed cycle bounded.
 
 ## Overview
 
