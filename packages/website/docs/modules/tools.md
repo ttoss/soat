@@ -378,6 +378,20 @@ Creating or updating a `soat` tool validates every entry in `actions` against th
 
 A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HTTP_ERROR`, with the real status in `meta.tool_status_code` — exactly as an `http` tool's target rejecting a call does. The error body is never returned as a result, so a rejected or unauthorized action can't be mistaken for data by an agent or stored as an orchestration node's artifact.
 
+An action that answers `204 No Content` — every `delete-*`, for one — yields a `null` result rather than an error.
+
+An action that streams binary content (`download-file`) cannot be represented as a tool result and is refused with `422 TOOL_CALL_NOT_SUPPORTED`. Use `download-file-base64` from a tool.
+
+#### How a soat action is executed
+
+The action runs **in the server process**, by dispatching the request through the same middleware stack and route handler a client request goes through. There is no network hop and no port involved, so nothing about a `soat` tool depends on the server being reachable at a particular address — including from a worker driving a durable run.
+
+What that dispatch does *not* skip is the point of it: the route's permission check runs per call against the caller's policies as they stand at that moment, and strict field validation, audit logging, request metering and quotas, and the snake_case response contract all apply exactly as they do to a client request.
+
+A `soat` tool therefore has **no ambient authority**. It acts with the credential it was given — the calling user's, or the run-as token a background run was minted — and an action the credential is not permitted to perform fails with `502 TOOL_HTTP_ERROR` / `meta.tool_status_code: 403`, the same as it would over the wire.
+
+A call that does not settle within `SOAT_TOOL_CALL_TIMEOUT_MS` (default `300000`) fails with a timeout error, so a stuck action returns a failed tool call instead of hanging the generation.
+
 Called from an orchestration, a `soat` tool acts as the run's own identity — see [Run identity](./orchestrations.md#durable-background-execution).
 
 When a `soat` tool is called mid-turn by an agent, the server injects `tool_context`, `parent_trace_id`, `root_trace_id`, and `max_call_depth` into the request only for actions whose REST schema declares those fields (currently only `create-agent-generation`, for nested agent-to-agent calls). Actions with no such fields — e.g. `search-knowledge` — are called as-is, so this bookkeeping never leaks into their request body as an unknown field.
@@ -489,6 +503,8 @@ If an `http` tool's target responds with a non-2xx status, the call fails with `
 If the tool declares [`execute.auth`](#computed-credentials-executeauth) and the credential itself cannot be produced — the request never reaches the target — the call fails with `502 TOOL_AUTH_FAILED` instead.
 
 If an `http` tool's target responds with a 2xx status but a body that isn't valid JSON (HTML, plain text, or an empty `204 No Content`), the tool result is the raw response text instead of a parse error.
+
+A tool whose result is empty — a `soat` action that answered `204`, for instance — responds `200` with a JSON `null` body rather than an empty one.
 
 ## Examples
 

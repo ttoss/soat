@@ -2,7 +2,6 @@ import type http from 'node:http';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
-import { app } from 'src/app';
 import { db } from 'src/db';
 import { emitApproval } from 'src/lib/approvals';
 import { drainQueueOnce } from 'src/lib/orchestrationWorker';
@@ -12,11 +11,15 @@ import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient } from '../../testClient';
 
 /**
- * Covers the platform *self-call* path: a `soat` tool reaches the REST API over
- * a loopback HTTP request to `http://localhost:$PORT` (`executeSoatTool`), so
- * these tests bind the worker's own port — like `mcp.test.ts` — instead of
- * relying on `app.callback()`. Without a listener the self-call is refused and
- * the behaviour under test (the response's *status*) never happens.
+ * Covers the platform *self-call* path: a `soat` tool reaching the REST API
+ * through `executeSoatTool`.
+ *
+ * That path used to be a loopback HTTP request to `http://localhost:$PORT`, so
+ * this file bound the worker's own port — like `mcp.test.ts` still does — or
+ * every self-call was refused before the behaviour under test could happen.
+ * Since #888 the action is served in-process, and the listener is gone: these
+ * tests now pass on `app.callback()` alone, which is itself part of the
+ * evidence that no self-call goes back over the wire.
  *
  * Three concerns live here because all three are properties of that one path:
  *   1. a non-2xx self-call must fail the tool call, not return the error body
@@ -27,7 +30,6 @@ import { authenticatedTestClient } from '../../testClient';
  *   3. the same holds for a workflow-dispatched *agent*, whose generation is
  *      just as request-less as a durable run (#884).
  */
-let httpServer: http.Server;
 
 /**
  * The tool result the model was handed back, parsed out of the follow-up
@@ -44,8 +46,7 @@ const toolResultFromFollowUp = (
 ): unknown => {
   for (const body of completionBodies) {
     const messages = body.messages as
-      | { role: string; content?: unknown }[]
-      | undefined;
+      { role: string; content?: unknown }[] | undefined;
     const toolMessage = messages?.find((m) => {
       return m.role === 'tool';
     });
@@ -54,25 +55,14 @@ const toolResultFromFollowUp = (
   return undefined;
 };
 
-beforeAll(async () => {
+beforeAll(() => {
   // Drive the queue explicitly instead of racing the in-process worker kick,
   // so a run's settled state is observable at a known point.
   process.env.ORCHESTRATION_WORKER_DISABLED = 'true';
-  const port = parseInt(process.env.PORT || '15047', 10);
-  await new Promise<void>((resolve, reject) => {
-    httpServer = app.listen(port, resolve);
-    httpServer.once('error', reject);
-  });
 });
 
-afterAll(async () => {
+afterAll(() => {
   delete process.env.ORCHESTRATION_WORKER_DISABLED;
-  await new Promise<void>((resolve, reject) => {
-    if (!httpServer) return resolve();
-    httpServer.close((err) => {
-      return err ? reject(err) : resolve();
-    });
-  });
 });
 
 describe('SOAT self-call', () => {
@@ -822,9 +812,9 @@ describe('SOAT self-call', () => {
         agentId: listAgentId,
       });
       expect(readTask.active_dispatch.status).toBe('completed');
-      expect(JSON.stringify(toolResultFromFollowUp(completionBodies))).toContain(
-        'soat-agent-list-tool'
-      );
+      expect(
+        JSON.stringify(toolResultFromFollowUp(completionBodies))
+      ).toContain('soat-agent-list-tool');
 
       completionBodies = [];
       toolCall = {
@@ -843,9 +833,9 @@ describe('SOAT self-call', () => {
 
       // The write is refused at the self-call, so the model is handed the
       // failure rather than a created resource.
-      expect(JSON.stringify(toolResultFromFollowUp(completionBodies))).toContain(
-        'HttpToolError'
-      );
+      expect(
+        JSON.stringify(toolResultFromFollowUp(completionBodies))
+      ).toContain('HttpToolError');
       const created = await db.Tool.findOne({
         where: { name: 'agent-escalated-tool' },
       });

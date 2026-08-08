@@ -3,6 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { HttpToolError } from './httpToolError';
+import { dispatchApiRequest, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
@@ -222,7 +223,15 @@ const withMaxCallDepth = (args: {
   };
 };
 
-const buildSoatRequestBody = (args: {
+/**
+ * Assembles the request body a SOAT action is called with: the operation's own
+ * body, plus the ambient fields the action's schema declares it accepts —
+ * `tool_context`, the trace lineage, and the remaining call depth. Exported for
+ * direct testing: which fields get injected into which action is a per-action
+ * rule with a large input space (#371), and the schema check that enforces it is
+ * invisible from the outside once the body has been sent.
+ */
+export const buildSoatRequestBody = (args: {
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
   toolContext?: Record<string, string>;
@@ -252,11 +261,26 @@ const buildSoatRequestBody = (args: {
   });
 };
 
+/**
+ * Invokes a SOAT platform action on behalf of a `soat` tool.
+ *
+ * The action is served **in this process** (`dispatchApiRequest`), not fetched
+ * from `http://localhost:$PORT` (#888). Everything the loopback was there to
+ * reuse — the route's permission check, strict-field validation, the audit
+ * record, request metering, the snake_case response contract — still runs,
+ * because the dispatch runs the app's real middleware chain; what is gone is the
+ * socket, the JSON round trip, and the requirement that the process be listening
+ * on a port at all.
+ *
+ * `authHeader` therefore keeps its exact former meaning: the credential the
+ * action is performed with. A call without one is unauthenticated and is refused
+ * by the same middleware that refused it over the wire — sharing a process never
+ * implies sharing authority.
+ */
 export const executeSoatTool = async (args: {
   toolName: string;
   def: (typeof soatTools)[number];
   rawArgs: Record<string, unknown>;
-  base: string;
   authHeader?: string;
   toolContext?: Record<string, string>;
   traceId?: string;
@@ -276,43 +300,44 @@ export const executeSoatTool = async (args: {
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
   });
+  const toolId = `${args.toolName}_${args.def.name}`;
   try {
-    const url = `${args.base}${path}`;
-    const toolId = `${args.toolName}_${args.def.name}`;
-    log('soat tool execute: %s %s %s', toolId, args.def.method, url);
-    const response = await fetch(url, {
-      method: args.def.method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(args.authHeader ? { Authorization: args.authHeader } : {}),
-        ...args.buildContextHeaders(args.toolContext),
-      },
-      signal: AbortSignal.timeout(SOAT_TOOL_CALL_TIMEOUT_MS),
-      body: body ? JSON.stringify(body) : undefined,
+    log('soat tool execute: %s %s %s', toolId, args.def.method, path);
+    const response = await withCallTimeout({
+      promise: dispatchApiRequest({
+        method: args.def.method,
+        path,
+        headers: {
+          ...(args.authHeader ? { Authorization: args.authHeader } : {}),
+          ...args.buildContextHeaders(args.toolContext),
+        },
+        body,
+      }),
+      ms: SOAT_TOOL_CALL_TIMEOUT_MS,
+      label: `SOAT action '${args.def.name}'`,
     });
-    const responseBody = await response.json();
     log('soat tool result: %s status=%d', toolId, response.status);
     // A non-2xx self-call is a failed tool call, not a result. Returning the
     // error body here used to make an unauthorized or rejected platform action
     // indistinguishable from data: an orchestration tool node stored the error
     // object as its artifact and the run carried on as though the action had
     // happened (#801-shaped, but on the call path).
-    if (!response.ok) {
+    if (response.status < 200 || response.status >= 300) {
       throw new HttpToolError(
         `SOAT action '${args.def.name}' failed`,
         response.status,
-        JSON.stringify(responseBody),
-        url,
+        JSON.stringify(response.body) ?? '',
+        path,
         args.def.method
       );
     }
-    return responseBody;
+    return response.body;
   } catch (error) {
-    log('soat tool error: %s', `${args.toolName}_${args.def.name}`);
+    log('soat tool error: %s', toolId);
     args.logToolCallingError({
-      toolName: `${args.toolName}_${args.def.name}`,
+      toolName: toolId,
       toolType: 'soat',
-      url: `${args.base}${path}`,
+      url: path,
       method: args.def.method,
       error,
     });
@@ -341,7 +366,6 @@ const buildSoatActionTool = (args: {
   }) => boolean;
   logToolCallingError: LogToolCallingError;
 }): Tool => {
-  const base = `http://localhost:${process.env.PORT || 5047}`;
   const effectiveInputSchema = buildInputSchemaWithoutPresets(
     args.def.inputSchema as JSONSchema7,
     args.presetParameters
@@ -367,7 +391,6 @@ const buildSoatActionTool = (args: {
         toolName: args.toolName,
         def: args.def,
         rawArgs,
-        base,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
         traceId: args.traceId,

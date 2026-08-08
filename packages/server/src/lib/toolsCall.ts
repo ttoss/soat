@@ -150,7 +150,6 @@ export const callSoatTool = (
     toolName: tool.name,
     def,
     rawArgs: mergedInput,
-    base: `http://localhost:${process.env.PORT ?? 5047}`,
     authHeader,
     buildContextHeaders: () => {
       return {};
