@@ -10,7 +10,7 @@ import {
   setAgentRelease,
 } from 'src/lib/agentVersions';
 
-import { parsePagination } from './helpers';
+import { parsePagination, resolveReadProjectIds } from './helpers';
 
 /**
  * Agent version history and staged rollout (docs/prd-agent-versions.md).
@@ -21,30 +21,6 @@ import { parsePagination } from './helpers';
  * ordinary agent update carrying an archived config.
  */
 export const agentVersionsRouter = new Router<Context>();
-
-const checkAgentAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'agent',
-  });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-
-  return projectIds;
-};
 
 /** Path-param `{version}` is a version *number*, not a public ID. */
 const parseVersionParam = (raw: string): number => {
@@ -65,9 +41,11 @@ const parseVersionParam = (raw: string): number => {
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1versions/get'
  */
 agentVersionsRouter.get('/agents/:agent_id/versions', async (ctx: Context) => {
-  const projectIds = await checkAgentAccess(ctx, 'agents:ListAgentVersions');
-  if (projectIds === null) return;
-
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'agents:ListAgentVersions',
+    resourceType: 'agent',
+  });
   ctx.body = await listAgentVersions({
     projectIds,
     agentId: ctx.params.agent_id,
@@ -84,9 +62,11 @@ agentVersionsRouter.get('/agents/:agent_id/versions', async (ctx: Context) => {
 agentVersionsRouter.get(
   '/agents/:agent_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await checkAgentAccess(ctx, 'agents:GetAgentVersion');
-    if (projectIds === null) return;
-
+    const projectIds = await resolveReadProjectIds({
+      ctx,
+      action: 'agents:GetAgentVersion',
+      resourceType: 'agent',
+    });
     ctx.body = await getAgentVersion({
       projectIds,
       agentId: ctx.params.agent_id,
@@ -104,13 +84,12 @@ agentVersionsRouter.get(
 agentVersionsRouter.post(
   '/agents/:agent_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await checkAgentAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'agents:RestoreAgentVersion'
-    );
-    if (projectIds === null) return;
-
-    const body = (ctx.request.body ?? {}) as { label?: unknown };
+      action: 'agents:RestoreAgentVersion',
+      resourceType: 'agent',
+    });
+    const body = ctx.request.body as { label?: unknown };
 
     ctx.body = await restoreAgentVersion({
       projectIds,
@@ -129,10 +108,12 @@ agentVersionsRouter.post(
  *     $ref: 'openapi/v1/agents.yaml#/paths/~1api~1v1~1agents~1{agent_id}~1release/put'
  */
 agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
-  const projectIds = await checkAgentAccess(ctx, 'agents:SetAgentRelease');
-  if (projectIds === null) return;
-
-  const body = (ctx.request.body ?? {}) as {
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'agents:SetAgentRelease',
+    resourceType: 'agent',
+  });
+  const body = ctx.request.body as {
     stable_version?: unknown;
     canary_version?: unknown;
     canary_percent?: unknown;
@@ -158,9 +139,11 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
 agentVersionsRouter.post(
   '/agents/:agent_id/release/promote',
   async (ctx: Context) => {
-    const projectIds = await checkAgentAccess(ctx, 'agents:SetAgentRelease');
-    if (projectIds === null) return;
-
+    const projectIds = await resolveReadProjectIds({
+      ctx,
+      action: 'agents:SetAgentRelease',
+      resourceType: 'agent',
+    });
     ctx.body = await promoteAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,
@@ -178,9 +161,11 @@ agentVersionsRouter.post(
 agentVersionsRouter.post(
   '/agents/:agent_id/release/abort',
   async (ctx: Context) => {
-    const projectIds = await checkAgentAccess(ctx, 'agents:SetAgentRelease');
-    if (projectIds === null) return;
-
+    const projectIds = await resolveReadProjectIds({
+      ctx,
+      action: 'agents:SetAgentRelease',
+      resourceType: 'agent',
+    });
     ctx.body = await abortAgentRelease({
       projectIds,
       agentId: ctx.params.agent_id,

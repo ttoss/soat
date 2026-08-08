@@ -78,7 +78,8 @@ describe('Group 15: JWT — policy scoped to a single resource SRN is enforced p
     );
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 });
 
@@ -258,7 +259,8 @@ describe('Group 2: JWT Permissions - User can read but not delete file', () => {
     );
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 });
 
@@ -383,7 +385,8 @@ describe('Group 3: API Key Permissions - Create key, assign permissions, test ac
       .set('Authorization', `Bearer ${apiKey}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 });
 
@@ -472,7 +475,8 @@ describe('Group 4: Two users in the same project with different policies', () =>
     );
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 
   test('editor user can read the file', async () => {
@@ -602,7 +606,8 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       .set('Authorization', `Bearer ${readOnlyApiKey}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 
   test('delete-only API key cannot read the file', async () => {
@@ -611,7 +616,8 @@ describe('Group 5: User with multiple API keys scoped to different permissions',
       .set('Authorization', `Bearer ${deleteOnlyApiKey}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 
   test('delete-only API key can delete the file', async () => {
@@ -717,7 +723,8 @@ describe('Group 6: API key cannot access files in a different project', () => {
       .set('Authorization', `Bearer ${apiKey}`);
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 });
 
@@ -928,7 +935,8 @@ describe('Group 9: notPermissions overrides permissions when action appears in b
     );
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 });
 
@@ -1033,7 +1041,8 @@ describe('Group 10: JWT — policy with explicit project-scoped resource SRN gra
     );
 
     expect(response.status).toBe(403);
-    expect(response.body.error).toBe('Forbidden');
+    expect(response.body.error.code).toBe('FORBIDDEN');
+    expect(response.body.error.message).toBe('Forbidden');
   });
 
   test('listing files filtered by the allowed project returns results', async () => {

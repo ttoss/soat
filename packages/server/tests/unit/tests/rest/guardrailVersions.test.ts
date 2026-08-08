@@ -410,7 +410,9 @@ describe('Guardrail versions', () => {
       const policyRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/policies')
         .send({
-          document: { statement: [{ effect: 'Allow', action: allowedActions }] },
+          document: {
+            statement: [{ effect: 'Allow', action: allowedActions }],
+          },
         });
       expect(policyRes.status).toBe(201);
 

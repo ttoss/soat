@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   createApiKey,
   deleteApiKey,
@@ -10,7 +11,7 @@ import {
 } from 'src/lib/apiKeys';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
-import { isOwnerOrAdmin, parsePagination } from './helpers';
+import { parsePagination, requireAuth, requireOwnerOrAdmin } from './helpers';
 
 const apiKeysRouter = new Router<Context>();
 
@@ -70,11 +71,7 @@ const resolvePolicyIds = async (args: {
 };
 
 apiKeysRouter.get('/api-keys', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   // When authenticated with an API key scoped to a project,
   // only show API keys scoped to that project
@@ -100,11 +97,7 @@ apiKeysRouter.get('/api-keys', async (ctx: Context) => {
 });
 
 apiKeysRouter.post('/api-keys', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const {
     name,
@@ -119,16 +112,12 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
   // project_id is optional: an omitted or null value creates an unscoped key.
   const projectResult = await resolveProjectId({ projectId });
   if (projectResult.error) {
-    ctx.status = 400;
-    ctx.body = { error: projectResult.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', projectResult.error);
   }
 
   const policyResult = await resolvePolicyIds({ policyIds });
   if (policyResult.error) {
-    ctx.status = 400;
-    ctx.body = { error: policyResult.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', policyResult.error);
   }
 
   const apiKey = await createApiKey({
@@ -151,37 +140,23 @@ apiKeysRouter.post('/api-keys', async (ctx: Context) => {
 });
 
 apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const apiKey = await getApiKey({ id: ctx.params.api_key_id });
   if (!apiKey) {
-    ctx.status = 404;
-    ctx.body = { error: 'API key not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'API key not found');
   }
 
-  if (
-    !isOwnerOrAdmin(ctx, {
-      ownerPublicId: apiKey.user_id,
-      action: 'api-keys:GetApiKey',
-    })
-  ) {
-    return;
-  }
+  requireOwnerOrAdmin(ctx, {
+    ownerPublicId: apiKey.user_id,
+    action: 'api-keys:GetApiKey',
+  });
 
   ctx.body = apiKey;
 });
 
 apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const {
     name,
@@ -195,32 +170,22 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
 
   const existing = await getApiKey({ id: ctx.params.api_key_id });
   if (!existing) {
-    ctx.status = 404;
-    ctx.body = { error: 'API key not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'API key not found');
   }
 
-  if (
-    !isOwnerOrAdmin(ctx, {
-      ownerPublicId: existing.user_id,
-      action: 'api-keys:UpdateApiKey',
-    })
-  ) {
-    return;
-  }
+  requireOwnerOrAdmin(ctx, {
+    ownerPublicId: existing.user_id,
+    action: 'api-keys:UpdateApiKey',
+  });
 
   const projectResult = await resolveProjectId({ projectId });
   if (projectResult.error) {
-    ctx.status = 400;
-    ctx.body = { error: projectResult.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', projectResult.error);
   }
 
   const policyResult = await resolvePolicyIds({ policyIds });
   if (policyResult.error) {
-    ctx.status = 400;
-    ctx.body = { error: policyResult.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', policyResult.error);
   }
 
   const updated = await updateApiKey({
@@ -236,27 +201,17 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
 });
 
 apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const existing = await getApiKey({ id: ctx.params.api_key_id });
   if (!existing) {
-    ctx.status = 404;
-    ctx.body = { error: 'API key not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'API key not found');
   }
 
-  if (
-    !isOwnerOrAdmin(ctx, {
-      ownerPublicId: existing.user_id,
-      action: 'api-keys:DeleteApiKey',
-    })
-  ) {
-    return;
-  }
+  requireOwnerOrAdmin(ctx, {
+    ownerPublicId: existing.user_id,
+    action: 'api-keys:DeleteApiKey',
+  });
 
   await deleteApiKey({ id: ctx.params.api_key_id });
   ctx.status = 204;

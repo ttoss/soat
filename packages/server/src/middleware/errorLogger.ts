@@ -80,6 +80,48 @@ const isKoaHttpError = (error: unknown): error is KoaHttpError => {
   return typeof e.status === 'number' && typeof e.expose === 'boolean';
 };
 
+/**
+ * A body-parse failure from `co-body`: a client sent something that is not
+ * parseable as the declared content type.
+ *
+ * It carries `status = 400` and the offending payload as `body`, but **not**
+ * `expose`, so `isKoaHttpError` rejects it and the request answered `500` with
+ * `{"error":"Internal Server Error"}` — blaming the server for a malformed
+ * client request, and in the one response shape a client cannot branch on.
+ * `POST` with `Content-Type: application/json` and a body of `null` reproduces
+ * it on any route.
+ *
+ * Recognised here rather than guarded at each parse site because this middleware
+ * is the single place that maps an error to a response — the same reason the
+ * route handlers stopped writing error bodies of their own.
+ */
+const isBodyParseError = (
+  error: unknown
+): error is Error & { status: number; body?: unknown } => {
+  if (!(error instanceof Error)) return false;
+  const candidate = error as unknown as Record<string, unknown>;
+  return (
+    candidate.status === 400 &&
+    candidate.expose === undefined &&
+    'body' in candidate
+  );
+};
+
+/**
+ * Maps errors that are really client faults onto the one error contract, so
+ * everything below this line handles a single shape.
+ */
+const normalizeError = (error: unknown): unknown => {
+  if (isBodyParseError(error)) {
+    return new DomainError(
+      'VALIDATION_FAILED',
+      `Malformed request body: ${error.message}`
+    );
+  }
+
+  return error;
+};
+
 const getErrorStatus = (args: { error: unknown }) => {
   if (args.error instanceof DomainError) {
     return args.error.httpStatus;
@@ -170,7 +212,8 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
 const errorLoggerMiddleware = async (ctx: Context, next: Next) => {
   try {
     await next();
-  } catch (error) {
+  } catch (error_) {
+    const error = normalizeError(error_);
     const status = getErrorStatus({ error });
 
     if (

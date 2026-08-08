@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
   createSecret,
@@ -10,31 +11,25 @@ import {
 } from 'src/lib/secrets';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
 const secretsRouter = new Router<Context>();
 
 secretsRouter.get('/secrets', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'secrets:ListSecrets',
     resourceType: 'secret',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listSecrets({
     projectIds: projectIds ?? [],
@@ -43,11 +38,7 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
 });
 
 secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const secret = await getSecret({ id: ctx.params.secret_id });
 
@@ -61,17 +52,14 @@ secretsRouter.get('/secrets/:secret_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = secret;
 });
 
 secretsRouter.post('/secrets', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   // `name` and `value` are guaranteed present by the strict-field middleware
   // (both are `required` in the OpenAPI request schema).
   const body = ctx.request.body as {
@@ -86,8 +74,6 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
     action: 'secrets:CreateSecret',
     resourceType: 'secret',
   });
-  if (targetProjectId === null) return;
-
   const secret = await createSecret({
     projectId: Number(targetProjectId),
     name: body.name,
@@ -99,11 +85,7 @@ secretsRouter.post('/secrets', async (ctx: Context) => {
 });
 
 secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const secret = await getSecret({ id: ctx.params.secret_id });
 
@@ -117,9 +99,7 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as { name?: string; value?: string };
@@ -134,11 +114,7 @@ secretsRouter.patch('/secrets/:secret_id', async (ctx: Context) => {
 });
 
 secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const secret = await getSecret({ id: ctx.params.secret_id });
 
@@ -152,9 +128,7 @@ secretsRouter.delete('/secrets/:secret_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const force = ctx.query.force === 'true';

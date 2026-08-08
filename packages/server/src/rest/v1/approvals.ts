@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   approveApproval,
   getApproval,
@@ -10,7 +11,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, resolveProjectIdsWithAction } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 
 const approvalsRouter = new Router<Context>();
 
@@ -31,22 +32,16 @@ const approvalSrn = (approval: { id: string } & ProjectOwned): string => {
 };
 
 approvalsRouter.get('/approvals', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'approvals:ListApprovals',
     resourceType: 'approval',
   });
-
-  if (projectIds === null) return;
 
   const expiresBeforeRaw = ctx.query.expires_before as string | undefined;
 
@@ -62,22 +57,16 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
 // Registered before `/approvals/:approval_id` so the static `recurrences`
 // segment matches this handler rather than binding as an `:approval_id` value.
 approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'approvals:ListApprovalRecurrences',
     resourceType: 'approval',
   });
-
-  if (projectIds === null) return;
 
   const minCountRaw = ctx.query.min_count as string | undefined;
   const minCount =
@@ -92,11 +81,7 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
 });
 
 approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const approval = await getApproval({ id: ctx.params.approval_id });
 
@@ -106,9 +91,7 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
     resource: approvalSrn(approval),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = approval;
@@ -117,11 +100,7 @@ approvalsRouter.get('/approvals/:approval_id', async (ctx: Context) => {
 approvalsRouter.post(
   '/approvals/:approval_id/approve',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const approval = await getApproval({ id: ctx.params.approval_id });
 
@@ -131,12 +110,10 @@ approvalsRouter.post(
       resource: approvalSrn(approval),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    const body = (ctx.request.body ?? {}) as { arguments?: object };
+    const body = ctx.request.body as { arguments?: object };
 
     const { item } = await approveApproval({
       id: ctx.params.approval_id,
@@ -149,11 +126,7 @@ approvalsRouter.post(
 );
 
 approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const approval = await getApproval({ id: ctx.params.approval_id });
 
@@ -163,9 +136,7 @@ approvalsRouter.post('/approvals/:approval_id/reject', async (ctx: Context) => {
     resource: approvalSrn(approval),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   // `reason` is guaranteed present by the strict-field middleware (required in

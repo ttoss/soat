@@ -1,9 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
-import { resolveProjectIdsWithAction } from './helpers';
+import { requireAuth, resolveReadProjectIds } from './helpers';
 
 const knowledgeRouter = new Router<Context>();
 
@@ -60,31 +61,23 @@ const resolvePolicyWhere = async (
 };
 
 knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as KnowledgeSearchBody;
 
   if (!hasSearchFilters(body)) {
-    ctx.status = 400;
-    ctx.body = {
-      error:
-        'At least one of query, memory_ids, memory_tags, document_paths, or document_ids is required',
-    };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'At least one of query, memory_ids, memory_tags, document_paths, or document_ids is required'
+    );
   }
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId: body.project_id,
     action: 'knowledge:SearchKnowledge',
     resourceType: 'document',
   });
-
-  if (projectIds === null) return;
 
   const { forbidden, policyWhere } = await resolvePolicyWhere(ctx, body);
   if (forbidden) {

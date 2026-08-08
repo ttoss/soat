@@ -17,9 +17,9 @@ import {
 } from 'src/lib/triggers';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -42,24 +42,18 @@ const resolvePolicyId = async (
 };
 
 triggersRouter.get('/triggers', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const type = ctx.query.type as string | undefined;
   const targetType = ctx.query.target_type as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
   });
-  if (projectIds === null) return;
-
   ctx.body = await listTriggers({
     projectIds: projectIds ?? [],
     type,
@@ -69,11 +63,7 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
 });
 
 triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
@@ -87,17 +77,14 @@ triggersRouter.get('/triggers/:trigger_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = trigger;
 });
 
 triggersRouter.post('/triggers', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     name: string;
@@ -118,8 +105,6 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     action: 'triggers:CreateTrigger',
     resourceType: 'trigger',
   });
-  if (targetProjectId === null) return;
-
   // No privilege escalation: the caller must also hold the target-start action.
   const projectPublicId =
     body.project_id ?? ctx.authUser!.apiKeyProjectPublicId;
@@ -133,9 +118,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
     }),
   });
   if (!canStartTarget) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const policyId = await resolvePolicyId(body.policy_id);
@@ -160,11 +143,7 @@ triggersRouter.post('/triggers', async (ctx: Context) => {
 });
 
 triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
@@ -178,9 +157,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -210,9 +187,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
       }),
     });
     if (!canStartTarget) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
   }
 
@@ -238,11 +213,7 @@ triggersRouter.patch('/triggers/:trigger_id', async (ctx: Context) => {
 });
 
 triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
@@ -256,9 +227,7 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteTrigger({ id: ctx.params.trigger_id });
@@ -266,11 +235,7 @@ triggersRouter.delete('/triggers/:trigger_id', async (ctx: Context) => {
 });
 
 triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   // No recursion: a trigger run-as credential cannot fire a trigger.
   if (ctx.authUser.isTriggerToken) {
@@ -292,12 +257,10 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
-  const body = (ctx.request.body ?? {}) as {
+  const body = ctx.request.body as {
     input?: Record<string, unknown>;
   };
 
@@ -312,11 +275,7 @@ triggersRouter.post('/triggers/:trigger_id/fire', async (ctx: Context) => {
 });
 
 triggersRouter.get('/trigger-firings', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const triggerPublicId = ctx.query.trigger_id as string | undefined;
   if (!triggerPublicId) {
@@ -337,9 +296,7 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const limit = ctx.query.limit ? Number(ctx.query.limit) : undefined;
@@ -353,11 +310,7 @@ triggersRouter.get('/trigger-firings', async (ctx: Context) => {
 });
 
 triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const firing = await getTriggerFiring({ id: ctx.params.firing_id });
 
@@ -371,20 +324,14 @@ triggersRouter.get('/trigger-firings/:firing_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = firing;
 });
 
 triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
@@ -398,9 +345,7 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = await getTriggerSecret({ id: ctx.params.trigger_id });
@@ -409,11 +354,7 @@ triggersRouter.get('/triggers/:trigger_id/secret', async (ctx: Context) => {
 triggersRouter.post(
   '/triggers/:trigger_id/rotate-secret',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const trigger = await getTrigger({ id: ctx.params.trigger_id });
 
@@ -427,9 +368,7 @@ triggersRouter.post(
       }),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     ctx.body = await rotateTriggerSecret({ id: ctx.params.trigger_id });

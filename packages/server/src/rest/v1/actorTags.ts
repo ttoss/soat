@@ -1,7 +1,10 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { getActor, getActorTags, updateActorTags } from 'src/lib/actors';
 import { buildSrn } from 'src/lib/iam';
+
+import { requireAuth } from './helpers';
 
 const actorTagsRouter = new Router<Context>();
 
@@ -16,11 +19,7 @@ const buildActorTagContext = (actor: {
 };
 
 actorTagsRouter.get('/actors/:actor_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -36,20 +35,14 @@ actorTagsRouter.get('/actors/:actor_id/tags', async (ctx: Context) => {
     context: buildActorTagContext(actor),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = await getActorTags({ id: ctx.params.actor_id });
 });
 
 actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -65,9 +58,7 @@ actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
     context: buildActorTagContext(actor),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const tags = ctx.request.body as Record<string, string>;
@@ -79,11 +70,7 @@ actorTagsRouter.put('/actors/:actor_id/tags', async (ctx: Context) => {
 });
 
 actorTagsRouter.patch('/actors/:actor_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -99,9 +86,7 @@ actorTagsRouter.patch('/actors/:actor_id/tags', async (ctx: Context) => {
     context: buildActorTagContext(actor),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const tags = ctx.request.body as Record<string, string>;

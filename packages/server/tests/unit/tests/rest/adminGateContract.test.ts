@@ -22,9 +22,18 @@ import { join } from 'node:path';
 
 const ROUTES_DIR = join(__dirname, '../../../../src/rest/v1');
 
-/** A role comparison, and the `403` it answers with, within a few lines. */
+/**
+ * A role comparison, and the `403` it answers with, within a few lines.
+ *
+ * Both denial forms count. `ctx.status = 403` was the only one that existed when
+ * this check was written; once the error-shape convergence (#913) replaced the
+ * manual bodies with `throw new DomainError('FORBIDDEN', …)`, matching only the
+ * old form would have left the check passing vacuously — green because the
+ * spelling it hunts for no longer appears anywhere, not because no route
+ * hand-rolls the gate.
+ */
 const HAND_ROLLED_GATE =
-  /role\s*!==\s*'admin'[\s\S]{0,120}?ctx\.status = 403/g;
+  /role\s*!==\s*'admin'[\s\S]{0,120}?(?:ctx\.status = 403|DomainError\(\s*'FORBIDDEN')/g;
 
 test('no route hand-rolls the admin gate', () => {
   const offenders: string[] = [];

@@ -12,8 +12,8 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
-  checkAuth,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -39,8 +39,7 @@ type UpdateBody = Partial<Omit<CreateBody, 'projectId' | 'contentTypeGlob'>> & {
 };
 
 ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
   const limit = ctx.query.limit
     ? parseInt(ctx.query.limit as string, 10)
@@ -49,29 +48,24 @@ ingestionRulesRouter.get('/ingestion-rules', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'ingestion-rules:ListIngestionRules',
     resourceType: 'ingestionRule',
   });
-  if (projectIds === null) return;
-
   ctx.body = await listIngestionRules({ projectIds, limit, offset });
 });
 
 ingestionRulesRouter.get(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!checkAuth(ctx)) return;
-
-    const projectIds = await resolveProjectIdsWithAction({
+    requireAuth(ctx);
+    const projectIds = await resolveReadProjectIds({
       ctx,
       action: 'ingestion-rules:GetIngestionRule',
       resourceType: 'ingestionRule',
     });
-    if (projectIds === null) return;
-
     // Scoping the fetch by projectIds (rather than checking permission after
     // an unscoped lookup) converges "doesn't exist" and "exists in a project
     // the caller cannot access" into the same 404 — a cross-project id must
@@ -84,8 +78,7 @@ ingestionRulesRouter.get(
 );
 
 ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as CreateBody;
 
   const targetProjectId = await resolveWriteProjectId({
@@ -94,8 +87,6 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
     action: 'ingestion-rules:CreateIngestionRule',
     resourceType: 'ingestionRule',
   });
-  if (targetProjectId === null) return;
-
   const refs = await resolveConverterRefs({
     projectIds: [Number(targetProjectId)],
     toolId: body.tool_id,
@@ -124,15 +115,12 @@ ingestionRulesRouter.post('/ingestion-rules', async (ctx: Context) => {
 ingestionRulesRouter.patch(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!checkAuth(ctx)) return;
-
-    const projectIds = await resolveProjectIdsWithAction({
+    requireAuth(ctx);
+    const projectIds = await resolveReadProjectIds({
       ctx,
       action: 'ingestion-rules:UpdateIngestionRule',
       resourceType: 'ingestionRule',
     });
-    if (projectIds === null) return;
-
     const body = ctx.request.body as UpdateBody;
 
     const refs = await resolveConverterRefs({
@@ -162,15 +150,12 @@ ingestionRulesRouter.patch(
 ingestionRulesRouter.delete(
   '/ingestion-rules/:ingestion_rule_id',
   async (ctx: Context) => {
-    if (!checkAuth(ctx)) return;
-
-    const projectIds = await resolveProjectIdsWithAction({
+    requireAuth(ctx);
+    const projectIds = await resolveReadProjectIds({
       ctx,
       action: 'ingestion-rules:DeleteIngestionRule',
       resourceType: 'ingestionRule',
     });
-    if (projectIds === null) return;
-
     // The success response is `204 No Content`, so the audit middleware has
     // no body to backfill the project/SRN from — hand it the resolved
     // resource before the delete runs (see `setAuditResourceHint`).

@@ -19,9 +19,9 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -73,11 +73,7 @@ const assertNoMissingParams = (
 };
 
 formationsRouter.post('/formations/validate', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as {
     template?: unknown;
@@ -101,8 +97,7 @@ formationsRouter.post('/formations/validate', async (ctx: Context) => {
 });
 
 formationsRouter.post('/formations/plan', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     formation_id?: string;
@@ -116,14 +111,12 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
     action: 'formations:PlanFormation',
     resourceType: 'formation',
   });
-  if (targetProjectId === null) return;
-
   const parsedTemplate = parseFormationTemplateInput(body.template);
   const validation = validateFormationTemplate(parsedTemplate);
   if (!validation.valid) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid template', details: validation.errors };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
+      details: validation.errors,
+    });
   }
 
   const plan = await planFormation({
@@ -136,8 +129,7 @@ formationsRouter.post('/formations/plan', async (ctx: Context) => {
 });
 
 formationsRouter.post('/formations', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     name: string;
@@ -152,14 +144,12 @@ formationsRouter.post('/formations', async (ctx: Context) => {
     action: 'formations:CreateFormation',
     resourceType: 'formation',
   });
-  if (targetProjectId === null) return;
-
   const parsedTemplate = parseFormationTemplateInput(body.template);
   const validation = validateFormationTemplate(parsedTemplate);
   if (!validation.valid) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid template', details: validation.errors };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
+      details: validation.errors,
+    });
   }
 
   assertNoMissingParams(parsedTemplate as FormationTemplate, body.parameters);
@@ -178,22 +168,16 @@ formationsRouter.post('/formations', async (ctx: Context) => {
 });
 
 formationsRouter.get('/formations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'formations:ListFormations',
     resourceType: 'formation',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listFormations({
     projectIds: projectIds ?? [],
@@ -202,11 +186,7 @@ formationsRouter.get('/formations', async (ctx: Context) => {
 });
 
 formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
@@ -220,20 +200,14 @@ formationsRouter.get('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = formation;
 });
 
 formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
@@ -247,9 +221,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -265,9 +237,9 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
     parsedTemplate = parseFormationTemplateInput(body.template);
     const validation = validateFormationTemplate(parsedTemplate);
     if (!validation.valid) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid template', details: validation.errors };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'Invalid template', {
+        details: validation.errors,
+      });
     }
 
     assertNoMissingParams(
@@ -288,11 +260,7 @@ formationsRouter.put('/formations/:formation_id', async (ctx: Context) => {
 });
 
 formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const formation = await getFormation({ id: ctx.params.formation_id });
 
@@ -306,9 +274,7 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const result = await deleteFormation({ id: ctx.params.formation_id });
@@ -319,11 +285,7 @@ formationsRouter.delete('/formations/:formation_id', async (ctx: Context) => {
 formationsRouter.get(
   '/formations/:formation_id/events',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const formation = await getFormation({ id: ctx.params.formation_id });
 
@@ -337,9 +299,7 @@ formationsRouter.get(
       }),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     ctx.body = await listFormationEvents({

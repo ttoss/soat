@@ -124,6 +124,27 @@ describe('Quotas', () => {
       expect(res.body.current_usage.resets_at).toBeDefined();
     });
 
+    test('accepts an explicit null scope_ref', async () => {
+      const res = await createQuota(userToken, {
+        scope: 'project',
+        scope_ref: null,
+        metric: 'tokens',
+        window: 'rolling_24h',
+        limit: 42,
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body.scope_ref).toBeNull();
+    });
+
+    test('an entirely absent body is a validation error, not a crash', async () => {
+      const res =
+        await authenticatedTestClient(userToken).post('/api/v1/quotas');
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('creates a fractional cost_usd quota with monitor mode (201)', async () => {
       const res = await createQuota(userToken, {
         scope: 'project',

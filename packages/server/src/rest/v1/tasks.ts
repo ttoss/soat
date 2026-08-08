@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { principalFromAuthUser } from 'src/lib/principals';
 import {
@@ -14,9 +15,9 @@ import {
 } from 'src/lib/tasks';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -42,17 +43,14 @@ const principalFromCtx = (ctx: Context): TaskPrincipal => {
  * Managed via packages/server/src/rest/openapi/v1/tasks.yaml
  */
 tasksRouter.get('/tasks', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'tasks:ListTasks',
     resourceType: 'task',
   });
-  if (projectIds === null) return;
-
   ctx.body = await listTasks({
     projectIds: projectIds ?? [],
     workflowId: ctx.query.workflow_id as string | undefined,
@@ -64,8 +62,7 @@ tasksRouter.get('/tasks', async (ctx: Context) => {
 });
 
 tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -78,17 +75,14 @@ tasksRouter.get('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = task;
 });
 
 tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -101,17 +95,14 @@ tasksRouter.get('/tasks/:task_id/history', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = await getTaskHistory({ id: ctx.params.task_id });
 });
 
 tasksRouter.post('/tasks', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     workflow_id: string;
@@ -127,8 +118,6 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
     action: 'tasks:CreateTask',
     resourceType: 'task',
   });
-  if (projectId === null) return;
-
   const task = await createTask({
     projectId,
     workflowId: body.workflow_id,
@@ -144,8 +133,7 @@ tasksRouter.post('/tasks', async (ctx: Context) => {
 });
 
 tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -158,9 +146,7 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -178,8 +164,7 @@ tasksRouter.patch('/tasks/:task_id', async (ctx: Context) => {
 });
 
 tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -192,9 +177,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -215,8 +198,7 @@ tasksRouter.post('/tasks/:task_id/transitions', async (ctx: Context) => {
 });
 
 tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const task = await getTask({ id: ctx.params.task_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -229,9 +211,7 @@ tasksRouter.delete('/tasks/:task_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteTask({ id: ctx.params.task_id });

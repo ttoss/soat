@@ -7,7 +7,7 @@ import {
   restoreOrchestrationVersion,
 } from 'src/lib/orchestrationVersions';
 
-import { parsePagination } from './helpers';
+import { parsePagination, resolveReadProjectIds } from './helpers';
 
 /**
  * Orchestration graph version history (issue #872).
@@ -34,27 +34,6 @@ const parseVersionParam = (raw: string): number => {
   return version;
 };
 
-const checkOrchestrationAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'orchestration',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds ?? undefined;
-};
-
 /**
  * @openapi
  * /api/v1/orchestrations/{orchestration_id}/versions:
@@ -64,12 +43,11 @@ const checkOrchestrationAccess = async (
 orchestrationVersionsRouter.get(
   '/orchestrations/:orchestration_id/versions',
   async (ctx: Context) => {
-    const projectIds = await checkOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:ListOrchestrationVersions'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:ListOrchestrationVersions',
+      resourceType: 'orchestration',
+    });
     ctx.body = await listOrchestrationVersions({
       projectIds,
       orchestrationId: ctx.params['orchestration_id'] as string,
@@ -87,12 +65,11 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.get(
   '/orchestrations/:orchestration_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await checkOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:GetOrchestrationVersion'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:GetOrchestrationVersion',
+      resourceType: 'orchestration',
+    });
     ctx.body = await getOrchestrationVersion({
       projectIds,
       orchestrationId: ctx.params['orchestration_id'] as string,
@@ -110,13 +87,12 @@ orchestrationVersionsRouter.get(
 orchestrationVersionsRouter.post(
   '/orchestrations/:orchestration_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await checkOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:RestoreOrchestrationVersion'
-    );
-    if (projectIds === null) return;
-
-    const body = (ctx.request.body ?? {}) as { label?: unknown };
+      action: 'orchestrations:RestoreOrchestrationVersion',
+      resourceType: 'orchestration',
+    });
+    const body = ctx.request.body as { label?: unknown };
 
     ctx.body = await restoreOrchestrationVersion({
       projectIds,

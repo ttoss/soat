@@ -16,10 +16,11 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
-  checkAuth,
   parsePagination,
   requireAdmin,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -48,25 +49,13 @@ type UpsertPricesBody = {
  * input/output/cached/reasoning token counts.
  */
 usageRouter.get('/usage/meters', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'usage:ListUsageMeters',
     resourceType: 'usage',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const {
     agent_id: agentId,
@@ -109,9 +98,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
  * usage:GetUsage on the project.
  */
 usageRouter.get('/usage', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
   const {
     project_id: projectPublicId,
@@ -127,7 +114,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
     );
   }
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'usage:GetUsage',
@@ -161,21 +148,13 @@ usageRouter.get('/usage', async (ctx: Context) => {
  * window crosses the configured value. Requires usage:ListThresholds.
  */
 usageRouter.get('/usage/thresholds', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'usage:ListThresholds',
     resourceType: 'usage',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   const { project_id: projectId } = ctx.query as Record<
     string,
@@ -198,8 +177,7 @@ usageRouter.get('/usage/thresholds', async (ctx: Context) => {
  * are immutable apart from deletion. Requires usage:ManageThresholds.
  */
 usageRouter.post('/usage/thresholds', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     metric?: string;
@@ -213,8 +191,6 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
     action: 'usage:ManageThresholds',
     resourceType: 'usage',
   });
-  if (targetProjectId === null) return;
-
   if (
     body.metric === undefined ||
     body.window === undefined ||
@@ -243,21 +219,13 @@ usageRouter.post('/usage/thresholds', async (ctx: Context) => {
  * usage:ManageThresholds.
  */
 usageRouter.delete('/usage/thresholds/:threshold_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'usage:ManageThresholds',
     resourceType: 'usage',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
@@ -351,25 +319,13 @@ const resolveReceipt = async (args: {
  * version that priced them, and cost, plus totals).
  */
 usageRouter.get('/usage/receipt', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'usage:GetReceipt',
     resourceType: 'usage',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const {
     generation_id: generationId,
@@ -391,11 +347,7 @@ usageRouter.get('/usage/receipt', async (ctx: Context) => {
  * used to compute usage cost. Readable by any authenticated user.
  */
 usageRouter.get('/usage/prices', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   ctx.body = await listPrices();
 });
@@ -409,8 +361,7 @@ usageRouter.get('/usage/prices', async (ctx: Context) => {
  * costs stay explainable.
  */
 usageRouter.put('/usage/prices', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'usage:ManagePriceBook')) return;
-
+  requireAdmin(ctx, 'usage:ManagePriceBook');
   const body = ctx.request.body as UpsertPricesBody;
   ctx.body = await upsertPrices({
     prices: (body.prices ?? []).map((price) => {

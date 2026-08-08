@@ -3,15 +3,15 @@ import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { createEmbeddings } from 'src/lib/embeddings';
 
+import { requireAuth } from './helpers';
+
 const embeddingsRouter = new Router<Context>();
 
 /**
  * @openapi embeddings.yaml
  */
 embeddingsRouter.post('/embeddings', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as {
     input?: string;

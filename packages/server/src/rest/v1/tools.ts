@@ -16,7 +16,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination, resolveProjectIdsWithAction } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 
 export const toolsRouter = new Router<Context>();
 
@@ -83,47 +83,19 @@ const resolveToolProjectId = async (
   ctx: Context,
   action: string,
   projectPublicId?: string
-): Promise<number | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await resolveProjectIdsWithAction({
+): Promise<number> => {
+  requireAuth(ctx);
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action,
     resourceType: 'tool',
   });
-  if (projectIds === null) return null;
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return null;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
   return targetProjectId!;
-};
-
-const checkToolsAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'tool',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds;
 };
 
 /**
@@ -133,15 +105,13 @@ const checkToolsAccess = async (
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools/post'
  */
 toolsRouter.post('/tools', async (ctx: Context) => {
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  const body = ctx.request.body as Record<string, unknown>;
   const { name, type, description, actions } = body;
   const deniedActions = body.denied_actions;
   const projectPublicId = body.project_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'name is required');
   }
 
   const targetProjectId = await resolveToolProjectId(
@@ -182,22 +152,16 @@ toolsRouter.post('/tools', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools/get'
  */
 toolsRouter.get('/tools', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'tools:ListTools',
     resourceType: 'tool',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listTools({ projectIds, ...parsePagination(ctx) });
 });
@@ -209,22 +173,13 @@ toolsRouter.get('/tools', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/get'
  */
 toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'tools:GetTool',
     resourceType: 'tool',
   });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const result = await getTool({
     projectIds,
@@ -241,10 +196,12 @@ toolsRouter.get('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/patch'
  */
 toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
-  const projectIds = await checkToolsAccess(ctx, 'tools:UpdateTool');
-  if (projectIds === null) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'tools:UpdateTool',
+    resourceType: 'tool',
+  });
+  const body = ctx.request.body as Record<string, unknown>;
   const {
     name,
     type,
@@ -318,22 +275,13 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}/delete'
  */
 toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'tools:DeleteTool',
     resourceType: 'tool',
   });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
@@ -387,24 +335,15 @@ const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
  *     $ref: 'openapi/v1/tools.yaml#/paths/~1api~1v1~1tools~1{tool_id}~1call/post'
  */
 toolsRouter.post('/tools/:tool_id/call', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'tools:CallTool',
     resourceType: 'tool',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
-
-  const { action, input } = (ctx.request.body ?? {}) as {
+  const { action, input } = ctx.request.body as {
     action?: unknown;
     input?: unknown;
   };

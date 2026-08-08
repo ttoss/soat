@@ -3,6 +3,7 @@ import { MEMORY_ENTRY_SOURCES } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import { getMemory } from 'src/lib/memories';
 import {
@@ -13,7 +14,7 @@ import {
   writeMemoryEntry,
 } from 'src/lib/memoryEntries';
 
-import { parsePagination } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
 
 export const memoryEntriesRouter = new Router<Context>();
 
@@ -79,15 +80,11 @@ const resolveMemoryForAction = async (
   action: string
 ): Promise<number | null> => {
   if (!memoryPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'memory_id is required' };
-    return null;
+    throw new DomainError('VALIDATION_FAILED', 'memory_id is required');
   }
   const memory = await getMemory({ id: memoryPublicId });
   if (!memory) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory not found' };
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
   }
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: memory.project_id!,
@@ -99,9 +96,7 @@ const resolveMemoryForAction = async (
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
   const memoryRow = await db.Memory.findOne({
     where: { publicId: memoryPublicId },
@@ -121,15 +116,11 @@ const resolveEntryForAction = async (
 ): Promise<Awaited<ReturnType<typeof getMemoryEntry>> | null> => {
   const entry = await getMemoryEntry({ id: entryId });
   if (!entry) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory entry not found' };
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory entry not found');
   }
   const memory = await getMemory({ id: entry.memory_id! });
   if (!memory) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory entry not found' };
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory entry not found');
   }
   const allowed = await ctx.authUser!.isAllowed({
     projectPublicId: memory.project_id!,
@@ -141,19 +132,13 @@ const resolveEntryForAction = async (
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
   return entry;
 };
 
 memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const memoryRowId = await resolveMemoryForAction(
     ctx,
@@ -169,11 +154,7 @@ memoryEntriesRouter.get('/memory-entries', async (ctx: Context) => {
 });
 
 memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as {
     memory_id?: string;
@@ -187,9 +168,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
 
   const validationError = validateTagsMetadata(body, { allowNull: false });
   if (validationError) {
-    ctx.status = 400;
-    ctx.body = { error: validationError };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
   const memoryRowId = await resolveMemoryForAction(
@@ -214,11 +193,7 @@ memoryEntriesRouter.post('/memory-entries', async (ctx: Context) => {
 });
 
 memoryEntriesRouter.get('/memory-entries/:entry_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const entry = await resolveEntryForAction(
     ctx,
@@ -231,11 +206,7 @@ memoryEntriesRouter.get('/memory-entries/:entry_id', async (ctx: Context) => {
 });
 
 memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const entry = await resolveEntryForAction(
     ctx,
@@ -252,9 +223,7 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
 
   const validationError = validateTagsMetadata(body, { allowNull: true });
   if (validationError) {
-    ctx.status = 400;
-    ctx.body = { error: validationError };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
   ctx.body = await updateMemoryEntry({
@@ -271,11 +240,7 @@ memoryEntriesRouter.put('/memory-entries/:entry_id', async (ctx: Context) => {
 memoryEntriesRouter.delete(
   '/memory-entries/:entry_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const entry = await resolveEntryForAction(
       ctx,

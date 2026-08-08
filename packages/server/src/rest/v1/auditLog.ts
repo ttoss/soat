@@ -9,7 +9,7 @@ import {
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
 
-import { resolveProjectIdsWithAction } from './helpers';
+import { requireAuth, resolveReadProjectIds } from './helpers';
 
 const auditLogRouter = new Router<Context>();
 
@@ -55,22 +55,16 @@ const parseIntParam = (args: {
 };
 
 auditLogRouter.get('/audit-log', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'audit:ListAuditEntries',
     resourceType: 'audit',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listAuditEntries({
     projectIds,
@@ -88,30 +82,22 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
 // Registered before `/audit-log/:entry_id` so `export` is matched as a literal
 // path segment rather than swallowed as an entry id.
 auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
   // Export is deliberately per-project: an unbounded cross-project dump is a
   // different (and much larger) egress surface than this endpoint offers.
   if (!projectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'audit:ExportAuditEntries',
     resourceType: 'audit',
   });
-
-  if (projectIds === null) return;
 
   const filename = `audit-log-${projectPublicId}.ndjson`;
   ctx.set('Content-Type', 'application/x-ndjson');
@@ -132,22 +118,13 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
 });
 
 auditLogRouter.get('/audit-log/:entry_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'audit:GetAuditEntry',
     resourceType: 'audit',
   });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   ctx.body = await getAuditEntry({ id: ctx.params.entry_id, projectIds });
 });

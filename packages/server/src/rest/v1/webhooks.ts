@@ -16,9 +16,9 @@ import {
 } from 'src/lib/webhooks';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -41,22 +41,16 @@ const resolvePolicyId = async (
 const webhooksRouter = new Router<Context>();
 
 webhooksRouter.get('/webhooks', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'webhooks:ListWebhooks',
     resourceType: 'webhook',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listWebhooks({
     projectIds: projectIds ?? [],
@@ -65,8 +59,7 @@ webhooksRouter.get('/webhooks', async (ctx: Context) => {
 });
 
 webhooksRouter.post('/webhooks', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     name?: string;
@@ -82,14 +75,11 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
     action: 'webhooks:CreateWebhook',
     resourceType: 'webhook',
   });
-  if (targetProjectId === null) return;
-
   if (!body.name || !body.url || !body.events || body.events.length === 0) {
-    ctx.status = 400;
-    ctx.body = {
-      error: 'name, url, and events are required',
-    };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'name, url, and events are required'
+    );
   }
 
   const policyId = await resolvePolicyId(body.policy_id);
@@ -108,17 +98,11 @@ webhooksRouter.post('/webhooks', async (ctx: Context) => {
 });
 
 webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const webhook = await getWebhook({ id: ctx.params.webhook_id });
   if (!webhook) {
-    ctx.status = 404;
-    ctx.body = { error: 'Webhook not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -131,26 +115,18 @@ webhooksRouter.get('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = webhook;
 });
 
 webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const webhook = await getWebhook({ id: ctx.params.webhook_id });
   if (!webhook) {
-    ctx.status = 404;
-    ctx.body = { error: 'Webhook not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -163,9 +139,7 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -196,17 +170,11 @@ webhooksRouter.put('/webhooks/:webhook_id', async (ctx: Context) => {
 });
 
 webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const webhook = await getWebhook({ id: ctx.params.webhook_id });
   if (!webhook) {
-    ctx.status = 404;
-    ctx.body = { error: 'Webhook not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -219,9 +187,7 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteWebhook({ id: ctx.params.webhook_id });
@@ -232,24 +198,16 @@ webhooksRouter.delete('/webhooks/:webhook_id', async (ctx: Context) => {
 // delivery belongs to a webhook; access is governed by the owning webhook's
 // project. Listing requires webhook_id (deliveries have no project of their own).
 webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const webhookPublicId = ctx.query.webhook_id as string | undefined;
   if (!webhookPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'webhook_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'webhook_id is required');
   }
 
   const webhook = await getWebhook({ id: webhookPublicId });
   if (!webhook) {
-    ctx.status = 404;
-    ctx.body = { error: 'Webhook not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -262,9 +220,7 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const webhookRecord = await db.Webhook.findOne({
@@ -284,24 +240,16 @@ webhooksRouter.get('/webhook-deliveries', async (ctx: Context) => {
 });
 
 webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const delivery = await getWebhookDelivery({ id: ctx.params.delivery_id });
   if (!delivery) {
-    ctx.status = 404;
-    ctx.body = { error: 'Delivery not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
   }
 
   const webhook = await getWebhook({ id: delivery.webhook_id! });
   if (!webhook) {
-    ctx.status = 404;
-    ctx.body = { error: 'Delivery not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Delivery not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -314,18 +262,14 @@ webhooksRouter.get('/webhook-deliveries/:delivery_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = delivery;
 });
 
 webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
   const webhook = await getWebhook({ id: ctx.params.webhook_id });
   if (!webhook) {
@@ -355,17 +299,11 @@ webhooksRouter.get('/webhooks/:webhook_id/secret', async (ctx: Context) => {
 webhooksRouter.post(
   '/webhooks/:webhook_id/rotate-secret',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const webhook = await getWebhook({ id: ctx.params.webhook_id });
     if (!webhook) {
-      ctx.status = 404;
-      ctx.body = { error: 'Webhook not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Webhook not found');
     }
 
     const allowed = await ctx.authUser.isAllowed({
@@ -378,9 +316,7 @@ webhooksRouter.post(
       }),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const rotated = await rotateWebhookSecret({

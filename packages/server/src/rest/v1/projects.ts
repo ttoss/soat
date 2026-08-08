@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { listProjectPrices, upsertProjectPrices } from 'src/lib/priceBook';
 import {
   createProject,
@@ -13,7 +14,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { requireAdmin } from './helpers';
+import { requireAdmin, requireAuth } from './helpers';
 
 const projectsRouter = new Router<Context>();
 
@@ -36,11 +37,7 @@ const authorizeProjectPrices = async (args: {
   action: string;
 }): Promise<string | null> => {
   const { ctx, action } = args;
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.params.project_id;
   const allowed = await ctx.authUser.isAllowed({
@@ -51,23 +48,18 @@ const authorizeProjectPrices = async (args: {
     resource: `soat:${projectPublicId}:*:*`,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   return projectPublicId;
 };
 
 projectsRouter.post('/projects', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'projects:CreateProject')) return;
-
+  requireAdmin(ctx, 'projects:CreateProject');
   const { name } = ctx.request.body as { name?: string };
 
   if (!name || typeof name !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'name is required');
   }
 
   const project = await createProject({ name });
@@ -77,22 +69,14 @@ projectsRouter.post('/projects', async (ctx: Context) => {
 });
 
 projectsRouter.get('/projects', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projects = await listProjects({ authUser: ctx.authUser });
   ctx.body = projects;
 });
 
 projectsRouter.get('/projects/:project_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const result = await getProject({
     id: ctx.params.project_id,
@@ -147,8 +131,7 @@ const parseProjectPatchFields = (body: Record<string, unknown>) => {
 };
 
 projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'projects:UpdateProject')) return;
-
+  requireAdmin(ctx, 'projects:UpdateProject');
   const fields = parseProjectPatchFields(
     ctx.request.body as Record<string, unknown>
   );
@@ -167,12 +150,10 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
       return value === undefined;
     })
   ) {
-    ctx.status = 400;
-    ctx.body = {
-      error:
-        'name, guardrail_ids, max_concurrent_runs, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required',
-    };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'name, guardrail_ids, max_concurrent_runs, default_model_route_id, audit_reads_enabled, trace_content_retention_days, or trace_content_mode is required'
+    );
   }
 
   if (guardrailIds !== undefined) {
@@ -203,8 +184,7 @@ projectsRouter.patch('/projects/:project_id', async (ctx: Context) => {
 });
 
 projectsRouter.delete('/projects/:project_id', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'projects:DeleteProject')) return;
-
+  requireAdmin(ctx, 'projects:DeleteProject');
   const force = ctx.query.force === 'true';
 
   await deleteProject({ id: ctx.params.project_id, force });

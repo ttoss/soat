@@ -186,6 +186,33 @@ describe('Files', () => {
       );
     });
 
+    /**
+     * The DB row and the stored object can diverge — a restore that misses the
+     * storage volume, or a manual cleanup. The route must say so rather than
+     * stream an empty body with a `200`.
+     */
+    test('returns 404 when the row survives but the object is gone', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('vanishing'), {
+          filename: 'vanishing.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      const orphanId = res.body.id;
+
+      const row = await db.File.findOne({ where: { publicId: orphanId } });
+      fs.rmSync(row!.storagePath, { force: true });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files/${orphanId}/download`
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toBe('File not found on disk');
+    });
+
     test('unauthenticated request cannot download a file', async () => {
       const response = await testClient.get(`/api/v1/files/${fileId}/download`);
 
@@ -442,6 +469,28 @@ describe('Files', () => {
       expect(response.body.size).toBe(Buffer.from(originalContent).length);
     });
 
+    test('returns 404 when the row survives but the object is gone', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/files/upload')
+        .attach('file', Buffer.from('vanishing'), {
+          filename: 'vanishing-b64.txt',
+          contentType: 'text/plain',
+        })
+        .field('project_id', projectId);
+      const orphanId = res.body.id;
+
+      const row = await db.File.findOne({ where: { publicId: orphanId } });
+      fs.rmSync(row!.storagePath, { force: true });
+
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/files/${orphanId}/download/base64`
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toBe('File not found on disk');
+    });
+
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.get(
         `/api/v1/files/${fileId}/download/base64`
@@ -517,10 +566,8 @@ describe('Files', () => {
         .send({ content, filename: 'missing-project.txt' });
 
       expect(response.status).toBe(400);
-      // Legacy plain-string body from the shared `resolveWriteProjectId`
-      // helper (rest/v1/helpers.ts), used across ~13 route files — not
-      // migrated to DomainError here to avoid a cross-cutting route change.
-      expect(response.body.error).toMatch(/project_id is required/i);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/project_id is required/i);
     });
 
     test('returns 403 when user has no upload permission', async () => {
@@ -635,7 +682,8 @@ describe('Files', () => {
         .send({ project_id: 'proj_nonexistent12345', filename: 'x.txt' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid project ID');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('Invalid project ID');
     });
   });
 
@@ -827,7 +875,8 @@ describe('Files', () => {
         });
 
       expect(response.status).toBe(403);
-      expect(response.body.error).toBe('Forbidden');
+      expect(response.body.error.code).toBe('FORBIDDEN');
+      expect(response.body.error.message).toBe('Forbidden');
     });
 
     test('creating a metadata record at an existing key returns 409, not 500', async () => {

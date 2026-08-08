@@ -134,6 +134,35 @@ describe('Model Routes', () => {
       expect(res.body.created_at).toBeDefined();
     });
 
+    /**
+     * `project_id` is read off an untyped body, so a non-string value must fall
+     * through to "absent" rather than reaching the scope resolver as a number.
+     * A project-scoped credential then supplies the project; a plain JWT does
+     * not, which is the 400 this asserts.
+     */
+    test('treats a non-string project_id as absent', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/model-routes')
+        .send({
+          project_id: 123,
+          name: 'non-string-project',
+          targets: [{ ai_provider_id: providerA, model: 'primary-model' }],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toBe('project_id is required');
+    });
+
+    test('an entirely absent body is a validation error, not a crash', async () => {
+      const res = await authenticatedTestClient(userToken).post(
+        '/api/v1/model-routes'
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('stores explicit retry, timeout, and breaker configuration', async () => {
       const res = await createRoute(userToken, {
         name: 'explicit-route',

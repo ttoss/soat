@@ -3,6 +3,8 @@ import type { Context } from 'src/Context';
 import { getOrchestrationQueueDriver } from 'src/lib/orchestration-queue-drivers';
 import type { QueueStats } from 'src/lib/orchestration-queue-drivers/types';
 
+import { requireAuth, requireProjectAccess } from './helpers';
+
 /**
  * The wire projection of a `QueueStats` snapshot. The driver type stays
  * camelCase — it is the internal contract both the postgres and SQS drivers
@@ -45,26 +47,15 @@ export const orchestrationQueueRouter = new Router<Context>();
 orchestrationQueueRouter.get(
   '/orchestrations/queue/stats',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
-    const projectIds = await ctx.authUser.resolveProjectIds({
+    requireAuth(ctx);
+    // An empty scope — the action granted on no project — is forbidden for this
+    // operator endpoint, not an empty result, so this takes the stricter of the
+    // two preambles.
+    const projectIds = await requireProjectAccess({
+      ctx,
       action: 'orchestrations:GetQueueStats',
       resourceType: 'orchestration',
     });
-    // `null` = forbidden; an empty array = the action is granted on no project,
-    // which for this operator endpoint is also forbidden. `undefined` (admin /
-    // unscoped) means all projects; a non-empty array means those projects.
-    if (
-      projectIds === null ||
-      (Array.isArray(projectIds) && projectIds.length === 0)
-    ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
     ctx.body = mapQueueStats(
       await getOrchestrationQueueDriver().stats({
         projectIds: projectIds ?? undefined,
