@@ -52,6 +52,7 @@ afterAll(async () => {
 describe('SOAT self-call', () => {
   let adminToken: string;
   let userToken: string;
+  let userPublicId: string;
   let projectId: string;
 
   beforeAll(async () => {
@@ -78,6 +79,7 @@ describe('SOAT self-call', () => {
 
     adminToken = setup.adminToken;
     userToken = setup.userToken;
+    userPublicId = setup.userId;
     projectId = setup.projectId;
   });
 
@@ -201,6 +203,29 @@ describe('SOAT self-call', () => {
     });
 
     /**
+     * The transition a background-driven run made, found by name. Attribution
+     * is asserted on *this* row rather than the task's first: the creation row
+     * names whoever called `POST /tasks` directly, which is an ordinary
+     * request-bound credential and was never the gap.
+     */
+    const finishRowOf = async (taskPublicId: string) => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskPublicId}/history`
+      );
+      expect(res.status).toBe(200);
+      const rows = res.body as {
+        transition: string | null;
+        principal_kind: string | null;
+        principal_id: string | null;
+      }[];
+      const row = rows.find((entry) => {
+        return entry.transition === 'finish';
+      });
+      expect(row).toBeDefined();
+      return row!;
+    };
+
+    /**
      * The end-to-end shape this whole mechanism exists for: a workflow state
      * dispatches an orchestration, and that run moves the task on with a `soat`
      * tool node. A task-dispatched run is always durable, so before runs
@@ -276,6 +301,130 @@ describe('SOAT self-call', () => {
       await flushTaskAutomations();
 
       expect(state).toBe('done');
+
+      // A user-started chain names that user. The `api_key` half of the same
+      // assertion lives in the next test; both kinds are covered through a
+      // background drive so neither can regress into the other.
+      const row = await finishRowOf(taskRes.body.id);
+      expect(row.principal_kind).toBe('user');
+      expect(row.principal_id).toBe(userPublicId);
+    });
+
+    /**
+     * The attribution half of the same path (#887). Authorization was already
+     * correct — a key-started run is bounded by the key's policies (the next
+     * test) — but the run-as token is JWT-shaped, so `apiKeyPublicId` was unset
+     * and every downstream record named the *owning user* instead of the key
+     * that actually acted. That erased the distinction task history exists to
+     * record: two different keys held by one user were indistinguishable.
+     */
+    test('a task transitioned by a key-started run is attributed to the key, not its owning user', async () => {
+      const policyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/policies')
+        .send({
+          document: {
+            statement: [
+              {
+                effect: 'Allow',
+                action: [
+                  'tasks:CreateTask',
+                  'tasks:GetTask',
+                  'tasks:TransitionTask',
+                  'tools:GetTool',
+                  'tools:CallTool',
+                  'orchestrations:GetOrchestration',
+                  'orchestrations:StartRun',
+                  'orchestrations:GetRun',
+                  'workflows:GetWorkflow',
+                ],
+              },
+            ],
+          },
+        });
+      expect(policyRes.status).toBe(201);
+
+      const keyRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/api-keys')
+        .send({
+          project_id: projectId,
+          name: 'soatselfcall-attribution-key',
+          policy_ids: [policyRes.body.id],
+        });
+      expect(keyRes.status).toBe(201);
+      const keyPublicId = keyRes.body.id as string;
+      const rawKey = keyRes.body.key as string;
+
+      const toolRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'soat-transition-task-key',
+          type: 'soat',
+          actions: ['transition-task'],
+        });
+      expect(toolRes.status).toBe(201);
+
+      const orchestrationId = await createSoatToolNodeOrchestration({
+        token: userToken,
+        name: 'advance-task-key',
+        toolId: toolRes.body.id,
+        action: 'transition-task',
+        input: {
+          task_id: { var: 'input.task_id' },
+          transition: 'finish',
+        },
+      });
+
+      const workflowRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/workflows')
+        .send({
+          project_id: projectId,
+          name: 'self-advancing-key',
+          states: [
+            {
+              name: 'working',
+              initial: true,
+              on_enter: {
+                dispatch: {
+                  kind: 'orchestration',
+                  orchestration_id: orchestrationId,
+                  input_mapping: { task_id: { var: 'task.id' } },
+                },
+              },
+            },
+            { name: 'done', terminal: true },
+          ],
+          transitions: [{ name: 'finish', from: ['working'], to: 'done' }],
+        });
+      expect(workflowRes.status).toBe(201);
+
+      // Created *by the key* — that is what makes the key the principal the
+      // dispatch persists and the run later re-mints a token from.
+      const taskRes = await authenticatedTestClient(rawKey)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: workflowRes.body.id,
+          title: 'advances itself as a key',
+        });
+      expect(taskRes.status).toBe(201);
+      expect(taskRes.body.state).toBe('working');
+
+      let state = taskRes.body.state as string;
+      for (let attempt = 0; attempt < 40 && state !== 'done'; attempt += 1) {
+        await drainQueueOnce();
+        const poll = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskRes.body.id}`
+        );
+        state = poll.body.state as string;
+      }
+      await flushTaskAutomations();
+
+      expect(state).toBe('done');
+
+      const row = await finishRowOf(taskRes.body.id);
+      expect(row.principal_kind).toBe('api_key');
+      expect(row.principal_id).toBe(keyPublicId);
     });
 
     test('a run started by a scoped API key cannot exceed that key policies', async () => {

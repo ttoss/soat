@@ -175,6 +175,15 @@ const deferAttributionUntilAuthorized = (args: {
  * attribution is deferred to the route's own authorized resolution — see
  * {@link deferAttributionUntilAuthorized}. That still lands before any mutation,
  * because a handler authorizes before it writes.
+ *
+ * **Run-as tokens are exempt, deliberately.** A background drive is machinery
+ * continuing work whose arrival was already counted, not a new arrival: metering
+ * it would bill a run's internal self-calls as fresh client traffic and let a
+ * long chain breach the starting key's request quota mid-flight. Until #887 that
+ * exemption was accidental — `apiKeyPublicId` simply went unset on a JWT-shaped
+ * run token — and it now has to be stated, because the same field that names the
+ * key for attribution is the field this middleware keys off. The `isRunToken`
+ * marker (#885) is what makes it statable without decoding a token here.
  */
 export const requestAttributionMiddleware = async (
   ctx: Context,
@@ -183,7 +192,12 @@ export const requestAttributionMiddleware = async (
   const authUser = ctx.authUser;
   const apiKeyPublicId = authUser?.apiKeyPublicId;
 
-  if (!ctx.path.startsWith('/api/v1') || !authUser || apiKeyPublicId == null) {
+  if (
+    !ctx.path.startsWith('/api/v1') ||
+    !authUser ||
+    apiKeyPublicId == null ||
+    authUser.isRunToken
+  ) {
     await next();
     return;
   }

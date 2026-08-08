@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { signRunToken } from 'src/lib/orchestrationRunToken';
 import {
   flushRequestCounters,
   resetRequestCounters,
@@ -16,9 +17,11 @@ import { authenticatedTestClient, testClient } from '../../testClient';
 
 describe('Usage — API-request metering', () => {
   let userToken: string;
+  let userPublicId: string;
   let projectId: string;
   let policyId: string;
   let rawKey: string;
+  let scopedKeyId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -26,6 +29,7 @@ describe('Usage — API-request metering', () => {
       policyActions: ['usage:ListUsageMeters'],
     });
     userToken = setup.userToken;
+    userPublicId = setup.userId;
     projectId = setup.projectId;
     policyId = setup.policyId;
 
@@ -40,6 +44,7 @@ describe('Usage — API-request metering', () => {
       });
     expect(keyRes.status).toBe(201);
     rawKey = keyRes.body.key;
+    scopedKeyId = keyRes.body.id;
   });
 
   const apiRequestMeters = async (): Promise<
@@ -98,6 +103,37 @@ describe('Usage — API-request metering', () => {
     // Nothing accumulated since; a second flush has no counters to write.
     const second = await flushRequestCounters({ now });
     expect(second).toBe(0);
+  });
+
+  /**
+   * #887 set `apiKeyPublicId` on a run-as token's auth context so attribution
+   * names the key that started the work. Request metering keys off that same
+   * field, so the exemption here is deliberate and must stay visible: a
+   * background drive is machinery continuing work the caller already paid a
+   * request for, not a new arrival. Before #887 run traffic was exempt only
+   * because the field happened to be unset — delete the `isRunToken` check in
+   * `requestAttribution.ts` and this test is what goes red.
+   */
+  test('run-as token requests are not counted against the key that started the work', async () => {
+    resetRequestCounters();
+
+    const runToken = signRunToken({
+      publicId: userPublicId,
+      role: 'user',
+      projectPublicId: projectId,
+      workPublicId: 'orun_metering',
+      apiKeyPublicId: scopedKeyId,
+    });
+
+    // Authorized through the key's policies as a boundary, so a 200 here also
+    // proves the request reached the handler rather than being short-circuited.
+    const res = await authenticatedTestClient(runToken).get(
+      '/api/v1/usage/meters?meter_type=api_request'
+    );
+    expect(res.status).toBe(200);
+
+    const written = await flushRequestCounters({ now: new Date() });
+    expect(written).toBe(0);
   });
 
   test('JWT-user requests are never counted', async () => {

@@ -5,6 +5,7 @@ import { DomainError } from '../errors';
 import type { AuditPrincipalType } from '../lib/auditLog';
 import { peekReadAuditEnabled } from '../lib/auditLog';
 import { enqueueAuditWrite } from '../lib/auditQueue';
+import { principalFromAuthUser } from '../lib/principals';
 
 const log = createDebug('soat:audit');
 
@@ -219,13 +220,16 @@ const deriveTargetIdFromParams = (ctx: Context): string | null => {
   return values.length === 1 ? (values[0] as string) : null;
 };
 
+/**
+ * Adapts the shared principal rule to the audit log's own vocabulary. The
+ * annotation is the point: `AuditPrincipalType` and `RequestPrincipal` agree
+ * today, and if a third principal kind is ever added to the latter this stops
+ * compiling — rather than silently writing a kind the audit schema cannot hold.
+ */
 const resolvePrincipal = (
   authUser: AuthUser
 ): { principalType: AuditPrincipalType; principalId: string } => {
-  if (authUser.apiKeyPublicId) {
-    return { principalType: 'api_key', principalId: authUser.apiKeyPublicId };
-  }
-  return { principalType: 'user', principalId: authUser.publicId };
+  return principalFromAuthUser(authUser);
 };
 
 const buildDetail = (
