@@ -10,6 +10,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { OrchestrationRun } from './OrchestrationRun';
+import { OrchestrationVersion } from './OrchestrationVersion';
 import { Project } from './Project';
 
 @Table({
@@ -53,6 +54,17 @@ export class Orchestration extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
+  /**
+   * Incremented on every write that changes the graph (`nodes`, `edges`,
+   * `stateSchema`, `inputSchema`); each version is archived as an
+   * `OrchestrationVersion`. A run pins the version it started on, so editing the
+   * graph never re-shapes a run already in flight (#872) — which makes these
+   * columns a *draft* for runs started from now on, not a live rewrite of the
+   * ones already executing. Metadata-only edits leave it untouched.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  declare version: number;
+
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   declare nodes: object[];
 
@@ -69,6 +81,11 @@ export class Orchestration extends Model {
     return OrchestrationRun;
   })
   declare runs: OrchestrationRun[];
+
+  @HasMany(() => {
+    return OrchestrationVersion;
+  })
+  declare versions: OrchestrationVersion[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

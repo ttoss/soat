@@ -25,6 +25,7 @@ import {
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
 import { recordHumanInputResumption } from './orchestrationPauseRecords';
+import { resolveRunGraph } from './orchestrationRunGraph';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
 import {
   applyHumanInputToState,
@@ -382,6 +383,46 @@ const resolveRunPrincipal = (args: {
   };
 };
 
+/** Writes the run row a `start-orchestration-run` produces. */
+const createRunRecord = async (args: {
+  orchestration: InstanceType<typeof db.Orchestration>;
+  projectId: number;
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+  input?: Record<string, unknown>;
+  triggerId?: string;
+  principal?: RequestPrincipal;
+  authHeader?: string;
+  wait?: boolean;
+}): Promise<InstanceType<typeof db.OrchestrationRun>> => {
+  return db.OrchestrationRun.create({
+    orchestrationId: args.orchestration.id as number,
+    // Pin the run to the graph it starts on (#872). Every later execution of
+    // this run resolves its topology through this number, so an
+    // `update-orchestration` that lands while the run is queued, sleeping or
+    // awaiting input cannot re-shape it.
+    orchestrationVersion: args.orchestration.version,
+    projectId: args.projectId,
+    // Synchronous mode enters `running` immediately (it drives in-process);
+    // async mode enters `queued` — the run is enqueued and a worker picks it up.
+    status: args.wait ? 'running' : 'queued',
+    state: args.state,
+    activeNodes: [],
+    artifacts: args.artifacts,
+    input: args.input ?? null,
+    triggerId: args.triggerId ?? null,
+    ...resolveRunPrincipal({
+      principal: args.principal,
+      authHeader: args.authHeader,
+    }),
+    startedAt: new Date(),
+    // In `wait` mode the run is `running` immediately, so acquire a lease so the
+    // reaper can reclaim it if this driver crashes before the first checkpoint.
+    // A `queued` run holds no lease until a worker claims and drives it.
+    leaseExpiresAt: args.wait ? newLeaseExpiry() : null,
+  });
+};
+
 export const startOrchestrationRun = async (args: {
   orchestrationPublicId: string;
   projectId?: number;
@@ -420,8 +461,6 @@ export const startOrchestrationRun = async (args: {
       orchestrationProjectId: orch.projectId as number,
     });
 
-  const nodes = orch.nodes as OrchestrationNode[];
-  const edges = orch.edges as OrchestrationEdge[];
   // Seed the run input under the `input` namespace only, matching the
   // pipeline/formation convention (`{ "var": "input.<name>" }`) so a graph
   // reads run input the same way everywhere in the platform. Earlier releases
@@ -431,28 +470,16 @@ export const startOrchestrationRun = async (args: {
   const state: Record<string, unknown> = { input: runInput };
   const artifacts: Record<string, unknown> = {};
 
-  const runPrincipal = resolveRunPrincipal({
+  const runRecord = await createRunRecord({
+    orchestration: orch,
+    projectId: effectiveProjectId,
+    state,
+    artifacts,
+    input: args.input,
+    triggerId: args.triggerId,
     principal: args.principal,
     authHeader: args.authHeader,
-  });
-
-  const runRecord = await db.OrchestrationRun.create({
-    orchestrationId: orch.id as number,
-    projectId: effectiveProjectId,
-    // Synchronous mode enters `running` immediately (it drives in-process);
-    // async mode enters `queued` — the run is enqueued and a worker picks it up.
-    status: args.wait ? 'running' : 'queued',
-    state,
-    activeNodes: [],
-    artifacts,
-    input: args.input ?? null,
-    triggerId: args.triggerId ?? null,
-    ...runPrincipal,
-    startedAt: new Date(),
-    // In `wait` mode the run is `running` immediately, so acquire a lease so the
-    // reaper can reclaim it if this driver crashes before the first checkpoint.
-    // A `queued` run holds no lease until a worker claims and drives it.
-    leaseExpiresAt: args.wait ? newLeaseExpiry() : null,
+    wait: args.wait,
   });
 
   const startMapped = await mapRunWithIncludes(runRecord.id as number);
@@ -473,6 +500,14 @@ export const startOrchestrationRun = async (args: {
   // Synchronous (compatibility) mode: block until the run reaches a terminal or
   // awaiting_input state, sleeping through any delay/poll waits in-process.
   if (args.wait) {
+    // Resolved through the pinned version rather than the row just read, so the
+    // inline drive and every later background drive of this run are guaranteed
+    // to execute the same graph even if an edit lands in between.
+    const { nodes, edges } = await resolveRunGraph({
+      run: runRecord,
+      orchestration: orch,
+    });
+
     return driveRunToRest({
       runRecord,
       nodes,
@@ -543,8 +578,7 @@ export const driveQueuedRun = async (args: {
     return;
   }
 
-  const nodes = orch.nodes as OrchestrationNode[];
-  const edges = orch.edges as OrchestrationEdge[];
+  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
   // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
@@ -595,8 +629,7 @@ export const wakeRun = async (args: {
     return;
   }
 
-  const nodes = orch.nodes as OrchestrationNode[];
-  const edges = orch.edges as OrchestrationEdge[];
+  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
   // Clone so mutations produce a fresh object reference — Sequelize does not
   // reliably detect in-place mutation of a JSONB attribute, so reusing
   // run.state directly can cause the final update to skip persisting it.
@@ -823,8 +856,7 @@ export const resumeOrchestrationRunExecution = async (args: {
       `Orchestration for run not found.`
     );
 
-  const nodes = orch.nodes as OrchestrationNode[];
-  const edges = orch.edges as OrchestrationEdge[];
+  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
   // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
@@ -965,8 +997,7 @@ export const redriveRun = async (args: {
     return;
   }
 
-  const nodes = orch.nodes as OrchestrationNode[];
-  const edges = orch.edges as OrchestrationEdge[];
+  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
   // Clone so mutations produce a fresh reference (see wakeRun).
   const state = { ...((run.state ?? {}) as Record<string, unknown>) };
   const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };

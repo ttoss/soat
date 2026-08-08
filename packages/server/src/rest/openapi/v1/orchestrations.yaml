@@ -236,6 +236,153 @@ paths:
         '404':
           description: Not found
 
+  /api/v1/orchestrations/{orchestration_id}/versions:
+    get:
+      tags:
+        - Orchestrations
+      summary: List an orchestration's graph versions
+      description: >
+        Returns the orchestration's archived graphs, newest first. A version is
+        written on create and on every subsequent write that changes the graph
+        (`nodes`, `edges`, `state_schema`, `input_schema`) — through the REST API
+        or a formation apply alike. Metadata-only edits (name, description) do not
+        archive a version. See
+        [Versioning](/docs/modules/orchestrations#versioning).
+      operationId: listOrchestrationVersions
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of orchestration versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OrchestrationVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Orchestration not found
+
+  /api/v1/orchestrations/{orchestration_id}/versions/{version}:
+    get:
+      tags:
+        - Orchestrations
+      summary: Fetch an archived orchestration version
+      description: >
+        Returns the exact graph a given version describes. Every run records the
+        version it started on in `orchestration_version` and executes that graph
+        for its whole life, so this is how you read the topology a run actually
+        took — including a run whose orchestration has been rewired since.
+      operationId: getOrchestrationVersion
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - name: version
+          in: path
+          required: true
+          description: The archived version number
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        '200':
+          description: Archived orchestration version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrchestrationVersion'
+        '400':
+          description: Bad Request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
+  /api/v1/orchestrations/{orchestration_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Orchestrations
+      summary: Restore an archived orchestration graph
+      description: >
+        Writes an archived version's graph back as the orchestration's live
+        definition, which archives it again as a **new** version rather than
+        rewinding the counter — so a run pinned to any version in between still
+        resolves the graph it started on.
+
+
+        The restore runs through the ordinary update path, so the archived graph
+        goes through the same static validation as an authored one. Node resource
+        references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run
+        reaches the node, so a target deleted since the snapshot was taken restores
+        cleanly and surfaces as a failed run rather than a `400`. Restoring the
+        graph the orchestration already holds is a no-op and archives nothing. Runs
+        already in flight are unaffected either way — a restore is an ordinary
+        edit, and pinning is what keeps it from reaching them.
+      operationId: restoreOrchestrationVersion
+      parameters:
+        - $ref: '#/components/parameters/orchestration_id'
+        - name: version
+          in: path
+          required: true
+          description: The archived version number
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreOrchestrationVersionRequest'
+      responses:
+        '200':
+          description: The orchestration, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Orchestration'
+        '400':
+          description: Bad Request — version is not a positive integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Not found
+
   /api/v1/orchestration-runs:
     post:
       tags:
@@ -755,6 +902,7 @@ components:
         - id
         - project_id
         - name
+        - version
         - nodes
         - edges
         - created_at
@@ -774,6 +922,14 @@ components:
           type: string
           nullable: true
           description: Optional description.
+        version:
+          type: integer
+          description: >
+            Incremented on every write that changes the graph; prior versions are
+            archived. A run pins the version it started on, so these fields are a
+            draft for runs started from now on rather than a live rewrite of the
+            ones already executing.
+          example: 1
         nodes:
           type: array
           items:
@@ -828,6 +984,11 @@ components:
         input_schema:
           type: object
           nullable: true
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the version this create archives, e.g. `initial`.
+          example: initial
 
     UpdateOrchestrationRequest:
       type: object
@@ -851,6 +1012,89 @@ components:
         input_schema:
           type: object
           nullable: true
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the version this write archives, e.g. `pre-rewire`.
+            Ignored when the write changes no graph field, since no version is
+            archived.
+          example: pre-rewire
+
+    OrchestrationVersion:
+      type: object
+      description: >-
+        An immutable archive of an orchestration's graph at one version.
+      properties:
+        id:
+          type: string
+          description: Public ID of the archived version
+          example: orch_ver_V1StGXR8Z5jdHi6B
+        orchestration_id:
+          x-soat-ref: orchestrations
+          type: string
+          description: Public ID of the orchestration this version belongs to
+          example: orch_V1StGXR8Z5jdHi6B
+        version:
+          type: integer
+          description: The archived version number
+          example: 1
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            The orchestration's versioned surface as it stood at this version:
+            `nodes`, `edges`, `state_schema` and `input_schema`. Name and
+            description are metadata — bumping the version when one of them changes
+            would make two version numbers denote the same topology, which is
+            exactly what a run cites.
+
+
+            Deliberately open rather than a fixed schema: an archive written by an
+            earlier release of SOAT reflects the orchestration surface **of its own
+            time**, so it may carry fields the current API no longer documents.
+          properties:
+            nodes:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrchestrationNode'
+            edges:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrchestrationEdge'
+            state_schema:
+              type: object
+              nullable: true
+            input_schema:
+              type: object
+              nullable: true
+        label:
+          type: string
+          nullable: true
+          description: >-
+            Optional human tag for this version, e.g. `pre-rewire`. Set from the
+            `version_label` field of a write, the `label` field of a restore, or
+            generated for one.
+          example: restored from v2
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: >-
+            Public ID of the user whose action produced this version. Null for
+            writes with no request user behind them.
+        created_at:
+          type: string
+          format: date-time
+
+    RestoreOrchestrationVersionRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: >-
+            Optional tag for the version the restore creates. Defaults to
+            `restored from v<version>`.
+          example: rollback to pre-incident graph
 
     OrchestrationRun:
       type: object
@@ -872,6 +1116,21 @@ components:
           x-soat-ref: orchestrations
           type: string
           description: Public ID of the parent orchestration.
+        orchestration_version:
+          type: integer
+          nullable: true
+          description: >
+            The orchestration version this run executes, fixed when the run
+            started. Every later step of the run — the first drive, a wake from
+            `sleeping`, a human or approval resume, a redrive after a crash —
+            resolves the graph from this version, so editing the orchestration
+            never re-shapes a run already in flight. Fetch the graph it names at
+            `GET /api/v1/orchestrations/{orchestration_id}/versions/{version}`.
+
+
+            Null for runs created before pinning existed, which execute the live
+            graph.
+          example: 3
         project_id:
           x-soat-ref: projects
           type: string

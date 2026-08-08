@@ -13,6 +13,10 @@ import {
   assertOrchestrationValid,
 } from './orchestrationValidation';
 import {
+  buildOrchestrationConfigSnapshot,
+  orchestrationVersionStore,
+} from './orchestrationVersionSnapshot';
+import {
   paginatedList,
   type PaginatedResult,
   resolvePagination,
@@ -132,11 +136,22 @@ export type OrchestrationEdge = {
   activationCondition?: 'all' | 'any';
 };
 
+/**
+ * The authorship a write attaches to the version it archives. Optional
+ * throughout: a write with no request user behind it (a scheduler-driven apply,
+ * an internal repair) archives a version with a null author rather than none.
+ */
+export type OrchestrationVersionAuthorship = {
+  createdByUserId?: number | null;
+  versionLabel?: string | null;
+};
+
 export type MappedOrchestration = {
   id: string;
   project_id: string;
   name: string;
   description: string | null;
+  version: number;
   nodes: ReturnType<typeof mapOrchestrationNode>[];
   edges: ReturnType<typeof mapOrchestrationEdge>[];
   state_schema: object | null;
@@ -161,6 +176,10 @@ export type MappedNodeExecution = {
 export type MappedOrchestrationRun = {
   id: string;
   orchestration_id: string;
+  // The orchestration version this run executes, fixed when the run started.
+  // Null for runs created before pinning existed (#872), which execute the live
+  // graph — the only thing there is to fall back to.
+  orchestration_version: number | null;
   project_id: string;
   status:
     | 'queued'
@@ -208,6 +227,7 @@ const mapOrchestration = (
     project_id: orch.project.publicId,
     name: orch.name,
     description: orch.description,
+    version: orch.version,
     ...mapOrchestrationGraph({
       nodes: orch.nodes as OrchestrationNode[],
       edges: orch.edges as OrchestrationEdge[],
@@ -283,6 +303,7 @@ export const mapOrchestrationRun = (
   return {
     id: run.publicId,
     orchestration_id: run.orchestration.publicId,
+    orchestration_version: run.orchestrationVersion,
     project_id: run.project.publicId,
     status: run.status,
     state: run.state as Record<string, unknown>,
@@ -327,15 +348,17 @@ export const nodeExecutionsInclude = (): object => {
 
 // ── CRUD: Orchestrations ──────────────────────────────────────────────────
 
-export const createOrchestration = async (args: {
-  projectId: number;
-  name: string;
-  description?: string | null;
-  nodes: OrchestrationNode[];
-  edges: OrchestrationEdge[];
-  stateSchema?: object | null;
-  inputSchema?: object | null;
-}): Promise<MappedOrchestration> => {
+export const createOrchestration = async (
+  args: {
+    projectId: number;
+    name: string;
+    description?: string | null;
+    nodes: OrchestrationNode[];
+    edges: OrchestrationEdge[];
+    stateSchema?: object | null;
+    inputSchema?: object | null;
+  } & OrchestrationVersionAuthorship
+): Promise<MappedOrchestration> => {
   log('createOrchestration %o', { projectId: args.projectId, name: args.name });
 
   assertOrchestrationValid({
@@ -348,6 +371,7 @@ export const createOrchestration = async (args: {
     projectId: args.projectId,
     name: args.name,
     description: args.description ?? null,
+    version: 1,
     nodes: args.nodes,
     edges: args.edges,
     stateSchema: args.stateSchema ?? null,
@@ -359,11 +383,23 @@ export const createOrchestration = async (args: {
     include: [{ model: db.Project, as: 'project' }],
   });
 
-  return mapOrchestration(
+  const mapped = mapOrchestration(
     created as InstanceType<typeof db.Orchestration> & {
       project: InstanceType<typeof db.Project>;
     }
   );
+
+  // Version 1 is archived on create, so the very first run has a pinned graph to
+  // resolve rather than falling back to the live row.
+  await orchestrationVersionStore.writeVersion({
+    resourceDbId: orch.id as number,
+    version: 1,
+    config: buildOrchestrationConfigSnapshot(mapped),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+  });
+
+  return mapped;
 };
 
 export const listOrchestrations = async (args: {
@@ -419,27 +455,43 @@ export const findOrchestration = async (args: {
   );
 };
 
-export const updateOrchestration = async (args: {
-  id: string;
-  projectIds?: number[];
-  name?: string;
-  description?: string | null;
-  nodes?: OrchestrationNode[];
-  edges?: OrchestrationEdge[];
-  stateSchema?: object | null;
-  inputSchema?: object | null;
-}): Promise<MappedOrchestration> => {
+export const updateOrchestration = async (
+  args: {
+    id: string;
+    projectIds?: number[];
+    name?: string;
+    description?: string | null;
+    nodes?: OrchestrationNode[];
+    edges?: OrchestrationEdge[];
+    stateSchema?: object | null;
+    inputSchema?: object | null;
+  } & OrchestrationVersionAuthorship
+): Promise<MappedOrchestration> => {
   log('updateOrchestration %o', { id: args.id });
 
   const where: Record<string, unknown> = { publicId: args.id };
   if (args.projectIds) where['projectId'] = args.projectIds;
 
-  const orch = await db.Orchestration.findOne({ where });
+  const orch = await db.Orchestration.findOne({
+    where,
+    include: [{ model: db.Project, as: 'project' }],
+  });
   if (!orch)
     throw new DomainError(
       'ORCHESTRATION_NOT_FOUND',
       `Orchestration '${args.id}' not found.`
     );
+
+  // `orch` is loaded with its project so it can be mapped directly, before and
+  // after the write: `update` mutates the instance in place, so the same
+  // reference yields the pre-write config here and the post-write one below,
+  // with no second query and no chance of the two views disagreeing.
+  const asMappable = orch as InstanceType<typeof db.Orchestration> & {
+    project: InstanceType<typeof db.Project>;
+  };
+  const beforeConfig = buildOrchestrationConfigSnapshot(
+    mapOrchestration(asMappable)
+  );
 
   assertOrchestrationUpdateValid({
     update: {
@@ -464,16 +516,31 @@ export const updateOrchestration = async (args: {
 
   await orch.update(updates);
 
-  const updated = await db.Orchestration.findOne({
-    where: { id: orch.id as number },
-    include: [{ model: db.Project, as: 'project' }],
+  // A graph write bumps the version and archives the new graph, so a run pinned
+  // to any earlier version still resolves the topology it started on.
+  // Metadata-only edits (name / description) leave the version untouched — as
+  // does re-writing the graph the orchestration already holds, which is what
+  // makes restoring the live graph a genuine no-op rather than an endless
+  // version chain.
+  await orchestrationVersionStore.archiveConfigChange({
+    resourceDbId: orch.id as number,
+    currentVersion: orch.version,
+    before: beforeConfig,
+    after: buildOrchestrationConfigSnapshot(mapOrchestration(asMappable)),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+    bumpVersion: async (nextVersion) => {
+      await orch.update({ version: nextVersion });
+      log(
+        'updateOrchestration: id=%s bumped to version=%d',
+        args.id,
+        nextVersion
+      );
+    },
   });
 
-  return mapOrchestration(
-    updated as InstanceType<typeof db.Orchestration> & {
-      project: InstanceType<typeof db.Project>;
-    }
-  );
+  // Mapped last, so the response carries the version the archive just wrote.
+  return mapOrchestration(asMappable);
 };
 
 export const deleteOrchestration = async (args: {
@@ -523,6 +590,13 @@ export const deleteOrchestration = async (args: {
         transaction: t,
       });
     }
+
+    // Archived versions are owned by the orchestration; remove them before the
+    // parent so no orphan version rows are left behind.
+    await orchestrationVersionStore.deleteVersions({
+      resourceDbId: orch.id as number,
+      transaction: t,
+    });
 
     await orch.destroy({ transaction: t });
   });
