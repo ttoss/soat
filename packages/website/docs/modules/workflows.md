@@ -395,6 +395,7 @@ resources:
 ## Related Tutorials
 
 - [Write a Sonnet with a Workflow](/docs/tutorials/orchestrate-a-sonnet-with-workflows) — a task flows through agent-driven states and a human review, with a backward move a DAG would reject.
+- [Close the Monthly Books - Step 8 (Define the close period as a workflow)](/docs/tutorials/close-the-monthly-books#step-8--define-the-close-period-as-a-workflow) — a guarded, approval-gated transition alongside an orchestration that does each state's work.
 
 ## Examples
 
