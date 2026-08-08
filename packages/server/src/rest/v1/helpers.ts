@@ -3,7 +3,10 @@
  */
 import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import type { RequestPrincipal } from 'src/lib/principals';
+import {
+  principalFromAuthUser,
+  type RequestPrincipal,
+} from 'src/lib/principals';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
 /**
@@ -232,20 +235,12 @@ export type { RequestPrincipal } from 'src/lib/principals';
 
 /**
  * The principal to credit for an action, resolved from the auth context only —
- * never from a body. For API-key auth the id is the key's own public id
- * (`key_…`) so the record names *which* key acted, not just that a key did;
- * `apiKeyPublicId` is set for both scoped and unscoped keys, so it (not
- * `apiKeyProjectId`) decides the type.
+ * never from a body. Attribution that a caller cannot address is the whole point
+ * (#853), so the derivation lives here rather than per handler.
  *
- * One definition for a rule that is repeated verbatim wherever attribution is
- * stamped: content purges (#836), discussion runs (#858), task transitions, and
- * the audit middleware. Attribution that a caller cannot address is the whole
- * point (#853), so the derivation lives here rather than per handler.
+ * The rule itself is `principalFromAuthUser`, shared with the audit middleware
+ * and task transitions; this is just the `ctx` adapter for it.
  */
 export const requestPrincipalFromCtx = (ctx: Context): RequestPrincipal => {
-  const apiKeyPublicId = ctx.authUser!.apiKeyPublicId;
-  if (apiKeyPublicId) {
-    return { principalType: 'api_key', principalId: apiKeyPublicId };
-  }
-  return { principalType: 'user', principalId: ctx.authUser!.publicId };
+  return principalFromAuthUser(ctx.authUser!);
 };

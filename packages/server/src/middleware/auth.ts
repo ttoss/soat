@@ -172,15 +172,34 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
   }
 };
 
-/** Project-scoping identity fields to spread onto a JWT-derived `authUser`. */
+/**
+ * Project-scoping and credential-identity fields to spread onto a JWT-derived
+ * `authUser`.
+ *
+ * `apiKeyPublicId` is set from a run token's `key` claim so a key-started run
+ * *names the key* everywhere attribution is derived — task history, audit
+ * entries, the principal an automation chain inherits (#887). The claim already
+ * decided the run's authorization boundary in `resolveScopedBoundaryDocs`; this
+ * makes the identity match the authority, rather than reporting the owning user
+ * and losing which of that user's keys acted.
+ *
+ * Deliberately *only* `apiKeyPublicId`, never the `apiKeyProject*` pair. Those
+ * two drive write-project defaulting and scope enforcement, and a run token's
+ * project already travels as `oauthProjectPublicId` — every reader of the pair
+ * (`assertCredentialProjectScope`, `resolveWriteProjectId`) falls back to it, so
+ * setting them would change nothing except by introducing a second source of
+ * truth for the same project.
+ */
 const buildScopedIdentityFields = (args: {
   scopedProjectPublicId?: string;
   isTriggerToken: boolean;
   isRunToken: boolean;
+  runApiKeyPublicId?: string;
 }): {
   oauthProjectPublicId?: string;
   isTriggerToken?: boolean;
   isRunToken?: boolean;
+  apiKeyPublicId?: string;
 } => {
   return {
     ...(args.scopedProjectPublicId
@@ -188,6 +207,10 @@ const buildScopedIdentityFields = (args: {
       : {}),
     ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
     ...(args.isRunToken ? { isRunToken: true } : {}),
+    // Gated on `isRunToken`: only a run token's `key` claim names an acting key.
+    ...(args.isRunToken && args.runApiKeyPublicId
+      ? { apiKeyPublicId: args.runApiKeyPublicId }
+      : {}),
   };
 };
 
@@ -256,6 +279,8 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
   const isRunToken = typeof payload.orn === 'string';
+  const runApiKeyPublicId =
+    typeof payload.key === 'string' ? payload.key : undefined;
 
   // OAuth access tokens, trigger run-as tokens and orchestration run-as tokens
   // are all project-scoped credentials: they intersect the owning user's
@@ -265,8 +290,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
     scopedProjectPublicId,
     triggerPublicId: isTriggerToken ? payload.trg : undefined,
     isRunToken,
-    runApiKeyPublicId:
-      typeof payload.key === 'string' ? payload.key : undefined,
+    runApiKeyPublicId,
     scopeClaim: payload.scope,
     db: ctx.db,
   });
@@ -291,6 +315,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
       scopedProjectPublicId,
       isTriggerToken,
       isRunToken,
+      runApiKeyPublicId,
     }),
     isAllowed,
     resolveProjectIds: scopedProjectPublicId

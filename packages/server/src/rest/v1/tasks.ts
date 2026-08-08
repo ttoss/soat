@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { buildSrn } from 'src/lib/iam';
+import { principalFromAuthUser } from 'src/lib/principals';
 import {
   createTask,
   deleteTask,
@@ -22,19 +23,18 @@ import {
 const tasksRouter = new Router<Context>();
 
 /**
- * Builds the transition principal from the authenticated caller. For API-key
- * auth the principal id is the key's own public id (`key_...`) so history can
- * distinguish which key acted — not just that *a* key did — falling back to the
- * user id only if the key id is somehow absent. `apiKeyPublicId` is set for
- * both scoped and unscoped keys, so it (not `apiKeyProjectId`) determines the
- * `api_key` kind.
+ * The transition principal for the authenticated caller, in the task engine's
+ * own `{ kind, id }` shape.
+ *
+ * `TaskPrincipal` carries two kinds the auth layer has no notion of
+ * (`automation`, `approval`), so the shapes stay distinct — but the *rule* for
+ * the two credential-derived kinds is shared with audit and the REST helper, so
+ * a key-started background drive is named identically in task history and in the
+ * audit log.
  */
 const principalFromCtx = (ctx: Context): TaskPrincipal => {
-  const apiKeyPublicId = ctx.authUser!.apiKeyPublicId;
-  if (apiKeyPublicId) {
-    return { kind: 'api_key', id: apiKeyPublicId };
-  }
-  return { kind: 'user', id: ctx.authUser!.publicId };
+  const { principalType, principalId } = principalFromAuthUser(ctx.authUser!);
+  return { kind: principalType, id: principalId };
 };
 
 /**

@@ -28,6 +28,8 @@ Attribution for an unscoped key deliberately waits for authorization. Counting a
 
 One request counts once, no matter how many permission checks the handler makes.
 
+**Background drives are exempt.** The platform self-calls a durable run or a workflow-dispatched agent makes with a [run-as token](./orchestrations.md#durable-background-execution) are not counted, even though the token names the API key that started the work. They are machinery continuing a request that was already counted on arrival, not new client traffic — counting them would let a long automation chain exhaust the starting key's `requests` quota from the inside and stall mid-flight.
+
 **Residual exemption.** A request that resolves to *no single* project is still not counted: an unscoped key listing across every project it can reach (no `project_id` filter, several projects accessible, or an unscoped admin key with no attached policies) names nothing to count against. Pass a `project_id`, bind the key to a project, or use `tokens`/`cost_usd` quotas — which aggregate from the usage meter independently of the request path — to cap that traffic.
 
 **Capping one specific unscoped key** is not possible: an `api_key`-scope `scope_ref` must name a key that lives in the quota's project, and an unscoped key lives in none. Use a null-`scope_ref` `api_key` quota (or a `project` quota) to cover it.
