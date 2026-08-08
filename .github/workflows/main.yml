@@ -76,6 +76,12 @@ jobs:
         env:
           COMPOSE_BAKE: '1'
 
+      # See the note in pr.yml: the tool_choice shim's stdout is not attached by
+      # `up`, so dump it when the stack fails.
+      - name: Smoke stack logs (on failure)
+        if: failure()
+        run: docker compose -f tests/docker-compose.smoke.yml logs --no-color --tail=400 ollama-tool-choice
+
   push-release-tag:
     name: Push Release Tag
     runs-on: ubuntu-latest
@@ -230,6 +236,12 @@ jobs:
 
       - name: Run tutorials tests
         run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+
+      # See the note in pr.yml: the tool_choice shim's stdout is not attached by
+      # `up`, so dump it when the stack fails.
+      - name: Tutorials stack logs (on failure)
+        if: failure()
+        run: docker compose -f tests/docker-compose.tutorials.yml logs --no-color --tail=400 ollama-tool-choice
 
       - name: Cleanup tutorials stack
         if: always()

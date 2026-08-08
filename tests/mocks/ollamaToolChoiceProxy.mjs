@@ -15,8 +15,14 @@
 //   * `POST **/chat/completions` forcing an **allowlisted** tool → a synthesized
 //     OpenAI-shaped `tool_calls` response. The model is never called, so the
 //     forced call is deterministic.
+//   * the same, but the request does not offer that tool → `400`. That is a
+//     wiring break, and forwarding it would hand the outcome back to the model
+//     and revive the flake downstream, where it no longer looks like a break.
 //   * everything else — an unlisted tool, no `tool_choice`, `"auto"`, `"none"`,
 //     `/v1/embeddings`, any other route — is forwarded to Ollama verbatim.
+//
+// Every request that asks for forcing logs one line with the outcome, so a
+// downstream failure can be attributed without guessing.
 //
 // The allowlist keeps the blast radius at one step per suite. Other CI flows
 // force tools whose arguments only the model can fill (the guardrail-gated tool
@@ -147,9 +153,25 @@ const buildToolArguments = (args) => {
   );
 };
 
+/** The tool name a `tool_choice` object names, whichever spelling it uses. */
+const forcedToolName = (toolChoice) => {
+  if (!toolChoice || typeof toolChoice !== 'object') {
+    return undefined;
+  }
+  // OpenAI wire shape is {type:'function', function:{name}}; accept the
+  // SOAT-facing {type:'tool', tool_name} spelling too so the shim keeps
+  // working if the provider layer changes how it serializes the field.
+  return (
+    toolChoice.function?.name ?? toolChoice.tool_name ?? toolChoice.toolName
+  );
+};
+
 /**
- * Resolves which tool the request forces, or null when the request should go to
- * the model untouched.
+ * Decides what to do with one chat completion, as a tagged result:
+ *
+ *   {kind:'force',   tool}    — synthesize the call, never touch the model
+ *   {kind:'forward'}          — send it upstream unchanged
+ *   {kind:'reject',  message} — 400; the request is misconfigured
  *
  * `toolNames` is an allowlist, and it is deliberately narrow. Other CI flows
  * force tools whose arguments carry meaning only the model can supply — the
@@ -157,43 +179,108 @@ const buildToolArguments = (args) => {
  * the formations tutorial (document ids, the poem text). Synthesizing those
  * would be worse than the status quo, so a tool that is not listed keeps going
  * to the real model exactly as it does today.
+ *
+ * The `reject` case exists because this shim's only purpose is to make a forced
+ * **allowlisted** call deterministic. If such a call arrives and the tool is not
+ * in `tools`, something upstream is misconfigured — and forwarding would hand
+ * the outcome back to the sandbox model, reviving the #774 coin flip with no
+ * trace of why. Fail closed so a wiring break reads as a wiring break instead of
+ * as a flaky assertion three steps later.
  */
-const resolveForcedTool = (args) => {
+const resolveDecision = (args) => {
   const { body, toolNames } = args;
   const toolChoice = body?.tool_choice;
   if (!toolChoice || toolChoice === 'auto' || toolChoice === 'none') {
-    return null;
+    return { kind: 'forward' };
   }
 
-  const tools = (Array.isArray(body?.tools) ? body.tools : []).filter(
-    (tool) => {
-      return tool?.function?.name && toolNames.has(tool.function.name);
-    }
-  );
-  if (tools.length === 0) {
-    return null;
-  }
+  const offeredTools = Array.isArray(body?.tools) ? body.tools : [];
+  const allowlisted = offeredTools.filter((tool) => {
+    return tool?.function?.name && toolNames.has(tool.function.name);
+  });
 
   if (toolChoice === 'required') {
     // "required" names no tool, so it is only unambiguous when the request
-    // offers exactly one — and that one has to be allowlisted.
-    const offered = Array.isArray(body.tools) ? body.tools.length : 0;
-    return offered === 1 ? tools[0].function : null;
+    // offers exactly one — and that one has to be allowlisted. Anything else is
+    // a genuine model decision, not a misconfiguration, so it forwards.
+    return offeredTools.length === 1 && allowlisted.length === 1
+      ? { kind: 'force', tool: allowlisted[0].function }
+      : { kind: 'forward' };
   }
 
-  if (typeof toolChoice === 'object') {
-    // OpenAI wire shape is {type:'function', function:{name}}; accept the
-    // SOAT-facing {type:'tool', tool_name} spelling too so the shim keeps
-    // working if the provider layer changes how it serializes the field.
-    const name =
-      toolChoice.function?.name ?? toolChoice.tool_name ?? toolChoice.toolName;
-    const match = tools.find((tool) => {
-      return tool.function.name === name;
-    });
-    return match?.function ?? null;
+  const name = forcedToolName(toolChoice);
+  if (!name) {
+    return { kind: 'forward' };
   }
 
-  return null;
+  const match = allowlisted.find((tool) => {
+    return tool.function.name === name;
+  });
+  if (match) {
+    return { kind: 'force', tool: match.function };
+  }
+
+  if (toolNames.has(name)) {
+    return {
+      kind: 'reject',
+      message:
+        `tool_choice forces "${name}", which is allowlisted for deterministic ` +
+        `forcing, but the request offers no such tool (offered: ` +
+        `${
+          offeredTools
+            .map((tool) => {
+              return tool?.function?.name;
+            })
+            .join(', ') || 'none'
+        }). ` +
+        `Forwarding this to the model would make the result nondeterministic, ` +
+        `so it is rejected instead.`,
+    };
+  }
+
+  return { kind: 'forward' };
+};
+
+/**
+ * Logs one line per request that *asked* for forcing, whatever the outcome.
+ *
+ * A request with no `tool_choice` (or `"auto"` / `"none"`) is the overwhelming
+ * majority and says nothing, so it stays silent — but every forcing request is
+ * recorded with what it asked for and what happened. Without this, a CI failure
+ * three steps downstream ("the run completed instead of pausing") leaves no way
+ * to tell whether forcing was requested, whether it was honored, or whether the
+ * request reached this proxy at all.
+ */
+const logDecision = (args) => {
+  const { body, decision } = args;
+  const toolChoice = body?.tool_choice;
+  if (!toolChoice || toolChoice === 'auto' || toolChoice === 'none') {
+    return;
+  }
+
+  const asked =
+    toolChoice === 'required'
+      ? 'required'
+      : (forcedToolName(toolChoice) ?? '?');
+  const offered =
+    (Array.isArray(body?.tools) ? body.tools : [])
+      .map((tool) => {
+        return tool?.function?.name;
+      })
+      .filter(Boolean)
+      .join(', ') || 'none';
+  const outcome =
+    decision.kind === 'force'
+      ? `forced ${decision.tool.name}`
+      : decision.kind === 'reject'
+        ? 'REJECTED (400)'
+        : 'forwarded to model (not allowlisted)';
+
+  // eslint-disable-next-line no-console
+  console.log(
+    `[tool-choice-proxy] tool_choice=${asked} offered=[${offered}] ` +
+      `model=${body?.model} → ${outcome}`
+  );
 };
 
 const randomId = (prefix) => {
@@ -288,11 +375,11 @@ const forward = async (args) => {
   });
 
   const responseHeaders = {};
-  upstream.headers.forEach((value, key) => {
+  for (const [key, value] of upstream.headers.entries()) {
     if (key !== 'content-encoding' && key !== 'transfer-encoding') {
       responseHeaders[key] = value;
     }
-  });
+  }
   res.writeHead(upstream.status, responseHeaders);
   if (!upstream.body) {
     res.end();
@@ -348,8 +435,17 @@ export const createToolChoiceProxy = (args) => {
         return;
       }
 
-      const forcedTool = resolveForcedTool({ body, toolNames });
-      if (!forcedTool) {
+      const decision = resolveDecision({ body, toolNames });
+      logDecision({ body, decision });
+
+      if (decision.kind === 'reject') {
+        sendJson(res, 400, {
+          error: { message: `[tool-choice-proxy] ${decision.message}` },
+        });
+        return;
+      }
+
+      if (decision.kind === 'forward') {
         // Agents carry no max_tokens field, so nothing else bounds how many
         // tokens the model emits per completion — the dominant, and wildly
         // variable, cost of the CI suites. Cap it here, at the provider
@@ -371,11 +467,7 @@ export const createToolChoiceProxy = (args) => {
         return;
       }
 
-      // eslint-disable-next-line no-console
-      console.log(
-        `[tool-choice-proxy] forcing ${forcedTool.name} (model=${body.model})`
-      );
-      sendForcedToolCall({ res, body, forcedTool });
+      sendForcedToolCall({ res, body, forcedTool: decision.tool });
     })().catch((error) => {
       // eslint-disable-next-line no-console
       console.error('[tool-choice-proxy] error', error);
