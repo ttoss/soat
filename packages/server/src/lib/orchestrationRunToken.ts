@@ -8,15 +8,15 @@ import type { RequestPrincipal } from './principals';
 const log = createDebug('soat:orchestrations');
 
 /**
- * Mints a short-lived run-as token for an orchestration run, mirroring
+ * Mints a short-lived run-as token for durable, request-less work, mirroring
  * `triggerToken.ts`. The token carries the starting principal's owning user
- * (`publicId`/`role`), the project the run is confined to (`prj`), and — when
- * an API key started the run — that key's public id (`key`), which the auth
+ * (`publicId`/`role`), the project the work is confined to (`prj`), and — when
+ * an API key started it — that key's public id (`key`), which the auth
  * middleware resolves into the key's policies as a boundary.
  *
  * It asserts *identity* only. Authorization is still evaluated per request
  * against the policies as they stand at that moment, so revoking access takes
- * effect for a run already in flight; a token minted at run start that froze
+ * effect for work already in flight; a token minted at the start that froze
  * permissions would not. It is minted per drive segment rather than stored, so
  * a run sleeping for days never holds a long-lived credential.
  */
@@ -24,7 +24,13 @@ export const signRunToken = (payload: {
   publicId: string;
   role: string;
   projectPublicId: string;
-  runPublicId: string;
+  /**
+   * The durable work this token acts for: an orchestration run, or the task
+   * whose `on_enter` automation dispatched an agent generation (#884). Carried
+   * in `orn`, whose *presence* is what marks a run-as token; the value itself
+   * is a provenance breadcrumb and is never an authorization input.
+   */
+  workPublicId: string;
   apiKeyPublicId?: string;
 }) => {
   const ttl = process.env.SOAT_RUN_TOKEN_TTL || '1h';
@@ -37,7 +43,7 @@ export const signRunToken = (payload: {
       // Without a marker the middleware cannot tell a project-scoped run token
       // from an OAuth access token, and would build a consent boundary out of
       // this token's (absent) `scope` claim — an allow-nothing policy.
-      orn: payload.runPublicId,
+      orn: payload.workPublicId,
       ...(payload.apiKeyPublicId ? { key: payload.apiKeyPublicId } : {}),
     },
     JWT_SECRET,
@@ -46,20 +52,20 @@ export const signRunToken = (payload: {
 };
 
 /**
- * Resolves a run's persisted principal into an `Authorization` header for the
- * platform self-calls its `soat` tool nodes make.
+ * Resolves a persisted principal into an `Authorization` header for the platform
+ * self-calls the work's `soat` tools make — an orchestration run's tool nodes,
+ * or a workflow-dispatched agent's `soat` tool (#884).
  *
- * Returns undefined when the run has no principal, or when the principal no
- * longer resolves (a deleted user, a revoked key). The run then drives on
- * exactly as it did before runs had an identity — its self-calls are
- * unauthenticated — except that they now fail loudly instead of storing a 401
- * body as a node artifact.
+ * Returns undefined when there is no principal, or when the principal no longer
+ * resolves (a deleted user, a revoked key). The work then proceeds exactly as it
+ * did before it had an identity — its self-calls are unauthenticated — except
+ * that they now fail loudly instead of storing a 401 body as a result.
  */
 export const buildRunAuthHeader = async (args: {
   principalKind: string | null;
   principalId: string | null;
   projectId: number;
-  runPublicId: string;
+  workPublicId: string;
 }): Promise<string | undefined> => {
   const { principalKind, principalId } = args;
   if (!principalKind || !principalId) return undefined;
@@ -85,7 +91,7 @@ export const buildRunAuthHeader = async (args: {
       publicId: user.publicId as string,
       role: user.role as string,
       projectPublicId: project.publicId as string,
-      runPublicId: args.runPublicId,
+      workPublicId: args.workPublicId,
       apiKeyPublicId: principalId,
     })}`;
   }
@@ -99,7 +105,7 @@ export const buildRunAuthHeader = async (args: {
     publicId: user.publicId as string,
     role: user.role as string,
     projectPublicId: project.publicId as string,
-    runPublicId: args.runPublicId,
+    workPublicId: args.workPublicId,
   })}`;
 };
 

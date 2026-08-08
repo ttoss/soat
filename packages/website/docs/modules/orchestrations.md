@@ -299,6 +299,8 @@ Runs execute in a **queue-backed durable worker**, detached from the HTTP reques
 
 Nested `loop` and `sub_orchestration` children inherit their parent's identity, so a whole tree of runs acts as one principal.
 
+**The same applies to a workflow-dispatched agent.** A [workflow](./workflows.md) state's `on_enter` dispatch is request-less whichever kind it is, so an agent dispatch re-mints the same run-as token — keyed to the task rather than a run — and an agent holding a [`soat` tool](./tools.md#soat) authenticates as the principal that started the chain, under that principal's boundary. The four points above hold unchanged, including a key-started chain being bounded by the key's own policies.
+
 **Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
 
 **Pluggable queue drivers.** The queue is reached through a four-operation abstraction (`enqueue` / `claim` / `ack` / `retry`, plus a stats snapshot), so the backend is selected with `ORCHESTRATION_QUEUE_DRIVER` and nothing else in the engine, scheduler, or worker changes. Both drivers are held to one shared conformance suite, so they are interchangeable for at-least-once delivery, lease-based redelivery, delayed availability, and exclusive claim.

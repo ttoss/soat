@@ -520,7 +520,7 @@ const runAuthHeader = async (args: {
     principalKind: args.run.principalKind ?? null,
     principalId: args.run.principalId ?? null,
     projectId: args.run.projectId as number,
-    runPublicId: args.run.publicId as string,
+    workPublicId: args.run.publicId as string,
   });
 };
 
