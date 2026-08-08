@@ -9,6 +9,7 @@ import {
 import { version } from '../../package.json' with { type: 'json' };
 import { getDocPage, getDocsIndex } from '../lib/docs';
 import { soatTools } from '../lib/soatTools';
+import { buildSoatActionTarget } from '../lib/soatToolsHelpers';
 import { verifyApiKeyToken } from '../middleware/auth';
 import { ISSUER, verifyOauthAccessToken } from '../oauth/server';
 import { callApi, mcpAuthorizationStore } from './callApi';
@@ -38,7 +39,7 @@ for (const tool of soatTools) {
     description: tool.description,
     inputSchema: tool.inputSchema,
     handler: async (args: Record<string, unknown>) => {
-      const url = tool.path(args) + (tool.query ? tool.query(args) : '');
+      const url = buildSoatActionTarget({ def: tool, args });
       const data = await callApi({
         apiBaseUrl,
         method: tool.method,

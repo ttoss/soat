@@ -5,6 +5,7 @@ import createDebug from 'debug';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequest, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
+import { buildSoatActionTarget } from './soatToolsHelpers';
 
 const SOAT_TOOL_CALL_TIMEOUT_MS = process.env.SOAT_TOOL_CALL_TIMEOUT_MS
   ? parseInt(process.env.SOAT_TOOL_CALL_TIMEOUT_MS, 10)
@@ -291,7 +292,12 @@ export const executeSoatTool = async (args: {
   ) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }) => {
-  const path = args.def.path(args.rawArgs);
+  // Path *and* query string. This used to be `def.path(...)` alone, which
+  // substitutes path parameters only — so every `in: query` parameter the
+  // action advertises was discarded (#924): a `list-*` call returned everything
+  // the credential could see no matter what was asked for, and a
+  // `preset_parameters` value targeting a query parameter did nothing at all.
+  const path = buildSoatActionTarget({ def: args.def, args: args.rawArgs });
   const body = buildSoatRequestBody({
     def: args.def,
     rawArgs: args.rawArgs,

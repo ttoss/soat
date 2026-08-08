@@ -3729,6 +3729,50 @@ if [ -z "$SOAT_TOOL_ID" ] || [ "$SOAT_TOOL_ID" = "null" ]; then
 fi
 echo "SOAT Agent Tool id: $SOAT_TOOL_ID"
 
+# 37b. A soat action's query string must reach the route (issue #924). The
+# request path used to be built from the path parameters alone, so every
+# `in: query` parameter — `project_id`, filters, pagination — was dropped
+# silently and a `list-*` action always answered with the default page. `limit`
+# is echoed back in the response, so both shapes are directly observable: one
+# supplied by the caller, one baked in with `preset_parameters`.
+echo "--- Calling a soat list action with a query parameter ---"
+SOAT_QUERY_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-agent-lister \
+  --type soat \
+  --actions '["list-agents"]')
+SOAT_QUERY_TOOL_ID=$(printf '%s\n' "$SOAT_QUERY_TOOL_RESP" | jq -r '.id')
+
+SOAT_QUERY_CALL_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_QUERY_TOOL_ID" \
+  --action list-agents \
+  --input '{"limit":1}')
+if ! printf '%s\n' "$SOAT_QUERY_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
+  echo "ERROR: soat list-agents ignored the caller-supplied limit query parameter" >&2
+  echo "$SOAT_QUERY_CALL_RESP" >&2
+  exit 1
+fi
+echo "Caller-supplied query parameter: OK"
+
+SOAT_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-agent-lister-preset \
+  --type soat \
+  --actions '["list-agents"]' \
+  --preset_parameters '{"limit":1}')
+SOAT_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PRESET_TOOL_RESP" | jq -r '.id')
+
+SOAT_PRESET_CALL_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_PRESET_TOOL_ID" \
+  --action list-agents \
+  --input '{}')
+if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | length) <= 1' >/dev/null 2>&1; then
+  echo "ERROR: soat list-agents ignored a preset_parameters query parameter" >&2
+  echo "$SOAT_PRESET_CALL_RESP" >&2
+  exit 1
+fi
+echo "Preset query parameter: OK"
+
 # 38. Create an agent that uses the SOAT tool
 echo "--- Creating SOAT agent ---"
 SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
