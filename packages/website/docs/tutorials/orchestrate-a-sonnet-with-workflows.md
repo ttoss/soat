@@ -535,13 +535,20 @@ retry: `# → retry N` re-runs the command until it exits `0`, up to `N` attempt
 second apart. `jq -e` supplies the exit code — non-zero until `.state` is
 actually `review`.
 
+Size `N` from measurement, not optimism. On the CI sandbox (`qwen2.5:0.5b`, CPU
+only, output capped at 256 tokens) the five generations took **32s, 72s, 36s,
+22s and 16s — 179s end to end**, and each poll attempt costs its one-second sleep
+plus the CLI round trip. The budget below is roughly double the observed total so
+ordinary variance does not fail the run; it is a ceiling, not a cost, since the
+loop exits as soon as the card lands.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
 soat transition-task --task-id "$TASK_ID" --transition start | jq '{ state, automation_status }'
 
-# → retry 90
+# → retry 240
 soat get-task --task-id "$TASK_ID" | jq -e '.state == "review"'
 
 soat get-task --task-id "$TASK_ID" | jq '{ state, status, sonnet: .last_result.content }'
@@ -557,7 +564,8 @@ await adminSoat.tasks.transitionTask({
 });
 
 const waitForState = async (target: string) => {
-  for (let attempt = 0; attempt < 90; attempt += 1) {
+  // ~4 minutes: the five sandbox generations measured 179s end to end.
+  for (let attempt = 0; attempt < 240; attempt += 1) {
     const { data: current } = await adminSoat.tasks.getTask({
       path: { task_id: TASK_ID },
     });
@@ -616,7 +624,7 @@ modelling decision, and it is the difference between a fast loop and a slow one.
 ```bash
 soat transition-task --task-id "$TASK_ID" --transition revise --note "tighten the closing couplet" | jq '{ state }'
 
-# → retry 40
+# → retry 120
 soat get-task --task-id "$TASK_ID" | jq -e '.state == "review"'
 ```
 
