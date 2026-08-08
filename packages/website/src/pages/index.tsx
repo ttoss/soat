@@ -35,6 +35,11 @@ const platformPillars = [
     description:
       'Traces capture every tool call, token, and model response; webhooks and triggers push what changed to the rest of your stack.',
   },
+  {
+    title: 'Improve',
+    description:
+      'Append-only agent versions and canary rollouts make every change attributable and reversible. Evaluations — coming soon — turn "did this change make it better?" into a verdict that gates promotion.',
+  },
 ];
 
 const formationSteps = [
@@ -65,8 +70,9 @@ const HomepageHeader = () => {
         <p className={clsx('hero__subtitle', styles.heroSubtitle)}>
           Run tool-calling agents with durable sessions, deterministic
           multi-agent orchestrations, searchable knowledge, writable memory,
-          scoped secrets, IAM policies, traces, and MCP from one self-hosted
-          Node.js server.
+          guardrails and human approvals, versioned canary rollouts, scoped
+          secrets, IAM policies, traces, and MCP from one self-hosted Node.js
+          server.
         </p>
         <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
@@ -108,6 +114,15 @@ const ArchitectureBand = () => {
               business logic and the same permission engine, so every surface
               enforces identical access rules. No queue, no vector service, no
               separate auth server to wire up.
+            </p>
+            <p className={styles.architectureLead}>
+              The platform is organized around the{' '}
+              <Link to="/docs/getting-started/harness-loop-graph-ratchet">
+                four layers of an agent system
+              </Link>{' '}
+              — the harness, the loop, the graph, and the ratchet: what an agent
+              can reach, what proves a run did the job, what happens next, and
+              what proves a change was an improvement.
             </p>
           </div>
           <div className={styles.architectureVisual}>
@@ -224,8 +239,10 @@ const FinalCta = () => {
       <div className="container text--center">
         <Heading as="h2">Stop rebuilding agent infrastructure.</Heading>
         <p className={styles.finalLead}>
-          Self-host SOAT and ship production-ready agents with sessions,
-          knowledge, memory, IAM, traces, and MCP on your own infrastructure.
+          Self-host SOAT and ship agents that can reach what they need, prove
+          they did the job, and improve on evidence — sessions, knowledge,
+          memory, IAM, guardrails, versions, traces, and MCP on your own
+          infrastructure.
         </p>
         <div className={styles.buttons}>
           <Link
