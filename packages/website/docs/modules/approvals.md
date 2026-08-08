@@ -43,7 +43,7 @@ filtering only — the lifecycle never branches on it.
 
 - [Approval Gates - Step 7 (Approve it — the run resumes)](/docs/tutorials/approval-gate#step-7--approve-it--the-run-resumes)
 - [Gate a Dangerous Tool with Guardrails - Step 9 (A class-C call parks for sign-off)](/docs/tutorials/gate-a-tool-with-guardrails#step-9--class-c-the-run-parks-for-sign-off)
-- [Close the Monthly Books - Step 11 (Sign off: the guard passes, the human decides)](/docs/tutorials/close-the-monthly-books#step-11--sign-off-the-guard-passes-the-human-decides) — an item raised by a `requires_approval` workflow transition rather than an orchestration node.
+- [Close the Monthly Books - Step 11 (Sign off: the human decides, the guard has the last word)](/docs/tutorials/close-the-monthly-books#step-11--sign-off-the-human-decides-the-guard-has-the-last-word) — an item raised by a `requires_approval` workflow transition, where the guard is re-evaluated at resolution time.
 
 ## Data Model
 
