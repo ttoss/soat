@@ -56,6 +56,12 @@ const setDispatchState = async (args: {
 const REJECTION_CODES: ReadonlySet<string> = new Set([
   'TASK_GUARD_REJECTED',
   'TASK_TRANSITION_CONFLICT',
+  // The chain budget refusing a hop is the same class of outcome: the matched
+  // rule could not be applied. Routing it here is what makes the bound *visible*
+  // — otherwise it propagates to the fire-and-forget `.catch` in
+  // `dispatchOnEnter`, and the cycle would stop silently, which is barely better
+  // than looping (#885).
+  'TASK_AUTOMATION_CHAIN_LIMIT',
 ]);
 
 /**

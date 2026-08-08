@@ -176,12 +176,18 @@ const resolveProjectKey = async (ctx: Context, rawKey: string) => {
 const buildScopedIdentityFields = (args: {
   scopedProjectPublicId?: string;
   isTriggerToken: boolean;
-}): { oauthProjectPublicId?: string; isTriggerToken?: boolean } => {
+  isRunToken: boolean;
+}): {
+  oauthProjectPublicId?: string;
+  isTriggerToken?: boolean;
+  isRunToken?: boolean;
+} => {
   return {
     ...(args.scopedProjectPublicId
       ? { oauthProjectPublicId: args.scopedProjectPublicId }
       : {}),
     ...(args.isTriggerToken ? { isTriggerToken: true } : {}),
+    ...(args.isRunToken ? { isRunToken: true } : {}),
   };
 };
 
@@ -207,24 +213,35 @@ const createJwtGetPolicies = (args: {
   };
 };
 
-const resolveJwt = async (ctx: Context, token: string) => {
-  let payload: {
-    publicId: string;
-    role: string;
-    prj?: string;
-    scope?: string;
-    trg?: string;
-    orn?: string;
-    key?: string;
-  };
+/**
+ * The claims one of our own JWTs can carry. `prj` scopes the token to a project;
+ * `trg` / `orn` / `scope` are the marker claims that say *which kind* of
+ * project-scoped credential it is (trigger, run-as, OAuth), each with its own
+ * boundary rule in `resolveScopedBoundaryDocs`.
+ */
+type JwtClaims = {
+  publicId: string;
+  role: string;
+  prj?: string;
+  scope?: string;
+  trg?: string;
+  orn?: string;
+  key?: string;
+};
 
+/** Verifies a bearer JWT, or null when it is not a valid token of ours. */
+const verifyJwtClaims = (token: string): JwtClaims | null => {
   try {
-    payload = jwt.verify(token, JWT_SECRET) as typeof payload;
+    const claims = jwt.verify(token, JWT_SECRET) as JwtClaims;
+    return typeof claims.publicId === 'string' ? claims : null;
   } catch {
-    return;
+    return null;
   }
+};
 
-  if (typeof payload.publicId !== 'string') return;
+const resolveJwt = async (ctx: Context, token: string) => {
+  const payload = verifyJwtClaims(token);
+  if (!payload) return;
 
   const user = await ctx.db.User.findOne({
     where: { publicId: payload.publicId },
@@ -238,6 +255,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const jwtIsAllowed = createJwtIsAllowed({ role, userPolicyIds, db: ctx.db });
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
+  const isRunToken = typeof payload.orn === 'string';
 
   // OAuth access tokens, trigger run-as tokens and orchestration run-as tokens
   // are all project-scoped credentials: they intersect the owning user's
@@ -246,7 +264,7 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId,
     triggerPublicId: isTriggerToken ? payload.trg : undefined,
-    isRunToken: typeof payload.orn === 'string',
+    isRunToken,
     runApiKeyPublicId:
       typeof payload.key === 'string' ? payload.key : undefined,
     scopeClaim: payload.scope,
@@ -269,7 +287,11 @@ const resolveJwt = async (ctx: Context, token: string) => {
     publicId: user.publicId as string,
     username: user.username as string,
     role,
-    ...buildScopedIdentityFields({ scopedProjectPublicId, isTriggerToken }),
+    ...buildScopedIdentityFields({
+      scopedProjectPublicId,
+      isTriggerToken,
+      isRunToken,
+    }),
     isAllowed,
     resolveProjectIds: scopedProjectPublicId
       ? createApiKeyResolveProjectIds({

@@ -143,9 +143,23 @@ export class Task extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare activeDispatch: Record<string, unknown> | null;
 
-  // running | completed | failed for the current state's dispatch.
+  // running | completed | failed | unrouted for the current state's dispatch.
   @Column({ type: DataType.STRING, allowNull: true })
   declare automationStatus: string | null;
+
+  // How many machine-driven transitions have run back-to-back with no outside
+  // intervention (#885). A workflow state may dispatch work that transitions the
+  // task straight back into that same state, and neither layer's validator sees
+  // the cycle: orchestration cycle detection is intra-graph, and revisiting a
+  // state is what workflows are *for*. This counter is the bound.
+  //
+  // It counts a *chain*, not a lifetime: any move by a person, a plain API key,
+  // or an approval resolution resets it to 0, because an outside intervention is
+  // exactly the evidence that the task is not spinning unattended. So a
+  // long-lived task that legitimately revisits states for months is never
+  // bounded by its own history — only by how far it can travel untouched.
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
+  declare automationChainDepth: number;
 
   // Basis for `stalled_after`; reset on every state entry.
   @Column({ type: DataType.DATE, allowNull: false })

@@ -105,8 +105,12 @@ and a queue slot, while a task lives for days and can move backward. Let the run
 let the task's own state machine carry things forward.
 
 **Bound the cycle yourself.** A state whose orchestration transitions the task back into
-that same state loops forever. Cycle detection is per-graph and workflow cycles are
-deliberate, so nothing rejects the composed cycle for you.
+that same state is a cycle no validator can see: cycle detection is per-graph, and
+workflow cycles are deliberate. It no longer runs forever — the task engine bounds it
+with an [automation chain budget](/docs/modules/workflows#the-automation-chain-budget)
+and refuses the hop that would exceed it — but the budget is a backstop, not a design.
+Reaching it means a loop is running unattended, which is worth an alert rather than a
+shrug. Bound the cycle in the graph you write; let the budget catch the case you missed.
 
 ## What the two share
 

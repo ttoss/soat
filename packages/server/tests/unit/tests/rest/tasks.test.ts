@@ -3,6 +3,7 @@ import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
+import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
 import { wakeDueRuns } from 'src/lib/orchestrationScheduler';
 import { flushTaskAutomations } from 'src/lib/tasks';
 import * as tasksAutomationModule from 'src/lib/tasksAutomation';
@@ -2594,6 +2595,244 @@ describe('Tasks', () => {
         })
       ).body.id;
       expect(await stallDeadline(taskId)).toBeNull();
+    });
+  });
+
+  // The composed cycle #879 made possible: a state dispatches, the dispatch
+  // routes the task back into that same state, and it dispatches again. Neither
+  // layer's validator sees it — orchestration cycle detection is intra-graph,
+  // and revisiting a workflow state is the module's whole point (#885).
+  describe('automation chain limit (#885)', () => {
+    const LIMIT = 3;
+    let previousLimit: string | undefined;
+
+    beforeAll(() => {
+      previousLimit = process.env.TASK_AUTOMATION_CHAIN_LIMIT;
+      process.env.TASK_AUTOMATION_CHAIN_LIMIT = String(LIMIT);
+    });
+
+    afterAll(() => {
+      if (previousLimit === undefined) {
+        delete process.env.TASK_AUTOMATION_CHAIN_LIMIT;
+      } else {
+        process.env.TASK_AUTOMATION_CHAIN_LIMIT = previousLimit;
+      }
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    /** A workflow whose only automated state routes straight back into itself. */
+    const selfLoopWorkflow = async () => {
+      return (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `spin-${Math.random().toString(36).slice(2)}`,
+            states: [
+              {
+                name: 'spin',
+                initial: true,
+                on_enter: {
+                  dispatch: { kind: 'agent', agent_id: agentId },
+                  on_complete: [{ when: true, transition: 'respin' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'respin', from: ['spin'], to: 'spin' },
+              { name: 'finish', from: ['spin'], to: 'done' },
+            ],
+          })
+      ).body.id;
+    };
+
+    test('a state that routes back into itself stops at the limit instead of looping forever', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_spin',
+        traceId: 'trc_spin',
+        status: 'completed',
+        output: { model: 'm', content: 'again', finishReason: 'stop' },
+      });
+
+      const events: SoatEvent[] = [];
+      const handler = (e: SoatEvent) => {
+        events.push(e);
+      };
+      eventBus.on('soat:event', handler);
+
+      try {
+        const wf = await selfLoopWorkflow();
+        const taskId = (
+          await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+            project_id: projectId,
+            workflow_id: wf,
+            title: 'spinner',
+          })
+        ).body.id;
+
+        const settled = await pollTask({
+          token: userToken,
+          taskId,
+          predicate: (t) => {
+            return t.automation_status === 'unrouted';
+          },
+        });
+
+        // The task is parked in the state it was looping through, not advanced
+        // and not silently left looking `completed`.
+        expect(settled.state).toBe('spin');
+        expect(settled.automation_chain_depth).toBe(LIMIT);
+
+        // The bound is surfaced, not a silent stop.
+        const rejection = events.find((e) => {
+          return (
+            e.type === 'tasks.automation_rejected' && e.resourceId === taskId
+          );
+        });
+        expect(rejection).toBeDefined();
+        expect(rejection!.data.transition).toBe('respin');
+        expect(rejection!.data.errorCode).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
+
+        // Exactly `LIMIT` automated hops ran — the loop was cut, not merely
+        // slowed. One entry for creation plus one per accepted `respin`.
+        const history = await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        );
+        const automated = (history.body as HistoryRow[]).filter((row) => {
+          return row.transition === 'respin';
+        });
+        expect(automated).toHaveLength(LIMIT);
+      } finally {
+        eventBus.off('soat:event', handler);
+      }
+    });
+
+    test('a human transition resets the chain, so a task is never bounded by its whole history', async () => {
+      mockCreateGeneration.mockResolvedValue({
+        id: 'gen_spin2',
+        traceId: 'trc_spin2',
+        status: 'completed',
+        output: { model: 'm', content: 'again', finishReason: 'stop' },
+      });
+
+      const wf = await selfLoopWorkflow();
+      const taskId = (
+        await authenticatedTestClient(userToken).post('/api/v1/tasks').send({
+          project_id: projectId,
+          workflow_id: wf,
+          title: 'spinner-2',
+        })
+      ).body.id;
+
+      await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'unrouted';
+        },
+      });
+
+      // A person stepping in is exactly the intervention the budget exists to
+      // wait for: the chain starts over rather than staying permanently spent.
+      const moved = await transition(taskId, 'respin');
+      expect(moved.status).toBe(200);
+      expect(moved.body.automation_chain_depth).toBe(0);
+
+      // ...and the state's automation runs again on that fresh budget.
+      const respun = await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'unrouted';
+        },
+      });
+      expect(respun.automation_chain_depth).toBe(LIMIT);
+    });
+
+    // The other half of the loop, and the one a budget keyed on `principal.kind`
+    // would miss entirely: a dispatch's own `soat` tool calls `transition-task`
+    // with a run-as token, which authenticates as the *user* who started the
+    // chain. On the wire that hop is indistinguishable from a person clicking a
+    // button — except for the `orn` claim.
+    describe('a transition fired by a run-as token', () => {
+      /** Two states that bounce back and forth, with no automation of their own. */
+      const pingPongWorkflow = async () => {
+        return (
+          await authenticatedTestClient(userToken)
+            .post('/api/v1/workflows')
+            .send({
+              project_id: projectId,
+              name: `pingpong-${Math.random().toString(36).slice(2)}`,
+              states: [{ name: 'ping', initial: true }, { name: 'pong' }],
+              transitions: [
+                { name: 'to_pong', from: ['ping'], to: 'pong' },
+                { name: 'to_ping', from: ['pong'], to: 'ping' },
+              ],
+            })
+        ).body.id;
+      };
+
+      const startPingPong = async () => {
+        return (
+          await authenticatedTestClient(userToken)
+            .post('/api/v1/tasks')
+            .send({
+              project_id: projectId,
+              workflow_id: await pingPongWorkflow(),
+              title: 'bounce',
+            })
+        ).body.id;
+      };
+
+      const bounce = (args: {
+        taskId: string;
+        index: number;
+        token: string;
+      }) => {
+        return authenticatedTestClient(args.token)
+          .post(`/api/v1/tasks/${args.taskId}/transitions`)
+          .send({ transition: args.index % 2 === 0 ? 'to_pong' : 'to_ping' });
+      };
+
+      test('counts against the chain budget rather than resetting it', async () => {
+        const taskId = await startPingPong();
+        const header = await buildRunAuthHeader({
+          principalKind: 'user',
+          principalId: userId,
+          projectId: (await db.Project.findOne({
+            where: { publicId: projectId },
+          }))!.id as number,
+          workPublicId: taskId,
+        });
+        const runToken = header!.slice('Bearer '.length);
+
+        for (let i = 0; i < LIMIT; i += 1) {
+          const res = await bounce({ taskId, index: i, token: runToken });
+          expect(res.status).toBe(200);
+          expect(res.body.automation_chain_depth).toBe(i + 1);
+        }
+
+        const refused = await bounce({
+          taskId,
+          index: LIMIT,
+          token: runToken,
+        });
+        expect(refused.status).toBe(409);
+        expect(refused.body.error.code).toBe('TASK_AUTOMATION_CHAIN_LIMIT');
+      });
+
+      test('the same sequence from a person is never bounded', async () => {
+        const taskId = await startPingPong();
+        for (let i = 0; i < LIMIT + 2; i += 1) {
+          const res = await bounce({ taskId, index: i, token: userToken });
+          expect(res.status).toBe(200);
+          expect(res.body.automation_chain_depth).toBe(0);
+        }
+      });
     });
   });
 });
