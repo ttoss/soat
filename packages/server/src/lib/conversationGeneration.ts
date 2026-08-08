@@ -97,6 +97,7 @@ const runAgentGeneration = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   sessionId?: string;
+  authHeader?: string;
 }): Promise<InternalGenerationResult> => {
   const result = await createGeneration({
     agentId: args.agent.publicId,
@@ -104,6 +105,7 @@ const runAgentGeneration = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
+    authHeader: args.authHeader,
   });
 
   if (result instanceof ReadableStream) {
@@ -139,6 +141,7 @@ const runGenerationForAgent = async (args: {
   toolContext?: Record<string, string>;
   abortSignal?: AbortSignal;
   sessionId?: string;
+  authHeader?: string;
 }): Promise<InternalGenerationResult> => {
   return runAgentGeneration({
     agent: args.generatingAgent,
@@ -146,6 +149,7 @@ const runGenerationForAgent = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
+    authHeader: args.authHeader,
   });
 };
 
@@ -279,6 +283,10 @@ export const generateConversationMessage = async (args: {
   // caller that knows the session behind the turn (the actor is derived from
   // it). Plain conversation generations leave it unset.
   sessionId?: string;
+  // The credential the turn's tools run with. Set only by request-less callers
+  // that re-minted one for durable work (an approved tool call's continuation,
+  // #894); a request-driven turn leaves it unset, exactly as before.
+  authHeader?: string;
 }): Promise<GenerateConversationMessageResult> => {
   const ctx = await loadGenerationContext({
     conversationId: args.conversationId,
@@ -301,6 +309,7 @@ export const generateConversationMessage = async (args: {
     toolContext: args.toolContext,
     abortSignal: args.abortSignal,
     sessionId: args.sessionId,
+    authHeader: args.authHeader,
   });
 
   if (genResult.status !== 'completed') {

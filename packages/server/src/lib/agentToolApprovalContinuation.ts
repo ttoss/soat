@@ -9,6 +9,7 @@ import {
   type MappedApproval,
   registerApprovalResumeHandler,
 } from './approvals';
+import { buildRunAuthHeader } from './orchestrationRunToken';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
 
@@ -23,6 +24,42 @@ const errorMessage = (error: unknown): string => {
 };
 
 /**
+ * Re-mints the credential the continuation acts with, from the principal
+ * persisted on the generation that proposed the approved call.
+ *
+ * The approval is the durable work here — it can sit pending for days, and the
+ * request that resolved it is gone before any of this runs — so identity has to
+ * come from the row, not from the resolving request. Note whose identity it is
+ * *not*: the approver decided **whether** the proposed action happens, not **as
+ * whom**; re-minting from the resolver would silently widen the chain to that
+ * person's access.
+ *
+ * `undefined` when the chain has no principal — a trigger- or OAuth-started
+ * generation deliberately records none — or when the principal no longer
+ * resolves. The continuation then behaves exactly as it did before it had an
+ * identity: its self-calls go out unauthenticated.
+ */
+const resolveContinuationAuthHeader = async (args: {
+  item: MappedApproval;
+  projectInternalId: number;
+}): Promise<string | undefined> => {
+  if (!args.item.generation_id) return undefined;
+
+  const proposing = await db.Generation.findOne({
+    where: { publicId: args.item.generation_id },
+    attributes: ['startedByPrincipalType', 'startedByPrincipalId'],
+  });
+  if (!proposing) return undefined;
+
+  return buildRunAuthHeader({
+    principalKind: proposing.startedByPrincipalType,
+    principalId: proposing.startedByPrincipalId,
+    projectId: args.projectInternalId,
+    workPublicId: args.item.id,
+  });
+};
+
+/**
  * Executes the frozen (or edited) proposed action at resolution time and returns
  * its output as the decision `result`. Runs through the normal persisted-tool
  * path (`callTool`), which re-applies preset parameters and output mapping.
@@ -32,6 +69,7 @@ const errorMessage = (error: unknown): string => {
 const executeApprovedAction = async (args: {
   item: MappedApproval;
   projectInternalId: number;
+  authHeader?: string;
 }): Promise<object | null> => {
   const proposed = args.item.proposed_action;
   if (!proposed?.tool_id) {
@@ -56,6 +94,10 @@ const executeApprovedAction = async (args: {
     id: proposed.tool_id,
     action: proposed.action,
     input,
+    // The approved action runs as the chain's principal too, not just the
+    // continuation that reports it — a proposed `soat` call is executed here,
+    // and without the credential it reaches the loopback unauthenticated.
+    authHeader: args.authHeader,
   });
 
   return isPlainObject(rawResult) ? rawResult : { output: rawResult };
@@ -117,6 +159,7 @@ const fireContinuation = async (args: {
   item: MappedApproval;
   decision: DecisionOutput;
   projectInternalId: number;
+  authHeader?: string;
 }): Promise<void> => {
   const { item } = args;
   if (!item.agent_id) return;
@@ -133,6 +176,7 @@ const fireContinuation = async (args: {
       agentId: agent.id as number,
       sessionId: item.session_id,
       message,
+      authHeader: args.authHeader,
     });
     return;
   }
@@ -143,6 +187,11 @@ const fireContinuation = async (args: {
     projectIds: [args.projectInternalId],
     initiatorGenerationId: item.generation_id,
     messages: [{ role: 'user', content: message }],
+    // Carries the chain's identity into the continuation's own `soat` tools,
+    // and — because `createGeneration` reads the principal back off it — onto
+    // the continuation's generation row, so a further approval in the same
+    // chain re-mints from there in turn.
+    authHeader: args.authHeader,
   });
 };
 
@@ -171,6 +220,11 @@ export const runToolCallContinuation = async (args: {
     }
     const projectInternalId = project.id as number;
 
+    const authHeader = await resolveContinuationAuthHeader({
+      item,
+      projectInternalId,
+    });
+
     let result: object | null = null;
     if (args.decision.decision === 'approved') {
       // A client tool cannot be executed server-side; approving one re-hands the
@@ -182,21 +236,25 @@ export const runToolCallContinuation = async (args: {
       const reHandedOff = await emitClientToolReHandoff({
         item,
         projectInternalId,
+        authHeader,
       });
       if (reHandedOff) return;
 
-      result = await executeApprovedAction({ item, projectInternalId }).catch(
-        (error: unknown) => {
-          log('executeApprovedAction failed id=%s %o', item.id, error);
-          return { error: errorMessage(error) };
-        }
-      );
+      result = await executeApprovedAction({
+        item,
+        projectInternalId,
+        authHeader,
+      }).catch((error: unknown) => {
+        log('executeApprovedAction failed id=%s %o', item.id, error);
+        return { error: errorMessage(error) };
+      });
     }
 
     await fireContinuation({
       item,
       decision: { ...args.decision, result },
       projectInternalId,
+      authHeader,
     });
   } catch (error) {
     // The continuation is best-effort: the decision is already persisted and

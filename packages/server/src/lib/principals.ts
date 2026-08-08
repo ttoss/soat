@@ -35,3 +35,21 @@ export const principalFromAuthUser = (authUser: {
   }
   return { principalType: 'user', principalId: authUser.publicId };
 };
+
+/**
+ * The `startedByPrincipal*` column pair for a principal, or nulls when the work
+ * records none. Every writer of those two columns spells the mapping the same
+ * way, and each new one is a spread rather than two more `?? null` branches in
+ * an already-long record literal.
+ */
+export const startedByPrincipalColumns = (
+  principal: RequestPrincipal | null
+): {
+  startedByPrincipalType: string | null;
+  startedByPrincipalId: string | null;
+} => {
+  return {
+    startedByPrincipalType: principal?.principalType ?? null,
+    startedByPrincipalId: principal?.principalId ?? null,
+  };
+};

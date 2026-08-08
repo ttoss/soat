@@ -141,6 +141,11 @@ export const generateSessionResponse = async (args: {
   sessionId: string;
   model?: string;
   toolContext?: Record<string, string>;
+  // The credential this turn's tools run with. Only request-less callers set it
+  // — an approved tool call's continuation re-mints one from the principal on
+  // the generation that proposed the call (#894). A session turn driven by a
+  // real request leaves it unset and behaves exactly as before.
+  authHeader?: string;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -210,6 +215,7 @@ export const generateSessionResponse = async (args: {
       // request's `toolContext` wins the merge), so trusting it would let a
       // caller bill another actor.
       sessionId: session.publicId,
+      authHeader: args.authHeader,
     });
   } finally {
     if (!controller.signal.aborted) {
@@ -231,6 +237,9 @@ export const addSessionMessage = async (args: {
   toolContext?: Record<string, string>;
   authUser?: AuthUser;
   idempotencyKey?: string;
+  // Forwarded to the auto-generation this message may trigger; see
+  // `generateSessionResponse`.
+  authHeader?: string;
 }) => {
   const session = await findSessionRecord({
     agentId: args.agentId,
@@ -299,6 +308,7 @@ export const addSessionMessage = async (args: {
     savedContent,
     savedDocumentId,
     toolContext: args.toolContext,
+    authHeader: args.authHeader,
     generateFn: generateSessionResponse,
   });
 };
@@ -310,6 +320,10 @@ export const sendSessionMessage = async (args: {
   model?: string;
   toolContext?: Record<string, string>;
   authUser?: AuthUser;
+  // See `generateSessionResponse`. Threaded through both the auto-generation
+  // `addSessionMessage` may trigger and the explicit turn below, so the
+  // credential reaches whichever of the two actually runs.
+  authHeader?: string;
 }) => {
   await addSessionMessage({
     agentId: args.agentId,
@@ -317,6 +331,7 @@ export const sendSessionMessage = async (args: {
     message: args.message,
     toolContext: args.toolContext,
     authUser: args.authUser,
+    authHeader: args.authHeader,
   });
 
   return generateSessionResponse({
@@ -324,6 +339,7 @@ export const sendSessionMessage = async (args: {
     sessionId: args.sessionId,
     model: args.model,
     toolContext: args.toolContext,
+    authHeader: args.authHeader,
   });
 };
 

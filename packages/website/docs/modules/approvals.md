@@ -111,6 +111,29 @@ The two producers share the item lifecycle but suspend differently:
   path's `on_expired` edge). When the original generation ran in a session or
   conversation, the continuation's messages append there.
 
+### Continuation identity
+
+A continuation runs **as the principal that started the chain** — never as the
+approver. The approver decided *whether* the proposed action happens, not *as
+whom*; acting as them would silently widen the chain to that person's access.
+
+Because an item can sit pending for days, identity comes from the row rather
+than from the request that resolved it: the platform reads the principal
+persisted on the proposing generation
+([`started_by_principal_type` / `started_by_principal_id`](./generations.md#starting-principal))
+and re-mints a short-lived run-as token from it. That token is what the
+continuation's [`soat` tools](./tools.md#soat) authenticate with, and what the
+approved action itself executes with. It asserts identity only — authorization
+is still evaluated per request, so a chain a scoped API key started can never
+reach past that key's policies, and revoking the key stops the chain even
+mid-flight.
+
+The continuation records the same principal on its own generation, so a further
+approval in the same chain re-mints from there in turn, however many hops later.
+A chain with no recorded principal — one started by a trigger or an OAuth token,
+which carry their boundary in the token rather than in the principal — gets no
+credential, and its self-calls stay unauthenticated.
+
 ### Duplicate proposals (dedup)
 
 An agent retrying a proposal must not spam the queue. Tool-call items carry a

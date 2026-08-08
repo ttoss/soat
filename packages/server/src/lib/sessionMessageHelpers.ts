@@ -68,6 +68,7 @@ type GenerateFn = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
+  authHeader?: string;
 }) => Promise<unknown>;
 
 export const triggerOrReturnMessage = (args: {
@@ -75,6 +76,7 @@ export const triggerOrReturnMessage = (args: {
   agentId: number;
   sessionId: string;
   toolContext?: Record<string, string>;
+  authHeader?: string;
   savedContent: string | null;
   savedDocumentId: string | undefined;
   generateFn: GenerateFn;
@@ -84,6 +86,7 @@ export const triggerOrReturnMessage = (args: {
       agentId: args.agentId,
       sessionId: args.sessionId,
       toolContext: args.toolContext,
+      authHeader: args.authHeader,
     });
   }
   return {

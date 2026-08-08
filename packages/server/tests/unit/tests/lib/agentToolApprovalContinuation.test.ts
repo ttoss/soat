@@ -223,6 +223,90 @@ describe('agentToolApprovalContinuation (tool_call resolution)', () => {
     expect(continuation).not.toBeNull();
   });
 
+  test('the continuation carries the principal persisted on the proposing generation', async () => {
+    // The durability property #894 turns on: the continuation re-mints its
+    // credential from the *row*, then records the same principal on its own
+    // generation — so a further approval in the same chain re-mints from there
+    // in turn, however many hops later. Whether that credential authenticates
+    // is asserted end-to-end in `rest/soatSelfCall.test.ts`; what this pins is
+    // that the identity survives the hop at all.
+    const agent = await db.Agent.findOne({
+      where: { publicId: agentPublicId },
+    });
+    const starter = await db.User.create({
+      username: `chain_starter_${Date.now()}`,
+      passwordHash: 'x',
+      role: 'user',
+      policyIds: [],
+    });
+    const trace = await db.Trace.create({
+      projectId,
+      agentId: agent!.id,
+      name: 'principal trace',
+    });
+    const initiator = await db.Generation.create({
+      projectId,
+      agentId: agent!.id,
+      traceId: trace.id,
+      status: 'completed',
+      startedAt: new Date(),
+      startedByPrincipalType: 'user',
+      startedByPrincipalId: starter.publicId,
+    });
+
+    const item = buildToolCallItem({
+      id: 'apr_principal_test',
+      generation_id: initiator.publicId,
+    });
+    await runToolCallContinuation({
+      item,
+      decision: {
+        decision: 'approved',
+        approvalId: item.id,
+        // Deliberately a different user from the one that started the chain:
+        // the approver decided *whether*, never *as whom*.
+        resolvedBy: 'user_someone_else',
+        editedArgs: null,
+        reason: null,
+        result: null,
+      },
+    });
+
+    const continuation = await db.Generation.findOne({
+      where: { initiatorGenerationId: initiator.id },
+    });
+    expect(continuation).not.toBeNull();
+    expect(continuation!.startedByPrincipalType).toBe('user');
+    expect(continuation!.startedByPrincipalId).toBe(starter.publicId);
+  });
+
+  test('a proposing generation that no longer exists leaves the continuation without a credential', async () => {
+    // `ApprovalItem.generationId` is a stored public id, not a foreign key, so
+    // the row it names can be gone by the time a days-old item is resolved.
+    // That must degrade to the pre-#894 behaviour — an unauthenticated
+    // continuation — not fail the resolution.
+    const item = buildToolCallItem({
+      id: 'apr_missing_gen_test',
+      generation_id: 'gen_doesnotexist0',
+    });
+    await expect(
+      runToolCallContinuation({
+        item,
+        decision: {
+          decision: 'approved',
+          approvalId: item.id,
+          resolvedBy: 'user_test',
+          editedArgs: null,
+          reason: null,
+          result: null,
+        },
+      })
+    ).resolves.toBeUndefined();
+
+    // The approved action still executed, and the continuation still fired.
+    expect(toolRequests).toHaveLength(1);
+  });
+
   test('a rejected item fires the continuation without executing', async () => {
     const item = buildToolCallItem({ status: 'rejected' });
     const decision: DecisionOutput = {
