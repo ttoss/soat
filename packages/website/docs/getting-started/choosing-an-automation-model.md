@@ -1,6 +1,6 @@
 ---
 description: "Workflows or orchestrations? Compare SOAT's two automation models — a cyclic state machine a task lives in, and an acyclic pipeline that runs and ends — and see how they compose."
-sidebar_position: 4
+sidebar_position: 5
 title: Choosing an Automation Model
 ---
 
