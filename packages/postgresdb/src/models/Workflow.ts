@@ -11,6 +11,7 @@ import {
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Project } from './Project';
 import { Task } from './Task';
+import { WorkflowVersion } from './WorkflowVersion';
 
 /**
  * A Workflow is the state-machine *definition*: named states, allowed
@@ -62,6 +63,17 @@ export class Workflow extends Model {
   @Column({ type: DataType.TEXT, allowNull: true })
   declare description: string | null;
 
+  /**
+   * Incremented on every write that changes the state machine (`states`,
+   * `transitions`, `payloadSchema`); each version is archived as a
+   * `WorkflowVersion`. A task pins the version it entered on, so editing a
+   * workflow never re-shapes a task already in flight (#882) — which makes these
+   * columns a *draft* for tasks created from now on, not a live rewrite of the
+   * ones already living in it. Metadata-only edits leave it untouched.
+   */
+  @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 1 })
+  declare version: number;
+
   // State definitions (§5): { name, initial?, terminal?, kind?, on_enter?, stalled_after? }.
   @Column({ type: DataType.JSONB, allowNull: false, defaultValue: [] })
   declare states: object[];
@@ -78,6 +90,11 @@ export class Workflow extends Model {
     return Task;
   })
   declare tasks: Task[];
+
+  @HasMany(() => {
+    return WorkflowVersion;
+  })
+  declare versions: WorkflowVersion[];
 
   @Column({ type: DataType.DATE })
   declare createdAt: Date;

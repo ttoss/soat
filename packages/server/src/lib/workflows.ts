@@ -10,6 +10,10 @@ import {
   type WorkflowState,
   type WorkflowTransition,
 } from './workflowsValidation';
+import {
+  buildWorkflowConfigSnapshot,
+  workflowVersionStore,
+} from './workflowVersionSnapshot';
 
 export type {
   OnCompleteRule,
@@ -25,12 +29,23 @@ type WorkflowInstance = InstanceType<(typeof db)['Workflow']> & {
   project?: InstanceType<(typeof db)['Project']>;
 };
 
+/**
+ * The authorship a write attaches to the version it archives. Optional
+ * throughout: a write with no request user behind it (a formation apply, an
+ * internal repair) archives a version with a null author rather than none.
+ */
+export type WorkflowVersionAuthorship = {
+  createdByUserId?: number | null;
+  versionLabel?: string | null;
+};
+
 export const mapWorkflow = (instance: WorkflowInstance) => {
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
     name: instance.name,
     description: instance.description,
+    version: instance.version,
     states: workflowCollectionToSnake(instance.states),
     transitions: workflowCollectionToSnake(instance.transitions),
     payload_schema: instance.payloadSchema,
@@ -38,6 +53,8 @@ export const mapWorkflow = (instance: WorkflowInstance) => {
     updated_at: instance.updatedAt,
   };
 };
+
+export type MappedWorkflow = ReturnType<typeof mapWorkflow>;
 
 const workflowIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
@@ -114,7 +131,7 @@ type CreateWorkflowArgs = {
   states: WorkflowState[];
   transitions: WorkflowTransition[];
   payloadSchema?: object | null;
-};
+} & WorkflowVersionAuthorship;
 
 export const createWorkflow = async (args: CreateWorkflowArgs) => {
   log(
@@ -135,6 +152,7 @@ export const createWorkflow = async (args: CreateWorkflowArgs) => {
     projectId: args.projectId,
     name: args.name,
     description: args.description ?? null,
+    version: 1,
     states: args.states,
     transitions: args.transitions,
     payloadSchema: args.payloadSchema ?? null,
@@ -142,7 +160,19 @@ export const createWorkflow = async (args: CreateWorkflowArgs) => {
   log('createWorkflow: created id=%s', workflow.publicId);
 
   const created = await findWorkflowInstance({ id: workflow.publicId });
-  return mapWorkflow(created!);
+  const mapped = mapWorkflow(created!);
+
+  // Version 1 is archived on create, so the very first task has a pinned state
+  // machine to resolve rather than falling back to the live row.
+  await workflowVersionStore.writeVersion({
+    resourceDbId: workflow.id as number,
+    version: 1,
+    config: buildWorkflowConfigSnapshot(mapped),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+  });
+
+  return mapped;
 };
 
 type UpdateWorkflowArgs = {
@@ -152,7 +182,7 @@ type UpdateWorkflowArgs = {
   states?: WorkflowState[];
   transitions?: WorkflowTransition[];
   payloadSchema?: object | null;
-};
+} & WorkflowVersionAuthorship;
 
 const revalidateWorkflowUpdate = async (args: {
   workflow: InstanceType<(typeof db)['Workflow']>;
@@ -189,6 +219,12 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
     transitions: args.transitions,
   });
 
+  // `workflow` is loaded with its project so it can be mapped directly, before
+  // and after the write: `save` mutates the instance in place, so the same
+  // reference yields the pre-write config here and the post-write one below,
+  // with no second query and no chance of the two views disagreeing.
+  const beforeConfig = buildWorkflowConfigSnapshot(mapWorkflow(workflow));
+
   if (args.name !== undefined && args.name !== workflow.name) {
     await assertNameAvailable({
       projectId: workflow.projectId as number,
@@ -204,6 +240,25 @@ export const updateWorkflow = async (args: UpdateWorkflowArgs) => {
   }
 
   await workflow.save();
+
+  // A definition write bumps the version and archives the new state machine, so
+  // a task pinned to any earlier version still resolves the machine it entered
+  // on. Metadata-only edits (name / description) leave the version untouched — as
+  // does re-writing the definition the workflow already holds, which is what
+  // makes restoring the live definition a genuine no-op rather than an endless
+  // version chain.
+  await workflowVersionStore.archiveConfigChange({
+    resourceDbId: workflow.id as number,
+    currentVersion: workflow.version,
+    before: beforeConfig,
+    after: buildWorkflowConfigSnapshot(mapWorkflow(workflow)),
+    label: args.versionLabel,
+    createdByUserId: args.createdByUserId,
+    bumpVersion: async (nextVersion) => {
+      await workflow.update({ version: nextVersion });
+      log('updateWorkflow: id=%s bumped to version=%d', args.id, nextVersion);
+    },
+  });
 
   const updated = await findWorkflowInstance({ id: args.id });
   return mapWorkflow(updated!);
@@ -230,5 +285,15 @@ export const deleteWorkflow = async (args: { id: string }) => {
     );
   }
 
-  await workflow.destroy();
+  // Archived versions are owned by the workflow; remove them before the parent
+  // so no orphan version rows are left behind. Closed tasks cascade with the
+  // workflow (the open-task guard above is the only thing that blocks deletion),
+  // so nothing is left pinned to a version that no longer exists.
+  await db.sequelize.transaction(async (t) => {
+    await workflowVersionStore.deleteVersions({
+      resourceDbId: workflow.id as number,
+      transaction: t,
+    });
+    await workflow.destroy({ transaction: t });
+  });
 };

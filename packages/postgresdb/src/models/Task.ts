@@ -94,6 +94,21 @@ export class Task extends Model {
   )
   declare workflow: Workflow;
 
+  // The workflow version this task lives in, stamped at creation and never
+  // changed afterwards (#882). Every read of the state machine — the transition
+  // validator, the approval gate, and payload validation — resolves through this
+  // number rather than the live `Workflow` row, so editing a workflow cannot
+  // re-shape a task already in flight, including one parked for weeks.
+  //
+  // A version *number* rather than a foreign key to `workflow_versions`: the
+  // number is what the task response exposes and what an audit reader cites, it
+  // matches `OrchestrationRun.orchestrationVersion` and `Generation.agentVersion`,
+  // and the archive row is reachable from it with no join. Null only for tasks
+  // created before pinning existed, which fall back to the live row — the
+  // pre-#882 behavior, and the only thing there is to fall back to.
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare workflowVersion: number | null;
+
   @Column({ type: DataType.STRING, allowNull: false })
   declare title: string;
 

@@ -4864,6 +4864,78 @@ echo "Transition history principal_kind: OK"
 # Board query by state/status.
 $SOAT_CLI list-tasks --project-id "$PROJECT_PUBLIC_ID" --workflow-id "$WORKFLOW_ID" --status closed >/dev/null
 
+# ── Definition versioning and task pinning (#882) ──
+echo "--- Workflow versions ---"
+WF_VER_LIST=$($SOAT_CLI list-workflow-versions --workflow-id "$WORKFLOW_ID")
+if ! printf '%s\n' "$WF_VER_LIST" | jq -e '.total == 1 and .data[0].version == 1' >/dev/null 2>&1; then
+  echo "ERROR: list-workflow-versions did not report the create-time version" >&2
+  printf '%s\n' "$WF_VER_LIST" >&2
+  exit 1
+fi
+WF_VER_GET=$($SOAT_CLI get-workflow-version --workflow-id "$WORKFLOW_ID" --version 1)
+if ! printf '%s\n' "$WF_VER_GET" | jq -e --arg id "$WORKFLOW_ID" '.workflow_id == $id and .version == 1 and (.config.states | length) == 4' >/dev/null 2>&1; then
+  echo "ERROR: get-workflow-version returned unexpected response" >&2
+  printf '%s\n' "$WF_VER_GET" >&2
+  exit 1
+fi
+echo "Workflow versions: OK (v1 archived on create)"
+
+# A task created now is pinned to v1 and keeps running on it after the edit.
+PINNED_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "pinned card" \
+  --payload '{"theme":"the tide"}' | jq -r '.id')
+PINNED_VERSION=$($SOAT_CLI get-task --task-id "$PINNED_TASK_ID" | jq -r '.workflow_version')
+if [ "$PINNED_VERSION" != "1" ]; then
+  echo "ERROR: create-task did not pin the task to workflow version 1 (got: $PINNED_VERSION)" >&2
+  exit 1
+fi
+
+# v2 drops the `start` transition the pinned task is about to fire.
+WF_V2_TRANSITIONS='[{"name":"to_review","from":["drafting"],"to":"review"},{"name":"revise","from":["review"],"to":"drafting"},{"name":"publish","from":["review"],"to":"published","guard":{"==":[{"var":"task.payload.approved"},true]}}]'
+WF_BUMP_RESP=$($SOAT_CLI update-workflow \
+  --workflow-id "$WORKFLOW_ID" \
+  --transitions "$WF_V2_TRANSITIONS" \
+  --version-label smoke-rewire)
+if ! printf '%s\n' "$WF_BUMP_RESP" | jq -e '.version == 2' >/dev/null 2>&1; then
+  echo "ERROR: update-workflow did not bump the version on a definition change" >&2
+  printf '%s\n' "$WF_BUMP_RESP" >&2
+  exit 1
+fi
+
+# The pinned task still fires the removed transition — it runs on v1.
+PINNED_MOVE=$($SOAT_CLI transition-task --task-id "$PINNED_TASK_ID" --transition start)
+if ! printf '%s\n' "$PINNED_MOVE" | jq -e '.state == "drafting"' >/dev/null 2>&1; then
+  echo "ERROR: pinned task could not fire a transition its own version declares" >&2
+  printf '%s\n' "$PINNED_MOVE" >&2
+  exit 1
+fi
+
+# A task created after the edit runs on v2, where `start` no longer exists.
+V2_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "v2 card" \
+  --payload '{"theme":"the shore"}' | jq -r '.id')
+expect_cli_error_status 400 transition-task --task-id "$V2_TASK_ID" --transition start
+echo "Task pinning: OK (v1 task moves, v2 task refused)"
+
+# A restore appends rather than rewinding, so v1's definition comes back as v3.
+WF_RESTORE_RESP=$($SOAT_CLI restore-workflow-version \
+  --workflow-id "$WORKFLOW_ID" \
+  --version 1 \
+  --label smoke-rollback)
+if ! printf '%s\n' "$WF_RESTORE_RESP" | jq -e '.version == 3 and (.transitions | length) == 4' >/dev/null 2>&1; then
+  echo "ERROR: restore-workflow-version did not append the restored definition" >&2
+  printf '%s\n' "$WF_RESTORE_RESP" >&2
+  exit 1
+fi
+echo "Restore workflow version: OK"
+
+$SOAT_CLI delete-task --task-id "$V2_TASK_ID" >/dev/null
+$SOAT_CLI delete-task --task-id "$PINNED_TASK_ID" >/dev/null
+
 # ── Approval-gated transition (Phase 3) ──
 echo "--- Approval-gated transition ---"
 GATED_WF_STATES='[{"name":"review","initial":true,"kind":"human"},{"name":"published","terminal":true}]'

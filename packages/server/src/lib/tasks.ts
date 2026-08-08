@@ -6,6 +6,7 @@ import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { runStateAutomation } from './tasksAutomation';
+import { resolveTaskDefinition } from './taskWorkflowDefinition';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
@@ -52,6 +53,7 @@ export const mapTask = (instance: TaskInstance) => {
     id: instance.publicId,
     project_id: instance.project?.publicId,
     workflow_id: instance.workflow?.publicId,
+    workflow_version: instance.workflowVersion,
     title: instance.title,
     state: instance.state,
     status: instance.status,
@@ -369,6 +371,9 @@ export const createTask = async (args: {
   const task = await db.Task.create({
     projectId: args.projectId,
     workflowId: workflow.id as number,
+    // The pin (#882): the task runs on this version of the state machine for its
+    // whole life, however long the workflow is edited around it.
+    workflowVersion: workflow.version,
     title: args.title,
     state: entryState.name,
     status: closed ? 'closed' : 'open',
@@ -432,10 +437,14 @@ export const updateTask = async (args: {
       ...((task.payload as Record<string, unknown> | null) ?? {}),
       ...args.payload,
     };
-    validatePayload({
-      payloadSchema: task.workflow?.payloadSchema,
-      payload: merged,
+    // Validated against the schema the task entered on, not the live one: a
+    // schema tightened after the task was created would otherwise make an
+    // in-flight task unpatchable (#882).
+    const { payloadSchema } = await resolveTaskDefinition({
+      task,
+      workflow: task.workflow!,
     });
+    validatePayload({ payloadSchema, payload: merged });
     task.payload = merged;
   }
   if (args.title !== undefined) task.title = args.title;

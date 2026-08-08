@@ -58,3 +58,4 @@ export { User } from './User';
 export { Webhook } from './Webhook';
 export { WebhookDelivery } from './WebhookDelivery';
 export { Workflow } from './Workflow';
+export { WorkflowVersion } from './WorkflowVersion';
