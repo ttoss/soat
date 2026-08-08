@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.20.0](https://github.com/ttoss/soat/compare/v0.19.2...v0.20.0) (2026-08-08)
+
+### Bug Fixes
+
+* **orchestrations:** pin a run to the graph it started on ([#892](https://github.com/ttoss/soat/issues/892)) ([cecda04](https://github.com/ttoss/soat/commit/cecda049071c52b91f9994f5563dc8084a34d369)), closes [#880](https://github.com/ttoss/soat/issues/880) [#883](https://github.com/ttoss/soat/issues/883) [#877](https://github.com/ttoss/soat/issues/877) [#872](https://github.com/ttoss/soat/issues/872)
+* **workflows:** give a workflow-dispatched agent the same run identity a run has ([#891](https://github.com/ttoss/soat/issues/891)) ([dc289a2](https://github.com/ttoss/soat/commit/dc289a2e96492c411e339fa3cf9da058f0b576dc)), closes [#884](https://github.com/ttoss/soat/issues/884)
+* **workflows:** pin a task to the state machine it entered on ([#895](https://github.com/ttoss/soat/issues/895)) ([aaffa42](https://github.com/ttoss/soat/commit/aaffa42c20b66bf1fd9a0eab10c86709d422204c)), closes [#883](https://github.com/ttoss/soat/issues/883) [#882](https://github.com/ttoss/soat/issues/882)
+
+### Features
+
+* **orchestrations:** give durable runs an identity and fail soat calls loudly ([#879](https://github.com/ttoss/soat/issues/879)) ([b6b39df](https://github.com/ttoss/soat/commit/b6b39df15b4aa14c8d861e6ff738ac4e87cfcd19))
+* **server:** extract a shared resource-versioning engine ([#880](https://github.com/ttoss/soat/issues/880)) ([95f08ec](https://github.com/ttoss/soat/commit/95f08ec1f45668255bb9f377bd2ac955e21407b6)), closes [#872](https://github.com/ttoss/soat/issues/872) [#877](https://github.com/ttoss/soat/issues/877)
+
+### BREAKING CHANGES
+
+* **server:** the `GuardrailVersion` response no longer carries a top-level
+  `document` field. The archived policy moved to `config.document`, alongside the
+  new `id`, `label` and `created_by` fields, so guardrail versions share one shape
+  with agent versions. Read `config.document` where you read `document` before.
+  The `guardrail_versions.document` column is renamed to `config` and rewrapped;
+  schema sync does not migrate existing rows.
+
 ## [0.19.2](https://github.com/ttoss/soat/compare/v0.19.1...v0.19.2) (2026-08-07)
 
 ### Bug Fixes
