@@ -11,19 +11,19 @@ import {
   emitRunLifecycleEvent,
   lifecycleEventForStatus,
 } from './orchestrationEvents';
-import type { RequiredAction, ScheduledWait } from './orchestrationExecutors';
+import { findStartNodes, resolveNextNodes } from './orchestrationGraph';
+import { newLeaseExpiry } from './orchestrationLease';
+import { registerNestedRunStarter } from './orchestrationNestedRun';
 import {
   applyStateMapping,
-  findStartNodes,
-  resolveNextNodes,
-} from './orchestrationExecutors';
-import { newLeaseExpiry } from './orchestrationLease';
-import { executeToolNode } from './orchestrationNodeExecutors';
+  executeToolNode,
+} from './orchestrationNodeExecutors';
 import {
   buildRunError,
   recordDelayResumption,
 } from './orchestrationNodeRecorder';
 import { writeNodeArtifact } from './orchestrationNodesNamespace';
+import type { RequiredAction, ScheduledWait } from './orchestrationNodeTypes';
 import { recordHumanInputResumption } from './orchestrationPauseRecords';
 import { resolveRunGraph } from './orchestrationRunGraph';
 import type { PersistedWakeContext } from './orchestrationRunHelpers';
@@ -1076,3 +1076,7 @@ const resumeRunForApproval = async (args: {
 };
 
 registerApprovalResumeHandler(resumeRunForApproval);
+
+// Loop and sub_orchestration nodes start a child run through this seam rather
+// than importing the engine, which would close a runtime import cycle (#910).
+registerNestedRunStarter(startOrchestrationRun);

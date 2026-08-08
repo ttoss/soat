@@ -1,7 +1,8 @@
 import { DomainError } from '../errors';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { parseDuration } from './orchestrationDuration';
-import { type NodeExecutionResult } from './orchestrationNodeExecutors';
+import { requireNodeField } from './orchestrationNodeFields';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import { callTool } from './tools';
 
@@ -20,11 +21,7 @@ const MAX_POLL_ATTEMPTS = 1000;
 const assertPollNode = (
   node: OrchestrationNode
 ): { toolId: string; interval: string } => {
-  if (!node.toolId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Poll node '${node.id}' missing toolId.`
-    );
+  const toolId = requireNodeField(node, 'toolId');
   if (node.exitCondition === undefined || node.exitCondition === null)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
@@ -35,7 +32,7 @@ const assertPollNode = (
       'ORCHESTRATION_NODE_FAILED',
       `Poll node '${node.id}' missing interval.`
     );
-  return { toolId: node.toolId, interval: node.interval };
+  return { toolId, interval: node.interval };
 };
 
 /**

@@ -7,6 +7,7 @@ import {
   computeDominators,
   transitivePredecessors,
 } from './orchestrationGraphAnalysis';
+import { REQUIRED_NODE_FIELDS } from './orchestrationNodeFields';
 import {
   checkReservedNodeNamespace,
   NODE_ARTIFACTS_STATE_KEY,
@@ -29,6 +30,10 @@ export type OrchestrationValidationResult = {
   warnings: OrchestrationValidationIssue[];
 };
 
+export {
+  REQUIRED_NODE_FIELDS,
+  requireNodeField,
+} from './orchestrationNodeFields';
 export { collectVarRefs } from './orchestrationVarRefs';
 
 const topSegment = (path: string): string => {
@@ -87,22 +92,6 @@ const inputStateKeys = (
 };
 
 // ── Node-level validation ─────────────────────────────────────────────────
-
-const REQUIRED_NODE_FIELDS: Partial<
-  Record<OrchestrationNode['type'], keyof OrchestrationNode>
-> = {
-  agent: 'agentId',
-  tool: 'toolId',
-  transform: 'expression',
-  condition: 'expression',
-  approval: 'toolId',
-  memory_write: 'memoryId',
-  delay: 'duration',
-  loop: 'orchestrationId',
-  poll: 'toolId',
-  emit_event: 'eventType',
-  sub_orchestration: 'orchestrationId',
-};
 
 /**
  * A tool node uses `operationId`, not `action`; flag the legacy field name.

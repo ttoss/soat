@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import type { NodeExecutionResult } from './orchestrationExecutors';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 
 const log = createDebug('soat:orchestrations');

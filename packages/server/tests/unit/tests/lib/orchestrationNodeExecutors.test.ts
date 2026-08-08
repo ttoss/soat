@@ -3,23 +3,23 @@ import { DomainError } from 'src/errors';
 import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { parseDuration } from 'src/lib/orchestrationDuration';
+import { executeEmitEventNode } from 'src/lib/orchestrationEmitEventNode';
 import {
   applyInputMapping,
   applyStateMapping,
   executeAgentNode,
   executeConditionNode,
   executeDelayNode,
-  executeEmitEventNode,
   executeHumanNode,
   executeLoopNode,
   executeMemoryWriteNode,
   executeSubOrchestrationNode,
   executeToolNode,
   executeTransformNode,
-  executeWebhookNode,
 } from 'src/lib/orchestrationNodeExecutors';
 import { executePollNode } from 'src/lib/orchestrationPollNode';
 import type { OrchestrationNode } from 'src/lib/orchestrations';
+import { executeWebhookNode } from 'src/lib/orchestrationWebhookNode';
 import * as toolsModule from 'src/lib/tools';
 
 const makeNode = (

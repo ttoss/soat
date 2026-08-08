@@ -14,8 +14,10 @@ import type { CollectedGuardrail } from './guardrailCollection';
 import { collectApplicableGuardrails } from './guardrailCollection';
 import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
 import { persistGuardrailEvaluations } from './guardrailEvaluationRecord';
-import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
-import type { NodeExecutionResult } from './orchestrationNodeExecutors';
+import type {
+  ApprovalNodeSpec,
+  NodeExecutionResult,
+} from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 
 const log = createDebug('soat:guardrails');

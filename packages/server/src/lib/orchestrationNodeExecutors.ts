@@ -1,4 +1,3 @@
-/* eslint-disable max-lines */
 import createDebug from 'debug';
 
 import { db } from '../db';
@@ -8,10 +7,11 @@ import { createGeneration } from './agentGeneration';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
-import type { ApprovalNodeSpec } from './orchestrationApprovalNode';
 import { parseDuration } from './orchestrationDuration';
-import { startOrchestrationRun } from './orchestrationEngine';
 import { parseMemoryWriteInputs } from './orchestrationMemoryWrite';
+import { startNestedRun } from './orchestrationNestedRun';
+import { requireNodeField } from './orchestrationNodeFields';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import type { ToolNodeGateResult } from './orchestrationToolGuardrail';
 import { runToolNodeGate } from './orchestrationToolGuardrail';
@@ -19,53 +19,6 @@ import { isPlainObject, stripMarkdownJsonFence } from './outputSchema';
 import { callTool } from './tools';
 
 const log = createDebug('soat:orchestrations');
-
-/**
- * Describes how a scheduled `wait` should be resumed once its timer elapses.
- * `delay` carries the artifact the delay node produces (the wait is a pure
- * timer, so on resume the node is simply recorded as complete). `poll` carries
- * the next attempt number, so the poll node re-executes from where it left off.
- */
-export type WaitResume =
-  | { kind: 'delay'; artifact: Record<string, unknown> }
-  | { kind: 'poll'; attempt: number }
-  | { kind: 'retry'; attempt: number };
-
-export type NodeExecutionResult =
-  | { kind: 'artifact'; artifact: Record<string, unknown>; traceId?: string }
-  | { kind: 'condition'; label: string }
-  | {
-      // A guardrail blocked (class D) or tripwired (failed class B) a tool
-      // node's call before it dispatched. Routable outcome (not a run failure):
-      // the engine records `artifact`, seeds `label` so edges conditioned on
-      // `blocked`/`tripwire` follow, and treats the node like a decision node so
-      // an unlabeled happy-path edge does NOT auto-follow a blocked action.
-      kind: 'blocked';
-      nodeId: string;
-      label: 'blocked' | 'tripwire';
-      artifact: Record<string, unknown>;
-    }
-  | {
-      kind: 'requires_action';
-      type: 'human_input' | 'webhook_receive' | 'approval';
-      nodeId: string;
-      prompt: string;
-      context: Record<string, unknown>;
-      options?: string[];
-      // Present only for `approval` requires_action: the frozen proposal the
-      // engine emits as an ApprovalItem when the run parks (§5b of the PRD).
-      approvalSpec?: ApprovalNodeSpec;
-    }
-  | {
-      // The node cannot complete now and must be resumed after `resumeInMs`.
-      // Used by `delay` (a timer) and `poll` (the wait between attempts) so
-      // long waits are offloaded to the background scheduler instead of holding
-      // the run loop — and its HTTP request — open.
-      kind: 'wait';
-      nodeId: string;
-      resumeInMs: number;
-      resume: WaitResume;
-    };
 
 const writeToState = (
   path: string,
@@ -206,11 +159,7 @@ export const executeAgentNode = async (args: {
     runPublicId,
     triggerId,
   } = args;
-  if (!node.agentId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Agent node '${node.id}' missing agentId.`
-    );
+  const agentId = requireNodeField(node, 'agentId');
 
   const inputs = applyInputMapping(node.inputMapping, state);
   const contextLines = Object.entries(inputs)
@@ -224,7 +173,7 @@ export const executeAgentNode = async (args: {
 
   const result = await createGeneration({
     projectIds,
-    agentId: node.agentId,
+    agentId,
     messages,
     parentTraceId: traceId,
     authHeader,
@@ -266,11 +215,7 @@ export const executeToolNode = async (args: {
   approvedArguments?: Record<string, unknown> | null;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader, idempotencyKey } = args;
-  if (!node.toolId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Tool node '${node.id}' missing toolId.`
-    );
+  const toolId = requireNodeField(node, 'toolId');
 
   const inputs =
     args.approvedArguments ?? applyInputMapping(node.inputMapping, state);
@@ -294,7 +239,7 @@ export const executeToolNode = async (args: {
 
   const result = await callTool({
     projectIds,
-    id: node.toolId,
+    id: toolId,
     action: node.operationId,
     input: gated.input,
     authHeader,
@@ -316,10 +261,10 @@ export const executeToolNode = async (args: {
     void emitActivityEntry({
       projectId: scopeProjectId,
       kind: 'action_executed',
-      summary: `Tool '${node.toolId}' executed by node '${node.id}'`,
+      summary: `Tool '${toolId}' executed by node '${node.id}'`,
       detail: { nodeId: node.id, action: node.operationId },
       orchestrationRunId: args.orchestrationRunId,
-      refId: node.toolId,
+      refId: toolId,
     });
   }
 
@@ -331,13 +276,7 @@ export const executeTransformNode = (args: {
   state: Record<string, unknown>;
 }): NodeExecutionResult => {
   const { node, state } = args;
-  if (node.expression === undefined || node.expression === null)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Transform node '${node.id}' missing expression.`
-    );
-
-  const result = evaluateLogic(node.expression, state);
+  const result = evaluateLogic(requireNodeField(node, 'expression'), state);
   return { kind: 'artifact', artifact: { result } };
 };
 
@@ -368,20 +307,16 @@ export const executeMemoryWriteNode = async (args: {
   state: Record<string, unknown>;
 }): Promise<NodeExecutionResult> => {
   const { node, state } = args;
-  if (!node.memoryId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `memory_write node '${node.id}' missing memoryId.`
-    );
+  const memoryId = requireNodeField(node, 'memoryId');
 
   const inputs = applyInputMapping(node.inputMapping, state);
   const memory = await db.Memory.findOne({
-    where: { publicId: node.memoryId },
+    where: { publicId: memoryId },
   });
   if (!memory)
     throw new DomainError(
       'ORCHESTRATION_NODE_FAILED',
-      `Memory '${node.memoryId}' not found.`
+      `Memory '${memoryId}' not found.`
     );
 
   const writeResult = await writeMemoryEntry({
@@ -397,13 +332,9 @@ export const executeConditionNode = (args: {
   state: Record<string, unknown>;
 }): NodeExecutionResult => {
   const { node, state } = args;
-  if (node.expression === undefined || node.expression === null)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Condition node '${node.id}' missing expression.`
-    );
-
-  const label = String(evaluateLogic(node.expression, state));
+  const label = String(
+    evaluateLogic(requireNodeField(node, 'expression'), state)
+  );
   return { kind: 'condition', label };
 };
 
@@ -427,13 +358,9 @@ export const executeDelayNode = (args: {
   node: OrchestrationNode;
 }): NodeExecutionResult => {
   const { node } = args;
-  if (!node.duration)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Delay node '${node.id}' missing duration.`
-    );
-  const ms = parseDuration(node.duration);
-  const artifact = { waited: node.duration };
+  const duration = requireNodeField(node, 'duration');
+  const ms = parseDuration(duration);
+  const artifact = { waited: duration };
   // A zero-length delay completes immediately; anything longer is offloaded to
   // the scheduler as a durable wait rather than blocking the run loop.
   if (ms <= 0) {
@@ -446,9 +373,6 @@ export const executeDelayNode = (args: {
     resume: { kind: 'delay', artifact },
   };
 };
-
-export { executeEmitEventNode } from './orchestrationEmitEventNode';
-export { executeWebhookNode } from './orchestrationWebhookNode';
 
 const resolveLoopCollection = (args: {
   collectionPath: string;
@@ -489,7 +413,7 @@ const runLoopBatches = async (args: {
     const batchResults = await Promise.all(
       batch.map((item) => {
         const itemInput: Record<string, unknown> = { [itemVariable]: item };
-        return startOrchestrationRun({
+        return startNestedRun({
           orchestrationPublicId: orchestrationId,
           projectId: projectIds[0],
           projectIds,
@@ -518,11 +442,7 @@ export const executeLoopNode = async (args: {
   authHeader?: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader } = args;
-  if (!node.orchestrationId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Loop node '${node.id}' missing orchestrationId.`
-    );
+  const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const collectionPath = node.collection ?? 'state.items';
   const itemVariable = node.itemVariable ?? 'item';
@@ -532,7 +452,7 @@ export const executeLoopNode = async (args: {
     items,
     parallelism,
     itemVariable,
-    orchestrationId: node.orchestrationId,
+    orchestrationId,
     projectIds,
     authHeader,
   });
@@ -548,15 +468,11 @@ export const executeSubOrchestrationNode = async (args: {
   authHeader?: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectIds, authHeader } = args;
-  if (!node.orchestrationId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `sub_orchestration node '${node.id}' missing orchestrationId.`
-    );
+  const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const input = applyInputMapping(node.inputMapping, state);
-  const run = await startOrchestrationRun({
-    orchestrationPublicId: node.orchestrationId,
+  const run = await startNestedRun({
+    orchestrationPublicId: orchestrationId,
     projectId: projectIds[0],
     projectIds,
     input,
