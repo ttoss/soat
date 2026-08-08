@@ -5002,6 +5002,148 @@ expect_cli_error_status 409 delete-workflow --workflow-id "$WORKFLOW_ID"
 $SOAT_CLI delete-task --task-id "$OPEN_TASK_ID" >/dev/null
 $SOAT_CLI delete-task --task-id "$TASK_ID" >/dev/null
 $SOAT_CLI delete-workflow --workflow-id "$WORKFLOW_ID" >/dev/null
+
+# ── A run that transitions its own task (#886) ───────────────────────────────
+#
+# The composed loop the run-identity work exists for: a workflow state
+# dispatches an orchestration, and that run moves the task on through a `soat`
+# tool node. A task-dispatched run is always durable, so the self-call has no
+# request to borrow a header from — it authenticates with a run-as token minted
+# from the principal persisted on the run.
+#
+# Four shipped behaviours meet on this one path and none of them had live-stack
+# coverage before: the run→task transition edge (#879), the chain budget that
+# bounds it (#885), the principal attribution that rides it (#887), and the
+# in-process dispatch that now carries all of it (#888). Deterministic
+# throughout — the tool node calls no model, so this adds no inference time.
+echo "--- Self-advancing task: workflow -> orchestration -> transition-task ---"
+
+SELF_TOOL_ID=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name smoke-soat-task-actions \
+  --type soat \
+  --description "Platform task actions for a self-advancing workflow." \
+  --actions '["transition-task","get-agent"]' | jq -r '.id')
+if [ -z "$SELF_TOOL_ID" ] || [ "$SELF_TOOL_ID" = "null" ]; then
+  echo "ERROR: failed to create the soat transition tool" >&2
+  exit 1
+fi
+
+SELF_ORCH_ID=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-advance-task \
+  --nodes "[{\"id\":\"advance\",\"type\":\"tool\",\"tool_id\":\"$SELF_TOOL_ID\",\"operation_id\":\"transition-task\",\"input_mapping\":{\"task_id\":{\"var\":\"input.task_id\"},\"transition\":\"finish\"}}]" \
+  --edges '[]' | jq -r '.id')
+if [ -z "$SELF_ORCH_ID" ] || [ "$SELF_ORCH_ID" = "null" ]; then
+  echo "ERROR: failed to create the self-advancing orchestration" >&2
+  exit 1
+fi
+
+# The task id reaches the run through the dispatch `input_mapping`, and the node
+# reads it back off the run input — so the run learns which task to move without
+# anything being hardcoded into the graph.
+SELF_WF_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-self-advancing \
+  --states "[{\"name\":\"working\",\"initial\":true,\"on_enter\":{\"dispatch\":{\"kind\":\"orchestration\",\"orchestration_id\":\"$SELF_ORCH_ID\",\"input_mapping\":{\"task_id\":{\"var\":\"task.id\"}}}}},{\"name\":\"done\",\"terminal\":true}]" \
+  --transitions '[{"name":"finish","from":["working"],"to":"done"}]' | jq -r '.id')
+if [ -z "$SELF_WF_ID" ] || [ "$SELF_WF_ID" = "null" ]; then
+  echo "ERROR: failed to create the self-advancing workflow" >&2
+  exit 1
+fi
+
+SELF_TASK_RESP=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$SELF_WF_ID" \
+  --title "advances itself")
+SELF_TASK_ID=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.id')
+SELF_TASK_STATE=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.state')
+if [ "$SELF_TASK_STATE" != "working" ]; then
+  echo "ERROR: expected the new task to enter 'working', got '$SELF_TASK_STATE'" >&2
+  printf '%s\n' "$SELF_TASK_RESP" >&2
+  exit 1
+fi
+
+# The dispatch is fire-and-forget and its run is queued, so poll the task — the
+# observable side effect — instead of sleeping for a fixed settle time.
+SELF_TASK_DONE=0
+SELF_AUTOMATION_STATUS=""
+i=0
+while [ "$i" -lt 60 ]; do
+  SELF_TASK_GET=$($SOAT_CLI get-task --task-id "$SELF_TASK_ID")
+  SELF_TASK_STATE=$(printf '%s\n' "$SELF_TASK_GET" | jq -r '.state')
+  if [ "$SELF_TASK_STATE" = "done" ]; then
+    SELF_TASK_DONE=1
+    break
+  fi
+  # A dispatch that failed or routed nowhere parks the task rather than
+  # retrying, so waiting out the rest of the budget only delays the report.
+  SELF_AUTOMATION_STATUS=$(printf '%s\n' "$SELF_TASK_GET" | jq -r '.automation_status // empty')
+  if [ "$SELF_AUTOMATION_STATUS" = "failed" ] || [ "$SELF_AUTOMATION_STATUS" = "unrouted" ]; then
+    break
+  fi
+  i=$((i + 1))
+  sleep 1
+done
+if [ "$SELF_TASK_DONE" != "1" ]; then
+  echo "ERROR: the dispatched run never transitioned its own task (state '$SELF_TASK_STATE', automation_status '$SELF_AUTOMATION_STATUS')" >&2
+  printf '%s\n' "$SELF_TASK_GET" >&2
+  exit 1
+fi
+echo "Run transitioned its own task: OK"
+
+# #885: the run's move is a chain hop, not a person's. The budget can only see
+# that because the transition arrived carrying a run-as token — a depth of 0
+# here means the marker was lost somewhere on the path and the composed cycle
+# is no longer bounded.
+SELF_CHAIN_DEPTH=$(printf '%s\n' "$SELF_TASK_GET" | jq -r '.automation_chain_depth')
+if [ "$SELF_CHAIN_DEPTH" != "1" ]; then
+  echo "ERROR: expected automation_chain_depth 1 after one automated hop, got '$SELF_CHAIN_DEPTH'" >&2
+  printf '%s\n' "$SELF_TASK_GET" >&2
+  exit 1
+fi
+echo "Automation chain depth counted the hop: OK"
+
+# #887: attribution is asserted on the *finish* row, not the task's first — the
+# creation row names whoever called create-task directly, which is an ordinary
+# request-bound credential and was never the gap.
+SELF_HISTORY=$($SOAT_CLI get-task-history --task-id "$SELF_TASK_ID")
+if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
+  'map(select(.transition == "finish")) | length == 1 and (.[0].principal_kind == "user") and (.[0].principal_id == $uid)' >/dev/null 2>&1; then
+  echo "ERROR: the automated transition was not attributed to the principal that started the chain" >&2
+  printf '%s\n' "$SELF_HISTORY" >&2
+  exit 1
+fi
+echo "Automated transition attribution: OK"
+
+# #879: a `soat` node whose action answers non-2xx fails the run. Before that
+# the error body was stored as the node's artifact and the run carried on as
+# though the action had happened.
+SELF_FAIL_ORCH_ID=$($SOAT_CLI create-orchestration \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-soat-node-failure \
+  --nodes "[{\"id\":\"probe\",\"type\":\"tool\",\"tool_id\":\"$SELF_TOOL_ID\",\"operation_id\":\"get-agent\",\"input_mapping\":{\"agent_id\":\"agent_doesnotexist\"}}]" \
+  --edges '[]' | jq -r '.id')
+SELF_FAIL_RUN=$($SOAT_CLI start-orchestration-run \
+  --orchestration-id "$SELF_FAIL_ORCH_ID" --input '{}' --wait true)
+if ! printf '%s\n' "$SELF_FAIL_RUN" | jq -e '.status == "failed" and (.error // "") != ""' >/dev/null 2>&1; then
+  echo "ERROR: a non-2xx soat node did not fail the run" >&2
+  printf '%s\n' "$SELF_FAIL_RUN" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SELF_FAIL_RUN" | jq -e '(.artifacts.probe // null) == null' >/dev/null 2>&1; then
+  echo "ERROR: the failed soat node stored its error body as an artifact" >&2
+  printf '%s\n' "$SELF_FAIL_RUN" >&2
+  exit 1
+fi
+echo "Non-2xx soat node fails the run: OK"
+
+$SOAT_CLI delete-task --task-id "$SELF_TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$SELF_WF_ID" >/dev/null
+$SOAT_CLI delete-orchestration --orchestration-id "$SELF_FAIL_ORCH_ID" >/dev/null
+$SOAT_CLI delete-orchestration --orchestration-id "$SELF_ORCH_ID" >/dev/null
+$SOAT_CLI delete-tool --tool-id "$SELF_TOOL_ID" >/dev/null
+
 echo "Workflows & Tasks: OK"
 
 echo ""
