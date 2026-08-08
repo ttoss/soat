@@ -1084,7 +1084,8 @@ out, and the card goes forward again with `reconciled: true`.
 
 ```bash
 # The guard rejects this: payload.reconciled is still false.
-soat transition-task --task-id "$TASK_ID" --transition close_period   # → expect-fail
+# → expect-fail
+soat transition-task --task-id "$TASK_ID" --transition close_period
 
 # Backward move — the thing a DAG cannot express.
 soat transition-task --task-id "$TASK_ID" --transition request_rework | jq '{state}'
