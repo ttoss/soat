@@ -2,24 +2,18 @@ import type { db } from '../db';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import type { GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 
 export const emitGenerationStarted = (
   session: InstanceType<(typeof db)['Session']>
 ) => {
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.started',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: { sessionId: session.publicId },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.generation.started',
+    projectId: session.projectId,
+    resourceType: 'session',
+    resourceId: session.publicId,
+    data: { sessionId: session.publicId },
+  });
 };
 
 export const emitGenerationRequiresAction = (args: {
@@ -27,23 +21,17 @@ export const emitGenerationRequiresAction = (args: {
   generationId: string;
   traceId: string;
 }) => {
-  resolveProjectPublicId({ projectId: args.session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.requires_action',
-        projectId: args.session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: args.session.publicId,
-        data: {
-          sessionId: args.session.publicId,
-          generationId: args.generationId,
-          traceId: args.traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.generation.requires_action',
+    projectId: args.session.projectId,
+    resourceType: 'session',
+    resourceId: args.session.publicId,
+    data: {
+      sessionId: args.session.publicId,
+      generationId: args.generationId,
+      traceId: args.traceId,
+    },
+  });
 };
 
 export const emitGenerationCompleted = (args: {
@@ -51,23 +39,17 @@ export const emitGenerationCompleted = (args: {
   generationId: string;
   traceId: string;
 }) => {
-  resolveProjectPublicId({ projectId: args.session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.generation.completed',
-        projectId: args.session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: args.session.publicId,
-        data: {
-          sessionId: args.session.publicId,
-          generationId: args.generationId,
-          traceId: args.traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.generation.completed',
+    projectId: args.session.projectId,
+    resourceType: 'session',
+    resourceId: args.session.publicId,
+    data: {
+      sessionId: args.session.publicId,
+      generationId: args.generationId,
+      traceId: args.traceId,
+    },
+  });
 };
 
 export const processToolOutputResult = async (args: {

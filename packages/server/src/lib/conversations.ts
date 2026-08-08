@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { mapMessage } from './conversationMessages';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -126,14 +126,13 @@ export const createConversation = async (args: {
 
   const mapped = mapConversation(conversationWithAssociations!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.created',
     projectId: conversationWithAssociations!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -169,14 +168,13 @@ export const updateConversation = async (args: {
 
   const mapped = mapConversation(updated!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -203,14 +201,13 @@ export const updateConversationStatus = async (args: {
 
   const mapped = mapConversation(updatedConversation!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updatedConversation!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -229,16 +226,12 @@ export const deleteConversation = async (args: { id: string }) => {
 
   await conversation.destroy();
 
-  resolveProjectPublicId({ projectId }).then((projectPublicId) => {
-    emitEvent({
-      type: 'conversations.deleted',
-      projectId,
-      projectPublicId,
-      resourceType: 'conversation',
-      resourceId: args.id,
-      data: { id: args.id },
-      timestamp: new Date().toISOString(),
-    });
+  emitResourceEvent({
+    type: 'conversations.deleted',
+    projectId,
+    resourceType: 'conversation',
+    resourceId: args.id,
+    data: { id: args.id },
   });
 
   return { id: args.id };
@@ -281,14 +274,13 @@ export const updateConversationTags = async (args: {
 
   const mapped = mapConversation(updated!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;

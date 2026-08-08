@@ -3,7 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
-import { emitEvent, onEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, onEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
   camelToSnakeKey,
@@ -128,14 +128,13 @@ const emitExceptionEvent = async (args: {
   const projectPublicId = await resolveProjectPublicId({
     projectId: args.projectId,
   });
-  emitEvent({
+  emitResourceEvent({
     type: args.type,
     projectId: args.projectId,
     projectPublicId,
     resourceType: 'exception',
     resourceId: args.item.id,
     data: { exception: args.item },
-    timestamp: new Date().toISOString(),
   });
 };
 
@@ -496,7 +495,7 @@ export const emitGuardrailTripwireEvent = (args: {
   agentId?: string | null;
   generationId?: string | null;
 }): void => {
-  emitEvent({
+  emitResourceEvent({
     type: 'guardrail.tripwire',
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
@@ -511,6 +510,5 @@ export const emitGuardrailTripwireEvent = (args: {
       agentId: args.agentId ?? null,
       generationId: args.generationId ?? null,
     },
-    timestamp: new Date().toISOString(),
   });
 };

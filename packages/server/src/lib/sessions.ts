@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -180,19 +180,13 @@ export const createSession = async (args: {
 
   const mapped = mapSession(sessionWithIncludes!);
 
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.created',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: mapped.id,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.created',
+    projectId: args.projectId,
+    resourceType: 'session',
+    resourceId: mapped.id,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -390,19 +384,13 @@ export const updateSession = async (args: {
 
   const mapped = mapSession(sessionWithIncludes!);
 
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.updated',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: mapped.id,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.updated',
+    projectId: session.projectId,
+    resourceType: 'session',
+    resourceId: mapped.id,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -434,19 +422,13 @@ export const deleteSession = async (args: {
     });
   });
 
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.deleted',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: { id: session.publicId },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.deleted',
+    projectId: session.projectId,
+    resourceType: 'session',
+    resourceId: session.publicId,
+    data: { id: session.publicId },
+  });
 };
 
 export {

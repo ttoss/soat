@@ -6,7 +6,7 @@ import type {
   GenerationResult,
   pendingGenerations,
 } from './agentGenerationHelpers';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { buildGenerationErrorPayload } from './providerError';
@@ -169,14 +169,13 @@ const runCompletionSideEffects = async (
     const projectPublicId = await resolveProjectPublicId({
       projectId: args.pending.projectId,
     });
-    emitEvent({
+    emitResourceEvent({
       type: 'agents.generation.completed',
       projectId: args.pending.projectId,
       projectPublicId,
       resourceType: 'generation',
       resourceId: args.generationId,
-      data: args.completedResult as unknown as Record<string, unknown>,
-      timestamp: new Date().toISOString(),
+      data: args.completedResult,
     });
   } catch (error) {
     log(

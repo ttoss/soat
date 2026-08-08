@@ -18,7 +18,7 @@ import {
   agentVersionStore,
   buildAgentConfigSnapshot,
 } from './agentVersionSnapshot';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { assertGuardrailsExist } from './guardrails';
 import {
@@ -514,15 +514,14 @@ export const createAgent = async (
     createdByUserId: args.createdByUserId,
   });
 
-  emitEvent({
+  emitResourceEvent({
     type: 'agents.created',
     projectId: args.projectId,
     projectPublicId: (created as unknown as { project: { publicId: string } })
       .project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -724,15 +723,14 @@ export const updateAgent = async (
   // Mapped after the archive so the response carries the bumped version.
   const mapped = mapAgent(updated as unknown as Parameters<typeof mapAgent>[0]);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'agents.updated',
     projectId: (agent as unknown as { projectId: number }).projectId,
     projectPublicId: (updated as unknown as { project: { publicId: string } })
       .project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -890,17 +888,11 @@ export const deleteAgent = async (args: {
 
   const agentProjectId = (agent as unknown as { projectId: number }).projectId;
 
-  resolveProjectPublicId({ projectId: agentProjectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'agents.deleted',
-        projectId: agentProjectId,
-        projectPublicId,
-        resourceType: 'agent',
-        resourceId: args.id,
-        data: { id: args.id },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'agents.deleted',
+    projectId: agentProjectId,
+    resourceType: 'agent',
+    resourceId: args.id,
+    data: { id: args.id },
+  });
 };

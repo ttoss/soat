@@ -7,7 +7,7 @@ import {
   chunkDocumentText,
   readFileContent,
 } from './documentContent';
-import { emitEvent } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { mapDocument } from './knowledge';
@@ -108,14 +108,13 @@ const emitDocumentLifecycleEvent = (args: {
 }) => {
   const project = args.doc.file?.project;
   if (!project) return;
-  emitEvent({
+  emitResourceEvent({
     type: args.type,
     projectId: project.id,
     projectPublicId: project.publicId,
     resourceType: 'document',
     resourceId: args.doc.publicId,
     data: args.data,
-    timestamp: new Date().toISOString(),
   });
 };
 
@@ -347,7 +346,7 @@ export const createDocument = async (args: {
   emitDocumentLifecycleEvent({
     type: 'documents.created',
     doc: created!,
-    data: mapped as unknown as Record<string, unknown>,
+    data: mapped,
   });
 
   return mapped;
@@ -440,7 +439,7 @@ export const updateDocument = async (args: {
   emitDocumentLifecycleEvent({
     type: 'documents.updated',
     doc: refreshed!,
-    data: mapped as unknown as Record<string, unknown>,
+    data: mapped,
   });
 
   return mapped;
@@ -473,7 +472,7 @@ export const updateDocumentTags = async (args: {
   emitDocumentLifecycleEvent({
     type: 'documents.updated',
     doc: refreshed!,
-    data: tagsMapped as unknown as Record<string, unknown>,
+    data: tagsMapped,
   });
 
   return tagsMapped;

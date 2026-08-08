@@ -1,6 +1,6 @@
 import createDebug from 'debug';
 
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import type { MappedOrchestrationRun } from './orchestrations';
 
 const log = createDebug('soat:orchestrations');
@@ -55,14 +55,13 @@ export const emitRunLifecycleEvent = (args: {
   log('emitRunLifecycleEvent event=%s orchestrationRunId=%s', event, run.id);
   resolveProjectPublicId({ projectId })
     .then((projectPublicId) => {
-      emitEvent({
+      emitResourceEvent({
         type: RUN_EVENT_TYPES[event],
         projectId,
         projectPublicId,
         resourceType: 'orchestration_run',
         resourceId: run.id,
         data: { ...run },
-        timestamp: new Date().toISOString(),
       });
     })
     .catch(() => {

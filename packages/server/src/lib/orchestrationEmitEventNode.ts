@@ -1,5 +1,5 @@
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { applyInputMapping } from './jsonLogicMapping';
 import type { NodeExecutionResult } from './orchestrationNodeExecutors';
 import type { OrchestrationNode } from './orchestrations';
@@ -36,14 +36,13 @@ export const executeEmitEventNode = async (args: {
   // event to; nothing is emitted, but the node still completes.
   if (projectId !== undefined) {
     const projectPublicId = await resolveProjectPublicId({ projectId });
-    emitEvent({
+    emitResourceEvent({
       type: node.eventType,
       projectId,
       projectPublicId,
       resourceType: 'orchestration_run',
       resourceId: runPublicId ?? '',
       data,
-      timestamp: new Date().toISOString(),
     });
   }
 
