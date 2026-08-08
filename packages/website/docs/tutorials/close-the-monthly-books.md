@@ -580,24 +580,38 @@ three reconciliations return `0`, the total is `0`, and `0 <= 1` routes down the
 `clean` edge. `draft_memo` is never reached, so it is recorded as `skipped` — no
 model was called at all on this path.
 
+**A run starts asynchronously.** `start-orchestration-run` enqueues the run and
+returns immediately with `status: "queued"` and an empty `state` — a worker drives
+it. Read the results from `get-orchestration-run` once the run reaches a terminal
+status, rather than from the start response. Below, `# → retry N` re-runs a
+`jq -e` assertion until the run settles; `jq -e` supplies the exit code the runner
+needs.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-CLEAN_RUN=$(soat start-orchestration-run \
+CLEAN_RUN_ID=$(soat start-orchestration-run \
   --orchestration-id "$CLOSE_ORCH_ID" \
   --input '{
     "period": "2026-07",
     "ledger": { "cash": 128450.25, "ar": 64200.00, "ap": 31775.50 },
     "statements": { "bank": 128450.25, "ar_subledger": 64200.00, "ap_subledger": 31775.50 },
     "tolerance": 1
-  }')
+  }' | jq -r '.id')
+echo "CLEAN_RUN_ID: $CLEAN_RUN_ID"
 
-printf '%s\n' "$CLEAN_RUN" | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
-printf '%s\n' "$CLEAN_RUN" | jq '[.node_executions[] | {node_id, status}]'
+# → retry 60
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" | jq -e '.status == "succeeded"'
+
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" \
+  | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
+
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$CLEAN_RUN_ID" \
+  | jq '[.node_executions[] | {node_id, status}]'
 ```
 
-Expected output:
+Expected output once the run settles:
 
 ```json
 {
@@ -613,23 +627,41 @@ Expected output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: cleanRun } =
-  await adminSoat.orchestrations.startOrchestrationRun({
-    body: {
-      orchestration_id: CLOSE_ORCH_ID,
-      input: {
-        period: '2026-07',
-        ledger: { cash: 128450.25, ar: 64200.0, ap: 31775.5 },
-        statements: {
-          bank: 128450.25,
-          ar_subledger: 64200.0,
-          ap_subledger: 31775.5,
-        },
-        tolerance: 1,
+const { data: queued } = await adminSoat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: CLOSE_ORCH_ID,
+    input: {
+      period: '2026-07',
+      ledger: { cash: 128450.25, ar: 64200.0, ap: 31775.5 },
+      statements: {
+        bank: 128450.25,
+        ar_subledger: 64200.0,
+        ap_subledger: 31775.5,
       },
+      tolerance: 1,
     },
-  });
+  },
+});
+console.log('Status on start:', queued.status); // "queued" — a worker drives it
 
+// A run is asynchronous: poll until it reaches a terminal status before
+// reading `state`.
+const waitForRun = async (runId: string) => {
+  for (let attempt = 0; attempt < 120; attempt += 1) {
+    const { data: run } = await adminSoat.orchestrations.getOrchestrationRun({
+      path: { orchestration_run_id: runId },
+    });
+    if (['succeeded', 'failed', 'cancelled', 'expired'].includes(run.status)) {
+      return run;
+    }
+    await new Promise((resolve) => {
+      return setTimeout(resolve, 1000);
+    });
+  }
+  throw new Error(`Run ${runId} never settled`);
+};
+
+const cleanRun = await waitForRun(queued.id);
 console.log('Status:', cleanRun.status);
 console.log('Total variance:', cleanRun.state.total_variance);
 console.log('Note:', cleanRun.state.close_note);
@@ -645,7 +677,14 @@ CLEAN_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
   -H "Content-Type: application/json" \
   -d '{"orchestration_id":"'"$CLOSE_ORCH_ID"'","input":{"period":"2026-07","ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":128450.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}')
 
-printf '%s\n' "$CLEAN_RUN" | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
+CLEAN_RUN_ID=$(printf '%s\n' "$CLEAN_RUN" | jq -r '.id')
+
+until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$CLEAN_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{status, total_variance: .state.total_variance, close_note: .state.close_note}'
 ```
 
 </TabItem>
@@ -668,25 +707,32 @@ branch changes with them, identically on every run.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-EXCEPTION_RUN=$(soat start-orchestration-run \
+EXCEPTION_RUN_ID=$(soat start-orchestration-run \
   --orchestration-id "$CLOSE_ORCH_ID" \
   --input '{
     "period": "2026-08",
     "ledger": { "cash": 128450.25, "ar": 64200.00, "ap": 31775.50 },
     "statements": { "bank": 127200.25, "ar_subledger": 64200.00, "ap_subledger": 31775.50 },
     "tolerance": 1
-  }')
+  }' | jq -r '.id')
+echo "EXCEPTION_RUN_ID: $EXCEPTION_RUN_ID"
 
-printf '%s\n' "$EXCEPTION_RUN" | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
+# This path calls the model, so it settles more slowly than the clean run.
+# → retry 120
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -e '.status == "succeeded"'
+
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" \
+  | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
 
 # The memo is free text from the model — its wording varies, its presence does not.
-printf '%s\n' "$EXCEPTION_RUN" | jq -r '.state.memo'
+soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" \
+  | jq -r '.state.memo'
 
-EXCEPTION_VARIANCE=$(printf '%s\n' "$EXCEPTION_RUN" | jq -r '.state.total_variance')
+EXCEPTION_VARIANCE=$(soat get-orchestration-run --orchestration-id "$CLOSE_ORCH_ID" --orchestration-run-id "$EXCEPTION_RUN_ID" | jq -r '.state.total_variance')
 echo "EXCEPTION_VARIANCE: $EXCEPTION_VARIANCE"
 ```
 
-Expected output:
+Expected output once the run settles:
 
 ```json
 {
@@ -700,7 +746,7 @@ Expected output:
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: exceptionRun } =
+const { data: exceptionQueued } =
   await adminSoat.orchestrations.startOrchestrationRun({
     body: {
       orchestration_id: CLOSE_ORCH_ID,
@@ -717,6 +763,9 @@ const { data: exceptionRun } =
     },
   });
 
+// Reuses waitForRun from the previous step. This path calls the model, so it
+// settles more slowly than the clean run.
+const exceptionRun = await waitForRun(exceptionQueued.id);
 console.log('Bank variance:', exceptionRun.state.bank_variance); // 1250
 console.log('Memo:', exceptionRun.state.memo);
 ```
@@ -730,8 +779,17 @@ EXCEPTION_RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
   -H "Content-Type: application/json" \
   -d '{"orchestration_id":"'"$CLOSE_ORCH_ID"'","input":{"period":"2026-08","ledger":{"cash":128450.25,"ar":64200.00,"ap":31775.50},"statements":{"bank":127200.25,"ar_subledger":64200.00,"ap_subledger":31775.50},"tolerance":1}}')
 
-printf '%s\n' "$EXCEPTION_RUN" | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
-printf '%s\n' "$EXCEPTION_RUN" | jq -r '.state.memo'
+EXCEPTION_RUN_ID=$(printf '%s\n' "$EXCEPTION_RUN" | jq -r '.id')
+
+until curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -e '.status == "succeeded"' > /dev/null; do sleep 1; done
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq '{status, bank_variance: .state.bank_variance, total_variance: .state.total_variance}'
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$EXCEPTION_RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq -r '.state.memo'
 ```
 
 </TabItem>
@@ -1069,24 +1127,28 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
 
 ---
 
-## Step 10 — The guard refuses, and the controller sends it back
+## Step 10 — The controller sends it back
 
-The books do not balance, so `payload.reconciled` is `false` and the
-`close_period` guard fails. The transition is refused before any human is asked —
-the deterministic check is the outer gate, not the inner one.
+The books do not balance — `payload.reconciled` is `false` — so the controller
+does not try to close the period. They fire `request_rework`, which moves it
+**backward** into `reconciling`. The team finds the missing deposit, the
+corrected pass ties out, and the card goes forward again with `reconciled: true`.
 
-The controller then fires `request_rework`, which moves the period **backward**
-into `reconciling`. The team finds the missing deposit, the corrected pass ties
-out, and the card goes forward again with `reconciled: true`.
+Order matters here, and not for the reason you might expect. A `guard` and
+`requires_approval` on the same transition are **not** checked at the same
+moment: firing an approval-gated transition parks an approval item first and
+evaluates the guard when that item **resolves** (see
+[Approval-gated transitions](/docs/modules/workflows#approval-gated-transitions)).
+So firing `close_period` now would not be rejected — it would park a decision
+against books that do not tie out, and the guard would only refuse later, at
+resolution. While an approval is pending the task also exposes
+`pending_transition` and **no other transition may fire**, so the rework move has
+to happen before the sign-off is requested, not after.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# The guard rejects this: payload.reconciled is still false.
-# → expect-fail
-soat transition-task --task-id "$TASK_ID" --transition close_period
-
 # Backward move — the thing a DAG cannot express.
 soat transition-task --task-id "$TASK_ID" --transition request_rework | jq '{state}'
 
@@ -1099,23 +1161,13 @@ soat transition-task --task-id "$TASK_ID" --transition submit_for_review | jq '{
 
 After `request_rework` the state is `reconciling`; after `submit_for_review` it is
 `controller_review` again. See
-[Workflows — Guards](/docs/modules/workflows) for how a guard is evaluated
+[Transition](/docs/modules/workflows#transition) for how a guard is evaluated
 against `{task, transition, principal}`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// The guard rejects this while payload.reconciled is false.
-try {
-  await adminSoat.tasks.transitionTask({
-    path: { task_id: TASK_ID },
-    body: { transition: 'close_period' },
-  });
-} catch (error) {
-  console.log('Refused by the guard:', error);
-}
-
 await adminSoat.tasks.transitionTask({
   path: { task_id: TASK_ID },
   body: { transition: 'request_rework' },
@@ -1137,12 +1189,6 @@ console.log(resubmitted.state); // controller_review
 <TabItem value="curl" label="curl">
 
 ```bash
-# Refused by the guard while payload.reconciled is false.
-curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"transition":"close_period"}' | jq '{error}'
-
 curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
@@ -1164,14 +1210,19 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/transitions" \
 
 ---
 
-## Step 11 — Sign off: the guard passes, the human decides
+## Step 11 — Sign off: the human decides, the guard has the last word
 
-Now `payload.reconciled` is `true`, so the guard passes — and
-`requires_approval: true` takes effect. Firing `close_period` does **not** move
-the card. It parks a pending item in the [Approvals](/docs/modules/approvals#examples)
-queue and the task exposes `pending_transition` until someone resolves it. See
-[Approval-gated transitions](/docs/modules/workflows#approval-gated-transitions)
-for how the guard is re-evaluated at resolution time.
+`payload.reconciled` is now `true`, so both gates will let the period close.
+Firing `close_period` does **not** move the card: `requires_approval: true` parks
+a pending item in the [Approvals](/docs/modules/approvals#examples) queue, and the
+task exposes `pending_transition` until someone resolves it.
+
+The guard is then re-evaluated **at resolution time**, as the `approval`
+principal. That ordering is worth internalising: the human decision is collected
+first and the deterministic check is applied last, so a sign-off cannot be
+banked while the books tie out and then cashed after they stop tying out. The
+approval is a request to close; the guard decides whether closing is still
+legal.
 
 This is the same queue, the same endpoints, and the same audit trail that an
 orchestration [`approval` node](/docs/tutorials/approval-gate) uses. Each item
@@ -1182,7 +1233,7 @@ raised the request.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Guard passes, so this parks an approval instead of closing the period.
+# Parks an approval instead of closing the period.
 soat transition-task --task-id "$TASK_ID" --transition close_period \
   | jq '{state, pending_transition}'
 
@@ -1322,10 +1373,19 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
   [workflow](/docs/modules/workflows) because it persists across days and moves
   backward. Trying to model the second as a DAG is what forces people into glue
   code; `request_rework` is the transition that makes the distinction concrete.
-- **Two gates, deliberately ordered.** The `guard` is deterministic and runs
-  first; `requires_approval` asks a human second. A person is never paged about
-  something a subtraction could have rejected — and the human decision is
-  recorded rather than implied.
+- **Two gates, and the human is asked first.** On an approval-gated transition
+  the `requires_approval` park happens at fire time and the `guard` is evaluated
+  when the item resolves — not the other way round. The consequence is the useful
+  part: a sign-off cannot be collected while the books balance and then applied
+  after they stop balancing, because the deterministic check runs last. If you
+  want a cheap check to run *before* anyone is paged, it belongs on the
+  transition that reaches the review state, or in the graph — not on the gated
+  transition itself.
+- **A run is asynchronous.** `start-orchestration-run` enqueues and returns
+  `queued` with an empty `state`; a worker drives it. Anything that reads
+  `state`, `output`, or `node_executions` has to poll `get-orchestration-run`
+  until the run is terminal. A trigger firing is the exception — it runs the
+  target synchronously and hands back the finished record.
 - **Joins are explicit.** `activation_group` with `activation_condition: "all"`
   is what makes `total_variance` wait for all three reconciliations. Without it,
   it would run as soon as the first one finished and sum whatever had landed.
