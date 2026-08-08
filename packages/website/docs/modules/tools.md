@@ -494,6 +494,19 @@ Example — two tools backed by the same `update-document` action, each locked t
 
 The model calls `public_doc_update-document` with only the fields it needs to supply (e.g., `content`). The server automatically injects `id: "doc_abc123"` before executing the request.
 
+Presets and model-supplied arguments reach the action wherever the OpenAPI operation declares the parameter — path, query string, or request body. A `list-*` action's `project_id`, its filters (`status`, `tag`, …) and its pagination arguments (`limit`, `offset`) are query parameters, so a preset is the way to lock a `soat` tool to one project:
+
+```json
+{
+  "name": "list_support_agents",
+  "type": "soat",
+  "actions": ["list-agents"],
+  "preset_parameters": { "project_id": "proj_abc123" }
+}
+```
+
+An argument the caller omits is left out of the request entirely rather than sent as an empty value, so an unscoped `list-*` call still returns everything the calling credential can see.
+
 ### Calling a Tool Directly
 
 Tools can be invoked independently of an agent via `POST /api/v1/tools/{tool_id}/call`. The request body accepts `action` (required for `soat` and `mcp` types) and `input` (key-value arguments). For `pipeline` tools, `input` is the pipeline input, `action` is ignored, and the response is the mapped `output`. When the tool has an `output_mapping`, the response is that mapping's result instead of the raw output — see [Output Mapping](#output-mapping).

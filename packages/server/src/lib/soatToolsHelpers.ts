@@ -33,6 +33,26 @@ export interface ToolDefinition {
   acceptedBodyFields: string[];
 }
 
+/**
+ * The request target an action is called with: its path with the path
+ * parameters substituted, followed by the query string its `in: query`
+ * parameters build.
+ *
+ * Both halves live here rather than at each call site because keeping them
+ * apart is exactly how #924 happened — the SOAT tool path built the path alone
+ * and dropped every query parameter the action advertised, while the MCP
+ * handler for the same registry appended both. There is now one way to address
+ * an action, so a third caller cannot repeat the omission.
+ */
+export const buildSoatActionTarget = (args: {
+  def: ToolDefinition;
+  args: Record<string, unknown>;
+}): string => {
+  return (
+    args.def.path(args.args) + (args.def.query ? args.def.query(args.args) : '')
+  );
+};
+
 export interface OpenApiSpec {
   paths?: Record<string, Record<string, unknown>>;
   components?: {
