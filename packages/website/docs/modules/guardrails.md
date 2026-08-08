@@ -54,12 +54,24 @@ The `document`:
 
 ### GuardrailVersion
 
-| Field          | Type    | Description                                          |
-| -------------- | ------- | --------------------------------------------------- |
-| `guardrail_id` | string  | The `guard_`-prefixed guardrail this version belongs to |
-| `version`      | integer | The archived version number                         |
-| `document`     | object  | The exact document that governed at that version    |
-| `created_at`   | string  | ISO 8601 timestamp                                  |
+An immutable archive of a guardrail's configuration at one version. Shares its
+shape — and the engine that reads and writes it — with [`AgentVersion`](./agents.md#versioning-and-staged-rollout).
+
+| Field          | Type    | Description                                                                 |
+| -------------- | ------- | --------------------------------------------------------------------------- |
+| `id`           | string  | `guard_ver_`-prefixed public ID of the archived version                     |
+| `guardrail_id` | string  | The `guard_`-prefixed guardrail this version belongs to                     |
+| `version`      | integer | The archived version number                                                 |
+| `config`       | object  | The versioned surface at that version — today `{ document }` and nothing else |
+| `label`        | string  | Optional human tag, e.g. `pre-tightening`; null when unset                   |
+| `created_by`   | string  | Public ID of the user whose action produced this version; null when there was none |
+| `created_at`   | string  | ISO 8601 timestamp                                                          |
+
+Only the policy `document` is versioned. Name, description and the context
+binding are metadata: bumping the version when one of them changes would make
+two version numbers denote the same policy — and the version number is exactly
+what an [evaluation record](#evaluation-audit-record) cites to say which policy
+governed a decision.
 
 A guardrail is attached by adding its `id` to the `guardrail_ids` list on a [tool](./tools.md), an [agent](./agents.md), or a [project](./projects.md) — see [Attachment](#attachment).
 
@@ -198,9 +210,45 @@ There is no separate override resource. A project runs a stricter posture than t
 
 ### Versioning
 
-Every write to a guardrail's `document` increments `version` and archives the prior document as a `GuardrailVersion`. Approval items, activity entries, and exceptions record the version that governed them, so the audit chain survives edits. Fetch the exact governing document with [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](#fetch-an-archived-version).
+A guardrail's policy is versioned by the same append-only archive that backs
+[agent versions](./agents.md#versioning-and-staged-rollout). Version 1 is written
+on create, and every subsequent write that **changes** the `document` increments
+`version` and archives the new document as a `GuardrailVersion`. Approval items,
+activity entries, and exceptions record the version that governed them, so the
+audit chain survives edits.
 
-Attachments reference the guardrail's **id**, not a version: a document edit takes effect immediately on every tool, agent, and project that carries the id. [Dry-run](#dry-run-evaluation) an edited document before writing it when the guardrail is attached at scale.
+Three writes archive nothing, and all three follow from the same rule — a version
+exists to name a distinct policy:
+
+- a metadata-only edit (`name`, `description`, `context_tool_id`, `context_mode`);
+- re-writing the document the guardrail already holds (compared structurally, so
+  key order does not matter);
+- restoring the version that is already live.
+
+`version_label` on a create or update annotates the version that write archives.
+It is not stored on the guardrail and is not part of the config, so labelling a
+change is never itself a change.
+
+| Operation | Endpoint |
+| --- | --- |
+| List versions, newest first | [`GET /api/v1/guardrails/{guardrail_id}/versions`](#list-archived-versions) |
+| Fetch one version | [`GET /api/v1/guardrails/{guardrail_id}/versions/{version}`](#fetch-an-archived-version) |
+| Roll back to a version | [`POST /api/v1/guardrails/{guardrail_id}/versions/{version}/restore`](#restore-an-archived-version) |
+
+**Restore appends, it does not rewind.** Restoring v1 of a guardrail at v2 writes
+v1's document back as **v3**, so an exception or approval item citing v2 still
+resolves. The restore runs through the ordinary update path, so the archived
+document is re-validated on the way in — and only the policy rolls back:
+`name`, `description` and the context binding are left exactly as they are.
+
+Attachments reference the guardrail's **id**, not a version: a document edit
+takes effect immediately on every tool, agent, and project that carries the id.
+[Dry-run](#dry-run-evaluation) an edited document before writing it when the
+guardrail is attached at scale.
+
+Guardrails have no release/canary layer, unlike agents. A guardrail is evaluated
+against the live policy by design — splitting traffic across two policies would
+mean deliberately under-enforcing one of them.
 
 ### Deletion
 
@@ -486,6 +534,36 @@ curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
 </TabItem>
 </Tabs>
 
+### List archived versions
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat list-guardrail-versions --guardrail-id guard_V1StGXR8Z5jdHi6B
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.guardrails.listGuardrailVersions({
+  path: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X GET https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/versions \
+  -H "Authorization: Bearer <admin-token>"
+```
+
+</TabItem>
+</Tabs>
+
 ### Fetch an archived version
 
 <Tabs groupId="client">
@@ -511,6 +589,44 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl -X GET https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/versions/3 \
   -H "Authorization: Bearer <admin-token>"
+```
+
+</TabItem>
+</Tabs>
+
+### Restore an archived version
+
+Rolls the policy back to v3 by writing it again as a new version.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat restore-guardrail-version \
+  --guardrail-id guard_V1StGXR8Z5jdHi6B \
+  --version 3 \
+  --label "rollback to pre-incident policy"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.guardrails.restoreGuardrailVersion({
+  path: { guardrail_id: 'guard_V1StGXR8Z5jdHi6B', version: 3 },
+  body: { label: 'rollback to pre-incident policy' },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -X POST https://api.example.com/api/v1/guardrails/guard_V1StGXR8Z5jdHi6B/versions/3/restore \
+  -H "Authorization: Bearer <admin-token>" \
+  -H "Content-Type: application/json" \
+  -d '{"label": "rollback to pre-incident policy"}'
 ```
 
 </TabItem>

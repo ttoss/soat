@@ -2,29 +2,36 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  type ActiveRelease,
-  parseActiveRelease,
-} from './agentReleaseAssignment';
 import { getAgent, type MappedAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
+  agentVersionStore,
+  configKnowledgeConfig,
+  configToolBindings,
+} from './agentVersionSnapshot';
+import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
+import {
+  type ArchivedVersionRow,
   configArray,
   configBoolean,
-  configKnowledgeConfig,
   configNumber,
   configObject,
   configString,
   configStringOrObject,
-  configToolBindings,
-} from './agentVersionSnapshot';
-import { paginatedList, type PaginatedResult } from './pagination';
+  makeVersionArchive,
+  mapArchivedVersionFields,
+  type VersionedResourceRef,
+} from './resourceVersions';
 
 const log = createDebug('soat:agents');
 
 /**
  * Agent version history and staged rollout operations
  * (docs/prd-agent-versions.md, Phases 1–2).
+ *
+ * The archive mechanics live in `resourceVersions.ts` and are shared with
+ * guardrails; this module supplies the agent-specific adapters and owns the one
+ * layer that is genuinely per resource — what a *release* means.
  *
  * Versions are never written from here — they are archived by the shared write
  * path in `agents.ts`. Restore, promote and abort all express themselves as an
@@ -33,24 +40,18 @@ const log = createDebug('soat:agents');
  */
 
 type AgentInstance = InstanceType<(typeof db)['Agent']>;
-type AgentVersionInstance = InstanceType<(typeof db)['AgentVersion']>;
 
 const CANARY_PERCENT_MAX = 100;
 
 // ── Mapping ──────────────────────────────────────────────────────────────
 
 export const mapAgentVersion = (
-  version: AgentVersionInstance,
+  version: ArchivedVersionRow,
   agentPublicId: string
 ) => {
   return {
-    id: version.publicId,
     agent_id: agentPublicId,
-    version: version.version,
-    config: version.config,
-    label: version.label,
-    created_by: version.createdBy?.publicId ?? null,
-    created_at: version.createdAt,
+    ...mapArchivedVersionFields(version),
   };
 };
 
@@ -79,89 +80,12 @@ const agentDbId = (agent: AgentInstance): number => {
   return agent.id as number;
 };
 
-const findVersionRow = async (args: {
-  agent: AgentInstance;
-  version: number;
-}): Promise<AgentVersionInstance> => {
-  const row = await db.AgentVersion.findOne({
-    where: { agentId: agentDbId(args.agent), version: args.version },
-    include: [{ model: db.User, as: 'createdBy' }],
-  });
-
-  if (!row) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.agent.publicId}' has no version ${args.version}.`
-    );
-  }
-  return row as AgentVersionInstance;
-};
-
-const readConfig = (row: AgentVersionInstance): AgentConfigSnapshot => {
-  const config = row.config;
-  /* istanbul ignore next -- the column is NOT NULL and only ever written from
-     buildAgentConfigSnapshot, so a non-object here means the row was edited
-     outside the application. */
-  if (typeof config !== 'object' || config === null || Array.isArray(config)) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${row.publicId}' has an unreadable archived config.`
-    );
-  }
-  return config as AgentConfigSnapshot;
-};
-
-// ── Read endpoints ───────────────────────────────────────────────────────
-
-export const listAgentVersions = async (args: {
-  projectIds?: number[];
-  agentId: string;
-  limit?: number;
-  offset?: number;
-}): Promise<PaginatedResult<ReturnType<typeof mapAgentVersion>>> => {
-  log('listAgentVersions: agentId=%s', args.agentId);
-
-  const agent = await findAgentInstance({
-    projectIds: args.projectIds,
-    id: args.agentId,
-  });
-
-  return paginatedList({
-    limit: args.limit,
-    offset: args.offset,
-    query: ({ limit, offset }) => {
-      return db.AgentVersion.findAndCountAll({
-        where: { agentId: agentDbId(agent) },
-        include: [{ model: db.User, as: 'createdBy' }],
-        // Newest first, ordered by the version counter rather than a timestamp:
-        // two versions can share a `createdAt` at timestamp resolution, and a
-        // non-deterministic page boundary in history is worse than useless.
-        order: [['version', 'DESC']],
-        distinct: true,
-        limit,
-        offset,
-      });
-    },
-    map: (row) => {
-      return mapAgentVersion(row as AgentVersionInstance, agent.publicId);
-    },
-  });
-};
-
-export const getAgentVersion = async (args: {
-  projectIds?: number[];
-  agentId: string;
-  version: number;
-}): Promise<ReturnType<typeof mapAgentVersion>> => {
-  log('getAgentVersion: agentId=%s version=%d', args.agentId, args.version);
-
-  const agent = await findAgentInstance({
-    projectIds: args.projectIds,
-    id: args.agentId,
-  });
-  const row = await findVersionRow({ agent, version: args.version });
-
-  return mapAgentVersion(row, agent.publicId);
+const toResourceRef = (agent: AgentInstance): VersionedResourceRef => {
+  return {
+    dbId: agentDbId(agent),
+    publicId: agent.publicId,
+    version: agent.version,
+  };
 };
 
 // ── Applying an archived config ───────────────────────────────────────────
@@ -203,27 +127,56 @@ const archivedConfigToUpdateArgs = (config: AgentConfigSnapshot) => {
 };
 
 /**
- * Writes an archived config back through the ordinary agent update path.
- *
- * Going through `updateAgent` rather than touching columns directly buys three
- * things: the config is re-validated (a tool, provider or guardrail deleted
- * since the snapshot was taken fails loudly instead of writing a broken agent),
- * the resulting version is archived by the same choke point as any other edit,
- * and a config identical to the live one is recognised as a no-op.
+ * The agent adapter over the shared archive. `applyConfig` routes through
+ * `updateAgent` rather than touching columns, so a restore is re-validated and
+ * archived by the same choke point as any other edit.
  */
-const applyArchivedConfig = async (args: {
+const agentVersionArchive = makeVersionArchive({
+  store: agentVersionStore,
+  loadResource: async (args) => {
+    return toResourceRef(await findAgentInstance(args));
+  },
+  mapVersion: mapAgentVersion,
+  applyConfig: async (args): Promise<MappedAgent> => {
+    return updateAgent({
+      projectIds: args.projectIds,
+      id: args.id,
+      ...archivedConfigToUpdateArgs(args.config),
+      versionLabel: args.label,
+      createdByUserId: args.createdByUserId,
+    });
+  },
+});
+
+// ── Read endpoints ───────────────────────────────────────────────────────
+
+export const listAgentVersions = async (args: {
   projectIds?: number[];
   agentId: string;
-  config: AgentConfigSnapshot;
-  label: string | null;
-  createdByUserId?: number | null;
-}): Promise<MappedAgent> => {
-  return updateAgent({
+  limit?: number;
+  offset?: number;
+}) => {
+  log('listAgentVersions: agentId=%s', args.agentId);
+
+  return agentVersionArchive.listVersions({
     projectIds: args.projectIds,
-    id: args.agentId,
-    ...archivedConfigToUpdateArgs(args.config),
-    versionLabel: args.label,
-    createdByUserId: args.createdByUserId,
+    resourceId: args.agentId,
+    limit: args.limit,
+    offset: args.offset,
+  });
+};
+
+export const getAgentVersion = async (args: {
+  projectIds?: number[];
+  agentId: string;
+  version: number;
+}) => {
+  log('getAgentVersion: agentId=%s version=%d', args.agentId, args.version);
+
+  return agentVersionArchive.getVersion({
+    projectIds: args.projectIds,
+    resourceId: args.agentId,
+    version: args.version,
   });
 };
 
@@ -236,20 +189,11 @@ export const restoreAgentVersion = async (args: {
 }): Promise<MappedAgent> => {
   log('restoreAgentVersion: agentId=%s version=%d', args.agentId, args.version);
 
-  const agent = await findAgentInstance({
+  return agentVersionArchive.restoreVersion({
     projectIds: args.projectIds,
-    id: args.agentId,
-  });
-  const row = await findVersionRow({ agent, version: args.version });
-
-  // Appends a new version rather than rewinding the counter, so audit
-  // references to the versions in between never dangle and "undo the undo" is
-  // just another restore.
-  return applyArchivedConfig({
-    projectIds: args.projectIds,
-    agentId: args.agentId,
-    config: readConfig(row),
-    label: args.label ?? `restored from v${args.version}`,
+    resourceId: args.agentId,
+    version: args.version,
+    label: args.label,
     createdByUserId: args.createdByUserId,
   });
 };
@@ -289,33 +233,6 @@ export const validateReleaseInput = (args: {
     return `canary_percent must be an integer between 0 and ${CANARY_PERCENT_MAX}.`;
   }
   return null;
-};
-
-const assertVersionsExist = async (args: {
-  agent: AgentInstance;
-  versions: number[];
-}): Promise<void> => {
-  const rows = await db.AgentVersion.findAll({
-    where: { agentId: agentDbId(args.agent), version: args.versions },
-    attributes: ['version'],
-  });
-
-  const found = new Set(
-    rows.map((row) => {
-      return row.version;
-    })
-  );
-  const missing = args.versions.filter((version) => {
-    return !found.has(version);
-  });
-
-  if (missing.length > 0) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `Agent '${args.agent.publicId}' has no version ${missing.join(', ')}.`,
-      { missing }
-    );
-  }
 };
 
 /**
@@ -361,8 +278,8 @@ export const setAgentRelease = async (args: {
     id: args.agentId,
   });
 
-  await assertVersionsExist({
-    agent,
+  await agentVersionStore.assertVersionsExist({
+    resource: toResourceRef(agent),
     versions: [release.stable_version, release.canary_version],
   });
 
@@ -402,20 +319,20 @@ const settleRelease = async (args: {
   label: string;
   createdByUserId?: number | null;
 }): Promise<MappedAgent> => {
-  const agent = await findAgentInstance({
+  await agentVersionArchive.applyArchivedVersion({
     projectIds: args.projectIds,
-    id: args.agentId,
-  });
-  const row = await findVersionRow({ agent, version: args.version });
-
-  await applyArchivedConfig({
-    projectIds: args.projectIds,
-    agentId: args.agentId,
-    config: readConfig(row),
+    resourceId: args.agentId,
+    version: args.version,
     label: args.label,
     createdByUserId: args.createdByUserId,
   });
 
+  // Re-read after the write: `applyArchivedVersion` goes through `updateAgent`,
+  // so the instance loaded before it would hold a stale version counter.
+  const agent = await findAgentInstance({
+    projectIds: args.projectIds,
+    id: args.agentId,
+  });
   await agent.update({ activeRelease: null });
 
   return getAgent({ projectIds: args.projectIds, id: args.agentId });

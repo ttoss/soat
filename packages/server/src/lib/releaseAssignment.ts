@@ -1,12 +1,19 @@
 import { createHash } from 'node:crypto';
 
 /**
- * Deterministic canary assignment for agent staged rollouts
+ * Deterministic canary assignment for staged rollouts of a versioned resource
  * (docs/prd-agent-versions.md, Phase 2).
  *
- * Pure by design — no DB, no clock. The generation path resolves an identity
- * key and asks this module which version to serve, so the split is reproducible
- * in tests and identical across server processes.
+ * Pure by design — no DB, no clock, and nothing agent-specific: the mechanism is
+ * "split traffic between two version numbers on a stable identity key", which is
+ * the same whatever the versions describe (issue #877, layer 2). A consumer
+ * resolves an identity key and asks this module which version to serve, so the
+ * split is reproducible in tests and identical across server processes.
+ *
+ * Agents are the only resource with release *semantics* today — what a release
+ * targets differs per resource (the version serving a generation, the version
+ * new runs start on, the version new tasks are created into), so that meaning
+ * stays with each resource rather than being guessed at here.
  */
 
 /**

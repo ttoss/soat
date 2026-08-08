@@ -3,19 +3,21 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { TypedAgent } from './agentGenerationHelpers';
 import {
+  configKnowledgeConfig,
+  configToolBindings,
+} from './agentVersionSnapshot';
+import {
   type ActiveRelease,
   assignReleaseVersion,
   parseActiveRelease,
-} from './agentReleaseAssignment';
+} from './releaseAssignment';
 import {
   configArray,
-  configKnowledgeConfig,
   configNumber,
   configObject,
   configString,
   configStringOrObject,
-  configToolBindings,
-} from './agentVersionSnapshot';
+} from './resourceVersions';
 
 const log = createDebug('soat:generation');
 

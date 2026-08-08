@@ -5,10 +5,6 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
-  type ActiveRelease,
-  parseActiveRelease,
-} from './agentReleaseAssignment';
-import {
   type AgentToolBinding,
   deriveLegacyToolFields,
   readAgentToolBindings,
@@ -19,9 +15,8 @@ import {
 } from './agentToolBindings';
 import {
   type AgentConfigSnapshot,
+  agentVersionStore,
   buildAgentConfigSnapshot,
-  isSameAgentConfig,
-  writeAgentVersion,
 } from './agentVersionSnapshot';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
@@ -33,6 +28,7 @@ import {
 } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
 import { type InlineToolDefinition } from './tools';
 import {
   invalidateTraceContentModeCache,
@@ -510,8 +506,8 @@ export const createAgent = async (
 
   // Version 1 is archived on create, so an agent has recoverable history from
   // the moment it exists rather than from its first edit.
-  await writeAgentVersion({
-    agentDbId: (agent as unknown as { id: number }).id,
+  await agentVersionStore.writeVersion({
+    resourceDbId: (agent as unknown as { id: number }).id,
     version: 1,
     config: buildAgentConfigSnapshot(mapped),
     label: args.versionLabel,
@@ -625,13 +621,9 @@ const applyModelBindingUpdates = async (args: {
 
 /**
  * Archives the post-write config as a new version, but only when the write
- * actually changed it.
- *
- * The comparison runs on the serialized config rather than on the incoming
- * fields, so it is immune to a request that sets a field to the value it already
- * held — including the whole-config replacement `restore` performs, which is why
- * restoring the live config is a genuine no-op instead of an endless version
- * chain.
+ * actually changed it. The change detection and the archive write live in the
+ * shared engine; what stays here is bumping the counter on the agent row, which
+ * the engine deliberately never touches.
  */
 const archiveConfigChange = async (args: {
   agent: InstanceType<typeof db.Agent>;
@@ -639,17 +631,16 @@ const archiveConfigChange = async (args: {
   after: AgentConfigSnapshot;
   authorship: AgentVersionAuthorship;
 }): Promise<void> => {
-  if (isSameAgentConfig(args.before, args.after)) return;
-
-  const nextVersion = args.agent.version + 1;
-  await args.agent.update({ version: nextVersion });
-
-  await writeAgentVersion({
-    agentDbId: (args.agent as unknown as { id: number }).id,
-    version: nextVersion,
-    config: args.after,
+  await agentVersionStore.archiveConfigChange({
+    resourceDbId: (args.agent as unknown as { id: number }).id,
+    currentVersion: args.agent.version,
+    before: args.before,
+    after: args.after,
     label: args.authorship.versionLabel,
     createdByUserId: args.authorship.createdByUserId,
+    bumpVersion: async (nextVersion) => {
+      await args.agent.update({ version: nextVersion });
+    },
   });
 };
 
@@ -834,8 +825,8 @@ const forceDeleteAgentWithDependents = async (args: {
     }
     // Archived configs are owned by the agent; remove them before the parent so
     // no orphan version rows are left behind.
-    await db.AgentVersion.destroy({
-      where: { agentId: args.agentId },
+    await agentVersionStore.deleteVersions({
+      resourceDbId: args.agentId,
       transaction,
     });
     await args.agent.destroy({ transaction });

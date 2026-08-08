@@ -32,11 +32,11 @@ paths:
         - Guardrails
       summary: Create a guardrail
       description: >
-        Creates a new guardrail in the project. The `document` is validated on
-        write: `class` must be a literal (A/B/C/D) or a JSON Logic expression,
-        and every variable it (and `guard`) reference must resolve to the
-        `args.*` / `context.*` / `soat.*` namespaces — an out-of-catalog
-        `soat.*` key is rejected with 400.
+        Creates a new guardrail in the project, archiving its document as
+        version 1. The `document` is validated on write: `class` must be a
+        literal (A/B/C/D) or a JSON Logic expression, and every variable it (and
+        `guard`) reference must resolve to the `args.*` / `context.*` / `soat.*`
+        namespaces — an out-of-catalog `soat.*` key is rejected with 400.
       operationId: createGuardrail
       requestBody:
         required: true
@@ -199,9 +199,11 @@ paths:
         - Guardrails
       summary: Update a guardrail
       description: >
-        Updates an existing guardrail. A `document` write increments `version`
-        and archives the prior document as a GuardrailVersion; metadata-only
-        edits (name / description / context) leave the version untouched.
+        Updates an existing guardrail. A `document` write that actually changes
+        the policy increments `version` and archives the new document as a
+        GuardrailVersion; metadata-only edits (name / description / context), and
+        re-writing the document the guardrail already holds, leave the version
+        untouched.
       operationId: updateGuardrail
       parameters:
         - name: guardrail_id
@@ -280,15 +282,90 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/v1/guardrails/{guardrail_id}/versions:
+    get:
+      tags:
+        - Guardrails
+      summary: List a guardrail's config versions
+      description: >
+        Returns the guardrail's archived configurations, newest first. A version
+        is written on create and on every subsequent write that changes the
+        policy `document` — through the REST API or a formation apply alike.
+        Metadata-only edits (name, description, context binding) do not archive a
+        version. See [Versioning](/docs/modules/guardrails#versioning).
+      operationId: listGuardrailVersions
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of guardrail versions, newest first
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GuardrailVersion'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Guardrail not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/v1/guardrails/{guardrail_id}/versions/{version}:
     get:
       tags:
         - Guardrails
       summary: Fetch an archived guardrail version
       description: >
-        Returns the exact `document` that governed at a given version. Approval
-        items, activity entries, and exceptions record the version that
-        governed them, so the audit chain survives edits.
+        Returns the exact configuration — and so the exact `document` — that
+        governed at a given version. Approval items, activity entries, and
+        exceptions record the version that governed them, so the audit chain
+        survives edits.
       operationId: getGuardrailVersion
       parameters:
         - name: guardrail_id
@@ -329,6 +406,72 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/v1/guardrails/{guardrail_id}/versions/{version}/restore:
+    post:
+      tags:
+        - Guardrails
+      summary: Restore an archived guardrail config
+      description: >
+        Writes an archived version's `document` back as the guardrail's live
+        policy, which archives it again as a **new** version rather than rewinding
+        the counter — so an approval item or exception citing any version in
+        between still resolves.
+
+
+        The restore runs through the ordinary update path, so the archived
+        document is re-validated; restoring the policy the guardrail already
+        holds is a no-op and archives nothing.
+      operationId: restoreGuardrailVersion
+      parameters:
+        - name: guardrail_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RestoreGuardrailVersionRequest'
+      responses:
+        '200':
+          description: The guardrail, at its new version
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Guardrail'
+        '400':
+          description: Bad Request — invalid version, or the archived document no longer validates
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Guardrail or version not found
           content:
             application/json:
               schema:
@@ -585,7 +728,13 @@ components:
           nullable: true
     GuardrailVersion:
       type: object
+      description: >-
+        An immutable archive of a guardrail's configuration at one version.
       properties:
+        id:
+          type: string
+          description: Public ID of the archived version
+          example: guard_ver_V1StGXR8Z5jdHi6B
         guardrail_id:
           x-soat-ref: guardrails
           type: string
@@ -595,11 +744,49 @@ components:
           type: integer
           description: The archived version number
           example: 1
-        document:
-          $ref: '#/components/schemas/GuardrailDocument'
+        config:
+          type: object
+          additionalProperties: true
+          description: >-
+            The guardrail's versioned surface as it stood at this version. Today
+            that is the policy `document` and nothing else: name, description and
+            the context binding are metadata, and bumping the version when one of
+            them changes would make two version numbers denote the same policy —
+            which is exactly what an evaluation record cites.
+
+
+            Deliberately open rather than a fixed schema: an archive written by an
+            earlier release of SOAT reflects the guardrail surface **of its own
+            time**, so it may carry fields the current API no longer documents.
+          properties:
+            document:
+              $ref: '#/components/schemas/GuardrailDocument'
+        label:
+          type: string
+          nullable: true
+          description: >-
+            Optional human tag for this version, e.g. `pre-tightening`. Set from
+            the `label` field of a restore, or generated for one.
+          example: restored from v2
+        created_by:
+          x-soat-ref: users
+          type: string
+          nullable: true
+          description: >-
+            Public ID of the user whose action produced this version. Null for
+            writes with no request user behind them.
         created_at:
           type: string
           format: date-time
+    RestoreGuardrailVersionRequest:
+      type: object
+      properties:
+        label:
+          type: string
+          description: >-
+            Optional tag for the version the restore creates. Defaults to
+            `restored from v<version>`.
+          example: rollback to pre-incident policy
     CreateGuardrailRequest:
       type: object
       required:
@@ -628,6 +815,14 @@ components:
           enum:
             - merge
             - replace
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the config version this write archives (e.g.
+            `initial`). Annotates the version only — it is not stored on the
+            guardrail and is not part of the config, so labelling a change is
+            never itself a change.
+          example: initial
     UpdateGuardrailRequest:
       type: object
       properties:
@@ -649,6 +844,15 @@ components:
             - merge
             - replace
             - null
+        version_label:
+          type: string
+          description: >-
+            Optional tag for the config version this write archives (e.g.
+            `pre-tightening`). Annotates the version only — it is not stored on
+            the guardrail and is not part of the config, so labelling a change is
+            never itself a change. Ignored when the write changes no policy, since
+            no version is created.
+          example: pre-tightening
     ErrorResponse:
       type: object
       properties:
