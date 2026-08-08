@@ -214,6 +214,8 @@ const resolveJwt = async (ctx: Context, token: string) => {
     prj?: string;
     scope?: string;
     trg?: string;
+    orn?: string;
+    key?: string;
   };
 
   try {
@@ -237,12 +239,16 @@ const resolveJwt = async (ctx: Context, token: string) => {
   const scopedProjectPublicId = payload.prj;
   const isTriggerToken = typeof payload.trg === 'string';
 
-  // Both OAuth access tokens and trigger run-as tokens are project-scoped
-  // credentials: they intersect the owning user's policies with a boundary
-  // through the same evaluator used for API keys, hard-confined to the project.
+  // OAuth access tokens, trigger run-as tokens and orchestration run-as tokens
+  // are all project-scoped credentials: they intersect the owning user's
+  // policies with a boundary through the same evaluator used for API keys,
+  // hard-confined to the project.
   const boundaryPolicyDocs = await resolveScopedBoundaryDocs({
     scopedProjectPublicId,
     triggerPublicId: isTriggerToken ? payload.trg : undefined,
+    isRunToken: typeof payload.orn === 'string',
+    runApiKeyPublicId:
+      typeof payload.key === 'string' ? payload.key : undefined,
     scopeClaim: payload.scope,
     db: ctx.db,
   });

@@ -4,6 +4,7 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList } from './pagination';
+import type { RequestPrincipal } from './principals';
 import { runStateAutomation } from './tasksAutomation';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
@@ -227,6 +228,10 @@ export const dispatchOnEnter = (args: {
   taskPublicId: string;
   projectId: number;
   state: WorkflowState;
+  // The identity an `orchestration` dispatch runs as. A task-dispatched run is
+  // always durable (never `wait`), so without one its `soat` tool nodes have no
+  // credential — see `orchestrationRunToken.ts`.
+  principal?: RequestPrincipal;
 }): void => {
   if (!args.state.onEnter || args.state.kind === 'human') return;
   const promise = runStateAutomation({
@@ -234,6 +239,7 @@ export const dispatchOnEnter = (args: {
     projectId: args.projectId,
     stateName: args.state.name,
     onEnter: args.state.onEnter,
+    principal: args.principal,
   })
     .catch((error: unknown) => {
       log(
@@ -278,6 +284,7 @@ const finalizeCreatedTask = async (args: {
   projectId: number;
   entryState: WorkflowState;
   closed: boolean;
+  principal: TaskPrincipal;
 }) => {
   const created = await findTaskInstance({ id: args.taskPublicId });
   const mapped = mapTask(created!);
@@ -298,6 +305,17 @@ const finalizeCreatedTask = async (args: {
     taskPublicId: args.taskPublicId,
     projectId: args.projectId,
     state: args.entryState,
+    // The creator is the identity the entry state's automation acts as; every
+    // later hop inherits it (see `resolveDispatchPrincipal`).
+    principal:
+      args.principal.kind === 'user' || args.principal.kind === 'api_key'
+        ? args.principal.id
+          ? {
+              principalType: args.principal.kind,
+              principalId: args.principal.id,
+            }
+          : undefined
+        : undefined,
   });
 
   return mapped;
@@ -384,6 +402,7 @@ export const createTask = async (args: {
     projectId: args.projectId,
     entryState,
     closed,
+    principal: args.principal,
   });
 };
 

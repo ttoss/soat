@@ -112,6 +112,20 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.STRING(32), allowNull: true })
   declare triggerId: string | null;
 
+  // The principal that started this run, denormalized (not an FK) exactly like
+  // `triggerId`. A run outlives the HTTP request that created it, so it cannot
+  // borrow that request's credential when the background worker drives it
+  // later: the identity has to belong to the run. `principalKind` is 'user' or
+  // 'api_key' and `principalId` the matching public id (`user_…` / `key_…`) —
+  // the same pair the REST layer stamps for attribution. Both null for runs
+  // started by a path that has no principal to name, whose `soat` tool nodes
+  // then fail with an explicit 401 rather than acting as nobody.
+  @Column({ type: DataType.STRING(16), allowNull: true })
+  declare principalKind: string | null;
+
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare principalId: string | null;
+
   // Durable background execution. When `status` is 'sleeping', the run is
   // parked on a scheduled wait (a `delay` timer or the interval between `poll`
   // attempts) and `wakeAt` holds when it should resume. The background

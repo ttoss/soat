@@ -36,6 +36,10 @@ import {
   updateRunRecord,
 } from './orchestrationRunHelpers';
 import { executeRunLoop } from './orchestrationRunLoop';
+import {
+  buildRunAuthHeader,
+  readRunTokenPrincipal,
+} from './orchestrationRunToken';
 import type {
   MappedOrchestrationRun,
   OrchestrationEdge,
@@ -47,6 +51,7 @@ import {
   resolveStartRunProjectScope,
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
+import type { RequestPrincipal } from './principals';
 
 const log = createDebug('soat:orchestrations');
 
@@ -360,6 +365,23 @@ const driveRunToRest = async (args: {
   }
 };
 
+/**
+ * The principal to persist on a new run. A nested run (`loop`,
+ * `sub_orchestration`) is handed its parent's header rather than a principal,
+ * so the identity is read back out of it — otherwise a child that has to be
+ * redriven from the queue would have none.
+ */
+const resolveRunPrincipal = (args: {
+  principal?: RequestPrincipal;
+  authHeader?: string;
+}): { principalKind: string | null; principalId: string | null } => {
+  const principal = args.principal ?? readRunTokenPrincipal(args.authHeader);
+  return {
+    principalKind: principal?.principalType ?? null,
+    principalId: principal?.principalId ?? null,
+  };
+};
+
 export const startOrchestrationRun = async (args: {
   orchestrationPublicId: string;
   projectId?: number;
@@ -371,6 +393,11 @@ export const startOrchestrationRun = async (args: {
   // trigger. Persisted on the run and propagated to in-run generations' usage
   // events for in-run trigger attribution.
   triggerId?: string;
+  // The principal starting this run, persisted so the background worker can
+  // re-establish it later (see `orchestrationRunToken.ts`). When omitted, a run
+  // started by another run inherits its parent's identity from `authHeader`,
+  // which for `loop` / `sub_orchestration` children is the parent's run token.
+  principal?: RequestPrincipal;
   // Invoked with the run's public id as soon as the run row is created, before
   // any (in `wait` mode, blocking) execution begins. Lets a caller persist the
   // run id immediately — e.g. a workflow task recording `active_dispatch.id` so
@@ -404,6 +431,11 @@ export const startOrchestrationRun = async (args: {
   const state: Record<string, unknown> = { input: runInput };
   const artifacts: Record<string, unknown> = {};
 
+  const runPrincipal = resolveRunPrincipal({
+    principal: args.principal,
+    authHeader: args.authHeader,
+  });
+
   const runRecord = await db.OrchestrationRun.create({
     orchestrationId: orch.id as number,
     projectId: effectiveProjectId,
@@ -415,6 +447,7 @@ export const startOrchestrationRun = async (args: {
     artifacts,
     input: args.input ?? null,
     triggerId: args.triggerId ?? null,
+    ...runPrincipal,
     startedAt: new Date(),
     // In `wait` mode the run is `running` immediately, so acquire a lease so the
     // reaper can reclaim it if this driver crashes before the first checkpoint.
@@ -474,6 +507,23 @@ export const startOrchestrationRun = async (args: {
  * the worker for a `continue` task whose run is still `queued`. A run whose
  * orchestration has since been deleted is settled `failed`.
  */
+/**
+ * The `Authorization` header a background-driven run acts with. A run started
+ * from an HTTP request is driven inline with that request's own credential; a
+ * queued, woken or redriven one has no request to borrow from, so it re-mints a
+ * run-as token from the principal persisted on the run.
+ */
+const runAuthHeader = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<string | undefined> => {
+  return buildRunAuthHeader({
+    principalKind: args.run.principalKind ?? null,
+    principalId: args.run.principalId ?? null,
+    projectId: args.run.projectId as number,
+    runPublicId: args.run.publicId as string,
+  });
+};
+
 export const driveQueuedRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
@@ -509,6 +559,7 @@ export const driveQueuedRun = async (args: {
     artifacts,
     projectIds: [run.projectId as number],
     traceId: run.traceId ?? null,
+    authHeader: await runAuthHeader({ run }),
     inlineWaits: false,
   });
 };
@@ -575,6 +626,7 @@ export const wakeRun = async (args: {
     artifacts,
     projectIds: [run.projectId as number],
     traceId: run.traceId ?? null,
+    authHeader: await runAuthHeader({ run }),
     inlineWaits: false,
     entry,
   });
@@ -828,6 +880,10 @@ export const resumeOrchestrationRunExecution = async (args: {
     artifacts,
     projectIds: [run.projectId as number],
     traceId: run.traceId ?? null,
+    // A resumed run acts as the principal that started it, not as whoever
+    // submitted the input or resolved the approval — the graph's remaining
+    // nodes are the original run's work.
+    authHeader: await runAuthHeader({ run }),
     inlineWaits: true,
     entry: {
       activatedNodes: new Set<string>(startNodeIds),
@@ -930,6 +986,7 @@ export const redriveRun = async (args: {
     artifacts,
     projectIds: [run.projectId as number],
     traceId: run.traceId ?? null,
+    authHeader: await runAuthHeader({ run }),
     inlineWaits: false,
     entry,
   });

@@ -1,5 +1,6 @@
 import createDebug from 'debug';
 
+import type { RequestPrincipal } from './principals';
 import type { ActiveDispatch } from './tasks';
 import { emitTaskEvent, mapTask } from './tasks';
 import {
@@ -134,6 +135,7 @@ type AttemptContext = {
   dispatchKind: ActiveDispatch['kind'];
   inputs: Record<string, unknown>;
   retry: RetryPolicy | null;
+  principal?: RequestPrincipal;
 };
 
 // One attempt: marks the (re)dispatch running with its attempt number, then runs
@@ -162,6 +164,7 @@ const runOneAttempt = async (args: {
     dispatch: ctx.dispatch,
     projectId: ctx.projectId,
     inputs: ctx.inputs,
+    principal: ctx.principal,
     onDispatchStarted: async ({ generationId, orchestrationRunId }) => {
       await writeAttemptState({
         taskPublicId: ctx.taskPublicId,

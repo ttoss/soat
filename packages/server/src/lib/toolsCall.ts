@@ -156,6 +156,11 @@ export const callSoatTool = (
       return {};
     },
     logToolCallingError: noopLogToolCallingError,
+    // Same mapping `callHttpTool` applies: the self-call's real status reaches
+    // the caller as `meta.tool_status_code`, which is also what
+    // `isRetriableError` reads to keep a 4xx from being retried.
+  }).catch((error: unknown) => {
+    throw toHttpToolDomainError(error) ?? error;
   });
 };
 

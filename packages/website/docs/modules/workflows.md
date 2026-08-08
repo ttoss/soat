@@ -32,6 +32,16 @@ The two compose: when a task enters a state, that state may **dispatch** an
 orchestration or an agent to do its work. A workflow never replaces a run — it
 _drives_ one.
 
+The return edge is an ordinary tool call, not a second mechanism: a dispatched
+orchestration moves its task on with a `tool` node bound to a
+[`soat` tool](./tools.md#soat) for `transition-task`, passing the task id in
+through the dispatch's `input_mapping`. The run acts as the principal that
+started the chain — the person or key that created the task or fired the
+transition — and each automated hop inherits that identity, so a chain of
+states keeps acting as whoever set it going rather than decaying to no
+principal at the second state. See
+[Run identity](./orchestrations.md#durable-background-execution).
+
 > A support ticket that reopens. A lead that goes `qualified → negotiating →
 > stalled → negotiating`. A kanban card dragged back a column. None of these fit
 > a DAG — a task is the shape they need.
