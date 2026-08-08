@@ -675,6 +675,21 @@ forcing in the formations tutorial (document ids, the poem text) — and synthes
 would be worse than the status quo. Adding a tool to `TOOL_CHOICE_TOOLS` is only correct
 when the assertion is about *the pause/dispatch wiring*, not about argument quality.
 
+**The shim fails closed.** A request that forces an **allowlisted** tool it does not offer
+in `tools` is answered `400`, naming the tool — it is never forwarded. That case is a
+wiring break (the tool was renamed, the agent lost its binding, the request never carried
+the tool list), and forwarding it would hand the outcome back to `qwen2.5:0.5b` and revive
+the #774 coin flip several steps downstream, where it reads as a flaky assertion rather
+than as the misconfiguration it is. Forcing a tool that is **not** allowlisted still
+forwards, unchanged — that is the deliberate case above, not a break.
+
+Every request that *asks* for forcing logs one line with what it asked for, what tools were
+offered, and what the shim did (`forced` / `forwarded` / `REJECTED`); requests with no
+`tool_choice` (or `"auto"` / `"none"`) stay silent. `pr.yml` and `main.yml` dump the
+`ollama-tool-choice` service logs on job failure, because `docker compose up` does not
+attach that service's stdout — without both halves, a downstream failure gives no way to
+tell whether forcing was even requested, let alone honored.
+
 Note the interaction with `base_url`: an AI provider that pins `base_url` overrides the
 server's `OLLAMA_BASE_URL`, so it bypasses the shim. `tests/smoke-tests.sh` routes its
 providers through `$OLLAMA_URL` for that reason.

@@ -235,6 +235,11 @@ jobs:
         env:
           COMPOSE_BAKE: '1'
 
+      # Same blind spot as the tutorials job: the shim also fronts Ollama here.
+      - name: Smoke stack logs (on failure)
+        if: failure()
+        run: docker compose -f tests/docker-compose.smoke.yml logs --no-color --tail=400 ollama-tool-choice
+
   tutorials-test:
     name: Tutorials Tests
     runs-on: ubuntu-latest
@@ -259,6 +264,15 @@ jobs:
 
       - name: Run tutorials tests
         run: docker compose -f tests/docker-compose.tutorials.yml up --build --renew-anon-volumes --remove-orphans --abort-on-container-exit --exit-code-from tutorials
+
+      # `up` only attaches the services it starts directly, so the tool_choice
+      # shim's stdout never reaches the job log — which is exactly the evidence
+      # needed to tell a forcing failure ("did the proxy see the request, and
+      # what did it decide?") from a model decision. Dump it on failure only, so
+      # green runs stay quiet.
+      - name: Tutorials stack logs (on failure)
+        if: failure()
+        run: docker compose -f tests/docker-compose.tutorials.yml logs --no-color --tail=400 ollama-tool-choice
 
       - name: Cleanup tutorials stack
         if: always()

@@ -250,6 +250,74 @@ describe('ollamaToolChoiceProxy', () => {
     assert.equal(upstreamRequests.length, before + 1);
   });
 
+  // The shim's whole job is to make a forced allowlisted call deterministic, so
+  // "the request forces an allowlisted tool but does not offer it" is a wiring
+  // break, not a model decision. Forwarding it would hand the outcome back to
+  // the sandbox model and re-create the #774 coin flip — with no trace of why.
+  // Fail closed instead, naming the tool.
+  test('rejects a forced allowlisted tool the request does not offer', async () => {
+    const before = upstreamRequests.length;
+
+    const res = await chat({
+      model: 'qwen2.5:0.5b',
+      messages: [{ role: 'user', content: 'Status of ord_1042?' }],
+      tools: [WEATHER_TOOL],
+      tool_choice: { type: 'function', function: { name: 'get_order_status' } },
+    });
+
+    assert.equal(res.status, 400);
+    const json = await res.json();
+    assert.match(json.error.message, /get_order_status/);
+    assert.equal(
+      upstreamRequests.length,
+      before,
+      'a misconfigured forced call must not fall through to the model'
+    );
+  });
+
+  test('rejects a forced allowlisted tool when the request offers none', async () => {
+    const before = upstreamRequests.length;
+
+    const res = await chat({
+      model: 'qwen2.5:0.5b',
+      messages: [{ role: 'user', content: 'Status of ord_1042?' }],
+      tool_choice: { type: 'function', function: { name: 'get_order_status' } },
+    });
+
+    assert.equal(res.status, 400);
+    assert.equal(upstreamRequests.length, before);
+  });
+
+  // The fail-closed rule keys on the *forced* name being allowlisted, so a flow
+  // that forces one of its own tools keeps reaching the model even when an
+  // allowlisted tool happens to be offered alongside it.
+  test('forwards an unlisted forced tool offered next to an allowlisted one', async () => {
+    const before = upstreamRequests.length;
+
+    const res = await chat({
+      model: 'qwen2.5:0.5b',
+      messages: [{ role: 'user', content: 'Update the poem' }],
+      tools: [
+        ORDER_TOOL,
+        {
+          type: 'function',
+          function: {
+            name: 'update_document',
+            parameters: {
+              type: 'object',
+              properties: { content: { type: 'string' } },
+              required: ['content'],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: 'function', function: { name: 'update_document' } },
+    });
+
+    assert.equal(res.status, 200);
+    assert.equal(upstreamRequests.length, before + 1);
+  });
+
   test('forwards "required" when the single tool is not listed', async () => {
     const before = upstreamRequests.length;
 
