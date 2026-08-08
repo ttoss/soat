@@ -2,8 +2,8 @@ import crypto from 'node:crypto';
 
 import createDebug from 'debug';
 import { db } from 'src/db';
-import { paginatedList } from 'src/lib/pagination';
 
+import { paginatedList } from './pagination';
 import { decryptValue, encryptValue } from './secrets';
 
 const log = createDebug('soat:webhooks');
@@ -215,23 +215,21 @@ export const listWebhookDeliveries = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
-  const { count, rows } = await db.WebhookDelivery.findAndCountAll({
-    where: { webhookId: args.webhookId },
-    include: [{ model: db.Webhook, as: 'webhook' }],
-    limit,
-    offset,
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.WebhookDelivery.findAndCountAll({
+        where: { webhookId: args.webhookId },
+        include: [{ model: db.Webhook, as: 'webhook' }],
+        distinct: true,
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+      });
+    },
+    map: mapWebhookDelivery,
   });
-
-  return {
-    data: rows.map(mapWebhookDelivery),
-    total: count,
-    limit,
-    offset,
-  };
 };
 
 export const getWebhookDelivery = async (args: { id: string }) => {

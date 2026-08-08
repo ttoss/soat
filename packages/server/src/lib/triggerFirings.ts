@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { paginatedList } from './pagination';
 
 const log = createDebug('soat:triggers');
 
@@ -81,51 +82,60 @@ export const finalizeFiringFailed = async (args: {
 };
 
 /**
- * Returns a firing record by public id, re-fetched with associations so
- * `mapTriggerFiring` can resolve the trigger/project public ids.
+ * Re-reads a firing the caller already holds, with the associations
+ * `mapTriggerFiring` needs to resolve the trigger/project public ids.
+ *
+ * A `reload` rather than a lookup by id, because the caller has the instance:
+ * there is no "not found" case to branch on — Sequelize throws if the row is
+ * gone, and the one caller re-reads a row it just wrote inside a `try` that
+ * falls back to the in-memory instance. A lookup returning `null` only added a
+ * branch no entry point can reach.
  */
-export const getFiringById = async (args: { internalId: number }) => {
-  const firing = await db.TriggerFiring.findOne({
-    where: { id: args.internalId },
-    include: firingIncludes(),
-  });
-  return firing ? mapTriggerFiring(firing) : null;
+export const reloadFiring = async (args: {
+  firing: InstanceType<(typeof db)['TriggerFiring']>;
+}) => {
+  await args.firing.reload({ include: firingIncludes() });
+  return mapTriggerFiring(args.firing);
 };
 
+/**
+ * Firings of one trigger, scoped by the trigger's public id through the join it
+ * already needs for `mapTriggerFiring`.
+ *
+ * It deliberately does not re-resolve the trigger first: the only caller is the
+ * route, which resolves it through `getTrigger` to authorize against its project
+ * — so a second lookup here restated the "trigger not found" rule in a branch no
+ * request could reach. An unknown id simply yields an empty page.
+ */
 export const listTriggerFirings = async (args: {
   triggerPublicId: string;
   limit?: number;
   offset?: number;
 }) => {
-  const trigger = await db.Trigger.findOne({
-    where: { publicId: args.triggerPublicId },
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.TriggerFiring.findAndCountAll({
+        include: [
+          {
+            model: db.Trigger,
+            as: 'trigger',
+            where: { publicId: args.triggerPublicId },
+            required: true,
+          },
+          { model: db.Project, as: 'project' },
+        ],
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (row) => {
+      return mapTriggerFiring(row);
+    },
   });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.triggerPublicId}' not found.`
-    );
-  }
-
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
-  const { rows, count } = await db.TriggerFiring.findAndCountAll({
-    where: { triggerId: trigger.id as number },
-    include: firingIncludes(),
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
-  });
-
-  return {
-    data: rows.map((r) => {
-      return mapTriggerFiring(r);
-    }),
-    total: count,
-    limit,
-    offset,
-  };
 };
 
 export const getTriggerFiring = async (args: { id: string }) => {

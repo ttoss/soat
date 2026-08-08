@@ -5,7 +5,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { assertValidApprovalFilters } from './approvalFilters';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import {
   paginatedList,
   type PaginatedResult,
@@ -193,14 +193,13 @@ const emitApprovalEvent = async (args: {
   const projectPublicId = await resolveProjectPublicId({
     projectId: args.projectId,
   });
-  emitEvent({
+  emitResourceEvent({
     type: args.type,
     projectId: args.projectId,
     projectPublicId,
     resourceType: 'approval',
     resourceId: args.item.id,
     data: { approval: args.item },
-    timestamp: new Date().toISOString(),
   });
 };
 

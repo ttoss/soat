@@ -10,7 +10,7 @@ import {
 } from 'src/lib/apiKeys';
 import { recordAuthorizationDecision } from 'src/middleware/audit';
 
-import { parsePagination } from './helpers';
+import { isOwnerOrAdmin, parsePagination } from './helpers';
 
 const apiKeysRouter = new Router<Context>();
 
@@ -165,11 +165,11 @@ apiKeysRouter.get('/api-keys/:api_key_id', async (ctx: Context) => {
   }
 
   if (
-    apiKey.user_id !== ctx.authUser.publicId &&
-    ctx.authUser.role !== 'admin'
+    !isOwnerOrAdmin(ctx, {
+      ownerPublicId: apiKey.user_id,
+      action: 'api-keys:GetApiKey',
+    })
   ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
     return;
   }
 
@@ -200,15 +200,12 @@ apiKeysRouter.put('/api-keys/:api_key_id', async (ctx: Context) => {
     return;
   }
 
-  const allowedToUpdate =
-    existing.user_id === ctx.authUser.publicId || ctx.authUser.role === 'admin';
-  recordAuthorizationDecision(ctx, {
-    action: 'api-keys:UpdateApiKey',
-    allowed: allowedToUpdate,
-  });
-  if (!allowedToUpdate) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (
+    !isOwnerOrAdmin(ctx, {
+      ownerPublicId: existing.user_id,
+      action: 'api-keys:UpdateApiKey',
+    })
+  ) {
     return;
   }
 
@@ -252,15 +249,12 @@ apiKeysRouter.delete('/api-keys/:api_key_id', async (ctx: Context) => {
     return;
   }
 
-  const allowedToDelete =
-    existing.user_id === ctx.authUser.publicId || ctx.authUser.role === 'admin';
-  recordAuthorizationDecision(ctx, {
-    action: 'api-keys:DeleteApiKey',
-    allowed: allowedToDelete,
-  });
-  if (!allowedToDelete) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+  if (
+    !isOwnerOrAdmin(ctx, {
+      ownerPublicId: existing.user_id,
+      action: 'api-keys:DeleteApiKey',
+    })
+  ) {
     return;
   }
 

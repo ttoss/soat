@@ -16,7 +16,12 @@ import {
   updateTrigger,
 } from 'src/lib/triggers';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const triggersRouter = new Router<Context>();
 
@@ -47,16 +52,13 @@ triggersRouter.get('/triggers', async (ctx: Context) => {
   const type = ctx.query.type as string | undefined;
   const targetType = ctx.query.target_type as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'triggers:ListTriggers',
     resourceType: 'trigger',
   });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listTriggers({
     projectIds: projectIds ?? [],

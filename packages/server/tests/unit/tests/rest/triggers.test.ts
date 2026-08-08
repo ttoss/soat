@@ -1280,6 +1280,22 @@ describe('Triggers', () => {
       expect(res.status).toBe(400);
     });
 
+    test('an unknown trigger_id returns 404', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        '/api/v1/trigger-firings?trigger_id=trg_doesnotexist0'
+      );
+      expect(res.status).toBe(404);
+      expect(res.body.error.code).toBe('RESOURCE_NOT_FOUND');
+    });
+
+    test('an absurd limit is clamped to MAX_LIST_LIMIT', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1000000`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.limit).toBe(100);
+    });
+
     test('accepts limit and offset query params', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/trigger-firings?trigger_id=${firedTriggerId}&limit=1&offset=0`

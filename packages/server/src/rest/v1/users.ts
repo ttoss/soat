@@ -29,33 +29,13 @@ usersRouter.get('/users/me', async (ctx: Context) => {
 });
 
 usersRouter.get('/users', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'users:ListUsers')) return;
 
   ctx.body = await listUsers(parsePagination(ctx));
 });
 
 usersRouter.get('/users/:user_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-
-  if (ctx.authUser.role !== 'admin') {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (!requireAdmin(ctx, 'users:GetUser')) return;
 
   const user = await getUser({ id: ctx.params.user_id });
 

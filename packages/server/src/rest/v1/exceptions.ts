@@ -9,7 +9,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination } from './helpers';
+import { parsePagination, resolveProjectIdsWithAction } from './helpers';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -33,17 +33,14 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'exceptions:ListExceptions',
     resourceType: 'exception',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listExceptions({
     projectIds: projectIds ?? [],

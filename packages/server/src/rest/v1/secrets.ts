@@ -9,7 +9,12 @@ import {
   updateSecret,
 } from 'src/lib/secrets';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const secretsRouter = new Router<Context>();
 
@@ -22,17 +27,14 @@ secretsRouter.get('/secrets', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'secrets:ListSecrets',
     resourceType: 'secret',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listSecrets({
     projectIds: projectIds ?? [],

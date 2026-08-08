@@ -2,7 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { runStateAutomation } from './tasksAutomation';
@@ -173,14 +173,13 @@ export const emitTaskEvent = async (args: {
   const projectPublicId = await resolveProjectPublicId({
     projectId: args.projectId,
   });
-  emitEvent({
+  emitResourceEvent({
     type: args.type,
     projectId: args.projectId,
     projectPublicId,
     resourceType: 'task',
     resourceId: args.task.id,
     data: { task: args.task, ...(args.extra ?? {}) },
-    timestamp: new Date().toISOString(),
   });
 };
 

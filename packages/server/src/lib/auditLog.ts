@@ -8,7 +8,7 @@ import {
 } from 'src/lib/resource-inputs/normalizers';
 
 import { DomainError } from '../errors';
-import { emitEvent } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 
 const log = createDebug('soat:audit');
 
@@ -171,7 +171,7 @@ const emitAuditEntryCreated = (args: {
   projectId: number;
   projectPublicId: string;
 }): void => {
-  emitEvent({
+  emitResourceEvent({
     type: AUDIT_ENTRY_CREATED_EVENT,
     projectId: args.projectId,
     projectPublicId: args.projectPublicId,
@@ -180,7 +180,6 @@ const emitAuditEntryCreated = (args: {
     // The full entry, snake_cased to match the read contract, so a subscriber
     // never needs a follow-up GET to see what happened.
     data: toSnakeAuditEntry(mapAuditEntry(args.entry, args.projectPublicId)),
-    timestamp: new Date().toISOString(),
   });
 };
 

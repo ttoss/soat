@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 
 const readStoredFileContent = async (
@@ -156,22 +156,16 @@ const emitMessageCreated = (args: {
   projectId: number;
   mapped: Awaited<ReturnType<typeof mapMessage>>;
 }) => {
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.created',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: args.mapped.document_id,
-        data: {
-          ...args.mapped,
-          conversationId: args.conversationId,
-        } as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'conversations.message.created',
+    projectId: args.projectId,
+    resourceType: 'conversation_message',
+    resourceId: args.mapped.document_id,
+    data: {
+      ...args.mapped,
+      conversationId: args.conversationId,
+    },
+  });
 };
 
 export const addConversationMessage = async (args: {
@@ -364,22 +358,16 @@ export const removeConversationMessage = async (args: {
     await deleteDocument({ id: document.publicId });
   }
 
-  resolveProjectPublicId({ projectId: conversation.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.deleted',
-        projectId: conversation.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: args.documentId,
-        data: {
-          conversationId: args.conversationId,
-          documentId: args.documentId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'conversations.message.deleted',
+    projectId: conversation.projectId,
+    resourceType: 'conversation_message',
+    resourceId: args.documentId,
+    data: {
+      conversationId: args.conversationId,
+      documentId: args.documentId,
+    },
+  });
 
   return { conversationId: args.conversationId, documentId: args.documentId };
 };

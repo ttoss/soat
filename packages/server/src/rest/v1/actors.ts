@@ -13,7 +13,11 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const actorsRouter = new Router<Context>();
 
@@ -48,17 +52,14 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'actors:ListActors',
     resourceType: 'actor',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {

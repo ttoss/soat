@@ -7,6 +7,7 @@ import {
 } from './generationContentSuppression';
 import { mapGeneration, type PersistedGeneration } from './generationMapper';
 import { findOrCreateTrace } from './generationTrace';
+import { emptyPage, paginatedList } from './pagination';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -327,15 +328,11 @@ export const listGenerations = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
-  const empty = { data: [], total: 0, limit, offset };
 
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return empty;
+    if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
   }
 
@@ -345,23 +342,30 @@ export const listGenerations = async (args: {
     initiatorGenerationId: args.initiatorGenerationId,
     projectIds: args.projectIds,
   });
-  if (!resolved) return empty;
+  if (!resolved) return emptyPage(args);
 
   if (args.status !== undefined) where.status = args.status;
 
-  const { count, rows } = await db.Generation.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ],
-    order: [['startedAt', 'DESC']],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Generation.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.Project, as: 'project' },
+          { model: db.Agent, as: 'agent' },
+          { model: db.Trace, as: 'trace' },
+          { model: db.Generation, as: 'initiatorGeneration' },
+        ],
+        order: [['startedAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapGeneration,
   });
-  return { data: rows.map(mapGeneration), total: count, limit, offset };
 };
 
 export const listGenerationsByTraceIds = async (args: {

@@ -1,4 +1,11 @@
+import { normalizeDeclaredProperties } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
+
+// The write half of the module-dispatch seam (the read half is
+// `runFormationModuleHooks` in `formationsValidation.ts`). The apply and plan
+// pipelines already normalize upstream; normalizing again here — it is
+// idempotent — is what makes the guarantee hold for any caller of these entry
+// points, so no module has to remember (#901).
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -15,7 +22,7 @@ export const applyCreateResource = async (args: ApplyArgs): Promise<string> => {
   if (!formationModule)
     throw new Error(`Unsupported resource type: ${args.resourceType}`);
   return formationModule.create({
-    properties: args.resolvedProperties,
+    properties: normalizeDeclaredProperties(args.resolvedProperties),
     projectId: args.projectId,
   });
 };
@@ -34,7 +41,7 @@ export const applyUpdateResource = async (args: {
     );
   return formationModule.update({
     physicalResourceId: args.physicalResourceId,
-    properties: args.resolvedProperties,
+    properties: normalizeDeclaredProperties(args.resolvedProperties),
   });
 };
 

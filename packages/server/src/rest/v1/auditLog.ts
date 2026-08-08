@@ -9,6 +9,8 @@ import {
   streamAuditEntriesNdjson,
 } from 'src/lib/auditLog';
 
+import { resolveProjectIdsWithAction } from './helpers';
+
 const auditLogRouter = new Router<Context>();
 
 // Absent is not the same as invalid: a filter the caller never supplied is
@@ -61,17 +63,14 @@ auditLogRouter.get('/audit-log', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'audit:ListAuditEntries',
     resourceType: 'audit',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listAuditEntries({
     projectIds,
@@ -105,17 +104,14 @@ auditLogRouter.get('/audit-log/export', async (ctx: Context) => {
     return;
   }
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'audit:ExportAuditEntries',
     resourceType: 'audit',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   const filename = `audit-log-${projectPublicId}.ndjson`;
   ctx.set('Content-Type', 'application/x-ndjson');

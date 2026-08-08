@@ -9,7 +9,12 @@ import {
   updateMemory,
 } from 'src/lib/memories';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const memoriesRouter = new Router<Context>();
 
@@ -28,17 +33,14 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
       : [rawTags as string]
     : undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'memories:ListMemories',
     resourceType: 'memory',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listMemories({
     projectIds: projectIds ?? [],

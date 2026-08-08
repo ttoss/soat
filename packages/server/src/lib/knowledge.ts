@@ -9,6 +9,9 @@ import { resolveMemorySearch } from './knowledgeMemory';
 export { mapDocument } from './documentMapper';
 export type { MemoryQueryConfig } from './knowledgeMemory';
 
+/** Results returned by a knowledge search when the caller names no `limit`. */
+const DEFAULT_SEARCH_TOP_K = 10;
+
 // ── Types ────────────────────────────────────────────────────────────────
 
 export type DocumentQueryConfig = {
@@ -438,6 +441,10 @@ export const searchKnowledge = async (
     });
   }
 
-  const limit = args.limit ?? 10;
-  return allResults.slice(0, limit);
+  // Not a page: `allResults` is already in memory, and this is the top-k of a
+  // similarity search rather than a slice of a table. Named accordingly so it
+  // reads as distinct from the `limit`/`offset` list envelope, whose bound lives
+  // in `pagination.ts`.
+  const topK = args.limit ?? DEFAULT_SEARCH_TOP_K;
+  return allResults.slice(0, topK);
 };

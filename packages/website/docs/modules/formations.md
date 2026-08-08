@@ -455,6 +455,17 @@ the formation resource instead — the same source of truth `update-formation`
 diffs against, so `plan-formation` and `update-formation` agree on whether a
 secret with `use_previous_value: true` is a `no-op`.
 
+Both commands apply the same change rule, so a plan never disagrees with the
+apply it previews:
+
+- Only properties **the template declares** are compared. A field the resource
+  carries but the template omits — set out of band, or removed from the
+  template — is not a change.
+- A declared property is compared **structurally**, so key order inside a
+  nested value bag is not a change.
+- A property resolving to `undefined` (a kept `use_previous_value` parameter)
+  reuses the previous value, or is dropped entirely when there is none.
+
 ### Operations and Event Log
 
 Every deploy (create, update, delete) creates a `FormationOperation` record with:

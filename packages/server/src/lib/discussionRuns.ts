@@ -15,6 +15,7 @@ import {
 import { findDiscussionModel } from './discussions';
 import type { DiscussionModel, SynthesisConfig } from './discussionsTypes';
 import { createDocument } from './documents';
+import { paginatedList } from './pagination';
 
 const log = createDebug('soat:discussions');
 
@@ -73,8 +74,6 @@ export const listDiscussionRuns = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
   const discussion = await db.Discussion.findOne({
     where: { publicId: args.discussionId },
   });
@@ -84,21 +83,23 @@ export const listDiscussionRuns = async (args: {
       `Discussion '${args.discussionId}' not found.`
     );
   }
-  const { count, rows } = await db.DiscussionRun.findAndCountAll({
-    where: { discussionId: discussion.id },
-    include: runIncludes(),
-    limit,
-    offset,
-    order: [['createdAt', 'DESC']],
-  });
-  return {
-    data: rows.map((row) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.DiscussionRun.findAndCountAll({
+        where: { discussionId: discussion.id },
+        include: runIncludes(),
+        distinct: true,
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+      });
+    },
+    map: (row) => {
       return mapRun(row as RunModel);
-    }),
-    total: count,
-    limit,
-    offset,
-  };
+    },
+  });
 };
 
 export const getDiscussionRun = async (args: { id: string }) => {

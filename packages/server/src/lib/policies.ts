@@ -4,7 +4,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PolicyDocument } from './iam';
 import { validatePolicyActions, validatePolicyDocument } from './iam';
-import { paginatedList, resolvePagination } from './pagination';
+import { emptyPage, paginatedList } from './pagination';
 
 const validatePolicy = (
   document: PolicyDocument
@@ -37,10 +37,7 @@ export const listPolicies = async (args?: {
   if (args?.userId !== undefined) {
     const user = await db.User.findOne({ where: { publicId: args.userId } });
     const policyIds = (user?.policyIds as number[] | undefined) ?? [];
-    if (policyIds.length === 0) {
-      const { limit, offset } = resolvePagination(args);
-      return { data: [], total: 0, limit, offset };
-    }
+    if (policyIds.length === 0) return emptyPage(args ?? {});
     where = { id: policyIds };
   }
 

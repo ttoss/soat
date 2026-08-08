@@ -5,6 +5,7 @@
 
 import type { db } from 'src/db';
 
+import { mergeWithPrevious } from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
 import {
   applyCreateResource,
@@ -85,20 +86,10 @@ export const applyUpdateChange = async (args: {
     string,
     unknown
   >;
-  // A property resolving to `undefined` means its parameter was kept
-  // ("use previous value"). Reuse the last-applied value where we have one;
-  // otherwise drop the field entirely so the underlying resource preserves its
-  // current value (e.g. a secret's encrypted value is never re-applied).
-  const mergedProperties: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(resolvedProperties)) {
-    if (value === undefined) {
-      if (key in lastProps) mergedProperties[key] = lastProps[key];
-    } else {
-      mergedProperties[key] = value;
-    }
-  }
-  const propertiesChanged =
-    JSON.stringify(lastProps) !== JSON.stringify(mergedProperties);
+  // Shared with `plan-formation`, so the preview and the apply it previews can
+  // no longer disagree about whether a resource changed (#902).
+  const { merged: mergedProperties, changed: propertiesChanged } =
+    mergeWithPrevious({ resolved: resolvedProperties, previous: lastProps });
   resolvedIds.set(logicalId, existing.physicalResourceId);
   if (propertiesChanged) {
     await applyUpdateResource({

@@ -243,31 +243,3 @@ export type MappedFormationOperation = {
   created_at: Date;
   updated_at: Date;
 };
-
-// ── Supported Resource Types ──────────────────────────────────────────────
-
-export const SUPPORTED_RESOURCE_TYPES = new Set([
-  'ai_provider',
-  'tool',
-  'agent',
-  'actor',
-  'api_key',
-  'chat',
-  'conversation',
-  'discussion',
-  'document',
-  'file',
-  'guardrail',
-  'ingestion_rule',
-  'memory',
-  'memory_entry',
-  'orchestration',
-  'policy',
-  'project_price',
-  'quota',
-  'secret',
-  'session',
-  'webhook',
-  'trigger',
-  'workflow',
-]);

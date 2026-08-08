@@ -2,7 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
 import {
@@ -43,19 +43,13 @@ const emitPurgeEvent = (args: {
   resourceId: string;
   data: Record<string, unknown>;
 }): void => {
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: args.type,
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: args.resourceType,
-        resourceId: args.resourceId,
-        data: args.data,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: args.type,
+    projectId: args.projectId,
+    resourceType: args.resourceType,
+    resourceId: args.resourceId,
+    data: args.data,
+  });
 };
 
 /**
@@ -112,7 +106,7 @@ export const purgeGenerationContent = async (args: {
       projectId: gen.projectId,
       resourceType: 'generation',
       resourceId: gen.publicId,
-      data: purged as unknown as Record<string, unknown>,
+      data: purged,
     });
   }
 
@@ -315,7 +309,7 @@ export const purgeTraceContent = async (args: {
     resourceType: 'trace',
     resourceId: target.publicId,
     data: {
-      ...(purged as unknown as Record<string, unknown>),
+      ...purged,
       purged_trace_count: traceDbIds.length,
     },
   });

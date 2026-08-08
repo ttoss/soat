@@ -12,7 +12,11 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const conversationsRouter = new Router<Context>();
 
@@ -32,17 +36,14 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'conversations:ListConversations',
     resourceType: 'conversation',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {

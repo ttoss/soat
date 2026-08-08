@@ -4,11 +4,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
-import {
-  paginatedList,
-  type PaginatedResult,
-  resolvePagination,
-} from './pagination';
+import { emptyPage, paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:usage:thresholds');
 
@@ -79,14 +75,9 @@ export const listThresholds = async (args: {
   limit?: number;
   offset?: number;
 }): Promise<PaginatedResult<PersistedUsageThreshold>> => {
-  const emptyPage = () => {
-    const { limit, offset } = resolvePagination(args);
-    return { data: [], total: 0, limit, offset };
-  };
-
   const where: Record<string, unknown> = {};
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return emptyPage();
+    if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
   }
 
@@ -94,13 +85,13 @@ export const listThresholds = async (args: {
     const project = await db.Project.findOne({
       where: { publicId: args.projectId },
     });
-    if (!project) return emptyPage();
+    if (!project) return emptyPage(args);
     const internalId = project.id as number;
     if (
       args.projectIds !== undefined &&
       !args.projectIds.includes(internalId)
     ) {
-      return emptyPage();
+      return emptyPage(args);
     }
     where.projectId = internalId;
   }

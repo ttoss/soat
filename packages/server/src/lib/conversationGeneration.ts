@@ -2,7 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { createGeneration, type GenerationResult } from './agents';
 import { addConversationMessage } from './conversationMessages';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
 import { fireMemoryExtraction } from './memoryExtraction';
 
@@ -237,24 +237,18 @@ const firePostTurnSideEffects = (args: {
     assistantContent: args.assistantContent,
   });
 
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'conversations.message.generated',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'conversation_message',
-        resourceId: args.documentId,
-        data: {
-          conversationId: args.conversationId,
-          agentId: args.agentId,
-          generationId: args.generationId,
-          traceId: args.traceId,
-        },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'conversations.message.generated',
+    projectId: args.projectId,
+    resourceType: 'conversation_message',
+    resourceId: args.documentId,
+    data: {
+      conversationId: args.conversationId,
+      agentId: args.agentId,
+      generationId: args.generationId,
+      traceId: args.traceId,
+    },
+  });
 };
 
 export type GenerateConversationMessageResult =

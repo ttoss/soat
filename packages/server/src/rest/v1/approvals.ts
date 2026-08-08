@@ -10,7 +10,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination } from './helpers';
+import { parsePagination, resolveProjectIdsWithAction } from './helpers';
 
 const approvalsRouter = new Router<Context>();
 
@@ -39,17 +39,14 @@ approvalsRouter.get('/approvals', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'approvals:ListApprovals',
     resourceType: 'approval',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   const expiresBeforeRaw = ctx.query.expires_before as string | undefined;
 
@@ -73,17 +70,14 @@ approvalsRouter.get('/approvals/recurrences', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'approvals:ListApprovalRecurrences',
     resourceType: 'approval',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   const minCountRaw = ctx.query.min_count as string | undefined;
   const minCount =

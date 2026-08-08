@@ -166,6 +166,59 @@ outputs:
       expect(res.status).toBe(401);
     });
 
+    // #900: the resource-type allowlist used to be a hand-written literal that
+    // had fallen behind the module registry, so `model_route` — a fully
+    // implemented resource type — was unreachable through the API.
+    test('a model_route resource is a declarable type', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              PrimaryRoute: {
+                type: 'model_route',
+                properties: {
+                  name: 'primary',
+                  targets: [
+                    { ai_provider_id: 'aip_placeholder000', model: 'gpt-4o' },
+                  ],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toEqual([]);
+    });
+
+    // #901: camelCase keys were normalized by 20 of 24 modules. `tool` was one
+    // of the four that skipped it, so the same spelling that worked elsewhere
+    // in a template was reported as an unknown field here.
+    test('a tool resource accepts camelCase property keys', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              CamelTool: {
+                type: 'tool',
+                properties: {
+                  name: 'camel-tool',
+                  type: 'soat',
+                  deniedActions: ['list-tools'],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+      expect(res.body.errors).toEqual([]);
+    });
+
     test('policy resource with an unknown action is rejected (F-11)', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations/validate')

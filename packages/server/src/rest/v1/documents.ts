@@ -16,7 +16,11 @@ import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 import type { ProjectOwned } from './helpers';
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
 
 const documentsRouter = new Router<Context>();
@@ -107,17 +111,14 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await ctx.authUser!.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'documents:ListDocuments',
     resourceType: 'document',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   // Compile SQL-level policy filter when a specific project is requested
   if (projectPublicId) {

@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
-import { emitEvent } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import type { MappedIngestionRule } from './ingestionRules';
 import { mapDocument } from './knowledge';
 
@@ -158,17 +158,16 @@ export const finalizeIngestedPages = async (
   const fetched = await fetchIngestedDocById(docId);
   const project = fetched?.file?.project;
   if (fetched && project) {
-    emitEvent({
+    emitResourceEvent({
       type: 'documents.created',
       projectId: project.id,
       projectPublicId: project.publicId,
       resourceType: 'document',
       resourceId: fetched.publicId,
       data: {
-        ...(mapDocument(fetched) as unknown as Record<string, unknown>),
+        ...mapDocument(fetched),
         chunkCount: chunks.length,
       },
-      timestamp: new Date().toISOString(),
     });
   }
 };

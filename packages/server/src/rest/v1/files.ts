@@ -9,7 +9,11 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
-import { checkAuth, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const upload = multer({ storage: multer.memoryStorage() });
 const filesRouter = new Router<Context>();
@@ -52,17 +56,14 @@ filesRouter.get('/files', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'files:GetFile',
     resourceType: 'file',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   if (projectPublicId) {
     ctx.body = await listFilesWithPolicy({

@@ -18,7 +18,12 @@ import {
 } from 'src/lib/formations';
 import { buildSrn } from 'src/lib/iam';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 export const formationsRouter = new Router<Context>();
 
@@ -181,17 +186,14 @@ formationsRouter.get('/formations', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'formations:ListFormations',
     resourceType: 'formation',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listFormations({
     projectIds: projectIds ?? [],

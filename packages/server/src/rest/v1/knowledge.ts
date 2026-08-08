@@ -3,6 +3,8 @@ import type { Context } from 'src/Context';
 import { searchKnowledge } from 'src/lib/knowledge';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
+import { resolveProjectIdsWithAction } from './helpers';
+
 const knowledgeRouter = new Router<Context>();
 
 type KnowledgeSearchBody = {
@@ -75,17 +77,14 @@ knowledgeRouter.post('/knowledge/search', async (ctx: Context) => {
     return;
   }
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId: body.project_id,
     action: 'knowledge:SearchKnowledge',
     resourceType: 'document',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   const { forbidden, policyWhere } = await resolvePolicyWhere(ctx, body);
   if (forbidden) {

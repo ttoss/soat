@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { mapMessage } from './conversationMessages';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
+import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -39,11 +40,8 @@ export const listConversations = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where: Record<string, unknown> = {};
@@ -55,7 +53,7 @@ export const listConversations = async (args: {
   if (args.actorId !== undefined) {
     const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
     if (!actor) {
-      return { data: [], total: 0, limit, offset };
+      return emptyPage(args);
     }
     const messages = await db.ConversationMessage.findAll({
       where: { actorId: actor.id },
@@ -74,17 +72,23 @@ export const listConversations = async (args: {
     Object.assign(where, args.policyWhere);
   }
 
-  const { count, rows } = await db.Conversation.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Actor, as: 'actor' },
-    ],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Conversation.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.Project, as: 'project' },
+          { model: db.Actor, as: 'actor' },
+        ],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapConversation,
   });
-
-  return { data: rows.map(mapConversation), total: count, limit, offset };
 };
 
 export const getConversation = async (args: { id: string }) => {
@@ -126,14 +130,13 @@ export const createConversation = async (args: {
 
   const mapped = mapConversation(conversationWithAssociations!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.created',
     projectId: conversationWithAssociations!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -169,14 +172,13 @@ export const updateConversation = async (args: {
 
   const mapped = mapConversation(updated!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -203,14 +205,13 @@ export const updateConversationStatus = async (args: {
 
   const mapped = mapConversation(updatedConversation!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updatedConversation!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -229,16 +230,12 @@ export const deleteConversation = async (args: { id: string }) => {
 
   await conversation.destroy();
 
-  resolveProjectPublicId({ projectId }).then((projectPublicId) => {
-    emitEvent({
-      type: 'conversations.deleted',
-      projectId,
-      projectPublicId,
-      resourceType: 'conversation',
-      resourceId: args.id,
-      data: { id: args.id },
-      timestamp: new Date().toISOString(),
-    });
+  emitResourceEvent({
+    type: 'conversations.deleted',
+    projectId,
+    resourceType: 'conversation',
+    resourceId: args.id,
+    data: { id: args.id },
   });
 
   return { id: args.id };
@@ -281,14 +278,13 @@ export const updateConversationTags = async (args: {
 
   const mapped = mapConversation(updated!);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'conversations.updated',
     projectId: updated!.projectId,
     projectPublicId: mapped.project_id!,
     resourceType: 'conversation',
     resourceId: mapped.id,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -299,9 +295,6 @@ export const listConversationMessages = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });
@@ -310,26 +303,27 @@ export const listConversationMessages = async (args: {
     return null;
   }
 
-  const { count, rows } = await db.ConversationMessage.findAndCountAll({
-    where: { conversationId: conversation.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Agent, as: 'agent' },
-    ],
-    order: [['position', 'ASC']],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.ConversationMessage.findAndCountAll({
+        where: { conversationId: conversation.id },
+        include: [
+          {
+            model: db.Document,
+            as: 'document',
+            include: [{ model: db.File, as: 'file' }],
+          },
+          { model: db.Actor, as: 'actor' },
+          { model: db.Agent, as: 'agent' },
+        ],
+        order: [['position', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapMessage,
   });
-
-  const data = await Promise.all(
-    rows.map((row) => {
-      return mapMessage(row);
-    })
-  );
-  return { data, total: count, limit, offset };
 };

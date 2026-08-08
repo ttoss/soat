@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent } from './eventBus';
+import { emptyPage, paginatedList } from './pagination';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -180,19 +181,13 @@ export const createSession = async (args: {
 
   const mapped = mapSession(sessionWithIncludes!);
 
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.created',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: mapped.id,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.created',
+    projectId: args.projectId,
+    resourceType: 'session',
+    resourceId: mapped.id,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -237,11 +232,8 @@ export const listSessions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where: Record<string, unknown> = {};
@@ -257,20 +249,28 @@ export const listSessions = async (args: {
     status: args.status,
   });
   if (!resolved) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
-  const { count, rows } = await db.Session.findAndCountAll({
-    where,
-    include: sessionIncludes(),
-    limit,
-    offset,
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: async ({ limit, offset }) => {
+      const page = await db.Session.findAndCountAll({
+        where,
+        include: sessionIncludes(),
+        distinct: true,
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+      });
+      // Expiry is applied to the rows this page returns before they are mapped,
+      // so a session that timed out is reported as expired rather than active.
+      await Promise.all(page.rows.map(checkAndExpireSession));
+      return page;
+    },
+    map: mapSession,
   });
-
-  await Promise.all(rows.map(checkAndExpireSession));
-
-  return { data: rows.map(mapSession), total: count, limit, offset };
 };
 
 /**
@@ -390,19 +390,13 @@ export const updateSession = async (args: {
 
   const mapped = mapSession(sessionWithIncludes!);
 
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.updated',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: mapped.id,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.updated',
+    projectId: session.projectId,
+    resourceType: 'session',
+    resourceId: mapped.id,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -434,19 +428,13 @@ export const deleteSession = async (args: {
     });
   });
 
-  resolveProjectPublicId({ projectId: session.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'sessions.deleted',
-        projectId: session.projectId,
-        projectPublicId,
-        resourceType: 'session',
-        resourceId: session.publicId,
-        data: { id: session.publicId },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'sessions.deleted',
+    projectId: session.projectId,
+    resourceType: 'session',
+    resourceId: session.publicId,
+    data: { id: session.publicId },
+  });
 };
 
 export {

@@ -1,7 +1,7 @@
 /**
  * Common helper functions for REST API handlers
  */
-import type { AuthUser, Context } from 'src/Context';
+import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   principalFromAuthUser,
@@ -20,20 +20,30 @@ import { recordAuthorizationDecision } from 'src/middleware/audit';
  * operations. Surfacing the reason here turns the otherwise opaque `403
  * Forbidden` into a message that names both projects and points at the fix.
  *
+ * The denial is recorded before it is thrown. This check short-circuits ahead of
+ * `resolveProjectIds`, so the audit middleware's wrapper never observes it —
+ * without the explicit record, refusing a cross-project request would leave no
+ * audit entry at all, the same #745 class the `requireAdmin` comment below
+ * describes.
+ *
  * No-op when the credential is unscoped, or when the requested project matches
  * the credential's project.
  */
 const assertCredentialProjectScope = (args: {
-  authUser: AuthUser;
+  ctx: Context;
   requestedProjectPublicId: string;
+  action: string;
 }): void => {
-  const { authUser, requestedProjectPublicId } = args;
+  const { ctx, requestedProjectPublicId } = args;
+  const authUser = ctx.authUser!;
   const scopedProject =
     authUser.apiKeyProjectPublicId ?? authUser.oauthProjectPublicId;
 
   if (!scopedProject || scopedProject === requestedProjectPublicId) {
     return;
   }
+
+  recordAuthorizationDecision(ctx, { action: args.action, allowed: false });
 
   const credential = authUser.apiKeyProjectPublicId ? 'API key' : 'OAuth token';
   // Meta keys are snake_case to match the external REST contract.
@@ -128,6 +138,39 @@ export const requireAdmin = (ctx: Context, action: string): boolean => {
 };
 
 /**
+ * Gates a route on the caller either owning the resource or being an admin —
+ * the API-key rule, where a user administers their own keys and an admin
+ * administers everyone's. Unlike {@link requireAdmin} this is not a pure role
+ * gate, so it needs the owner to compare against.
+ *
+ * Shared for the same reason `requireAdmin` is: the comparison bypasses
+ * `isAllowed`/`resolveProjectIds`, so the decision is invisible to the audit log
+ * unless it is recorded explicitly. `apiKeys.ts` open-coded this three times and
+ * two of the three remembered the record — the read did not.
+ *
+ * Sets `401`/`403` and returns `false` when the caller should stop; the route
+ * should `return` immediately in that case.
+ */
+export const isOwnerOrAdmin = (
+  ctx: Context,
+  args: { ownerPublicId: string | null | undefined; action: string }
+): boolean => {
+  if (!checkAuth(ctx)) return false;
+
+  const authUser = ctx.authUser!;
+  const allowed =
+    args.ownerPublicId === authUser.publicId || authUser.role === 'admin';
+  recordAuthorizationDecision(ctx, { action: args.action, allowed });
+
+  if (!allowed) {
+    ctx.status = 403;
+    ctx.body = { error: 'Forbidden' };
+    return false;
+  }
+  return true;
+};
+
+/**
  * Resolves project IDs for an action with permission check
  */
 export const resolveProjectIdsWithAction = async (args: {
@@ -144,8 +187,9 @@ export const resolveProjectIdsWithAction = async (args: {
   // error rather than the opaque `Forbidden` that resolveProjectIds would yield.
   if (args.projectPublicId) {
     assertCredentialProjectScope({
-      authUser,
+      ctx: args.ctx,
       requestedProjectPublicId: args.projectPublicId,
+      action: args.action,
     });
   }
 
@@ -207,8 +251,9 @@ export const resolveWriteProjectId = async (args: {
   // `projectPublicId` here already defaulted to the credential's own project
   // when omitted, so this only fires on an explicit, mismatching project id.
   assertCredentialProjectScope({
-    authUser,
+    ctx,
     requestedProjectPublicId: projectPublicId,
+    action,
   });
 
   // resolveProjectIds runs the permission check and, for a scoped key, returns null

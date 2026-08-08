@@ -10,7 +10,7 @@ import { isStepCount, streamText } from 'ai';
 import createDebug from 'debug';
 
 import { resolveToolIdsToNames } from './agents';
-import { emitEvent } from './eventBus';
+import { emitResourceEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -690,14 +690,13 @@ export const savePendingGeneration = (args: {
     },
   };
 
-  emitEvent({
+  emitResourceEvent({
     type: 'agents.generation.requires_action',
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
     resourceType: 'generation',
     resourceId: args.generationId,
-    data: requiresActionResult as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: requiresActionResult,
   });
 
   return requiresActionResult;
@@ -780,14 +779,13 @@ export const buildCompletedGenerationResult = async (args: {
     usage: args.result.usage,
   });
 
-  emitEvent({
+  emitResourceEvent({
     type: 'agents.generation.completed',
     projectId: args.typedAgent.project.id as number,
     projectPublicId: args.typedAgent.project.publicId,
     resourceType: 'generation',
     resourceId: args.generationId,
-    data: completedResult as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: completedResult,
   });
 
   return completedResult;

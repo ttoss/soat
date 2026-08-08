@@ -2,7 +2,7 @@ import path from 'node:path';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { emitEvent, resolveProjectPublicId } from './eventBus';
+import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import {
   buildPath,
   filenameFromPath,
@@ -12,6 +12,7 @@ import {
 } from './filePaths';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { persistFileBytes } from './fileStorageLayout';
+import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   compilePolicy,
@@ -55,11 +56,8 @@ export const listFiles = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,12 +71,18 @@ export const listFiles = async (args: {
     Object.assign(where, args.policyWhere);
   }
 
-  const { count, rows } = await db.File.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.File.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        limit,
+        offset,
+      });
+    },
+    map: mapFile,
   });
-  return { data: rows.map(mapFile), total: count, limit, offset };
 };
 
 export { compilePolicy };
@@ -176,14 +180,13 @@ export const uploadFile = async (args: {
 
   const mapped = mapFile(file);
 
-  emitEvent({
+  emitResourceEvent({
     type: 'files.created',
     projectId: args.projectId,
     projectPublicId,
     resourceType: 'file',
     resourceId: file.publicId,
-    data: mapped as unknown as Record<string, unknown>,
-    timestamp: new Date().toISOString(),
+    data: mapped,
   });
 
   return mapped;
@@ -318,19 +321,13 @@ export const updateFileMetadata = async (args: {
   }
   const mapped = mapFile(file);
 
-  resolveProjectPublicId({ projectId: file.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'files.updated',
-        projectId: file.projectId,
-        projectPublicId,
-        resourceType: 'file',
-        resourceId: file.publicId,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'files.updated',
+    projectId: file.projectId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -378,19 +375,13 @@ export const createFile = async (args: {
   }
   const mapped = mapFile(file);
 
-  resolveProjectPublicId({ projectId: args.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'files.created',
-        projectId: args.projectId,
-        projectPublicId,
-        resourceType: 'file',
-        resourceId: file.publicId,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'files.created',
+    projectId: args.projectId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+    data: mapped,
+  });
 
   return mapped;
 };
@@ -424,19 +415,13 @@ export const deleteFile = async (args: { id: string }) => {
 
   await file.destroy();
 
-  resolveProjectPublicId({ projectId: fileProjectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'files.deleted',
-        projectId: fileProjectId,
-        projectPublicId,
-        resourceType: 'file',
-        resourceId: filePublicId,
-        data: { id: filePublicId },
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'files.deleted',
+    projectId: fileProjectId,
+    resourceType: 'file',
+    resourceId: filePublicId,
+    data: { id: filePublicId },
+  });
 
   return true;
 };
@@ -469,19 +454,13 @@ export const updateFileTags = async (args: {
 
   const mapped = { ...mapFile(file), tags: newTags };
 
-  resolveProjectPublicId({ projectId: file.projectId }).then(
-    (projectPublicId) => {
-      emitEvent({
-        type: 'files.updated',
-        projectId: file.projectId,
-        projectPublicId,
-        resourceType: 'file',
-        resourceId: file.publicId,
-        data: mapped as unknown as Record<string, unknown>,
-        timestamp: new Date().toISOString(),
-      });
-    }
-  );
+  emitResourceEvent({
+    type: 'files.updated',
+    projectId: file.projectId,
+    resourceType: 'file',
+    resourceId: file.publicId,
+    data: mapped,
+  });
 
   return mapped;
 };

@@ -12,8 +12,8 @@ import {
   createFiringRecord,
   finalizeFiringFailed,
   finalizeFiringSucceeded,
-  getFiringById,
   mapTriggerFiring,
+  reloadFiring,
 } from './triggerFirings';
 import { signTriggerToken } from './triggerToken';
 import { targetStartAction } from './triggerValidation';
@@ -361,12 +361,11 @@ export const runFiringDispatch = async (
   }
 
   try {
-    const finalized = await getFiringById({ internalId: firing.id as number });
-    if (finalized) return finalized;
+    return await reloadFiring({ firing });
   } catch {
     // Fall back to the in-memory instance if the re-fetch fails.
+    return mapTriggerFiring(firing);
   }
-  return mapTriggerFiring(firing);
 };
 
 /**

@@ -11,7 +11,7 @@ import {
   assertDefaultModelRouteInProject,
   assertProjectDefaultNotInherited,
 } from './modelRouteDefaults';
-import { paginatedList, resolvePagination } from './pagination';
+import { emptyPage, paginatedList } from './pagination';
 import {
   clearTraceContentModeCache,
   validateTraceContentMode,
@@ -63,11 +63,6 @@ export const listProjects = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const emptyPage = () => {
-    const { limit, offset } = resolvePagination(args);
-    return { data: [], total: 0, limit, offset };
-  };
-
   const listWhere = async (): Promise<
     Record<string, unknown> | undefined | null
   > => {
@@ -92,7 +87,7 @@ export const listProjects = async (args: {
   };
 
   const where = await listWhere();
-  if (where === null) return emptyPage();
+  if (where === null) return emptyPage(args);
 
   return paginatedList({
     limit: args.limit,

@@ -16,7 +16,11 @@ import {
   validateOrchestrationGraph,
 } from 'src/lib/orchestrations';
 
-import { parsePagination, requestPrincipalFromCtx } from './helpers';
+import {
+  parsePagination,
+  requestPrincipalFromCtx,
+  resolveProjectIdsWithAction,
+} from './helpers';
 import {
   hintAuditResourceForOrchestration,
   resolveRunAuth,
@@ -44,17 +48,14 @@ const resolveAuth = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action,
     resourceType: 'orchestration',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
+  if (projectIds === null) return null;
   const primaryId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!primaryId) {
     ctx.status = 400;
@@ -171,17 +172,14 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'orchestrations:ListOrchestrations',
     resourceType: 'orchestration',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   if (!projectIds || projectIds.length === 0) {
     ctx.status = 400;

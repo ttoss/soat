@@ -4,7 +4,10 @@ import { DomainError } from 'src/errors';
 import { purgeTraceContent } from 'src/lib/contentPurge';
 import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
 
-import { requestPrincipalFromCtx } from './helpers';
+import {
+  requestPrincipalFromCtx,
+  resolveProjectIdsWithAction,
+} from './helpers';
 
 export const tracesRouter = new Router<Context>();
 
@@ -17,17 +20,14 @@ tracesRouter.get('/traces', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'traces:ListTraces',
     resourceType: 'trace',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   const limit = ctx.query.limit ? Number(ctx.query.limit) : undefined;
   const offset = ctx.query.offset ? Number(ctx.query.offset) : undefined;

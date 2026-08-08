@@ -1,8 +1,10 @@
-import { isDeepStrictEqual } from 'node:util';
-
 import type { db } from 'src/db';
 
 import { resolveParamExpressions, resolveRefs } from './formationsHelpers';
+import {
+  mergeWithPrevious,
+  normalizeDeclaredProperties,
+} from './formationsProperties';
 import { getFormationModule } from './formationsRegistry';
 import type { PlanChange, ResourceDeclaration } from './formationsTypes';
 
@@ -18,11 +20,13 @@ const resolveParamExpressionsForDiff = (args: {
   existingMap: Map<string, string>;
 }): Record<string, unknown> => {
   const { decl, resolvedParams, templateResourceKeys, existingMap } = args;
-  const resolvedProperties = resolveParamExpressions(
-    decl.properties ?? {},
-    resolvedParams,
-    templateResourceKeys
-  ) as Record<string, unknown>;
+  const resolvedProperties = normalizeDeclaredProperties(
+    resolveParamExpressions(
+      decl.properties ?? {},
+      resolvedParams,
+      templateResourceKeys
+    ) as Record<string, unknown>
+  );
   try {
     return resolveRefs(resolvedProperties, existingMap) as Record<
       string,
@@ -33,30 +37,6 @@ const resolveParamExpressionsForDiff = (args: {
     // raw expression in the diff is more informative than failing the plan.
     return resolvedProperties;
   }
-};
-
-// Compares resolved desired-state properties against a known current-state
-// snapshot the same way `applyUpdateChange` does at apply time: a property
-// resolving to `undefined` (an omitted `use_previous_value` param) is not a
-// change, and is filled in from `current` for the returned `desired` diff so
-// the plan reflects what will actually be applied.
-const diffAgainstCurrent = (args: {
-  resolvedProperties: Record<string, unknown>;
-  current: Record<string, unknown>;
-}): { desired: Record<string, unknown>; changed: boolean } => {
-  const { resolvedProperties, current } = args;
-  const desired: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(resolvedProperties)) {
-    if (value === undefined) {
-      if (key in current) desired[key] = current[key];
-    } else {
-      desired[key] = value;
-    }
-  }
-  const changed = Object.entries(desired).some(([key, value]) => {
-    return !isDeepStrictEqual(current[key], value);
-  });
-  return { desired, changed };
 };
 
 // Builds the `update` / `no-op` change result for an existing resource by
@@ -86,9 +66,11 @@ const buildComparedChange = (args: {
     templateResourceKeys,
     existingMap,
   });
-  const { desired, changed } = diffAgainstCurrent({
-    resolvedProperties,
-    current,
+  // The same predicate apply runs, not a restatement of it (#902): a plan that
+  // decides "changed" differently from the apply it previews is a lie.
+  const { merged: desired, changed } = mergeWithPrevious({
+    resolved: resolvedProperties,
+    previous: current,
   });
   return {
     logicalId,

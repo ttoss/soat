@@ -16,7 +16,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination } from './helpers';
+import { parsePagination, resolveProjectIdsWithAction } from './helpers';
 
 export const toolsRouter = new Router<Context>();
 
@@ -89,16 +89,13 @@ const resolveToolProjectId = async (
     ctx.body = { error: 'Unauthorized' };
     return null;
   }
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action,
     resourceType: 'tool',
   });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
+  if (projectIds === null) return null;
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
     ctx.status = 400;
@@ -193,17 +190,14 @@ toolsRouter.get('/tools', async (ctx: Context) => {
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId,
     action: 'tools:ListTools',
     resourceType: 'tool',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listTools({ projectIds, ...parsePagination(ctx) });
 });

@@ -22,6 +22,10 @@ import {
   resolveWorkingTemplate,
   topologicalSort,
 } from 'src/lib/formationsHelpers';
+import {
+  mergeWithPrevious,
+  normalizeDeclaredProperties,
+} from 'src/lib/formationsProperties';
 import type { FormationTemplate } from 'src/lib/formationsTypes';
 
 describe('formationsHelpers', () => {
@@ -811,6 +815,97 @@ describe('formationsHelpers', () => {
       await expect(
         lookupPolicyInternalIds([policyA.publicId, 'pol_doesnotexist000'])
       ).rejects.toThrow('Policy not found: pol_doesnotexist000');
+    });
+  });
+
+  // ── mergeWithPrevious ────────────────────────────────────────────────────
+
+  // The predicate `plan-formation` and apply now share. The first two cases are
+  // the divergences that made a plan disagree with the apply it previewed
+  // (#902): apply's whole-object `JSON.stringify` comparison reported a change
+  // for both, plan's per-key comparison for neither.
+  describe('mergeWithPrevious', () => {
+    test('a previous key the template omits is not a change', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'kept' },
+          previous: { name: 'kept', description: 'set out of band' },
+        })
+      ).toEqual({ merged: { name: 'kept' }, changed: false });
+    });
+
+    test('key order is not a change', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'a', description: 'b' },
+          previous: { description: 'b', name: 'a' },
+        }).changed
+      ).toBe(false);
+    });
+
+    test('an undefined property reuses the previous value', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'a', value: undefined },
+          previous: { name: 'a', value: 'kept' },
+        })
+      ).toEqual({ merged: { name: 'a', value: 'kept' }, changed: false });
+    });
+
+    test('an undefined property with no previous value is dropped entirely', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'a', value: undefined },
+          previous: { name: 'a' },
+        })
+      ).toEqual({ merged: { name: 'a' }, changed: false });
+    });
+
+    test('a differing declared value is a change', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'new' },
+          previous: { name: 'old' },
+        })
+      ).toEqual({ merged: { name: 'new' }, changed: true });
+    });
+
+    test('a newly declared key is a change', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { name: 'a', description: 'added' },
+          previous: { name: 'a' },
+        }).changed
+      ).toBe(true);
+    });
+
+    test('compares nested values structurally, not by identity', () => {
+      expect(
+        mergeWithPrevious({
+          resolved: { document: { statement: [{ effect: 'allow' }] } },
+          previous: { document: { statement: [{ effect: 'allow' }] } },
+        }).changed
+      ).toBe(false);
+    });
+  });
+
+  // ── normalizeDeclaredProperties ──────────────────────────────────────────
+
+  describe('normalizeDeclaredProperties', () => {
+    test('rewrites top-level camelCase keys to snake_case', () => {
+      expect(
+        normalizeDeclaredProperties({ aiProviderId: 'aip_1', name: 'x' })
+      ).toEqual({ ai_provider_id: 'aip_1', name: 'x' });
+    });
+
+    test('is idempotent on an already snake_case bag', () => {
+      const snake = { ai_provider_id: 'aip_1', name: 'x' };
+      expect(normalizeDeclaredProperties(snake)).toEqual(snake);
+    });
+
+    test('leaves nested bags verbatim', () => {
+      const nested = { document: { Statement: [{ costCenter: 'a_b' }] } };
+      expect(normalizeDeclaredProperties(nested)).toEqual(nested);
     });
   });
 });

@@ -10,7 +10,12 @@ import {
 } from 'src/lib/modelRoutes';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { checkAuth, parsePagination, resolveWriteProjectId } from './helpers';
+import {
+  checkAuth,
+  parsePagination,
+  resolveProjectIdsWithAction,
+  resolveWriteProjectId,
+} from './helpers';
 
 const modelRoutesRouter = new Router<Context>();
 
@@ -82,17 +87,14 @@ modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
     return;
   }
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveProjectIdsWithAction({
+    ctx,
     projectPublicId: ctx.query.project_id as string | undefined,
     action: 'model-routes:ListModelRoutes',
     resourceType: 'model_route',
   });
 
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
+  if (projectIds === null) return;
 
   ctx.body = await listModelRoutes({ projectIds, ...parsePagination(ctx) });
 });
