@@ -27,7 +27,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/quick-start',
         'getting-started/concepts',
-        'getting-started/harness-loop-graph',
+        'getting-started/harness-loop-graph-ratchet',
         'getting-started/choosing-a-client',
         'getting-started/choosing-an-automation-model',
       ],
@@ -118,6 +118,11 @@ const sidebars: SidebarsConfig = {
           type: 'category',
           label: 'Declarative Deployment',
           items: ['modules/formations'],
+        },
+        {
+          type: 'category',
+          label: 'Improvement & Adaptation',
+          items: ['modules/evaluations', 'modules/learned-rules'],
         },
         {
           type: 'category',

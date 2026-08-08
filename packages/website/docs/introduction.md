@@ -1,5 +1,5 @@
 ---
-description: "SOAT is a self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server."
+description: 'SOAT is a self-hostable infrastructure layer for production-ready AI agents: IAM, storage, vector search, memory, orchestration, RAG, and a full MCP server.'
 sidebar_position: 1
 ---
 
@@ -11,6 +11,8 @@ import TabItem from '@theme/TabItem';
 **SOAT is the infrastructure layer for production-ready AI agents.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
 
 If you have ever shipped an AI product, you know the pattern: half the codebase is plumbing — users, API keys, embeddings, conversation history, tool calling, traces. SOAT solves all of it once, exposes it through four equivalent client surfaces, and gets out of your way.
+
+The platform is organized around the [four layers of an agent system](/docs/getting-started/harness-loop-graph-ratchet): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
 
 ## What you get out of the box
 
@@ -36,16 +38,42 @@ If you have ever shipped an AI product, you know the pattern: half the codebase 
 - [Conversations](/docs/modules/conversations) — multi-party message engine when you need full control
 - [Chats](/docs/modules/chats) — raw LLM completions when you don't need an agent at all
 
+### Orchestration & automation
+
+- [Orchestrations](/docs/modules/orchestrations) — deterministic DAG pipelines with parallel rounds, conditions, retries, and durable resumption
+- [Workflows](/docs/modules/workflows) — state graphs that durable tasks live in and move through, including backward
+- [Triggers](/docs/modules/triggers) start a flow on a cron schedule, an inbound webhook, or on demand
+- [Discussions](/docs/modules/discussions) — structured multi-agent panel reasoning
+
+### Governance & safety
+
+- [Guardrails](/docs/modules/guardrails) classify every tool call from its actual arguments — deterministically, before anything executes
+- [Approvals](/docs/modules/approvals) — a human-decision queue with frozen evidence, hard expiry, and a recurrence view over repeated corrections
+- [Quotas](/docs/modules/quotas) fail closed on request, token, or cost caps; [Usage](/docs/modules/usage) meters every call with alert thresholds
+- Append-only [agent versions](/docs/modules/agents#versioning-and-staged-rollout) with staged canary rollout and served-version stamping
+
 ### Operations
 
 - Encrypted [secrets](/docs/modules/secrets) for provider keys
 - HMAC-signed [webhooks](/docs/modules/webhooks) with event-pattern subscriptions
-- Trace records for every generation — tool calls, latency, and cost-relevant fields
+- [Traces](/docs/modules/traces) for every generation — tool calls, latency, and cost-relevant fields — plus [exceptions](/docs/modules/exceptions), [activity](/docs/modules/activity), and an [audit log](/docs/modules/audit-log)
 
 ### Declarative deployment
 
 - [Agent formations](/docs/modules/formations) to define full agent stacks (providers, memories, tools, agents) in JSON/YAML
 - Dependency-aware provisioning with operation history and event logs for each deployment
+
+## Where SOAT is going
+
+Everything above records what agents _did_ or constrains what they _may do_. The direction of the platform is the layer that governs what they _become_: the **ratchet** — produce a verdict from evidence, gate every change on the verdict, keep history append-only so nothing regresses silently.
+
+The shipped foundation is already in place: versioned agents, canary rollout, and the approvals recurrence view. Building on it, designed and coming next:
+
+- **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent, comparable against a baseline, answering "did this change make the agent worse?" with a pass/fail verdict
+- **Eval-gated promotion** — a canary release that promotes on a passing eval run rather than a judgment call
+- **[Learned Rules](/docs/modules/learned-rules)** — human corrections captured, clustered when they recur, and promoted by a human into versioned scoped rules, with a graduation path to hard guardrail enforcement
+
+Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [Harness, Loop, Graph, and Ratchet](/docs/getting-started/harness-loop-graph-ratchet), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 
 ## Architecture
 
