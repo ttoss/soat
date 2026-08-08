@@ -614,8 +614,30 @@ The runner itself is covered by `tests/harness/` (`pnpm run test:harness`, wired
 | `# → ignore` | Run the command, ignore its exit code entirely. |
 | `# → retry N` | Re-run until the command exits 0, up to N attempts, 1s apart. Fails after N. |
 
-An annotation on its own line applies to the **next** command; a trailing inline
-annotation applies to the command it sits on.
+**An annotation must sit on its own line, immediately _before_ the command it
+applies to.** Both other placements silently fail:
+
+```bash
+# → 400
+soat transition-task --task-id "$TASK_ID" --transition publish   # correct
+
+soat transition-task --task-id "$TASK_ID" --transition publish   # → 400
+# WRONG — inline, annotation ignored, step fails on the non-zero exit
+
+soat transition-task --task-id "$TASK_ID" --transition publish
+# → 400
+# WRONG — binds to whichever command comes NEXT, not the one above
+```
+
+A **trailing** annotation is not recognized at all: the extractor only matches a
+`#` at the start of a line, so an inline `# → …` reaches the shell as an ordinary
+comment. An annotation on its own line **after** a command is equally wrong — a
+command line with balanced quotes is flushed the moment it is read, so
+`CURRENT_CMD` is already empty and the annotation becomes the *pending* one for
+the following command.
+
+The behavior is pinned by `tests/harness/tutorialsRetryAnnotation.test.mjs`,
+where every case places the annotation on the preceding line.
 
 `# → retry N` is for steps that are **slow to converge** — an async webhook delivery, a
 queued job, an ingestion that finishes shortly after the call returns. It replaces

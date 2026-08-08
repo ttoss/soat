@@ -57,6 +57,14 @@ services:
       # Only these tools have their forcing honored deterministically — the client-tools tutorial.
       # Every other forced tool still goes to the real model.
       TOOL_CHOICE_TOOLS: 'get_order_status'
+      # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
+      # have no max_tokens field), and no tutorial asserts generated content —
+      # only structure and forward progress. Uncapped output is what makes a
+      # multi-generation tutorial's wall-clock swing by minutes between
+      # identical runs, which is what pushes its poll loops past their budget.
+      # Same value and rationale as the smoke stack; 256 leaves ample room for a
+      # volunteered tool call's JSON.
+      MAX_COMPLETION_TOKENS: '256'
     healthcheck:
       test:
         - CMD

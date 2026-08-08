@@ -58,8 +58,12 @@ cleanup() {
 trap cleanup EXIT
 
 # Extract bash code blocks from CLI tabs with proper continuation handling.
-# Also preserve trailing inline comments (# → NNN / # → ignore) as a
-# synthetic marker line immediately after the command line that contains them.
+#
+# Annotations (# → NNN / # → ignore / # → retry N) are only recognized on their
+# own line, immediately BEFORE the command they apply to — see the parser below,
+# which matches a leading `#` and stores the hint for the next command to be
+# flushed. A trailing inline `# → ...` is NOT split out here; it reaches the
+# shell as an ordinary comment and the annotation is lost.
 awk '
   /value="cli"/ { in_cli_tab = 1; next }
   in_cli_tab && /<\/TabItem>/ { in_cli_tab = 0; next }
