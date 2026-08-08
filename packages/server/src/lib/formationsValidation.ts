@@ -8,14 +8,18 @@ import {
   parseRefAttr,
   topologicalSort,
 } from './formationsHelpers';
-import { getFormationModule } from './formationsRegistry';
+import { normalizeDeclaredProperties } from './formationsProperties';
+import {
+  getFormationModule,
+  supportedResourceTypes,
+} from './formationsRegistry';
 import type {
   FormationTemplate,
   ParameterDeclaration,
   ValidationError,
   ValidationResult,
 } from './formationsTypes';
-import { SUPPORTED_RESOURCE_TYPES } from './formationsTypes';
+import { isPlainObject } from './resource-inputs/normalizers';
 
 // ── Template Input Parsing ────────────────────────────────────────────────
 
@@ -50,11 +54,12 @@ const validateResourceType = (args: {
       },
     ];
   }
-  if (!SUPPORTED_RESOURCE_TYPES.has(type)) {
+  const supported = supportedResourceTypes();
+  if (!supported.has(type)) {
     return [
       {
         path: `${basePath}.type`,
-        message: `Unsupported resource type: ${type}. Supported: ${[...SUPPORTED_RESOURCE_TYPES].join(', ')}`,
+        message: `Unsupported resource type: ${type}. Supported: ${[...supported].join(', ')}`,
       },
     ];
   }
@@ -141,6 +146,14 @@ const validateResourceProperties = (args: {
   return errors;
 };
 
+/**
+ * The single seam where a template's property bag reaches a formation module's
+ * validation hooks — and therefore the only place the camelCase→snake_case
+ * normalization has to be applied. Twenty modules used to call
+ * `normalizePropertyKeys` themselves and four forgot (#901); doing it here
+ * makes the step unskippable for the 25th module too. Shallow by design: the
+ * nested value bags a module owns are left verbatim.
+ */
 const runFormationModuleHooks = (args: {
   type: string;
   properties: unknown;
@@ -148,7 +161,9 @@ const runFormationModuleHooks = (args: {
 }): { errors: ValidationError[]; warnings: ValidationError[] } => {
   const formationModule = getFormationModule({ resourceType: args.type });
   const hookArgs = {
-    properties: args.properties,
+    properties: isPlainObject(args.properties)
+      ? normalizeDeclaredProperties(args.properties)
+      : args.properties,
     basePath: `${args.basePath}.properties`,
   };
   return {

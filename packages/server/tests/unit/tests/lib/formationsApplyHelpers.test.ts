@@ -4,6 +4,7 @@ import {
   applyUpdateChange,
   failFormationOperation,
 } from 'src/lib/formationsApplyHelpers';
+import { planResourceChange } from 'src/lib/formationsPlanHelpers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
 import { createMemory, getMemory } from 'src/lib/memories';
 
@@ -166,6 +167,59 @@ describe('formationsApplyHelpers', () => {
     });
     // The resource is untouched by a no-op.
     expect((await getMemory({ id: memory.id }))?.name).toBe('No-op Mem');
+  });
+
+  // #902: `plan-formation` previews `update-formation`, so the two must reach
+  // the same verdict. Both divergences below used to make apply see a change
+  // that plan reported as a no-op.
+  describe.each([
+    [
+      'a stored key the template no longer declares',
+      { name: 'Agreed Mem', description: 'set out of band' },
+    ],
+    ['a different key order', { description: null, name: 'Agreed Mem' }],
+  ])('plan and apply agree on %s', (_label, lastApplied) => {
+    test('both report no change', async () => {
+      const memory = await createMemory({ projectId, name: 'Agreed Mem' });
+      const resourceRow = db.FormationResource.build({
+        publicId: uniqueName('fmr_agree'),
+        formationId,
+        logicalId: 'agree',
+        resourceType: 'memory',
+        status: 'active',
+        physicalResourceId: memory.id,
+        lastAppliedProperties: lastApplied,
+      });
+
+      const decl = {
+        type: 'memory',
+        properties: { name: 'Agreed Mem' },
+      } as const;
+
+      const plan = await planResourceChange({
+        logicalId: 'agree',
+        decl,
+        physicalResourceId: memory.id,
+        resolvedParams: new Map(),
+        existingMap: new Map(),
+        templateResourceKeys: new Set(['agree']),
+        lastAppliedProperties: lastApplied,
+      });
+
+      const events: FormationEvent[] = [];
+      await applyUpdateChange({
+        resourceRow,
+        existing: resourceRow as ResourceRowWithId,
+        resourceType: 'memory',
+        resolvedProperties: { name: 'Agreed Mem' },
+        logicalId: 'agree',
+        resolvedIds: new Map<string, string>(),
+        events,
+      });
+
+      expect(plan.action).toBe('no-op');
+      expect(events[0]).toMatchObject({ action: 'no-op' });
+    });
   });
 
   test('applyUpdateChange treats a dropped (use-previous) field as a no-op', async () => {

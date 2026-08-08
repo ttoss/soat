@@ -67,3 +67,13 @@ export const getFormationModule = (args: {
 }): FormationModule | undefined => {
   return registeredModules.get(args.resourceType);
 };
+
+/**
+ * The resource types a formation template may declare — derived from the
+ * registry rather than restated, so registering a module is the single step
+ * that makes its type reachable. A hand-written copy of this set had already
+ * fallen one entry behind (#900), leaving `model_route` unusable.
+ */
+export const supportedResourceTypes = (): ReadonlySet<string> => {
+  return new Set(registeredModules.keys());
+};

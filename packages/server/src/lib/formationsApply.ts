@@ -14,6 +14,7 @@ import {
   resolveWorkingTemplate,
   topologicalSort,
 } from './formationsHelpers';
+import { normalizeDeclaredProperties } from './formationsProperties';
 import {
   resolveFormationMetadata,
   resolveFormationOutputs,
@@ -118,10 +119,13 @@ export const processResourceChange = async (args: {
     projectId,
     formationId,
   } = args;
-  const resolvedProperties = resolveRefs(
-    decl.properties,
-    resolvedIds
-  ) as Record<string, unknown>;
+  // Normalized here, at the top of the apply pipeline, so the merge diff and
+  // the `lastAppliedProperties` snapshot below are keyed the same way the
+  // module's `read()` reports them — a camelCase template used to store camel
+  // keys and then compare them against a snake_case read forever after (#901).
+  const resolvedProperties = normalizeDeclaredProperties(
+    resolveRefs(decl.properties, resolvedIds) as Record<string, unknown>
+  );
   log('processResourceChange: logicalId=%s type=%s', logicalId, decl.type);
 
   const deletionPolicy = decl.deletion_policy ?? 'delete';
