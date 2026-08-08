@@ -22,7 +22,7 @@ The navbar has three documentation tabs, each backed by a sidebar defined in `si
 
 - **Docs** (`docsSidebar`) — learning-oriented content:
   - **Introduction** — what SOAT is and the "one backend, four surfaces" model.
-  - **Getting Started** — quick start, key concepts, and choosing a client surface.
+  - **Getting Started** — quick start, key concepts, choosing a client surface, the harness/loop/graph layering, and choosing an automation model.
   - **Client Surfaces** — setup and usage guides for the SDK, CLI, and MCP server.
   - **Platform** — one page per module (`docs/modules/*.md`), grouped into: Identity & Access, Storage & Retrieval, Agents & Conversations, Orchestration & Automation, Declarative Deployment, and Operations. The grouping mirrors `introduction.md`; `docs/modules/index.md` is the category landing page.
   - **Self-Hosting & Production** — environment variables and production configuration (`docs/self-hosting/configuration.md`).

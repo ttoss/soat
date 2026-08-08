@@ -28,6 +28,7 @@ const sidebars: SidebarsConfig = {
         'getting-started/quick-start',
         'getting-started/concepts',
         'getting-started/choosing-a-client',
+        'getting-started/harness-loop-graph',
         'getting-started/choosing-an-automation-model',
       ],
     },

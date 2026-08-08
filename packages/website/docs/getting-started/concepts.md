@@ -118,6 +118,7 @@ See the [CLI commands reference](/docs/cli/commands) for the full surface.
 
 | Topic                                       | Description                          |
 | ------------------------------------------- | ------------------------------------ |
+| [Harness, Loop, and Graph](/docs/getting-started/harness-loop-graph) | Which layer owns a failure, and which modules own each layer |
 | [Configuration](/docs/self-hosting/configuration)          | Production environment variables     |
 | [Platform modules](/docs/modules)           | Deep-dives into every resource type  |
 | [API Reference](/docs/api)                  | OpenAPI-generated endpoint reference |
