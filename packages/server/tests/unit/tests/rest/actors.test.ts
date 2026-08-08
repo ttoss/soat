@@ -168,6 +168,36 @@ describe('Actors', () => {
       expect(Array.isArray(response.body.data)).toBe(true);
     });
 
+    // #904: `listActors` hand-rolled `args.limit ?? 50`, bypassing the only
+    // place `MAX_LIST_LIMIT` is enforced. `parsePagination` does not clamp
+    // either, so this asked for a full-table read with the `include` fan-out
+    // across four associations.
+    test('an absurd limit is clamped to MAX_LIST_LIMIT', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/actors?project_id=${projectId}&limit=1000000`
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body.limit).toBe(100);
+      expect(response.body.data.length).toBeLessThanOrEqual(100);
+    });
+
+    test('an empty accessible-project set reports the clamped limit too', async () => {
+      // The early-return page must describe the request the same way a real
+      // query would; it used to hardcode the default.
+      const response = await authenticatedTestClient(noPermToken).get(
+        '/api/v1/actors?limit=1000000'
+      );
+
+      expect(response.status).toBe(200);
+      expect(response.body).toEqual({
+        data: [],
+        total: 0,
+        limit: 100,
+        offset: 0,
+      });
+    });
+
     test('listing without projectId returns all accessible actors', async () => {
       const response =
         await authenticatedTestClient(userToken).get('/api/v1/actors');

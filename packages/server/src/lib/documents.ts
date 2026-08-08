@@ -11,6 +11,7 @@ import { emitResourceEvent } from './eventBus';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
 import { mapDocument } from './knowledge';
+import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 
 export {
@@ -125,36 +126,40 @@ export const listDocuments = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
-  const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
-    projectIds: args.projectIds,
-    policyWhere: args.policyWhere,
-    limit,
-    offset,
-  });
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      const { topLevelWhere, fileWhere, subQuery } = buildDocumentQueryOptions({
+        projectIds: args.projectIds,
+        policyWhere: args.policyWhere,
+        limit,
+        offset,
+      });
 
-  const { count, rows } = await db.Document.findAndCountAll({
-    distinct: true,
-    where: Object.keys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
-    include: [
-      {
-        model: db.File,
-        as: 'file',
-        where: fileWhere,
-        include: [{ model: db.Project, as: 'project' }],
-      },
-    ],
-    subQuery,
-    limit,
-    offset,
+      return db.Document.findAndCountAll({
+        distinct: true,
+        where:
+          Object.keys(topLevelWhere).length > 0 ? topLevelWhere : undefined,
+        include: [
+          {
+            model: db.File,
+            as: 'file',
+            where: fileWhere,
+            include: [{ model: db.Project, as: 'project' }],
+          },
+        ],
+        subQuery,
+        limit,
+        offset,
+      });
+    },
+    map: mapDocument,
   });
-  return { data: rows.map(mapDocument), total: count, limit, offset };
 };
 
 /**

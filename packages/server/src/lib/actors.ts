@@ -7,6 +7,7 @@ import {
   buildActorListWhere,
 } from './actorFilters';
 import { createMemory } from './memories';
+import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -158,11 +159,8 @@ export const listActors = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where = buildActorListWhere({
@@ -183,17 +181,23 @@ export const listActors = async (args: {
     conversationId: args.conversationId,
   });
   if (!resolved) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
-  const { count, rows } = await db.Actor.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: actorIncludes(),
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Actor.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: actorIncludes(),
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapActor,
   });
-
-  return { data: rows.map(mapActor), total: count, limit, offset };
 };
 
 export const getActor = async (args: { id: string }) => {

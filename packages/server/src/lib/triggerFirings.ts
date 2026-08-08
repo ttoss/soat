@@ -2,6 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
+import { paginatedList } from './pagination';
 
 const log = createDebug('soat:triggers');
 
@@ -107,25 +108,23 @@ export const listTriggerFirings = async (args: {
     );
   }
 
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
-  const { rows, count } = await db.TriggerFiring.findAndCountAll({
-    where: { triggerId: trigger.id as number },
-    include: firingIncludes(),
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.TriggerFiring.findAndCountAll({
+        where: { triggerId: trigger.id as number },
+        include: firingIncludes(),
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: (row) => {
+      return mapTriggerFiring(row);
+    },
   });
-
-  return {
-    data: rows.map((r) => {
-      return mapTriggerFiring(r);
-    }),
-    total: count,
-    limit,
-    offset,
-  };
 };
 
 export const getTriggerFiring = async (args: { id: string }) => {

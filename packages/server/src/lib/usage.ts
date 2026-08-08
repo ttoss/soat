@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { emptyPage, paginatedList } from './pagination';
 
 // The metering write path is split across `usageRecording.ts` (the two
 // `llm_tokens` writers), `usageTokenEvent.ts` (their shared pricing + persist
@@ -231,15 +232,11 @@ export const listUsageEvents = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
-  const empty = { data: [], total: 0, limit, offset };
 
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return empty;
+    if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
   }
 
@@ -255,30 +252,35 @@ export const listUsageEvents = async (args: {
     sessionId: args.sessionId,
     projectIds: args.projectIds,
   });
-  if (!resolved) return empty;
+  if (!resolved) return emptyPage(args);
 
-  const { count, rows } = await db.UsageEvent.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Generation, as: 'generation' },
-      { model: db.OrchestrationRun, as: 'run' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Session, as: 'session' },
-      { model: db.AiProvider, as: 'aiProvider' },
-      {
-        model: db.UsageComponent,
-        as: 'components',
-        include: [{ model: db.PriceBook, as: 'price' }],
-      },
-    ],
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
-    distinct: true,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.UsageEvent.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.Project, as: 'project' },
+          { model: db.Agent, as: 'agent' },
+          { model: db.Generation, as: 'generation' },
+          { model: db.OrchestrationRun, as: 'run' },
+          { model: db.Trace, as: 'trace' },
+          { model: db.Actor, as: 'actor' },
+          { model: db.Session, as: 'session' },
+          { model: db.AiProvider, as: 'aiProvider' },
+          {
+            model: db.UsageComponent,
+            as: 'components',
+            include: [{ model: db.PriceBook, as: 'price' }],
+          },
+        ],
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true,
+      });
+    },
+    map: mapUsageEvent,
   });
-
-  return { data: rows.map(mapUsageEvent), total: count, limit, offset };
 };

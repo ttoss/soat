@@ -44,6 +44,21 @@ export const resolvePagination = (args: {
 };
 
 /**
+ * The empty page for a list that can answer without querying — no accessible
+ * projects, a filter that resolved to nothing. It still reports the *resolved*
+ * `limit`/`offset`, so an early return and a real query describe the page the
+ * same way; hardcoding `limit: 50` here is how an early return used to disagree
+ * with {@link paginatedList} about a request it clamped.
+ */
+export const emptyPage = <T = never>(args: {
+  limit?: number;
+  offset?: number;
+}): PaginatedResult<T> => {
+  const { limit, offset } = resolvePagination(args);
+  return { data: [], total: 0, limit, offset };
+};
+
+/**
  * The single place the paginated list envelope is produced. `query` performs
  * the `findAndCountAll` (or equivalent) call with the bounded `limit`/`offset`
  * this helper resolves, so the concrete, fully-typed model call stays at the

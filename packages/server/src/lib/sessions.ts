@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
+import { emptyPage, paginatedList } from './pagination';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -231,11 +232,8 @@ export const listSessions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where: Record<string, unknown> = {};
@@ -251,20 +249,28 @@ export const listSessions = async (args: {
     status: args.status,
   });
   if (!resolved) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
-  const { count, rows } = await db.Session.findAndCountAll({
-    where,
-    include: sessionIncludes(),
-    limit,
-    offset,
-    order: [['createdAt', 'DESC']],
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: async ({ limit, offset }) => {
+      const page = await db.Session.findAndCountAll({
+        where,
+        include: sessionIncludes(),
+        distinct: true,
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+      });
+      // Expiry is applied to the rows this page returns before they are mapped,
+      // so a session that timed out is reported as expired rather than active.
+      await Promise.all(page.rows.map(checkAndExpireSession));
+      return page;
+    },
+    map: mapSession,
   });
-
-  await Promise.all(rows.map(checkAndExpireSession));
-
-  return { data: rows.map(mapSession), total: count, limit, offset };
 };
 
 /**

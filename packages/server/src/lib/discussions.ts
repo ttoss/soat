@@ -18,6 +18,7 @@ import {
   validateDiscussionConfig,
 } from './discussionsValidation';
 import { assertModelBindingResolvable } from './modelRoutes';
+import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
 
 const log = createDebug('soat:discussions');
@@ -211,11 +212,8 @@ export const listDiscussions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where: Record<string, unknown> = {};
@@ -226,23 +224,23 @@ export const listDiscussions = async (args: {
     Object.assign(where, args.policyWhere);
   }
 
-  const { count, rows } = await db.Discussion.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: discussionIncludes(),
-    limit,
-    offset,
-    order: [['createdAt', 'DESC']],
-    distinct: true,
-  });
-
-  return {
-    data: rows.map((row) => {
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Discussion.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: discussionIncludes(),
+        limit,
+        offset,
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+      });
+    },
+    map: (row) => {
       return mapDiscussion(row as DiscussionModel);
-    }),
-    total: count,
-    limit,
-    offset,
-  };
+    },
+  });
 };
 
 export const getDiscussion = async (args: { id: string }) => {

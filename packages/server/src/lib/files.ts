@@ -12,6 +12,7 @@ import {
 } from './filePaths';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { persistFileBytes } from './fileStorageLayout';
+import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   compilePolicy,
@@ -55,11 +56,8 @@ export const listFiles = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -73,12 +71,18 @@ export const listFiles = async (args: {
     Object.assign(where, args.policyWhere);
   }
 
-  const { count, rows } = await db.File.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.File.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        limit,
+        offset,
+      });
+    },
+    map: mapFile,
   });
-  return { data: rows.map(mapFile), total: count, limit, offset };
 };
 
 export { compilePolicy };

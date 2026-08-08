@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { mapMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
+import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
@@ -39,11 +40,8 @@ export const listConversations = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   if (args.projectIds !== undefined && args.projectIds.length === 0) {
-    return { data: [], total: 0, limit, offset };
+    return emptyPage(args);
   }
 
   const where: Record<string, unknown> = {};
@@ -55,7 +53,7 @@ export const listConversations = async (args: {
   if (args.actorId !== undefined) {
     const actor = await db.Actor.findOne({ where: { publicId: args.actorId } });
     if (!actor) {
-      return { data: [], total: 0, limit, offset };
+      return emptyPage(args);
     }
     const messages = await db.ConversationMessage.findAll({
       where: { actorId: actor.id },
@@ -74,17 +72,23 @@ export const listConversations = async (args: {
     Object.assign(where, args.policyWhere);
   }
 
-  const { count, rows } = await db.Conversation.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Actor, as: 'actor' },
-    ],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Conversation.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.Project, as: 'project' },
+          { model: db.Actor, as: 'actor' },
+        ],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapConversation,
   });
-
-  return { data: rows.map(mapConversation), total: count, limit, offset };
 };
 
 export const getConversation = async (args: { id: string }) => {
@@ -291,9 +295,6 @@ export const listConversationMessages = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });
@@ -302,26 +303,27 @@ export const listConversationMessages = async (args: {
     return null;
   }
 
-  const { count, rows } = await db.ConversationMessage.findAndCountAll({
-    where: { conversationId: conversation.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Agent, as: 'agent' },
-    ],
-    order: [['position', 'ASC']],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.ConversationMessage.findAndCountAll({
+        where: { conversationId: conversation.id },
+        include: [
+          {
+            model: db.Document,
+            as: 'document',
+            include: [{ model: db.File, as: 'file' }],
+          },
+          { model: db.Actor, as: 'actor' },
+          { model: db.Agent, as: 'agent' },
+        ],
+        order: [['position', 'ASC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapMessage,
   });
-
-  const data = await Promise.all(
-    rows.map((row) => {
-      return mapMessage(row);
-    })
-  );
-  return { data, total: count, limit, offset };
 };

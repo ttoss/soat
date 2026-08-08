@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import type { PersistedGeneration } from './generations';
 import { listGenerationsByTraceIds } from './generations';
+import { emptyPage, paginatedList } from './pagination';
 
 // The write path lives in its own module; re-exported here so `saveTrace` and
 // friends keep their long-standing import site.
@@ -75,31 +76,34 @@ export const listTraces = async (args: {
   limit: number;
   offset: number;
 }> => {
-  const limit = args.limit ?? 50;
-  const offset = args.offset ?? 0;
-
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const where: Record<string, any> = {};
   if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0)
-      return { data: [], total: 0, limit, offset };
+    if (args.projectIds.length === 0) return emptyPage(args);
     where.projectId = args.projectIds;
   }
 
-  const { count, rows } = await db.Trace.findAndCountAll({
-    where: Object.keys(where).length > 0 ? where : undefined,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.File, as: 'file' },
-      { model: db.Trace, as: 'parentTrace' },
-      { model: db.Trace, as: 'rootTrace' },
-    ],
-    order: [['createdAt', 'DESC']],
-    limit,
-    offset,
+  return paginatedList({
+    limit: args.limit,
+    offset: args.offset,
+    query: ({ limit, offset }) => {
+      return db.Trace.findAndCountAll({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        include: [
+          { model: db.Project, as: 'project' },
+          { model: db.Agent, as: 'agent' },
+          { model: db.File, as: 'file' },
+          { model: db.Trace, as: 'parentTrace' },
+          { model: db.Trace, as: 'rootTrace' },
+        ],
+        order: [['createdAt', 'DESC']],
+        distinct: true,
+        limit,
+        offset,
+      });
+    },
+    map: mapTrace,
   });
-  return { data: rows.map(mapTrace), total: count, limit, offset };
 };
 
 export const getTrace = async (args: {
