@@ -163,6 +163,33 @@ export const loadModuleSpec = (args: {
   return result;
 };
 
+// ── Field selection ──────────────────────────────────────────────────────
+
+/**
+ * Selects a schema's declared fields out of an already-snake_case source — the
+ * default `read()` view for a resource whose template shape is exactly its
+ * declared fields.
+ *
+ * It **selects**, it does not transform: every key it emits comes from
+ * `spec.allowedFields`, which is the spec's own property name verbatim, and a
+ * key the source does not carry is omitted rather than invented. No field name
+ * is derived from another, so this is not a key-rewriting walk
+ * (`.claude/rules/case-convention.md`). Values are copied as values — a
+ * `metadata`/`tags`/`document` bag is never inspected.
+ */
+export const pickSpecFields = (args: {
+  spec: ModuleOpenApiSpec;
+  resource: Record<string, unknown>;
+}): Record<string, unknown> => {
+  const picked: Record<string, unknown> = {};
+  for (const field of args.spec.allowedFields) {
+    if (field in args.resource) {
+      picked[field] = args.resource[field];
+    }
+  }
+  return picked;
+};
+
 // ── Guard helpers ────────────────────────────────────────────────────────
 
 export const isFormationExpression = (value: unknown): boolean => {

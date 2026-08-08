@@ -1,130 +1,33 @@
-import createDebug from 'debug';
-
-import type { FormationModule, ValidationError } from '../formationsTypes';
-import {
-  normalizePropertyKeys,
-  toOptionalString,
-} from '../resource-inputs/normalizers';
+import { toOptionalString } from '../resource-inputs/normalizers';
 import { createSecret, deleteSecret, updateSecret } from '../secrets';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
+import { defineFormationModule } from './defineFormationModule';
 
-const log = createDebug('soat:formations:secrets');
-
-const SCHEMA_NAME = 'SecretResourceProperties';
-const RESOURCE_LABEL = 'secret';
-
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateSecretProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      {
-        path: basePath,
-        message: 'Secret `properties` must be an object',
-      },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const secretsFormationModule: FormationModule = {
+// Secrets are write-only: the value cannot be read back, so the module declares
+// no `fetch` and `writeOnly: true` tells the planner to diff against the
+// persisted lastAppliedProperties snapshot instead of reading the null back as
+// "resource deleted externally".
+export const secretsFormationModule = defineFormationModule({
   resourceType: 'secret',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateSecretProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateSecretProperties({
-      properties: rawProperties,
-      basePath: 'resources.<secret>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
-    const result = await createSecret({
+  create: ({ properties, projectId }) => {
+    return createSecret({
       projectId,
       name: properties.name as string,
       // `value` is required by SecretResourceProperties and validated above.
       value: properties.value as string,
     });
-
-    log(
-      'created secret from formation: projectId=%d secretId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateSecretProperties({
-      properties: rawProperties,
-      basePath: 'resources.<secret>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  update: async ({ properties, physicalResourceId }) => {
     await updateSecret({
       id: physicalResourceId,
       name: toOptionalString(properties.name) ?? undefined,
       value: toOptionalString(properties.value) ?? undefined,
     });
-
-    log('updated secret from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteSecret({ id: physicalResourceId, force: true });
-    log('deleted secret from formation: id=%s', physicalResourceId);
-  },
-
-  // Secrets are write-only: the value cannot be read back. Always return
-  // null; `writeOnly: true` below tells the planner to diff against the
-  // persisted lastAppliedProperties snapshot instead of treating this as
-  // "resource deleted externally".
-  read: async () => {
-    return null;
+  remove: ({ physicalResourceId }) => {
+    return deleteSecret({ id: physicalResourceId, force: true });
   },
 
   writeOnly: true,
@@ -135,4 +38,4 @@ export const secretsFormationModule: FormationModule = {
     const { value: _value, ...rest } = properties;
     return rest;
   },
-};
+});

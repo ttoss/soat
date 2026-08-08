@@ -1,7 +1,4 @@
-import createDebug from 'debug';
-
 import { DomainError } from '../../errors';
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import type { GuardrailDocument } from '../guardrailDocument';
 import { validateGuardrailDocument } from '../guardrailDocument';
 import {
@@ -11,23 +8,11 @@ import {
   updateGuardrail,
 } from '../guardrails';
 import {
-  normalizePropertyKeys,
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import {
-  isFormationExpression,
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:guardrails');
-
-const SCHEMA_NAME = 'GuardrailResourceProperties';
-const RESOURCE_LABEL = 'guardrail';
+import { defineFormationModule } from './defineFormationModule';
+import { isFormationExpression } from './formationSpecLoader';
 
 const DOCUMENT_FIELDS = [
   'class',
@@ -71,41 +56,18 @@ const buildGuardrailDocument = (
   return document;
 };
 
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateGuardrailProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      { path: basePath, message: 'Guardrail `properties` must be an object' },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
+export const guardrailsFormationModule = defineFormationModule({
+  resourceType: 'guardrail',
 
   // Validate the assembled action-class document (class literal/JSON-Logic
   // namespace checks, escalate boolean, etc.) — skipped when a document
   // field is still an unresolved `{ ref / param / sub }` expression, since
   // that can't be validated in isolation; `createGuardrail`/`updateGuardrail`
   // re-validate the resolved document at apply time regardless.
-  if (properties.class !== undefined && !hasExpressionField(properties)) {
+  extraChecks: ({ properties, basePath, errors }) => {
+    if (properties.class === undefined || hasExpressionField(properties)) {
+      return;
+    }
     try {
       validateGuardrailDocument(buildGuardrailDocument(properties));
     } catch (error) {
@@ -113,34 +75,10 @@ const validateGuardrailProperties = (args: {
         error instanceof DomainError ? error.message : String(error);
       errors.push({ path: `${basePath}.class`, message });
     }
-  }
-
-  return errors;
-};
-
-// ── Module export ────────────────────────────────────────────────────────
-
-export const guardrailsFormationModule: FormationModule = {
-  resourceType: 'guardrail',
-
-  validateProperties: ({ properties, basePath }) => {
-    return validateGuardrailProperties({ properties, basePath });
   },
 
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateGuardrailProperties({
-      properties: rawProperties,
-      basePath: 'resources.<guardrail>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
-    const result = await createGuardrail({
+  create: ({ properties, projectId }) => {
+    return createGuardrail({
       projectId,
       name: properties.name as string,
       description: toOptionalString(properties.description),
@@ -148,29 +86,9 @@ export const guardrailsFormationModule: FormationModule = {
       contextToolId: toNullableString(properties.context_tool_id),
       contextMode: toNullableString(properties.context_mode),
     });
-
-    log(
-      'created guardrail from formation: projectId=%d guardrailId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateGuardrailProperties({
-      properties: rawProperties,
-      basePath: 'resources.<guardrail>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = isObjectRecord(rawProperties)
-      ? normalizePropertyKeys(rawProperties)
-      : rawProperties;
-
+  update: async ({ properties, physicalResourceId }) => {
     await updateGuardrail({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
@@ -179,31 +97,29 @@ export const guardrailsFormationModule: FormationModule = {
       contextToolId: toNullableString(properties.context_tool_id),
       contextMode: toNullableString(properties.context_mode),
     });
-
-    log('updated guardrail from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteGuardrail({ id: physicalResourceId });
-    log('deleted guardrail from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteGuardrail({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const guardrail = await getGuardrail({ id: physicalResourceId });
-      const document = guardrail.document as GuardrailDocument;
-      return {
-        name: guardrail.name,
-        description: guardrail.description,
-        class: document.class,
-        default_class: document.default_class ?? null,
-        guard: document.guard ?? null,
-        escalate: document.escalate ?? null,
-        context_tool_id: guardrail.context_tool_id,
-        context_mode: guardrail.context_mode,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return getGuardrail({ id: physicalResourceId });
   },
-};
+
+  // The stored `document` is flattened back to the four template fields, so
+  // this view is a mapping rather than a plain field selection.
+  read: (guardrail) => {
+    const document = guardrail.document as GuardrailDocument;
+    return {
+      name: guardrail.name,
+      description: guardrail.description,
+      class: document.class,
+      default_class: document.default_class ?? null,
+      guard: document.guard ?? null,
+      escalate: document.escalate ?? null,
+      context_tool_id: guardrail.context_tool_id,
+      context_mode: guardrail.context_mode,
+    };
+  },
+});

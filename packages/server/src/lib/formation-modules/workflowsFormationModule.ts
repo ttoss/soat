@@ -1,8 +1,4 @@
-import createDebug from 'debug';
-
-import type { FormationModule, ValidationError } from '../formationsTypes';
 import {
-  normalizePropertyKeys,
   toNullableObject,
   toNullableString,
   toOptionalString,
@@ -19,18 +15,7 @@ import {
   workflowCollectionToCamel as toCamelCollection,
   workflowCollectionToSnake as toSnakeCollection,
 } from '../workflowsValidation';
-import {
-  isObjectRecord,
-  loadModuleSpec,
-  pushFieldTypeErrors,
-  pushRequiredFieldErrors,
-  pushUnknownFieldErrors,
-} from './formationSpecLoader';
-
-const log = createDebug('soat:formations:workflows');
-
-const SCHEMA_NAME = 'WorkflowResourceProperties';
-const RESOURCE_LABEL = 'workflow';
+import { defineFormationModule } from './defineFormationModule';
 
 // ── Key normalization ────────────────────────────────────────────────────
 //
@@ -39,59 +24,11 @@ const RESOURCE_LABEL = 'workflow';
 // the wire. The deep conversion (leaving JSON-Logic `guard`/`when` bodies
 // verbatim) lives in `workflowsValidation.ts`, shared with `rest/v1/workflows.ts`.
 
-// ── Property validation ──────────────────────────────────────────────────
-
-const validateWorkflowProperties = (args: {
-  properties: unknown;
-  basePath: string;
-  forUpdate?: boolean;
-}): ValidationError[] => {
-  const { basePath, forUpdate } = args;
-  if (!isObjectRecord(args.properties)) {
-    return [
-      { path: basePath, message: 'Workflow `properties` must be an object' },
-    ];
-  }
-
-  const properties = normalizePropertyKeys(args.properties);
-  const spec = loadModuleSpec({ schemaName: SCHEMA_NAME });
-  const errors: ValidationError[] = [];
-  pushUnknownFieldErrors({
-    spec,
-    resourceLabel: RESOURCE_LABEL,
-    properties,
-    basePath,
-    errors,
-  });
-  if (!forUpdate) {
-    pushRequiredFieldErrors({ spec, properties, basePath, errors });
-  }
-  pushFieldTypeErrors({ spec, properties, basePath, errors });
-
-  return errors;
-};
-
-// ── Module export ──────────────────────────────────────────────────────────
-
-export const workflowsFormationModule: FormationModule = {
+export const workflowsFormationModule = defineFormationModule({
   resourceType: 'workflow',
 
-  validateProperties: ({ properties, basePath }) => {
-    return validateWorkflowProperties({ properties, basePath });
-  },
-
-  create: async ({ properties: rawProperties, projectId }) => {
-    const errors = validateWorkflowProperties({
-      properties: rawProperties,
-      basePath: 'resources.<workflow>.properties',
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-
-    const result = await createWorkflow({
+  create: ({ properties, projectId }) => {
+    return createWorkflow({
       projectId,
       name: properties.name as string,
       description: toNullableString(properties.description),
@@ -102,27 +39,9 @@ export const workflowsFormationModule: FormationModule = {
       ) ?? []) as WorkflowTransition[],
       payloadSchema: toNullableObject(properties.payload_schema),
     });
-
-    log(
-      'created workflow from formation: projectId=%d workflowId=%s',
-      projectId,
-      result.id
-    );
-    return result.id;
   },
 
-  update: async ({ properties: rawProperties, physicalResourceId }) => {
-    const errors = validateWorkflowProperties({
-      properties: rawProperties,
-      basePath: 'resources.<workflow>.properties',
-      forUpdate: true,
-    });
-    if (errors.length > 0) {
-      throw new Error(errors[0].message);
-    }
-
-    const properties = normalizePropertyKeys(rawProperties);
-
+  update: async ({ properties, physicalResourceId }) => {
     await updateWorkflow({
       id: physicalResourceId,
       name: toOptionalString(properties.name),
@@ -133,28 +52,23 @@ export const workflowsFormationModule: FormationModule = {
       ),
       payloadSchema: toNullableObject(properties.payload_schema),
     });
-
-    log('updated workflow from formation: id=%s', physicalResourceId);
   },
 
-  delete: async ({ physicalResourceId }) => {
-    await deleteWorkflow({ id: physicalResourceId });
-    log('deleted workflow from formation: id=%s', physicalResourceId);
+  remove: ({ physicalResourceId }) => {
+    return deleteWorkflow({ id: physicalResourceId });
   },
 
-  read: async ({ physicalResourceId }) => {
-    try {
-      const workflow = await findWorkflow({ id: physicalResourceId });
-      if (!workflow) return null;
-      return {
-        name: workflow.name,
-        description: workflow.description,
-        states: toSnakeCollection(workflow.states),
-        transitions: toSnakeCollection(workflow.transitions),
-        payload_schema: workflow.payload_schema,
-      };
-    } catch {
-      return null;
-    }
+  fetch: ({ physicalResourceId }) => {
+    return findWorkflow({ id: physicalResourceId });
   },
-};
+
+  read: (workflow) => {
+    return {
+      name: workflow.name,
+      description: workflow.description,
+      states: toSnakeCollection(workflow.states),
+      transitions: toSnakeCollection(workflow.transitions),
+      payload_schema: workflow.payload_schema,
+    };
+  },
+});
