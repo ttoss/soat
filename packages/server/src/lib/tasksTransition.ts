@@ -115,6 +115,75 @@ type TransitionArgs = {
   principal: TaskPrincipal;
   generationId?: string | null;
   orchestrationRunId?: string | null;
+  /**
+   * True when the caller authenticated with a run-as token (`ctx.authUser
+   * .isRunToken`). Such a move is a dispatch's own `soat` tool acting as the
+   * principal that started the chain — machinery continuing the work, not a
+   * person directing it — even though it names a user or an API key on the wire.
+   * Without this the composed cycle is invisible here; see `isChainHop`.
+   */
+  viaRunToken?: boolean;
+};
+
+/** How far a task may travel on automation alone before the engine refuses. */
+const DEFAULT_CHAIN_LIMIT = 50;
+
+const chainLimit = (): number => {
+  const configured = Number(process.env.TASK_AUTOMATION_CHAIN_LIMIT);
+  return Number.isFinite(configured) && configured > 0
+    ? configured
+    : DEFAULT_CHAIN_LIMIT;
+};
+
+/**
+ * Whether this move continues a machine-driven chain rather than starting one.
+ *
+ * Two shapes qualify, and both are needed because the loop #885 bounds can close
+ * through either:
+ *
+ * - an `automation` principal — the engine routing a dispatch outcome through
+ *   `on_complete` / `on_failure`;
+ * - a run-as token — the dispatched run or agent calling `transition-task` with
+ *   the credential it was minted, which authenticates as the *user* who started
+ *   the chain and is otherwise indistinguishable from a person clicking a
+ *   button.
+ *
+ * Everything else — a human, a plain API key, an approval resolution — is an
+ * outside intervention and resets the chain. `approval` in particular is not a
+ * hop: a person deciding a gate is the clearest evidence there is that the task
+ * is not spinning unattended.
+ */
+const isChainHop = (args: TransitionArgs): boolean => {
+  return args.principal.kind === 'automation' || args.viaRunToken === true;
+};
+
+/**
+ * Applies the chain budget to the locked task and returns the depth to persist.
+ * Throws once the chain would exceed the limit, so the refusal lands *before*
+ * the state change — the next `on_enter` never fires, which is what actually
+ * breaks the cycle.
+ */
+const nextChainDepth = (args: {
+  task: TaskInstance;
+  transitionArgs: TransitionArgs;
+  transitionName: string;
+}): number => {
+  if (!isChainHop(args.transitionArgs)) return 0;
+
+  const limit = chainLimit();
+  const next = (args.task.automationChainDepth ?? 0) + 1;
+  if (next > limit) {
+    throw new DomainError(
+      'TASK_AUTOMATION_CHAIN_LIMIT',
+      `Task '${args.transitionArgs.id}' has run ${limit} automated transitions with no outside intervention; '${args.transitionName}' was refused to break the cycle.`,
+      {
+        transition: args.transitionName,
+        taskId: args.transitionArgs.id,
+        limit,
+      }
+    );
+  }
+  return next;
 };
 
 // Validates the just-locked task against the requested transition: not closed,
@@ -185,6 +254,14 @@ const performTransitionTxn = async (args: {
       transitions,
     });
 
+    // Before any mutation: a refused chain hop must leave the task exactly where
+    // it was, with its dispatch provenance intact for whoever comes to look.
+    const chainDepth = nextChainDepth({
+      task,
+      transitionArgs: a,
+      transitionName: transition.name,
+    });
+
     const fromState = task.state;
     const previousDispatch = task.activeDispatch as ActiveDispatch | null;
     const toStateDef = stateByName({ states, name: transition.to });
@@ -197,6 +274,7 @@ const performTransitionTxn = async (args: {
     // on_enter (if any) sets it again.
     task.activeDispatch = null;
     task.automationStatus = null;
+    task.automationChainDepth = chainDepth;
     // The gate (if any) is discharged by this move; clear it. Re-arm the stall
     // sweeper for the new state.
     task.pendingTransition = null;

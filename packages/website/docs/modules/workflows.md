@@ -138,6 +138,7 @@ state in `from`) if a workflow needs one.
 | `assignee`          | string \| null   | Informational in v1 (a user or actor public ID; not interpreted by the engine) |
 | `active_dispatch`   | object \| null   | `{ kind, id, status }` of the current state's dispatch, if any — plus `attempt` while a `retry` policy is in effect |
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
+| `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
@@ -403,6 +404,49 @@ the author's choice via a webhook or trigger. The event fires **once per stall
 episode** and is **re-armed on the next transition**: entering any state (with or
 without a `stalled_after`) resets the timer for the new state.
 
+### The automation chain budget
+
+Cycles are the point of a workflow — `review → draft → review` is a healthy
+loop, not a bug. What is *not* healthy is a cycle that turns entirely on its
+own: a state dispatches work, the work routes the task back into that state, and
+it dispatches again, with nobody in the loop.
+
+Neither layer's validator can see that shape. Orchestration cycle detection is
+intra-graph, so it cannot see a cycle that leaves the graph; and rejecting it in
+the workflow would mean rejecting the very thing workflows are for.
+
+So the task engine bounds the **chain** instead. Every task carries an
+`automation_chain_depth`, and a transition either **increments** it or **resets
+it to zero**:
+
+| The move | Effect |
+| --- | --- |
+| A dispatch outcome routed through `on_complete` / `on_failure` (the `automation` principal) | increments |
+| A `transition-task` call from a dispatched run or agent, made with its run-as token | increments |
+| A person, a plain API key, or an approval resolution | resets to `0` |
+
+Once the depth would exceed the limit (`TASK_AUTOMATION_CHAIN_LIMIT`, default
+`50`), the transition is refused with `TASK_AUTOMATION_CHAIN_LIMIT` — **before**
+the state change, so the next `on_enter` never fires and the cycle is actually
+broken rather than slowed. The task parks where it was with
+`automation_status: unrouted`, and a `tasks.automation_rejected` event fires
+carrying the transition and the error code. A `soat` tool that fired the
+refused transition gets the `409` and can report it.
+
+The second row of that table is what makes the bound work at all. A dispatched
+run or agent authenticates with a
+[run-as token](./orchestrations.md#durable-background-execution),
+which names the user or key that started the chain — on the wire its
+`transition-task` call is indistinguishable from a person clicking a button.
+The engine tells them apart by the token, not the principal.
+
+Counting a *chain* rather than a lifetime is what keeps long-lived tasks
+unaffected. Any human touch starts the budget over, so a task that revisits
+states for months is never bounded by its own history — only by how far it can
+travel untouched. A genuine multi-state pipeline is a handful of hops and never
+approaches the limit; hitting it means a loop is running unattended, which is
+worth an alert rather than a silent stop.
+
 ### Deploying as a formation
 
 A workflow is a [formation](./formations.md) resource type (`workflow`), so it
@@ -437,6 +481,12 @@ resources:
         - { name: approve, from: [reviewing], to: approved }
 ```
 
+## Configuration
+
+| Variable | Required | Description |
+| --- | --- | --- |
+| `TASK_AUTOMATION_CHAIN_LIMIT` | No | How many machine-driven transitions a task may run back-to-back with no outside intervention before the next one is refused (default `50`). See [The automation chain budget](#the-automation-chain-budget). |
+
 ## Error Codes
 
 | Code                       | Status | When                                                            |
@@ -451,6 +501,7 @@ resources:
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
 | `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, and `orchestration_run_id` all null — rejected as a writer bug rather than silently recorded |
+| `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 
 ## Webhook events
 

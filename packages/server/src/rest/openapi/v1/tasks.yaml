@@ -369,6 +369,18 @@ components:
           description: >-
             Status of the current state's dispatch. `null` until a state with an
             automation is entered.
+        automation_chain_depth:
+          type: integer
+          description: >-
+            Server-owned. How many machine-driven transitions have run
+            back-to-back with no outside intervention — a dispatch outcome routed
+            through `on_complete`/`on_failure`, or a `transition-task` call made
+            by a dispatched run or agent with its run-as token. Any move by a
+            person, a plain API key, or an approval resolution resets it to `0`.
+            Once it would exceed the server's limit (`TASK_AUTOMATION_CHAIN_LIMIT`,
+            default 50) the next such transition is refused with
+            `TASK_AUTOMATION_CHAIN_LIMIT`, bounding a cycle composed across
+            workflows and orchestrations.
         pending_transition:
           type: string
           nullable: true

@@ -483,6 +483,11 @@ export const ERROR_CODES = {
     description:
       'An automation-caused transition was about to be persisted with no recorded cause: principal_id, generation_id, and orchestration_run_id would all be null. This is a writer bug, not a valid degraded record — the transition is rejected instead of being silently written (#792).',
   },
+  TASK_AUTOMATION_CHAIN_LIMIT: {
+    httpStatus: 409,
+    description:
+      'The task has run too many machine-driven transitions back-to-back with no outside intervention, and the next one was refused. This bounds a cycle composed across modules — a workflow state dispatching work that transitions the task back into that same state — which neither the orchestration cycle validator (intra-graph) nor the workflow itself (where revisiting states is deliberate) can see. Any move by a person, a plain API key, or an approval resolution resets the chain. The ceiling is TASK_AUTOMATION_CHAIN_LIMIT (default 50) (#885).',
+  },
   GUARDRAIL_NOT_FOUND: {
     httpStatus: 400,
     description:

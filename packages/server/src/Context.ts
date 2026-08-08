@@ -54,6 +54,20 @@ export type AuthUser = {
    * claim). Used by the fire endpoint to reject trigger→trigger recursion.
    */
   isTriggerToken?: boolean;
+  /**
+   * True when the caller authenticated with a run-as token (`orn` claim) — the
+   * short-lived credential durable, request-less work re-mints for its own
+   * platform self-calls (`orchestrationRunToken.ts`).
+   *
+   * It marks *how* the request arrived, never what it may do: the `orn` value
+   * is not an authorization input, and the boundary a run token carries is
+   * resolved separately in `resolveScopedBoundaryDocs`. The one thing it tells
+   * a handler is that the caller is machinery continuing a chain rather than a
+   * person starting one — which is what lets the task engine bound a composed
+   * dispatch→transition→dispatch cycle that otherwise looks like a series of
+   * ordinary user moves (#885).
+   */
+  isRunToken?: boolean;
 };
 
 export type Context = {

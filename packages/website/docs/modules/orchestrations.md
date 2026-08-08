@@ -35,7 +35,7 @@ The two compose in both directions. A task's state _dispatches_ an orchestration
 
 Keep that edge **fire-and-forget**. A graph that instead waits for a task to reach some state inverts the two lifetimes — a run is bounded and holds a lease and a queue slot, while a task lives for days and can move backward. Let the run end and let the task's own state machine carry things forward.
 
-> A state whose orchestration transitions the task back into that same state loops forever. Cycle detection is per-graph and workflow cycles are deliberate, so nothing rejects the composed cycle for you — bound it in the graph you write.
+> A state whose orchestration transitions the task back into that same state is a cycle no validator can see: cycle detection is per-graph, and workflow cycles are deliberate. It no longer runs forever — the task engine bounds it with a [chain budget](./workflows.md#the-automation-chain-budget) and refuses the hop that would exceed it — but the budget is a backstop, not a design. Bound the loop in the graph you write; reaching the budget means something is wrong.
 
 ## Overview
 
