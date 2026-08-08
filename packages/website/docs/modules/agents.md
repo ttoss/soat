@@ -342,6 +342,8 @@ When `content.type` is `document`, the server loads the referenced document and 
 
 Pass `stream: true` to receive results as Server-Sent Events (SSE). Each step's output is streamed as it is generated.
 
+Streaming is a REST/SDK/CLI capability only. A tool call — from an MCP client or from an agent's own `soat` tool — is one request returning one result, with no channel to carry deltas, so `stream` is not offered on the `create-agent-generation` tool at all. Calling that tool returns the completed generation.
+
 ### Tool Context
 
 `tool_context` lets callers inject key-value pairs forwarded as HTTP headers to every tool call in a generation. This enables server-side tools to perform authorization decisions based on the caller's identity without trusting data embedded in the prompt.

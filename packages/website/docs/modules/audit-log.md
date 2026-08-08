@@ -100,6 +100,8 @@ Entries are never updated or deleted through the API; the model layer rejects up
 
 Entries arrive oldest-first so that a row written during the export is appended after the cursor rather than shifting rows the consumer already read.
 
+The export is a REST/SDK/CLI operation and is deliberately **not** an MCP or `soat` tool action. Its response is a stream, which has no single-value form a tool result could carry, and it is unbounded by design — the properties that make it right for archival make it wrong for a caller that must materialize the whole thing. Read the log from a tool with `list-audit-entries`, which is paged and takes the same filters.
+
 ### `audit.entry_created` webhook
 
 Every persisted **project-scoped** entry emits an `audit.entry_created` [webhook](./webhooks.md) event carrying the full entry as its `data`, in the same snake_case shape the read API returns — so a subscriber never needs a follow-up `GET`. Subscribe with `audit.*` or the exact event name:

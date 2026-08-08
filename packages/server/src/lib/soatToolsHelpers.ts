@@ -318,6 +318,32 @@ export const extractAcceptedBodyFields = (args: {
   return Object.keys(bodySchema?.properties ?? {});
 };
 
+/**
+ * Whether a request-body property is kept out of the tool input schema.
+ *
+ * Two distinct markers, deliberately not merged — they say different things to
+ * the next person reading the spec:
+ *
+ * - `x-soat-server-managed` — the platform supplies the value (trace lineage,
+ *   call depth). A caller *may not* set it, but the field is honored when the
+ *   server injects it (see `extractAcceptedBodyFields`, which keeps them).
+ * - `x-soat-tool-unsupported` — the field selects a response mode a tool call
+ *   cannot receive at all, such as an SSE stream. Nothing injects it later; it
+ *   is simply not reachable from a tool.
+ *
+ * Both are invisible to REST, SDK and CLI callers, which read the spec's
+ * schemas rather than this projection of them.
+ */
+const isHiddenFromToolSchema = (property: unknown): boolean => {
+  const val = property as {
+    'x-soat-server-managed'?: unknown;
+    'x-soat-tool-unsupported'?: unknown;
+  };
+  return Boolean(
+    val['x-soat-server-managed'] || val['x-soat-tool-unsupported']
+  );
+};
+
 export const extractBodyProps = (args: {
   requestBody?: RequestBodySpec;
   spec: OpenApiSpec;
@@ -336,19 +362,16 @@ export const extractBodyProps = (args: {
   if (!bodySchema?.properties) return [];
   const allEntries = Object.entries(bodySchema.properties);
   const filtered = allEntries.filter(([, value]: [string, unknown]) => {
-    const val = value as { 'x-soat-server-managed'?: unknown };
-    return !val['x-soat-server-managed'];
+    return !isHiddenFromToolSchema(value);
   });
   const excluded = allEntries.length - filtered.length;
   if (excluded > 0) {
     log(
-      'extractBodyProps: excluded %d server-managed field(s): %s',
+      'extractBodyProps: excluded %d non-callable field(s): %s',
       excluded,
       allEntries
         .filter(([, v]: [string, unknown]) => {
-          return (v as { 'x-soat-server-managed'?: unknown })[
-            'x-soat-server-managed'
-          ];
+          return isHiddenFromToolSchema(v);
         })
         .map(([k]) => {
           return k;

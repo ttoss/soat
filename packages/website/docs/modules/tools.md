@@ -380,7 +380,9 @@ A platform action that responds non-2xx **fails the tool call** — `502 TOOL_HT
 
 An action that answers `204 No Content` — every `delete-*`, for one — yields a `null` result rather than an error.
 
-An action that streams binary content (`download-file`) cannot be represented as a tool result and is refused with `422 TOOL_CALL_NOT_SUPPORTED`. Use `download-file-base64` from a tool.
+An operation whose response cannot be a tool result is **not a bindable action at all**, so it is rejected at create time with `400 VALIDATION_FAILED` rather than accepted and failed on use. This is the same registry check as an unrecognized name above, and it covers the operations that stream: `download-file` (raw bytes — use `download-file-base64`) and `export-audit-entries` (an unbounded NDJSON dump — use `list-audit-entries`). Both remain available over REST, the SDK, and the CLI.
+
+For the same reason, a field that selects a streaming response is not offered on the action's input: `create-agent-generation` is callable as a `soat` action, but without `stream`, and returns the completed generation.
 
 #### How a soat action is executed
 

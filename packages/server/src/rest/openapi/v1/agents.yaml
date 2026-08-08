@@ -1581,6 +1581,14 @@ components:
         stream:
           type: boolean
           default: false
+          # A tool call is one request and one result; there is no channel to
+          # stream deltas over, and the route answers a streamed request by
+          # writing SSE frames straight to the socket instead of setting a body
+          # — which in-process would run the generation and then have nowhere to
+          # put it. Hiding the field means a caller cannot ask for a mode that
+          # cannot be delivered; the same action without it returns the
+          # completed generation.
+          x-soat-tool-unsupported: true
           description: When true the response is an SSE stream
         trace_id:
           x-soat-ref: traces
