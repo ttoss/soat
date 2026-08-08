@@ -8,26 +8,6 @@
 
 index
 connect-third-party-llms
-# orchestrate-a-sonnet-with-workflows is disabled pending evidence, not pending a
-# fix. Its original rationale — inherent `on_enter` dispatch nondeterminism,
-# "same class as review-panel-discussion" — was wrong on both counts and is
-# corrected here. The tutorial declares no `output_schema` anywhere and every
-# `on_complete` is `{"when": true}`, so the card advances on any completion
-# regardless of content; nothing in it depends on model quality. The actual
-# causes were fixed in #881:
-#   - the AI provider pinned `llama3.2`, which this stack never pulls (it pulls
-#     `qwen2.5:0.5b` only), so every generation failed outright;
-#   - the `# → 400` annotation sat after its command, so it bound to the next
-#     one, leaving the expected guard rejection unannotated;
-#   - this stack had no `MAX_COMPLETION_TOKENS`, so output was unbounded;
-#   - `revise` re-entered `create_text`, running ten generations per run instead
-#     of six;
-#   - no state declared `on_failure`, so a failed generation stalled the card.
-# What is still missing is a green run: nothing has executed this tutorial end to
-# end since those fixes landed. Remove this entry once
-# `TUTORIAL_ID=orchestrate-a-sonnet-with-workflows` passes locally a few times in
-# a row.
-orchestrate-a-sonnet-with-workflows
 
 # call-aws-and-gcp-apis-from-an-agent creates tools whose `execute.auth` signs
 # requests with real AWS credentials or mints a GCP service account token. The
