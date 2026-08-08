@@ -1,6 +1,6 @@
 ---
 description: "Harness, loop, graph — the three layers of an agent system, which SOAT module owns each one, and why the graph should be the last thing you build."
-sidebar_position: 4
+sidebar_position: 3
 title: Harness, Loop, and Graph
 ---
 
