@@ -1,28 +1,10 @@
-import { DomainError } from '../errors';
-import type { GuardrailEvaluationRecord } from './guardrailEvaluationRecord';
 import { applyInputMapping, evaluateLogic } from './jsonLogicMapping';
-import type { NodeExecutionResult } from './orchestrationNodeExecutors';
+import { requireNodeField } from './orchestrationNodeFields';
+import type {
+  ApprovalNodeSpec,
+  NodeExecutionResult,
+} from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
-
-/**
- * The frozen proposal an `approval` node hands to the engine, which emits it as
- * an ApprovalItem (linked to the parked run) when the run settles.
- */
-export type ApprovalNodeSpec = {
-  toolId: string;
-  arguments: Record<string, unknown>;
-  reasoning: string | null;
-  evidence: object | null;
-  predictedImpact: string | null;
-  expiresInSeconds: number;
-  // `${guardrailId}@${version}` of the guardrail that routed this proposal to
-  // approval, or null for an explicit (non-guardrail) `approval` node.
-  policyVersion: string | null;
-  // The guardrail_evaluation records for this proposal, persisted by the
-  // engine once the ApprovalItem exists so they can be cross-linked via
-  // `approvalId`. Absent for an explicit `approval` node (no evaluations ran).
-  guardrailEvaluationRecords?: GuardrailEvaluationRecord[];
-};
 
 // Absent `expires_in`, an approval defaults to a 24h window — long enough for a
 // human queue but bounded so a stale proposal can never sit forever.
@@ -55,15 +37,11 @@ export const executeApprovalNode = (args: {
   state: Record<string, unknown>;
 }): NodeExecutionResult => {
   const { node, state } = args;
-  if (!node.toolId)
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `Approval node '${node.id}' missing toolId.`
-    );
+  const toolId = requireNodeField(node, 'toolId');
 
   const resolvedArguments = applyInputMapping(node.arguments, state);
   const approvalSpec: ApprovalNodeSpec = {
-    toolId: node.toolId,
+    toolId,
     arguments: resolvedArguments,
     reasoning:
       node.reasoning === undefined

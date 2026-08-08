@@ -1,5 +1,5 @@
 import { applyInputMapping } from './jsonLogicMapping';
-import type { NodeExecutionResult } from './orchestrationNodeExecutors';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 
 /**

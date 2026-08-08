@@ -1,7 +1,7 @@
-import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { applyInputMapping } from './jsonLogicMapping';
-import type { NodeExecutionResult } from './orchestrationNodeExecutors';
+import { requireNodeField } from './orchestrationNodeFields';
+import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 
 /**
@@ -23,12 +23,7 @@ export const executeEmitEventNode = async (args: {
   runPublicId?: string;
 }): Promise<NodeExecutionResult> => {
   const { node, state, projectId, runPublicId } = args;
-  if (!node.eventType) {
-    throw new DomainError(
-      'ORCHESTRATION_NODE_FAILED',
-      `emit_event node '${node.id}' missing eventType.`
-    );
-  }
+  const eventType = requireNodeField(node, 'eventType');
 
   const data = applyInputMapping(node.inputMapping, state);
 
@@ -37,7 +32,7 @@ export const executeEmitEventNode = async (args: {
   if (projectId !== undefined) {
     const projectPublicId = await resolveProjectPublicId({ projectId });
     emitResourceEvent({
-      type: node.eventType,
+      type: eventType,
       projectId,
       projectPublicId,
       resourceType: 'orchestration_run',
@@ -48,6 +43,6 @@ export const executeEmitEventNode = async (args: {
 
   return {
     kind: 'artifact',
-    artifact: { emitted: true, eventType: node.eventType },
+    artifact: { emitted: true, eventType },
   };
 };

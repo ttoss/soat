@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { RequiredAction } from './orchestrationExecutors';
+import type { RequiredAction } from './orchestrationNodeTypes';
 import {
   type MappedOrchestrationRun,
   mapRequiredAction,
