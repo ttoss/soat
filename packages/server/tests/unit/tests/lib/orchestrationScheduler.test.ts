@@ -118,6 +118,8 @@ const createOrphanedRun = () => {
 // Creates a run whose orchestration is then deleted. The FK cascades and removes
 // the run row, but the in-memory instance survives — modelling the (real, if
 // rare) state where the scheduler wakes a run whose orchestration is gone.
+type RunInstance = InstanceType<(typeof db)['OrchestrationRun']>;
+
 const createRunWithMissingOrchestration = async (
   overrides: Record<string, unknown>
 ) => {
@@ -563,6 +565,69 @@ describe('wakeRun (branch coverage)', () => {
     expect(run.status).toBe('failed');
     expect(run.wakeAt).toBeNull();
   });
+});
+
+// #907: three entry points failed a run whose orchestration was gone, and each
+// wrote a different field set. `wakeRun` in particular left `leaseExpiresAt`
+// populated on a run it had just moved to `failed`, so the reaper kept seeing an
+// active lease on a terminal run. `redriveRun` held the superset, which is the
+// intended semantics — asserted here for every path so they cannot diverge again.
+describe('a run whose orchestration is gone fails the same way from every path', () => {
+  const LEASE = new Date(Date.now() - 60_000);
+  const WAKE_CONTEXT = {
+    nodeId: 'delay',
+    resume: { kind: 'delay', artifact: {} },
+  };
+
+  const drivers: Array<
+    [string, Record<string, unknown>, (run: RunInstance) => Promise<void>]
+  > = [
+    [
+      'driveQueuedRun',
+      { status: 'queued', leaseExpiresAt: LEASE, wakeContext: WAKE_CONTEXT },
+      async (run) => {
+        await engineModule.driveQueuedRun({ run });
+      },
+    ],
+    [
+      'wakeRun',
+      {
+        status: 'sleeping',
+        wakeAt: new Date(Date.now() - 1000),
+        leaseExpiresAt: LEASE,
+        wakeContext: WAKE_CONTEXT,
+      },
+      async (run) => {
+        await engineModule.wakeRun({ run });
+      },
+    ],
+    [
+      'redriveRun',
+      { status: 'running', leaseExpiresAt: LEASE, wakeContext: WAKE_CONTEXT },
+      async (run) => {
+        await engineModule.redriveRun({ run });
+      },
+    ],
+  ];
+
+  test.each(drivers)(
+    '%s clears the lease and the wake',
+    async (_name, overrides, drive) => {
+      const run = await createRunWithMissingOrchestration(overrides);
+
+      await drive(run);
+
+      expect(run.status).toBe('failed');
+      expect(run.leaseExpiresAt).toBeNull();
+      expect(run.wakeAt).toBeNull();
+      expect(run.wakeContext).toBeNull();
+      expect(run.completedAt).toBeInstanceOf(Date);
+      expect(run.error).toEqual({
+        code: 'ORCHESTRATION_NOT_FOUND',
+        message: 'Orchestration gone',
+      });
+    }
+  );
 });
 
 describe('redriveRun (branch coverage)', () => {

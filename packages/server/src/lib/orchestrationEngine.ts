@@ -103,6 +103,20 @@ const collectApprovalNodeIds = (nodes: OrchestrationNode[]): Set<string> => {
 };
 
 /**
+ * A loop entry with nothing activated, completed, labelled, or attempted — the
+ * base every caller starts from, so the five-field literal is written once.
+ */
+const emptyLoopEntry = (): LoopEntry => {
+  return {
+    activatedNodes: new Set<string>(),
+    completedNodes: new Set<string>(),
+    conditionLabels: new Map<string, string>(),
+    pollAttempts: new Map<string, number>(),
+    retryAttempts: new Map<string, number>(),
+  };
+};
+
+/**
  * Builds the loop entry to wake a run that was sleeping on a scheduled wait. For
  * a `delay` the timer has elapsed, so the node is recorded complete and the loop
  * resumes from its successors; for a `poll` or `retry` the same node re-executes
@@ -118,31 +132,18 @@ const buildResumeEntry = async (args: {
   artifacts: Record<string, unknown>;
 }): Promise<LoopEntry> => {
   const { runRecord, nodeId, resume, nodes, edges, state, artifacts } = args;
+  const entry = emptyLoopEntry();
   const completedNodes = new Set<string>(Object.keys(artifacts));
-  const conditionLabels = new Map<string, string>();
-  const pollAttempts = new Map<string, number>();
-  const retryAttempts = new Map<string, number>();
+  entry.completedNodes = completedNodes;
 
-  if (resume.kind === 'poll') {
-    pollAttempts.set(nodeId, resume.attempt);
-    return {
-      activatedNodes: new Set<string>([nodeId]),
-      completedNodes,
-      conditionLabels,
-      pollAttempts,
-      retryAttempts,
-    };
-  }
-
-  if (resume.kind === 'retry') {
-    retryAttempts.set(nodeId, resume.attempt);
-    return {
-      activatedNodes: new Set<string>([nodeId]),
-      completedNodes,
-      conditionLabels,
-      pollAttempts,
-      retryAttempts,
-    };
+  // poll and retry re-execute the same node; they differ only in which attempt
+  // counter carries the number.
+  if (resume.kind === 'poll' || resume.kind === 'retry') {
+    const attempts =
+      resume.kind === 'poll' ? entry.pollAttempts : entry.retryAttempts;
+    attempts.set(nodeId, resume.attempt);
+    entry.activatedNodes = new Set<string>([nodeId]);
+    return entry;
   }
 
   // delay: record completion, apply its artifact, resume from successors.
@@ -161,19 +162,15 @@ const buildResumeEntry = async (args: {
       artifact: resume.artifact,
     });
   }
-  const startNodes = resolveNextNodes({
-    completedNodeId: nodeId,
-    completedNodes,
-    conditionLabels,
-    edges,
-  });
-  return {
-    activatedNodes: new Set<string>(startNodes),
-    completedNodes,
-    conditionLabels,
-    pollAttempts,
-    retryAttempts,
-  };
+  entry.activatedNodes = new Set<string>(
+    resolveNextNodes({
+      completedNodeId: nodeId,
+      completedNodes,
+      conditionLabels: entry.conditionLabels,
+      edges,
+    })
+  );
+  return entry;
 };
 
 /**
@@ -559,29 +556,93 @@ const runAuthHeader = async (args: {
   });
 };
 
+/**
+ * The single terminal state for a run whose orchestration has been deleted
+ * underneath it.
+ *
+ * Three entry points wrote this failure and each wrote a different field set
+ * (#907): `driveQueuedRun` cleared the lease but not the wake, `wakeRun` cleared
+ * the wake but not the lease — so the reaper kept seeing an active lease on a
+ * terminal run — and only `redriveRun` cleared both. The superset is the correct
+ * semantics: a failed run holds neither a lease nor a pending wake.
+ */
+const failRunOrchestrationGone = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+}): Promise<void> => {
+  await args.run.update({
+    status: 'failed',
+    error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
+    wakeAt: null,
+    wakeContext: null,
+    leaseExpiresAt: null,
+    completedAt: new Date(),
+  });
+};
+
+/**
+ * The prologue every background driver shares: load the run's orchestration,
+ * resolve its pinned graph, and clone `state`/`artifacts`.
+ *
+ * The clone is load-bearing — Sequelize does not reliably detect in-place
+ * mutation of a JSONB attribute, so driving against `run.state` directly can
+ * cause the final update to skip persisting it.
+ *
+ * A missing orchestration is handled per `onMissing`. The background drivers
+ * fail the run and get `null` back, so they return without driving. The
+ * request-driven resume asks to `throw` instead: its caller is an HTTP request,
+ * which deserves the error rather than a silently failed run.
+ */
+const prepareRunDrive = async (args: {
+  run: InstanceType<typeof db.OrchestrationRun>;
+  /** Replays the last checkpoint over the cloned state (every path but the queued one). */
+  restoreCheckpoint?: boolean;
+  onMissing?: 'fail' | 'throw';
+}): Promise<{
+  nodes: OrchestrationNode[];
+  edges: OrchestrationEdge[];
+  state: Record<string, unknown>;
+  artifacts: Record<string, unknown>;
+} | null> => {
+  const { run } = args;
+
+  const orch = await db.Orchestration.findOne({
+    where: { id: run.orchestrationId as number },
+  });
+  if (!orch) {
+    if (args.onMissing === 'throw') {
+      throw new DomainError(
+        'ORCHESTRATION_NOT_FOUND',
+        `Orchestration for run not found.`
+      );
+    }
+    await failRunOrchestrationGone({ run });
+    return null;
+  }
+
+  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
+  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
+  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
+
+  if (args.restoreCheckpoint) {
+    await restoreRunFromCheckpoint({
+      orchestrationRunId: run.id as number,
+      state,
+      artifacts,
+    });
+  }
+
+  return { nodes, edges, state, artifacts };
+};
+
 export const driveQueuedRun = async (args: {
   run: InstanceType<typeof db.OrchestrationRun>;
 }): Promise<void> => {
   const { run } = args;
   log('driveQueuedRun %o', { orchestrationRunId: run.id });
 
-  const orch = await db.Orchestration.findOne({
-    where: { id: run.orchestrationId as number },
-  });
-  if (!orch) {
-    await run.update({
-      status: 'failed',
-      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
-      leaseExpiresAt: null,
-      completedAt: new Date(),
-    });
-    return;
-  }
-
-  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
-  // Clone so mutations produce a fresh reference (see wakeRun).
-  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
-  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
+  const prepared = await prepareRunDrive({ run });
+  if (!prepared) return;
+  const { nodes, edges, state, artifacts } = prepared;
 
   await run.update({ status: 'running', leaseExpiresAt: newLeaseExpiry() });
 
@@ -615,31 +676,9 @@ export const wakeRun = async (args: {
     return;
   }
 
-  const orch = await db.Orchestration.findOne({
-    where: { id: run.orchestrationId as number },
-  });
-  if (!orch) {
-    await run.update({
-      status: 'failed',
-      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
-      wakeAt: null,
-      wakeContext: null,
-      completedAt: new Date(),
-    });
-    return;
-  }
-
-  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
-  // Clone so mutations produce a fresh object reference — Sequelize does not
-  // reliably detect in-place mutation of a JSONB attribute, so reusing
-  // run.state directly can cause the final update to skip persisting it.
-  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
-  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
-  await restoreRunFromCheckpoint({
-    orchestrationRunId: run.id as number,
-    state,
-    artifacts,
-  });
+  const prepared = await prepareRunDrive({ run, restoreCheckpoint: true });
+  if (!prepared) return;
+  const { nodes, edges, state, artifacts } = prepared;
 
   const entry = await buildResumeEntry({
     runRecord: run,
@@ -847,22 +886,15 @@ export const resumeOrchestrationRunExecution = async (args: {
     decisionLabel,
   });
 
-  const orch = await db.Orchestration.findOne({
-    where: { id: run.orchestrationId as number },
+  // `onMissing: 'throw'` — this path answers an HTTP request, so a deleted
+  // orchestration surfaces as an error rather than a silently failed run.
+  const prepared = await prepareRunDrive({
+    run,
+    restoreCheckpoint: true,
+    onMissing: 'throw',
   });
-  if (!orch)
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration for run not found.`
-    );
-
-  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
-  // Clone so mutations produce a fresh reference (see wakeRun).
-  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
-  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
-
-  const orchestrationRunId = run.id as number;
-  await restoreRunFromCheckpoint({ orchestrationRunId, state, artifacts });
+  // `prepareRunDrive` only returns null in `fail` mode, which this call is not.
+  const { nodes, edges, state, artifacts } = prepared!;
 
   const resumedNode = humanNodeId
     ? nodes.find((n) => {
@@ -918,11 +950,10 @@ export const resumeOrchestrationRunExecution = async (args: {
     authHeader: await runAuthHeader({ run }),
     inlineWaits: true,
     entry: {
+      ...emptyLoopEntry(),
       activatedNodes: new Set<string>(startNodeIds),
       completedNodes,
       conditionLabels,
-      pollAttempts: new Map<string, number>(),
-      retryAttempts: new Map<string, number>(),
     },
   });
 };
@@ -962,11 +993,10 @@ export const buildRedriveEntry = (args: {
   }
 
   return {
+    ...emptyLoopEntry(),
     activatedNodes,
     completedNodes,
     conditionLabels,
-    pollAttempts: new Map<string, number>(),
-    retryAttempts: new Map<string, number>(),
   };
 };
 
@@ -982,30 +1012,9 @@ export const redriveRun = async (args: {
   const { run } = args;
   log('redriveRun %o', { orchestrationRunId: run.id });
 
-  const orch = await db.Orchestration.findOne({
-    where: { id: run.orchestrationId as number },
-  });
-  if (!orch) {
-    await run.update({
-      status: 'failed',
-      error: { code: 'ORCHESTRATION_NOT_FOUND', message: 'Orchestration gone' },
-      wakeAt: null,
-      wakeContext: null,
-      leaseExpiresAt: null,
-      completedAt: new Date(),
-    });
-    return;
-  }
-
-  const { nodes, edges } = await resolveRunGraph({ run, orchestration: orch });
-  // Clone so mutations produce a fresh reference (see wakeRun).
-  const state = { ...((run.state ?? {}) as Record<string, unknown>) };
-  const artifacts = { ...((run.artifacts ?? {}) as Record<string, unknown>) };
-  await restoreRunFromCheckpoint({
-    orchestrationRunId: run.id as number,
-    state,
-    artifacts,
-  });
+  const prepared = await prepareRunDrive({ run, restoreCheckpoint: true });
+  if (!prepared) return;
+  const { nodes, edges, state, artifacts } = prepared;
 
   const entry = buildRedriveEntry({ nodes, edges, artifacts });
 
