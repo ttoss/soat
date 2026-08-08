@@ -364,13 +364,19 @@ toolsRouter.delete('/tools/:tool_id', async (ctx: Context) => {
  * serialized as JSON to honor the endpoint's declared `application/json`
  * contract. Object/array results are left as-is: a tool result is caller-owned
  * data, so its keys are passed through untouched.
+ *
+ * `undefined` is serialized as `null` rather than passed through: a `undefined`
+ * Koa body sets no status, so the response would keep the framework default of
+ * `404` and report a call that *succeeded* as a missing resource. A tool whose
+ * action legitimately returns nothing — a SOAT action answering `204`, now that
+ * those resolve instead of failing to parse (#888) — reaches here.
  */
 const setCallToolResponseBody = (ctx: Context, result: unknown): void => {
-  if (result !== null && typeof result === 'object') {
+  if (result !== null && result !== undefined && typeof result === 'object') {
     ctx.body = result;
   } else {
     ctx.type = 'application/json';
-    ctx.body = JSON.stringify(result);
+    ctx.body = JSON.stringify(result ?? null);
   }
 };
 

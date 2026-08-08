@@ -12,10 +12,12 @@ import {
 } from 'src/lib/agentToolResolver';
 import {
   buildMcpToolExecute,
+  buildSoatRequestBody,
   executeSoatTool,
   resolveMcpTools,
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
+import { withCallTimeout } from 'src/lib/inProcessApi';
 import { soatTools } from 'src/lib/soatTools';
 import {
   assertValidToolContextKeys,
@@ -1543,7 +1545,7 @@ describe('resolveAgentTools - mcp and soat types', () => {
     expect(Object.keys(tools)).toHaveLength(0);
   });
 
-  test('soat tool resolves configured actions and executes through internal API', async () => {
+  test('soat tool resolves configured actions and executes through the platform', async () => {
     const soatToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
       .send({
@@ -1553,22 +1555,22 @@ describe('resolveAgentTools - mcp and soat types', () => {
         actions: ['list-files'],
       });
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })));
-
-    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
+    const tools = await resolveAgentTools({
+      toolIds: [soatToolRes.body.id],
+      authHeader: `Bearer ${adminToken}`,
+    });
     expect(tools).toHaveProperty('mySoatTool_list-files');
 
     const soatTool = tools['mySoatTool_list-files'];
-    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
-      await soatTool.execute({}, {} as never);
-    }
+    expect(
+      'execute' in soatTool && typeof soatTool.execute === 'function'
+    ).toBe(true);
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/files'),
-      expect.objectContaining({ method: 'GET' })
-    );
+    // Since #888 the action runs in this process, so the assertion is the real
+    // listing the platform returned rather than the shape of an outgoing
+    // request. Nothing is listening on a port here.
+    const result = await soatTool.execute!({}, {} as never);
+    expect(Array.isArray((result as { data?: unknown[] }).data)).toBe(true);
   });
 
   test('soat tool returns boundary error when action is denied', async () => {
@@ -1624,32 +1626,40 @@ describe('resolveAgentTools - mcp and soat types', () => {
   });
 
   test('soat tool with preset_parameters injects preset values into execution', async () => {
+    // A real target, so the preset's effect is observable in the result rather
+    // than only in the request that carried it.
+    const targetRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/tools')
+      .send({
+        project_id: projectId,
+        name: 'myPresetTargetTool',
+        type: 'soat',
+        actions: ['list-files'],
+      });
+    expect(targetRes.status).toBe(201);
+
     const soatToolRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
       .send({
         project_id: projectId,
         name: 'myPresetExecTool',
         type: 'soat',
-        actions: ['get-document'],
-        preset_parameters: { document_id: 'doc_injected' },
+        actions: ['get-tool'],
+        preset_parameters: { tool_id: targetRes.body.id },
       });
+    expect(soatToolRes.status).toBe(201);
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: {} })));
+    const tools = await resolveAgentTools({
+      toolIds: [soatToolRes.body.id],
+      authHeader: `Bearer ${adminToken}`,
+    });
+    const soatTool = tools['myPresetExecTool_get-tool'];
 
-    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
-    const soatTool = tools['myPresetExecTool_get-document'];
-
-    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
-      // Model does not supply 'id' — it is injected from preset_parameters
-      await soatTool.execute({}, {} as never);
-    }
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('doc_injected'),
-      expect.anything()
-    );
+    // The model supplies no `tool_id` — it comes from preset_parameters, and
+    // the resource that came back is the proof it reached the path.
+    const result = await soatTool.execute!({}, {} as never);
+    expect((result as { id?: string }).id).toBe(targetRes.body.id);
+    expect((result as { name?: string }).name).toBe('myPresetTargetTool');
   });
 
   test('soat tool without preset_parameters works as before', async () => {
@@ -1662,22 +1672,15 @@ describe('resolveAgentTools - mcp and soat types', () => {
         actions: ['list-files'],
       });
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(new Response(JSON.stringify({ data: [] })));
-
-    const tools = await resolveAgentTools({ toolIds: [soatToolRes.body.id] });
+    const tools = await resolveAgentTools({
+      toolIds: [soatToolRes.body.id],
+      authHeader: `Bearer ${adminToken}`,
+    });
     expect(tools).toHaveProperty('myNoPresetTool_list-files');
 
     const soatTool = tools['myNoPresetTool_list-files'];
-    if ('execute' in soatTool && typeof soatTool.execute === 'function') {
-      await soatTool.execute({}, {} as never);
-    }
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/v1/files'),
-      expect.objectContaining({ method: 'GET' })
-    );
+    const result = await soatTool.execute!({}, {} as never);
+    expect(Array.isArray((result as { data?: unknown[] }).data)).toBe(true);
   });
 
   test('resolves pipeline tool and returns tool with execute function', async () => {
@@ -1921,135 +1924,114 @@ describe('resolveMcpTools - direct', () => {
   });
 });
 
+const soatDef = (name: string) => {
+  const def = soatTools.find((t) => {
+    return t.name === name;
+  });
+  expect(def).toBeDefined();
+  return def!;
+};
+
 describe('executeSoatTool - direct', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  test('exercises body/context/trace/depth branches when POST def with body fn is provided', async () => {
-    const postDef = soatTools.find((t) => {
-      return typeof t.body === 'function';
-    });
-    if (!postDef) {
-      return;
-    }
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'new-1' }), { status: 201 })
-      );
-    await executeSoatTool({
-      toolName: 'test',
-      def: postDef,
-      rawArgs: {},
-      base: 'http://localhost:5047',
-      toolContext: { env: 'test' },
-      traceId: 'trc_123',
-      rootTraceId: null,
-      remainingDepth: 3,
-      buildContextHeaders: () => {
-        return {};
-      },
-      logToolCallingError: jest.fn(),
-    });
-    expect(fetchMock).toHaveBeenCalled();
-  });
-
-  test('calls logToolCallingError and rethrows when fetch throws', async () => {
-    const listDef = soatTools.find((t) => {
-      return t.method === 'GET';
-    });
-    if (!listDef) {
-      return;
-    }
+  test('an uncredentialed action fails the tool call and reports it', async () => {
     const logToolCallingError = jest.fn();
-    const networkError = new Error('SOAT network failure');
-    jest.spyOn(global, 'fetch').mockRejectedValueOnce(networkError);
+
+    // Since #888 the action is served in-process, so there is no network error
+    // left to simulate — the failure that matters is the real one: no
+    // `authHeader`, so the app's own auth middleware refuses the call. Sharing
+    // a process must never imply sharing authority.
     await expect(
       executeSoatTool({
         toolName: 'test',
-        def: listDef,
+        def: soatDef('list-tools'),
         rawArgs: {},
-        base: 'http://localhost:5047',
         buildContextHeaders: () => {
           return {};
         },
         logToolCallingError,
       })
-    ).rejects.toThrow('SOAT network failure');
-    expect(logToolCallingError).toHaveBeenCalled();
+    ).rejects.toThrow(HttpToolError);
+
+    expect(logToolCallingError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'test_list-tools',
+        toolType: 'soat',
+        method: 'GET',
+      })
+    );
   });
 });
 
-describe('executeSoatTool - trace field injection scoping (issue #371)', () => {
-  afterEach(() => {
-    jest.restoreAllMocks();
+describe('withCallTimeout', () => {
+  test('returns the value when the call settles inside the budget', async () => {
+    await expect(
+      withCallTimeout({
+        promise: Promise.resolve('done'),
+        ms: 60_000,
+        label: 'test action',
+      })
+    ).resolves.toBe('done');
   });
 
-  test('does not inject parent_trace_id/root_trace_id/max_call_depth for actions whose schema does not declare them', async () => {
-    const searchKnowledgeDef = soatTools.find((t) => {
-      return t.name === 'search-knowledge';
-    });
-    expect(searchKnowledgeDef).toBeDefined();
+  test('rejects when the call does not settle, naming the action', async () => {
+    // A promise that can never settle, so the timer wins without racing the
+    // clock against real work.
+    await expect(
+      withCallTimeout({
+        promise: new Promise<never>(() => {}),
+        ms: 5,
+        label: "SOAT action 'list-tools'",
+      })
+    ).rejects.toThrow(/SOAT action 'list-tools' timed out after 5ms/);
+  });
+});
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ results: [] }), { status: 200 })
-      );
-
-    await executeSoatTool({
-      toolName: 'test',
-      def: searchKnowledgeDef!,
+describe('buildSoatRequestBody - trace field injection scoping (issue #371)', () => {
+  test('does not inject parent_trace_id/root_trace_id/max_call_depth for actions whose schema does not declare them', () => {
+    const body = buildSoatRequestBody({
+      def: soatDef('search-knowledge'),
       rawArgs: { query: 'hello' },
-      base: 'http://localhost:5047',
       traceId: 'trc_123',
       rootTraceId: 'trc_root',
       remainingDepth: 3,
-      buildContextHeaders: () => {
-        return {};
-      },
-      logToolCallingError: jest.fn(),
     });
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const sentBody = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(sentBody).not.toHaveProperty('parent_trace_id');
-    expect(sentBody).not.toHaveProperty('root_trace_id');
-    expect(sentBody).not.toHaveProperty('max_call_depth');
+    expect(body).not.toHaveProperty('parent_trace_id');
+    expect(body).not.toHaveProperty('root_trace_id');
+    expect(body).not.toHaveProperty('max_call_depth');
   });
 
-  test('still injects parent_trace_id/root_trace_id/max_call_depth for create-agent-generation', async () => {
-    const createAgentGenerationDef = soatTools.find((t) => {
-      return t.name === 'create-agent-generation';
-    });
-    expect(createAgentGenerationDef).toBeDefined();
-
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ id: 'gen_1' }), { status: 201 })
-      );
-
-    await executeSoatTool({
-      toolName: 'test',
-      def: createAgentGenerationDef!,
+  test('still injects parent_trace_id/root_trace_id/max_call_depth for create-agent-generation', () => {
+    const body = buildSoatRequestBody({
+      def: soatDef('create-agent-generation'),
       rawArgs: { agent_id: 'agt_1', messages: [] },
-      base: 'http://localhost:5047',
+      toolContext: { env: 'test' },
       traceId: 'trc_123',
       rootTraceId: 'trc_root',
       remainingDepth: 3,
-      buildContextHeaders: () => {
-        return {};
-      },
-      logToolCallingError: jest.fn(),
     });
 
-    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const sentBody = JSON.parse(init.body as string) as Record<string, unknown>;
-    expect(sentBody.parent_trace_id).toBe('trc_123');
-    expect(sentBody.root_trace_id).toBe('trc_root');
-    expect(sentBody.max_call_depth).toBe(2);
+    expect(body).toMatchObject({
+      tool_context: { env: 'test' },
+      parent_trace_id: 'trc_123',
+      root_trace_id: 'trc_root',
+      max_call_depth: 2,
+    });
+  });
+
+  test('roots the lineage at the current trace when no root was carried in', () => {
+    const body = buildSoatRequestBody({
+      def: soatDef('create-agent-generation'),
+      rawArgs: { agent_id: 'agt_1', messages: [] },
+      traceId: 'trc_123',
+      rootTraceId: null,
+      remainingDepth: 3,
+    });
+
+    expect(body).toMatchObject({
+      parent_trace_id: 'trc_123',
+      root_trace_id: 'trc_123',
+    });
   });
 });
 

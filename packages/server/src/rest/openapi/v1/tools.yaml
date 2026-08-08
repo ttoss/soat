@@ -450,7 +450,11 @@ paths:
             application/json:
               schema:
                 type: object
-                description: The raw output returned by the tool
+                nullable: true
+                description: >-
+                  The raw output returned by the tool. `null` when the tool
+                  produced no output — a `soat` action answering `204 No
+                  Content`, for instance.
                 additionalProperties: true
         '400':
           description: Bad Request — invalid input or unknown action
