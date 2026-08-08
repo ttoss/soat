@@ -21,32 +21,21 @@ between states over time, including backward.
 An **[orchestration](./orchestrations.md) is a pipeline that _ends_** — a
 directed acyclic graph that runs forward and terminates. A **workflow is a state
 graph a task _lives_ in** — a long-lived entity that moves between named states
-over days or weeks, and can revisit them.
-
-| You want… | Use |
-| --- | --- |
-| Statuses, transitions, guards, a kanban board, or an entity that revisits states | **Workflows & Tasks** (this module) |
-| A deterministic, forward-only sequence of steps that runs and completes | **[Orchestrations](./orchestrations.md)** |
+over days or weeks, and can revisit them. Use this module for statuses,
+transitions, guards, a kanban board, or an entity that revisits states; use an
+orchestration for a deterministic, forward-only sequence that runs and completes.
 
 The two compose: when a task enters a state, that state may **dispatch** an
 orchestration or an agent to do its work. A workflow never replaces a run — it
 _drives_ one.
 
-The return edge is an ordinary tool call, not a second mechanism: a dispatched
-orchestration moves its task on with a `tool` node bound to a
-[`soat` tool](./tools.md#soat) for `transition-task`, passing the task id in
-through the dispatch's `input_mapping`. A dispatched **agent** does the same
-thing with a `soat` tool of its own.
-
-Both kinds of dispatch act as the principal that started the chain — the person
-or key that created the task or fired the transition — and each automated hop
-inherits that identity, so a chain of states keeps acting as whoever set it
-going rather than decaying to no principal at the second state. See
-[Run identity](./orchestrations.md#durable-background-execution).
-
 > A support ticket that reopens. A lead that goes `qualified → negotiating →
 > stalled → negotiating`. A kanban card dragged back a column. None of these fit
 > a DAG — a task is the shape they need.
+
+> See **[Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model)**
+> for the full comparison, the composition patterns in both directions, and the
+> principal a dispatched run or agent acts as.
 
 > See the [Permissions Reference](../permissions.md#workflows) for the
 > `workflows:` action strings and [#tasks](../permissions.md#tasks) for the
