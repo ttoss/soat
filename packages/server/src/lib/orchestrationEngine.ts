@@ -13,7 +13,6 @@ import {
 } from './orchestrationEvents';
 import { findStartNodes, resolveNextNodes } from './orchestrationGraph';
 import { newLeaseExpiry } from './orchestrationLease';
-import { registerNestedRunStarter } from './orchestrationNestedRun';
 import {
   applyStateMapping,
   executeToolNode,
@@ -1076,7 +1075,3 @@ const resumeRunForApproval = async (args: {
 };
 
 registerApprovalResumeHandler(resumeRunForApproval);
-
-// Loop and sub_orchestration nodes start a child run through this seam rather
-// than importing the engine, which would close a runtime import cycle (#910).
-registerNestedRunStarter(startOrchestrationRun);

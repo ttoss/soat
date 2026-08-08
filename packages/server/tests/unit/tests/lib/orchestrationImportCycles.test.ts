@@ -14,6 +14,12 @@ import path from 'node:path';
  * next to an implementation is exactly how five of the six #910 cycles formed,
  * and the fix (a leaf types module) is the same either way.
  *
+ * A **dynamic** `import('./x')` is deliberately not an edge. It resolves when
+ * the call is made rather than when the module graph is built, so it cannot
+ * close a load-time cycle — it is one of the two ways to break one (the other
+ * being a registry, as `registerApprovalResumeHandler` does).
+ * `orchestrationNestedRun.ts` reaches the engine that way on purpose.
+ *
  * {@link KNOWN_MUTUAL_IMPORTS} is a baseline of pairs that predate this guard,
  * not an allowlist to grow. Two assertions keep it honest: a pair not on it
  * fails, and a pair on it that no longer exists fails too — so fixing a cycle
