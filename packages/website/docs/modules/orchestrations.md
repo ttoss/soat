@@ -69,6 +69,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 | `project_id`   | string         | Owning project                                   |
 | `name`         | string         | Human-readable name                              |
 | `description`  | string \| null | Optional description                             |
+| `version`      | integer        | Incremented on every write that changes the graph; prior versions are archived (see [Versioning](#versioning)) |
 | `nodes`        | array          | Ordered list of node definitions                 |
 | `edges`        | array          | Directed connections between nodes               |
 | `state_schema` | object         | Optional JSON Schema describing the run state    |
@@ -82,6 +83,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 | ------------------ | -------------- | ----------------------------------------------------------------- |
 | `id`               | string         | Public ID (`orch_run_` prefix)                                    |
 | `orchestration_id` | string         | Parent orchestration                                              |
+| `orchestration_version` | integer \| null | The orchestration version this run executes, fixed when the run started (see [Versioning](#versioning)). `null` for runs created before pinning existed, which execute the live graph |
 | `project_id`       | string         | Owning project                                                    |
 | `status`           | string         | `queued` \| `running` \| `sleeping` \| `awaiting_input` \| `succeeded` \| `failed` \| `cancelled` \| `expired` |
 | `state`            | object         | Current mutable execution state                                   |
@@ -521,6 +523,79 @@ soat validate-orchestration \
   --edges '[{"from":"a","to":"b"}]'
 # → { "valid": true, "errors": [], "warnings": [] }
 ```
+
+### Versioning
+
+An orchestration's graph is versioned by the same append-only archive that backs
+[agent versions](./agents.md#versioning-and-staged-rollout) and
+[guardrail versions](./guardrails.md#versioning). Version 1 is written on create,
+and every subsequent write that **changes** the graph increments `version` and
+archives the new graph as an `OrchestrationVersion`. The versioned surface is
+`nodes`, `edges`, `state_schema` and `input_schema` — the graph the engine
+executes, and nothing else.
+
+**A run executes the version it started on.** `start-orchestration-run` stamps
+the orchestration's current `version` onto the run as `orchestration_version`, and
+every later step of that run — the first drive out of the queue, a wake from
+`sleeping`, a human or approval resume, a redrive after a worker crash — resolves
+its topology from that version rather than from the live orchestration. Editing an
+orchestration therefore never re-shapes a run already in flight, including one
+parked for days on a `delay`, a `poll`, or an `awaiting_input` pause. The live
+columns are a **draft** for runs started from now on.
+
+Before this, every resume path re-read the live row, so deleting a node could
+leave a sleeping run skipping the work it was created to do, and `node_executions`
+could reference node ids from a graph that no longer existed.
+
+Three writes archive nothing, and all three follow from the same rule — a version
+exists to name a distinct graph:
+
+- a metadata-only edit (`name`, `description`);
+- re-writing the graph the orchestration already holds (compared structurally, so
+  key order does not matter);
+- restoring the version that is already live.
+
+`version_label` on a create or update annotates the version that write archives.
+It is not stored on the orchestration and is not part of the config, so labelling
+a change is never itself a change.
+
+| Operation | Endpoint |
+| --- | --- |
+| List versions, newest first | `GET /api/v1/orchestrations/{orchestration_id}/versions` |
+| Fetch one version | `GET /api/v1/orchestrations/{orchestration_id}/versions/{version}` |
+| Roll back to a version | `POST /api/v1/orchestrations/{orchestration_id}/versions/{version}/restore` |
+
+To read the topology a given run actually took, fetch the version its
+`orchestration_version` names:
+
+```bash
+soat get-orchestration-run --orchestration-run-id "$RUN_ID"
+# → { "orchestration_version": 3, ... }
+
+soat get-orchestration-version --orchestration-id "$ORCH_ID" --version 3
+```
+
+**Restore appends, it does not rewind.** Restoring v1 of an orchestration at v2
+writes v1's graph back as **v3**, so a run pinned to v2 still resolves the graph
+it started on. Only the graph rolls back: `name` and `description` are left
+exactly as they are. Runs already in flight are unaffected — a restore is an
+ordinary graph edit, and pinning is what keeps it from reaching them.
+
+A restored graph goes through the same static validation as an authored one. Node
+resource references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run
+reaches the node, not when the graph is written, so restoring a graph whose target
+has since been deleted succeeds and surfaces as a failed run — the same place it
+surfaces when the graph is authored that way in the first place.
+
+Orchestrations have no release/canary layer, unlike agents. A run is pinned for
+its whole life, which can be days; splitting *new* runs across two graphs is a
+coherent idea that nothing has asked for yet.
+
+Pinning is per run, and a `loop` or `sub_orchestration` node starts a **new** run
+of the child orchestration. That child pins the child's current version at the
+moment it starts, not the version its parent was pinned to — so editing a
+sub-orchestration does reach iterations that have not started yet. Version the
+parent and the child together if you need a whole nested pipeline frozen.
 
 ### Node Executions
 

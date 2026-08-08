@@ -8,25 +8,6 @@
 
 index
 connect-third-party-llms
-# review-panel-discussion now runs the panel as an orchestration `tool` node
-# (draft → review → revise) rather than from inside an agent generation, so the
-# original failure — a nested discussion-tool call from a generation dying with
-# `fetch failed` — no longer applies. It stays ignored for a different reason:
-# both agent nodes declare an `output_schema`, and the CI sandbox's
-# qwen2.5:0.5b is not reliable at emitting the required structured JSON, so
-# `draft`/`revise` can fail nondeterministically. Re-enable only after running
-# the tutorials stack locally and confirming the run reaches `succeeded`
-# repeatedly; the deterministic parts (the tool node's pause/dispatch wiring)
-# are already covered by tests/smoke-tests.sh.
-review-panel-discussion
-# orchestrate-a-sonnet-with-workflows exercises on_enter agent dispatch, which
-# runs the generation asynchronously (fire-and-forget) when a task enters a state
-# and routes the outcome via on_complete. Whether the card reaches `review`
-# depends on the sandbox LLM completing in time, so the forward-progress steps
-# are non-deterministic in CI (same class as review-panel-discussion). The
-# workflows/tasks module is covered deterministically by the server unit suite
-# (rest/workflows, rest/tasks, mcp) and the smoke tests.
-orchestrate-a-sonnet-with-workflows
 
 # call-aws-and-gcp-apis-from-an-agent creates tools whose `execute.auth` signs
 # requests with real AWS credentials or mints a GCP service account token. The

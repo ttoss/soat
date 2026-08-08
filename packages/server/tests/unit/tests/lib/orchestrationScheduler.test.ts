@@ -21,6 +21,7 @@ import { authenticatedTestClient } from '../../testClient';
 const fakeRun: MappedOrchestrationRun = {
   id: 'orch_run_fake',
   orchestration_id: 'orch_fake',
+  orchestration_version: 1,
   project_id: 'prj_fake',
   status: 'succeeded',
   state: {},

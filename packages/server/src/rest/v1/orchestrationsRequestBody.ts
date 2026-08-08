@@ -19,6 +19,7 @@ export type RawCreateBody = {
   edges?: unknown;
   state_schema?: unknown;
   input_schema?: unknown;
+  version_label?: unknown;
 };
 
 export type RawUpdateBody = {
@@ -28,6 +29,12 @@ export type RawUpdateBody = {
   edges?: unknown;
   state_schema?: unknown;
   input_schema?: unknown;
+  version_label?: unknown;
+};
+
+/** The tag to attach to the version a write archives, when one was given. */
+export const parseVersionLabel = (raw: unknown): string | undefined => {
+  return typeof raw === 'string' ? raw : undefined;
 };
 
 export const validateCreateBody = (
@@ -64,6 +71,7 @@ export const parseUpdateBody = (body: RawUpdateBody) => {
       body.input_schema !== undefined
         ? (body.input_schema as object | null)
         : undefined,
+    versionLabel: parseVersionLabel(body.version_label),
   };
 };
 
