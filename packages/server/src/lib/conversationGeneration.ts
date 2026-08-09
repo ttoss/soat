@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { createGeneration, type GenerationResult } from './agents';
+import { createGeneration } from './agentGeneration';
+import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';

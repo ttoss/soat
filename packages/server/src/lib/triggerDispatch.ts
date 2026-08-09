@@ -2,7 +2,7 @@ import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { createGeneration } from './agents';
+import { createGeneration } from './agentGeneration';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
 import { startOrchestrationRun } from './orchestrationEngine';

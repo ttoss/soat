@@ -10,7 +10,7 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize } from '@ttoss/postgresdb';
 import { app } from 'src/app';
 import { initializeDatabase } from 'src/db';
-import * as agentsModule from 'src/lib/agents';
+import * as agentGenerationModule from 'src/lib/agentGeneration';
 
 import {
   createTestDatabase,
@@ -22,8 +22,12 @@ beforeEach(() => {
   jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
+// Spies on the module that *defines* `createGeneration`. It used to name
+// `src/lib/agents`, which only re-exported it; that barrel closed three import
+// cycles and is gone (#911), and pointing the spy at the definition is what
+// every caller now imports anyway.
 export const mockCreateGeneration = jest.spyOn(
-  agentsModule,
+  agentGenerationModule,
   'createGeneration'
 );
 

@@ -4,8 +4,8 @@ import createDebug from 'debug';
 import { DomainError } from '../errors';
 import type {
   GenerationResult,
-  pendingGenerations,
-} from './agentGenerationHelpers';
+  PendingGeneration,
+} from './agentGenerationTypes';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { saveRoutingMetadata } from './modelRouteMetadata';
@@ -88,7 +88,7 @@ export const recordGenerationFailure = async (args: {
  */
 export const recordContinuationFailure = async (args: {
   generationId: string;
-  pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
+  pending: PendingGeneration;
   steps: unknown[];
   error: unknown;
 }): Promise<unknown> => {
@@ -117,7 +117,7 @@ export const recordContinuationFailure = async (args: {
 
 type CompletionSideEffectsArgs = {
   generationId: string;
-  pending: NonNullable<ReturnType<typeof pendingGenerations.get>>;
+  pending: PendingGeneration;
   result: {
     steps: unknown[];
     finishReason: string;

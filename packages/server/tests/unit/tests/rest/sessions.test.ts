@@ -1,5 +1,5 @@
 import { db } from '../../../../src/db';
-import * as agentsModule from '../../../../src/lib/agents';
+import * as agentGenerationModule from '../../../../src/lib/agentGeneration';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -1617,7 +1617,7 @@ describe('Sessions', () => {
   describe('POST /api/v1/sessions/:sessionId/tool-outputs - execution', () => {
     let sessionId: string;
     let submitToolOutputsSpy: jest.SpiedFunction<
-      typeof agentsModule.submitToolOutputs
+      typeof agentGenerationModule.submitToolOutputs
     >;
 
     beforeAll(async () => {
@@ -1628,7 +1628,10 @@ describe('Sessions', () => {
     });
 
     beforeEach(() => {
-      submitToolOutputsSpy = jest.spyOn(agentsModule, 'submitToolOutputs');
+      submitToolOutputsSpy = jest.spyOn(
+        agentGenerationModule,
+        'submitToolOutputs'
+      );
     });
 
     afterEach(() => {

@@ -4,7 +4,7 @@ import type { AddressInfo } from 'node:net';
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import { db } from 'src/db';
-import { createGeneration } from 'src/lib/agents';
+import { createGeneration } from 'src/lib/agentGeneration';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { startOrchestrationRun } from 'src/lib/orchestrationEngine';
 import {

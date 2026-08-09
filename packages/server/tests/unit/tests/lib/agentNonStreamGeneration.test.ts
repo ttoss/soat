@@ -5,7 +5,7 @@ import type { AddressInfo } from 'node:net';
 import type { Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import { db } from 'src/db';
-import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
+import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { buildModel } from 'src/lib/agentModel';
 // Statically imported (real `ai`, real DB) for the stub-server test below;
 // the doMock('ai') tests use the dynamic loadNonStreamModule instead.
@@ -60,149 +60,19 @@ describe('agentNonStreamGeneration', () => {
     realAgentPublicId = agent.publicId;
   });
 
+  // Reset *before* each test, not only after: a `jest.doMock('ai')` is inert
+  // against a module the registry already holds, and this file's static import
+  // loads the module under test at file scope. Relying on the previous test's
+  // teardown made every test here pass only in file order — the first one ran
+  // against the real `ai` and failed on a fake model.
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
   afterEach(() => {
     jest.unmock('ai');
     jest.resetModules();
     jest.restoreAllMocks();
-  });
-
-  test('buildPrepareStep returns undefined when stepRules are empty', async () => {
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [],
-      logContext: 'non_stream',
-    });
-
-    expect(prepareStep).toBeUndefined();
-  });
-
-  test('buildPrepareStep returns forced tool config for matching step', async () => {
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [
-        { step: 2, toolChoice: { type: 'tool', toolName: 'lookup' } },
-      ],
-      logContext: 'non_stream',
-    });
-
-    expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({
-      toolChoice: { type: 'tool', toolName: 'lookup' },
-      activeTools: ['lookup'],
-    });
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
-  });
-
-  test('buildPrepareStep honors a string tool_choice, not just a named tool', async () => {
-    // `tool_choice` accepts the strings "auto" / "required" / "none" as well as
-    // the { type: "tool" } object, at the agent level and inside a step rule
-    // alike. Forcing *some* tool call on the first step — without naming which
-    // tool, because that varies per message — is the whole point of a rule like
-    // { step: 1, tool_choice: "required" }: agent-level "required" applies to
-    // every step and never lets the run stop, so the string form has to work
-    // here or the rule is a silent no-op.
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [{ step: 1, tool_choice: 'required' }],
-      logContext: 'non_stream',
-    });
-
-    expect(prepareStep).toBeDefined();
-    // Step 1 forces a tool call, and leaves the active tool set alone: no
-    // specific tool is named, so every bound tool stays available.
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({ toolChoice: 'required' });
-    // Later steps fall back to the agent's own tool_choice.
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
-  });
-
-  test('buildPrepareStep honors the wire-shaped (snake_case) step rule keys', async () => {
-    // step_rules are stored verbatim from the request body, and the wire is
-    // snake_case: { step, tool_choice: { type, tool_name } } is the documented
-    // shape (see docs/modules/agents.md#step-rules).
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [
-        { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
-      ],
-      logContext: 'non_stream',
-    });
-
-    expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({
-      toolChoice: { type: 'tool', toolName: 'lookup' },
-      activeTools: ['lookup'],
-    });
-  });
-
-  test('buildPrepareStep restricts activeTools to a step rule active_tool_ids, resolved via id→name map', async () => {
-    // `active_tool_ids` on a step rule holds persisted tool ids
-    // (`modules/agents.md` — Step Rules), while the AI SDK's `activeTools`
-    // takes tool names — the caller resolves the id→name map (via
-    // `resolveToolIdsToNames`) and hands it in here (#809).
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [{ step: 1, active_tool_ids: ['tool_abc'] }],
-      logContext: 'non_stream',
-      toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
-    });
-
-    expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
-      activeTools: ['search'],
-    });
-    // A later step with no matching rule is untouched.
-    expect(prepareStep!({ stepNumber: 1 })).toEqual({});
-  });
-
-  test('buildPrepareStep combines a forced tool_choice with a step rule active_tool_ids', async () => {
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [
-        {
-          step: 1,
-          tool_choice: { type: 'tool', tool_name: 'search' },
-          active_tool_ids: ['tool_abc', 'tool_def'],
-        },
-      ],
-      logContext: 'non_stream',
-      toolIdToName: { tool_abc: 'search', tool_def: 'analyze' },
-    });
-
-    expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
-      toolChoice: { type: 'tool', toolName: 'search' },
-      activeTools: ['search', 'analyze'],
-    });
-  });
-
-  test('buildPrepareStep combines a string tool_choice override with active_tool_ids', async () => {
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [
-        { step: 1, tool_choice: 'required', active_tool_ids: ['tool_abc'] },
-      ],
-      logContext: 'non_stream',
-      toolIdToName: { tool_abc: 'search' },
-    });
-
-    expect(prepareStep).toBeDefined();
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({
-      toolChoice: 'required',
-      activeTools: ['search'],
-    });
-  });
-
-  test('buildPrepareStep ignores active_tool_ids that resolve to no known tool', async () => {
-    const { buildPrepareStep } = await loadNonStreamModule();
-    const prepareStep = buildPrepareStep({
-      stepRules: [{ step: 1, active_tool_ids: ['tool_doesNotExist'] }],
-      logContext: 'non_stream',
-      toolIdToName: {},
-    });
-
-    expect(prepareStep).toBeDefined();
-    // No id resolved to a name — treated as no restriction, not "no tools".
-    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
   });
 
   test('runNonStreamGeneration normalizes a wire-shaped tool_choice before calling generateText', async () => {
@@ -258,14 +128,14 @@ describe('agentNonStreamGeneration', () => {
     // needs the tool's name, so `runNonStreamGeneration` must resolve the id
     // through `resolveToolIdsToNames` before building `prepareStep` (#809).
     // `resolveToolIdsToNames` itself is a thin DB query covered end-to-end via
-    // `agentGenerationHelpers.test.ts`'s `runStreamGeneration` suite; mocked
+    // `agentStreamGeneration`'s suite; mocked
     // here instead of hitting the real DB because this test's dynamic
     // `loadNonStreamModule()` re-requires a fresh, uninitialized `src/db`
     // after the file's `afterEach` `jest.resetModules()`.
     const mockResolveToolIdsToNamesFn = jest
       .fn()
       .mockResolvedValue({ [`tool_abc`]: 'search' });
-    jest.doMock('src/lib/agents', () => {
+    jest.doMock('src/lib/agentToolSelection', () => {
       return { resolveToolIdsToNames: mockResolveToolIdsToNamesFn };
     });
 

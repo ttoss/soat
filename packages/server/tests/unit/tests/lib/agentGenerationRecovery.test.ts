@@ -23,6 +23,7 @@ describe('recoverPendingFromDb (real DB)', () => {
   let projectDbId: number;
   let agentWithToolsId: string;
   let agentNoToolsId: string;
+  let agentWithMemoryId: string;
 
   const buildPendingState = () => {
     return {
@@ -91,6 +92,20 @@ describe('recoverPendingFromDb (real DB)', () => {
         name: 'Recovery Agent No Tools',
       });
     agentNoToolsId = agentNoToolsRes.body.id;
+
+    const memoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/memories')
+      .send({ project_id: projectPublicId, name: 'Recovery Memory' });
+
+    const agentWithMemoryRes = await authenticatedTestClient(adminToken)
+      .post('/api/v1/agents')
+      .send({
+        project_id: projectPublicId,
+        ai_provider_id: aiProvRes.body.id,
+        name: 'Recovery Agent With Memory',
+        knowledge_config: { write_memory_id: memoryRes.body.id },
+      });
+    agentWithMemoryId = agentWithMemoryRes.body.id;
   });
 
   const seedGeneration = async (args: {
@@ -160,6 +175,29 @@ describe('recoverPendingFromDb (real DB)', () => {
     expect(result).toBeDefined();
     expect(result!.resolvedTools).toEqual({});
     expect(result!.agentConfig.instructions).toBeNull();
+  });
+
+  // A generation that pauses for a client tool keeps its tool surface in the
+  // pending map; recovering the same generation from the DB after a restart
+  // must rebuild the *same* surface. `write_memory` is derived from the agent's
+  // `knowledge_config` rather than from `tool_ids`, so it is the field that
+  // exposes whether the two paths still agree — a resumed run that silently
+  // lost it would answer without the memory tool the agent is configured with.
+  test('rebuilds the knowledge-derived tools, not only the bound ones', async () => {
+    await seedGeneration({
+      publicId: 'gen_recover_memory',
+      agentId: agentWithMemoryId,
+      traceId: 'trc_recover_memory',
+      withPendingState: true,
+    });
+
+    const result = await recoverPendingFromDb({
+      generationId: 'gen_recover_memory',
+      agentId: agentWithMemoryId,
+    });
+
+    expect(result).toBeDefined();
+    expect(Object.keys(result!.resolvedTools)).toContain('write_memory');
   });
 
   test('returns undefined when the generation record does not exist', async () => {

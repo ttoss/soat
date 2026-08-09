@@ -769,6 +769,8 @@ No `tool_choice`, `step_rules`, or `stop_conditions` — everything defaults to 
 
 When the model calls the `client` tool, the generation suspends with `status: "requires_action"`. The caller submits results via `POST /agents/{agent_id}/generate/{generation_id}/tool-outputs` and the loop resumes. See [client tools](./tools.md#client) for the full interaction pattern.
 
+The resumed turn runs with the agent's **full** tool surface — the bound tools narrowed by `active_tool_ids`, plus the `write_memory` tool `knowledge_config.write_memory_id` injects. This holds whether the pause outlived a server restart or not: a generation recovered from its persisted state rebuilds the same surface the live one held.
+
 ---
 
 ### 3. Structured Pipeline (Step Rules)

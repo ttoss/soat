@@ -1,6 +1,5 @@
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import * as agentGenerationModule from 'src/lib/agentGeneration';
 import { expireDueApprovals } from 'src/lib/approvalScheduler';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 import { buildRunAuthHeader } from 'src/lib/orchestrationRunToken';
@@ -1841,21 +1840,23 @@ describe('Tasks', () => {
       const started = new Promise<void>((resolve) => {
         signalStarted = resolve;
       });
-      // Orchestration agent nodes call createGeneration from `agentGeneration`
-      // directly (not via the `agents` re-export the shared mock spies), so gate
-      // that module's export to hold the run genuinely in flight.
-      const genSpy = jest
-        .spyOn(agentGenerationModule, 'createGeneration')
-        .mockImplementation(async () => {
-          signalStarted!();
-          await gate;
-          return {
-            id: 'gen_cancel606',
-            traceId: 'trc_cancel606',
-            status: 'completed',
-            output: { model: 'm', content: 'x', finishReason: 'stop' },
-          };
-        });
+      // Gate the generation so the orchestration run is genuinely in flight
+      // when the manual transition fires. This used to install a second spy on
+      // `agentGeneration` directly, because the shared one named the `agents`
+      // re-export and orchestration agent nodes bypassed it — and restoring
+      // that second spy unwired the shared one for every test after it. The
+      // barrel is gone (#911) and the shared spy names the defining module, so
+      // there is one spy again and nothing to restore.
+      mockCreateGeneration.mockImplementationOnce(async () => {
+        signalStarted!();
+        await gate;
+        return {
+          id: 'gen_cancel606',
+          traceId: 'trc_cancel606',
+          status: 'completed',
+          output: { model: 'm', content: 'x', finishReason: 'stop' },
+        };
+      });
 
       const orchestrationId = (
         await authenticatedTestClient(userToken)
@@ -1929,7 +1930,6 @@ describe('Tasks', () => {
         releaseGen!();
       }
       await flushTaskAutomations();
-      genSpy.mockRestore();
     });
 
     test('a task-dispatched orchestration with a delay node parks durably as `sleeping` and resumes via the scheduler, without an in-process sleep (#855)', async () => {

@@ -1,6 +1,6 @@
 import { db } from '../db';
+import type { MappedAgent } from './agentAccessor';
 import { normalizeKnowledgeConfig } from './agentKnowledge';
-import type { MappedAgent } from './agents';
 import {
   type AgentToolBinding,
   parseWireToolBindings,

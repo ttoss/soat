@@ -5,8 +5,8 @@ import type { AddressInfo } from 'node:net';
 import { jsonSchema, tool } from 'ai';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
-import type { PendingGeneration } from 'src/lib/agentGenerationHelpers';
 import { pendingGenerations } from 'src/lib/agentGenerationHelpers';
+import type { PendingGeneration } from 'src/lib/agentGenerationTypes';
 import { buildModel } from 'src/lib/agentModel';
 import {
   createGenerationRecord,

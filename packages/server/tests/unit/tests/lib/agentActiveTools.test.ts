@@ -1,4 +1,4 @@
-import { narrowToActiveTools } from 'src/lib/agents';
+import { narrowToActiveTools } from 'src/lib/agentToolSelection';
 
 /**
  * `active_tool_ids` is a restriction on which bound tools a generation may use

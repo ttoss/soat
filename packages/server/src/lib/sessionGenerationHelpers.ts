@@ -1,6 +1,6 @@
 import type { db } from '../db';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
-import type { GenerationResult } from './agents';
+import type { GenerationResult } from './agentGenerationTypes';
 import { addConversationMessage } from './conversationMessages';
 import { emitResourceEvent } from './eventBus';
 

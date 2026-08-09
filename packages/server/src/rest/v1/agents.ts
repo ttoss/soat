@@ -2,15 +2,10 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { deleteAgent } from 'src/lib/agentDelete';
 import { normalizeKnowledgeConfig } from 'src/lib/agentKnowledge';
 import type { InlineToolDefinition } from 'src/lib/agents';
-import {
-  createAgent,
-  deleteAgent,
-  getAgent,
-  listAgents,
-  updateAgent,
-} from 'src/lib/agents';
+import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';

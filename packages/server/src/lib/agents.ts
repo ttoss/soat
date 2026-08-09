@@ -1,8 +1,10 @@
-/* eslint-disable max-lines */
-import createDebug from 'debug';
-
 import { db } from '../db';
-import { DomainError } from '../errors';
+import {
+  type AgentRow,
+  agents,
+  getAgentIncludes,
+  type MappedAgent,
+} from './agentAccessor';
 import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
@@ -11,102 +13,31 @@ import {
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
   toWireToolBinding,
-  type WireAgentToolBinding,
 } from './agentToolBindings';
 import {
   type AgentConfigSnapshot,
   agentVersionStore,
   buildAgentConfigSnapshot,
 } from './agentVersionSnapshot';
-import { emitResourceEvent } from './eventBus';
-import { deleteStorageObjects } from './fileStorage';
-import { assertGuardrailsExist } from './guardrails';
 import {
-  assertModelBindingResolvable,
-  resolveModelRouteDbId,
-  validateModelRouteExclusivity,
-} from './modelRoutes';
+  assertAgentReferencesExist,
+  assertModelBinding,
+  requireAiProviderDbId,
+  resolveCreateModelBinding,
+} from './agentWriteValidation';
+import { emitResourceEvent } from './eventBus';
+import { resolveModelRouteDbId } from './modelRoutes';
 import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
-import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
-import { makeResourceAccessor } from './resourceAccessor';
+import { parseActiveRelease } from './releaseAssignment';
 import { type InlineToolDefinition } from './tools';
-import {
-  invalidateTraceContentModeCache,
-  validateAgentTraceContentMode,
-} from './traceContentPolicy';
+import { invalidateTraceContentModeCache } from './traceContentPolicy';
 
-const log = createDebug('soat:agents');
-
-export type { AgentToolBinding, InlineToolDefinition };
-
-// Re-export symbols that callers expect from this module.
-export {
-  createGeneration,
-  type GenerationResult,
-  submitToolOutputs,
-} from './agentGeneration';
-export { resolveUrlPathParams } from './agentToolResolver';
+export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 
 // ── Mapped Types ─────────────────────────────────────────────────────────
 
-export type MappedAgent = {
-  id: string;
-  project_id: string;
-  /** Null when the agent resolves its model through `model_route_id` instead. */
-  ai_provider_id: string | null;
-  /** Null when the agent pins a provider through `ai_provider_id` instead. */
-  model_route_id: string | null;
-  name: string | null;
-  instructions: string | null;
-  model: string | null;
-  tool_bindings: WireAgentToolBinding[] | null;
-  tool_ids: string[] | null;
-  tools: InlineToolDefinition[] | null;
-  max_steps: number | null;
-  tool_choice: string | object | null;
-  stop_conditions: object[] | null;
-  active_tool_ids: string[] | null;
-  step_rules: object[] | null;
-  boundary_policy: object | null;
-  temperature: number | null;
-  knowledge_config: object | null;
-  output_schema: object | null;
-  max_context_messages: number | null;
-  single_session_per_actor: boolean;
-  trace_content_mode: string | null;
-  guardrail_ids: string[] | null;
-  /** Current config version; starts at 1 and bumps on every config change. */
-  version: number;
-  /** Staged rollout in progress, or null when all traffic serves this config. */
-  active_release: ActiveRelease | null;
-  created_at: Date;
-  updated_at: Date;
-};
-
 // ── Map Functions ────────────────────────────────────────────────────────
-
-const getAgentIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.AiProvider, as: 'aiProvider' },
-    { model: db.ModelRoute, as: 'modelRoute' },
-  ];
-};
-
-type AgentRow = InstanceType<typeof db.Agent> & {
-  project: InstanceType<typeof db.Project>;
-  aiProvider: InstanceType<typeof db.AiProvider> | null;
-  modelRoute: InstanceType<typeof db.ModelRoute> | null;
-};
-
-const agents = makeResourceAccessor<AgentRow>({
-  model: () => {
-    return db.Agent;
-  },
-  includes: getAgentIncludes,
-  label: 'Agent',
-});
 
 const mapAgent = (agent: AgentRow): MappedAgent => {
   // Canonical bindings (legacy rows normalize lazily); the deprecated
@@ -183,156 +114,6 @@ type AgentVersionAuthorship = {
   versionLabel?: string | null;
 };
 
-/**
- * The bound tool ids a generation may actually resolve, after applying the
- * agent's `active_tool_ids` restriction (`modules/agents.md` — Active Tools).
- *
- * Shared by the generation and recovery paths so a resumed run is restricted
- * exactly like the run it resumes.
- *
- * Two deliberate fail-open cases, both about not disarming a live agent for a
- * value that cannot express real intent:
- *
- * - **absent / empty** — an empty active set would leave the agent with no
- *   tools at all, which is never a deliberate configuration, and agents stored
- *   `[]` while this field was inert (#811), so honouring it literally would
- *   silently strip their tools on upgrade.
- * - **not an array** — the column is untyped JSON, so a legacy or hand-written
- *   row can hold anything.
- *
- * Inline (ephemeral) tool definitions carry no id, so they can never be named
- * here and are always left active; they are authored on the agent itself
- * alongside this field rather than referenced from the project.
- */
-export const narrowToActiveTools = (args: {
-  toolIds: string[];
-  activeToolIds: unknown;
-}): string[] => {
-  if (!Array.isArray(args.activeToolIds)) return args.toolIds;
-  const allowed = new Set(
-    args.activeToolIds.filter((id): id is string => {
-      return typeof id === 'string';
-    })
-  );
-  if (allowed.size === 0) return args.toolIds;
-  return args.toolIds.filter((id) => {
-    return allowed.has(id);
-  });
-};
-
-/**
- * Rejects an `active_tool_ids` entry that names no tool in the project, so a
- * typo surfaces as a `400` on write instead of silently narrowing the agent's
- * tool surface at generation time. Mirrors `assertGuardrailsExist` — both
- * fields are declared references (`x-soat-ref`) and only one of them used to
- * be checked (#811). A null/empty list is a no-op: it clears the restriction.
- */
-const assertActiveToolsExist = async (args: {
-  activeToolIds: string[] | null | undefined;
-  projectId: number;
-}): Promise<void> => {
-  const ids = args.activeToolIds ?? [];
-  if (ids.length === 0) return;
-
-  const found = await db.Tool.findAll({
-    where: { publicId: ids, projectId: args.projectId },
-    attributes: ['publicId'],
-  });
-  const foundSet = new Set(
-    found.map((tool) => {
-      return tool.publicId;
-    })
-  );
-  const missing = ids.filter((id) => {
-    return !foundSet.has(id);
-  });
-  if (missing.length > 0) {
-    throw new DomainError(
-      'TOOL_NOT_FOUND',
-      `Tool(s) not found in the project: ${missing.join(', ')}.`,
-      { missing }
-    );
-  }
-};
-
-/**
- * Resolves persisted tool ids to their names, for `step_rules[].active_tool_ids`
- * (`modules/agents.md` — Step Rules, #809). The AI SDK's `activeTools` option is
- * keyed by tool **name**, while the persisted rule holds tool **ids** — this is
- * the id→name map `buildPrepareStep` needs to translate one into the other.
- *
- * Unlike `assertActiveToolsExist`, this runs at generation time rather than on
- * write: an id naming no tool in the project (typo, wrong project, a tool
- * deleted after the rule was written) is silently dropped from the map instead
- * of rejected, so a step rule with mixed valid/stale ids still restricts to
- * the ids that resolve rather than failing the whole generation.
- */
-export const resolveToolIdsToNames = async (args: {
-  toolIds: string[];
-  projectId: number;
-}): Promise<Record<string, string>> => {
-  if (args.toolIds.length === 0) return {};
-
-  const found = await db.Tool.findAll({
-    where: { publicId: args.toolIds, projectId: args.projectId },
-    attributes: ['publicId', 'name'],
-  });
-
-  const map: Record<string, string> = {};
-  for (const foundTool of found) {
-    map[foundTool.publicId] = foundTool.name;
-  }
-  return map;
-};
-
-/**
- * Every declared cross-resource reference on an agent write, checked together.
- * Both are no-ops for an absent list, so create and update share one call.
- */
-/**
- * Enforces the project's zero-retention floor: an agent may tighten to `none`
- * but never loosen a `none` project back to `full` (#838). Checked on every
- * write path (create and update alike), so a project-wide mandate cannot be
- * escaped by an agent created afterwards.
- */
-const assertTraceContentModeAllowed = async (args: {
-  traceContentMode: string | null | undefined;
-  projectId: number;
-}): Promise<void> => {
-  if (args.traceContentMode === undefined) return;
-
-  const project = await db.Project.findByPk(args.projectId, {
-    attributes: ['id', 'traceContentMode'],
-  });
-
-  const message = validateAgentTraceContentMode({
-    projectMode: project?.traceContentMode ?? 'none',
-    agentMode: args.traceContentMode,
-  });
-
-  if (message) throw new DomainError('VALIDATION_FAILED', message);
-};
-
-const assertAgentReferencesExist = async (args: {
-  guardrailIds: string[] | null | undefined;
-  activeToolIds: string[] | null | undefined;
-  traceContentMode?: string | null;
-  projectId: number;
-}): Promise<void> => {
-  await assertGuardrailsExist({
-    guardrailIds: args.guardrailIds,
-    projectId: args.projectId,
-  });
-  await assertActiveToolsExist({
-    activeToolIds: args.activeToolIds,
-    projectId: args.projectId,
-  });
-  await assertTraceContentModeAllowed({
-    traceContentMode: args.traceContentMode,
-    projectId: args.projectId,
-  });
-};
-
 // `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
 // path, not copied verbatim.
 const AGENT_SCALAR_FIELDS = [
@@ -362,80 +143,6 @@ const buildAgentUpdates = (
     if (args[field] !== undefined) updates[field] = args[field];
   }
   return updates;
-};
-
-const resolveAiProviderDbId = async (
-  publicId: string
-): Promise<number | null> => {
-  const aiProvider = await db.AiProvider.findOne({ where: { publicId } });
-  return aiProvider ? (aiProvider.id as number) : null;
-};
-
-/**
- * An agent resolves its completion model through **at most one** of a pinned
- * provider or a model route; binding neither inherits the project's
- * `default_model_route_id`. The pure rule lives in `modelRoutes` (shared with
- * the formation module) and this asserts it as the standard `VALIDATION_FAILED`
- * (400); the second guard is the database fact that a project default actually
- * exists to inherit.
- */
-const assertModelBinding = async (args: {
-  projectId: number;
-  modelRouteId: unknown;
-  aiProviderId: unknown;
-  model: unknown;
-}): Promise<void> => {
-  const error = validateModelRouteExclusivity(args);
-  if (error) throw new DomainError('VALIDATION_FAILED', error);
-
-  await assertModelBindingResolvable({
-    projectId: args.projectId,
-    aiProviderId: args.aiProviderId,
-    modelRouteId: args.modelRouteId,
-    resourceLabel: 'agent',
-  });
-};
-
-const requireAiProviderDbId = async (publicId: string): Promise<number> => {
-  const dbId = await resolveAiProviderDbId(publicId);
-  if (!dbId) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider '${publicId}' not found.`
-    );
-  }
-  return dbId;
-};
-
-/**
- * Resolves the create-time model binding: at most one of a pinned provider or a
- * model route, both stored as internal ids. Both null means the agent inherits
- * its project's default route.
- */
-const resolveCreateModelBinding = async (args: {
-  projectId: number;
-  aiProviderId?: string;
-  modelRouteId?: string;
-  model?: string;
-}): Promise<{ aiProviderId: number | null; modelRouteId: number | null }> => {
-  await assertModelBinding({
-    projectId: args.projectId,
-    modelRouteId: args.modelRouteId,
-    aiProviderId: args.aiProviderId,
-    model: args.model,
-  });
-
-  return {
-    aiProviderId: args.aiProviderId
-      ? await requireAiProviderDbId(args.aiProviderId)
-      : null,
-    modelRouteId: args.modelRouteId
-      ? await resolveModelRouteDbId({
-          modelRouteId: args.modelRouteId,
-          projectId: args.projectId,
-        })
-      : null,
-  };
 };
 
 // ── Agent CRUD ───────────────────────────────────────────────────────────
@@ -711,155 +418,4 @@ export const updateAgent = async (
   });
 
   return mapped;
-};
-
-const findDependentIds = async (args: {
-  agentId: number;
-}): Promise<{
-  generationIds: number[];
-  traceIds: number[];
-  fileIds: number[];
-}> => {
-  const [generationRows, traceRows] = await Promise.all([
-    db.Generation.findAll({
-      where: { agentId: args.agentId },
-      attributes: ['id'],
-    }),
-    db.Trace.findAll({
-      where: { agentId: args.agentId },
-      attributes: ['id', 'fileId'],
-    }),
-  ]);
-
-  return {
-    generationIds: generationRows.map((row) => {
-      return row.id as number;
-    }),
-    traceIds: traceRows.map((row) => {
-      return row.id as number;
-    }),
-    fileIds: traceRows
-      .map((row) => {
-        return row.fileId;
-      })
-      .filter((fileId): fileId is number => {
-        return fileId !== null;
-      }),
-  };
-};
-
-// Deletes an agent's generations/traces along with it. Cross-references from
-// OTHER agents' rows into the ones being deleted (self-referencing FKs on
-// Generation.initiatorGenerationId and Trace.parentTraceId/rootTraceId) are
-// nulled out first, since those FKs are RESTRICT. Traces own a File holding
-// their serialized steps (see `saveTrace`); those File rows are destroyed
-// alongside the traces, and their storage objects are cleaned up once the
-// transaction commits (see #835 — the row must be gone before the object is,
-// otherwise a concurrent read could reference bytes mid-delete).
-const forceDeleteAgentWithDependents = async (args: {
-  agent: InstanceType<typeof db.Agent>;
-  agentId: number;
-}): Promise<void> => {
-  const { generationIds, traceIds, fileIds } = await findDependentIds({
-    agentId: args.agentId,
-  });
-
-  const files =
-    fileIds.length > 0
-      ? await db.File.findAll({
-          where: { id: fileIds },
-          attributes: ['storagePath', 'storageType'],
-        })
-      : [];
-
-  await db.sequelize.transaction(async (transaction) => {
-    if (generationIds.length > 0) {
-      await db.Generation.update(
-        { initiatorGenerationId: null },
-        { where: { initiatorGenerationId: generationIds }, transaction }
-      );
-    }
-    if (traceIds.length > 0) {
-      await db.Trace.update(
-        { parentTraceId: null },
-        { where: { parentTraceId: traceIds }, transaction }
-      );
-      await db.Trace.update(
-        { rootTraceId: null },
-        { where: { rootTraceId: traceIds }, transaction }
-      );
-    }
-
-    await db.Generation.destroy({
-      where: { agentId: args.agentId },
-      transaction,
-    });
-    await db.Trace.destroy({ where: { agentId: args.agentId }, transaction });
-    if (fileIds.length > 0) {
-      await db.File.destroy({ where: { id: fileIds }, transaction });
-    }
-    // Archived configs are owned by the agent; remove them before the parent so
-    // no orphan version rows are left behind.
-    await agentVersionStore.deleteVersions({
-      resourceDbId: args.agentId,
-      transaction,
-    });
-    await args.agent.destroy({ transaction });
-  });
-
-  await deleteStorageObjects(
-    files.map((file) => {
-      return { storagePath: file.storagePath, storageType: file.storageType };
-    })
-  );
-};
-
-export const deleteAgent = async (args: {
-  projectIds?: number[];
-  id: string;
-  force?: boolean;
-}): Promise<void> => {
-  log('deleteAgent: id=%s force=%s', args.id, Boolean(args.force));
-
-  const agent = await agents.getByPublicId(args);
-
-  const agentId = agent.id as number;
-
-  const [generationCount, traceCount] = await Promise.all([
-    db.Generation.count({ where: { agentId } }),
-    db.Trace.count({ where: { agentId } }),
-  ]);
-
-  if (generationCount > 0 || traceCount > 0) {
-    if (!args.force) {
-      throw new DomainError(
-        'AGENT_HAS_DEPENDENTS',
-        `Agent '${args.id}' has dependent generations or traces and cannot be deleted.`,
-        { generationCount, traceCount }
-      );
-    }
-
-    log(
-      'deleteAgent: force-cascading id=%s generations=%d traces=%d',
-      args.id,
-      generationCount,
-      traceCount
-    );
-
-    await forceDeleteAgentWithDependents({ agent, agentId });
-  } else {
-    // Archived configs are owned by the agent, so they go first (the FK is
-    // RESTRICT); Actor.agentId is cleared automatically by the DB via
-    // onDelete: 'SET NULL' on its own FK.
-    await db.AgentVersion.destroy({ where: { agentId } });
-    await agent.destroy();
-  }
-
-  emitResourceEvent({
-    type: 'agents.deleted',
-    projectId: agent.projectId,
-    resourceType: 'agent',
-    resourceId: args.id,
-    data: { id: args.id },
-  });
 };

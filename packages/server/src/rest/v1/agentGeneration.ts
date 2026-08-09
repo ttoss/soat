@@ -8,8 +8,8 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import type { GenerationResult } from 'src/lib/agentGeneration';
+import { createGeneration, submitToolOutputs } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
-import { createGeneration, submitToolOutputs } from 'src/lib/agents';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateGenerationMetadata } from 'src/lib/generationMetadata';
 import {

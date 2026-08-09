@@ -1,8 +1,8 @@
 import type { AuthUser } from '../Context';
 import { db } from '../db';
 import { DomainError } from '../errors';
+import { submitToolOutputs } from './agentGeneration';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
-import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
 import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
