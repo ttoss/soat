@@ -5,11 +5,9 @@ import { DomainError } from '../errors';
 import type { SoatEvent } from './eventBus';
 import { emitResourceEvent, onEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
-import {
-  camelToSnakeKey,
-  convertKeys,
-  isPlainObject,
-} from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
+import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:exceptions');
 
@@ -50,15 +48,6 @@ type ExceptionInstance = InstanceType<(typeof db)['ExceptionItem']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
   acknowledgedByUser?: InstanceType<(typeof db)['User']> | null;
   resolvedByUser?: InstanceType<(typeof db)['User']> | null;
-};
-
-const isUniqueViolation = (error: unknown): boolean => {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    (error as { name?: unknown }).name === 'SequelizeUniqueConstraintError'
-  );
 };
 
 // Built lazily inside each query: `db.*` models are only populated after the

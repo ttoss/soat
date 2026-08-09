@@ -1,4 +1,5 @@
 import { DomainError } from '../errors';
+import { isPlainObject } from './plainObject';
 
 /**
  * Credential strategies for `http` tools. AWS and GCP are ordinary HTTPS+JSON
@@ -29,12 +30,6 @@ export type HttpToolAuthConfig =
   AwsSigV4AuthConfig | GcpServiceAccountAuthConfig;
 
 const AUTH_TYPES = ['aws_sigv4', 'gcp_service_account'] as const;
-
-export const isPlainObject = (
-  value: unknown
-): value is Record<string, unknown> => {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-};
 
 export const asString = (value: unknown): string | undefined => {
   return typeof value === 'string' && value ? value : undefined;

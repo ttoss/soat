@@ -1,5 +1,6 @@
 import { db } from '../db';
 import { emitResourceEvent } from './eventBus';
+import { mergeTags } from './tags';
 
 // Both functions are only ever called by the session-tags REST routes
 // (sessionSubResources.ts), which resolve the session's existence via
@@ -27,11 +28,11 @@ export const updateSessionTags = async (args: {
     where: { publicId: args.sessionId, agentId: args.agentId },
   }))!;
 
-  if (args.merge) {
-    session.tags = { ...(session.tags ?? {}), ...args.tags };
-  } else {
-    session.tags = args.tags;
-  }
+  session.tags = mergeTags({
+    current: session.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
 
   await session.save();
 

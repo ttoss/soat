@@ -33,6 +33,8 @@ import {
   type PlanResult,
   planResultToWire,
 } from './formationsTypes';
+import type { ResourceIncludes } from './modelIncludes';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:formations');
 
@@ -55,11 +57,13 @@ export {
 
 // ── Mapping ───────────────────────────────────────────────────────────────
 
+type FormationRow = InstanceType<(typeof db)['Formation']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  formationResources?: InstanceType<(typeof db)['FormationResource']>[];
+};
+
 const mapFormation = (
-  instance: InstanceType<(typeof db)['Formation']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    formationResources?: InstanceType<(typeof db)['FormationResource']>[];
-  },
+  instance: FormationRow,
   includeResources = false
 ): MappedFormation => {
   const resources: MappedFormationResource[] | undefined = includeResources
@@ -90,8 +94,8 @@ const mapFormation = (
   };
 };
 
-const getFormationIncludes = (includeResources = false) => {
-  const includes: object[] = [{ model: db.Project, as: 'project' }];
+const getFormationIncludes = (includeResources = false): ResourceIncludes => {
+  const includes: ResourceIncludes = [{ model: db.Project, as: 'project' }];
   if (includeResources) {
     includes.push({
       model: db.FormationResource,
@@ -100,6 +104,23 @@ const getFormationIncludes = (includeResources = false) => {
   }
   return includes;
 };
+
+/**
+ * Every single-formation read wants the resources joined, so the accessor
+ * pins that shape; the list query keeps the lighter one.
+ */
+const formations = makeResourceAccessor<FormationRow>({
+  model: () => {
+    return db.Formation;
+  },
+  includes: () => {
+    return getFormationIncludes(true);
+  },
+  label: 'Formation',
+});
+
+/** A deleted formation reads as absent on every single-formation lookup. */
+const NOT_DELETED = { status: { [Op.ne]: 'deleted' } };
 
 // ── Public API ────────────────────────────────────────────────────────────
 
@@ -122,7 +143,7 @@ export const planFormation = async (args: {
     if (formation) {
       existingResources = await db.FormationResource.findAll({
         where: {
-          formationId: (formation as unknown as { id: number }).id,
+          formationId: formation.id as number,
         },
       });
       for (const r of existingResources) {
@@ -212,7 +233,7 @@ export const createFormation = async (args: {
   );
 
   const operation = await db.FormationOperation.create({
-    formationId: (formation as unknown as { id: number }).id,
+    formationId: formation.id as number,
     operationType: 'create',
     status: 'running',
     events: null,
@@ -235,21 +256,15 @@ export const createFormation = async (args: {
     parameters: args.parameters,
   });
 
-  const refreshed = await db.Formation.findOne({
-    where: { id: (formation as unknown as { id: number }).id },
-    include: getFormationIncludes(true),
-  });
+  const refreshed = await formations.reload(formation);
 
   log(
     'createFormation: formation completed formationId=%s status=%s',
     formation.publicId,
-    refreshed?.status
+    refreshed.status
   );
 
-  return mapFormation(
-    refreshed as unknown as Parameters<typeof mapFormation>[0],
-    true
-  );
+  return mapFormation(refreshed, true);
 };
 
 export const listFormations = async (args: {
@@ -271,7 +286,7 @@ export const listFormations = async (args: {
       });
     },
     map: (f) => {
-      return mapFormation(f as unknown as Parameters<typeof mapFormation>[0]);
+      return mapFormation(f as FormationRow);
     },
   });
 };
@@ -279,19 +294,11 @@ export const listFormations = async (args: {
 export const getFormation = async (args: {
   id: string;
 }): Promise<MappedFormation> => {
-  const formation = await db.Formation.findOne({
-    where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
-    include: getFormationIncludes(true),
+  const formation = await formations.getByPublicId({
+    id: args.id,
+    where: NOT_DELETED,
   });
-  if (!formation)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Formation '${args.id}' not found.`
-    );
-  return mapFormation(
-    formation as unknown as Parameters<typeof mapFormation>[0],
-    true
-  );
+  return mapFormation(formation, true);
 };
 
 export const updateFormation = async (args: {
@@ -320,7 +327,7 @@ export const updateFormation = async (args: {
     args.template ?? (formation.template as FormationTemplate);
 
   const operation = await db.FormationOperation.create({
-    formationId: (formation as unknown as { id: number }).id,
+    formationId: formation.id as number,
     operationType: 'update',
     status: 'running',
     events: null,
@@ -336,7 +343,7 @@ export const updateFormation = async (args: {
   }
 
   const existingResources = await db.FormationResource.findAll({
-    where: { formationId: (formation as unknown as { id: number }).id },
+    where: { formationId: formation.id as number },
   });
 
   await applyFormationTemplate({
@@ -348,15 +355,9 @@ export const updateFormation = async (args: {
     parameters: args.parameters,
   });
 
-  const refreshed = await db.Formation.findOne({
-    where: { id: (formation as unknown as { id: number }).id },
-    include: getFormationIncludes(true),
-  });
+  const refreshed = await formations.reload(formation);
 
-  return mapFormation(
-    refreshed as unknown as Parameters<typeof mapFormation>[0],
-    true
-  );
+  return mapFormation(refreshed, true);
 };
 
 export const deleteFormation = async (args: {
@@ -374,7 +375,7 @@ export const deleteFormation = async (args: {
   await formation.update({ status: 'deleting' });
 
   const operation = await db.FormationOperation.create({
-    formationId: (formation as unknown as { id: number }).id,
+    formationId: formation.id as number,
     operationType: 'delete',
     status: 'running',
     events: null,
@@ -383,7 +384,7 @@ export const deleteFormation = async (args: {
   });
 
   const existingResources = await db.FormationResource.findAll({
-    where: { formationId: (formation as unknown as { id: number }).id },
+    where: { formationId: formation.id as number },
   });
 
   const orderedResources = buildDeleteOrder(
@@ -423,7 +424,7 @@ export const listFormationEvents = async (args: {
     offset: args.offset,
     query: (pagination) => {
       return db.FormationOperation.findAndCountAll({
-        where: { formationId: (formation as unknown as { id: number }).id },
+        where: { formationId: formation.id as number },
         order: [['createdAt', 'ASC']],
         limit: pagination.limit,
         offset: pagination.offset,

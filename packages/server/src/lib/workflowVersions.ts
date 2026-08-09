@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import {
@@ -7,7 +5,7 @@ import {
   configObject,
   makeVersionArchive,
   mapArchivedVersionFields,
-  type VersionedResourceRef,
+  toResourceRef,
 } from './resourceVersions';
 import {
   type MappedWorkflow,
@@ -17,8 +15,6 @@ import {
 } from './workflows';
 import { workflowCollectionToCamel } from './workflowsWire';
 import { workflowVersionStore } from './workflowVersionSnapshot';
-
-const log = createDebug('soat:workflows');
 
 /**
  * Workflow state-machine version history (issue #882).
@@ -92,14 +88,6 @@ const archivedCollection = <T>(value: unknown): T[] => {
   return workflowCollectionToCamel<T>(value) ?? [];
 };
 
-const toResourceRef = (workflow: WorkflowInstance): VersionedResourceRef => {
-  return {
-    dbId: workflow.id as number,
-    publicId: workflow.publicId,
-    version: workflow.version,
-  };
-};
-
 /**
  * The workflow adapter over the shared archive. `applyConfig` routes through
  * `updateWorkflow` rather than touching columns, so a restored definition goes
@@ -144,8 +132,6 @@ export const listWorkflowVersions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  log('listWorkflowVersions: workflowId=%s', args.workflowId);
-
   return workflowVersionArchive.listVersions({
     resourceId: args.workflowId,
     limit: args.limit,
@@ -157,12 +143,6 @@ export const getWorkflowVersion = async (args: {
   workflowId: string;
   version: number;
 }) => {
-  log(
-    'getWorkflowVersion: workflowId=%s version=%d',
-    args.workflowId,
-    args.version
-  );
-
   return workflowVersionArchive.getVersion({
     resourceId: args.workflowId,
     version: args.version,
@@ -175,12 +155,6 @@ export const restoreWorkflowVersion = async (args: {
   label?: string | null;
   createdByUserId?: number | null;
 }): Promise<MappedWorkflow> => {
-  log(
-    'restoreWorkflowVersion: workflowId=%s version=%d',
-    args.workflowId,
-    args.version
-  );
-
   // Appends a new version rather than rewinding the counter, so a task pinned to
   // any version in between still resolves the machine it entered on. Tasks
   // already in flight are untouched: a restore is an ordinary definition edit,

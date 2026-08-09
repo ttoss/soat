@@ -7,11 +7,14 @@ import {
   buildActorListWhere,
 } from './actorFilters';
 import { createMemory } from './memories';
+import type { ResourceIncludes } from './modelIncludes';
 import { emptyPage, paginatedList } from './pagination';
 import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { makeResourceAccessor } from './resourceAccessor';
+import { mergeTags } from './tags';
 
 const log = createDebug('soat:actors');
 
@@ -29,14 +32,14 @@ const getLinkedPublicId = (
   return linked?.publicId ?? null;
 };
 
-const mapActor = (
-  actor: InstanceType<(typeof db)['Actor']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']> | null;
-    chat?: InstanceType<(typeof db)['Chat']> | null;
-    memory?: InstanceType<(typeof db)['Memory']> | null;
-  }
-) => {
+type ActorRow = InstanceType<(typeof db)['Actor']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  agent?: InstanceType<(typeof db)['Agent']> | null;
+  chat?: InstanceType<(typeof db)['Chat']> | null;
+  memory?: InstanceType<(typeof db)['Memory']> | null;
+};
+
+const mapActor = (actor: ActorRow) => {
   return {
     id: actor.publicId,
     project_id: actor.project?.publicId,
@@ -52,7 +55,7 @@ const mapActor = (
   };
 };
 
-const actorIncludes = () => {
+const actorIncludes = (): ResourceIncludes => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.Agent, as: 'agent' },
@@ -60,6 +63,14 @@ const actorIncludes = () => {
     { model: db.Memory, as: 'memory' },
   ];
 };
+
+const actors = makeResourceAccessor<ActorRow>({
+  model: () => {
+    return db.Actor;
+  },
+  includes: actorIncludes,
+  label: 'Actor',
+});
 
 export const validateActorExclusivity = (args: {
   agentId: unknown;
@@ -201,19 +212,7 @@ export const listActors = async (args: {
 };
 
 export const getActor = async (args: { id: string }) => {
-  const actor = await db.Actor.findOne({
-    where: { publicId: args.id },
-    include: actorIncludes(),
-  });
-
-  if (!actor) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Actor '${args.id}' not found.`
-    );
-  }
-
-  return mapActor(actor);
+  return mapActor(await actors.getByPublicId({ id: args.id }));
 };
 
 export const createActor = async (args: {
@@ -259,13 +258,10 @@ export const createActor = async (args: {
     memoryId: resolvedMemoryId,
   });
 
-  const actorWithProject = await db.Actor.findOne({
-    where: { id: actor.id },
-    include: actorIncludes(),
-  });
+  const created = await actors.reload(actor);
 
-  log('createActor: created actor id=%s', actorWithProject!.publicId);
-  return mapActor(actorWithProject!);
+  log('createActor: created actor id=%s', created.publicId);
+  return mapActor(created);
 };
 
 const attachMemoryToActor = async (args: {
@@ -325,25 +321,13 @@ export const findOrCreateActor = async (args: {
     });
   }
 
-  const actorWithProject = await db.Actor.findOne({
-    where: { id: actor.id },
-    include: actorIncludes(),
-  });
-
-  return { actor: mapActor(actorWithProject!), created };
+  return { actor: mapActor(await actors.reload(actor)), created };
 };
 
 export const deleteActor = async (args: { id: string }) => {
   log('deleteActor: id=%s', args.id);
 
-  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
-
-  if (!actor) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Actor '${args.id}' not found.`
-    );
-  }
+  const actor = await actors.getByPublicId({ id: args.id });
 
   const messageCount = await db.ConversationMessage.count({
     where: { actorId: actor.id as number },
@@ -370,13 +354,7 @@ export const updateActor = async (args: {
 }) => {
   log('updateActor %o', args);
 
-  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
-  if (!actor) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Actor '${args.id}' not found.`
-    );
-  }
+  const actor = await actors.getByPublicId({ id: args.id });
 
   const updates = buildActorUpdates({
     name: args.name,
@@ -405,23 +383,11 @@ export const updateActor = async (args: {
   }
 
   await actor.update(updates);
-  const actorWithProject = await db.Actor.findOne({
-    where: { id: actor.id },
-    include: actorIncludes(),
-  });
-  return mapActor(actorWithProject!);
+  return mapActor(await actors.reload(actor));
 };
 
 export const getActorTags = async (args: { id: string }) => {
-  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
-
-  if (!actor) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Actor '${args.id}' not found.`
-    );
-  }
-
+  const actor = await actors.getByPublicId({ id: args.id });
   return actor.tags ?? {};
 };
 
@@ -430,24 +396,14 @@ export const updateActorTags = async (args: {
   tags: Record<string, string>;
   merge?: boolean;
 }) => {
-  const actor = await db.Actor.findOne({ where: { publicId: args.id } });
+  const actor = await actors.getByPublicId({ id: args.id });
 
-  if (!actor) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Actor '${args.id}' not found.`
-    );
-  }
-
-  const newTags = args.merge
-    ? { ...(actor.tags ?? {}), ...args.tags }
-    : args.tags;
+  const newTags = mergeTags({
+    current: actor.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
   await actor.update({ tags: newTags });
 
-  const actorWithProject = await db.Actor.findOne({
-    where: { id: actor.id },
-    include: actorIncludes(),
-  });
-
-  return mapActor(actorWithProject!);
+  return mapActor(await actors.reload(actor));
 };

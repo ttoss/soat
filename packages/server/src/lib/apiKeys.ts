@@ -1,10 +1,9 @@
-import crypto from 'node:crypto';
-
 import { API_KEY_RAW_PREFIX } from '@soat/postgresdb';
 import bcrypt from 'bcryptjs';
 
 import { db } from '../db';
 import { paginatedList } from './pagination';
+import { generateSecretValue } from './secrets';
 
 type ApiKeyWithAssociations = InstanceType<(typeof db)['ApiKey']> & {
   user: InstanceType<(typeof db)['User']> | null;
@@ -63,7 +62,7 @@ export const createApiKey = async (args: {
   projectId?: number | null;
   policyIds?: number[];
 }) => {
-  const random = crypto.randomBytes(32).toString('hex');
+  const random = generateSecretValue();
   const key = `${API_KEY_RAW_PREFIX}${random}`;
   const keyPrefix = key.slice(0, 8);
   const keyHash = await bcrypt.hash(key, 10);

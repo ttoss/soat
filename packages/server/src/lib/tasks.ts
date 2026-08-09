@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { emitResourceEvent, resolveProjectPublicId } from './eventBus';
+import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { runStateAutomation } from './tasksAutomation';
@@ -85,7 +86,7 @@ export const computeStallDeadline = (args: {
   return new Date(args.enteredStateAt.getTime() + seconds * 1000);
 };
 
-const taskIncludes = () => {
+export const taskIncludes = (): ResourceIncludes => {
   return [
     { model: db.Project, as: 'project' },
     { model: db.Workflow, as: 'workflow' },
@@ -101,7 +102,7 @@ export const findTaskInstance = async (args: {
   })) as TaskInstance | null;
 };
 
-export const findTask = async (args: { id: string }) => {
+const findTask = async (args: { id: string }) => {
   const task = await findTaskInstance({ id: args.id });
   return task ? mapTask(task) : null;
 };

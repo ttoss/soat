@@ -3,16 +3,14 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { createScheduler, createSweep } from './scheduler';
-import { emitTaskEvent, mapTask, type TaskInstance } from './tasks';
+import {
+  emitTaskEvent,
+  mapTask,
+  taskIncludes,
+  type TaskInstance,
+} from './tasks';
 
 const log = createDebug('soat:tasks');
-
-const taskIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.Workflow, as: 'workflow' },
-  ];
-};
 
 /**
  * Finds open tasks whose stall deadline is due (`status = 'open'` and

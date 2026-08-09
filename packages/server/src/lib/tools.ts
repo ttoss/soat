@@ -3,11 +3,13 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { assertGuardrailsExist } from './guardrails';
+import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import {
   assertPipelineStepToolsValid,
   validatePipelineConfig,
 } from './pipelineTools';
+import { makeResourceAccessor } from './resourceAccessor';
 import {
   assertNoInvalidTemplateTokens,
   assertSecretRefsExist,
@@ -48,7 +50,7 @@ const camelToKebab = (value: string): string => {
   return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 };
 
-export const validateSoatActions = (actions: string[] | null | undefined) => {
+const validateSoatActions = (actions: string[] | null | undefined) => {
   if (!actions) return;
   const unknown = actions.filter((action) => {
     return !KNOWN_SOAT_ACTIONS.has(action);
@@ -91,15 +93,23 @@ export type MappedTool = {
 
 // ── Map Helpers ───────────────────────────────────────────────────────────
 
-const getToolIncludes = () => {
+const getToolIncludes = (): ResourceIncludes => {
   return [{ model: db.Project, as: 'project' }];
 };
 
-const mapTool = (
-  tool: InstanceType<typeof db.Tool> & {
-    project: InstanceType<typeof db.Project>;
-  }
-): MappedTool => {
+type ToolRow = InstanceType<typeof db.Tool> & {
+  project: InstanceType<typeof db.Project>;
+};
+
+const tools = makeResourceAccessor<ToolRow>({
+  model: () => {
+    return db.Tool;
+  },
+  includes: getToolIncludes,
+  label: 'Tool',
+});
+
+const mapTool = (tool: ToolRow): MappedTool => {
   return {
     id: tool.publicId,
     project_id: tool.project.publicId,
@@ -236,12 +246,7 @@ export const createTool = async (args: CreateToolArgs): Promise<MappedTool> => {
 
   const tool = await db.Tool.create(buildToolCreateAttributes(args));
 
-  const created = await db.Tool.findOne({
-    where: { id: (tool as unknown as { id: number }).id },
-    include: getToolIncludes(),
-  });
-
-  return mapTool(created as unknown as Parameters<typeof mapTool>[0]);
+  return mapTool(await tools.reload(tool));
 };
 
 export const listTools = async (args: {
@@ -268,37 +273,16 @@ export const listTools = async (args: {
       });
     },
     map: (t) => {
-      return mapTool(t as unknown as Parameters<typeof mapTool>[0]);
+      return mapTool(t as ToolRow);
     },
   });
-};
-
-const findToolInstance = async (args: {
-  projectIds?: number[];
-  id: string;
-}) => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const tool = await db.Tool.findOne({
-    where,
-    include: getToolIncludes(),
-  });
-
-  if (!tool)
-    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
-
-  return tool;
 };
 
 export const getTool = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<MappedTool> => {
-  const tool = await findToolInstance(args);
-  return mapTool(tool as unknown as Parameters<typeof mapTool>[0]);
+  return mapTool(await tools.getByPublicId(args));
 };
 
 const buildToolUpdates = (args: {
@@ -384,15 +368,7 @@ const validateToolUpdate = async (params: {
 };
 
 export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const tool = await db.Tool.findOne({ where });
-
-  if (!tool)
-    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
+  const tool = await tools.getByPublicId(args);
 
   await validateToolUpdate({ args, tool });
   await assertGuardrailsExist({
@@ -402,28 +378,14 @@ export const updateTool = async (args: ToolUpdateArgs): Promise<MappedTool> => {
 
   await tool.update(buildToolUpdates(args));
 
-  const updated = await db.Tool.findOne({
-    where: { id: (tool as unknown as { id: number }).id },
-    include: getToolIncludes(),
-  });
-
-  return mapTool(updated as unknown as Parameters<typeof mapTool>[0]);
+  return mapTool(await tools.reload(tool));
 };
 
 export const deleteTool = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<void> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const tool = await db.Tool.findOne({ where });
-
-  if (!tool)
-    throw new DomainError('RESOURCE_NOT_FOUND', `Tool '${args.id}' not found.`);
-
+  const tool = await tools.getByPublicId(args);
   await tool.destroy();
 };
 
@@ -463,13 +425,11 @@ export const callTool = async (args: {
   // so a redelivered orchestration node call can be deduped downstream.
   idempotencyKey?: string;
 }): Promise<unknown> => {
-  const toolInstance = await findToolInstance({
+  const toolInstance = await tools.getByPublicId({
     projectIds: args.projectIds,
     id: args.id,
   });
-  const foundTool = mapTool(
-    toolInstance as unknown as Parameters<typeof mapTool>[0]
-  );
+  const foundTool = mapTool(toolInstance);
 
   return callResolvedTool({
     tool: toCallableTool(foundTool),

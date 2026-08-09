@@ -239,7 +239,7 @@ const mapOrchestration = (
   };
 };
 
-export const mapNodeExecution = (
+const mapNodeExecution = (
   exec: InstanceType<typeof db.OrchestrationNodeExecution>
 ): MappedNodeExecution => {
   return {

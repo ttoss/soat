@@ -15,7 +15,8 @@ import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
 import type { ToolNodeGateResult } from './orchestrationToolGuardrail';
 import { runToolNodeGate } from './orchestrationToolGuardrail';
-import { isPlainObject, stripMarkdownJsonFence } from './outputSchema';
+import { stripMarkdownJsonFence } from './outputSchema';
+import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
 
 const log = createDebug('soat:orchestrations');

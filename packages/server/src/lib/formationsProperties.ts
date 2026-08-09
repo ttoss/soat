@@ -15,10 +15,8 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import {
-  isPlainObject,
-  normalizePropertyKeys,
-} from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
+import { normalizePropertyKeys } from './resource-inputs/normalizers';
 
 /**
  * Puts a resource declaration's top-level property keys into the snake_case the

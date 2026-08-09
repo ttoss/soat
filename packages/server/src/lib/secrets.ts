@@ -53,6 +53,34 @@ export const decryptValue = (ciphertext: string): string => {
   return decipher.update(encrypted) + decipher.final('utf8');
 };
 
+/**
+ * A 32-byte random value, hex-encoded. The shared source for every
+ * server-minted secret (trigger secrets, webhook secrets, API keys).
+ */
+export const generateSecretValue = (): string => {
+  return crypto.randomBytes(32).toString('hex');
+};
+
+/**
+ * Rows created before secret-at-rest encryption store the raw secret.
+ * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
+ * so fall back to treating it as plaintext. Rotating or recreating the
+ * secret re-encrypts it going forward.
+ *
+ * Delete this fallback — in one place — once the backfill lands.
+ */
+export const decryptMaybeLegacySecret = (args: {
+  stored: string;
+  label: string;
+}): string => {
+  try {
+    return decryptValue(args.stored);
+  } catch {
+    log('%s: value is not encrypted (legacy row)', args.label);
+    return args.stored;
+  }
+};
+
 const mapSecret = (
   instance: InstanceType<(typeof db)['Secret']> & {
     project?: InstanceType<(typeof db)['Project']>;
@@ -157,7 +185,7 @@ const SECRET_REF_RE = /\{\{secret:(sec_[A-Za-z0-9]+)\}\}/g;
  * Collects the public IDs of all secrets referenced by `{{secret:...}}`
  * tokens anywhere inside a value (deep-walks strings, arrays, and objects).
  */
-export const collectSecretRefs = (value: unknown): string[] => {
+const collectSecretRefs = (value: unknown): string[] => {
   if (typeof value === 'string') {
     return [...value.matchAll(SECRET_REF_RE)].map((m) => {
       return m[1];

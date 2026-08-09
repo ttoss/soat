@@ -1,9 +1,9 @@
+import { isPlainObject } from 'src/lib/plainObject';
 import {
   camelToSnakeKey,
   coalesce,
   convertKeys,
   convertKeysDeep,
-  isPlainObject,
   normalizePropertyKeys,
   snakeToCamelKey,
 } from 'src/lib/resource-inputs/normalizers';

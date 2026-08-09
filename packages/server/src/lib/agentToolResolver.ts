@@ -24,6 +24,7 @@ import {
 } from './agentToolResolverExternalTools';
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { isPlainObject } from './plainObject';
 import {
   resolveSecretRefsInRecord,
   resolveSecretRefsInString,
@@ -201,10 +202,6 @@ const logToolCallingError = (args: {
     args.method,
     toToolErrorText({ error: args.error })
   );
-};
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
 };
 
 const parseHeaders = (args: {
@@ -876,15 +873,6 @@ const resolveToolByType = async (
   }
 };
 
-/**
- * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
- * tool — reusing the same `resolveToolByType` dispatch as a persisted Tool
- * row, adapted to a synthetic `AgentToolRow`. `projectId` scopes
- * `{{secret:...}}` resolution for `http`/`mcp` definitions. `pipeline`-type
- * definitions are rejected by `assertEphemeralTypeSupported` (imported
- * dynamically to avoid a circular import with tools.ts, which imports this
- * module) before resolution — they have no persisted steps to resolve.
- */
 const orNull = <T>(value: T | null | undefined): T | null => {
   return value ?? null;
 };
@@ -918,6 +906,20 @@ const ephemeralDefinitionToRow = (
   };
 };
 
+/**
+ * Resolves an ephemeral (inline, unpersisted) tool definition into an AI-SDK
+ * tool — reusing the same `resolveToolByType` dispatch as a persisted Tool
+ * row, adapted to a synthetic `AgentToolRow`. `projectId` scopes
+ * `{{secret:...}}` resolution for `http`/`mcp` definitions. `pipeline`-type
+ * definitions are rejected by `assertEphemeralTypeSupported` before
+ * resolution — they have no persisted steps to resolve.
+ *
+ * That assertion lives in `toolsCall.ts` and is imported statically, via the
+ * `tools.ts` re-export. There **is** an import cycle here
+ * (`tools` → `toolsCall` → `agentToolResolver` → `tools`), but nothing in this
+ * module mitigates it; breaking it is tracked on the orchestration/agent
+ * import-cycle work, not worked around locally.
+ */
 export const resolveEphemeralAgentTool = async (args: {
   definition: InlineToolDefinition;
   projectId: number;

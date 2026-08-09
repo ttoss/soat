@@ -6,6 +6,7 @@ import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { mergeTags } from './tags';
 
 export type { CompiledPolicy };
 
@@ -184,39 +185,6 @@ export const updateConversation = async (args: {
   return mapped;
 };
 
-export const updateConversationStatus = async (args: {
-  id: string;
-  status: string;
-}) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.id },
-  });
-
-  if (!conversation) {
-    return null;
-  }
-
-  await conversation.update({ status: args.status });
-
-  const updatedConversation = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  const mapped = mapConversation(updatedConversation!);
-
-  emitResourceEvent({
-    type: 'conversations.updated',
-    projectId: updatedConversation!.projectId,
-    projectPublicId: mapped.project_id!,
-    resourceType: 'conversation',
-    resourceId: mapped.id,
-    data: mapped,
-  });
-
-  return mapped;
-};
-
 export const deleteConversation = async (args: { id: string }) => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.id },
@@ -266,9 +234,11 @@ export const updateConversationTags = async (args: {
     return null;
   }
 
-  const newTags = args.merge
-    ? { ...(conversation.tags ?? {}), ...args.tags }
-    : args.tags;
+  const newTags = mergeTags({
+    current: conversation.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
   await conversation.update({ tags: newTags });
 
   const updated = await db.Conversation.findOne({

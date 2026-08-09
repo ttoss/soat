@@ -2,9 +2,9 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { chunkPages, type ChunkStrategy, persistChunks } from './chunking';
+import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
 import type { MappedIngestionRule } from './ingestionRules';
-import { mapDocument } from './knowledge';
 
 const log = createDebug('soat:documents');
 

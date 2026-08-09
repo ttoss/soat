@@ -20,7 +20,7 @@ import {
   configStringOrObject,
   makeVersionArchive,
   mapArchivedVersionFields,
-  type VersionedResourceRef,
+  toResourceRef,
 } from './resourceVersions';
 
 const log = createDebug('soat:agents');
@@ -74,18 +74,6 @@ const findAgentInstance = async (args: {
     );
   }
   return agent as AgentInstance;
-};
-
-const agentDbId = (agent: AgentInstance): number => {
-  return agent.id as number;
-};
-
-const toResourceRef = (agent: AgentInstance): VersionedResourceRef => {
-  return {
-    dbId: agentDbId(agent),
-    publicId: agent.publicId,
-    version: agent.version,
-  };
 };
 
 // ── Applying an archived config ───────────────────────────────────────────
@@ -156,8 +144,6 @@ export const listAgentVersions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  log('listAgentVersions: agentId=%s', args.agentId);
-
   return agentVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.agentId,
@@ -171,8 +157,6 @@ export const getAgentVersion = async (args: {
   agentId: string;
   version: number;
 }) => {
-  log('getAgentVersion: agentId=%s version=%d', args.agentId, args.version);
-
   return agentVersionArchive.getVersion({
     projectIds: args.projectIds,
     resourceId: args.agentId,
@@ -187,8 +171,6 @@ export const restoreAgentVersion = async (args: {
   label?: string | null;
   createdByUserId?: number | null;
 }): Promise<MappedAgent> => {
-  log('restoreAgentVersion: agentId=%s version=%d', args.agentId, args.version);
-
   return agentVersionArchive.restoreVersion({
     projectIds: args.projectIds,
     resourceId: args.agentId,

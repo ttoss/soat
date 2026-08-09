@@ -19,7 +19,7 @@ import type {
   ValidationError,
   ValidationResult,
 } from './formationsTypes';
-import { isPlainObject } from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
 
 // ── Template Input Parsing ────────────────────────────────────────────────
 

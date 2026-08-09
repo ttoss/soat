@@ -13,6 +13,7 @@ import {
   type ResolvedChatModel,
 } from './chatCompletionModel';
 import { resolveMessageContent } from './messageContent';
+import type { ResourceIncludes } from './modelIncludes';
 import {
   assertModelBindingResolvable,
   resolveConsumerModelRoute,
@@ -20,6 +21,7 @@ import {
   validateModelRouteExclusivity,
 } from './modelRoutes';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 export type ChatMessage = {
   role: 'user' | 'assistant' | 'system';
@@ -47,12 +49,12 @@ export type MappedChat = {
   updated_at: Date;
 };
 
-const mapChat = (
-  chat: InstanceType<typeof db.Chat> & {
-    aiProvider: InstanceType<typeof db.AiProvider> | null;
-    project: InstanceType<typeof db.Project>;
-  }
-): MappedChat => {
+type ChatRow = InstanceType<typeof db.Chat> & {
+  aiProvider: InstanceType<typeof db.AiProvider> | null;
+  project: InstanceType<typeof db.Project>;
+};
+
+const mapChat = (chat: ChatRow): MappedChat => {
   return {
     id: chat.publicId,
     project_id: chat.project.publicId,
@@ -66,12 +68,20 @@ const mapChat = (
   };
 };
 
-const getChatIncludes = () => {
+const getChatIncludes = (): ResourceIncludes => {
   return [
     { model: db.AiProvider, as: 'aiProvider' },
     { model: db.Project, as: 'project' },
   ];
 };
+
+const chats = makeResourceAccessor<ChatRow>({
+  model: () => {
+    return db.Chat;
+  },
+  includes: getChatIncludes,
+  label: 'Chat',
+});
 
 export const createChat = async (args: {
   projectId: number;
@@ -117,27 +127,14 @@ export const createChat = async (args: {
     model: args.model ?? null,
   });
 
-  const created = await db.Chat.findOne({
-    where: { id: (chat as unknown as { id: number }).id },
-    include: getChatIncludes(),
-  });
-
-  return mapChat(created as unknown as Parameters<typeof mapChat>[0]);
+  return mapChat(await chats.reload(chat));
 };
 
 export const findChat = async (args: {
   id: string;
 }): Promise<MappedChat | null> => {
-  const chat = await db.Chat.findOne({
-    where: { publicId: args.id },
-    include: getChatIncludes(),
-  });
-
-  if (!chat) {
-    return null;
-  }
-
-  return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+  const chat = await chats.findByPublicId({ id: args.id });
+  return chat ? mapChat(chat) : null;
 };
 
 export const getChat = async (args: { id: string }): Promise<MappedChat> => {
@@ -169,7 +166,7 @@ export const listChats = async (args: {
       });
     },
     map: (chat) => {
-      return mapChat(chat as unknown as Parameters<typeof mapChat>[0]);
+      return mapChat(chat as ChatRow);
     },
   });
 };
@@ -347,16 +344,10 @@ export const createChatCompletionForChat = async (args: {
   model?: string;
   authUser: AuthUser;
 }): Promise<{ model: string; content: string; finishReason: string }> => {
-  const chat = await db.Chat.findOne({
-    where: { publicId: args.chatId },
-    include: getChatIncludes(),
+  const typedChat = await chats.getByPublicId({
+    id: args.chatId,
+    errorCode: 'CHAT_NOT_FOUND',
   });
-
-  if (!chat) {
-    throw new DomainError('CHAT_NOT_FOUND', `Chat '${args.chatId}' not found.`);
-  }
-
-  const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
 
   const resolvedMessages = await resolveMessages({
     messages: args.messages,
@@ -399,16 +390,10 @@ export const streamChatCompletionForChat = async (args: {
   model?: string;
   authUser: AuthUser;
 }) => {
-  const chat = await db.Chat.findOne({
-    where: { publicId: args.chatId },
-    include: getChatIncludes(),
+  const typedChat = await chats.getByPublicId({
+    id: args.chatId,
+    errorCode: 'CHAT_NOT_FOUND',
   });
-
-  if (!chat) {
-    throw new DomainError('CHAT_NOT_FOUND', `Chat '${args.chatId}' not found.`);
-  }
-
-  const typedChat = chat as unknown as Parameters<typeof mapChat>[0];
 
   const resolvedMessages = await resolveMessages({
     messages: args.messages,

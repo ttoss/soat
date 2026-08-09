@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import type { ActionClass, GuardrailDocument } from './guardrailDocument';
 import { DEFAULT_ACTION_CLASS, isActionClass } from './guardrailDocument';
 import { evaluateLogic } from './jsonLogicMapping';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:guardrails');
 
@@ -71,10 +72,6 @@ export const strictestDecision = (
   b: GuardrailDecision
 ): GuardrailDecision => {
   return DECISION_RANK[b] > DECISION_RANK[a] ? b : a;
-};
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
 // Builds the nested object the JSON Logic evaluator reads `var` dot-paths

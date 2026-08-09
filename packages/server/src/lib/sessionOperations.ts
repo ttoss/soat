@@ -4,6 +4,7 @@ import { DomainError } from '../errors';
 import { mapGenerationRequiredAction } from './agentGenerationHelpers';
 import { submitToolOutputs } from './agents';
 import { generateConversationMessage } from './conversationGeneration';
+import { sessionIncludes } from './sessionAccessor';
 import { triggerOrScheduleGeneration } from './sessionDelayHelpers';
 import {
   emitGenerationCompleted,
@@ -33,15 +34,6 @@ export const abortSessionGeneration = (sessionKey: string) => {
     existing.abort();
     sessionAbortControllers.delete(sessionKey);
   }
-};
-
-const sessionIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.Agent, as: 'agent' },
-    { model: db.Conversation, as: 'conversation' },
-    { model: db.Actor, as: 'actor' },
-  ];
 };
 
 /**

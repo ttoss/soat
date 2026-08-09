@@ -3,14 +3,9 @@ import { Ajv, type ValidateFunction } from 'ajv';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:generation');
-
-export const isPlainObject = (
-  value: unknown
-): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 const MARKDOWN_JSON_FENCE = /^\s*```(?:json)?\s*\n?([\s\S]*?)\n?\s*```\s*$/i;
 

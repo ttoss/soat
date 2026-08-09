@@ -1,30 +1,16 @@
-import crypto from 'node:crypto';
-
-import createDebug from 'debug';
 import { db } from 'src/db';
 
 import { paginatedList } from './pagination';
-import { decryptValue, encryptValue } from './secrets';
+import {
+  decryptMaybeLegacySecret,
+  encryptValue,
+  generateSecretValue,
+} from './secrets';
 
-const log = createDebug('soat:webhooks');
+const generateSecret = generateSecretValue;
 
-const generateSecret = () => {
-  return crypto.randomBytes(32).toString('hex');
-};
-
-/**
- * Rows created before secret-at-rest encryption store the raw secret.
- * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
- * so fall back to treating it as plaintext. Rotating or recreating the
- * secret re-encrypts it going forward.
- */
 export const decryptWebhookSecret = (stored: string): string => {
-  try {
-    return decryptValue(stored);
-  } catch {
-    log('decryptWebhookSecret: value is not encrypted (legacy row)');
-    return stored;
-  }
+  return decryptMaybeLegacySecret({ stored, label: 'decryptWebhookSecret' });
 };
 
 const mapWebhook = (

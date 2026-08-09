@@ -18,6 +18,8 @@ import {
   compilePolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { mergeTags } from './tags';
+import { rethrowAsConflict } from './uniqueViolation';
 
 export type { CompiledPolicy };
 // Re-export the path helpers so existing importers (`from './files'`) keep
@@ -30,6 +32,9 @@ registerResourceFieldMap({
   pathColumn: { column: 'path' },
   tagsColumn: { column: 'tags' },
 });
+
+const FILE_PATH_CONFLICT_MESSAGE =
+  'A file already exists at that path in this project.';
 
 const mapFile = (file: InstanceType<(typeof db)['File']>) => {
   return {
@@ -157,16 +162,7 @@ export const uploadFile = async (args: {
       metadata: args.metadata,
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === 'SequelizeUniqueConstraintError'
-    ) {
-      throw new DomainError(
-        'NAME_CONFLICT',
-        `A file already exists at that path in this project.`
-      );
-    }
-    throw error;
+    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
   }
 
   await persistFileBytes({
@@ -308,16 +304,7 @@ export const updateFileMetadata = async (args: {
   try {
     await file.update(updates);
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === 'SequelizeUniqueConstraintError'
-    ) {
-      throw new DomainError(
-        'NAME_CONFLICT',
-        `A file already exists at that path in this project.`
-      );
-    }
-    throw error;
+    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
   }
   const mapped = mapFile(file);
 
@@ -362,16 +349,7 @@ export const createFile = async (args: {
       storagePath: '',
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === 'SequelizeUniqueConstraintError'
-    ) {
-      throw new DomainError(
-        'NAME_CONFLICT',
-        `A file already exists at that path in this project.`
-      );
-    }
-    throw error;
+    throw rethrowAsConflict(error, FILE_PATH_CONFLICT_MESSAGE);
   }
   const mapped = mapFile(file);
 
@@ -447,9 +425,11 @@ export const updateFileTags = async (args: {
     return null;
   }
 
-  const newTags = args.merge
-    ? { ...(file.tags ?? {}), ...args.tags }
-    : args.tags;
+  const newTags = mergeTags({
+    current: file.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
   await file.update({ tags: newTags });
 
   const mapped = { ...mapFile(file), tags: newTags };

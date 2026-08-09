@@ -6,7 +6,6 @@ import { getEmbedding } from './embedding';
 import type { MemoryKnowledgeResult } from './knowledgeMemory';
 import { resolveMemorySearch } from './knowledgeMemory';
 
-export { mapDocument } from './documentMapper';
 export type { MemoryQueryConfig } from './knowledgeMemory';
 
 /** Results returned by a knowledge search when the caller names no `limit`. */

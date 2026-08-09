@@ -1,5 +1,7 @@
 import crypto from 'node:crypto';
 
+import { isPlainObject } from './plainObject';
+
 // Shared tool-dispatch machinery for filing a tool-call approval item:
 // return-pending justification fields, the resolved action name, the dedup key,
 // and the default expiry. These helpers are used solely by the guardrail
@@ -13,10 +15,6 @@ export const DEFAULT_TOOL_APPROVAL_EXPIRES_IN_SECONDS = 24 * 60 * 60;
 
 const DEFAULT_REASONING_PROMPT =
   'This action requires human approval before it executes. Explain why it is warranted.';
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 // ── Justification fields ────────────────────────────────────────────────────
 

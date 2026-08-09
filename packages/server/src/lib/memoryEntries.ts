@@ -56,7 +56,7 @@ const mergeEntryMetadata = (args: {
   return { ...(args.existing ?? {}), ...args.incoming };
 };
 
-export const mergeEntryContent = (args: {
+const mergeEntryContent = (args: {
   existing: string;
   incoming: string;
 }): string => {

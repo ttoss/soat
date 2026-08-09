@@ -31,8 +31,8 @@ export {
   validateQuotaImmutableFields,
 } from './quotaImmutability';
 
-export const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
-export const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
+const QUOTA_SCOPES = ['project', 'api_key', 'agent', 'actor'] as const;
+const QUOTA_METRICS = ['requests', 'tokens', 'cost_usd'] as const;
 export const QUOTA_MODES = ['enforce', 'monitor'] as const;
 
 export type QuotaScope = (typeof QUOTA_SCOPES)[number];
@@ -49,7 +49,7 @@ export type CurrentUsage = {
   resetsAt: Date;
 } | null;
 
-export const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
+const mapQuota = (quota: QuotaInstance, currentUsage: CurrentUsage) => {
   return {
     id: quota.publicId,
     project_id: quota.project.publicId,

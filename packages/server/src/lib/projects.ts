@@ -40,7 +40,7 @@ const mapProject = (project: InstanceType<(typeof db)['Project']>) => {
  * otherwise it must be an integer ≥ 1. Returns an error message, or `null` when
  * valid. Pure — the single source of truth shared by every write path.
  */
-export const validateMaxConcurrentRuns = (value: unknown): string | null => {
+const validateMaxConcurrentRuns = (value: unknown): string | null => {
   if (value === null) return null;
   if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) {
     return 'max_concurrent_runs must be an integer >= 1, or null to clear it.';

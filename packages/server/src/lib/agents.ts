@@ -29,6 +29,7 @@ import {
 import { validateOutputSchema } from './outputSchema';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { type ActiveRelease, parseActiveRelease } from './releaseAssignment';
+import { makeResourceAccessor } from './resourceAccessor';
 import { type InlineToolDefinition } from './tools';
 import {
   invalidateTraceContentModeCache,
@@ -93,13 +94,21 @@ const getAgentIncludes = () => {
   ];
 };
 
-const mapAgent = (
-  agent: InstanceType<typeof db.Agent> & {
-    project: InstanceType<typeof db.Project>;
-    aiProvider: InstanceType<typeof db.AiProvider> | null;
-    modelRoute: InstanceType<typeof db.ModelRoute> | null;
-  }
-): MappedAgent => {
+type AgentRow = InstanceType<typeof db.Agent> & {
+  project: InstanceType<typeof db.Project>;
+  aiProvider: InstanceType<typeof db.AiProvider> | null;
+  modelRoute: InstanceType<typeof db.ModelRoute> | null;
+};
+
+const agents = makeResourceAccessor<AgentRow>({
+  model: () => {
+    return db.Agent;
+  },
+  includes: getAgentIncludes,
+  label: 'Agent',
+});
+
+const mapAgent = (agent: AgentRow): MappedAgent => {
   // Canonical bindings (legacy rows normalize lazily); the deprecated
   // `toolIds`/`tools` views are derived from them for the response echo.
   const toolBindings = readAgentToolBindings(agent);
@@ -359,7 +368,7 @@ const resolveAiProviderDbId = async (
   publicId: string
 ): Promise<number | null> => {
   const aiProvider = await db.AiProvider.findOne({ where: { publicId } });
-  return aiProvider ? (aiProvider as unknown as { id: number }).id : null;
+  return aiProvider ? (aiProvider.id as number) : null;
 };
 
 /**
@@ -497,17 +506,14 @@ export const createAgent = async (
     modelRouteId,
   });
 
-  const created = await db.Agent.findOne({
-    where: { id: (agent as unknown as { id: number }).id },
-    include: getAgentIncludes(),
-  });
+  const created = await agents.reload(agent);
 
-  const mapped = mapAgent(created as unknown as Parameters<typeof mapAgent>[0]);
+  const mapped = mapAgent(created);
 
   // Version 1 is archived on create, so an agent has recoverable history from
   // the moment it exists rather than from its first edit.
   await agentVersionStore.writeVersion({
-    resourceDbId: (agent as unknown as { id: number }).id,
+    resourceDbId: created.id as number,
     version: 1,
     config: buildAgentConfigSnapshot(mapped),
     label: args.versionLabel,
@@ -517,8 +523,7 @@ export const createAgent = async (
   emitResourceEvent({
     type: 'agents.created',
     projectId: args.projectId,
-    projectPublicId: (created as unknown as { project: { publicId: string } })
-      .project.publicId,
+    projectPublicId: created.project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
     data: mapped,
@@ -549,7 +554,7 @@ export const listAgents = async (args: {
       });
     },
     map: (a) => {
-      return mapAgent(a as unknown as Parameters<typeof mapAgent>[0]);
+      return mapAgent(a as AgentRow);
     },
   });
 };
@@ -558,17 +563,7 @@ export const getAgent = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<MappedAgent> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const agent = await db.Agent.findOne({ where, include: getAgentIncludes() });
-  if (!agent)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.id}' not found.`
-    );
-
-  return mapAgent(agent as unknown as Parameters<typeof mapAgent>[0]);
+  return mapAgent(await agents.getByPublicId(args));
 };
 
 /** The value a field will hold after the update: incoming, else stored. */
@@ -584,12 +579,12 @@ const effectiveValue = (incoming: unknown, stored: unknown): unknown => {
  * to a route requires clearing the pin in the same request.
  */
 const applyModelBindingUpdates = async (args: {
-  agent: InstanceType<typeof db.Agent>;
+  agent: AgentRow;
   args: AgentUpdateFields;
   updates: Record<string, unknown>;
 }): Promise<void> => {
   const { agent, args: fields, updates } = args;
-  const projectId = (agent as unknown as { projectId: number }).projectId;
+  const projectId = agent.projectId;
 
   const touchesBinding =
     fields.aiProviderId !== undefined || fields.modelRouteId !== undefined;
@@ -625,13 +620,13 @@ const applyModelBindingUpdates = async (args: {
  * the engine deliberately never touches.
  */
 const archiveConfigChange = async (args: {
-  agent: InstanceType<typeof db.Agent>;
+  agent: AgentRow;
   before: AgentConfigSnapshot;
   after: AgentConfigSnapshot;
   authorship: AgentVersionAuthorship;
 }): Promise<void> => {
   await agentVersionStore.archiveConfigChange({
-    resourceDbId: (args.agent as unknown as { id: number }).id,
+    resourceDbId: args.agent.id as number,
     currentVersion: args.agent.version,
     before: args.before,
     after: args.after,
@@ -652,36 +647,24 @@ export const updateAgent = async (
 ): Promise<MappedAgent> => {
   validateOutputSchema(args.outputSchema);
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
   // Loaded with its joins so the pre-write config can be snapshotted through
   // the same mapper that serializes the response — the diff is then between two
   // wire-shaped configs, never between a model instance and a response body.
-  const agent = await db.Agent.findOne({ where, include: getAgentIncludes() });
-  if (!agent)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.id}' not found.`
-    );
+  const agent = await agents.getByPublicId(args);
 
-  const beforeConfig = buildAgentConfigSnapshot(
-    mapAgent(agent as unknown as Parameters<typeof mapAgent>[0])
-  );
+  const beforeConfig = buildAgentConfigSnapshot(mapAgent(agent));
 
   // No-ops for an undefined list (attachments/restriction left untouched).
   await assertAgentReferencesExist({
     guardrailIds: args.guardrailIds,
     activeToolIds: args.activeToolIds,
     traceContentMode: args.traceContentMode,
-    projectId: (agent as unknown as { projectId: number }).projectId,
+    projectId: agent.projectId,
   });
 
   const bindingsUpdate = await resolveBindingsForUpdate({
-    projectId: (agent as unknown as { projectId: number }).projectId,
-    current: readAgentToolBindings(
-      agent as unknown as Parameters<typeof readAgentToolBindings>[0]
-    ),
+    projectId: agent.projectId,
+    current: readAgentToolBindings(agent),
     toolBindings: args.toolBindings,
     toolIds: args.toolIds,
     tools: args.tools,
@@ -701,33 +684,27 @@ export const updateAgent = async (
   // Tightening an agent to `none` must stop content writes on its next
   // generation, not once the 30s cache entry expires.
   invalidateTraceContentModeCache({
-    agentDbId: (agent as unknown as { id: number }).id,
-    projectDbId: (agent as unknown as { projectId: number }).projectId,
+    agentDbId: agent.id as number,
+    projectDbId: agent.projectId,
     agentPublicId: args.id,
   });
 
-  const updated = (await db.Agent.findOne({
-    where: { id: (agent as unknown as { id: number }).id },
-    include: getAgentIncludes(),
-  })) as InstanceType<typeof db.Agent>;
+  const updated = await agents.reload(agent);
 
   await archiveConfigChange({
     agent: updated,
     before: beforeConfig,
-    after: buildAgentConfigSnapshot(
-      mapAgent(updated as unknown as Parameters<typeof mapAgent>[0])
-    ),
+    after: buildAgentConfigSnapshot(mapAgent(updated)),
     authorship: args,
   });
 
   // Mapped after the archive so the response carries the bumped version.
-  const mapped = mapAgent(updated as unknown as Parameters<typeof mapAgent>[0]);
+  const mapped = mapAgent(updated);
 
   emitResourceEvent({
     type: 'agents.updated',
-    projectId: (agent as unknown as { projectId: number }).projectId,
-    projectPublicId: (updated as unknown as { project: { publicId: string } })
-      .project.publicId,
+    projectId: agent.projectId,
+    projectPublicId: updated.project.publicId,
     resourceType: 'agent',
     resourceId: mapped.id,
     data: mapped,
@@ -756,14 +733,14 @@ const findDependentIds = async (args: {
 
   return {
     generationIds: generationRows.map((row) => {
-      return (row as unknown as { id: number }).id;
+      return row.id as number;
     }),
     traceIds: traceRows.map((row) => {
-      return (row as unknown as { id: number }).id;
+      return row.id as number;
     }),
     fileIds: traceRows
       .map((row) => {
-        return (row as unknown as { fileId: number | null }).fileId;
+        return row.fileId;
       })
       .filter((fileId): fileId is number => {
         return fileId !== null;
@@ -844,17 +821,9 @@ export const deleteAgent = async (args: {
 }): Promise<void> => {
   log('deleteAgent: id=%s force=%s', args.id, Boolean(args.force));
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  const agent = await agents.getByPublicId(args);
 
-  const agent = await db.Agent.findOne({ where });
-  if (!agent)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.id}' not found.`
-    );
-
-  const agentId = (agent as unknown as { id: number }).id;
+  const agentId = agent.id as number;
 
   const [generationCount, traceCount] = await Promise.all([
     db.Generation.count({ where: { agentId } }),
@@ -886,11 +855,9 @@ export const deleteAgent = async (args: {
     await agent.destroy();
   }
 
-  const agentProjectId = (agent as unknown as { projectId: number }).projectId;
-
   emitResourceEvent({
     type: 'agents.deleted',
-    projectId: agentProjectId,
+    projectId: agent.projectId,
     resourceType: 'agent',
     resourceId: args.id,
     data: { id: args.id },
