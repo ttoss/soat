@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.1](https://github.com/ttoss/soat/compare/v0.20.0...v0.20.1) (2026-08-09)
+
+### Bug Fixes
+
+* **server:** attribute a key-started run to the API key, not its owner ([#917](https://github.com/ttoss/soat/issues/917)) ([1b7127f](https://github.com/ttoss/soat/commit/1b7127f42683d3f9797123d4fcdf773ac1150bfa)), closes [#801](https://github.com/ttoss/soat/issues/801) [#887](https://github.com/ttoss/soat/issues/887) [#889](https://github.com/ttoss/soat/issues/889)
+* **server:** give an approval continuation the identity of the chain that started it ([#918](https://github.com/ttoss/soat/issues/918)) ([ba08d48](https://github.com/ttoss/soat/commit/ba08d48839d763d46cb82ece05d9436a848cfc5c)), closes [#894](https://github.com/ttoss/soat/issues/894) [#879](https://github.com/ttoss/soat/issues/879) [#884](https://github.com/ttoss/soat/issues/884) [#894](https://github.com/ttoss/soat/issues/894) [#894](https://github.com/ttoss/soat/issues/894)
+* **server:** send a soat action's query string, so list actions scope ([#929](https://github.com/ttoss/soat/issues/929)) ([db870bd](https://github.com/ttoss/soat/commit/db870bd11e5e7f463b3228f00d3fcbae38d48d3d)), closes [#924](https://github.com/ttoss/soat/issues/924)
+* **server:** the eight duplication-caused defects from [#916](https://github.com/ttoss/soat/issues/916) ([#919](https://github.com/ttoss/soat/issues/919)) ([c630220](https://github.com/ttoss/soat/commit/c6302202872e91dfe9814f3b474a6d05ca02c96b)), closes [#900](https://github.com/ttoss/soat/issues/900) [#901](https://github.com/ttoss/soat/issues/901) [#902](https://github.com/ttoss/soat/issues/902) [#903](https://github.com/ttoss/soat/issues/903) [#904](https://github.com/ttoss/soat/issues/904) [#905](https://github.com/ttoss/soat/issues/905) [#906](https://github.com/ttoss/soat/issues/906) [#907](https://github.com/ttoss/soat/issues/907) [#900](https://github.com/ttoss/soat/issues/900) [#901](https://github.com/ttoss/soat/issues/901) [#902](https://github.com/ttoss/soat/issues/902) [#903](https://github.com/ttoss/soat/issues/903) [#904](https://github.com/ttoss/soat/issues/904) [#905](https://github.com/ttoss/soat/issues/905) [#906](https://github.com/ttoss/soat/issues/906) [#907](https://github.com/ttoss/soat/issues/907)
+* **workflows:** bound the composed workflow↔dispatch cycle ([#899](https://github.com/ttoss/soat/issues/899)) ([ea73a54](https://github.com/ttoss/soat/commit/ea73a54cdc5a02acd822c34fb8b757bfcced29a2)), closes [#885](https://github.com/ttoss/soat/issues/885)
+
+### Features
+
+* **server:** dispatch MCP tool calls in-process instead of over the loopback ([#930](https://github.com/ttoss/soat/issues/930)) ([65de605](https://github.com/ttoss/soat/commit/65de605f96a5a10ecb2084db179cf7cdd765dd50))
+* **server:** dispatch soat tool actions in-process instead of over the loopback ([#923](https://github.com/ttoss/soat/issues/923)) ([6e446c3](https://github.com/ttoss/soat/commit/6e446c375dbb6fa293d044ecb06a8d2f45f14359)), closes [#888](https://github.com/ttoss/soat/issues/888) [#879](https://github.com/ttoss/soat/issues/879) [#884](https://github.com/ttoss/soat/issues/884) [#885](https://github.com/ttoss/soat/issues/885) [#887](https://github.com/ttoss/soat/issues/887) [#888](https://github.com/ttoss/soat/issues/888)
+
 # [0.20.0](https://github.com/ttoss/soat/compare/v0.19.2...v0.20.0) (2026-08-08)
 
 ### Bug Fixes

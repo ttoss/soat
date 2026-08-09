@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.1](https://github.com/ttoss/soat/compare/v0.20.0...v0.20.1) (2026-08-09)
+
+### Bug Fixes
+
+* **workflows:** bound the composed workflow↔dispatch cycle ([#899](https://github.com/ttoss/soat/issues/899)) ([ea73a54](https://github.com/ttoss/soat/commit/ea73a54cdc5a02acd822c34fb8b757bfcced29a2)), closes [#885](https://github.com/ttoss/soat/issues/885)
+
 # [0.20.0](https://github.com/ttoss/soat/compare/v0.19.2...v0.20.0) (2026-08-08)
 
 ### Bug Fixes
