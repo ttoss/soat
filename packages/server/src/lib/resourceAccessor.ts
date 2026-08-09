@@ -65,9 +65,9 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   /** Defaults to `RESOURCE_NOT_FOUND`. */
   errorCode?: ErrorCode;
 }) => {
-  const notFound = (id: string) => {
+  const notFound = (id: string, errorCode?: ErrorCode) => {
     return new DomainError(
-      config.errorCode ?? 'RESOURCE_NOT_FOUND',
+      errorCode ?? config.errorCode ?? 'RESOURCE_NOT_FOUND',
       `${config.label} '${id}' not found.`
     );
   };
@@ -80,8 +80,15 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   const scopedWhere = (args: {
     id: string;
     projectIds?: number[];
+    /**
+     * Extra predicates merged into the `where` — a resource-specific filter
+     * the lookup is never valid without, such as a soft-delete exclusion.
+     * Column names, not wire field names; the accessor passes the object
+     * through without reading a key.
+     */
+    where?: Record<string, unknown>;
   }): Record<string, unknown> => {
-    const where: Record<string, unknown> = { publicId: args.id };
+    const where: Record<string, unknown> = { publicId: args.id, ...args.where };
     if (args.projectIds !== undefined) where.projectId = args.projectIds;
     return where;
   };
@@ -89,6 +96,7 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   const findByPublicId = async (args: {
     id: string;
     projectIds?: number[];
+    where?: Record<string, unknown>;
   }): Promise<TRow | null> => {
     const row = await config.model().findOne({
       where: scopedWhere(args),
@@ -100,9 +108,17 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
   const getByPublicId = async (args: {
     id: string;
     projectIds?: number[];
+    where?: Record<string, unknown>;
+    /**
+     * Overrides the accessor's code for this call. A module whose resource is
+     * a top-level `404` on its own routes but a `400`-class referenced-entity
+     * miss elsewhere (`CHAT_NOT_FOUND`) names the second code here, rather
+     * than dropping back to a hand-rolled lookup.
+     */
+    errorCode?: ErrorCode;
   }): Promise<TRow> => {
     const row = await findByPublicId(args);
-    if (!row) throw notFound(args.id);
+    if (!row) throw notFound(args.id, args.errorCode);
     return row;
   };
 
