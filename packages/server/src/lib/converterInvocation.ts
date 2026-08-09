@@ -1,7 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { createGeneration } from './agents';
+import { createGeneration } from './agentGeneration';
 import type { SourcePage } from './chunking';
 import { buildFileDownloadUrl } from './fileDownloadToken';
 import { readFileBuffer } from './fileStorage';

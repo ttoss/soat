@@ -1,23 +1,15 @@
-import type { LanguageModel } from 'ai';
-import { resolveAiProviderSecret } from 'src/lib/aiProviders';
-
 import { db } from '../db';
 import {
+  type ClientToolResult,
   type GenerationResult,
   type PendingGeneration,
+  toAgentConfig,
   type TypedAgent,
-} from './agentGenerationHelpers';
-import { buildModel } from './agentModel';
-import { narrowToActiveTools } from './agents';
-import {
-  deriveLegacyToolFields,
-  readAgentToolBindings,
-} from './agentToolBindings';
-import { buildResolverGuardrailContext } from './agentToolGuardrail';
-import { resolveAgentTools } from './agentToolResolver';
+} from './agentGenerationTypes';
+import { resolveAgentModel } from './agentModelResolution';
+import { resolveAgentToolSurface } from './agentToolSurface';
 import { getGenerationPendingState } from './generationPendingState';
 import { getGeneration, updateGenerationRecord } from './generations';
-import { buildRoutedModel, resolveConsumerModelRoute } from './modelRoutes';
 import { saveTrace } from './traces';
 
 // ── Agent Resolver ────────────────────────────────────────────────────────
@@ -92,110 +84,13 @@ type PendingStateDb = {
     toolName: string;
     args: unknown;
   }>;
-  syntheticToolResults?: Array<{
-    toolCallId: string;
-    toolName: string;
-    output: unknown;
-  }>;
+  syntheticToolResults?: ClientToolResult[];
   messages: Array<{ role: string; content: string }>;
   steps?: unknown[];
   parentTraceId: string | null;
   rootTraceId: string | null;
   toolContext: Record<string, string> | null;
   remainingDepth: number | null;
-};
-
-// Re-resolves the agent's tool surface for a resumed generation, re-applying
-// the guardrail interceptor (the single tool-call gating mechanism). The
-// caller's guardrail_context is not persisted across the tool-outputs
-// round-trip, so only project/agent/tool scope guardrails apply here (caller
-// `context.*` keys fail closed). Extracted so buildPendingFromState stays within
-// its complexity budget.
-const resolveRecoveryTools = async (args: {
-  generationId: string;
-  agentId: string;
-  projectIds?: number[];
-  authHeader?: string;
-  typedAgent: TypedAgent;
-  pendingState: PendingStateDb;
-}) => {
-  const projectId = args.typedAgent.project.id as number;
-  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
-  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const bindings = readAgentToolBindings(args.typedAgent);
-  const legacyViews = deriveLegacyToolFields(bindings);
-  return resolveAgentTools({
-    // A resumed run is restricted exactly like the run it resumes.
-    toolIds: narrowToActiveTools({
-      toolIds: legacyViews.toolIds ?? [],
-      activeToolIds: args.typedAgent.activeToolIds,
-    }),
-    tools: legacyViews.tools,
-    projectId,
-    projectIds: args.projectIds,
-    boundaryPolicy: args.typedAgent.boundaryPolicy,
-    authHeader: args.authHeader,
-    toolContext: args.pendingState.toolContext ?? undefined,
-    remainingDepth: args.pendingState.remainingDepth ?? undefined,
-    guardrail: await buildResolverGuardrailContext({
-      agentId: args.agentId,
-      generationId: args.generationId,
-      projectId,
-      projectPublicId: args.typedAgent.project.publicId,
-      projectGuardrailIds: args.typedAgent.project.guardrailIds,
-      agentGuardrailIds: args.typedAgent.guardrailIds,
-      // Trusted read: `pendingState.toolContext` is persisted AFTER the
-      // chokepoint pin in buildGenerationContext (#850), so a `sessionId` key
-      // here is always server-stamped — a caller-forged value never reaches
-      // the persisted state.
-      sessionId: args.pendingState.toolContext?.sessionId ?? null,
-      authHeader: args.authHeader,
-    }),
-    // A resumed generation's tool calls are as autonomous as a fresh one's, so
-    // they record on the activity feed under the same identity.
-    activity: {
-      projectId,
-      agentId: args.agentId,
-      generationId: args.generationId,
-    },
-  });
-};
-
-/**
- * The `LanguageModel` a resumed generation continues on, following the same
- * chain as a fresh generation: the agent's model route → its pinned provider →
- * the project default route (both route cases composite, with failover).
- * Returns `undefined` when none resolves, which the caller reports as an
- * unrecoverable pending generation.
- */
-const resolveResumptionModel = async (
-  typedAgent: TypedAgent
-): Promise<LanguageModel | undefined> => {
-  const route = await resolveConsumerModelRoute({
-    projectId: typedAgent.project.id as number,
-    modelRouteId: typedAgent.modelRoute?.publicId,
-    aiProviderId: typedAgent.aiProvider?.publicId,
-  });
-  if (route) {
-    return buildRoutedModel({ route });
-  }
-
-  /* istanbul ignore next -- the write-time guards leave a pin as the only
-     remaining possibility once no route resolves */
-  if (!typedAgent.aiProvider) return undefined;
-
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: typedAgent.aiProvider.publicId,
-  });
-  if (!resolved) return undefined;
-
-  return buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
 };
 
 const buildPendingFromState = async (args: {
@@ -209,11 +104,26 @@ const buildPendingFromState = async (args: {
 }): Promise<PendingGeneration | undefined> => {
   // A route-only agent has no pinned provider, so the resumption path has to
   // resolve the route too — a client-tool continuation is the least-traveled
-  // consumer and would otherwise be the one place routing silently broke.
-  const model = await resolveResumptionModel(args.typedAgent);
-  if (!model) return undefined;
+  // consumer and would otherwise be the one place routing silently broke. An
+  // agent whose binding no longer resolves makes the pending generation
+  // unrecoverable, which the caller reports as a plain "not found".
+  const resolution = await resolveAgentModel(args.typedAgent);
+  if (resolution.failure) return undefined;
 
-  const resolvedTools = await resolveRecoveryTools(args);
+  const resolvedTools = await resolveAgentToolSurface({
+    agentId: args.agentId,
+    generationId: args.generationId,
+    projectIds: args.projectIds,
+    typedAgent: args.typedAgent,
+    authHeader: args.authHeader,
+    toolContext: args.pendingState.toolContext ?? undefined,
+    remainingDepth: args.pendingState.remainingDepth ?? undefined,
+    // Trusted read: `pendingState.toolContext` is persisted AFTER the
+    // chokepoint pin in buildGenerationContext (#850), so a `sessionId` key
+    // here is always server-stamped — a caller-forged value never reaches the
+    // persisted state.
+    sessionId: args.pendingState.toolContext?.sessionId ?? null,
+  });
 
   return {
     agentId: args.agentId,
@@ -232,17 +142,8 @@ const buildPendingFromState = async (args: {
     syntheticToolResults: args.pendingState.syntheticToolResults ?? [],
     messages: args.pendingState.messages,
     steps: args.pendingState.steps ?? [],
-    resolvedModel: model,
-    agentConfig: {
-      instructions: args.typedAgent.instructions,
-      maxSteps: (args.typedAgent.maxSteps as number) ?? 20,
-      toolChoice: args.typedAgent.toolChoice,
-      stopConditions: args.typedAgent.stopConditions,
-      activeToolIds: args.typedAgent.activeToolIds as string[] | null,
-      stepRules: args.typedAgent.stepRules,
-      temperature: args.typedAgent.temperature as number | null,
-      outputSchema: args.typedAgent.outputSchema,
-    },
+    resolvedModel: resolution.model,
+    agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,

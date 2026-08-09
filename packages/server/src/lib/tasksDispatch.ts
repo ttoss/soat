@@ -1,7 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { GenerationResult } from './agentGenerationHelpers';
-import { createGeneration } from './agents';
+import { createGeneration } from './agentGeneration';
+import type { GenerationResult } from './agentGenerationTypes';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { startOrchestrationRun } from './orchestrationEngine';
 import { mapRunWithIncludes } from './orchestrationRunHelpers';

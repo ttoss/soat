@@ -3,7 +3,7 @@ import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
-import type { TypedAgent } from './agentGenerationHelpers';
+import type { TypedAgent } from './agentGenerationTypes';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';

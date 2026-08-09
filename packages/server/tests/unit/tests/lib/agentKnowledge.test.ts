@@ -1,5 +1,5 @@
 import { db } from 'src/db';
-import type { TypedAgent } from 'src/lib/agentGenerationHelpers';
+import type { TypedAgent } from 'src/lib/agentGenerationTypes';
 import {
   buildKnowledgeMessages,
   buildKnowledgeTools,

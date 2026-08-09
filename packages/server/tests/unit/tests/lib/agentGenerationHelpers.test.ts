@@ -14,16 +14,13 @@
 import {
   buildAllMessages,
   buildCompletedGenerationResult,
-  collectStepRuleActiveToolIds,
   findPendingClientTools,
-  normalizeToolChoice,
   pendingGenerations,
-  resolveStepActiveTools,
-  runStreamGeneration,
   savePendingGeneration,
-  type TypedAgent,
 } from 'src/lib/agentGenerationHelpers';
 import { buildDepthGuardResult } from 'src/lib/agentGenerationRecovery';
+import type { TypedAgent } from 'src/lib/agentGenerationTypes';
+import { runStreamGeneration } from 'src/lib/agentStreamGeneration';
 import * as generationsModule from 'src/lib/generations';
 import * as tracesModule from 'src/lib/traces';
 
@@ -161,38 +158,6 @@ describe('findPendingClientTools', () => {
         return r.toolName === 'clientTool';
       })
     ).toBe(true);
-  });
-});
-
-describe('normalizeToolChoice', () => {
-  test('passes through the string strategies the AI SDK accepts', () => {
-    expect(normalizeToolChoice('auto')).toBe('auto');
-    expect(normalizeToolChoice('required')).toBe('required');
-    expect(normalizeToolChoice('none')).toBe('none');
-  });
-
-  test('returns undefined for null, undefined, and unknown strings', () => {
-    expect(normalizeToolChoice(null)).toBeUndefined();
-    expect(normalizeToolChoice(undefined)).toBeUndefined();
-    expect(normalizeToolChoice('sometimes')).toBeUndefined();
-  });
-
-  test('maps the wire-shaped object ({ tool_name }) to the AI SDK shape', () => {
-    expect(
-      normalizeToolChoice({ type: 'tool', tool_name: 'get_weather' })
-    ).toEqual({ type: 'tool', toolName: 'get_weather' });
-  });
-
-  test('keeps supporting the legacy camelCase object ({ toolName })', () => {
-    expect(
-      normalizeToolChoice({ type: 'tool', toolName: 'get_weather' })
-    ).toEqual({ type: 'tool', toolName: 'get_weather' });
-  });
-
-  test('returns undefined for objects without a usable tool name', () => {
-    expect(normalizeToolChoice({ type: 'tool' })).toBeUndefined();
-    expect(normalizeToolChoice({ type: 'tool', tool_name: 7 })).toBeUndefined();
-    expect(normalizeToolChoice({ type: 'other' })).toBeUndefined();
   });
 });
 
@@ -575,12 +540,12 @@ describe('runStreamGeneration', () => {
         jest.mock('src/lib/generations', () => {
           return { updateGenerationRecord: mockUpdateGenerationFn };
         });
-        jest.mock('src/lib/agents', () => {
+        jest.mock('src/lib/agentToolSelection', () => {
           return { resolveToolIdsToNames: mockResolveToolIdsToNamesFn };
         });
         // jest.isolateModules requires require() for synchronous module loading
         // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/no-explicit-any
-        const mod = require('src/lib/agentGenerationHelpers') as any;
+        const mod = require('src/lib/agentStreamGeneration') as any;
         isolatedRunStreamGeneration = mod.runStreamGeneration;
       });
     });
@@ -971,55 +936,5 @@ describe('runStreamGeneration', () => {
       // No id resolved to a name — treated as no restriction, not "no tools".
       expect(capturedOpts?.prepareStep({ stepNumber: 0 })).toEqual({});
     });
-  });
-});
-
-describe('collectStepRuleActiveToolIds', () => {
-  test('returns an empty array when stepRules is not an array', () => {
-    expect(collectStepRuleActiveToolIds(null)).toEqual([]);
-    expect(collectStepRuleActiveToolIds(undefined)).toEqual([]);
-    expect(collectStepRuleActiveToolIds('nope')).toEqual([]);
-  });
-
-  test('collects and dedupes tool ids across rules and key casings', () => {
-    const ids = collectStepRuleActiveToolIds([
-      { step: 1, active_tool_ids: ['tool_a', 'tool_b'] },
-      { step: 2, activeToolIds: ['tool_b', 'tool_c'] },
-      { step: 3, tool_choice: 'required' },
-    ]);
-
-    expect(ids.sort()).toEqual(['tool_a', 'tool_b', 'tool_c']);
-  });
-});
-
-describe('resolveStepActiveTools', () => {
-  test('returns undefined when activeToolIds is absent, empty, or not an array', () => {
-    expect(
-      resolveStepActiveTools({ activeToolIds: undefined, toolIdToName: {} })
-    ).toBeUndefined();
-    expect(
-      resolveStepActiveTools({ activeToolIds: [], toolIdToName: {} })
-    ).toBeUndefined();
-    expect(
-      resolveStepActiveTools({ activeToolIds: 'nope', toolIdToName: {} })
-    ).toBeUndefined();
-  });
-
-  test('resolves ids to names via the map, dropping unresolvable ids', () => {
-    expect(
-      resolveStepActiveTools({
-        activeToolIds: ['tool_a', 'tool_unknown'],
-        toolIdToName: { tool_a: 'search' },
-      })
-    ).toEqual(['search']);
-  });
-
-  test('returns undefined when every id fails to resolve', () => {
-    expect(
-      resolveStepActiveTools({
-        activeToolIds: ['tool_unknown'],
-        toolIdToName: {},
-      })
-    ).toBeUndefined();
   });
 });

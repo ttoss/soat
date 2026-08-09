@@ -1,5 +1,5 @@
 import { db } from 'src/db';
-import { resolveToolIdsToNames } from 'src/lib/agents';
+import { resolveToolIdsToNames } from 'src/lib/agentToolSelection';
 
 // `resolveToolIdsToNames` is the id->name lookup `buildPrepareStep` uses to
 // translate a step rule's persisted `active_tool_ids` into the tool names the

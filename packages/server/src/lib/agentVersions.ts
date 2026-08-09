@@ -2,7 +2,8 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { getAgent, type MappedAgent, updateAgent } from './agents';
+import type { MappedAgent } from './agentAccessor';
+import { getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
   agentVersionStore,

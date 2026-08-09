@@ -1,9 +1,10 @@
 import { db } from '../../db';
+import { deleteAgent } from '../agentDelete';
 import {
   denormalizeKnowledgeConfig,
   normalizeKnowledgeConfig,
 } from '../agentKnowledge';
-import { createAgent, deleteAgent, getAgent, updateAgent } from '../agents';
+import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
 import { bindingsFromLegacyFields } from '../agentToolBindings';
 import { lookupProjectOwnerUserId } from '../formationsHelpers';

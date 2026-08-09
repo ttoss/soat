@@ -2,36 +2,28 @@ import { generatePublicId, PUBLIC_ID_PREFIXES } from '@soat/postgresdb';
 import type { LanguageModel, Tool } from 'ai';
 import createDebug from 'debug';
 import type { AuthUser } from 'src/Context';
-import { resolveAiProviderSecret } from 'src/lib/aiProviders';
 
 import { DomainError } from '../errors';
-import { buildAllMessages, type TypedAgent } from './agentGenerationHelpers';
+import { buildAllMessages } from './agentGenerationHelpers';
 import { resolveAgentForGeneration } from './agentGenerationRecovery';
+import type { TypedAgent } from './agentGenerationTypes';
 import {
   buildKnowledgeMessages,
-  buildKnowledgeTools,
   mergeKnowledgeConfig,
   normalizeKnowledgeConfig,
 } from './agentKnowledge';
-import { buildModel } from './agentModel';
-import { narrowToActiveTools } from './agents';
+import { resolveAgentModel } from './agentModelResolution';
 import { resolveServedAgentVersion } from './agentServedVersion';
 import {
   deriveLegacyToolFields,
   readAgentToolBindings,
 } from './agentToolBindings';
-import { buildResolverGuardrailContext } from './agentToolGuardrail';
-import { resolveAgentTools } from './agentToolResolver';
+import { resolveAgentToolSurface } from './agentToolSurface';
 import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
   type GenerationInputMessage,
   resolveGenerationInputMessages,
 } from './generationInputMessages';
-import {
-  buildRoutedModel,
-  resolveConsumerModelRoute,
-  ROUTED_PROVIDER_LABEL,
-} from './modelRoutes';
 import { pinServerIdentityToolContext } from './toolContext';
 
 const log = createDebug('soat:generation');
@@ -53,62 +45,29 @@ export type GenerationContext = {
   agentVersion: number;
 };
 
+/**
+ * A fresh generation cannot proceed without a model, so this path turns
+ * {@link resolveAgentModel}'s reported failure into the `AI_PROVIDER_NOT_FOUND`
+ * the API answers with. (The resumed path reports it as an unrecoverable
+ * pending generation instead — the one thing the two chains never shared.)
+ */
 const resolveGenerationModel = async (args: {
   agentId: string;
   typedAgent: TypedAgent;
-}) => {
-  // Chain: the agent's own route → its pinned provider → the project default
-  // (`resolveConsumerModelRoute` returns null as soon as a pin is present, so a
-  // project-wide default can never override a deliberate binding).
-  const route = await resolveConsumerModelRoute({
-    projectId: args.typedAgent.project.id as number,
-    modelRouteId: args.typedAgent.modelRoute?.publicId,
-    aiProviderId: args.typedAgent.aiProvider?.publicId,
-  });
-  if (route) {
-    return {
-      model: await buildRoutedModel({ route }),
-      provider: ROUTED_PROVIDER_LABEL,
-    };
-  }
+}): Promise<{ model: LanguageModel }> => {
+  const resolution = await resolveAgentModel(args.typedAgent);
 
-  // The write-time guards guarantee a pinned provider once neither a route nor a
-  // project default resolves; this only fires if a row violates them (never
-  // reachable through a write path).
-  /* istanbul ignore next */
-  if (!args.typedAgent.aiProvider) {
+  /* istanbul ignore next -- see the failure docs on resolveAgentModel */
+  if (resolution.failure) {
     throw new DomainError(
       'AI_PROVIDER_NOT_FOUND',
-      `Agent '${args.agentId}' has neither an AI provider nor a model route.`
+      resolution.failure === 'no_binding'
+        ? `Agent '${args.agentId}' has neither an AI provider nor a model route.`
+        : `AI provider for agent '${args.agentId}' could not be resolved.`
     );
   }
 
-  const resolved = await resolveAiProviderSecret({
-    aiProviderId: args.typedAgent.aiProvider.publicId,
-  });
-
-  // Defensive TOCTOU guard: the agent is loaded with its aiProvider join and
-  // the guard above proved it is set, so a consistent DB always resolves the
-  // secret here. This branch only fires if the provider row is deleted
-  // between the agent load and this lookup — unreachable through any entry
-  // point without racing a concurrent delete or mocking an owned module.
-  /* istanbul ignore next */
-  if (!resolved) {
-    throw new DomainError(
-      'AI_PROVIDER_NOT_FOUND',
-      `AI provider for agent '${args.agentId}' could not be resolved.`
-    );
-  }
-
-  const model = await buildModel({
-    provider: resolved.provider,
-    secretValue: resolved.secretValue,
-    model: args.typedAgent.model ?? resolved.defaultModel,
-    baseUrl: resolved.baseUrl,
-    config: resolved.config as Record<string, unknown> | undefined,
-  });
-
-  return { model, provider: resolved.provider };
+  return { model: resolution.model };
 };
 
 const assembleContextMessages = async (args: {
@@ -142,77 +101,6 @@ const assembleContextMessages = async (args: {
   log('assembleContextMessages: allMessages=%o', allMessages);
 
   return allMessages;
-};
-
-const resolveGenerationTools = async (args: {
-  agentId: string;
-  generationId: string;
-  projectIds?: number[];
-  typedAgent: TypedAgent;
-  authHeader?: string;
-  toolContext?: Record<string, string>;
-  traceId?: string;
-  parentTraceId?: string | null;
-  rootTraceId?: string | null;
-  remainingDepth?: number;
-  guardrailContext?: Record<string, unknown> | null;
-  sessionId?: string | null;
-}): Promise<Record<string, Tool>> => {
-  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
-  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const bindings = readAgentToolBindings(args.typedAgent);
-  const legacyViews = deriveLegacyToolFields(bindings);
-  const guardrail = await buildResolverGuardrailContext({
-    agentId: args.agentId,
-    generationId: args.generationId,
-    projectId: args.typedAgent.project.id as number,
-    projectPublicId: args.typedAgent.project.publicId,
-    projectGuardrailIds: args.typedAgent.project.guardrailIds,
-    agentGuardrailIds: args.typedAgent.guardrailIds,
-    // #851 — the typed argument, never the `tool_context` bag: guard
-    // decisions and their audit records must attribute to a session id the
-    // server derived, not one a caller typed.
-    sessionId: args.sessionId ?? null,
-    authHeader: args.authHeader,
-    guardrailContext: args.guardrailContext,
-  });
-  const resolvedTools = await resolveAgentTools({
-    // `active_tool_ids` narrows the bound set before resolution — filtering ids
-    // here rather than resolved tools afterwards avoids needing an id→name map
-    // on this path.
-    toolIds: narrowToActiveTools({
-      toolIds: legacyViews.toolIds ?? [],
-      activeToolIds: args.typedAgent.activeToolIds,
-    }),
-    tools: legacyViews.tools,
-    projectId: args.typedAgent.project.id as number,
-    projectIds: args.projectIds,
-    boundaryPolicy: args.typedAgent.boundaryPolicy,
-    authHeader: args.authHeader,
-    toolContext: args.toolContext,
-    traceId: args.traceId,
-    parentTraceId: args.parentTraceId,
-    rootTraceId: args.rootTraceId,
-    remainingDepth: args.remainingDepth,
-    // Guardrails are the single tool-call gating mechanism.
-    guardrail,
-    // Attributes a successful tool call to this agent/generation on the activity
-    // feed (approvals PRD Phase 4).
-    activity: {
-      projectId: args.typedAgent.project.id as number,
-      agentId: args.agentId,
-      generationId: args.generationId,
-    },
-  });
-
-  buildKnowledgeTools({
-    agentId: args.agentId,
-    projectIds: args.projectIds,
-    typedAgent: args.typedAgent,
-    resolvedTools,
-  });
-
-  return resolvedTools;
 };
 
 // #850 — the identity chokepoint. Every fresh generation (direct agent,
@@ -292,7 +180,7 @@ export const buildGenerationContext = async (args: {
   // back to this generation via `initiator_generation_id`.
   const generationId = generatePublicId(PUBLIC_ID_PREFIXES.generation);
 
-  const resolvedTools = await resolveGenerationTools({
+  const resolvedTools = await resolveAgentToolSurface({
     agentId: args.agentId,
     generationId,
     projectIds: args.projectIds,

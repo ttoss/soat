@@ -1,40 +1,39 @@
 /* eslint-disable max-lines */
-import type {
-  LanguageModel,
-  LanguageModelUsage,
-  ModelMessage,
-  Tool,
-  ToolChoice,
-} from 'ai';
+import type { LanguageModel, LanguageModelUsage, ModelMessage, Tool } from 'ai';
 import { generateText, isStepCount } from 'ai';
 import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import {
-  gatePendingClientTools,
-  type SynthesizedClientResult,
-} from './agentClientToolGuardrail';
+import { gatePendingClientTools } from './agentClientToolGuardrail';
 import {
   buildCompletedGenerationResult,
-  collectStepRuleActiveToolIds,
   findPendingClientTools,
-  type GenerationResult,
-  normalizeToolChoice,
-  type PendingGeneration,
-  resolvePrepareStepResult,
-  resolveStepActiveTools,
-  resolveStepRuleToolIdToName,
   savePendingGeneration,
-  type TypedAgent,
 } from './agentGenerationHelpers';
-import { resolveToolIdsToNames } from './agents';
+import {
+  type AgentRunResult,
+  type ClientToolCall,
+  type ClientToolResult,
+  fromAgentConfig,
+  type GenerationResult,
+  type PendingGeneration,
+  toAgentConfig,
+  type TypedAgent,
+} from './agentGenerationTypes';
+import {
+  buildPrepareStep,
+  normalizeToolChoice,
+  resolveAgentStepRuleToolIdToName,
+  resolveStepRuleToolIdToName,
+} from './agentStepRules';
 import {
   fireCompletionSideEffects,
   recordContinuationFailure,
   recordGenerationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
+import { findSystemInstructions, withoutSystemMessages } from './modelMessages';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
@@ -50,41 +49,43 @@ import { serializeSteps } from './traces';
 // last turn as its terminal state.
 const MAX_CLIENT_GATE_RESUMES = 12;
 
-type PendingClientCall = {
-  toolCallId: string;
-  toolName: string;
-  input: unknown;
+const log = createDebug('soat:generation');
+
+/**
+ * One `tool` message carrying a tool call's result, in the AI SDK's shape.
+ *
+ * Both message builders in this file — the one for results the client
+ * submitted and the one for results the guardrail gate synthesized — produce
+ * exactly this; they differed only in where the output comes from and whether
+ * an `output_mapping` is applied to it first.
+ */
+const buildToolResultMessage = (result: ClientToolResult) => {
+  return {
+    role: 'tool' as const,
+    content: [
+      {
+        type: 'tool-result' as const,
+        toolCallId: result.toolCallId,
+        toolName: result.toolName,
+        output: {
+          type: 'text' as const,
+          value:
+            typeof result.output === 'string'
+              ? result.output
+              : JSON.stringify(result.output),
+        },
+      },
+    ],
+  };
 };
 
 // Tool-result messages for client calls the guardrail gate did NOT release
 // (class D / tripwire / pending_approval). They share the assistant turn with
 // the released calls, so they must be present before the loop resumes.
 const buildSyntheticToolResultMessages = (
-  synthesizedResults: Array<{
-    toolCallId: string;
-    toolName: string;
-    output: unknown;
-  }>
+  synthesizedResults: ClientToolResult[]
 ): Array<{ role: 'tool'; content: unknown }> => {
-  return synthesizedResults.map((entry) => {
-    return {
-      role: 'tool' as const,
-      content: [
-        {
-          type: 'tool-result' as const,
-          toolCallId: entry.toolCallId,
-          toolName: entry.toolName,
-          output: {
-            type: 'text' as const,
-            value:
-              typeof entry.output === 'string'
-                ? entry.output
-                : JSON.stringify(entry.output),
-          },
-        },
-      ],
-    };
-  });
+  return synthesizedResults.map(buildToolResultMessage);
 };
 
 // Runs the guardrail gate over the client calls a turn produced. Returns null
@@ -93,18 +94,9 @@ const buildSyntheticToolResultMessages = (
 const partitionClientCalls = async (args: {
   steps: unknown[];
   resolvedTools: Record<string, Tool>;
-}): Promise<{
-  released: PendingClientCall[];
-  synthesizedResults: SynthesizedClientResult[];
-} | null> => {
+}): Promise<ClientCallPartition | null> => {
   const pending = findPendingClientTools(
-    args.steps as Array<{
-      toolCalls?: Array<{
-        toolCallId: string;
-        toolName: string;
-        input: unknown;
-      }>;
-    }>,
+    args.steps as Array<{ toolCalls?: ClientToolCall[] }>,
     args.resolvedTools
   );
   if (pending.length === 0) return null;
@@ -117,62 +109,6 @@ const partitionClientCalls = async (args: {
 };
 
 export { buildSyntheticToolResultMessages };
-
-const log = createDebug('soat:generation');
-
-type StepRule = {
-  step: number;
-  tool_choice?: unknown;
-  toolChoice?: unknown;
-  active_tool_ids?: unknown;
-  activeToolIds?: unknown;
-};
-
-export const buildPrepareStep = (args: {
-  stepRules: unknown;
-  logContext: 'stream' | 'non_stream';
-  toolIdToName?: Record<string, string>;
-}):
-  | ((opts: { stepNumber: number }) => {
-      toolChoice?: ToolChoice<Record<string, Tool>>;
-      activeTools?: string[];
-    })
-  | undefined => {
-  if (!Array.isArray(args.stepRules) || args.stepRules.length === 0) {
-    return undefined;
-  }
-
-  const rules = args.stepRules as StepRule[];
-  const toolIdToName = args.toolIdToName ?? {};
-  log('buildPrepareStep (%s): rules=%o', args.logContext, rules);
-
-  return ({ stepNumber }) => {
-    const oneIndexedStep = stepNumber + 1;
-    const rule = rules.find((candidate) => {
-      return candidate.step === oneIndexedStep;
-    });
-
-    log(
-      'prepareStep (%s): stepNumber=%d (1-indexed=%d) rule=%o',
-      args.logContext,
-      stepNumber,
-      oneIndexedStep,
-      rule
-    );
-
-    const result = resolvePrepareStepResult({
-      ruleToolChoice: normalizeToolChoice(
-        rule?.tool_choice ?? rule?.toolChoice
-      ),
-      ruleActiveTools: resolveStepActiveTools({
-        activeToolIds: rule?.active_tool_ids ?? rule?.activeToolIds,
-        toolIdToName,
-      }),
-    });
-    log('prepareStep (%s): result=%o', args.logContext, result);
-    return result;
-  };
-};
 
 const callGenerateText = async (args: {
   agentId: string;
@@ -214,18 +150,9 @@ const callGenerateText = async (args: {
   }
 };
 
-type GenerateTextResult = {
-  steps: unknown[];
-  response?: { messages?: unknown[]; modelId?: string };
-  text: string;
-  finishReason: string;
-  output?: unknown;
-  usage?: LanguageModelUsage;
-};
-
 type ClientCallPartition = {
-  released: PendingClientCall[];
-  synthesizedResults: SynthesizedClientResult[];
+  released: ClientToolCall[];
+  synthesizedResults: ClientToolResult[];
 };
 
 // Params for suspending/resuming a turn whose partition still needs settling —
@@ -310,16 +237,7 @@ const buildInitialResumePending = (args: {
     messages: [...args.allMessages, ...args.responseMessages],
     steps: serializeSteps(args.initialSteps),
     resolvedModel: args.model,
-    agentConfig: {
-      instructions: args.typedAgent.instructions,
-      maxSteps: (args.typedAgent.maxSteps as number) ?? 20,
-      toolChoice: args.typedAgent.toolChoice,
-      stopConditions: args.typedAgent.stopConditions,
-      activeToolIds: args.typedAgent.activeToolIds as string[] | null,
-      stepRules: args.typedAgent.stepRules,
-      temperature: args.typedAgent.temperature as number | null,
-      outputSchema: args.typedAgent.outputSchema,
-    },
+    agentConfig: toAgentConfig(args.typedAgent),
     resolvedTools: args.resolvedTools,
     initiatorGenerationId: null,
     projectPublicId: args.typedAgent.project.publicId,
@@ -337,7 +255,7 @@ const resolveGenerationResult = async (args: {
   model: LanguageModel;
   typedAgent: TypedAgent;
   agentId: string;
-  result: GenerateTextResult;
+  result: AgentRunResult;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): Promise<GenerationResult> => {
@@ -409,19 +327,12 @@ export const runNonStreamGeneration = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): Promise<GenerationResult> => {
-  const system = args.allMessages.find((message) => {
-    return message.role === 'system';
-  })?.content as string | undefined;
-
-  const nonSystemMessages = args.allMessages.filter((message) => {
-    return message.role !== 'system';
-  });
-
-  const toolIdToName = await resolveStepRuleToolIdToName(args.typedAgent);
+  const system = findSystemInstructions(args.allMessages);
+  const nonSystemMessages = withoutSystemMessages(args.allMessages);
   const prepareStep = buildPrepareStep({
     stepRules: args.typedAgent.stepRules,
     logContext: 'non_stream',
-    toolIdToName,
+    toolIdToName: await resolveAgentStepRuleToolIdToName(args.typedAgent),
   });
 
   log(
@@ -471,7 +382,7 @@ export const runNonStreamGeneration = async (args: {
 
   return resolveGenerationResult({
     ...args,
-    result: result as GenerateTextResult,
+    result: result as AgentRunResult,
   });
 };
 
@@ -480,17 +391,11 @@ export const runToolOutputsGeneration = async (args: {
   pending: PendingGeneration;
   system: string | undefined;
   nonSystemMessages: unknown[];
-}): Promise<GenerateTextResult> => {
-  const stepRuleToolIds = collectStepRuleActiveToolIds(
-    args.pending.agentConfig.stepRules
-  );
-  const toolIdToName =
-    stepRuleToolIds.length > 0
-      ? await resolveToolIdsToNames({
-          toolIds: stepRuleToolIds,
-          projectId: args.pending.projectId,
-        })
-      : {};
+}): Promise<AgentRunResult> => {
+  const toolIdToName = await resolveStepRuleToolIdToName({
+    stepRules: args.pending.agentConfig.stepRules,
+    projectId: args.pending.projectId,
+  });
   try {
     return await generateText({
       model: args.pending.resolvedModel,
@@ -520,42 +425,13 @@ export const runToolOutputsGeneration = async (args: {
   }
 };
 
-type ToolOutputsGenerationResult = {
-  steps: unknown[];
-  response?: { messages?: unknown[]; modelId?: string };
-  text: string;
-  finishReason: string;
-  output?: unknown;
-  usage?: LanguageModelUsage;
-};
-
-const buildTypedAgentFromPending = (pending: PendingGeneration): TypedAgent => {
-  return {
-    instructions: pending.agentConfig.instructions,
-    model: null,
-    toolIds: null,
-    tools: null,
-    maxSteps: pending.agentConfig.maxSteps,
-    toolChoice: pending.agentConfig.toolChoice,
-    stopConditions: pending.agentConfig.stopConditions,
-    activeToolIds: pending.agentConfig.activeToolIds,
-    stepRules: pending.agentConfig.stepRules,
-    boundaryPolicy: null,
-    temperature: pending.agentConfig.temperature,
-    knowledgeConfig: null,
-    outputSchema: pending.agentConfig.outputSchema,
-    project: { id: pending.projectId, publicId: pending.projectPublicId },
-    aiProvider: { publicId: '' },
-  };
-};
-
 // Builds the completed result for a continuation turn and fires its side effects
 // (trace, usage, completion event) — the terminal path once no client calls
 // remain (or the resume cap is hit).
 const completeContinuation = async (args: {
   generationId: string;
   pending: PendingGeneration;
-  result: ToolOutputsGenerationResult;
+  result: AgentRunResult;
 }): Promise<GenerationResult> => {
   // Same guard as the initial turn: a continuation ends on model text too, and
   // a call written out as text is no more an answer here than there. Failing
@@ -612,7 +488,7 @@ export const resolveToolOutputsResult = async (args: {
   agentId: string;
   pending: PendingGeneration;
   allMessages: unknown[];
-  result: ToolOutputsGenerationResult;
+  result: AgentRunResult;
   resumeCount?: number;
 }): Promise<GenerationResult> => {
   const resumeCount = args.resumeCount ?? 0;
@@ -651,7 +527,7 @@ export const resolveToolOutputsResult = async (args: {
       pending: nextPending,
       partition,
       save: {
-        typedAgent: buildTypedAgentFromPending(args.pending),
+        typedAgent: fromAgentConfig(args.pending),
         model: args.pending.resolvedModel,
         allMessages: args.allMessages as Array<{
           role: string;
@@ -680,21 +556,15 @@ export const resolveToolOutputsResult = async (args: {
  */
 const resumeWithSyntheticResults = async (args: {
   pending: PendingGeneration;
-  synthesizedResults: SynthesizedClientResult[];
+  synthesizedResults: ClientToolResult[];
   resumeCount: number;
 }): Promise<GenerationResult> => {
   const synthMessages = buildSyntheticToolResultMessages(
     args.synthesizedResults
   );
   const allMessages = [...args.pending.messages, ...synthMessages];
-  const system = (
-    args.pending.messages as Array<{ role: string; content: string }>
-  ).find((message) => {
-    return message.role === 'system';
-  })?.content;
-  const nonSystemMessages = allMessages.filter((message) => {
-    return (message as { role?: string }).role !== 'system';
-  });
+  const system = findSystemInstructions(args.pending.messages);
+  const nonSystemMessages = withoutSystemMessages(allMessages);
 
   const result = await runToolOutputsGeneration({
     generationId: args.pending.generationId,
@@ -759,26 +629,13 @@ export const buildToolResultMessages = (args: {
     });
     const toolName = pendingTool?.toolName ?? '';
     const outputMapping = args.outputMappingsByToolName?.[toolName];
-    const mappedOutput = outputMapping
-      ? applyToolOutputMapping(outputMapping, output.output)
-      : output.output;
 
-    return {
-      role: 'tool' as const,
-      content: [
-        {
-          type: 'tool-result' as const,
-          toolCallId: output.toolCallId,
-          toolName,
-          output: {
-            type: 'text' as const,
-            value:
-              typeof mappedOutput === 'string'
-                ? mappedOutput
-                : JSON.stringify(mappedOutput),
-          },
-        },
-      ],
-    };
+    return buildToolResultMessage({
+      toolCallId: output.toolCallId,
+      toolName,
+      output: outputMapping
+        ? applyToolOutputMapping(outputMapping, output.output)
+        : output.output,
+    });
   });
 };

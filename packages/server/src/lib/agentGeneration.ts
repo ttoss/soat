@@ -7,16 +7,13 @@ import {
   buildGenerationContext,
   type GenerationContext,
 } from './agentGenerationContext';
-import {
-  type GenerationResult,
-  pendingGenerations,
-  runStreamGeneration,
-} from './agentGenerationHelpers';
+import { pendingGenerations } from './agentGenerationHelpers';
 import {
   buildDepthGuardResult,
   recoverPendingFromDb,
   resolveAgentForGeneration,
 } from './agentGenerationRecovery';
+import { type GenerationResult } from './agentGenerationTypes';
 import {
   buildSyntheticToolResultMessages,
   buildToolResultMessages as buildToolResultMessagesFromOutputs,
@@ -25,9 +22,11 @@ import {
   runNonStreamGeneration,
   runToolOutputsGeneration,
 } from './agentNonStreamGeneration';
+import { runStreamGeneration } from './agentStreamGeneration';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
+import { findSystemInstructions, withoutSystemMessages } from './modelMessages';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
@@ -350,14 +349,8 @@ export const submitToolOutputs = async (args: {
     ...toolResultMessages,
     ...syntheticMessages,
   ];
-  const system = (
-    pending.messages as Array<{ role: string; content: string }>
-  ).find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = allMessages.filter((m) => {
-    return (m as { role?: string }).role !== 'system';
-  });
+  const system = findSystemInstructions(pending.messages);
+  const nonSystemMessages = withoutSystemMessages(allMessages);
 
   const result = await runToolOutputsGeneration({
     generationId: args.generationId,
