@@ -78,16 +78,24 @@ All errors return a 4xx or 5xx status code. Most business-logic errors use a str
 }
 ```
 
-`meta` is optional and present only for some error codes. **Every** handled error
-uses this object shape, including authentication and authorization failures —
-`401` is `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }` and
-`403` is `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }`. Earlier
-versions returned a plain string in `error` with no `code` on those paths; a
-client that special-cased the string form can drop that branch.
+`meta` is optional and present only for some error codes.
 
-The one remaining string body is the catch-all: unhandled server errors return
-`500` with `{ "error": "Internal Server Error" }` — the underlying exception
-message is never forwarded to the client.
+**Every** error response uses this shape, with no exceptions — `error` is always
+an object with a `code` and a `message`, so a client can read `error.code`
+without first testing what it got. That includes the responses most likely to be
+special-cased:
+
+| Situation | Status | Body |
+|---|---|---|
+| Missing or invalid credentials | `401` | `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }` |
+| Insufficient permissions | `403` | `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }` |
+| Unparseable request body | `400` | `{ "error": { "code": "VALIDATION_FAILED", "message": "Malformed request body: …" } }` |
+| Rejected by the HTTP layer before routing | varies | `{ "error": { "code": "REQUEST_REJECTED", "message": "…" } }` |
+| Unhandled server failure | `500` | `{ "error": { "code": "INTERNAL_ERROR", "message": "Internal Server Error" } }` |
+
+`INTERNAL_ERROR` always carries exactly that message: the underlying exception is
+logged server-side and never forwarded to the client, so the body carries no
+detail to act on beyond retrying.
 
 Common status codes:
 

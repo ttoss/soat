@@ -28,6 +28,10 @@ import { join } from 'node:path';
  */
 
 const V1_DIR = join(__dirname, '../../../../src/rest/v1');
+const ERROR_LOGGER = join(
+  __dirname,
+  '../../../../src/middleware/errorLogger.ts'
+);
 
 /**
  * Handlers throw `DomainError`; the middleware owns the response body.
@@ -86,6 +90,27 @@ const scan = (rawSource: string, pattern: RegExp) => {
 
   return found;
 };
+
+/**
+ * The middleware is the last place a string-shaped body could come back, and it
+ * is the place it survived longest: #913 converged the 349 handler bodies but
+ * left the 500 catch-all as `{ error: 'Internal Server Error' }`, so a client
+ * still had to test the type of `error` before reading it.
+ */
+describe('the error middleware emits one shape', () => {
+  test('assigns no bare-string error body', () => {
+    const violations = scan(
+      readFileSync(ERROR_LOGGER, 'utf8'),
+      /ctx\.body\s*=\s*\{\s*error:\s*['`]/
+    );
+
+    expect(
+      violations.map((v) => {
+        return `errorLogger.ts:${v.line} returns a string error body — every response is { error: { code, message } }`;
+      })
+    ).toEqual([]);
+  });
+});
 
 describe('REST handlers signal errors with DomainError', () => {
   const files = readdirSync(V1_DIR).filter((f) => {

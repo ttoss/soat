@@ -19,6 +19,11 @@ const extractError = (errorBody: unknown, status: number): ApiError => {
   if (typeof errorBody === 'object' && errorBody !== null) {
     const body = errorBody as Record<string, unknown>;
     const err = body['error'];
+    // The SOAT server no longer emits `{ error: "some string" }` — every
+    // response is `{ error: { code, message } }`, the 500 catch-all included.
+    // This branch stays because the app does not only talk to that server: a
+    // reverse proxy, gateway or CDN in front of it can answer 502/504 in
+    // whatever shape it likes, and that is not a contract we control.
     if (typeof err === 'string') return { message: err };
     if (typeof err === 'object' && err !== null) {
       const e = err as Record<string, unknown>;

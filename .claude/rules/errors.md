@@ -98,13 +98,19 @@ Use `get*` in route handlers so errors propagate automatically to the middleware
 sets the response. **Never add a try/catch in a route handler just to convert errors
 to HTTP responses** — let errors propagate to the middleware.
 
-| Error type    | HTTP status        | Response body                                                                     |
-| ------------- | ------------------ | --------------------------------------------------------------------------------- |
-| `DomainError` | `error.httpStatus` | `{ error: { code, message, meta? } }` (object)                                    |
-| Any other     | 500                | `{ error: "Internal Server Error" }` — **raw `error.message` is never forwarded** |
+| Error type              | HTTP status         | Response body                                                        |
+| ----------------------- | ------------------- | -------------------------------------------------------------------- |
+| `DomainError`           | `error.httpStatus`  | `{ error: { code, message, meta? } }`                                |
+| Koa HTTP error, exposed | the error's status  | `{ error: { code: 'REQUEST_REJECTED', message } }`                   |
+| Anything else           | 500                 | `{ error: { code: 'INTERNAL_ERROR', message: 'Internal Server Error' } }` — **raw `error.message` is never forwarded** |
 
-The object shape is now the **only** handled-error shape, `401` and `403`
-included. The string form is reachable exclusively through the 500 catch-all.
+`{ error: { code, message, meta? } }` is the **only** error shape the API
+returns — `401`, `403` and the 500 catch-all included. A client never has to
+test the type of `error` before reading `error.code`.
+
+Leaving the catch-all as a bare string was the last exception, and it was the
+worst one to leave: a catch-all is the response that arrives unannounced, so it
+is the one a client is least likely to have special-cased.
 
 ### Consuming DomainError responses in tests
 
@@ -120,11 +126,12 @@ expect(response.body.error.message).toMatch(/not found/i);
 expect(response.body.error).toContain('not found');
 ```
 
-For generic (non-domain) errors the body is a plain string:
+Generic (non-domain) errors are the same shape, under a fixed code:
 
 ```ts
 expect(response.status).toBe(500);
-expect(response.body.error).toBe('Internal Server Error');
+expect(response.body.error.code).toBe('INTERNAL_ERROR');
+expect(response.body.error.message).toBe('Internal Server Error');
 ```
 
 ### CLI error display
