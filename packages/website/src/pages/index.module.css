@@ -20,6 +20,7 @@
 
 .heroTitle {
   max-width: 760px;
+  font-size: clamp(1.85rem, 5vw + 1rem, 3rem);
 }
 
 .heroSubtitle {
