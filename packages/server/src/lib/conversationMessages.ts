@@ -3,6 +3,7 @@ import { type Transaction } from './dbTransaction';
 import { createDocument, deleteDocument } from './documents';
 import { emitResourceEvent } from './eventBus';
 import { readFileBuffer } from './fileStorage';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const readStoredFileContent = async (
   file?: InstanceType<(typeof db)['File']>
@@ -15,15 +16,37 @@ const readStoredFileContent = async (
   return buffer ? buffer.toString('utf-8') : null;
 };
 
-export const mapMessage = async (
-  message: InstanceType<(typeof db)['ConversationMessage']> & {
-    document?: InstanceType<(typeof db)['Document']> & {
-      file?: InstanceType<(typeof db)['File']>;
-    };
-    actor?: InstanceType<(typeof db)['Actor']> | null;
-    agent?: InstanceType<(typeof db)['Agent']> | null;
-  }
-) => {
+type ConversationMessageRow = InstanceType<
+  (typeof db)['ConversationMessage']
+> & {
+  document?: InstanceType<(typeof db)['Document']> & {
+    file?: InstanceType<(typeof db)['File']>;
+  };
+  actor?: InstanceType<(typeof db)['Actor']> | null;
+  agent?: InstanceType<(typeof db)['Agent']> | null;
+};
+
+const conversationMessageIncludes = () => {
+  return [
+    {
+      model: db.Document,
+      as: 'document',
+      include: [{ model: db.File, as: 'file' }],
+    },
+    { model: db.Actor, as: 'actor' },
+    { model: db.Agent, as: 'agent' },
+  ];
+};
+
+const conversationMessages = makeResourceAccessor<ConversationMessageRow>({
+  model: () => {
+    return db.ConversationMessage;
+  },
+  includes: conversationMessageIncludes,
+  label: 'Conversation message',
+});
+
+export const mapMessage = async (message: ConversationMessageRow) => {
   return {
     role: message.role,
     document_id: message.document?.publicId,
@@ -227,20 +250,9 @@ export const addConversationMessage = async (args: {
     idempotencyKey: args.idempotencyKey ?? null,
   });
 
-  const messageWithAssociations = await db.ConversationMessage.findOne({
-    where: { id: result.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Agent, as: 'agent' },
-    ],
-  });
+  const messageWithAssociations = await conversationMessages.reload(result);
 
-  const mapped = await mapMessage(messageWithAssociations!);
+  const mapped = await mapMessage(messageWithAssociations);
 
   emitMessageCreated({
     conversationId: args.conversationId,
@@ -297,20 +309,9 @@ export const addConversationDocumentMessage = async (args: {
     idempotencyKey: null,
   });
 
-  const messageWithAssociations = await db.ConversationMessage.findOne({
-    where: { id: result.id },
-    include: [
-      {
-        model: db.Document,
-        as: 'document',
-        include: [{ model: db.File, as: 'file' }],
-      },
-      { model: db.Actor, as: 'actor' },
-      { model: db.Agent, as: 'agent' },
-    ],
-  });
+  const messageWithAssociations = await conversationMessages.reload(result);
 
-  const mapped = await mapMessage(messageWithAssociations!);
+  const mapped = await mapMessage(messageWithAssociations);
 
   emitMessageCreated({
     conversationId: args.conversationId,

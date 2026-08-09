@@ -5,6 +5,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitEvent, resolveProjectPublicId } from './eventBus';
 import { emptyPage, paginatedList, type PaginatedResult } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:usage:thresholds');
 
@@ -39,10 +40,24 @@ export type PersistedUsageThreshold = {
   created_at: Date;
 };
 
+type UsageThresholdRow = InstanceType<(typeof db)['UsageThreshold']> & {
+  project?: InstanceType<(typeof db)['Project']> | null;
+};
+
+const thresholdIncludes = () => {
+  return [{ model: db.Project, as: 'project' }];
+};
+
+const thresholds = makeResourceAccessor<UsageThresholdRow>({
+  model: () => {
+    return db.UsageThreshold;
+  },
+  includes: thresholdIncludes,
+  label: 'Usage threshold',
+});
+
 const mapThreshold = (
-  threshold: InstanceType<(typeof db)['UsageThreshold']> & {
-    project?: InstanceType<(typeof db)['Project']> | null;
-  }
+  threshold: UsageThresholdRow
 ): PersistedUsageThreshold => {
   return {
     id: threshold.publicId,
@@ -164,11 +179,7 @@ export const createThreshold = async (args: {
     firedWindowKey: null,
   });
 
-  const withProject = await db.UsageThreshold.findOne({
-    where: { id: created.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-  return mapThreshold(withProject!);
+  return mapThreshold(await thresholds.reload(created));
 };
 
 /**
@@ -185,27 +196,11 @@ export const getThreshold = async (args: {
   id: string;
   projectIds?: number[];
 }): Promise<PersistedUsageThreshold> => {
-  const notFound = (): never => {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Usage threshold '${args.id}' not found.`
-    );
-  };
-
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return notFound();
-    where.projectId = args.projectIds;
-  }
-  const threshold = await db.UsageThreshold.findOne({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
-  });
-  if (!threshold) return notFound();
   return mapThreshold(
-    threshold as InstanceType<(typeof db)['UsageThreshold']> & {
-      project?: InstanceType<(typeof db)['Project']> | null;
-    }
+    await thresholds.getByPublicId({
+      id: args.id,
+      projectIds: args.projectIds,
+    })
   );
 };
 
@@ -213,12 +208,10 @@ export const deleteThreshold = async (args: {
   id: string;
   projectIds?: number[];
 }): Promise<boolean> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return false;
-    where.projectId = args.projectIds;
-  }
-  const threshold = await db.UsageThreshold.findOne({ where });
+  const threshold = await thresholds.findByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
+  });
   if (!threshold) return false;
   await threshold.destroy();
   log('deleteThreshold: id=%s', args.id);

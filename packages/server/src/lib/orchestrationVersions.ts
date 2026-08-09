@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { DomainError } from '../errors';
+import { orchestrations } from './orchestrationAccessor';
 import { parseOrchestrationGraph } from './orchestrationGraphWire';
 import {
   type MappedOrchestration,
@@ -46,22 +46,20 @@ const mapOrchestrationVersion = (
 
 // ── Lookup helpers ───────────────────────────────────────────────────────
 
+// Lean lookup: only the row's own columns are read here. Cross-project access
+// resolves as "not found" rather than a 403, so an orchestration's existence
+// never leaks across a tenant boundary — that decision lives in `scopedWhere`.
 const findOrchestrationInstance = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<OrchestrationInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const orchestration = await db.Orchestration.findOne({ where });
-  // Cross-project access resolves here as "not found" rather than a 403, so an
-  // orchestration's existence never leaks across a tenant boundary.
-  if (!orchestration) {
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration '${args.id}' not found.`
-    );
-  }
+  const orchestration = await db.Orchestration.findOne({
+    where: orchestrations.scopedWhere({
+      id: args.id,
+      projectIds: args.projectIds,
+    }),
+  });
+  if (!orchestration) throw orchestrations.notFound(args.id);
   return orchestration as OrchestrationInstance;
 };
 

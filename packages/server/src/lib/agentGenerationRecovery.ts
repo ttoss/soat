@@ -1,4 +1,4 @@
-import { db } from '../db';
+import { agents } from './agentAccessor';
 import {
   type ClientToolResult,
   type GenerationResult,
@@ -18,16 +18,9 @@ export const resolveAgentForGeneration = async (args: {
   agentId: string;
   projectIds?: number[];
 }): Promise<TypedAgent | null> => {
-  const where: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const agent = await db.Agent.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.AiProvider, as: 'aiProvider' },
-      { model: db.ModelRoute, as: 'modelRoute' },
-    ],
+  const agent = await agents.findByPublicId({
+    id: args.agentId,
+    projectIds: args.projectIds,
   });
 
   return agent as unknown as TypedAgent | null;

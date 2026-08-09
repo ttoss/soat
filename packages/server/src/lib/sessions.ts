@@ -2,7 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
-import { sessionIncludes } from './sessionAccessor';
+import { sessionIncludes, type SessionRow, sessions } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -50,14 +50,7 @@ const extractSessionOptional = (session: Parameters<typeof mapSession>[0]) => {
   };
 };
 
-const mapSession = (
-  session: InstanceType<(typeof db)['Session']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']>;
-    conversation?: InstanceType<(typeof db)['Conversation']>;
-    actor?: InstanceType<(typeof db)['Actor']> | null;
-  }
-) => {
+const mapSession = (session: SessionRow) => {
   return {
     id: session.publicId,
     ...extractSessionIds(session),
@@ -166,12 +159,7 @@ export const createSession = async (args: {
     });
   });
 
-  const sessionWithIncludes = await db.Session.findOne({
-    where: { id: session.id },
-    include: sessionIncludes(),
-  });
-
-  const mapped = mapSession(sessionWithIncludes!);
+  const mapped = mapSession(await sessions.reload(session));
 
   emitResourceEvent({
     type: 'sessions.created',
@@ -375,12 +363,7 @@ export const updateSession = async (args: {
     abortSessionGeneration(sessionKey);
   }
 
-  const sessionWithIncludes = await db.Session.findOne({
-    where: { id: session.id },
-    include: sessionIncludes(),
-  });
-
-  const mapped = mapSession(sessionWithIncludes!);
+  const mapped = mapSession(await sessions.reload(session));
 
   emitResourceEvent({
     type: 'sessions.updated',

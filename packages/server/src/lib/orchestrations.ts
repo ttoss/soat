@@ -2,7 +2,12 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
+import {
+  nodeExecutionsInclude,
+  type OrchestrationRunRow,
+  orchestrationRuns,
+  orchestrations,
+} from './orchestrationAccessor';
 import type {
   mapOrchestrationEdge,
   mapOrchestrationNode,
@@ -333,18 +338,7 @@ export const mapOrchestrationRun = (
   };
 };
 
-/**
- * Sequelize include for the per-node execution records of a run, ordered
- * oldest-first. Returned as a function because `db` is populated at runtime.
- */
-export const nodeExecutionsInclude = (): object => {
-  return {
-    model: db.OrchestrationNodeExecution,
-    as: 'nodeExecutions',
-    separate: true,
-    order: [['createdAt', 'ASC']],
-  };
-};
+export { nodeExecutionsInclude } from './orchestrationAccessor';
 
 // ── CRUD: Orchestrations ──────────────────────────────────────────────────
 
@@ -438,21 +432,14 @@ export const findOrchestration = async (args: {
 }): Promise<MappedOrchestration | null> => {
   log('findOrchestration %o', { id: args.id });
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const orch = await db.Orchestration.findOne({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
+  const orch = await orchestrations.findByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
   });
 
   if (!orch) return null;
 
-  return mapOrchestration(
-    orch as InstanceType<typeof db.Orchestration> & {
-      project: InstanceType<typeof db.Project>;
-    }
-  );
+  return mapOrchestration(orch);
 };
 
 export const updateOrchestration = async (
@@ -469,18 +456,10 @@ export const updateOrchestration = async (
 ): Promise<MappedOrchestration> => {
   log('updateOrchestration %o', { id: args.id });
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const orch = await db.Orchestration.findOne({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
+  const orch = await orchestrations.getByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
   });
-  if (!orch)
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration '${args.id}' not found.`
-    );
 
   // `orch` is loaded with its project so it can be mapped directly, before and
   // after the write: `update` mutates the instance in place, so the same
@@ -549,15 +528,10 @@ export const deleteOrchestration = async (args: {
 }): Promise<void> => {
   log('deleteOrchestration %o', { id: args.id });
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const orch = await db.Orchestration.findOne({ where });
-  if (!orch)
-    throw new DomainError(
-      'ORCHESTRATION_NOT_FOUND',
-      `Orchestration '${args.id}' not found.`
-    );
+  const orch = await orchestrations.getByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
+  });
 
   await db.sequelize.transaction(async (t) => {
     const runs = await db.OrchestrationRun.findAll({
@@ -611,35 +585,34 @@ export const findOrchestrationRun = async (args: {
 }): Promise<MappedOrchestrationRun | null> => {
   log('findOrchestrationRun %o', { id: args.id });
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
+  // The run's own includes plus the node executions, and — when the caller
+  // pins one — an inner `where` on the orchestration that turns the join into
+  // a filter. Built here rather than taken from the accessor because it varies
+  // per call; the scoped `where` is the part that must not.
   const include: object[] = [
     { model: db.Project, as: 'project' },
-    { model: db.Orchestration, as: 'orchestration' },
+    args.orchestrationId
+      ? {
+          model: db.Orchestration,
+          as: 'orchestration',
+          where: { publicId: args.orchestrationId },
+        }
+      : { model: db.Orchestration, as: 'orchestration' },
     nodeExecutionsInclude(),
   ];
 
-  if (args.orchestrationId) {
-    include[1] = {
-      model: db.Orchestration,
-      as: 'orchestration',
-      where: { publicId: args.orchestrationId },
-    };
-  }
-
-  const run = await db.OrchestrationRun.findOne({ where, include });
+  const run = (await db.OrchestrationRun.findOne({
+    where: orchestrationRuns.scopedWhere({
+      id: args.id,
+      projectIds: args.projectIds,
+    }),
+    include,
+  })) as OrchestrationRunRow | null;
   if (!run) return null;
 
   const usage = await getRunUsageTotals({ runInternalId: run.id as number });
 
-  return mapOrchestrationRun(
-    run as InstanceType<typeof db.OrchestrationRun> & {
-      orchestration: InstanceType<typeof db.Orchestration>;
-      project: InstanceType<typeof db.Project>;
-    },
-    usage
-  );
+  return mapOrchestrationRun(run, usage);
 };
 
 export const listOrchestrationRuns = async (args: {

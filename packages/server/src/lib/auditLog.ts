@@ -7,8 +7,8 @@ import {
   convertKeys,
 } from 'src/lib/resource-inputs/normalizers';
 
-import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:audit');
 
@@ -29,10 +29,22 @@ export type AuditCheck = {
   allowed: boolean;
 };
 
-const mapAuditEntry = (
-  instance: InstanceType<(typeof db)['AuditEntry']> & {
-    project?: InstanceType<(typeof db)['Project']> | null;
+type AuditEntryRow = InstanceType<(typeof db)['AuditEntry']> & {
+  project?: InstanceType<(typeof db)['Project']> | null;
+};
+
+const auditEntries = makeResourceAccessor<AuditEntryRow>({
+  model: () => {
+    return db.AuditEntry;
   },
+  includes: () => {
+    return [{ model: db.Project, as: 'project' }];
+  },
+  label: 'Audit entry',
+});
+
+const mapAuditEntry = (
+  instance: AuditEntryRow,
   // Overrides the eager-loaded association when the caller already knows the
   // project's public id (the write path, which never re-reads the row it just
   // created).
@@ -392,25 +404,12 @@ export const getAuditEntry = async (args: {
   id: string;
   projectIds?: number[];
 }): Promise<ReturnType<typeof mapAuditEntry>> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.id };
-  if (args.projectIds) {
-    where.projectId = args.projectIds;
-  }
-
-  const entry = await db.AuditEntry.findOne({
-    where,
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  if (!entry) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Audit entry '${args.id}' not found.`
-    );
-  }
-
-  return mapAuditEntry(entry);
+  return mapAuditEntry(
+    await auditEntries.getByPublicId({
+      id: args.id,
+      projectIds: args.projectIds,
+    })
+  );
 };
 
 const DEFAULT_RETENTION_DAYS = 365;

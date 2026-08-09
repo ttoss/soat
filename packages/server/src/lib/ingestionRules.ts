@@ -9,6 +9,7 @@ import {
 import { resolveConverterToolType } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:ingestionRules');
@@ -48,13 +49,21 @@ const ingestionRuleIncludes = () => {
   ];
 };
 
-const mapIngestionRule = (
-  rule: InstanceType<typeof db.IngestionRule> & {
-    project?: InstanceType<typeof db.Project>;
-    tool?: InstanceType<typeof db.Tool> | null;
-    agent?: InstanceType<typeof db.Agent> | null;
-  }
-): MappedIngestionRule => {
+type IngestionRuleRow = InstanceType<typeof db.IngestionRule> & {
+  project?: InstanceType<typeof db.Project>;
+  tool?: InstanceType<typeof db.Tool> | null;
+  agent?: InstanceType<typeof db.Agent> | null;
+};
+
+const ingestionRules = makeResourceAccessor<IngestionRuleRow>({
+  model: () => {
+    return db.IngestionRule;
+  },
+  includes: ingestionRuleIncludes,
+  label: 'IngestionRule',
+});
+
+const mapIngestionRule = (rule: IngestionRuleRow): MappedIngestionRule => {
   return {
     id: rule.publicId,
     project_id: rule.project?.publicId ?? '',
@@ -215,13 +224,10 @@ export const createIngestionRule = async (args: {
     buildIngestionRuleCreateValues(args)
   );
 
-  const created = await db.IngestionRule.findOne({
-    where: { id: rule.id },
-    include: ingestionRuleIncludes(),
-  });
+  const created = await ingestionRules.reload(rule);
 
-  log('createIngestionRule: created rule id=%s', created!.publicId);
-  return mapIngestionRule(created as Parameters<typeof mapIngestionRule>[0]);
+  log('createIngestionRule: created rule id=%s', created.publicId);
+  return mapIngestionRule(created);
 };
 
 export const listIngestionRules = async (args: {
@@ -259,24 +265,12 @@ export const getIngestionRule = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<MappedIngestionRule> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const rule = await db.IngestionRule.findOne({
-    where,
-    include: ingestionRuleIncludes(),
-  });
-
-  if (!rule) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `IngestionRule '${args.id}' not found.`
-    );
-  }
-
-  return mapIngestionRule(rule as Parameters<typeof mapIngestionRule>[0]);
+  return mapIngestionRule(
+    await ingestionRules.getByPublicId({
+      id: args.id,
+      projectIds: args.projectIds,
+    })
+  );
 };
 
 const buildIngestionRuleUpdates = (args: {
@@ -329,18 +323,15 @@ export const updateIngestionRule = async (args: {
 }): Promise<MappedIngestionRule> => {
   log('updateIngestionRule: id=%s', args.id);
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const rule = await db.IngestionRule.findOne({ where });
-  if (!rule) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `IngestionRule '${args.id}' not found.`
-    );
-  }
+  // Lean lookup on purpose: this path reloads with includes after the write,
+  // so attaching them here would join twice.
+  const rule = await db.IngestionRule.findOne({
+    where: ingestionRules.scopedWhere({
+      id: args.id,
+      projectIds: args.projectIds,
+    }),
+  });
+  if (!rule) throw ingestionRules.notFound(args.id);
 
   const finalToolId = args.toolId !== undefined ? args.toolId : rule.toolId;
   const finalAgentId = args.agentId !== undefined ? args.agentId : rule.agentId;
@@ -378,12 +369,7 @@ export const updateIngestionRule = async (args: {
     contentTypeGlob: finalContentTypeGlob,
   });
 
-  const updated = await db.IngestionRule.findOne({
-    where: { id: rule.id },
-    include: ingestionRuleIncludes(),
-  });
-
-  return mapIngestionRule(updated as Parameters<typeof mapIngestionRule>[0]);
+  return mapIngestionRule(await ingestionRules.reload(rule));
 };
 
 export const deleteIngestionRule = async (args: {
@@ -392,18 +378,13 @@ export const deleteIngestionRule = async (args: {
 }): Promise<void> => {
   log('deleteIngestionRule: id=%s', args.id);
 
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const rule = await db.IngestionRule.findOne({ where });
-  if (!rule) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `IngestionRule '${args.id}' not found.`
-    );
-  }
+  const rule = await db.IngestionRule.findOne({
+    where: ingestionRules.scopedWhere({
+      id: args.id,
+      projectIds: args.projectIds,
+    }),
+  });
+  if (!rule) throw ingestionRules.notFound(args.id);
 
   await rule.destroy();
 };

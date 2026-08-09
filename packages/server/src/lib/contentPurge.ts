@@ -5,6 +5,7 @@ import { db } from '../db';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
+import { makeResourceAccessor } from './resourceAccessor';
 import {
   PURGED_GENERATION_CONTENT,
   PURGED_TRACE_CONTENT,
@@ -12,6 +13,25 @@ import {
 import { getTrace, type Trace } from './traces';
 
 const log = createDebug('soat:content-purge');
+
+// Lean accessors: both purge paths mutate the row's own columns and re-read the
+// mapped resource through `getGeneration` / `getTrace` afterwards, so only the
+// scoped `where` is borrowed — never the includes.
+const generations = makeResourceAccessor<
+  InstanceType<(typeof db)['Generation']>
+>({
+  model: () => {
+    return db.Generation;
+  },
+  label: 'Generation',
+});
+
+const traces = makeResourceAccessor<InstanceType<(typeof db)['Trace']>>({
+  model: () => {
+    return db.Trace;
+  },
+  label: 'Trace',
+});
 
 /**
  * The principal that performed a purge, resolved from the request's auth
@@ -73,14 +93,10 @@ export const purgeGenerationContent = async (args: {
 }): Promise<PersistedGeneration | null> => {
   log('purgeGenerationContent: publicId=%s', args.publicId);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.publicId };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return null;
-    where.projectId = args.projectIds;
-  }
-
-  const gen = await db.Generation.findOne({ where });
+  const gen = await generations.findByPublicId({
+    id: args.publicId,
+    projectIds: args.projectIds,
+  });
   if (!gen) return null;
 
   const alreadyRedacted = gen.contentRedactedAt !== null;
@@ -241,14 +257,10 @@ export const purgeTraceContent = async (args: {
 }): Promise<Trace | null> => {
   log('purgeTraceContent: traceId=%s', args.traceId);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.traceId };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0) return null;
-    where.projectId = args.projectIds;
-  }
-
-  const target = await db.Trace.findOne({ where });
+  const target = await traces.findByPublicId({
+    id: args.traceId,
+    projectIds: args.projectIds,
+  });
   if (!target) return null;
 
   const subtree = await collectTraceSubtree({

@@ -17,6 +17,7 @@ import {
   validateModelRouteTargets,
 } from './modelRouteValidation';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:model-routes');
 
@@ -150,34 +151,35 @@ const validateName = (name: unknown): string => {
 
 // ── CRUD ─────────────────────────────────────────────────────────────────
 
-const reloadWithIncludes = async (id: number): Promise<MappedModelRoute> => {
-  const reloaded = await db.ModelRoute.findOne({
-    where: { id },
-    include: getModelRouteIncludes(),
-  });
-  return mapModelRoute(reloaded as Parameters<typeof mapModelRoute>[0]);
+/**
+ * The loaded row `mapModelRoute` reads. Declared once so the accessor's return
+ * type *is* the mapper's parameter type — the `as Parameters<typeof
+ * mapModelRoute>[0]` cast at each reload is gone.
+ */
+type ModelRouteRow = ModelRouteInstance & { project: { publicId: string } };
+
+const modelRoutes = makeResourceAccessor<ModelRouteRow>({
+  model: () => {
+    return db.ModelRoute;
+  },
+  includes: getModelRouteIncludes,
+  label: 'Model route',
+});
+
+const reloadWithIncludes = async (row: {
+  id?: unknown;
+}): Promise<MappedModelRoute> => {
+  return mapModelRoute(await modelRoutes.reload(row));
 };
 
 const findModelRouteInstance = async (args: {
   projectIds?: number[];
   id: string;
-}): Promise<ModelRouteInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const route = await db.ModelRoute.findOne({
-    where,
-    include: getModelRouteIncludes(),
+}): Promise<ModelRouteRow> => {
+  return modelRoutes.getByPublicId({
+    id: args.id,
+    projectIds: args.projectIds,
   });
-
-  if (!route) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Model route '${args.id}' not found.`
-    );
-  }
-
-  return route as ModelRouteInstance;
 };
 
 export const createModelRoute = async (args: {
@@ -218,7 +220,7 @@ export const createModelRoute = async (args: {
     targets.length
   );
 
-  return reloadWithIncludes((route as unknown as { id: number }).id);
+  return reloadWithIncludes(route);
 };
 
 export const listModelRoutes = async (args: {
@@ -253,7 +255,7 @@ export const getModelRoute = async (args: {
   id: string;
 }): Promise<MappedModelRoute> => {
   const route = await findModelRouteInstance(args);
-  return mapModelRoute(route as Parameters<typeof mapModelRoute>[0]);
+  return mapModelRoute(route);
 };
 
 export const updateModelRoute = async (args: {
@@ -309,7 +311,7 @@ export const updateModelRoute = async (args: {
 
   log('updateModelRoute: id=%s fields=%o', args.id, Object.keys(updates));
 
-  return reloadWithIncludes(routeDbId);
+  return reloadWithIncludes({ id: routeDbId });
 };
 
 const MAX_DEPENDENT_SAMPLE = 5;

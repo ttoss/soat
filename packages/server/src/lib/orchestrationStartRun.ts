@@ -1,5 +1,5 @@
 import { db } from '../db';
-import { DomainError } from '../errors';
+import { orchestrations } from './orchestrationAccessor';
 import type { RequiredAction } from './orchestrationNodeTypes';
 import {
   type MappedOrchestrationRun,
@@ -10,21 +10,21 @@ export const findOrchestrationForStartRun = async (args: {
   orchestrationPublicId: string;
   projectIds?: number[];
 }): Promise<InstanceType<typeof db.Orchestration>> => {
-  const where: Record<string, unknown> = {
-    publicId: args.orchestrationPublicId,
-  };
-
-  if (args.projectIds && args.projectIds.length > 0) {
-    where['projectId'] = args.projectIds;
+  // Lean lookup: the start path reads the row's own columns only.
+  //
+  // This used to skip the `projectId` filter whenever `projectIds` was an empty
+  // array, which read as "no scope restriction" — the opposite of what every
+  // other module means by it. `scopedWhere` makes an empty scope match nothing.
+  const orchestration = await db.Orchestration.findOne({
+    where: orchestrations.scopedWhere({
+      id: args.orchestrationPublicId,
+      projectIds: args.projectIds,
+    }),
+  });
+  if (!orchestration) {
+    throw orchestrations.notFound(args.orchestrationPublicId);
   }
-
-  const orchestration = await db.Orchestration.findOne({ where });
-  if (orchestration) return orchestration;
-
-  throw new DomainError(
-    'ORCHESTRATION_NOT_FOUND',
-    `Orchestration '${args.orchestrationPublicId}' not found.`
-  );
+  return orchestration;
 };
 
 export const resolveStartRunProjectScope = (args: {

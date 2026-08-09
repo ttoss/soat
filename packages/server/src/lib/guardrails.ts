@@ -10,12 +10,22 @@ import {
   guardrailVersionStore,
 } from './guardrailVersionSnapshot';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:guardrails');
 
 const CONTEXT_MODES = ['merge', 'replace'];
 
-type GuardrailInstance = InstanceType<(typeof db)['Guardrail']>;
+/**
+ * A guardrail row with its project attached — the shape `mapGuardrail` reads.
+ * Declaring the association here (rather than casting at each `findOne`) is
+ * what lets the accessor's return type *be* the mapper's parameter type: the
+ * `as GuardrailInstance` at every call site collapses to the one cast inside
+ * the accessor.
+ */
+type GuardrailInstance = InstanceType<(typeof db)['Guardrail']> & {
+  project: InstanceType<(typeof db)['Project']>;
+};
 
 /**
  * Who caused a config write, and an optional tag for the version it archives.
@@ -30,6 +40,14 @@ export type GuardrailVersionAuthorship = {
 const getGuardrailIncludes = () => {
   return [{ model: db.Project, as: 'project' }];
 };
+
+const guardrails = makeResourceAccessor<GuardrailInstance>({
+  model: () => {
+    return db.Guardrail;
+  },
+  includes: getGuardrailIncludes,
+  label: 'Guardrail',
+});
 
 export type MappedGuardrail = ReturnType<typeof mapGuardrail>;
 
@@ -171,14 +189,6 @@ const validateContextMode = (contextMode: unknown): void => {
   }
 };
 
-const reloadWithIncludes = async (id: number) => {
-  const reloaded = await db.Guardrail.findOne({
-    where: { id },
-    include: getGuardrailIncludes(),
-  });
-  return reloaded as GuardrailInstance;
-};
-
 export const createGuardrail = async (
   args: {
     projectId: number;
@@ -221,10 +231,7 @@ export const createGuardrail = async (
 
   log('createGuardrail: created id=%s', guardrail.publicId);
 
-  const created = await reloadWithIncludes(
-    (guardrail as unknown as { id: number }).id
-  );
-  return mapGuardrail(created);
+  return mapGuardrail(await guardrails.reload(guardrail));
 };
 
 export const listGuardrails = async (args: {
@@ -258,28 +265,17 @@ export const listGuardrails = async (args: {
   });
 };
 
-const findGuardrailInstance = async (args: {
+// Cross-project access resolves as "not found" rather than a 403, so a
+// guardrail's existence never leaks across a tenant boundary — that decision
+// lives in `scopedWhere`, not here.
+//
+// Exported because `guardrailVersions.ts` needs the same scoped lookup; it kept
+// a byte-identical private copy until the two were converged here.
+export const findGuardrailInstance = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<GuardrailInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const guardrail = await db.Guardrail.findOne({
-    where,
-    include: getGuardrailIncludes(),
-  });
-
-  if (!guardrail) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Guardrail '${args.id}' not found.`
-    );
-  }
-
-  return guardrail as GuardrailInstance;
+  return guardrails.getByPublicId({ id: args.id, projectIds: args.projectIds });
 };
 
 export const getGuardrail = async (args: {

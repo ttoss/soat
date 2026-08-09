@@ -1,6 +1,7 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { applyInputMapping, applyOutputMapping } from './jsonLogicMapping';
+import { scopedWhere } from './resourceAccessor';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -276,11 +277,16 @@ export const assertPipelineStepToolsValid = async (args: {
       continue;
     }
 
-    const where: Record<string, unknown> = { publicId: step.toolId };
-    if (args.projectIds !== undefined) {
-      where['projectId'] = args.projectIds;
-    }
-    const stepTool = await db.Tool.findOne({ where });
+    // `parseStepToolReference` rejects a step carrying neither an inline `tool`
+    // (handled above) nor a non-empty `toolId`, so this branch always has one.
+    const stepTool = await db.Tool.findOne({
+      // A step's tool miss is a `PIPELINE_INVALID_STEP` carrying step context,
+      // not a generic not-found, so only the scope rule is borrowed.
+      where: scopedWhere({
+        id: step.toolId as string,
+        projectIds: args.projectIds,
+      }),
+    });
     if (!stepTool) {
       throw new DomainError(
         'PIPELINE_INVALID_STEP',

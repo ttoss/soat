@@ -1,4 +1,5 @@
 import { db } from '../db';
+import { orchestrationRuns } from './orchestrationAccessor';
 import { sumComponentCostUsd } from './priceCompute';
 
 const assocPublicId = (
@@ -212,11 +213,12 @@ const resolveRunInternalId = async (args: {
   orchestrationRunId: string;
   projectIds?: number[];
 }): Promise<number | null> => {
-  const where: { publicId: string; projectId?: number[] } = {
-    publicId: args.orchestrationRunId,
-  };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-  const run = await db.OrchestrationRun.findOne({ where });
+  const run = await db.OrchestrationRun.findOne({
+    where: orchestrationRuns.scopedWhere({
+      id: args.orchestrationRunId,
+      projectIds: args.projectIds,
+    }),
+  });
   return (run?.id as number | undefined) ?? null;
 };
 

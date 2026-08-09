@@ -1,5 +1,6 @@
 import { db } from '../db';
 import type { ResourceIncludes } from './modelIncludes';
+import { makeResourceAccessor } from './resourceAccessor';
 
 /**
  * The association set every session read loads.
@@ -18,3 +19,23 @@ export const sessionIncludes = (): ResourceIncludes => {
     { model: db.Actor, as: 'actor' },
   ];
 };
+
+/**
+ * A session row with those associations attached — the shape `mapSession`
+ * reads. Declared here for the same reason `sessionIncludes` is: the type and
+ * the includes it describes must not be able to drift apart.
+ */
+export type SessionRow = InstanceType<(typeof db)['Session']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  agent?: InstanceType<(typeof db)['Agent']>;
+  conversation?: InstanceType<(typeof db)['Conversation']>;
+  actor?: InstanceType<(typeof db)['Actor']> | null;
+};
+
+export const sessions = makeResourceAccessor<SessionRow>({
+  model: () => {
+    return db.Session;
+  },
+  includes: sessionIncludes,
+  label: 'Session',
+});
