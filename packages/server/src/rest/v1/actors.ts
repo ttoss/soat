@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   createActor,
   deleteActor,
@@ -14,8 +15,8 @@ import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 import {
-  checkAuth,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -33,11 +34,7 @@ type CreateActorBody = {
 };
 
 actorsRouter.get('/actors', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const externalId = ctx.query.external_id as string | undefined;
@@ -52,14 +49,12 @@ actorsRouter.get('/actors', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'actors:ListActors',
     resourceType: 'actor',
   });
-
-  if (projectIds === null) return;
 
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {
@@ -96,11 +91,7 @@ actorsRouter.get('/actors', async (ctx: Context) => {
 });
 
 actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -120,9 +111,7 @@ actorsRouter.get('/actors/:actor_id', async (ctx: Context) => {
     context: contextGet,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = actor;
@@ -175,14 +164,11 @@ const validateCreateActorBody = (body: CreateActorBody): string | null => {
 };
 
 actorsRouter.post('/actors', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as CreateActorBody;
   const validationError = validateCreateActorBody(body);
   if (validationError) {
-    ctx.status = 400;
-    ctx.body = { error: validationError };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
   const targetProjectId = await resolveWriteProjectId({
@@ -191,8 +177,6 @@ actorsRouter.post('/actors', async (ctx: Context) => {
     action: 'actors:CreateActor',
     resourceType: 'actor',
   });
-  if (targetProjectId === null) return;
-
   const projectDbId = Number(targetProjectId);
   const resolved = await resolveActorLinkedIds({
     agentId: body.agent_id,
@@ -214,11 +198,7 @@ actorsRouter.post('/actors', async (ctx: Context) => {
 });
 
 actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -238,9 +218,7 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
     context: contextDel,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteActor({ id: ctx.params.actor_id });
@@ -248,11 +226,7 @@ actorsRouter.delete('/actors/:actor_id', async (ctx: Context) => {
 });
 
 actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const actor = await getActor({ id: ctx.params.actor_id });
 
@@ -272,9 +246,7 @@ actorsRouter.patch('/actors/:actor_id', async (ctx: Context) => {
     context: contextUpd,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {

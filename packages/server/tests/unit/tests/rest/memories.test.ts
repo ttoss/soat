@@ -467,7 +467,7 @@ describe('Memories', () => {
           .send({ memory_id: memoryId, content: 'x', tags: [1, 2, 3] });
 
         expect(response.status).toBe(400);
-        expect(response.body.error).toMatch(/tags/);
+        expect(response.body.error.message).toMatch(/tags/);
       });
 
       test('returns 400 when metadata is not an object', async () => {
@@ -476,7 +476,7 @@ describe('Memories', () => {
           .send({ memory_id: memoryId, content: 'x', metadata: 'nope' });
 
         expect(response.status).toBe(400);
-        expect(response.body.error).toMatch(/metadata/);
+        expect(response.body.error.message).toMatch(/metadata/);
       });
     });
 
@@ -627,7 +627,7 @@ describe('Memories', () => {
           .send({ tags: [1] });
 
         expect(response.status).toBe(400);
-        expect(response.body.error).toMatch(/tags/);
+        expect(response.body.error.message).toMatch(/tags/);
       });
     });
 

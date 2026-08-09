@@ -7,6 +7,8 @@ import { getPermissionCatalog } from 'src/lib/permissionCatalog';
 import { getProject, listProjects } from 'src/lib/projects';
 import { PROJECT_SCOPE_PREFIX, saveConsentGrant } from 'src/oauth/server';
 
+import { requireAuth } from './helpers';
+
 const oauthRouter = new Router<Context>();
 
 const MCP_ACCESS_SCOPE = 'mcp:access';
@@ -65,9 +67,7 @@ const parseSelection = (value: unknown): ConsentSelection => {
  *         description: Unauthenticated.
  */
 oauthRouter.get('/oauth/consent-info', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
   const projects = await listProjects({ authUser: ctx.authUser });
   const catalog = getPermissionCatalog();
@@ -111,11 +111,9 @@ oauthRouter.get('/oauth/consent-info', async (ctx: Context) => {
  *         description: No access to the requested project.
  */
 oauthRouter.post('/oauth/consent', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
-  const body = (ctx.request.body ?? {}) as {
+  const body = ctx.request.body as {
     project_id?: string;
     selection?: unknown;
     authorize_query?: string;

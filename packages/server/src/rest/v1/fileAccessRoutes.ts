@@ -13,6 +13,7 @@ import {
 import { db } from '../../db';
 import { canAccessFile } from '../../lib/fileAuthorization';
 import { verifyFileDownloadToken } from '../../lib/fileDownloadToken';
+import { type AuthenticatedContext, requireAuth } from './helpers';
 
 const collectStreamToBuffer = async (args: {
   stream: AsyncIterable<unknown>;
@@ -22,16 +23,6 @@ const collectStreamToBuffer = async (args: {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
   }
   return Buffer.concat(chunks);
-};
-
-const ensureAuthenticated = (args: { ctx: Context }): boolean => {
-  if (!args.ctx.authUser) {
-    args.ctx.status = 401;
-    args.ctx.body = { error: 'Unauthorized' };
-    return false;
-  }
-
-  return true;
 };
 
 const ensureFileExists = async (args: { ctx: Context }) => {
@@ -44,17 +35,22 @@ const ensureFileExists = async (args: { ctx: Context }) => {
 };
 
 const ensureAllowed = async (args: {
-  ctx: Context;
-  action: 'files:GetFile' | 'files:DownloadFile' | 'files:UpdateFileMetadata';
+  // Narrowed: every caller runs `requireAuth` first, and the type says so.
+  ctx: AuthenticatedContext;
+  action:
+    | 'files:GetFile'
+    | 'files:DownloadFile'
+    | 'files:UpdateFileMetadata'
+    | 'files:DeleteFile';
   file: {
     id: string;
     project_id?: string | null;
     path?: string | null;
     tags?: Record<string, unknown> | null;
   };
-}) => {
+}): Promise<void> => {
   const allowed = await canAccessFile({
-    authUser: args.ctx.authUser!,
+    authUser: args.ctx.authUser,
     action: args.action,
     file: {
       id: args.file.id,
@@ -65,61 +61,47 @@ const ensureAllowed = async (args: {
   });
 
   if (!allowed) {
-    args.ctx.status = 403;
-    args.ctx.body = { error: 'Forbidden' };
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-
-  return allowed;
 };
 
 const registerGetFileRoute = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.get('/files/:file_id', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await ensureFileExists({ ctx });
 
-    const allowed = await ensureAllowed({ ctx, action: 'files:GetFile', file });
-    if (!allowed) return;
-
+    await ensureAllowed({ ctx, action: 'files:GetFile', file });
     ctx.body = file;
   });
 };
 
 const registerDeleteFileRoute = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.delete('/files/:file_id', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await db.File.findOne({
       where: { publicId: ctx.params.file_id },
       include: [{ model: db.Project, as: 'project' }],
     });
     if (!file) {
-      ctx.status = 404;
-      ctx.body = { error: 'File not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'File not found');
     }
 
-    const allowed = await canAccessFile({
-      authUser: ctx.authUser!,
+    await ensureAllowed({
+      ctx,
       action: 'files:DeleteFile',
       file: {
         id: file.publicId,
-        projectId: file.project!.publicId,
+        project_id: file.project!.publicId,
         path: (file as { path?: string | null }).path,
         tags: file.tags as Record<string, unknown> | null,
       },
     });
-    if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const result = await deleteFile({ id: ctx.params.file_id });
     if (result === null) {
-      ctx.status = 404;
-      ctx.body = { error: 'File not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'File not found');
     }
 
     ctx.status = 204;
@@ -147,31 +129,28 @@ const ensureDownloadAuthorized = async (args: {
     return ensureFileExists({ ctx: args.ctx });
   }
 
-  if (!ensureAuthenticated({ ctx: args.ctx })) return null;
+  requireAuth(args.ctx);
 
   const file = await ensureFileExists({ ctx: args.ctx });
 
-  const allowed = await ensureAllowed({
+  await ensureAllowed({
     ctx: args.ctx,
     action: 'files:DownloadFile',
     file,
   });
-  return allowed ? file : null;
+  return file;
 };
 
 const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.get('/files/:file_id/download', async (ctx: Context) => {
-    const file = await ensureDownloadAuthorized({
+    await ensureDownloadAuthorized({
       ctx,
       tokenValid: hasValidDownloadToken(ctx),
     });
-    if (!file) return;
 
     const result = await downloadFile({ id: ctx.params.file_id });
     if (!result) {
-      ctx.status = 404;
-      ctx.body = { error: 'File not found on disk' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'File not found on disk');
     }
 
     ctx.set('Content-Type', result.contentType ?? 'application/octet-stream');
@@ -190,22 +169,18 @@ const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.get(
     '/files/:file_id/download/base64',
     async (ctx: Context) => {
-      if (!ensureAuthenticated({ ctx })) return;
+      requireAuth(ctx);
 
       const file = await ensureFileExists({ ctx });
 
-      const allowed = await ensureAllowed({
+      await ensureAllowed({
         ctx,
         action: 'files:DownloadFile',
         file,
       });
-      if (!allowed) return;
-
       const result = await downloadFile({ id: ctx.params.file_id });
       if (!result) {
-        ctx.status = 404;
-        ctx.body = { error: 'File not found on disk' };
-        return;
+        throw new DomainError('RESOURCE_NOT_FOUND', 'File not found on disk');
       }
 
       const buffer = await collectStreamToBuffer({ stream: result.stream });
@@ -221,17 +196,15 @@ const registerDownloadRoutes = (args: { filesRouter: Router<Context> }) => {
 
 const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
   args.filesRouter.patch('/files/:file_id/metadata', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await ensureFileExists({ ctx });
 
-    const allowed = await ensureAllowed({
+    await ensureAllowed({
       ctx,
       action: 'files:UpdateFileMetadata',
       file,
     });
-    if (!allowed) return;
-
     const body = ctx.request.body as {
       metadata?: string;
       prefix?: string;
@@ -246,28 +219,24 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
   });
 
   args.filesRouter.get('/files/:file_id/tags', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await ensureFileExists({ ctx });
 
-    const allowed = await ensureAllowed({ ctx, action: 'files:GetFile', file });
-    if (!allowed) return;
-
+    await ensureAllowed({ ctx, action: 'files:GetFile', file });
     ctx.body = await getFileTags({ id: ctx.params.file_id });
   });
 
   args.filesRouter.put('/files/:file_id/tags', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await ensureFileExists({ ctx });
 
-    const allowed = await ensureAllowed({
+    await ensureAllowed({
       ctx,
       action: 'files:UpdateFileMetadata',
       file,
     });
-    if (!allowed) return;
-
     const tags = ctx.request.body as Record<string, string>;
     ctx.body = await updateFileTags({
       id: ctx.params.file_id,
@@ -277,17 +246,15 @@ const registerMetadataRoutes = (args: { filesRouter: Router<Context> }) => {
   });
 
   args.filesRouter.patch('/files/:file_id/tags', async (ctx: Context) => {
-    if (!ensureAuthenticated({ ctx })) return;
+    requireAuth(ctx);
 
     const file = await ensureFileExists({ ctx });
 
-    const allowed = await ensureAllowed({
+    await ensureAllowed({
       ctx,
       action: 'files:UpdateFileMetadata',
       file,
     });
-    if (!allowed) return;
-
     const tags = ctx.request.body as Record<string, string>;
     ctx.body = await updateFileTags({
       id: ctx.params.file_id,

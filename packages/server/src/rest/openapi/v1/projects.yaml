@@ -536,8 +536,11 @@ components:
         error:
           oneOf:
             - type: string
-              description: Generic error message (e.g. "Unauthorized" or "Internal Server Error")
-              example: Unauthorized
+              description: >-
+                Catch-all for an unhandled server error, the only path that
+                still answers with a bare string. Every handled error —
+                including 401/403 — uses the structured object form below.
+              example: Internal Server Error
             - type: object
               description: Structured domain error
               properties:

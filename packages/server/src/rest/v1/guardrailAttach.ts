@@ -3,6 +3,8 @@ import { DomainError } from 'src/errors';
 import { computeDetachedGuardrailIds } from 'src/lib/guardrails';
 import { buildSrn } from 'src/lib/iam';
 
+import { requireAuth } from './helpers';
+
 /**
  * Parses a request-body `guardrail_ids` value into the shape the lib update
  * functions expect: `undefined` (field absent — leave attachments untouched),
@@ -41,11 +43,10 @@ export const assertGuardrailDetachAllowed = async (args: {
   });
   if (detached.length === 0) return;
 
-  if (!args.ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  const { ctx } = args;
+  requireAuth(ctx);
 
-  const allowed = await args.ctx.authUser.isAllowed({
+  const allowed = await ctx.authUser.isAllowed({
     projectPublicId: args.projectPublicId,
     action: 'guardrails:DetachGuardrail',
     // Probe with the guardrail type-level SRN so project- or type-scoped

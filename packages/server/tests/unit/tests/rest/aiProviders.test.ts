@@ -305,7 +305,8 @@ describe('AI Providers', () => {
         .send({ secret_id: 'sec_nonexistent12345' });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid secret ID');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('Invalid secret ID');
     });
 
     test('unauthenticated request returns 401', async () => {

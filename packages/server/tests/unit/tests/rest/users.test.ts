@@ -277,7 +277,8 @@ describe('Admin user operations', () => {
       );
 
       expect(response.status).toBe(404);
-      expect(response.body.error).toBe('User not found');
+      expect(response.body.error.code).toBe('RESOURCE_NOT_FOUND');
+      expect(response.body.error.message).toBe('User not found');
     });
 
     test('non-admin user cannot delete a user', async () => {

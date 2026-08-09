@@ -10,8 +10,8 @@ import { consumeUploadToken, createPresignedUrl } from 'src/lib/uploadTokens';
 
 import { registerFileAccessRoutes } from './fileAccessRoutes';
 import {
-  checkAuth,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -42,11 +42,7 @@ const listFilesWithPolicy = async (args: {
 };
 
 filesRouter.get('/files', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = (ctx.query as Record<string, string>).project_id;
   const limit = ctx.query.limit
@@ -56,14 +52,12 @@ filesRouter.get('/files', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'files:GetFile',
     resourceType: 'file',
   });
-
-  if (projectIds === null) return;
 
   if (projectPublicId) {
     ctx.body = await listFilesWithPolicy({
@@ -84,8 +78,7 @@ filesRouter.get('/files', async (ctx: Context) => {
 });
 
 filesRouter.post('/files', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   // NOTE: POST /files is intentionally lenient — it accepts and ignores
   // client-supplied read-only/storage fields (path, storage_*) as a
   // robustness/security behavior, so it is excluded from strict field
@@ -106,8 +99,6 @@ filesRouter.post('/files', async (ctx: Context) => {
     action: 'files:CreateFile',
     resourceType: 'file',
   });
-  if (targetProjectId === null) return;
-
   // The key (`path`) is built from `prefix` (directory, default /) + `filename`.
   // storageType / storagePath are system-managed, so any storage_* / path a
   // caller supplies is intentionally ignored.
@@ -127,8 +118,7 @@ filesRouter.post(
   '/files/upload',
   upload.single('file'),
   async (ctx: Context) => {
-    if (!checkAuth(ctx)) return;
-
+    requireAuth(ctx);
     const body = ctx.request.body as {
       project_id?: string;
       metadata?: string;
@@ -142,9 +132,7 @@ filesRouter.post(
     const projectId = body.project_id;
 
     if (!file) {
-      ctx.status = 400;
-      ctx.body = { error: 'No file provided' };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'No file provided');
     }
 
     const targetProjectId = await resolveWriteProjectId({
@@ -153,8 +141,6 @@ filesRouter.post(
       action: 'files:UploadFile',
       resourceType: 'file',
     });
-    if (targetProjectId === null) return;
-
     const record = await uploadFile({
       projectId: Number(targetProjectId),
       fileBuffer: file.buffer,
@@ -171,8 +157,7 @@ filesRouter.post(
 );
 
 filesRouter.post('/files/upload/base64', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     content: string;
@@ -188,8 +173,6 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
     action: 'files:UploadFile',
     resourceType: 'file',
   });
-  if (targetProjectId === null) return;
-
   const fileBuffer = Buffer.from(body.content, 'base64');
 
   const record = await uploadFile({
@@ -206,11 +189,7 @@ filesRouter.post('/files/upload/base64', async (ctx: Context) => {
 });
 
 filesRouter.post('/files/presigned-url', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as {
     project_id: string;
@@ -229,18 +208,14 @@ filesRouter.post('/files/presigned-url', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const project = await db.Project.findOne({
     where: { publicId: body.project_id },
   });
   if (!project) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid project ID' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'Invalid project ID');
   }
 
   const token = await createPresignedUrl({

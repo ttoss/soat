@@ -3,6 +3,7 @@ import { AI_PROVIDER_SLUGS } from '@soat/postgresdb';
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   createAiProvider,
   deleteAiProvider,
@@ -14,9 +15,9 @@ import { buildSrn } from 'src/lib/iam';
 import { listProviderPrices, upsertProviderPrices } from 'src/lib/priceBook';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -45,22 +46,16 @@ const validateCreateAiProviderBody = (
 };
 
 aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'ai-providers:ListAiProviders',
     resourceType: 'aiProvider',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listAiProviders({
     projectIds: projectIds ?? [],
@@ -69,17 +64,11 @@ aiProvidersRouter.get('/ai-providers', async (ctx: Context) => {
 });
 
 aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const provider = await getAiProvider({ id: ctx.params.ai_provider_id });
   if (!provider) {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -92,9 +81,7 @@ aiProvidersRouter.get('/ai-providers/:ai_provider_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = provider;
@@ -117,17 +104,11 @@ const authorizeProviderPrices = async (args: {
   action: string;
 }): Promise<Awaited<ReturnType<typeof getAiProvider>> | null> => {
   const { ctx, action } = args;
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
+  requireAuth(ctx);
 
   const provider = await getAiProvider({ id: ctx.params.ai_provider_id });
   if (!provider) {
-    ctx.status = 404;
-    ctx.body = { error: 'AI provider not found' };
-    return null;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -140,9 +121,7 @@ const authorizeProviderPrices = async (args: {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   return provider;
@@ -190,15 +169,12 @@ aiProvidersRouter.put(
 );
 
 aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as CreateAiProviderBody;
 
   const validationError = validateCreateAiProviderBody(body);
   if (validationError) {
-    ctx.status = 400;
-    ctx.body = { error: validationError };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validationError);
   }
 
   const targetProjectId = await resolveWriteProjectId({
@@ -207,17 +183,13 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
     action: 'ai-providers:CreateAiProvider',
     resourceType: 'aiProvider',
   });
-  if (targetProjectId === null) return;
-
   let resolvedSecretId: number | undefined;
   if (body.secret_id) {
     const secret = await db.Secret.findOne({
       where: { publicId: body.secret_id, projectId: Number(targetProjectId) },
     });
     if (!secret) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid secret ID' };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'Invalid secret ID');
     }
     resolvedSecretId = secret.id;
   }
@@ -239,17 +211,11 @@ aiProvidersRouter.post('/ai-providers', async (ctx: Context) => {
 aiProvidersRouter.patch(
   '/ai-providers/:ai_provider_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const existing = await getAiProvider({ id: ctx.params.ai_provider_id });
     if (!existing) {
-      ctx.status = 404;
-      ctx.body = { error: 'AI provider not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
     const allowed = await ctx.authUser.isAllowed({
@@ -262,9 +228,7 @@ aiProvidersRouter.patch(
       }),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const body = ctx.request.body as {
@@ -285,9 +249,7 @@ aiProvidersRouter.patch(
         where: { publicId: body.secret_id, projectId: project!.id },
       });
       if (!secret) {
-        ctx.status = 400;
-        ctx.body = { error: 'Invalid secret ID' };
-        return;
+        throw new DomainError('VALIDATION_FAILED', 'Invalid secret ID');
       }
       resolvedSecretId = secret.id;
     }
@@ -309,17 +271,11 @@ aiProvidersRouter.patch(
 aiProvidersRouter.delete(
   '/ai-providers/:ai_provider_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const existing = await getAiProvider({ id: ctx.params.ai_provider_id });
     if (!existing) {
-      ctx.status = 404;
-      ctx.body = { error: 'AI provider not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
     const allowed = await ctx.authUser.isAllowed({
@@ -332,9 +288,7 @@ aiProvidersRouter.delete(
       }),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     await deleteAiProvider({

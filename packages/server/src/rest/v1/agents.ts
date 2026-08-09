@@ -21,7 +21,7 @@ import {
   assertGuardrailDetachAllowed,
   parseGuardrailIds,
 } from './guardrailAttach';
-import { parsePagination, resolveProjectIdsWithAction } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
@@ -185,7 +185,7 @@ const resolveAgentProjectId = async (
   projectPublicId: string | undefined
 ): Promise<number | 403 | 400> => {
   const authUser = ctx.authUser!;
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'agents:CreateAgent',
@@ -295,11 +295,7 @@ const runAgentUpdate = async (args: {
 };
 
 agentsRouter.post('/agents', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
@@ -311,16 +307,12 @@ agentsRouter.post('/agents', async (ctx: Context) => {
   const targetProjectId = await resolveAgentProjectId(ctx, reqBody.project_id);
 
   if (targetProjectId === 403) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   /* istanbul ignore next */
   if (targetProjectId === 400) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
 
   const result = await createAgent(
@@ -337,44 +329,28 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 });
 
 agentsRouter.get('/agents', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'agents:ListAgents',
     resourceType: 'agent',
   });
 
-  if (projectIds === null) return;
-
   ctx.body = await listAgents({ projectIds, ...parsePagination(ctx) });
 });
 
 agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'agents:GetAgent',
     resourceType: 'agent',
   });
-
-  /* istanbul ignore next */
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const result = await getAgent({
     projectIds,
@@ -385,67 +361,37 @@ agentsRouter.get('/agents/:agent_id', async (ctx: Context) => {
 });
 
 agentsRouter.put('/agents/:agent_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'agents:UpdateAgent',
     resourceType: 'agent',
   });
-
-  /* istanbul ignore next */
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.patch('/agents/:agent_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'agents:UpdateAgent',
     resourceType: 'agent',
   });
-
-  /* istanbul ignore next */
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   ctx.body = await runAgentUpdate({ ctx, projectIds });
 });
 
 agentsRouter.delete('/agents/:agent_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'agents:DeleteAgent',
     resourceType: 'agent',
   });
-
-  /* istanbul ignore next */
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource

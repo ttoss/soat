@@ -11,9 +11,9 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -23,27 +23,6 @@ const parseStringOrUndefined = (v: unknown): string | undefined => {
   return typeof v === 'string' ? v : undefined;
 };
 
-const checkModelRoutesAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'model_route',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds;
-};
-
 /**
  * @openapi
  * /api/v1/model-routes:
@@ -51,9 +30,8 @@ const checkModelRoutesAccess = async (
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes/post'
  */
 modelRoutesRouter.post('/model-routes', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  requireAuth(ctx);
+  const body = ctx.request.body as Record<string, unknown>;
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
@@ -61,8 +39,6 @@ modelRoutesRouter.post('/model-routes', async (ctx: Context) => {
     action: 'model-routes:CreateModelRoute',
     resourceType: 'model_route',
   });
-  if (targetProjectId === null) return;
-
   ctx.status = 201;
   ctx.body = await createModelRoute({
     projectId: Number(targetProjectId),
@@ -81,20 +57,14 @@ modelRoutesRouter.post('/model-routes', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes/get'
  */
 modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId: ctx.query.project_id as string | undefined,
     action: 'model-routes:ListModelRoutes',
     resourceType: 'model_route',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listModelRoutes({ projectIds, ...parsePagination(ctx) });
 });
@@ -106,12 +76,11 @@ modelRoutesRouter.get('/model-routes', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/get'
  */
 modelRoutesRouter.get('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await checkModelRoutesAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'model-routes:GetModelRoute'
-  );
-  if (projectIds === null) return;
-
+    action: 'model-routes:GetModelRoute',
+    resourceType: 'model_route',
+  });
   ctx.body = await getModelRoute({ projectIds, id: ctx.params.route_id });
 });
 
@@ -122,13 +91,12 @@ modelRoutesRouter.get('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/put'
  */
 modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await checkModelRoutesAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'model-routes:UpdateModelRoute'
-  );
-  if (projectIds === null) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    action: 'model-routes:UpdateModelRoute',
+    resourceType: 'model_route',
+  });
+  const body = ctx.request.body as Record<string, unknown>;
 
   ctx.body = await updateModelRoute({
     projectIds,
@@ -148,12 +116,11 @@ modelRoutesRouter.put('/model-routes/:route_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/model-routes.yaml#/paths/~1api~1v1~1model-routes~1{route_id}/delete'
  */
 modelRoutesRouter.delete('/model-routes/:route_id', async (ctx: Context) => {
-  const projectIds = await checkModelRoutesAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'model-routes:DeleteModelRoute'
-  );
-  if (projectIds === null) return;
-
+    action: 'model-routes:DeleteModelRoute',
+    resourceType: 'model_route',
+  });
   // `204 No Content` leaves the audit middleware no body to backfill from, so
   // hand it the resolved resource before the delete runs.
   const route = await getModelRoute({ projectIds, id: ctx.params.route_id });

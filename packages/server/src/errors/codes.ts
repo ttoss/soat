@@ -522,6 +522,16 @@ export const ERROR_CODES = {
     description:
       "A project's default_model_route_id cannot be cleared while consumers that bind neither an AI provider nor a model route inherit it — clearing it would leave them with no resolvable model. Repointing the default to another route is always allowed; the error meta reports the count and a sample of inheriting resource IDs.",
   },
+  BOOTSTRAP_ALREADY_COMPLETED: {
+    httpStatus: 409,
+    description:
+      'The instance already has at least one user, so the one-time bootstrap of the first admin cannot run again.',
+  },
+  NOT_IMPLEMENTED: {
+    httpStatus: 501,
+    description:
+      'The request is well-formed but names an option this API version does not implement.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }

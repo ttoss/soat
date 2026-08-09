@@ -6,6 +6,7 @@ import type { ServerResponse } from 'node:http';
 
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import type { GenerationResult } from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import { createGeneration, submitToolOutputs } from 'src/lib/agents';
@@ -15,6 +16,8 @@ import {
   type ExtractionMessage,
   fireMemoryExtraction,
 } from 'src/lib/memoryExtraction';
+
+import { requireAuth, resolveReadProjectIds } from './helpers';
 
 const pipeStreamToResponse = async (
   stream: ReadableStream,
@@ -119,22 +122,13 @@ export const agentGenerationRouter = new Router<Context>();
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
-    const projectIds = await ctx.authUser.resolveProjectIds({
+    const projectIds = await resolveReadProjectIds({
+      ctx,
       action: 'agents:CreateAgentGeneration',
       resourceType: 'agent',
     });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const {
       messages,
@@ -166,9 +160,7 @@ agentGenerationRouter.post(
 
     const bodyError = validateGenerateBody({ messages, metadata });
     if (bodyError) {
-      ctx.status = 400;
-      ctx.body = { error: bodyError };
-      return;
+      throw new DomainError('VALIDATION_FAILED', bodyError);
     }
 
     const result = await createGeneration({
@@ -207,33 +199,23 @@ agentGenerationRouter.post(
 agentGenerationRouter.post(
   '/agents/:agent_id/generate/:generation_id/tool-outputs',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
-    const projectIds = await ctx.authUser.resolveProjectIds({
+    const projectIds = await resolveReadProjectIds({
+      ctx,
       action: 'agents:CreateAgentGeneration',
       resourceType: 'agent',
     });
-
-    if (projectIds === null) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const { tool_outputs: toolOutputs } = ctx.request.body as {
       tool_outputs?: Array<{ tool_call_id: string; output: unknown }>;
     };
 
     if (!Array.isArray(toolOutputs) || toolOutputs.length === 0) {
-      ctx.status = 400;
-      ctx.body = {
-        error: 'toolOutputs is required and must be a non-empty array',
-      };
-      return;
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'toolOutputs is required and must be a non-empty array'
+      );
     }
 
     const result = await submitToolOutputs({

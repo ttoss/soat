@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
   createWorkflow,
@@ -13,9 +14,9 @@ import {
 import { workflowCollectionToCamel } from 'src/lib/workflowsValidation';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 import { workflowVersionsRouter } from './workflowVersions';
@@ -32,17 +33,14 @@ const parseVersionLabel = (raw: unknown): string | undefined => {
  * Managed via packages/server/src/rest/openapi/v1/workflows.yaml
  */
 workflowsRouter.get('/workflows', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'workflows:ListWorkflows',
     resourceType: 'workflow',
   });
-  if (projectIds === null) return;
-
   ctx.body = await listWorkflows({
     projectIds: projectIds ?? [],
     ...parsePagination(ctx),
@@ -50,8 +48,7 @@ workflowsRouter.get('/workflows', async (ctx: Context) => {
 });
 
 workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -64,17 +61,14 @@ workflowsRouter.get('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = workflow;
 });
 
 workflowsRouter.post('/workflows', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     name: string;
@@ -91,8 +85,6 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
     action: 'workflows:CreateWorkflow',
     resourceType: 'workflow',
   });
-  if (projectId === null) return;
-
   const workflow = await createWorkflow({
     projectId,
     name: body.name,
@@ -110,8 +102,7 @@ workflowsRouter.post('/workflows', async (ctx: Context) => {
 });
 
 workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -124,9 +115,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -153,8 +142,7 @@ workflowsRouter.patch('/workflows/:workflow_id', async (ctx: Context) => {
 });
 
 workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const workflow = await getWorkflow({ id: ctx.params.workflow_id });
 
   const allowed = await ctx.authUser!.isAllowed({
@@ -167,9 +155,7 @@ workflowsRouter.delete('/workflows/:workflow_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteWorkflow({ id: ctx.params.workflow_id });

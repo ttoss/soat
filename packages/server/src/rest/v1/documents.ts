@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   createDocument,
   deleteDocument,
@@ -17,8 +18,8 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 
 import type { ProjectOwned } from './helpers';
 import {
-  checkAuth,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 import { registerIngestionCallbackRoute } from './ingestionCallbackRoute';
@@ -90,18 +91,13 @@ const checkDocumentPermission = async (
     context,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
   return allowed;
 };
 
 documentsRouter.get('/documents', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const limit = ctx.query.limit
@@ -111,14 +107,12 @@ documentsRouter.get('/documents', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'documents:ListDocuments',
     resourceType: 'document',
   });
-
-  if (projectIds === null) return;
 
   // Compile SQL-level policy filter when a specific project is requested
   if (projectPublicId) {
@@ -146,17 +140,11 @@ documentsRouter.get('/documents', async (ctx: Context) => {
 });
 
 documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
@@ -167,8 +155,7 @@ documentsRouter.get('/documents/:document_id', async (ctx: Context) => {
 });
 
 documentsRouter.post('/documents', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     content: string;
@@ -188,8 +175,6 @@ documentsRouter.post('/documents', async (ctx: Context) => {
     action: 'documents:CreateDocument',
     resourceType: 'document',
   });
-  if (targetProjectId === null) return;
-
   const doc = await createDocument({
     projectId: Number(targetProjectId),
     content: body.content,
@@ -207,17 +192,11 @@ documentsRouter.post('/documents', async (ctx: Context) => {
 });
 
 documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:DeleteDocument'))) {
@@ -226,26 +205,18 @@ documentsRouter.delete('/documents/:document_id', async (ctx: Context) => {
 
   const result = await deleteDocument({ id: ctx.params.document_id });
   if (result === null) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   ctx.status = 204;
 });
 
 documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
@@ -272,17 +243,11 @@ documentsRouter.patch('/documents/:document_id', async (ctx: Context) => {
 });
 
 documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const status = await getDocumentStatus({ id: ctx.params.document_id });
   if (!status) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, status, 'documents:GetDocument'))) {
@@ -302,17 +267,11 @@ documentsRouter.get('/documents/:document_id/status', async (ctx: Context) => {
 });
 
 documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:GetDocument'))) {
@@ -323,17 +282,11 @@ documentsRouter.get('/documents/:document_id/tags', async (ctx: Context) => {
 });
 
 documentsRouter.put('/documents/:document_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
@@ -349,17 +302,11 @@ documentsRouter.put('/documents/:document_id/tags', async (ctx: Context) => {
 });
 
 documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocument({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:UpdateDocument'))) {
@@ -375,8 +322,7 @@ documentsRouter.patch('/documents/:document_id/tags', async (ctx: Context) => {
 });
 
 documentsRouter.post('/documents/ingest', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     file_id: string;
     project_id?: string;
@@ -396,8 +342,6 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     action: 'documents:IngestDocument',
     resourceType: 'document',
   });
-  if (targetProjectId === null) return;
-
   const result = await enqueueDocumentIngestion({
     fileId: body.file_id,
     projectId: Number(targetProjectId),
@@ -414,17 +358,11 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
 });
 
 documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const doc = await getDocumentStatus({ id: ctx.params.document_id });
   if (!doc) {
-    ctx.status = 404;
-    ctx.body = { error: 'Document not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Document not found');
   }
 
   if (!(await checkDocumentPermission(ctx, doc, 'documents:IngestDocument'))) {

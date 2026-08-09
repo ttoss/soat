@@ -9,7 +9,11 @@ import {
   updateGenerationMetadata,
 } from 'src/lib/generations';
 
-import { requestPrincipalFromCtx } from './helpers';
+import {
+  requestPrincipalFromCtx,
+  requireAuth,
+  requireProjectAccess,
+} from './helpers';
 
 export const generationsRouter = new Router<Context>();
 
@@ -21,25 +25,13 @@ export const generationsRouter = new Router<Context>();
  * trace_id, and status. Replaces the former GET /traces/{trace_id}/generations.
  */
 generationsRouter.get('/generations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'generations:ListGenerations',
     resourceType: 'generation',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const {
     agent_id: agentId,
@@ -72,25 +64,13 @@ generationsRouter.get('/generations', async (ctx: Context) => {
  * structured error payload when the generation failed.
  */
 generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'generations:GetGeneration',
     resourceType: 'generation',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const generation = await getGeneration({
     publicId: ctx.params.generation_id,
@@ -119,33 +99,19 @@ generationsRouter.get('/generations/:generation_id', async (ctx: Context) => {
  * top-level fields and cannot be reached from here.
  */
 generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'generations:UpdateGeneration',
     resourceType: 'generation',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const { metadata } = ctx.request.body as { metadata?: unknown };
 
   const metadataError = validateGenerationMetadata(metadata);
   if (metadataError) {
-    ctx.status = 400;
-    ctx.body = { error: metadataError };
-    return;
+    throw new DomainError('VALIDATION_FAILED', metadataError);
   }
 
   const generation = await updateGenerationMetadata({
@@ -175,25 +141,13 @@ generationsRouter.patch('/generations/:generation_id', async (ctx: Context) => {
 generationsRouter.delete(
   '/generations/:generation_id/content',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
-    const projectIds = await ctx.authUser.resolveProjectIds({
+    const projectIds = await requireProjectAccess({
+      ctx,
       action: 'generations:PurgeGenerationContent',
       resourceType: 'generation',
     });
-
-    if (
-      projectIds === null ||
-      (Array.isArray(projectIds) && projectIds.length === 0)
-    ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
-    }
 
     const purged = await purgeGenerationContent({
       publicId: ctx.params.generation_id,

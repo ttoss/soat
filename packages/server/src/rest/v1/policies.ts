@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import type { PolicyDocument } from 'src/lib/iam';
 import {
   createPolicy,
@@ -14,15 +15,13 @@ import { parsePagination, requireAdmin } from './helpers';
 const policiesRouter = new Router<Context>();
 
 policiesRouter.get('/policies', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'policies:ListPolicies')) return;
-
+  requireAdmin(ctx, 'policies:ListPolicies');
   const userId = ctx.query.user_id as string | undefined;
   ctx.body = await listPolicies({ userId, ...parsePagination(ctx) });
 });
 
 policiesRouter.post('/policies', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'policies:CreatePolicy')) return;
-
+  requireAdmin(ctx, 'policies:CreatePolicy');
   const { name, description, document } = ctx.request.body as {
     name?: string;
     description?: string;
@@ -36,9 +35,9 @@ policiesRouter.post('/policies', async (ctx: Context) => {
   });
 
   if ('invalid' in result) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid policy document', details: result.errors };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'Invalid policy document', {
+      details: result.errors,
+    });
   }
 
   ctx.status = 201;
@@ -46,22 +45,18 @@ policiesRouter.post('/policies', async (ctx: Context) => {
 });
 
 policiesRouter.get('/policies/:policy_id', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'policies:GetPolicy')) return;
-
+  requireAdmin(ctx, 'policies:GetPolicy');
   const policy = await getPolicy({ policyId: ctx.params.policy_id });
 
   if (!policy) {
-    ctx.status = 404;
-    ctx.body = { error: 'Policy not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Policy not found');
   }
 
   ctx.body = policy;
 });
 
 policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'policies:UpdatePolicy')) return;
-
+  requireAdmin(ctx, 'policies:UpdatePolicy');
   const { name, description, document } = ctx.request.body as {
     name?: string;
     description?: string;
@@ -76,17 +71,16 @@ policiesRouter.put('/policies/:policy_id', async (ctx: Context) => {
   });
 
   if ('invalid' in result) {
-    ctx.status = 400;
-    ctx.body = { error: 'Invalid policy document', details: result.errors };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'Invalid policy document', {
+      details: result.errors,
+    });
   }
 
   ctx.body = result;
 });
 
 policiesRouter.delete('/policies/:policy_id', async (ctx: Context) => {
-  if (!requireAdmin(ctx, 'policies:DeletePolicy')) return;
-
+  requireAdmin(ctx, 'policies:DeletePolicy');
   await deletePolicy({ policyId: ctx.params.policy_id });
 
   ctx.status = 204;

@@ -13,6 +13,7 @@ import {
 } from 'src/lib/sessions';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
+import { requireAuth, requireProjectAccess } from './helpers';
 import { sessionSubResourcesRouter } from './sessionSubResources';
 
 export const sessionsRouter = new Router<Context>();
@@ -31,19 +32,12 @@ export const checkSessionAccess = async (
   ctx: Context,
   action: string
 ): Promise<{ agentId: number; agentPublicId: string; projectId: number }> => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  requireAuth(ctx);
+  const projectIds = await requireProjectAccess({
+    ctx,
     action,
     resourceType: 'session',
   });
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
   const access = await findSessionAccess({ sessionId: ctx.params.session_id });
   if (!access) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Session not found');
@@ -57,9 +51,7 @@ export const checkSessionAccess = async (
 // ── Create Session ───────────────────────────────────────────────────────
 
 sessionsRouter.post('/sessions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
   const body = ctx.request.body as {
     agent_id?: string;
@@ -71,17 +63,11 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
     message_delay_seconds?: number | null;
   };
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'agents:CreateSession',
     resourceType: 'session',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   const agent = await db.Agent.findOne({ where: { publicId: body.agent_id } });
   if (!agent) {
@@ -111,21 +97,13 @@ sessionsRouter.post('/sessions', async (ctx: Context) => {
 // ── List Sessions ────────────────────────────────────────────────────────
 
 sessionsRouter.get('/sessions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'agents:ListSessions',
     resourceType: 'session',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
 
   const {
     agent_id: agentId,

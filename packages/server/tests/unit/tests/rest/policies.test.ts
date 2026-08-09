@@ -194,9 +194,10 @@ describe('Policies', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid policy document');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('Invalid policy document');
       expect(
-        response.body.details.some((d: string) => {
+        response.body.error.meta.details.some((d: string) => {
           return d.includes('memories:CreateMemoryEntryy');
         })
       ).toBe(true);
@@ -213,7 +214,8 @@ describe('Policies', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('Invalid policy document');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('Invalid policy document');
     });
 
     test('accepts a real memory-write action and a module wildcard (F-11)', async () => {

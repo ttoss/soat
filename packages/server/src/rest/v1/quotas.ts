@@ -11,9 +11,9 @@ import {
 import { setAuditResourceHint } from 'src/middleware/audit';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -29,27 +29,6 @@ const parseNullableString = (v: unknown): string | null | undefined => {
   return undefined;
 };
 
-const checkQuotasAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'quota',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds;
-};
-
 /**
  * @openapi
  * /api/v1/quotas:
@@ -57,9 +36,8 @@ const checkQuotasAccess = async (
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas/post'
  */
 quotasRouter.post('/quotas', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  requireAuth(ctx);
+  const body = ctx.request.body as Record<string, unknown>;
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
@@ -67,8 +45,6 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
     action: 'quotas:CreateQuota',
     resourceType: 'quota',
   });
-  if (targetProjectId === null) return;
-
   const result = await createQuota({
     projectId: Number(targetProjectId),
     scope: body.scope as string,
@@ -90,22 +66,16 @@ quotasRouter.post('/quotas', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas/get'
  */
 quotasRouter.get('/quotas', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'quotas:ListQuotas',
     resourceType: 'quota',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listQuotas({ projectIds, ...parsePagination(ctx) });
 });
@@ -117,9 +87,11 @@ quotasRouter.get('/quotas', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/get'
  */
 quotasRouter.get('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await checkQuotasAccess(ctx, 'quotas:GetQuota');
-  if (projectIds === null) return;
-
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'quotas:GetQuota',
+    resourceType: 'quota',
+  });
   ctx.body = await getQuota({ projectIds, id: ctx.params.quota_id });
 });
 
@@ -130,10 +102,12 @@ quotasRouter.get('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/patch'
  */
 quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await checkQuotasAccess(ctx, 'quotas:UpdateQuota');
-  if (projectIds === null) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'quotas:UpdateQuota',
+    resourceType: 'quota',
+  });
+  const body = ctx.request.body as Record<string, unknown>;
 
   ctx.body = await updateQuota({
     projectIds,
@@ -150,9 +124,11 @@ quotasRouter.patch('/quotas/:quota_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/quotas.yaml#/paths/~1api~1v1~1quotas~1{quota_id}/delete'
  */
 quotasRouter.delete('/quotas/:quota_id', async (ctx: Context) => {
-  const projectIds = await checkQuotasAccess(ctx, 'quotas:DeleteQuota');
-  if (projectIds === null) return;
-
+  const projectIds = await resolveReadProjectIds({
+    ctx,
+    action: 'quotas:DeleteQuota',
+    resourceType: 'quota',
+  });
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
   // before the delete runs (see `setAuditResourceHint`).

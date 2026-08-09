@@ -374,7 +374,7 @@ describe('Generations', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/object/i);
+      expect(response.body.error.message).toMatch(/object/i);
     });
 
     test('persists caller metadata on the generation record', async () => {
@@ -429,7 +429,7 @@ describe('Generations', () => {
         .patch(`/api/v1/generations/${failedGenerationId}`)
         .send({ metadata: ['not', 'an', 'object'] });
       expect(response.status).toBe(400);
-      expect(response.body.error).toMatch(/object/i);
+      expect(response.body.error.message).toMatch(/object/i);
     });
 
     // Was: "rejects reserved metadata keys with 400", in both the wire and the

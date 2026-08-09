@@ -17,7 +17,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 import { setAuditResourceHint } from 'src/middleware/audit';
 
-import { parsePagination, resolveProjectIdsWithAction } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 import { coerceToJsonObject } from './tools';
 
 export const guardrailsRouter = new Router<Context>();
@@ -50,47 +50,19 @@ const resolveGuardrailProjectId = async (
   ctx: Context,
   action: string,
   projectPublicId?: string
-): Promise<number | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await resolveProjectIdsWithAction({
+): Promise<number> => {
+  requireAuth(ctx);
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action,
     resourceType: 'guardrail',
   });
-  if (projectIds === null) return null;
   const targetProjectId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!targetProjectId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return null;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
   return targetProjectId;
-};
-
-const checkGuardrailsAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'guardrail',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds;
 };
 
 /**
@@ -100,14 +72,12 @@ const checkGuardrailsAccess = async (
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails/post'
  */
 guardrailsRouter.post('/guardrails', async (ctx: Context) => {
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+  const body = ctx.request.body as Record<string, unknown>;
   const { name, description } = body;
   const projectPublicId = body.project_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'name is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'name is required');
   }
 
   const targetProjectId = await resolveGuardrailProjectId(
@@ -149,22 +119,16 @@ guardrailsRouter.post('/guardrails', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails/get'
  */
 guardrailsRouter.get('/guardrails', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'guardrails:ListGuardrails',
     resourceType: 'guardrail',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listGuardrails({ projectIds, ...parsePagination(ctx) });
 });
@@ -176,12 +140,11 @@ guardrailsRouter.get('/guardrails', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/get'
  */
 guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await checkGuardrailsAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'guardrails:GetGuardrail'
-  );
-  if (projectIds === null) return;
-
+    action: 'guardrails:GetGuardrail',
+    resourceType: 'guardrail',
+  });
   ctx.body = await getGuardrail({
     projectIds,
     id: ctx.params.guardrail_id,
@@ -195,13 +158,12 @@ guardrailsRouter.get('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/patch'
  */
 guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await checkGuardrailsAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'guardrails:UpdateGuardrail'
-  );
-  if (projectIds === null) return;
-
-  const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+    action: 'guardrails:UpdateGuardrail',
+    resourceType: 'guardrail',
+  });
+  const body = ctx.request.body as Record<string, unknown>;
 
   let document: object | null | undefined;
   try {
@@ -230,12 +192,11 @@ guardrailsRouter.patch('/guardrails/:guardrail_id', async (ctx: Context) => {
  *     $ref: 'openapi/v1/guardrails.yaml#/paths/~1api~1v1~1guardrails~1{guardrail_id}/delete'
  */
 guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
-  const projectIds = await checkGuardrailsAccess(
+  const projectIds = await resolveReadProjectIds({
     ctx,
-    'guardrails:DeleteGuardrail'
-  );
-  if (projectIds === null) return;
-
+    action: 'guardrails:DeleteGuardrail',
+    resourceType: 'guardrail',
+  });
   // The success response is `204 No Content`, so the audit middleware has no
   // body to backfill the project/SRN from — hand it the resolved resource
   // before the delete runs (see `setAuditResourceHint`).
@@ -270,13 +231,12 @@ guardrailsRouter.delete('/guardrails/:guardrail_id', async (ctx: Context) => {
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/evaluate',
   async (ctx: Context) => {
-    const projectIds = await checkGuardrailsAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'guardrails:EvaluateGuardrail'
-    );
-    if (projectIds === null) return;
-
-    const body = (ctx.request.body ?? {}) as Record<string, unknown>;
+      action: 'guardrails:EvaluateGuardrail',
+      resourceType: 'guardrail',
+    });
+    const body = ctx.request.body as Record<string, unknown>;
     const args = coerceToJsonObject(body.args) ?? undefined;
     const guardrailContext =
       coerceToJsonObject(body.guardrail_context) ?? undefined;
@@ -301,12 +261,11 @@ guardrailsRouter.post(
 guardrailsRouter.get(
   '/guardrails/:guardrail_id/versions',
   async (ctx: Context) => {
-    const projectIds = await checkGuardrailsAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'guardrails:ListGuardrailVersions'
-    );
-    if (projectIds === null) return;
-
+      action: 'guardrails:ListGuardrailVersions',
+      resourceType: 'guardrail',
+    });
     ctx.body = await listGuardrailVersions({
       projectIds,
       guardrailId: ctx.params.guardrail_id,
@@ -324,12 +283,11 @@ guardrailsRouter.get(
 guardrailsRouter.get(
   '/guardrails/:guardrail_id/versions/:version',
   async (ctx: Context) => {
-    const projectIds = await checkGuardrailsAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'guardrails:GetGuardrailVersion'
-    );
-    if (projectIds === null) return;
-
+      action: 'guardrails:GetGuardrailVersion',
+      resourceType: 'guardrail',
+    });
     ctx.body = await getGuardrailVersion({
       projectIds,
       guardrailId: ctx.params.guardrail_id,
@@ -347,13 +305,12 @@ guardrailsRouter.get(
 guardrailsRouter.post(
   '/guardrails/:guardrail_id/versions/:version/restore',
   async (ctx: Context) => {
-    const projectIds = await checkGuardrailsAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'guardrails:RestoreGuardrailVersion'
-    );
-    if (projectIds === null) return;
-
-    const body = (ctx.request.body ?? {}) as { label?: unknown };
+      action: 'guardrails:RestoreGuardrailVersion',
+      resourceType: 'guardrail',
+    });
+    const body = ctx.request.body as { label?: unknown };
 
     ctx.body = await restoreGuardrailVersion({
       projectIds,

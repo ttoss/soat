@@ -184,7 +184,8 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestrations')
         .send({ ...simpleOrchestration, name: 'No Project Admin' });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('project_id is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('project_id is required');
     });
 
     test('unauthenticated request returns 401', async () => {
@@ -230,7 +231,8 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestrations')
         .send({ ...simpleOrchestration, name: 123, project_id: projectId });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('name is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('name is required');
     });
 
     test('non-array nodes returns 400', async () => {
@@ -242,7 +244,8 @@ describe('Orchestrations', () => {
           project_id: projectId,
         });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('nodes must be an array');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('nodes must be an array');
     });
 
     test('non-array edges returns 400', async () => {
@@ -250,7 +253,8 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestrations')
         .send({ ...simpleOrchestration, edges: {}, project_id: projectId });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('edges must be an array');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('edges must be an array');
     });
 
     test('invalid graph (dangling edge) returns 400 with validation error', async () => {
@@ -479,7 +483,8 @@ describe('Orchestrations', () => {
         '/api/v1/orchestrations'
       );
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('project_id is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('project_id is required');
     });
 
     test('user without permission returns 403', async () => {
@@ -668,7 +673,8 @@ describe('Orchestrations', () => {
         .post('/api/v1/orchestration-runs')
         .send({ wait: true, orchestration_id: 123, input: {} });
       expect(response.status).toBe(400);
-      expect(response.body.error).toBe('orchestration_id is required');
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toBe('orchestration_id is required');
     });
 
     test('project-scoped API key without StartRun permission returns 403', async () => {

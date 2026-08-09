@@ -377,7 +377,7 @@ describe('Project default model route', () => {
     test('a PATCH naming no field at all still returns 400', async () => {
       const res = await patchProject({});
       expect(res.status).toBe(400);
-      expect(res.body.error).toMatch(/default_model_route_id/);
+      expect(res.body.error.message).toMatch(/default_model_route_id/);
     });
 
     test('unauthenticated PATCH returns 401', async () => {

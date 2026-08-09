@@ -9,7 +9,7 @@ import {
   restoreWorkflowVersion,
 } from 'src/lib/workflowVersions';
 
-import { checkAuth, parsePagination } from './helpers';
+import { parsePagination, requireAuth } from './helpers';
 
 /**
  * Workflow state-machine version history (issue #882).
@@ -45,12 +45,12 @@ const authorizeWorkflow = async (
   ctx: Context,
   action: string
 ): Promise<string | null> => {
-  if (!checkAuth(ctx)) return null;
+  requireAuth(ctx);
 
   const workflowId = ctx.params['workflow_id'] as string;
   const workflow = await getWorkflow({ id: workflowId });
 
-  const allowed = await ctx.authUser!.isAllowed({
+  const allowed = await ctx.authUser.isAllowed({
     projectPublicId: workflow.project_id!,
     action,
     resource: buildSrn({
@@ -60,9 +60,7 @@ const authorizeWorkflow = async (
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
   return workflowId;
 };
@@ -112,7 +110,7 @@ workflowVersionsRouter.post(
     );
     if (workflowId === null) return;
 
-    const body = (ctx.request.body ?? {}) as { label?: unknown };
+    const body = ctx.request.body as { label?: unknown };
 
     ctx.body = await restoreWorkflowVersion({
       workflowId,

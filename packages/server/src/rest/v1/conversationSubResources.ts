@@ -15,26 +15,21 @@ import {
 } from 'src/lib/conversations';
 
 import { checkConversationAccess } from './conversationHelpers';
+import { requireAuth } from './helpers';
 
 const conversationSubResourcesRouter = new Router<Context>();
 
 conversationSubResourcesRouter.get(
   '/conversations/:conversation_id/messages',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -44,9 +39,7 @@ conversationSubResourcesRouter.get(
         'conversations:GetConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const limit = ctx.query.limit
@@ -69,11 +62,7 @@ conversationSubResourcesRouter.get(
 conversationSubResourcesRouter.post(
   '/conversations/:conversation_id/messages',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const body = ctx.request.body as {
       message: string;
@@ -98,9 +87,7 @@ conversationSubResourcesRouter.post(
         'conversations:UpdateConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const message = await addConversationMessage({
@@ -127,11 +114,7 @@ conversationSubResourcesRouter.post(
 conversationSubResourcesRouter.delete(
   '/conversations/:conversation_id/messages/:document_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
@@ -148,9 +131,7 @@ conversationSubResourcesRouter.delete(
         'conversations:UpdateConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const result = await removeConversationMessage({
@@ -169,20 +150,14 @@ conversationSubResourcesRouter.delete(
 conversationSubResourcesRouter.get(
   '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -192,9 +167,7 @@ conversationSubResourcesRouter.get(
         'conversations:GetConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     ctx.body = await getConversationTags({ id: ctx.params.conversation_id });
@@ -204,20 +177,14 @@ conversationSubResourcesRouter.get(
 conversationSubResourcesRouter.put(
   '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -227,9 +194,7 @@ conversationSubResourcesRouter.put(
         'conversations:UpdateConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const tags = ctx.request.body as Record<string, string>;
@@ -244,20 +209,14 @@ conversationSubResourcesRouter.put(
 conversationSubResourcesRouter.patch(
   '/conversations/:conversation_id/tags',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -267,9 +226,7 @@ conversationSubResourcesRouter.patch(
         'conversations:UpdateConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const tags = ctx.request.body as Record<string, string>;
@@ -284,11 +241,7 @@ conversationSubResourcesRouter.patch(
 conversationSubResourcesRouter.post(
   '/conversations/:conversation_id/generate',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const body = ctx.request.body as {
       agent_id: string;
@@ -298,20 +251,17 @@ conversationSubResourcesRouter.post(
     };
 
     if (body.stream) {
-      ctx.status = 501;
-      ctx.body = {
-        error: 'Streaming is not implemented in v1. Omit stream or set false.',
-      };
-      return;
+      throw new DomainError(
+        'NOT_IMPLEMENTED',
+        'Streaming is not implemented in v1. Omit stream or set false.'
+      );
     }
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -321,9 +271,7 @@ conversationSubResourcesRouter.post(
         'conversations:GenerateConversationMessage'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const result = await generateConversationMessage({

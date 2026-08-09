@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   acknowledgeException,
   getException,
@@ -9,7 +10,7 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import type { ProjectOwned } from './helpers';
-import { parsePagination, resolveProjectIdsWithAction } from './helpers';
+import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
 
 const exceptionsRouter = new Router<Context>();
 
@@ -25,22 +26,16 @@ const exceptionSrn = (exception: { id: string } & ProjectOwned): string => {
 };
 
 exceptionsRouter.get('/exceptions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'exceptions:ListExceptions',
     resourceType: 'exception',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listExceptions({
     projectIds: projectIds ?? [],
@@ -52,11 +47,7 @@ exceptionsRouter.get('/exceptions', async (ctx: Context) => {
 });
 
 exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const exception = await getException({ id: ctx.params.exception_id });
 
@@ -66,9 +57,7 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
     resource: exceptionSrn(exception),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = exception;
@@ -77,11 +66,7 @@ exceptionsRouter.get('/exceptions/:exception_id', async (ctx: Context) => {
 exceptionsRouter.post(
   '/exceptions/:exception_id/acknowledge',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const exception = await getException({ id: ctx.params.exception_id });
 
@@ -91,9 +76,7 @@ exceptionsRouter.post(
       resource: exceptionSrn(exception),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     ctx.body = await acknowledgeException({
@@ -106,11 +89,7 @@ exceptionsRouter.post(
 exceptionsRouter.post(
   '/exceptions/:exception_id/resolve',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const exception = await getException({ id: ctx.params.exception_id });
 
@@ -120,12 +99,10 @@ exceptionsRouter.post(
       resource: exceptionSrn(exception),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
-    const body = (ctx.request.body ?? {}) as { note?: string };
+    const body = ctx.request.body as { note?: string };
 
     ctx.body = await resolveException({
       id: ctx.params.exception_id,

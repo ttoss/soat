@@ -78,7 +78,16 @@ All errors return a 4xx or 5xx status code. Most business-logic errors use a str
 }
 ```
 
-`meta` is optional and present only for some error codes. A handful of legacy authentication/authorization checks instead return a plain string in `error` with no `code` or `meta`, e.g. `{ "error": "Unauthorized" }` or `{ "error": "Forbidden" }`. Unhandled server errors always return `500` with `{ "error": "Internal Server Error" }` — the underlying exception message is never forwarded to the client.
+`meta` is optional and present only for some error codes. **Every** handled error
+uses this object shape, including authentication and authorization failures —
+`401` is `{ "error": { "code": "UNAUTHORIZED", "message": "Unauthorized" } }` and
+`403` is `{ "error": { "code": "FORBIDDEN", "message": "Forbidden" } }`. Earlier
+versions returned a plain string in `error` with no `code` on those paths; a
+client that special-cased the string form can drop that branch.
+
+The one remaining string body is the catch-all: unhandled server errors return
+`500` with `{ "error": "Internal Server Error" }` — the underlying exception
+message is never forwarded to the client.
 
 Common status codes:
 

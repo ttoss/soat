@@ -1,6 +1,7 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
+import { DomainError } from 'src/errors';
 import {
   createConversation,
   deleteConversation,
@@ -13,19 +14,15 @@ import { compilePolicy } from 'src/lib/policyCompiler';
 import { checkConversationAccess } from './conversationHelpers';
 import { conversationSubResourcesRouter } from './conversationSubResources';
 import {
-  checkAuth,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
 const conversationsRouter = new Router<Context>();
 
 conversationsRouter.get('/conversations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const actorId = ctx.query.actor_id as string | undefined;
@@ -36,14 +33,12 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
     ? parseInt(ctx.query.offset as string, 10)
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'conversations:ListConversations',
     resourceType: 'conversation',
   });
-
-  if (projectIds === null) return;
 
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {
@@ -78,19 +73,13 @@ conversationsRouter.get('/conversations', async (ctx: Context) => {
 conversationsRouter.get(
   '/conversations/:conversation_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -100,9 +89,7 @@ conversationsRouter.get(
         'conversations:GetConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     ctx.body = conversation;
@@ -110,8 +97,7 @@ conversationsRouter.get(
 );
 
 conversationsRouter.post('/conversations', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     status?: string;
@@ -125,17 +111,13 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
     action: 'conversations:CreateConversation',
     resourceType: 'conversation',
   });
-  if (targetProjectId === null) return;
-
   let resolvedActorId: number | null = null;
   if (body.actor_id) {
     const actor = await db.Actor.findOne({
       where: { publicId: body.actor_id },
     });
     if (!actor) {
-      ctx.status = 400;
-      ctx.body = { error: 'Invalid actor ID' };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'Invalid actor ID');
     }
     resolvedActorId = actor.id;
   }
@@ -153,18 +135,15 @@ conversationsRouter.post('/conversations', async (ctx: Context) => {
 conversationsRouter.patch(
   '/conversations/:conversation_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const body = ctx.request.body as { status?: string; name?: string | null };
 
     if (body.status === undefined && body.name === undefined) {
-      ctx.status = 400;
-      ctx.body = { error: 'At least one of status or name is required' };
-      return;
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        'At least one of status or name is required'
+      );
     }
 
     const conversation = await getConversation({
@@ -172,9 +151,7 @@ conversationsRouter.patch(
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -184,9 +161,7 @@ conversationsRouter.patch(
         'conversations:UpdateConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const updated = await updateConversation({
@@ -202,20 +177,14 @@ conversationsRouter.patch(
 conversationsRouter.delete(
   '/conversations/:conversation_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,
     });
 
     if (!conversation) {
-      ctx.status = 404;
-      ctx.body = { error: 'Conversation not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Conversation not found');
     }
 
     if (
@@ -225,9 +194,7 @@ conversationsRouter.delete(
         'conversations:DeleteConversation'
       ))
     ) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     await deleteConversation({ id: ctx.params.conversation_id });

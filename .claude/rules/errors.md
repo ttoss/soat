@@ -103,6 +103,9 @@ to HTTP responses** — let errors propagate to the middleware.
 | `DomainError` | `error.httpStatus` | `{ error: { code, message, meta? } }` (object)                                    |
 | Any other     | 500                | `{ error: "Internal Server Error" }` — **raw `error.message` is never forwarded** |
 
+The object shape is now the **only** handled-error shape, `401` and `403`
+included. The string form is reachable exclusively through the 500 catch-all.
+
 ### Consuming DomainError responses in tests
 
 `response.body.error` is an **object** for `DomainError`, not a string:
@@ -136,11 +139,43 @@ spreads it directly into the output object:
 This avoids the nested `error.error` pattern that would occur if the body were
 wrapped again. **Do not** wrap API error bodies in an extra `error` key in the CLI.
 
+## The auth/scope preamble
+
+Every guard in `src/rest/v1/helpers.ts` throws; none writes a response. Pick one
+and call it as a bare statement — there is no `return` bookkeeping and no boolean
+to check:
+
+| Helper | Use for | Throws |
+| --- | --- | --- |
+| `requireAuth(ctx)` | a route with no project to resolve (`/users/me`, OAuth introspection, sub-resources authorized against a parent) | `UNAUTHORIZED` |
+| `resolveReadProjectIds({ ctx, action, resourceType, projectPublicId? })` | a list/read route; **an empty scope is allowed** and yields an empty result | `UNAUTHORIZED` · `API_KEY_PROJECT_SCOPE` · `FORBIDDEN` |
+| `requireProjectAccess({ … })` | a route that loads one resource and checks its project; **an empty scope is a `403`**, not a `404` | the same, plus `FORBIDDEN` on an empty scope |
+| `resolveWriteProjectId({ … })` | a create/write route needing one concrete project | the same, plus `VALIDATION_FAILED` when no project can be inferred |
+| `requireAdmin(ctx, action)` | the non-IAM role gate (users, policies, projects, price book) | `UNAUTHORIZED` · `FORBIDDEN` |
+| `requireOwnerOrAdmin(ctx, { ownerPublicId, action })` | own-resource-or-admin (API keys) | `UNAUTHORIZED` · `FORBIDDEN` |
+
+`requireAuth` is a TypeScript **assertion**, so a bare `requireAuth(ctx);`
+narrows `ctx.authUser` for the rest of the block — never write `ctx.authUser!`.
+
+**Never call `ctx.authUser.resolveProjectIds` from a route.** It skips the
+credential-scope check and leaves you to re-decide how `null` and `[]` map to
+statuses — the 26 copies of that decision are what made the routes disagree.
+
+Three static checks enforce this; each replaced a prose rule that had already
+lost:
+
+| Test | Catches |
+| --- | --- |
+| `rest/errorShapeContract.test.ts` | a manual `ctx.body = { error: … }`, an inline `!ctx.authUser`, or a direct `resolveProjectIds` call in `src/rest/v1` |
+| `rest/adminGateContract.test.ts` | a hand-rolled `role !== 'admin'` gate that answers `403` — in either denial form |
+| `rest/wireKeyContract.test.ts` | a handler reading a camelCase wire key |
+
 ## Route handler rules
 
 1. **Do not wrap lib calls in try/catch** just to set `ctx.status` — let `DomainError` propagate.
 2. **Do not set `ctx.body = { error: '...' }` manually** — throw `DomainError` with the appropriate code instead.
 3. Only use try/catch when you need to perform cleanup (e.g., rolling back a transaction) and then re-throw.
+4. **Do not re-derive the auth/scope preamble** — call one of the helpers above.
 
 ```ts
 // ✅ correct — DomainError propagates to middleware
@@ -150,6 +185,14 @@ if (!ctx.authUser) {
 const agent = await getAgent({ agentId, projectId });
 ctx.body = agent;
 ctx.status = 200;
+
+// ✅ better — the shared preamble does auth + credential scope + 403 in one call
+const projectIds = await resolveReadProjectIds({
+  ctx,
+  action: 'agents:GetAgent',
+  resourceType: 'agent',
+});
+ctx.body = await getAgent({ projectIds, id: ctx.params.agent_id });
 
 // ❌ wrong — manual error body creates an inconsistent string format
 if (!ctx.authUser) {

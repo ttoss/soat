@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { buildSrn } from 'src/lib/iam';
 import {
   createMemory,
@@ -10,20 +11,16 @@ import {
 } from 'src/lib/memories';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
 const memoriesRouter = new Router<Context>();
 
 memoriesRouter.get('/memories', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const rawTags = ctx.query.tags;
@@ -33,14 +30,12 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
       : [rawTags as string]
     : undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'memories:ListMemories',
     resourceType: 'memory',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listMemories({
     projectIds: projectIds ?? [],
@@ -50,18 +45,12 @@ memoriesRouter.get('/memories', async (ctx: Context) => {
 });
 
 memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const memory = await getMemory({ id: ctx.params.memory_id });
 
   if (!memory) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -74,17 +63,14 @@ memoriesRouter.get('/memories/:memory_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = memory;
 });
 
 memoriesRouter.post('/memories', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as {
     project_id?: string;
     name: string;
@@ -98,8 +84,6 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
     action: 'memories:CreateMemory',
     resourceType: 'memory',
   });
-  if (targetProjectId === null) return;
-
   const memory = await createMemory({
     projectId: Number(targetProjectId),
     name: body.name,
@@ -112,17 +96,11 @@ memoriesRouter.post('/memories', async (ctx: Context) => {
 });
 
 memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const memory = await getMemory({ id: ctx.params.memory_id });
   if (!memory) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -135,9 +113,7 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as {
@@ -157,17 +133,11 @@ memoriesRouter.put('/memories/:memory_id', async (ctx: Context) => {
 });
 
 memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const memory = await getMemory({ id: ctx.params.memory_id });
   if (!memory) {
-    ctx.status = 404;
-    ctx.body = { error: 'Memory not found' };
-    return;
+    throw new DomainError('RESOURCE_NOT_FOUND', 'Memory not found');
   }
 
   const allowed = await ctx.authUser.isAllowed({
@@ -180,9 +150,7 @@ memoriesRouter.delete('/memories/:memory_id', async (ctx: Context) => {
     }),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   await deleteMemory({ id: ctx.params.memory_id });

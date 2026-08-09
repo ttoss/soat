@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import { parseOrchestrationGraph } from 'src/lib/orchestrationGraphWire';
 import {
   cancelOrchestrationRun,
@@ -19,7 +20,9 @@ import {
 import {
   parsePagination,
   requestPrincipalFromCtx,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
 } from './helpers';
 import {
   hintAuditResourceForOrchestration,
@@ -42,47 +45,20 @@ const resolveAuth = async (
   ctx: Context,
   action: string,
   projectPublicId?: string
-): Promise<{ projectIds: number[]; primaryId: number } | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await resolveProjectIdsWithAction({
+): Promise<{ projectIds: number[]; primaryId: number }> => {
+  requireAuth(ctx);
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action,
     resourceType: 'orchestration',
   });
 
-  if (projectIds === null) return null;
   const primaryId = projectIds?.[0] ?? ctx.authUser.apiKeyProjectId;
   if (!primaryId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return null;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
   return { projectIds: projectIds ?? [primaryId], primaryId };
-};
-const resolveOrchestrationAccess = async (
-  ctx: Context,
-  action: string
-): Promise<number[] | undefined | null> => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return null;
-  }
-  const projectIds = await ctx.authUser.resolveProjectIds({
-    action,
-    resourceType: 'orchestration',
-  });
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
-  }
-  return projectIds ?? undefined;
 };
 /**
  * @openapi
@@ -91,13 +67,11 @@ const resolveOrchestrationAccess = async (
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations/post'
  */
 orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
-  const body = (ctx.request.body ?? {}) as RawCreateBody;
+  const body = ctx.request.body as RawCreateBody;
 
   const validated = validateCreateBody(body);
   if ('error' in validated) {
-    ctx.status = 400;
-    ctx.body = { error: validated.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validated.error);
   }
 
   const auth = await resolveAuth(
@@ -105,7 +79,6 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
     'orchestrations:CreateOrchestration',
     body.project_id
   );
-  if (!auth) return;
 
   const graph = parseOrchestrationGraph({
     nodes: validated.nodes,
@@ -141,12 +114,8 @@ orchestrationsRouter.post('/orchestrations', async (ctx: Context) => {
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations~1validate/post'
  */
 orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
-  const body = (ctx.request.body ?? {}) as {
+  requireAuth(ctx);
+  const body = ctx.request.body as {
     nodes?: unknown;
     edges?: unknown;
     input_schema?: unknown;
@@ -164,27 +133,19 @@ orchestrationsRouter.post('/orchestrations/validate', async (ctx: Context) => {
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestrations/get'
  */
 orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'orchestrations:ListOrchestrations',
     resourceType: 'orchestration',
   });
 
-  if (projectIds === null) return;
-
   if (!projectIds || projectIds.length === 0) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
 
   ctx.body = await listOrchestrations({ projectIds, ...parsePagination(ctx) });
@@ -198,12 +159,11 @@ orchestrationsRouter.get('/orchestrations', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:GetOrchestration'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:GetOrchestration',
+      resourceType: 'orchestration',
+    });
     const orchestrationId = ctx.params['orchestration_id'] as string;
 
     const result = await findOrchestration({
@@ -212,9 +172,7 @@ orchestrationsRouter.get(
     });
 
     if (!result) {
-      ctx.status = 404;
-      ctx.body = { error: 'Orchestration not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'Orchestration not found');
     }
 
     ctx.body = result;
@@ -229,14 +187,13 @@ orchestrationsRouter.get(
 orchestrationsRouter.patch(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:UpdateOrchestration'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:UpdateOrchestration',
+      resourceType: 'orchestration',
+    });
     const orchestrationId = ctx.params['orchestration_id'] as string;
-    const body = (ctx.request.body ?? {}) as RawUpdateBody;
+    const body = ctx.request.body as RawUpdateBody;
 
     const result = await updateOrchestration({
       id: orchestrationId,
@@ -257,12 +214,11 @@ orchestrationsRouter.patch(
 orchestrationsRouter.delete(
   '/orchestrations/:orchestration_id',
   async (ctx: Context) => {
-    const projectIds = await resolveOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:DeleteOrchestration'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:DeleteOrchestration',
+      resourceType: 'orchestration',
+    });
     const target = {
       id: ctx.params['orchestration_id'] as string,
       projectIds: projectIds ?? undefined,
@@ -280,13 +236,9 @@ orchestrationsRouter.delete(
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/post'
  */
 orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const body = (ctx.request.body ?? {}) as {
+  const body = ctx.request.body as {
     orchestration_id?: unknown;
     input?: unknown;
     wait?: unknown;
@@ -296,9 +248,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
       ? body.orchestration_id
       : undefined;
   if (!orchestrationId) {
-    ctx.status = 400;
-    ctx.body = { error: 'orchestration_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'orchestration_id is required');
   }
 
   const scope = await resolveStartRunScope(ctx);
@@ -329,27 +279,15 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
  *     $ref: 'openapi/v1/orchestrations.yaml#/paths/~1api~1v1~1orchestration-runs/get'
  */
 orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const orchestrationId = ctx.query['orchestration_id'] as string | undefined;
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'orchestrations:ListRuns',
     resourceType: 'orchestration',
   });
-
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const result = await listOrchestrationRuns({
     orchestrationPublicId: orchestrationId,
@@ -368,12 +306,11 @@ orchestrationsRouter.get('/orchestration-runs', async (ctx: Context) => {
 orchestrationsRouter.get(
   '/orchestration-runs/:orchestration_run_id',
   async (ctx: Context) => {
-    const projectIds = await resolveOrchestrationAccess(
+    const projectIds = await resolveReadProjectIds({
       ctx,
-      'orchestrations:GetRun'
-    );
-    if (projectIds === null) return;
-
+      action: 'orchestrations:GetRun',
+      resourceType: 'orchestration',
+    });
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
 
     const result = await findOrchestrationRun({
@@ -382,9 +319,10 @@ orchestrationsRouter.get(
     });
 
     if (!result) {
-      ctx.status = 404;
-      ctx.body = { error: 'Orchestration run not found' };
-      return;
+      throw new DomainError(
+        'RESOURCE_NOT_FOUND',
+        'Orchestration run not found'
+      );
     }
 
     ctx.body = result;
@@ -401,7 +339,6 @@ orchestrationsRouter.post(
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
     const auth = await resolveRunAuth(ctx, 'orchestrations:CancelRun');
-    if (!auth) return;
 
     const result = await cancelOrchestrationRun({
       runPublicId: orchestrationRunId,
@@ -422,9 +359,8 @@ orchestrationsRouter.post(
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
     const auth = await resolveRunAuth(ctx, 'orchestrations:SubmitHumanInput');
-    if (!auth) return;
 
-    const body = (ctx.request.body ?? {}) as {
+    const body = ctx.request.body as {
       node_id?: unknown;
       output?: unknown;
     };
@@ -436,9 +372,7 @@ orchestrationsRouter.post(
         : {};
 
     if (!nodeId) {
-      ctx.status = 400;
-      ctx.body = { error: 'nodeId is required' };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'nodeId is required');
     }
 
     const result = await submitHumanInput({
@@ -462,7 +396,6 @@ orchestrationsRouter.post(
   async (ctx: Context) => {
     const orchestrationRunId = ctx.params['orchestration_run_id'] as string;
     const auth = await resolveRunAuth(ctx, 'orchestrations:ResumeRun');
-    if (!auth) return;
 
     const result = await resumeOrchestrationRun({
       runPublicId: orchestrationRunId,

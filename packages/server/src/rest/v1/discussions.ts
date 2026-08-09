@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import {
   getDiscussionRun,
   listDiscussionRuns,
@@ -18,9 +19,9 @@ import { buildSrn } from 'src/lib/iam';
 import { compilePolicy } from 'src/lib/policyCompiler';
 
 import {
-  checkAuth,
   requestPrincipalFromCtx,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -132,23 +133,17 @@ const discussionContext = (tags?: Record<string, string>) => {
 };
 
 discussionsRouter.get('/discussions', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
   const { limit, offset } = parsePage(ctx);
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'discussions:ListDiscussions',
     resourceType: 'discussion',
   });
-  if (projectIds === null) return;
-
   let policyWhere: Record<string, unknown> | undefined;
   if (projectPublicId) {
     const policies = await ctx.authUser.getPolicies(projectPublicId);
@@ -174,8 +169,7 @@ discussionsRouter.get('/discussions', async (ctx: Context) => {
 });
 
 discussionsRouter.post('/discussions', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const body = ctx.request.body as CreateDiscussionBody;
 
   const targetProjectId = await resolveWriteProjectId({
@@ -184,8 +178,6 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
     action: 'discussions:CreateDiscussion',
     resourceType: 'discussion',
   });
-  if (targetProjectId === null) return;
-
   const discussion = await createDiscussion({
     projectId: Number(targetProjectId),
     name: body.name,
@@ -205,11 +197,7 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
 // Registered before `/discussions/:discussion_id` — distinct segment count, but
 // keep run-scoped reads grouped here.
 discussionsRouter.get('/discussions/runs/:run_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const run = await getDiscussionRun({ id: ctx.params.run_id });
   const allowed = await ctx.authUser.isAllowed({
@@ -223,20 +211,14 @@ discussionsRouter.get('/discussions/runs/:run_id', async (ctx: Context) => {
     context: discussionContext(),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = run;
 });
 
 discussionsRouter.get('/discussions/:discussion_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const discussion = await getDiscussion({ id: ctx.params.discussion_id });
   const allowed = await ctx.authUser.isAllowed({
@@ -250,20 +232,14 @@ discussionsRouter.get('/discussions/:discussion_id', async (ctx: Context) => {
     context: discussionContext(discussion.tags),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   ctx.body = discussion;
 });
 
 discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const discussion = await getDiscussion({ id: ctx.params.discussion_id });
   const allowed = await ctx.authUser.isAllowed({
@@ -277,9 +253,7 @@ discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
     context: discussionContext(discussion.tags),
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   const body = ctx.request.body as UpdateDiscussionBody;
@@ -299,11 +273,7 @@ discussionsRouter.patch('/discussions/:discussion_id', async (ctx: Context) => {
 discussionsRouter.delete(
   '/discussions/:discussion_id',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
@@ -317,9 +287,7 @@ discussionsRouter.delete(
       context: discussionContext(discussion.tags),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     await deleteDiscussion({ id: ctx.params.discussion_id });
@@ -330,11 +298,7 @@ discussionsRouter.delete(
 discussionsRouter.post(
   '/discussions/:discussion_id/runs',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
@@ -348,16 +312,12 @@ discussionsRouter.post(
       context: discussionContext(discussion.tags),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const body = ctx.request.body as { topic?: string };
     if (!body.topic || typeof body.topic !== 'string') {
-      ctx.status = 400;
-      ctx.body = { error: 'topic is required' };
-      return;
+      throw new DomainError('VALIDATION_FAILED', 'topic is required');
     }
 
     const principal = requestPrincipalFromCtx(ctx);
@@ -377,11 +337,7 @@ discussionsRouter.post(
 discussionsRouter.get(
   '/discussions/:discussion_id/runs',
   async (ctx: Context) => {
-    if (!ctx.authUser) {
-      ctx.status = 401;
-      ctx.body = { error: 'Unauthorized' };
-      return;
-    }
+    requireAuth(ctx);
 
     const discussion = await getDiscussion({ id: ctx.params.discussion_id });
     const allowed = await ctx.authUser.isAllowed({
@@ -395,9 +351,7 @@ discussionsRouter.get(
       context: discussionContext(discussion.tags),
     });
     if (!allowed) {
-      ctx.status = 403;
-      ctx.body = { error: 'Forbidden' };
-      return;
+      throw new DomainError('FORBIDDEN', 'Forbidden');
     }
 
     const { limit, offset } = parsePage(ctx);

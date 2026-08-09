@@ -6,28 +6,24 @@ import { getTrace, getTraceTree, listTraces } from 'src/lib/traces';
 
 import {
   requestPrincipalFromCtx,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  requireProjectAccess,
+  resolveReadProjectIds,
 } from './helpers';
 
 export const tracesRouter = new Router<Context>();
 
 tracesRouter.get('/traces', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'traces:ListTraces',
     resourceType: 'trace',
   });
-
-  if (projectIds === null) return;
 
   const limit = ctx.query.limit ? Number(ctx.query.limit) : undefined;
   const offset = ctx.query.offset ? Number(ctx.query.offset) : undefined;
@@ -36,22 +32,13 @@ tracesRouter.get('/traces', async (ctx: Context) => {
 });
 
 tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'traces:GetTrace',
     resourceType: 'trace',
   });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const result = await getTrace({
     projectIds,
@@ -62,22 +49,13 @@ tracesRouter.get('/traces/:trace_id', async (ctx: Context) => {
 });
 
 tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  const projectIds = await resolveReadProjectIds({
+    ctx,
     action: 'traces:GetTraceTree',
     resourceType: 'trace',
   });
-
-  if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const includeParam = ctx.query.include as string | undefined;
   const include = includeParam
@@ -105,29 +83,16 @@ tracesRouter.get('/traces/:trace_id/tree', async (ctx: Context) => {
  * the erasure is provable rather than a 404 that proves nothing. Idempotent.
  */
 tracesRouter.delete('/traces/:trace_id/content', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
-  const projectIds = await ctx.authUser.resolveProjectIds({
+  // An empty scope means the action is denied everywhere, which must answer 403
+  // rather than the 404 an empty filter would produce — see
+  // `requireProjectAccess`.
+  const projectIds = await requireProjectAccess({
+    ctx,
     action: 'traces:PurgeTraceContent',
     resourceType: 'trace',
   });
-
-  // A plain user JWT with no `project_id` on the request resolves to the set of
-  // projects the caller may act on, which is `[]` — not null — when the action
-  // is denied everywhere. Both mean "not permitted", so both are 403; treating
-  // only null as denial would answer 404 and read as "no such trace".
-  if (
-    projectIds === null ||
-    (Array.isArray(projectIds) && projectIds.length === 0)
-  ) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return;
-  }
 
   const purged = await purgeTraceContent({
     traceId: ctx.params.trace_id,

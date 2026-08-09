@@ -1,5 +1,6 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
+import { DomainError } from 'src/errors';
 import type { ChatMessage, ChatMessageInput, MappedChat } from 'src/lib/chats';
 import {
   createChat,
@@ -15,9 +16,9 @@ import {
 import { buildSrn } from 'src/lib/iam';
 
 import {
-  checkAuth,
   parsePagination,
-  resolveProjectIdsWithAction,
+  requireAuth,
+  resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
 
@@ -43,8 +44,7 @@ const checkChatPermission = async (
     resource,
   });
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
   return allowed;
 };
@@ -90,13 +90,10 @@ const validateCreateChatBody = (
 };
 
 chatsRouter.post('/chats', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const validated = validateCreateChatBody(ctx.request.body);
   if (validated.error !== undefined) {
-    ctx.status = 400;
-    ctx.body = { error: validated.error };
-    return;
+    throw new DomainError('VALIDATION_FAILED', validated.error);
   }
 
   const targetProjectId = await resolveWriteProjectId({
@@ -105,8 +102,6 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     action: 'chats:CreateChat',
     resourceType: 'chat',
   });
-  if (targetProjectId === null) return;
-
   const result = await createChat({
     projectId: Number(targetProjectId),
     aiProviderId: validated.aiProviderId,
@@ -120,18 +115,15 @@ chatsRouter.post('/chats', async (ctx: Context) => {
 });
 
 chatsRouter.get('/chats', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const projectPublicId = ctx.query.project_id as string | undefined;
 
-  const projectIds = await resolveProjectIdsWithAction({
+  const projectIds = await resolveReadProjectIds({
     ctx,
     projectPublicId,
     action: 'chats:ListChats',
     resourceType: 'chat',
   });
-
-  if (projectIds === null) return;
 
   ctx.body = await listChats({
     projectIds: projectIds ?? [],
@@ -140,11 +132,7 @@ chatsRouter.get('/chats', async (ctx: Context) => {
 });
 
 chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const { chat_id: chatId } = ctx.params;
 
@@ -156,11 +144,7 @@ chatsRouter.get('/chats/:chat_id', async (ctx: Context) => {
 });
 
 chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
-  if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return;
-  }
+  requireAuth(ctx);
 
   const { chat_id: chatId } = ctx.params;
 
@@ -214,8 +198,7 @@ const handleStreamingCompletion = async (args: {
 };
 
 chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const { chat_id: chatId } = ctx.params;
 
   const { messages, model, stream } = ctx.request.body as {
@@ -225,9 +208,10 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
-    ctx.status = 400;
-    ctx.body = { error: 'messages is required and must be a non-empty array' };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'messages is required and must be a non-empty array'
+    );
   }
 
   const chatMessages = (messages as Record<string, unknown>[]).map(
@@ -336,8 +320,7 @@ const handleStatelessStreamingCompletion = async (args: {
 };
 
 chatsRouter.post('/chat/completions', async (ctx: Context) => {
-  if (!checkAuth(ctx)) return;
-
+  requireAuth(ctx);
   const {
     ai_provider_id: aiProviderId,
     model,
@@ -352,15 +335,14 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
 
   const chatMessages = validateMessages(messages);
   if (!chatMessages) {
-    ctx.status = 400;
-    ctx.body = { error: 'messages is required and must be a non-empty array' };
-    return;
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'messages is required and must be a non-empty array'
+    );
   }
 
   if (!aiProviderId || typeof aiProviderId !== 'string') {
-    ctx.status = 400;
-    ctx.body = { error: 'ai_provider_id is required' };
-    return;
+    throw new DomainError('VALIDATION_FAILED', 'ai_provider_id is required');
   }
 
   if (stream) {
@@ -393,9 +375,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     };
   } catch (error) {
     if (error instanceof Error && error.message === 'AI provider not found') {
-      ctx.status = 404;
-      ctx.body = { error: 'AI provider not found' };
-      return;
+      throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
     }
 
     throw error;

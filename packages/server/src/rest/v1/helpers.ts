@@ -1,7 +1,22 @@
 /**
- * Common helper functions for REST API handlers
+ * Common helper functions for REST API handlers.
+ *
+ * Every guard here **throws** a `DomainError` rather than writing a response.
+ * That is the rule `.claude/rules/errors.md` states and the one these helpers
+ * used to contradict: `checkAuth`/`requireAdmin` set `ctx.body = { error: '…' }`
+ * by hand, so the shared helpers institutionalized the ❌ example and 349 call
+ * sites followed it (#913). Throwing also removes the `return` bookkeeping that
+ * every caller had to remember — a forgotten `return` after a boolean guard
+ * continued into the handler body with the response already set.
+ *
+ * The auth/scope preamble lives here and nowhere else (#908). Before, ~170
+ * routes re-derived it inline and eight modules kept a private `check*Access`
+ * clone differing only in a `resourceType` string literal; each copy was free to
+ * pick a different failure, which is the substrate the scoped-key `403`
+ * inconsistency grew in. `tests/unit/tests/rest/errorShapeContract.test.ts`
+ * enforces both properties statically.
  */
-import type { Context } from 'src/Context';
+import type { AuthUser, Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import {
   principalFromAuthUser,
@@ -99,42 +114,57 @@ export const parsePagination = (
   };
 };
 
+/** A `Context` past {@link requireAuth}: `authUser` is guaranteed present. */
+export type AuthenticatedContext = Context & { authUser: AuthUser };
+
 /**
- * Checks if user is authenticated and returns error response if not
+ * Asserts the request is authenticated, throwing `UNAUTHORIZED` otherwise.
+ *
+ * Declared as a TypeScript **assertion** rather than a function returning the
+ * user, so a bare `requireAuth(ctx);` narrows `ctx.authUser` for the rest of the
+ * block. That is what lets the guard replace the inline
+ * `if (!ctx.authUser) { … return; }` blocks without every handler also having to
+ * thread a returned value around — and it retires the `ctx.authUser!` non-null
+ * assertions those blocks used to make necessary, so a handler that forgets the
+ * guard no longer typechecks.
+ *
+ * (An assertion signature needs an explicitly annotated call target, hence the
+ * type-then-implementation form.)
+ *
+ * Prefer {@link resolveReadProjectIds} / {@link resolveWriteProjectId}, which
+ * run this themselves — a route that needs project scope should not also call
+ * this. It stands alone only where a handler genuinely has no project to
+ * resolve (`/users/me`, the OAuth introspection routes, sub-resource routes
+ * that authorize against a parent they load first).
  */
-export const checkAuth = (ctx: Context): boolean => {
+export const requireAuth: (
+  ctx: Context
+) => asserts ctx is AuthenticatedContext = (ctx) => {
   if (!ctx.authUser) {
-    ctx.status = 401;
-    ctx.body = { error: 'Unauthorized' };
-    return false;
+    throw new DomainError('UNAUTHORIZED', 'Unauthorized');
   }
-  return true;
 };
 
 /**
  * Gates a route on the caller's role being `admin` — the hard, non-IAM gate
  * used by global (non-project-scoped) admin operations (users, policies,
  * projects, the price book) where no policy can grant access; only the
- * `admin` role itself can. Sets `401`/`403` and returns `false` when the
- * caller should stop; the route should `return` immediately in that case.
+ * `admin` role itself can. Throws `UNAUTHORIZED`/`FORBIDDEN`.
  *
  * Records the decision for the audit log via `recordAuthorizationDecision` —
  * this comparison bypasses `isAllowed`/`resolveProjectIds` entirely, so
  * without this call the request produces no audit entry at all, even on a
  * successful mutation (see #745).
  */
-export const requireAdmin = (ctx: Context, action: string): boolean => {
-  if (!checkAuth(ctx)) return false;
+export const requireAdmin = (ctx: Context, action: string): void => {
+  requireAuth(ctx);
 
-  const allowed = ctx.authUser!.role === 'admin';
+  const allowed = ctx.authUser.role === 'admin';
   recordAuthorizationDecision(ctx, { action, allowed });
 
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return false;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-  return true;
 };
 
 /**
@@ -148,61 +178,98 @@ export const requireAdmin = (ctx: Context, action: string): boolean => {
  * unless it is recorded explicitly. `apiKeys.ts` open-coded this three times and
  * two of the three remembered the record — the read did not.
  *
- * Sets `401`/`403` and returns `false` when the caller should stop; the route
- * should `return` immediately in that case.
+ * Throws `UNAUTHORIZED`/`FORBIDDEN`.
  */
-export const isOwnerOrAdmin = (
+export const requireOwnerOrAdmin = (
   ctx: Context,
   args: { ownerPublicId: string | null | undefined; action: string }
-): boolean => {
-  if (!checkAuth(ctx)) return false;
+): void => {
+  requireAuth(ctx);
 
-  const authUser = ctx.authUser!;
   const allowed =
-    args.ownerPublicId === authUser.publicId || authUser.role === 'admin';
+    args.ownerPublicId === ctx.authUser.publicId ||
+    ctx.authUser.role === 'admin';
   recordAuthorizationDecision(ctx, { action: args.action, allowed });
 
   if (!allowed) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return false;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
-  return true;
 };
 
 /**
- * Resolves project IDs for an action with permission check
+ * The read/list preamble, in one place: authenticate, enforce the credential's
+ * project binding, then resolve the project ids the caller may read for this
+ * action.
+ *
+ * `undefined` means "no project filter" — a JWT admin with no explicit
+ * `project_id`. Lib list/get functions already treat an `undefined` `projectIds`
+ * that way, so the return type is passed straight through.
+ *
+ * Every non-admin read route funnels through here. That is the point: the eight
+ * `check*Access` clones this replaces differed only in a `resourceType` literal,
+ * yet 21 of 25 read routes reached the variant *without*
+ * `assertCredentialProjectScope`, so a scoped key got an opaque `Forbidden`
+ * instead of a message naming both projects (#906). With one preamble there is
+ * no second variant to pick.
  */
-export const resolveProjectIdsWithAction = async (args: {
+export const resolveReadProjectIds = async (args: {
   ctx: Context;
   projectPublicId?: string;
   action: string;
   resourceType?: string;
-}): Promise<number[] | null | undefined> => {
-  // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
-  // always defined here.
-  const authUser = args.ctx.authUser!;
+}): Promise<number[] | undefined> => {
+  const { ctx } = args;
+  requireAuth(ctx);
 
   // A scoped credential targeting a different project fails with an actionable
   // error rather than the opaque `Forbidden` that resolveProjectIds would yield.
   if (args.projectPublicId) {
     assertCredentialProjectScope({
-      ctx: args.ctx,
+      ctx,
       requestedProjectPublicId: args.projectPublicId,
       action: args.action,
     });
   }
 
-  const projectIds = await authUser.resolveProjectIds({
+  const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId: args.projectPublicId,
     action: args.action,
     resourceType: args.resourceType,
   });
 
   if (projectIds === null) {
-    args.ctx.status = 403;
-    args.ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
+  }
+
+  return projectIds;
+};
+
+/**
+ * {@link resolveReadProjectIds}, but an **empty** scope is also a `403`.
+ *
+ * The two differ on one case, and it is a real distinction rather than an
+ * accident. `resolveReadProjectIds` lets `[]` through because "the caller may
+ * read zero projects" is a correct answer for a list route: the filter matches
+ * nothing and the response is `[]`. A route that then fetches one resource and
+ * checks whether its project is in the caller's set cannot use that answer — an
+ * empty set would make the resource look *missing* rather than *forbidden*,
+ * turning an authorization failure into a `404`.
+ *
+ * `undefined` still means "unrestricted" (a JWT admin) and stays permitted;
+ * only a non-null, zero-length array is rejected. Getting that pair backwards is
+ * why the check was written out inline 17 times instead of shared — the comment
+ * explaining it appeared in exactly one of the copies.
+ */
+export const requireProjectAccess = async (args: {
+  ctx: Context;
+  projectPublicId?: string;
+  action: string;
+  resourceType?: string;
+}): Promise<number[] | undefined> => {
+  const projectIds = await resolveReadProjectIds(args);
+
+  if (Array.isArray(projectIds) && projectIds.length === 0) {
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   return projectIds;
@@ -216,34 +283,30 @@ export const resolveProjectIdsWithAction = async (args: {
  *   own project automatically (implicit project id).
  * - A scoped credential with an explicit `projectPublicId` that does not match the
  *   credential's project resolves to 403.
- * - When omitted without a scoped credential (e.g. plain JWT auth), responds 400 —
- *   a write needs a concrete project and one is never inferred from a JWT user's
- *   accessible projects.
+ * - When omitted without a scoped credential (e.g. plain JWT auth), throws
+ *   `VALIDATION_FAILED` — a write needs a concrete project and one is never
+ *   inferred from a JWT user's accessible projects.
  *
- * Returns the numeric project id, or `null` when a response (401/400/403) has already
- * been set on `ctx` and the caller should `return`.
+ * Returns the numeric project id; throws `UNAUTHORIZED` / `VALIDATION_FAILED` /
+ * `API_KEY_PROJECT_SCOPE` / `FORBIDDEN` otherwise.
  */
 export const resolveWriteProjectId = async (args: {
   ctx: Context;
   projectPublicId?: string;
   action: string;
   resourceType?: string;
-}): Promise<number | null> => {
+}): Promise<number> => {
   const { ctx, action } = args;
-  // Every call site runs this after `checkAuth(ctx)`, so `ctx.authUser` is
-  // always defined here.
-  const authUser = ctx.authUser!;
+  requireAuth(ctx);
 
   // Without an explicit project id, a project-scoped API key or OAuth token supplies a default.
   const projectPublicId =
     args.projectPublicId ??
-    authUser.apiKeyProjectPublicId ??
-    authUser.oauthProjectPublicId;
+    ctx.authUser.apiKeyProjectPublicId ??
+    ctx.authUser.oauthProjectPublicId;
 
   if (!projectPublicId) {
-    ctx.status = 400;
-    ctx.body = { error: 'project_id is required' };
-    return null;
+    throw new DomainError('VALIDATION_FAILED', 'project_id is required');
   }
 
   // A scoped credential targeting a different project fails with an actionable
@@ -261,16 +324,14 @@ export const resolveWriteProjectId = async (args: {
   // resolveProjectIds implementation, given a truthy projectPublicId (guaranteed
   // above), either returns null or a single-element array — so the resolved id is
   // always defined here.
-  const projectIds = await authUser.resolveProjectIds({
+  const projectIds = await ctx.authUser.resolveProjectIds({
     projectPublicId,
     action,
     resourceType: args.resourceType,
   });
 
   if (projectIds === null) {
-    ctx.status = 403;
-    ctx.body = { error: 'Forbidden' };
-    return null;
+    throw new DomainError('FORBIDDEN', 'Forbidden');
   }
 
   return projectIds![0];
