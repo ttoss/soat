@@ -7,12 +7,13 @@ import {
   chunkDocumentText,
   readFileContent,
 } from './documentContent';
+import { mapDocument } from './documentMapper';
 import { emitResourceEvent } from './eventBus';
 import { getActiveStorageProvider, getStorageProvider } from './fileStorage';
 import { recoverStaleDocument } from './ingestionCallback';
-import { mapDocument } from './knowledge';
 import { emptyPage, paginatedList } from './pagination';
 import { registerResourceFieldMap } from './policyCompiler';
+import { mergeTags } from './tags';
 
 export {
   enqueueDocumentIngestion,
@@ -465,9 +466,11 @@ export const updateDocumentTags = async (args: {
 
   if (!doc) return null;
 
-  const newTags = args.merge
-    ? { ...(doc.tags ?? {}), ...args.tags }
-    : args.tags;
+  const newTags = mergeTags({
+    current: doc.tags,
+    incoming: args.tags,
+    merge: args.merge,
+  });
 
   await doc.update({ tags: newTags });
 

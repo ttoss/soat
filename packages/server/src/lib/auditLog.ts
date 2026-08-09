@@ -1,10 +1,10 @@
 import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 import { db } from 'src/db';
+import { isPlainObject } from 'src/lib/plainObject';
 import {
   camelToSnakeKey,
   convertKeys,
-  isPlainObject,
 } from 'src/lib/resource-inputs/normalizers';
 
 import { DomainError } from '../errors';
@@ -18,7 +18,7 @@ const log = createDebug('soat:audit');
  * Only project-scoped entries emit it — webhooks are project-scoped, so a
  * global entry (`projectId` null) has no possible subscriber.
  */
-export const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
+const AUDIT_ENTRY_CREATED_EVENT = 'audit.entry_created';
 
 export type AuditPrincipalType = 'user' | 'api_key';
 
@@ -419,7 +419,7 @@ const DEFAULT_RETENTION_DAYS = 365;
  * Resolves the configured retention window (`AUDIT_RETENTION_DAYS`, default
  * 365). A non-numeric or non-positive value falls back to the default.
  */
-export const getAuditRetentionDays = (): number => {
+const getAuditRetentionDays = (): number => {
   const raw = Number(process.env.AUDIT_RETENTION_DAYS);
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_RETENTION_DAYS;
 };

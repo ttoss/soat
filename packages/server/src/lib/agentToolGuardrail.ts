@@ -34,12 +34,9 @@ import {
   type GuardrailEvaluationRecord,
   persistGuardrailEvaluations,
 } from './guardrailEvaluationRecord';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:guardrails');
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 const toIso = (value: unknown): string => {
   return value instanceof Date ? value.toISOString() : String(value);

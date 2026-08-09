@@ -14,12 +14,9 @@ import {
   mapGuardrailEvaluation,
 } from './guardrailEvaluationRecord';
 import { loadGuardrailForEvaluation } from './guardrails';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:guardrails');
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 /**
  * Dry-runs the full evaluation pipeline for one guardrail (task 2.9): resolves

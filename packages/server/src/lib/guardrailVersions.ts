@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { type MappedGuardrail, updateGuardrail } from './guardrails';
@@ -9,10 +7,8 @@ import {
   configObject,
   makeVersionArchive,
   mapArchivedVersionFields,
-  type VersionedResourceRef,
+  toResourceRef,
 } from './resourceVersions';
-
-const log = createDebug('soat:guardrails');
 
 /**
  * Guardrail version history.
@@ -62,14 +58,6 @@ const findGuardrailInstance = async (args: {
   return guardrail as GuardrailInstance;
 };
 
-const toResourceRef = (guardrail: GuardrailInstance): VersionedResourceRef => {
-  return {
-    dbId: guardrail.id as number,
-    publicId: guardrail.publicId,
-    version: guardrail.version,
-  };
-};
-
 /**
  * The guardrail adapter over the shared archive. `applyConfig` routes through
  * `updateGuardrail` rather than touching columns, so a restored document is
@@ -112,8 +100,6 @@ export const listGuardrailVersions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  log('listGuardrailVersions: guardrailId=%s', args.guardrailId);
-
   return guardrailVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.guardrailId,
@@ -127,12 +113,6 @@ export const getGuardrailVersion = async (args: {
   guardrailId: string;
   version: number;
 }) => {
-  log(
-    'getGuardrailVersion: guardrailId=%s version=%d',
-    args.guardrailId,
-    args.version
-  );
-
   return guardrailVersionArchive.getVersion({
     projectIds: args.projectIds,
     resourceId: args.guardrailId,
@@ -147,12 +127,6 @@ export const restoreGuardrailVersion = async (args: {
   label?: string | null;
   createdByUserId?: number | null;
 }): Promise<MappedGuardrail> => {
-  log(
-    'restoreGuardrailVersion: guardrailId=%s version=%d',
-    args.guardrailId,
-    args.version
-  );
-
   // Appends a new version rather than rewinding the counter, so an evaluation
   // record citing any version in between still resolves.
   return guardrailVersionArchive.restoreVersion({

@@ -1,7 +1,8 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { isPlainObject, stripMarkdownJsonFence } from './outputSchema';
+import { stripMarkdownJsonFence } from './outputSchema';
+import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:generation');
 

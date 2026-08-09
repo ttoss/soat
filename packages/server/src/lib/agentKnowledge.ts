@@ -7,10 +7,10 @@ import type { TypedAgent } from './agentGenerationHelpers';
 import { isSoatActionAllowedByBoundary } from './agentToolResolver';
 import { searchKnowledge } from './knowledge';
 import { writeMemoryEntry } from './memoryEntries';
+import { isPlainObject } from './plainObject';
 import {
   camelToSnakeKey,
   convertKeysDeep,
-  isPlainObject,
   snakeToCamelKey,
 } from './resource-inputs/normalizers';
 

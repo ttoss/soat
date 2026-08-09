@@ -48,7 +48,7 @@ const camelToKebab = (value: string): string => {
   return value.replace(/([a-z0-9])([A-Z])/g, '$1-$2').toLowerCase();
 };
 
-export const validateSoatActions = (actions: string[] | null | undefined) => {
+const validateSoatActions = (actions: string[] | null | undefined) => {
   if (!actions) return;
   const unknown = actions.filter((action) => {
     return !KNOWN_SOAT_ACTIONS.has(action);

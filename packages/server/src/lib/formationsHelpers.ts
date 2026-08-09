@@ -133,7 +133,7 @@ export const isParam = (value: unknown): value is ParamExpression => {
  * `body.*` tokens (which are resolved at tool-call time). A token may name a
  * template parameter or a resource logical id — callers disambiguate.
  */
-export const collectSubTokens = (value: unknown): string[] => {
+const collectSubTokens = (value: unknown): string[] => {
   if (isSub(value)) {
     return [...value.sub.matchAll(SUB_PARAM_RE)]
       .map((m) => {
@@ -253,7 +253,7 @@ export const buildResolvedParamsMap = (
 
 // Placeholder written to `resolvedParameters` for `no_echo` parameters so a
 // deploy's parameter set stays auditable without persisting the sensitive value.
-export const MASKED_PARAMETER_VALUE = '***';
+const MASKED_PARAMETER_VALUE = '***';
 
 /**
  * Builds the auditable record of parameter values applied at a deploy: declared

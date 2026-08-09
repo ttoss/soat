@@ -1,11 +1,13 @@
-import crypto from 'node:crypto';
-
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
-import { decryptValue, encryptValue } from './secrets';
+import {
+  decryptMaybeLegacySecret,
+  encryptValue,
+  generateSecretValue,
+} from './secrets';
 import {
   assertTriggerConfigValid,
   computeNextFireAt,
@@ -22,23 +24,10 @@ export {
 
 const log = createDebug('soat:triggers');
 
-const generateSecret = () => {
-  return crypto.randomBytes(32).toString('hex');
-};
+const generateSecret = generateSecretValue;
 
-/**
- * Rows created before secret-at-rest encryption store the raw secret.
- * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
- * so fall back to treating it as plaintext. Rotating or recreating the
- * secret re-encrypts it going forward.
- */
 const decryptTriggerSecret = (stored: string): string => {
-  try {
-    return decryptValue(stored);
-  } catch {
-    log('decryptTriggerSecret: value is not encrypted (legacy row)');
-    return stored;
-  }
+  return decryptMaybeLegacySecret({ stored, label: 'decryptTriggerSecret' });
 };
 
 type TriggerInstance = InstanceType<(typeof db)['Trigger']> & {

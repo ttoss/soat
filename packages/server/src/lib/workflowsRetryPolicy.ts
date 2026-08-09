@@ -1,5 +1,5 @@
 import { DomainError } from '../errors';
-import { isPlainObject } from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
 
 /**
  * Optional retry policy on a state's `on_enter`, covering the dispatch's

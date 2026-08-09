@@ -9,6 +9,7 @@ import {
 import { resolveConverterToolType } from './ingestionRuleRefs';
 import { validateIngestionRule } from './ingestionRuleValidation';
 import { paginatedList, type PaginatedResult } from './pagination';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:ingestionRules');
 
@@ -77,10 +78,7 @@ const throwOnGlobConflict = (args: {
   error: unknown;
   contentTypeGlob: string;
 }): never => {
-  if (
-    args.error instanceof Error &&
-    args.error.name === 'SequelizeUniqueConstraintError'
-  ) {
+  if (isUniqueViolation(args.error)) {
     throw new DomainError(
       'INGESTION_RULE_GLOB_CONFLICT',
       `An ingestion rule for content_type_glob '${args.contentTypeGlob}' already exists in this project.`

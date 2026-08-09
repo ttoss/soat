@@ -1,5 +1,3 @@
-import createDebug from 'debug';
-
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { parseOrchestrationGraph } from './orchestrationGraphWire';
@@ -13,10 +11,8 @@ import {
   configObject,
   makeVersionArchive,
   mapArchivedVersionFields,
-  type VersionedResourceRef,
+  toResourceRef,
 } from './resourceVersions';
-
-const log = createDebug('soat:orchestrations');
 
 /**
  * Orchestration graph version history (issue #872).
@@ -38,7 +34,7 @@ type OrchestrationInstance = InstanceType<(typeof db)['Orchestration']>;
 
 // ── Mapping ──────────────────────────────────────────────────────────────
 
-export const mapOrchestrationVersion = (
+const mapOrchestrationVersion = (
   version: ArchivedVersionRow,
   orchestrationPublicId: string
 ) => {
@@ -67,16 +63,6 @@ const findOrchestrationInstance = async (args: {
     );
   }
   return orchestration as OrchestrationInstance;
-};
-
-const toResourceRef = (
-  orchestration: OrchestrationInstance
-): VersionedResourceRef => {
-  return {
-    dbId: orchestration.id as number,
-    publicId: orchestration.publicId,
-    version: orchestration.version,
-  };
 };
 
 /**
@@ -130,8 +116,6 @@ export const listOrchestrationVersions = async (args: {
   limit?: number;
   offset?: number;
 }) => {
-  log('listOrchestrationVersions: orchestrationId=%s', args.orchestrationId);
-
   return orchestrationVersionArchive.listVersions({
     projectIds: args.projectIds,
     resourceId: args.orchestrationId,
@@ -145,12 +129,6 @@ export const getOrchestrationVersion = async (args: {
   orchestrationId: string;
   version: number;
 }) => {
-  log(
-    'getOrchestrationVersion: orchestrationId=%s version=%d',
-    args.orchestrationId,
-    args.version
-  );
-
   return orchestrationVersionArchive.getVersion({
     projectIds: args.projectIds,
     resourceId: args.orchestrationId,
@@ -165,12 +143,6 @@ export const restoreOrchestrationVersion = async (args: {
   label?: string | null;
   createdByUserId?: number | null;
 }): Promise<MappedOrchestration> => {
-  log(
-    'restoreOrchestrationVersion: orchestrationId=%s version=%d',
-    args.orchestrationId,
-    args.version
-  );
-
   // Appends a new version rather than rewinding the counter, so a run pinned to
   // any version in between still resolves the graph it started on. Runs already
   // in flight are untouched: a restore is an ordinary graph edit, and pinning is

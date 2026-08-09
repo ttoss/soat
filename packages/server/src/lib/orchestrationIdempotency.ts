@@ -3,6 +3,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import type { NodeExecutionResult } from './orchestrationNodeTypes';
 import type { OrchestrationNode } from './orchestrations';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:orchestrations');
 
@@ -36,14 +37,6 @@ export const computeNodeIdempotencyKey = (args: {
   if (!args.runPublicId || !args.nodeType) return null;
   if (!SIDE_EFFECTING_NODE_TYPES.has(args.nodeType)) return null;
   return `${args.runPublicId}:${args.nodeId}:${args.attempt}`;
-};
-
-const isUniqueViolation = (error: unknown): boolean => {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    (error as { name?: string }).name === 'SequelizeUniqueConstraintError'
-  );
 };
 
 const findNodeExecutionByKey = (key: string) => {

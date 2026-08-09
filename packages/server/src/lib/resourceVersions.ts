@@ -78,6 +78,25 @@ export type VersionedResourceRef = {
   version: number;
 };
 
+/**
+ * Narrows any versioned row to the archive's reference shape.
+ *
+ * Four modules had written this out identically. It reads only `id`,
+ * `publicId`, and `version` — present on every versioned row — so it moves a
+ * **whole row** in and a fixed three-key struct out, naming no resource field.
+ */
+export const toResourceRef = (row: {
+  id?: unknown;
+  publicId: string;
+  version: number;
+}): VersionedResourceRef => {
+  return {
+    dbId: row.id as number,
+    publicId: row.publicId,
+    version: row.version,
+  };
+};
+
 // ── Building a snapshot ───────────────────────────────────────────────────
 
 /**
@@ -111,7 +130,7 @@ export const projectConfigSnapshot = (args: {
 };
 
 /** True when two snapshots describe the same configuration. */
-export const isSameConfig = (
+const isSameConfig = (
   before: ConfigSnapshot,
   after: ConfigSnapshot
 ): boolean => {

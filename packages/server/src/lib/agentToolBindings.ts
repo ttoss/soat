@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
+import { isPlainObject } from './plainObject';
 import {
   assertEphemeralTypeSupported,
   type InlineToolDefinition,
@@ -31,10 +32,6 @@ type AgentToolColumns = {
 };
 
 // ── Read / derive ─────────────────────────────────────────────────────────
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 /**
  * Derives canonical bindings from the deprecated `toolIds` / `tools` pair —

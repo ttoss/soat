@@ -11,6 +11,7 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
+import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:approvals');
 
@@ -29,18 +30,6 @@ type ApprovalInstance = InstanceType<(typeof db)['ApprovalItem']> & {
   project?: InstanceType<(typeof db)['Project']> | null;
   orchestrationRun?: InstanceType<(typeof db)['OrchestrationRun']> | null;
   resolvedByUser?: InstanceType<(typeof db)['User']> | null;
-};
-
-// A Sequelize unique-constraint violation surfaces as an error whose `name` is
-// `SequelizeUniqueConstraintError` — matched by name so no Sequelize error
-// class needs importing here.
-const isUniqueViolation = (error: unknown): boolean => {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'name' in error &&
-    (error as { name?: unknown }).name === 'SequelizeUniqueConstraintError'
-  );
 };
 
 // Built lazily inside each query: `db.*` models are only populated after the

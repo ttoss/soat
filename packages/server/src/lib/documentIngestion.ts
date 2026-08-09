@@ -12,13 +12,14 @@ import {
   type IngestedDoc,
   resolveChunkConfig,
 } from './documentIngestionCore';
+import { mapDocument } from './documentMapper';
 import { normalizePath } from './filePaths';
 import { resolveIngestionRule } from './ingestionRules';
-import { mapDocument } from './knowledge';
 import {
   resolveSourcePages,
   SUPPORTED_CONTENT_TYPES,
 } from './sourcePageResolver';
+import { isUniqueViolation } from './uniqueViolation';
 
 export { finalizeIngestedPages } from './documentIngestionCore';
 
@@ -122,10 +123,7 @@ const createDocumentOrThrowConflict = async (args: {
       tags: args.tags ?? null,
     });
   } catch (error) {
-    if (
-      error instanceof Error &&
-      error.name === 'SequelizeUniqueConstraintError'
-    ) {
+    if (isUniqueViolation(error)) {
       const existing = await db.Document.findOne({
         where: { fileId: args.file.id },
       });

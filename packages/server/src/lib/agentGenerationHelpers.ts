@@ -14,7 +14,7 @@ import { emitResourceEvent } from './eventBus';
 import { updateGenerationRecord } from './generations';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
-import { isPlainObject } from './outputSchema';
+import { isPlainObject } from './plainObject';
 import { buildGenerationErrorPayload } from './providerError';
 import {
   assertNoTextEncodedToolCall,

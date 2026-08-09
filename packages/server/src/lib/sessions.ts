@@ -2,6 +2,7 @@ import { db } from '../db';
 import { DomainError } from '../errors';
 import { emitResourceEvent } from './eventBus';
 import { emptyPage, paginatedList } from './pagination';
+import { sessionIncludes } from './sessionAccessor';
 import { cancelDelayTimer } from './sessionDelayHelpers';
 import { abortSessionGeneration } from './sessionOperations';
 import { createSessionTransaction } from './sessionTransaction';
@@ -22,15 +23,6 @@ const checkAndExpireSession = async (
   if (isSessionExpired(session)) {
     await session.update({ status: 'expired' });
   }
-};
-
-const sessionIncludes = () => {
-  return [
-    { model: db.Project, as: 'project' },
-    { model: db.Agent, as: 'agent' },
-    { model: db.Conversation, as: 'conversation' },
-    { model: db.Actor, as: 'actor' },
-  ];
 };
 
 const extractSessionIds = (session: Parameters<typeof mapSession>[0]) => {

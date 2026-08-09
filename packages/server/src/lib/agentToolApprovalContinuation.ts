@@ -10,14 +10,11 @@ import {
   registerApprovalResumeHandler,
 } from './approvals';
 import { buildRunAuthHeader } from './orchestrationRunToken';
+import { isPlainObject } from './plainObject';
 import { sendSessionMessage } from './sessionOperations';
 import { callTool } from './tools';
 
 const log = createDebug('soat:approvals');
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 const errorMessage = (error: unknown): string => {
   return error instanceof Error ? error.message : String(error);

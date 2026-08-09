@@ -5,6 +5,7 @@ import { windowedActionCount } from './activity';
 import type { CollectedGuardrail } from './guardrailCollection';
 import { collectDocumentVarPaths } from './guardrailDocument';
 import type { GuardrailEvaluationContext } from './guardrailEvaluation';
+import { isPlainObject } from './plainObject';
 import { callTool } from './tools';
 import {
   runCostUsd,
@@ -35,10 +36,6 @@ export type GuardrailCallIdentity = {
   action?: string | null;
   orchestrationRunId?: string | null;
   run?: SoatRunContext | null;
-};
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
 // Reads a dotted path (`a.b.c`) off a nested object, returning `undefined` when

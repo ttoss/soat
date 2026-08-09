@@ -8,11 +8,8 @@ import type { SoatEvent } from './eventBus';
 import { onEvent } from './eventBus';
 import { EXCEPTION_EVENT_TYPES } from './exceptions';
 import { DEFAULT_LIST_LIMIT, MAX_LIST_LIMIT } from './pagination';
-import {
-  camelToSnakeKey,
-  convertKeys,
-  isPlainObject,
-} from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
+import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
 
 const log = createDebug('soat:activity');
 

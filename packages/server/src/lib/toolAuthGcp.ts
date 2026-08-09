@@ -2,10 +2,10 @@ import crypto from 'node:crypto';
 
 import createDebug from 'debug';
 
+import { isPlainObject } from './plainObject';
 import {
   asString,
   type GcpServiceAccountAuthConfig,
-  isPlainObject,
   toolAuthFailed as authFailed,
 } from './toolAuthConfig';
 

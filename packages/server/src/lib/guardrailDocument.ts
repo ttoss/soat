@@ -1,5 +1,6 @@
 import { DomainError } from '../errors';
 import { isLogic } from './jsonLogicMapping';
+import { isPlainObject } from './plainObject';
 
 /**
  * Guardrail action classes (see the guardrails module docs):
@@ -69,10 +70,6 @@ export const isActionClass = (value: unknown): value is ActionClass => {
     typeof value === 'string' &&
     (ACTION_CLASSES as readonly string[]).includes(value)
   );
-};
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 };
 
 // The path a JSON Logic `var` argument selects: a bare string, or the first

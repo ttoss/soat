@@ -1,7 +1,7 @@
 import { db } from 'src/db';
 
 import { DomainError } from '../errors';
-import { isPlainObject } from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
 import {
   assertRetryPolicyValid,
   type RetryPolicy,

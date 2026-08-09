@@ -2,6 +2,7 @@ import {
   MODEL_ROUTE_ERROR_CLASSES,
   type ModelRouteErrorClass,
 } from './modelRouteErrors';
+import { isPlainObject } from './plainObject';
 
 /**
  * A route target, stored and exposed in the wire (snake_case) shape.
@@ -33,10 +34,6 @@ export const DEFAULT_COOLDOWN_SECONDS = 60;
  * operator sees it immediately.
  */
 export const MAX_MODEL_ROUTE_ATTEMPTS = 10;
-
-const isPlainObject = (value: unknown): value is Record<string, unknown> => {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-};
 
 const isPositiveInteger = (value: unknown): value is number => {
   return typeof value === 'number' && Number.isInteger(value) && value > 0;

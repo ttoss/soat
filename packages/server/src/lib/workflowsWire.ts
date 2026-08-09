@@ -1,4 +1,4 @@
-import { isPlainObject } from './resource-inputs/normalizers';
+import { isPlainObject } from './plainObject';
 
 // ── Wire <-> internal conversion ─────────────────────────────────────────
 //
