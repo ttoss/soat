@@ -1842,21 +1842,21 @@ components:
         - error
       properties:
         error:
-          oneOf:
-            - type: string
-              description: >-
-                Catch-all for an unhandled server error, the only path that
-                still answers with a bare string. Every handled error —
-                including 401/403 — uses the structured object form below.
-              example: Internal Server Error
-            - type: object
-              description: Structured domain error
-              properties:
-                code:
-                  type: string
-                  example: AI_PROVIDER_ERROR
-                message:
-                  type: string
-                  example: 'Provider returned 402: insufficient credits'
-                meta:
-                  type: object
+          type: object
+          description: >-
+            Structured error. Every error response uses this shape — 401, 403
+            and the 500 catch-all included — so `code` can be read without
+            first checking the type of `error`.
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: A key from the server's ERROR_CODES registry.
+              example: AI_PROVIDER_ERROR
+            message:
+              type: string
+              example: 'Provider returned 402: insufficient credits'
+            meta:
+              type: object

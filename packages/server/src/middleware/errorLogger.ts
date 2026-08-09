@@ -4,7 +4,7 @@ import { DatabaseError } from '@ttoss/postgresdb';
 import { APICallError } from 'ai';
 
 import type { Context } from '../Context';
-import { DomainError } from '../errors';
+import { DomainError, type ErrorCode } from '../errors';
 
 type Next = () => Promise<void>;
 
@@ -173,17 +173,42 @@ const quotaRetryAfterSeconds = (
   return Math.max(0, Math.ceil((ms - Date.now()) / 1000));
 };
 
+/** The message returned whenever the real one must not leave the server. */
+const OPAQUE_MESSAGE = 'Internal Server Error';
+
+/**
+ * The response body, in the one shape the API has: `{ error: { code, message,
+ * meta? } }`.
+ *
+ * Every branch below routes through here, the catch-all included. A response a
+ * caller cannot parse the same way as every other response is the branch #913
+ * set out to delete, and the catch-all is the worst place to leave one — it is
+ * the response that arrives unannounced, so it is the one a client is least
+ * likely to have special-cased.
+ */
+const errorBody = (args: {
+  code: ErrorCode;
+  message: string;
+  meta?: Record<string, unknown>;
+}) => {
+  return {
+    error: {
+      code: args.code,
+      message: args.message,
+      ...(args.meta !== undefined && { meta: args.meta }),
+    },
+  };
+};
+
 const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
   ctx.status = status;
 
   if (error instanceof DomainError) {
-    ctx.body = {
-      error: {
-        code: error.code,
-        message: error.message,
-        ...(error.meta !== undefined && { meta: error.meta }),
-      },
-    };
+    ctx.body = errorBody({
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
     // The QUOTA_EXCEEDED contract includes a `Retry-After` header. The request
     // middleware sets it explicitly; other enforcement points (the token/cost
     // generation gate) rely on this fallback so every breach honors it.
@@ -200,13 +225,19 @@ const applyErrorResponse = (ctx: Context, error: unknown, status: number) => {
         ctx.set(key, value);
       }
     }
-    ctx.body = {
-      error: error.expose ? error.message : 'Internal Server Error',
-    };
+
+    // `expose` is the framework's own judgement about whether the message is
+    // safe to return, so it decides both halves: an exposed rejection keeps its
+    // reason, an unexposed one is indistinguishable from any other 500. The
+    // status stays the framework's — `REQUEST_REJECTED` labels the class, and
+    // its registry `httpStatus` is only the default for throwing it directly.
+    ctx.body = error.expose
+      ? errorBody({ code: 'REQUEST_REJECTED', message: error.message })
+      : errorBody({ code: 'INTERNAL_ERROR', message: OPAQUE_MESSAGE });
     return;
   }
 
-  ctx.body = { error: 'Internal Server Error' };
+  ctx.body = errorBody({ code: 'INTERNAL_ERROR', message: OPAQUE_MESSAGE });
 };
 
 const errorLoggerMiddleware = async (ctx: Context, next: Next) => {

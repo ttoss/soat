@@ -532,6 +532,16 @@ export const ERROR_CODES = {
     description:
       'The request is well-formed but names an option this API version does not implement.',
   },
+  REQUEST_REJECTED: {
+    httpStatus: 400,
+    description:
+      'The HTTP framework rejected the request before it reached a handler — a payload over the size limit, an unsupported method, a malformed request line. The accompanying message carries the specific reason, and the response status is the one the framework chose rather than this default.',
+  },
+  INTERNAL_ERROR: {
+    httpStatus: 500,
+    description:
+      'An unhandled server-side failure. The message is always the constant "Internal Server Error" — the underlying exception is logged, never returned, so this error carries no detail a caller can act on beyond retrying.',
+  },
 } as const satisfies Record<
   string,
   { httpStatus: number; description: string }
