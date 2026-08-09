@@ -31,14 +31,9 @@ const platformPillars = [
       'IAM policies, API keys, OAuth for MCP clients, and scoped secrets keep every operation bounded.',
   },
   {
-    title: 'Observe',
+    title: 'Observe & Improve',
     description:
-      'Traces capture every tool call, token, and model response; webhooks and triggers push what changed to the rest of your stack.',
-  },
-  {
-    title: 'Improve',
-    description:
-      'Append-only agent versions and canary rollouts make every change attributable and reversible. Evaluations — coming soon — turn "did this change make it better?" into a verdict that gates promotion.',
+      'Traces capture every tool call and model response. Append-only agent versions and canary rollouts make every change attributable and reversible.',
   },
 ];
 
@@ -68,11 +63,8 @@ const HomepageHeader = () => {
           The infrastructure layer for production-ready AI agents.
         </Heading>
         <p className={clsx('hero__subtitle', styles.heroSubtitle)}>
-          Run tool-calling agents with durable sessions, deterministic
-          multi-agent orchestrations, searchable knowledge, writable memory,
-          guardrails and human approvals, versioned canary rollouts, scoped
-          secrets, IAM policies, traces, and MCP from one self-hosted Node.js
-          server.
+          Durable sessions, multi-agent orchestration, knowledge, memory,
+          guardrails, IAM, and traces — all from one self-hosted Node.js server.
         </p>
         <div className={clsx(styles.buttons, styles.heroButtons)}>
           <Link
@@ -107,22 +99,18 @@ const ArchitectureBand = () => {
               One self-hosted layer for the agent backend stack.
             </Heading>
             <p className={styles.architectureLead}>
-              SOAT packages the production services agents need — storage,
-              orchestration, retrieval, governance, and observability — into one
-              Node.js process backed by PostgreSQL and pgvector. The REST API
-              and the MCP endpoint run in that same process, over the same
-              business logic and the same permission engine, so every surface
-              enforces identical access rules. No queue, no vector service, no
+              SOAT packages storage, orchestration, retrieval, governance, and
+              observability into one Node.js process backed by PostgreSQL and
+              pgvector. The REST API and MCP endpoint share the same business
+              logic and permission engine — no queue, vector service, or
               separate auth server to wire up.
             </p>
             <p className={styles.architectureLead}>
-              The platform is organized around the{' '}
+              It&apos;s organized around the{' '}
               <Link to="/docs/getting-started/harness-loop-graph-ratchet">
                 four layers of an agent system
               </Link>{' '}
-              — the harness, the loop, the graph, and the ratchet: what an agent
-              can reach, what proves a run did the job, what happens next, and
-              what proves a change was an improvement.
+              — the harness, the loop, the graph, and the ratchet.
             </p>
           </div>
           <div className={styles.architectureVisual}>
@@ -268,7 +256,7 @@ export default function Home(): React.ReactNode {
   return (
     <Layout
       title={`${siteConfig.title} — Infrastructure for production-ready AI agents`}
-      description="Run tool-calling agents with durable sessions, deterministic multi-agent orchestrations, searchable knowledge, writable memory, scoped secrets, IAM policies, traces, and MCP from one self-hosted Node.js server."
+      description="Durable sessions, multi-agent orchestration, knowledge, memory, guardrails, IAM, and traces — all from one self-hosted Node.js server."
     >
       <HomepageHeader />
       <main>

@@ -121,12 +121,15 @@
 }
 
 .platformPillars {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.875rem;
 }
 
 .platformPillar {
+  flex: 1 1 220px;
+  max-width: 260px;
   min-height: 132px;
   padding: 1rem;
   border: 1px solid var(--ifm-color-emphasis-300);
@@ -207,8 +210,9 @@ html[data-theme='dark'] .architectureVisual {
     gap: 1.25rem;
   }
 
-  .platformPillars {
-    grid-template-columns: 1fr;
+  .platformPillar {
+    flex-basis: 100%;
+    max-width: 400px;
   }
 
   .architectureVisual {
