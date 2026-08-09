@@ -290,12 +290,13 @@ html[data-theme='dark'] .hero.hero--primary .hero__title {
   background: linear-gradient(
     135deg,
     #ffffff 0%,
-    var(--ifm-color-primary) 50%,
-    var(--soat-violet) 100%
+    var(--ifm-color-primary) 45%,
+    var(--soat-violet-light) 100%
   );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  text-shadow: none;
   filter: drop-shadow(0 0 20px rgba(0, 229, 255, 0.3));
   position: relative;
   z-index: 1;
