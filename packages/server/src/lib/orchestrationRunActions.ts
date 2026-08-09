@@ -2,9 +2,14 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
+import {
+  nodeExecutionsInclude,
+  type OrchestrationRunRow,
+  orchestrationRuns,
+} from './orchestrationAccessor';
 import { resumeOrchestrationRunExecution } from './orchestrationEngine';
 import type { MappedOrchestrationRun } from './orchestrations';
-import { mapOrchestrationRun, nodeExecutionsInclude } from './orchestrations';
+import { mapOrchestrationRun } from './orchestrations';
 
 const log = createDebug('soat:orchestrations');
 
@@ -22,21 +27,20 @@ export const cancelOrchestrationRun = async (args: {
 }): Promise<MappedOrchestrationRun> => {
   log('cancelOrchestrationRun %o', { runPublicId: args.runPublicId });
 
-  const where: Record<string, unknown> = { publicId: args.runPublicId };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const include: object[] = [
-    { model: db.Project, as: 'project' },
-    { model: db.Orchestration, as: 'orchestration' },
-    nodeExecutionsInclude(),
-  ];
-
-  const run = await db.OrchestrationRun.findOne({ where, include });
-  if (!run)
-    throw new DomainError(
-      'ORCHESTRATION_RUN_NOT_FOUND',
-      `Run '${args.runPublicId}' not found.`
-    );
+  // Node executions on top of the accessor's includes: the cancel response
+  // reports them. Only the includes vary — the scoped `where` does not.
+  const run = (await db.OrchestrationRun.findOne({
+    where: orchestrationRuns.scopedWhere({
+      id: args.runPublicId,
+      projectIds: args.projectIds,
+    }),
+    include: [
+      { model: db.Project, as: 'project' },
+      { model: db.Orchestration, as: 'orchestration' },
+      nodeExecutionsInclude(),
+    ],
+  })) as OrchestrationRunRow | null;
+  if (!run) throw orchestrationRuns.notFound(args.runPublicId);
 
   if (
     run.status === 'succeeded' ||
@@ -52,12 +56,7 @@ export const cancelOrchestrationRun = async (args: {
 
   await run.update({ status: 'cancelled', completedAt: new Date() });
 
-  return mapOrchestrationRun(
-    run as InstanceType<typeof db.OrchestrationRun> & {
-      orchestration: InstanceType<typeof db.Orchestration>;
-      project: InstanceType<typeof db.Project>;
-    }
-  );
+  return mapOrchestrationRun(run);
 };
 
 export const submitHumanInput = async (args: {
@@ -71,20 +70,10 @@ export const submitHumanInput = async (args: {
     nodeId: args.nodeId,
   });
 
-  const where: Record<string, unknown> = { publicId: args.runPublicId };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const include: object[] = [
-    { model: db.Project, as: 'project' },
-    { model: db.Orchestration, as: 'orchestration' },
-  ];
-
-  const run = await db.OrchestrationRun.findOne({ where, include });
-  if (!run)
-    throw new DomainError(
-      'ORCHESTRATION_RUN_NOT_FOUND',
-      `Run '${args.runPublicId}' not found.`
-    );
+  const run = await orchestrationRuns.getByPublicId({
+    id: args.runPublicId,
+    projectIds: args.projectIds,
+  });
 
   if (run.status !== 'awaiting_input')
     throw new DomainError(
@@ -112,20 +101,10 @@ export const resumeOrchestrationRun = async (args: {
 }): Promise<MappedOrchestrationRun> => {
   log('resumeOrchestrationRun %o', { runPublicId: args.runPublicId });
 
-  const where: Record<string, unknown> = { publicId: args.runPublicId };
-  if (args.projectIds) where['projectId'] = args.projectIds;
-
-  const include: object[] = [
-    { model: db.Project, as: 'project' },
-    { model: db.Orchestration, as: 'orchestration' },
-  ];
-
-  const run = await db.OrchestrationRun.findOne({ where, include });
-  if (!run)
-    throw new DomainError(
-      'ORCHESTRATION_RUN_NOT_FOUND',
-      `Run '${args.runPublicId}' not found.`
-    );
+  const run = await orchestrationRuns.getByPublicId({
+    id: args.runPublicId,
+    projectIds: args.projectIds,
+  });
 
   if (run.status !== 'awaiting_input')
     throw new DomainError(

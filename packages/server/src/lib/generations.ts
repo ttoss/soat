@@ -8,6 +8,7 @@ import {
 import { mapGeneration, type PersistedGeneration } from './generationMapper';
 import { findOrCreateTrace } from './generationTrace';
 import { emptyPage, paginatedList } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 // The row → wire mapper lives in its own module; re-exported so the many
 // existing `from './generations'` imports of the type keep working.
@@ -319,6 +320,28 @@ const applyGenerationScopeFilters = async (
   return true;
 };
 
+type GenerationRow = InstanceType<(typeof db)['Generation']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  agent?: InstanceType<(typeof db)['Agent']> | null;
+  trace?: InstanceType<(typeof db)['Trace']> | null;
+  initiatorGeneration?: InstanceType<(typeof db)['Generation']> | null;
+};
+
+const generations = makeResourceAccessor<GenerationRow>({
+  model: () => {
+    return db.Generation;
+  },
+  includes: () => {
+    return [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.Trace, as: 'trace' },
+      { model: db.Generation, as: 'initiatorGeneration' },
+    ];
+  },
+  label: 'Generation',
+});
+
 export const listGenerations = async (args: {
   projectIds?: number[];
   agentId?: string;
@@ -406,18 +429,9 @@ export const getGeneration = async (args: {
   publicId: string;
   projectIds?: number[];
 }) => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.publicId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const gen = await db.Generation.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.Trace, as: 'trace' },
-      { model: db.Generation, as: 'initiatorGeneration' },
-    ],
+  const gen = await generations.findByPublicId({
+    id: args.publicId,
+    projectIds: args.projectIds,
   });
   if (!gen) return null;
 

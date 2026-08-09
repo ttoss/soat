@@ -10,6 +10,7 @@ import {
   windowKeyFor,
   windowResetsAt,
 } from './quotaWindows';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:quotas');
 
@@ -255,36 +256,25 @@ const loadCurrentUsage = async (args: {
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
-const reloadWithIncludes = async (id: number): Promise<QuotaInstance> => {
-  const reloaded = await db.Quota.findOne({
-    where: { id },
-    include: getQuotaIncludes(),
-  });
-  return reloaded as QuotaInstance;
+const quotas = makeResourceAccessor<QuotaInstance>({
+  model: () => {
+    return db.Quota;
+  },
+  includes: getQuotaIncludes,
+  label: 'Quota',
+});
+
+const reloadWithIncludes = async (row: {
+  id?: unknown;
+}): Promise<QuotaInstance> => {
+  return quotas.reload(row);
 };
 
 const findQuotaInstance = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<QuotaInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) {
-    where.projectId = args.projectIds;
-  }
-
-  const quota = await db.Quota.findOne({
-    where,
-    include: getQuotaIncludes(),
-  });
-
-  if (!quota) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Quota '${args.id}' not found.`
-    );
-  }
-
-  return quota as QuotaInstance;
+  return quotas.getByPublicId({ id: args.id, projectIds: args.projectIds });
 };
 
 export const createQuota = async (args: {
@@ -355,9 +345,7 @@ export const createQuota = async (args: {
 
   log('createQuota: created id=%s', quota.publicId);
 
-  const created = await reloadWithIncludes(
-    (quota as unknown as { id: number }).id
-  );
+  const created = await reloadWithIncludes(quota);
   return mapQuota(
     created,
     await loadCurrentUsage({ quota: created, now: new Date() })

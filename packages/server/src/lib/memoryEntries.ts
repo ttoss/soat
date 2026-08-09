@@ -5,6 +5,7 @@ import { getEmbedding } from 'src/lib/embedding';
 import { pickMergedContent } from 'src/lib/memoryConsolidation';
 import * as consolidationCompletion from 'src/lib/memoryConsolidationCompletion';
 import { paginatedList } from 'src/lib/pagination';
+import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 /**
  * Context needed to consolidate a merge with an LLM. Present only for writes
@@ -18,11 +19,23 @@ export type MemoryConsolidationContext = {
   model?: string;
 };
 
-const mapMemoryEntry = (
-  instance: InstanceType<(typeof db)['MemoryEntry']> & {
-    memory?: InstanceType<(typeof db)['Memory']>;
-  }
-) => {
+type MemoryEntryRow = InstanceType<(typeof db)['MemoryEntry']> & {
+  memory?: InstanceType<(typeof db)['Memory']>;
+};
+
+const memoryEntryIncludes = () => {
+  return [{ model: db.Memory, as: 'memory' }];
+};
+
+const memoryEntries = makeResourceAccessor<MemoryEntryRow>({
+  model: () => {
+    return db.MemoryEntry;
+  },
+  includes: memoryEntryIncludes,
+  label: 'Memory entry',
+});
+
+const mapMemoryEntry = (instance: MemoryEntryRow) => {
   return {
     id: instance.publicId,
     memory_id: instance.memory?.publicId,
@@ -140,12 +153,7 @@ const mergeAndUpdateEntry = async (args: {
 
   await match.save();
 
-  const withMemory = await db.MemoryEntry.findOne({
-    where: { id: match.id },
-    include: [{ model: db.Memory, as: 'memory' }],
-  });
-
-  return mapMemoryEntry(withMemory!);
+  return mapMemoryEntry(await memoryEntries.reload(match));
 };
 
 type WriteMemoryEntryResult = {
@@ -237,12 +245,10 @@ export const writeMemoryEntry = async (args: {
     embedding,
   });
 
-  const withMemory = await db.MemoryEntry.findOne({
-    where: { id: entry.id },
-    include: [{ model: db.Memory, as: 'memory' }],
-  });
-
-  return { action: 'created', entry: mapMemoryEntry(withMemory!) };
+  return {
+    action: 'created',
+    entry: mapMemoryEntry(await memoryEntries.reload(entry)),
+  };
 };
 
 export const createMemoryEntry = async (args: {
@@ -269,12 +275,7 @@ export const createMemoryEntry = async (args: {
     embedding,
   });
 
-  const withMemory = await db.MemoryEntry.findOne({
-    where: { id: entry.id },
-    include: [{ model: db.Memory, as: 'memory' }],
-  });
-
-  return mapMemoryEntry(withMemory!);
+  return mapMemoryEntry(await memoryEntries.reload(entry));
 };
 
 export const listMemoryEntries = async (args: {
@@ -339,12 +340,7 @@ export const updateMemoryEntry = async (args: {
 
   await entry.save();
 
-  const withMemory = await db.MemoryEntry.findOne({
-    where: { id: entry.id },
-    include: [{ model: db.Memory, as: 'memory' }],
-  });
-
-  return mapMemoryEntry(withMemory!);
+  return mapMemoryEntry(await memoryEntries.reload(entry));
 };
 
 export const deleteMemoryEntry = async (args: {

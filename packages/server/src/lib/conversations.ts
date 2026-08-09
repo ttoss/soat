@@ -6,6 +6,7 @@ import {
   type CompiledPolicy,
   registerResourceFieldMap,
 } from './policyCompiler';
+import { makeResourceAccessor } from './resourceAccessor';
 import { mergeTags } from './tags';
 
 export type { CompiledPolicy };
@@ -16,12 +17,27 @@ registerResourceFieldMap({
   tagsColumn: { column: 'tags' },
 });
 
-const mapConversation = (
-  conversation: InstanceType<(typeof db)['Conversation']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    actor?: InstanceType<(typeof db)['Actor']> | null;
-  }
-) => {
+type ConversationRow = InstanceType<(typeof db)['Conversation']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  actor?: InstanceType<(typeof db)['Actor']> | null;
+};
+
+const conversationIncludes = () => {
+  return [
+    { model: db.Project, as: 'project' },
+    { model: db.Actor, as: 'actor' },
+  ];
+};
+
+const conversations = makeResourceAccessor<ConversationRow>({
+  model: () => {
+    return db.Conversation;
+  },
+  includes: conversationIncludes,
+  label: 'Conversation',
+});
+
+const mapConversation = (conversation: ConversationRow) => {
   return {
     id: conversation.publicId,
     project_id: conversation.project?.publicId,
@@ -93,13 +109,7 @@ export const listConversations = async (args: {
 };
 
 export const getConversation = async (args: { id: string }) => {
-  const conversation = await db.Conversation.findOne({
-    where: { publicId: args.id },
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Actor, as: 'actor' },
-    ],
-  });
+  const conversation = await conversations.findByPublicId({ id: args.id });
 
   if (!conversation) {
     return null;
@@ -121,15 +131,9 @@ export const createConversation = async (args: {
     actorId: args.actorId ?? null,
   });
 
-  const conversationWithAssociations = await db.Conversation.findOne({
-    where: { id: conversation.id },
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Actor, as: 'actor' },
-    ],
-  });
+  const conversationWithAssociations = await conversations.reload(conversation);
 
-  const mapped = mapConversation(conversationWithAssociations!);
+  const mapped = mapConversation(conversationWithAssociations);
 
   emitResourceEvent({
     type: 'conversations.created',

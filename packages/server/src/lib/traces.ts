@@ -6,6 +6,7 @@ import { DomainError } from '../errors';
 import type { PersistedGeneration } from './generations';
 import { listGenerationsByTraceIds } from './generations';
 import { emptyPage, paginatedList } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 // The write path lives in its own module; re-exported here so `saveTrace` and
 // friends keep their long-standing import site.
@@ -33,15 +34,31 @@ export type TraceTreeNode = Trace & {
   generations?: PersistedGeneration[];
 };
 
-export const mapTrace = (
-  row: InstanceType<(typeof db)['Trace']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    agent?: InstanceType<(typeof db)['Agent']>;
-    file?: InstanceType<(typeof db)['File']> | null;
-    parentTrace?: InstanceType<(typeof db)['Trace']> | null;
-    rootTrace?: InstanceType<(typeof db)['Trace']> | null;
-  }
-): Trace => {
+type TraceRow = InstanceType<(typeof db)['Trace']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  agent?: InstanceType<(typeof db)['Agent']>;
+  file?: InstanceType<(typeof db)['File']> | null;
+  parentTrace?: InstanceType<(typeof db)['Trace']> | null;
+  rootTrace?: InstanceType<(typeof db)['Trace']> | null;
+};
+
+const traceRows = makeResourceAccessor<TraceRow>({
+  model: () => {
+    return db.Trace;
+  },
+  includes: () => {
+    return [
+      { model: db.Project, as: 'project' },
+      { model: db.Agent, as: 'agent' },
+      { model: db.File, as: 'file' },
+      { model: db.Trace, as: 'parentTrace' },
+      { model: db.Trace, as: 'rootTrace' },
+    ];
+  },
+  label: 'Trace',
+});
+
+export const mapTrace = (row: TraceRow): Trace => {
   if (!row.agent) {
     throw new Error('Trace agent association is required for serialization.');
   }
@@ -110,34 +127,12 @@ export const getTrace = async (args: {
   projectIds?: number[];
   traceId: string;
 }): Promise<Trace> => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.traceId };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0)
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Trace '${args.traceId}' not found.`
-      );
-    where.projectId = args.projectIds;
-  }
-
-  const row = await db.Trace.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.File, as: 'file' },
-      { model: db.Trace, as: 'parentTrace' },
-      { model: db.Trace, as: 'rootTrace' },
-    ],
-  });
-  if (!row)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trace '${args.traceId}' not found.`
-    );
-
-  return mapTrace(row);
+  return mapTrace(
+    await traceRows.getByPublicId({
+      id: args.traceId,
+      projectIds: args.projectIds,
+    })
+  );
 };
 
 const buildTraceTree = (traces: Trace[]): TraceTreeNode | undefined => {
@@ -210,32 +205,10 @@ export const getTraceTree = async (args: {
 }): Promise<TraceTreeNode> => {
   log('getTraceTree: traceId=%s projectIds=%o', args.traceId, args.projectIds);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const where: Record<string, any> = { publicId: args.traceId };
-  if (args.projectIds !== undefined) {
-    if (args.projectIds.length === 0)
-      throw new DomainError(
-        'RESOURCE_NOT_FOUND',
-        `Trace '${args.traceId}' not found.`
-      );
-    where.projectId = args.projectIds;
-  }
-
-  const targetRow = await db.Trace.findOne({
-    where,
-    include: [
-      { model: db.Project, as: 'project' },
-      { model: db.Agent, as: 'agent' },
-      { model: db.File, as: 'file' },
-      { model: db.Trace, as: 'parentTrace' },
-      { model: db.Trace, as: 'rootTrace' },
-    ],
+  const targetRow = await traceRows.getByPublicId({
+    id: args.traceId,
+    projectIds: args.projectIds,
   });
-  if (!targetRow)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trace '${args.traceId}' not found.`
-    );
 
   // Determine root publicId
   const rootTraceDbId = (targetRow.rootTraceId ??

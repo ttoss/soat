@@ -1,5 +1,11 @@
 import { db } from '../db';
 import { DomainError } from '../errors';
+// This module keeps its own `TOOL_NOT_FOUND` / `AGENT_NOT_FOUND` throws — a
+// *referenced-entity* miss on a request field is a `400`, not the `404` a
+// top-level lookup returns — so it borrows the scope rule alone. That is the
+// half that must not drift: how a credential scope narrows a lookup is one
+// rule, with one implementation.
+import { scopedWhere } from './resourceAccessor';
 
 /**
  * Resolves the public tool/agent ids from a REST request to the internal
@@ -22,11 +28,12 @@ export const resolveConverterRefs = async (args: {
     if (args.toolId === null) {
       result.toolId = null;
     } else {
-      const where: Record<string, unknown> = { publicId: args.toolId };
-      if (args.projectIds !== undefined) {
-        where.projectId = args.projectIds;
-      }
-      const tool = await db.Tool.findOne({ where });
+      const tool = await db.Tool.findOne({
+        where: scopedWhere({
+          id: args.toolId,
+          projectIds: args.projectIds,
+        }),
+      });
       if (!tool) {
         throw new DomainError(
           'TOOL_NOT_FOUND',
@@ -41,11 +48,12 @@ export const resolveConverterRefs = async (args: {
     if (args.agentId === null) {
       result.agentId = null;
     } else {
-      const where: Record<string, unknown> = { publicId: args.agentId };
-      if (args.projectIds !== undefined) {
-        where.projectId = args.projectIds;
-      }
-      const agent = await db.Agent.findOne({ where });
+      const agent = await db.Agent.findOne({
+        where: scopedWhere({
+          id: args.agentId,
+          projectIds: args.projectIds,
+        }),
+      });
       if (!agent) {
         throw new DomainError(
           'AGENT_NOT_FOUND',

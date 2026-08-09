@@ -6,6 +6,7 @@ import { normalizeKnowledgeConfig } from './agentKnowledge';
 import { updateGenerationRecord } from './generations';
 import { writeMemoryEntry } from './memoryEntries';
 import * as extractionCompletion from './memoryExtractionCompletion';
+import { scopedWhere } from './resourceAccessor';
 
 const log = createDebug('soat:memory-extraction');
 
@@ -152,13 +153,17 @@ type ExtractionTarget = {
  * config has extraction enabled and a `write_memory_id`, and the target
  * memory exists.
  */
+// Lean lookup: only the agent's own `knowledgeConfig` column is read here.
 const findExtractionAgent = (args: {
   agentId: string;
   projectIds?: number[];
 }): Promise<InstanceType<(typeof db)['Agent']> | null> => {
-  const where: Record<string, unknown> = { publicId: args.agentId };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-  return db.Agent.findOne({ where });
+  return db.Agent.findOne({
+    where: scopedWhere({
+      id: args.agentId,
+      projectIds: args.projectIds,
+    }),
+  });
 };
 
 /**

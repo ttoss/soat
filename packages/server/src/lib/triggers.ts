@@ -1,6 +1,7 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
+import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import {
@@ -70,6 +71,14 @@ const triggerIncludes = () => {
   ];
 };
 
+const triggers = makeResourceAccessor<TriggerInstance>({
+  model: () => {
+    return db.Trigger;
+  },
+  includes: triggerIncludes,
+  label: 'Trigger',
+});
+
 const assertNameAvailable = async (args: {
   projectId: number;
   name: string;
@@ -87,17 +96,7 @@ const assertNameAvailable = async (args: {
 };
 
 const findTriggerOrThrow = async (args: { id: string }) => {
-  const trigger = await db.Trigger.findOne({
-    where: { publicId: args.id },
-    include: triggerIncludes(),
-  });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.id}' not found.`
-    );
-  }
-  return trigger;
+  return triggers.getByPublicId({ id: args.id });
 };
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
@@ -139,22 +138,12 @@ export const listTriggers = async (args: {
 };
 
 export const findTrigger = async (args: { id: string }) => {
-  const trigger = await db.Trigger.findOne({
-    where: { publicId: args.id },
-    include: triggerIncludes(),
-  });
+  const trigger = await triggers.findByPublicId({ id: args.id });
   return trigger ? mapTrigger(trigger) : null;
 };
 
 export const getTrigger = async (args: { id: string }) => {
-  const trigger = await findTrigger({ id: args.id });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.id}' not found.`
-    );
-  }
-  return trigger;
+  return mapTrigger(await triggers.getByPublicId({ id: args.id }));
 };
 
 /**
@@ -180,12 +169,7 @@ export const findWebhookTriggerForDelivery = async (args: { id: string }) => {
  */
 export const getTriggerSecret = async (args: { id: string }) => {
   const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.id}' not found.`
-    );
-  }
+  if (!trigger) throw triggers.notFound(args.id);
   if (trigger.type !== 'webhook') {
     throw new DomainError(
       'TRIGGER_ACTION_NOT_ALLOWED',
@@ -273,11 +257,9 @@ export const createTrigger = async (args: CreateTriggerArgs) => {
   const trigger = await db.Trigger.create(buildCreateAttributes(args));
   log('createTrigger: created id=%s', trigger.publicId);
 
-  const created = await db.Trigger.findOne({
-    where: { id: trigger.id },
-    include: triggerIncludes(),
+  return mapTrigger(await triggers.reload(trigger), {
+    includeSecret: args.type === 'webhook',
   });
-  return mapTrigger(created!, { includeSecret: args.type === 'webhook' });
 };
 
 type UpdateTriggerArgs = {
@@ -348,22 +330,13 @@ export const updateTrigger = async (args: UpdateTriggerArgs) => {
   applyUpdateFields(trigger, args);
   await trigger.save();
 
-  const updated = await db.Trigger.findOne({
-    where: { id: trigger.id },
-    include: triggerIncludes(),
-  });
-  return mapTrigger(updated!);
+  return mapTrigger(await triggers.reload(trigger));
 };
 
 export const deleteTrigger = async (args: { id: string }) => {
   log('deleteTrigger: id=%s', args.id);
   const trigger = await db.Trigger.findOne({ where: { publicId: args.id } });
-  if (!trigger) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Trigger '${args.id}' not found.`
-    );
-  }
+  if (!trigger) throw triggers.notFound(args.id);
   await trigger.destroy();
 };
 

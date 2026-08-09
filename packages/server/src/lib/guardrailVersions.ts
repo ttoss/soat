@@ -1,6 +1,9 @@
-import { db } from '../db';
 import { DomainError } from '../errors';
-import { type MappedGuardrail, updateGuardrail } from './guardrails';
+import {
+  findGuardrailInstance,
+  type MappedGuardrail,
+  updateGuardrail,
+} from './guardrails';
 import { guardrailVersionStore } from './guardrailVersionSnapshot';
 import {
   type ArchivedVersionRow,
@@ -23,8 +26,6 @@ import {
  * deliberately under-enforcing one of them.
  */
 
-type GuardrailInstance = InstanceType<(typeof db)['Guardrail']>;
-
 // ── Mapping ──────────────────────────────────────────────────────────────
 
 export const mapGuardrailVersion = (
@@ -35,27 +36,6 @@ export const mapGuardrailVersion = (
     guardrail_id: guardrailPublicId,
     ...mapArchivedVersionFields(version),
   };
-};
-
-// ── Lookup helpers ───────────────────────────────────────────────────────
-
-const findGuardrailInstance = async (args: {
-  projectIds?: number[];
-  id: string;
-}): Promise<GuardrailInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const guardrail = await db.Guardrail.findOne({ where });
-  // Cross-project access resolves here as "not found" rather than a 403, so a
-  // guardrail's existence never leaks across a tenant boundary.
-  if (!guardrail) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Guardrail '${args.id}' not found.`
-    );
-  }
-  return guardrail as GuardrailInstance;
 };
 
 /**

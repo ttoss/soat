@@ -16,6 +16,7 @@ import { findDiscussionModel } from './discussions';
 import type { DiscussionModel, SynthesisConfig } from './discussionsTypes';
 import { createDocument } from './documents';
 import { paginatedList } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 
 const log = createDebug('soat:discussions');
 
@@ -44,6 +45,14 @@ const runIncludes = () => {
     { model: db.Document, as: 'outcomeDocument' },
   ];
 };
+
+const discussionRuns = makeResourceAccessor<RunModel>({
+  model: () => {
+    return db.DiscussionRun;
+  },
+  includes: runIncludes,
+  label: 'Discussion run',
+});
 
 const mapRunArtifacts = (run: RunModel) => {
   return {
@@ -389,9 +398,5 @@ export const runDiscussion = async (args: {
     completedAt: new Date(),
   });
 
-  const finished = await db.DiscussionRun.findOne({
-    where: { id: run.id },
-    include: runIncludes(),
-  });
-  return mapRun(finished as RunModel);
+  return mapRun(await discussionRuns.reload(run));
 };

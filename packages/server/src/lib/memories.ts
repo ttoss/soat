@@ -1,6 +1,7 @@
 import { Op } from '@ttoss/postgresdb';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
+import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 const buildTagsGlobLiteral = (args: { tags: string[] }) => {
   const sequelize = db.Memory.sequelize!;
@@ -17,11 +18,23 @@ const buildTagsGlobLiteral = (args: { tags: string[] }) => {
   );
 };
 
-const mapMemory = (
-  instance: InstanceType<(typeof db)['Memory']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-  }
-) => {
+type MemoryRow = InstanceType<(typeof db)['Memory']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+};
+
+const memoryIncludes = () => {
+  return [{ model: db.Project, as: 'project' }];
+};
+
+const memories = makeResourceAccessor<MemoryRow>({
+  model: () => {
+    return db.Memory;
+  },
+  includes: memoryIncludes,
+  label: 'Memory',
+});
+
+const mapMemory = (instance: MemoryRow) => {
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
@@ -46,12 +59,7 @@ export const createMemory = async (args: {
     tags: args.tags ?? null,
   });
 
-  const withProject = await db.Memory.findOne({
-    where: { id: memory.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  return mapMemory(withProject!);
+  return mapMemory(await memories.reload(memory));
 };
 
 export const listMemories = async (args: {
@@ -83,10 +91,7 @@ export const listMemories = async (args: {
 };
 
 export const getMemory = async (args: { id: string }) => {
-  const memory = await db.Memory.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
+  const memory = await memories.findByPublicId({ id: args.id });
   if (!memory) return null;
   return mapMemory(memory);
 };
@@ -109,12 +114,7 @@ export const updateMemory = async (args: {
 
   await memory.save();
 
-  const withProject = await db.Memory.findOne({
-    where: { id: memory.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-
-  return mapMemory(withProject!);
+  return mapMemory(await memories.reload(memory));
 };
 
 export const deleteMemory = async (args: {

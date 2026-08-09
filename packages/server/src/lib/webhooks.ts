@@ -1,6 +1,7 @@
 import { db } from 'src/db';
 
 import { paginatedList } from './pagination';
+import { makeResourceAccessor } from './resourceAccessor';
 import {
   decryptMaybeLegacySecret,
   encryptValue,
@@ -13,11 +14,13 @@ export const decryptWebhookSecret = (stored: string): string => {
   return decryptMaybeLegacySecret({ stored, label: 'decryptWebhookSecret' });
 };
 
+type WebhookRow = InstanceType<(typeof db)['Webhook']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  policy?: InstanceType<(typeof db)['Policy']> | null;
+};
+
 const mapWebhook = (
-  instance: InstanceType<(typeof db)['Webhook']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    policy?: InstanceType<(typeof db)['Policy']> | null;
-  },
+  instance: WebhookRow,
   args?: { includeSecret?: boolean }
 ) => {
   return {
@@ -44,6 +47,14 @@ const webhookIncludes = () => {
   ];
 };
 
+const webhooks = makeResourceAccessor<WebhookRow>({
+  model: () => {
+    return db.Webhook;
+  },
+  includes: webhookIncludes,
+  label: 'Webhook',
+});
+
 export const listWebhooks = async (args: {
   projectIds: number[];
   limit?: number;
@@ -68,10 +79,7 @@ export const listWebhooks = async (args: {
 };
 
 export const getWebhook = async (args: { id: string }) => {
-  const webhook = await db.Webhook.findOne({
-    where: { publicId: args.id },
-    include: webhookIncludes(),
-  });
+  const webhook = await webhooks.findByPublicId({ id: args.id });
   if (!webhook) return null;
   return mapWebhook(webhook);
 };
@@ -105,12 +113,7 @@ export const createWebhook = async (args: {
     active: true,
   });
 
-  const withIncludes = await db.Webhook.findOne({
-    where: { id: webhook.id },
-    include: webhookIncludes(),
-  });
-
-  return mapWebhook(withIncludes!, { includeSecret: true });
+  return mapWebhook(await webhooks.reload(webhook), { includeSecret: true });
 };
 
 export const updateWebhook = async (args: {
@@ -137,12 +140,7 @@ export const updateWebhook = async (args: {
 
   await webhook.update(updates);
 
-  const withIncludes = await db.Webhook.findOne({
-    where: { id: webhook.id },
-    include: webhookIncludes(),
-  });
-
-  return mapWebhook(withIncludes!);
+  return mapWebhook(await webhooks.reload(webhook));
 };
 
 export const deleteWebhook = async (args: { id: string }) => {
@@ -163,12 +161,7 @@ export const rotateWebhookSecret = async (args: { id: string }) => {
   const newSecret = generateSecret();
   await webhook.update({ secret: encryptValue(newSecret) });
 
-  const withIncludes = await db.Webhook.findOne({
-    where: { id: webhook.id },
-    include: webhookIncludes(),
-  });
-
-  return mapWebhook(withIncludes!, { includeSecret: true });
+  return mapWebhook(await webhooks.reload(webhook), { includeSecret: true });
 };
 
 /**

@@ -7,6 +7,7 @@ import { emitResourceEvent, onEvent, resolveProjectPublicId } from './eventBus';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { isPlainObject } from './plainObject';
 import { camelToSnakeKey, convertKeys } from './resource-inputs/normalizers';
+import { makeResourceAccessor } from './resourceAccessor';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:exceptions');
@@ -59,6 +60,15 @@ const buildIncludes = () => {
     { model: db.User, as: 'resolvedByUser' },
   ];
 };
+
+const exceptionItems = makeResourceAccessor<ExceptionInstance>({
+  model: () => {
+    return db.ExceptionItem;
+  },
+  includes: buildIncludes,
+  label: 'Exception',
+  errorCode: 'EXCEPTION_NOT_FOUND',
+});
 
 /**
  * Converts `detail`'s own top-level keys from camelCase to snake_case
@@ -161,11 +171,7 @@ const findExceptionOrThrow = async (id: string): Promise<ExceptionInstance> => {
 const reload = async (
   instance: ExceptionInstance
 ): Promise<MappedException> => {
-  const withRefs = await db.ExceptionItem.findOne({
-    where: { id: instance.id },
-    include: buildIncludes(),
-  });
-  return mapException(withRefs!);
+  return mapException(await exceptionItems.reload(instance));
 };
 
 export type FileExceptionArgs = {

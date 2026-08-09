@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import createDebug from 'debug';
 import { db } from 'src/db';
 import { paginatedList } from 'src/lib/pagination';
+import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 
@@ -81,11 +82,23 @@ export const decryptMaybeLegacySecret = (args: {
   }
 };
 
-const mapSecret = (
-  instance: InstanceType<(typeof db)['Secret']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-  }
-) => {
+type SecretRow = InstanceType<(typeof db)['Secret']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+};
+
+const secretIncludes = () => {
+  return [{ model: db.Project, as: 'project' }];
+};
+
+const secrets = makeResourceAccessor<SecretRow>({
+  model: () => {
+    return db.Secret;
+  },
+  includes: secretIncludes,
+  label: 'Secret',
+});
+
+const mapSecret = (instance: SecretRow) => {
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
@@ -118,16 +131,7 @@ export const listSecrets = async (args: {
 };
 
 export const getSecret = async (args: { id: string }) => {
-  const secret = await db.Secret.findOne({
-    where: { publicId: args.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-  if (!secret)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Secret '${args.id}' not found.`
-    );
-  return mapSecret(secret);
+  return mapSecret(await secrets.getByPublicId({ id: args.id }));
 };
 
 export const createSecret = async (args: {
@@ -140,11 +144,7 @@ export const createSecret = async (args: {
     name: args.name,
     encryptedValue: encryptValue(args.value),
   });
-  const withProject = await db.Secret.findOne({
-    where: { id: secret.id },
-    include: [{ model: db.Project, as: 'project' }],
-  });
-  return mapSecret(withProject!);
+  return mapSecret(await secrets.reload(secret));
 };
 
 export const updateSecret = async (args: {

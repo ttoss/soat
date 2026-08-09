@@ -3,6 +3,7 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { findModelRoutesReferencingProvider } from 'src/lib/modelRouteReferences';
 import { paginatedList } from 'src/lib/pagination';
+import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 import { decryptValue } from 'src/lib/secrets';
 
 const getAiProviderIncludes = () => {
@@ -12,12 +13,20 @@ const getAiProviderIncludes = () => {
   ];
 };
 
-const mapAiProvider = (
-  instance: InstanceType<(typeof db)['AiProvider']> & {
-    project?: InstanceType<(typeof db)['Project']>;
-    secret?: InstanceType<(typeof db)['Secret']> | null;
-  }
-) => {
+type AiProviderRow = InstanceType<(typeof db)['AiProvider']> & {
+  project?: InstanceType<(typeof db)['Project']>;
+  secret?: InstanceType<(typeof db)['Secret']> | null;
+};
+
+const aiProviders = makeResourceAccessor<AiProviderRow>({
+  model: () => {
+    return db.AiProvider;
+  },
+  includes: getAiProviderIncludes,
+  label: 'AI provider',
+});
+
+const mapAiProvider = (instance: AiProviderRow) => {
   return {
     id: instance.publicId,
     project_id: instance.project?.publicId,
@@ -54,10 +63,7 @@ export const listAiProviders = async (args: {
 };
 
 export const getAiProvider = async (args: { id: string }) => {
-  const provider = await db.AiProvider.findOne({
-    where: { publicId: args.id },
-    include: getAiProviderIncludes(),
-  });
+  const provider = await aiProviders.findByPublicId({ id: args.id });
   if (!provider) return null;
   return mapAiProvider(provider);
 };
@@ -80,11 +86,7 @@ export const createAiProvider = async (args: {
     baseUrl: args.baseUrl ?? null,
     config: args.config ?? null,
   });
-  const withAssociations = await db.AiProvider.findOne({
-    where: { id: instance.id },
-    include: getAiProviderIncludes(),
-  });
-  return mapAiProvider(withAssociations!);
+  return mapAiProvider(await aiProviders.reload(instance));
 };
 
 export const updateAiProvider = async (args: {
@@ -96,10 +98,7 @@ export const updateAiProvider = async (args: {
   baseUrl?: string | null;
   config?: Record<string, unknown> | null;
 }) => {
-  const instance = await db.AiProvider.findOne({
-    where: { publicId: args.id },
-    include: getAiProviderIncludes(),
-  });
+  const instance = await aiProviders.findByPublicId({ id: args.id });
   if (!instance) return null;
 
   if (args.name !== undefined) instance.name = args.name;
@@ -111,11 +110,7 @@ export const updateAiProvider = async (args: {
   if (args.secretId !== undefined) instance.secretId = args.secretId;
 
   await instance.save();
-  const refreshed = await db.AiProvider.findOne({
-    where: { id: instance.id },
-    include: getAiProviderIncludes(),
-  });
-  return mapAiProvider(refreshed!);
+  return mapAiProvider(await aiProviders.reload(instance));
 };
 
 // Cap on how many offending public IDs we echo back in a 409. Hard references

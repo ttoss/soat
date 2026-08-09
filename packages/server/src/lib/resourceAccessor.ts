@@ -14,6 +14,35 @@ type FinderModel = {
 };
 
 /**
+ * `{ publicId }`, narrowed to `projectIds` when a credential scope is in play.
+ *
+ * Passing `projectIds: []` is a scope that matches nothing, which is what makes
+ * an out-of-scope id read as absent rather than as forbidden. Spelling that as
+ * `projectIds.length > 0` instead — as `orchestrationStartRun.ts` did — drops
+ * the filter entirely and turns an empty scope into *no* scope.
+ *
+ * Exported on its own because a module can need this rule without needing an
+ * accessor: `ingestionRuleRefs.ts` and `pipelineTools.ts` resolve a *referenced*
+ * entity, so a miss is a `400` carrying their own context rather than the `404`
+ * `getByPublicId` throws. They borrow the scope rule and keep their own throw.
+ */
+export const scopedWhere = (args: {
+  id: string;
+  projectIds?: number[];
+  /**
+   * Extra predicates merged into the `where` — a resource-specific filter the
+   * lookup is never valid without, such as a soft-delete exclusion. Column
+   * names, not wire field names; the object is passed through without any key
+   * being read.
+   */
+  where?: Record<string, unknown>;
+}): Record<string, unknown> => {
+  const where: Record<string, unknown> = { publicId: args.id, ...args.where };
+  if (args.projectIds !== undefined) where.projectId = args.projectIds;
+  return where;
+};
+
+/**
  * Builds the four queries every resource module in `src/lib` was writing out
  * by hand: the scoped `where`, the scoped lookup, its throwing counterpart,
  * and the reload-after-write.
@@ -70,27 +99,6 @@ export const makeResourceAccessor = <TRow extends { id?: unknown }>(config: {
       errorCode ?? config.errorCode ?? 'RESOURCE_NOT_FOUND',
       `${config.label} '${id}' not found.`
     );
-  };
-
-  /**
-   * `{ publicId }`, narrowed to `projectIds` when a credential scope is in
-   * play. Passing `projectIds: []` is a scope that matches nothing, which is
-   * what makes an out-of-scope id read as absent rather than as forbidden.
-   */
-  const scopedWhere = (args: {
-    id: string;
-    projectIds?: number[];
-    /**
-     * Extra predicates merged into the `where` — a resource-specific filter
-     * the lookup is never valid without, such as a soft-delete exclusion.
-     * Column names, not wire field names; the accessor passes the object
-     * through without reading a key.
-     */
-    where?: Record<string, unknown>;
-  }): Record<string, unknown> => {
-    const where: Record<string, unknown> = { publicId: args.id, ...args.where };
-    if (args.projectIds !== undefined) where.projectId = args.projectIds;
-    return where;
   };
 
   const findByPublicId = async (args: {

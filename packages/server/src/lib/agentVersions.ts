@@ -2,7 +2,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import type { MappedAgent } from './agentAccessor';
+import { agents, type MappedAgent } from './agentAccessor';
 import { getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
@@ -58,22 +58,18 @@ export const mapAgentVersion = (
 
 // ── Lookup helpers ───────────────────────────────────────────────────────
 
+// Lean lookup: this module only needs the row's own columns, never its
+// associations. Cross-project access resolves as "not found" rather than a 403
+// — that decision lives in `scopedWhere`, so it cannot differ from the CRUD
+// module's answer for the same id.
 const findAgentInstance = async (args: {
   projectIds?: number[];
   id: string;
 }): Promise<AgentInstance> => {
-  const where: Record<string, unknown> = { publicId: args.id };
-  if (args.projectIds !== undefined) where.projectId = args.projectIds;
-
-  const agent = await db.Agent.findOne({ where });
-  // Cross-project access resolves here as "not found" rather than a 403, so an
-  // agent's existence never leaks across a tenant boundary.
-  if (!agent) {
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Agent '${args.id}' not found.`
-    );
-  }
+  const agent = await db.Agent.findOne({
+    where: agents.scopedWhere({ id: args.id, projectIds: args.projectIds }),
+  });
+  if (!agent) throw agents.notFound(args.id);
   return agent as AgentInstance;
 };
 
