@@ -34,7 +34,7 @@ you know which part of the platform to reach for when a layer is the one failing
 | **Harness** | What can this agent reach, and what is it forbidden? | [Tools](/docs/modules/tools), [Knowledge](/docs/modules/knowledge), [Documents](/docs/modules/documents), [Memories](/docs/modules/memories), [Sessions](/docs/modules/sessions), [IAM](/docs/modules/iam), [Secrets](/docs/modules/secrets), [Formations](/docs/modules/formations) |
 | **Loop**    | What proves it did the job, and when does it stop? | [Agents](/docs/modules/agents) (`output_schema`, `max_steps`, `stop_conditions`), [Guardrails](/docs/modules/guardrails), [Approvals](/docs/modules/approvals), [Quotas](/docs/modules/quotas), [Usage](/docs/modules/usage), [Traces](/docs/modules/traces), [Exceptions](/docs/modules/exceptions) |
 | **Graph**   | What is allowed to happen next?    | [Orchestrations](/docs/modules/orchestrations), [Workflows](/docs/modules/workflows), [Triggers](/docs/modules/triggers), [Discussions](/docs/modules/discussions)                                       |
-| **Ratchet** | How does the system change, and what proves the change was an improvement? | [Evaluations](/docs/modules/evaluations), [agent versions](/docs/modules/agents#versioning-and-staged-rollout), [Learned Rules](/docs/modules/learned-rules), the [approvals recurrence view](/docs/modules/approvals#recurrence-view), [Guardrails](/docs/modules/guardrails), [Formations](/docs/modules/formations) |
+| **Ratchet** | How does the system change, and what proves the change was an improvement? | [Evaluations](/docs/modules/evaluations), [agent versions](/docs/modules/agents#versioning-and-staged-rollout), the [approvals recurrence view](/docs/modules/approvals#recurrence-view), [Guardrails](/docs/modules/guardrails), [Formations](/docs/modules/formations) |
 
 ## Layer 1 — The harness
 
@@ -218,7 +218,7 @@ and add a graph only when a process pain demands one.
 | **A regression is live** and nobody can name what changed        | Append-only [agent versions](/docs/modules/agents#versioning-and-staged-rollout), with the served version stamped on every generation as `agent_version`                         |
 | **Promotion is a judgment call made under deadline**             | A staged [release](/docs/modules/agents#staged-rollout) (stable/canary split) whose promotion is gated on an eval verdict rather than a hunch                                    |
 | **A human keeps making the same correction**                     | The approvals [recurrence view](/docs/modules/approvals#recurrence-view) rolls up repeated rejections with their reasons — the prompt to encode a [guardrail](/docs/modules/guardrails) `deny` that stops the pattern upstream |
-| **A rule was added and nobody knows if it works**                | [Learned Rules](/docs/modules/learned-rules) are soft context by design, so their efficacy is an eval question: run the regression set with the rule injected and without it     |
+| **Guidance was added to an agent and nobody knows if it works**   | Instructions are soft context, so efficacy is an eval question: run the regression set with the wording changed and without it, and compare against the baseline                  |
 
 ### A verdict, not an opinion
 
@@ -261,17 +261,21 @@ recur from. The shipped [recurrence view](/docs/modules/approvals#recurrence-vie
 that up into "this correction has happened four times" — grouped by exact key, with no new
 models and no LLM in the path.
 
-That surface is deliberately the *deterministic* slice. [Learned
-Rules](/docs/modules/learned-rules) is the module for the rest: clustering paraphrased
-corrections that an exact-key rollup cannot group, and promoting a curated correction into
-a versioned, scoped rule that future runs can read. The distinction that keeps both honest
-is worth internalizing — **memories are facts the agents learn about the world; learned
-rules are corrections humans make to agent behavior.**
+That surface is deliberately the *deterministic* slice: it tells you a correction recurs,
+and leaves the judgment about what to do with it to a human. The distinction that decides
+where any piece of guidance belongs is worth internalizing — **[memories](/docs/modules/memories)
+are facts the agents learn about the world; a correction is doctrine about how the agent
+should act**, and doctrine has two homes, not one:
 
-A rule is **soft**: injected context the model is expected, but not forced, to follow. When
-a constraint must *never* be violated, the graduation path is hard — encode it as a
-guardrail `deny`, so the action is refused upstream and never reaches the queue again.
-Recurring rejections are exactly the signal that a soft rule should graduate.
+- **Hard** — a [guardrail](/docs/modules/guardrails) `deny`, which refuses the action
+  upstream so it never reaches the queue again. This is the right home whenever a constraint
+  must *never* be violated, and recurring rejections are exactly the signal for it.
+- **Soft** — the agent's `instructions`, which the model is expected but not forced to
+  follow, and which [agent versions](/docs/modules/agents#versioning-and-staged-rollout)
+  archive on every write, so the reworded guidance is attributable and reversible.
+
+Soft guidance is where the ratchet's two halves meet: whether a wording change actually
+improved anything is not a judgment, it is an eval.
 
 ### What the ratchet must never do
 
@@ -279,9 +283,9 @@ Promote by itself. It is tempting to let the system turn a recurring correction 
 standing instruction automatically, and it is an unforced error class: free-text
 corrections are ambiguous, occasionally wrong, and permanent once they are in every
 prompt. SOAT's stance is that the platform owns the *queue*, the *recurrence signal*, and
-the *verdict*, and a human owns the judgment — promoting a rule, graduating it to a
-guardrail, and promoting a canary all stay human-gated decisions made against evidence the
-platform assembled.
+the *verdict*, and a human owns the judgment — rewording an instruction, encoding a
+guardrail `deny`, and promoting a canary all stay human-gated decisions made against
+evidence the platform assembled.
 
 This is also where the layers stop being a purely technical progression. A bad objective
 looks like flawless execution in every trace, so the reading habit that works below —
@@ -300,7 +304,6 @@ is not built yet.
 | [Approvals recurrence view](/docs/modules/approvals#recurrence-view)   | Shipped                                                                                        |
 | [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Coming soon                                                                              |
 | Eval-gated promotion of a canary release                               | Coming soon — depends on evaluations                                                           |
-| [Learned Rules](/docs/modules/learned-rules) — semantic clustering, promotion lifecycle, scoped rule listing | Coming soon — deferred until the recurrence view proves demand and evaluations can measure rule efficacy |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
 
 ## Diagnose before you build

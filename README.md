@@ -44,7 +44,6 @@ Shipped today: append-only agent versions with staged canary rollout, served-ver
 
 - **[Evaluations](https://soat.ttoss.dev/docs/modules/evaluations)** — datasets, deterministic and LLM-judge scorers, and scored runs of the real agent, comparable against a baseline: "did this change make the agent worse?" as a pass/fail verdict.
 - **Eval-gated promotion** — a canary that promotes on a passing eval run instead of a hunch.
-- **[Learned Rules](https://soat.ttoss.dev/docs/modules/learned-rules)** — human corrections captured from approval decisions, clustered when they recur, and promoted (by a human, always) into versioned, scoped rules — with a graduation path to hard guardrail enforcement.
 
 The stance behind all of it: the platform owns the queue, the recurrence signal, and the verdict; a human owns the judgment. Promotion is never automatic.
 

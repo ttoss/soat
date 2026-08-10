@@ -122,7 +122,7 @@ const sidebars: SidebarsConfig = {
         {
           type: 'category',
           label: 'Improvement & Adaptation',
-          items: ['modules/evaluations', 'modules/learned-rules'],
+          items: ['modules/evaluations'],
         },
         {
           type: 'category',

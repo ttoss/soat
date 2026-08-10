@@ -68,7 +68,8 @@ How the system changes, and what proves a change was an improvement. See
 for how this group fits the rest of the platform.
 
 - [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)
-- [Learned Rules](./learned-rules.md) — human corrections captured, clustered, and promoted into versioned scoped rules (coming soon)
+- [Agent versions](./agents.md#versioning-and-staged-rollout) — append-only config history with staged canary rollout
+- [Approvals recurrence view](./approvals.md#recurrence-view) — what human correction keeps coming back, and what to do with it
 
 ## Operations
 

@@ -292,6 +292,17 @@ Consequences:
   efficacy question ("does injection change behavior?") is unanswerable until
   evaluations P1 exists.
 
+**Update (2026-08): the public module page was removed too.** The remaining
+scope neither enforces (guardrails do) nor injects (the app does), so what it
+would own is a text table plus a clustering job whose outcome is not observable
+inside SOAT — while a promoted correction already has two better homes: a
+guardrail `deny` (deterministic) or the agent's `instructions` (versioned,
+served, stamped on every generation). The fact/correction boundary now lives in
+[memories](../packages/website/docs/modules/memories.md#what-belongs-in-a-memory)
+and the graduation choice on the
+[recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view).
+This PRD stays as the design record.
+
 Build gates for the full module — **both** must hold: sustained demand on the
 recurrence view (humans graduating groups into guardrails *and* hitting the
 exact-match ceiling on paraphrased corrections), and evaluations P1 shipped.
