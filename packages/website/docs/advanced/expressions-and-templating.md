@@ -64,7 +64,7 @@ Plain dotted strings (no delimiters) appear where a value is an **address**, not
 - **`output_path` on `tool_output` message content** — extracts a field from a tool result before it enters a conversation (`"text"`, `"data.0.url"`; numeric segments index arrays).
 - **Formation `ref_attr`** — `"MySecret.value"` reads an attribute of another resource: everything before the first dot is the logical ID, the rest is the attribute name.
 
-:::note Mapping keys are stored verbatim
+:::note[Mapping keys are stored verbatim]
 
 The keys of an `input_mapping`, `state_mapping`, or approval-node `arguments` are
 names you author, and they leave SOAT exactly as written — an `input_mapping` key
@@ -87,7 +87,7 @@ Dotted paths also appear *inside* JSON Logic `var` strings (`{"var": "steps.call
 
 This is the canonical URL placeholder syntax and intentionally matches OpenAPI path templating.
 
-:::warning Single braces, not double
+:::warning[Single braces, not double]
 `{{city}}` is **not** a supported placeholder — double braces are reserved for [secret references](#secret-references-secret). Creating or updating a tool (directly, or via a formation) with any other `{{...}}` token in `execute`/`mcp` fields is rejected with `400 INVALID_TEMPLATE_TOKEN`. Always write `{city}`.
 :::
 

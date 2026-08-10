@@ -34,7 +34,7 @@ The `DATABASE_*` variables above set the host, port, name, user, and password. F
 
 The full list is documented in the [libpq environment variables](https://www.postgresql.org/docs/current/libpq-envars.html) reference. These take effect without any SOAT-specific configuration.
 
-:::tip Managed PostgreSQL with forced SSL
+:::tip[Managed PostgreSQL with forced SSL]
 
 Managed providers such as **Amazon Aurora / RDS** may set `rds.force_ssl=1`, which rejects any non-TLS connection. SOAT connects in plaintext by default, so the connection is refused and the server exits at startup. Set `PGSSLMODE` to enable TLS:
 
@@ -50,7 +50,7 @@ services:
 
 :::
 
-:::note Aurora PostgreSQL 18.3
+:::note[Aurora PostgreSQL 18.3]
 
 Aurora PostgreSQL 18.3 crashes the DB instance when it receives the multi-statement session-setup query (`SET client_min_messages ...; SET TIME ZONE ...`) that the ORM sends on each new pooled connection, which previously caused a silent startup failure. SOAT suppresses the `SET TIME ZONE` half of that query (the session timezone is UTC either way), so it now boots against Aurora 18.3 without any extra configuration.
 
@@ -72,7 +72,7 @@ Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) f
 Keep this value **larger than a legitimate migration's duration.** A task that is merely waiting for a live peer's `sync` to finish should wait it out rather than abort. Align it with your deployment's health-check grace period. Lower it only if your migrations are known to be fast and you want boots to fail sooner when a lock is genuinely stuck.
 :::
 
-:::note Indexes are never dropped by the sync
+:::note[Indexes are never dropped by the sync]
 
 `sync({ alter: true })` is additive where indexes are concerned: it creates what the current schema declares and never drops what an earlier version declared. When a SOAT release renames an index, the previous one stays in your database, and a release that _widens_ a unique index leaves its narrower predecessor in place — still enforcing the old constraint.
 

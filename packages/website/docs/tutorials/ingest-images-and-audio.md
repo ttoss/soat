@@ -48,7 +48,7 @@ It maps onto the feature's building blocks:
 | **Secret references** — a tool's API key never appears in `GET`/`LIST` responses | Step 10 |
 | **`body_mode: multipart`** — calling a non-JSON third-party API directly | Step 10 |
 
-:::tip Runs against mock providers — no keys needed
+:::tip[Runs against mock providers — no keys needed]
 Every provider/tool call is directed at a `base_url` you configure, so the flow
 can run against stand-in servers instead of the real APIs. The tutorials test
 runner does exactly this: `tests/docker-compose.tutorials.yml` starts a
