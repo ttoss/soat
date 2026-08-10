@@ -107,7 +107,7 @@ const ArchitectureBand = () => {
             </p>
             <p className={styles.architectureLead}>
               It&apos;s organized around the{' '}
-              <Link to="/docs/getting-started/harness-loop-graph-ratchet">
+              <Link to="/docs/getting-started/agent-system-layers">
                 four layers of an agent system
               </Link>{' '}
               — the harness, the loop, the graph, and the ratchet.

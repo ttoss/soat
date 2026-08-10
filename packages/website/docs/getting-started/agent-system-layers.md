@@ -1,11 +1,11 @@
 ---
-description: "Harness, loop, graph, ratchet — the four layers of an agent system, which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet is the layer that keeps the other three honest."
+description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet is the layer that keeps the other three honest."
 sidebar_position: 3
-sidebar_label: Harness, Loop, Graph, Ratchet
-title: Harness, Loop, Graph, and Ratchet
+sidebar_label: Layers of an Agent System
+title: The Layers of an Agent System
 ---
 
-# Harness, Loop, Graph, and Ratchet
+# The Layers of an Agent System
 
 A common way to decompose an agent system splits it into three layers:
 

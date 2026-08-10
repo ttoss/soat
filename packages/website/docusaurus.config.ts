@@ -131,9 +131,16 @@ const config: Config = {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
           },
+          // The page's title used to name the layers, so its slug churned every
+          // time a layer was added or renamed. It is now layer-agnostic; these
+          // keep the historical URLs alive.
           {
             from: '/docs/getting-started/harness-loop-graph',
-            to: '/docs/getting-started/harness-loop-graph-ratchet',
+            to: '/docs/getting-started/agent-system-layers',
+          },
+          {
+            from: '/docs/getting-started/harness-loop-graph-ratchet',
+            to: '/docs/getting-started/agent-system-layers',
           },
         ],
       },

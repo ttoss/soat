@@ -27,7 +27,7 @@ const sidebars: SidebarsConfig = {
       items: [
         'getting-started/quick-start',
         'getting-started/concepts',
-        'getting-started/harness-loop-graph-ratchet',
+        'getting-started/agent-system-layers',
         'getting-started/choosing-a-client',
         'getting-started/choosing-an-automation-model',
       ],

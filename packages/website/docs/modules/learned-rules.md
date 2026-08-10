@@ -37,7 +37,7 @@ captured, clustered, **promoted by a human**, versioned, scoped, and eventually 
 
 Learned rules is part of the **ratchet** — the layer that governs how the system changes,
 described in
-[Harness, Loop, Graph, and Ratchet](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet).
+[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet).
 It is the half of that layer concerned with human corrections; [evaluations](./evaluations.md)
 is the half concerned with measurement, and the two are coupled: a rule is soft context, so
 only an eval can say whether injecting it changed anything.

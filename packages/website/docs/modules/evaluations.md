@@ -13,7 +13,7 @@ output, and runs comparable against a baseline.
 This module is designed but **not implemented**. There is no REST, MCP, CLI, or SDK surface
 for it yet, and nothing on this page is callable today. It is documented here because the
 concept is settled and it is the piece the rest of the
-[ratchet layer](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet)
+[ratchet layer](../getting-started/agent-system-layers.md#layer-4--the-ratchet)
 depends on — see [What to use today](#what-to-use-today) for the shipped alternatives.
 
 :::
@@ -35,7 +35,7 @@ can gate a change.
 
 Evaluations is the foundation of the **ratchet** — the layer that governs how the system
 changes, described in
-[Harness, Loop, Graph, and Ratchet](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet).
+[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet).
 The loop asks whether a single run succeeded; an evaluation asks whether a *change* to the
 agent improved the distribution of runs, which no single run can answer.
 
