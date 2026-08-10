@@ -131,25 +131,6 @@ const config: Config = {
             from: '/docs/getting-started/advanced-config',
             to: '/docs/self-hosting/configuration',
           },
-          // The page's title used to name the layers, so its slug churned every
-          // time a layer was added or renamed. It is now layer-agnostic; these
-          // keep the historical URLs alive.
-          {
-            from: '/docs/getting-started/harness-loop-graph',
-            to: '/docs/getting-started/agent-system-layers',
-          },
-          {
-            from: '/docs/getting-started/harness-loop-graph-ratchet',
-            to: '/docs/getting-started/agent-system-layers',
-          },
-          // The learned-rules module page was removed: its shipped slice is the
-          // approvals recurrence view, and a correction's durable homes are a
-          // guardrail `deny` or the agent's versioned instructions. The design
-          // record stays in docs/prd-learned-rules.md.
-          {
-            from: '/docs/modules/learned-rules',
-            to: '/docs/modules/approvals#recurrence-view',
-          },
         ],
       },
     ],
