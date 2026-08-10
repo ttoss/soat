@@ -172,6 +172,19 @@ stops the pattern upstream.
 - Grouping is **exact-key only**. Semantic clustering of paraphrased
   corrections is deliberately out of scope for this deterministic surface.
 
+A recurring correction has two durable homes, and picking between them is the
+decision the view exists to prompt:
+
+- **It must never happen again** — encode a [guardrail](./guardrails.md) `deny`,
+  so the action is refused before it reaches this queue.
+- **The agent should know better** — put it in the agent's `instructions`, which
+  [agent versions](./agents.md#versioning-and-staged-rollout) archive on every
+  write, so the change is attributable and reversible.
+
+A correction is not a fact about the world, so it does not belong in
+[memories](./memories.md) — see
+[what belongs in a memory](./memories.md#what-belongs-in-a-memory).
+
 ### Expiry is a hard gate
 
 Evidence goes stale, so expiry is enforced server-side in **both directions**:

@@ -55,6 +55,26 @@ Memory entries are the individual knowledge items stored inside a memory. When a
 
 ## Key Concepts
 
+### What belongs in a memory
+
+A memory entry is a **fact the agent learns about the world** — a customer's shipping
+address, a decision a team reached, a constraint discovered while working. It is retrieved
+by semantic similarity and consumed as context.
+
+A **correction to the agent's behavior** is not a fact, and does not belong here.
+"Never quote a delivery date without checking stock" is doctrine about how the agent should
+act; storing it as an entry makes its application depend on whether a retrieval happened to
+rank it highly. Doctrine has two durable homes instead:
+
+- **A constraint that must never be violated** — a [guardrail](./guardrails.md) `deny`,
+  which refuses the action deterministically rather than hoping the model reads the entry.
+- **Guidance the model should follow** — the agent's `instructions`, which
+  [agent versions](./agents.md#versioning-and-staged-rollout) archive on every write, so the
+  change is attributable and reversible.
+
+When the same correction keeps being made by hand, the
+[approvals recurrence view](./approvals.md#recurrence-view) is what surfaces it.
+
 ### Write Algorithm
 
 Every write to a memory — via REST, agent tool, or extraction — goes through the same deduplication algorithm.

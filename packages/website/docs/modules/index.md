@@ -64,11 +64,12 @@ Composing agents into workflows and reacting to events.
 ## Improvement & Adaptation
 
 How the system changes, and what proves a change was an improvement. See
-[Harness, Loop, Graph, and Ratchet](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet)
+[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet)
 for how this group fits the rest of the platform.
 
 - [Evaluations](./evaluations.md) — datasets, scorers, and scored runs comparable against a baseline (coming soon)
-- [Learned Rules](./learned-rules.md) — human corrections captured, clustered, and promoted into versioned scoped rules (coming soon)
+- [Agent versions](./agents.md#versioning-and-staged-rollout) — append-only config history with staged canary rollout
+- [Approvals recurrence view](./approvals.md#recurrence-view) — what human correction keeps coming back, and what to do with it
 
 ## Operations
 

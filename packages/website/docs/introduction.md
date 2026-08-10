@@ -12,7 +12,7 @@ import TabItem from '@theme/TabItem';
 
 If you have ever shipped an AI product, you know the pattern: half the codebase is plumbing — users, API keys, embeddings, conversation history, tool calling, traces. SOAT solves all of it once, exposes it through four equivalent client surfaces, and gets out of your way.
 
-The platform is organized around the [four layers of an agent system](/docs/getting-started/harness-loop-graph-ratchet): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
+The platform is organized around the [four layers of an agent system](/docs/getting-started/agent-system-layers): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
 
 ## What you get out of the box
 
@@ -71,9 +71,8 @@ The shipped foundation is already in place: versioned agents, canary rollout, an
 
 - **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent, comparable against a baseline, answering "did this change make the agent worse?" with a pass/fail verdict
 - **Eval-gated promotion** — a canary release that promotes on a passing eval run rather than a judgment call
-- **[Learned Rules](/docs/modules/learned-rules)** — human corrections captured, clustered when they recur, and promoted by a human into versioned scoped rules, with a graduation path to hard guardrail enforcement
 
-Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [Harness, Loop, Graph, and Ratchet](/docs/getting-started/harness-loop-graph-ratchet), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
+Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [The Layers of an Agent System](/docs/getting-started/agent-system-layers), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 
 ## Architecture
 

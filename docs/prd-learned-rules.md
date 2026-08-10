@@ -7,6 +7,17 @@
 > builds only if the [build gates](#deferral-decision-2026-07) pass. See
 > [roadmap → Deferral: learned rules](./roadmap.md#deferral-learned-rules).
 >
+> **The public module page was removed (2026-08).** A "coming soon" page for a
+> module with no surface, whose two remaining novel pieces are a feature of the
+> recurrence view (semantic clustering) and a query (scoped listing), advertised
+> more than it delivered. The durable content moved to where a reader acts on it:
+> the fact/correction boundary is
+> [what belongs in a memory](../packages/website/docs/modules/memories.md#what-belongs-in-a-memory),
+> and the two homes for a correction are documented on the
+> [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view).
+> This document remains the design record — if the gates below fire, build from
+> it rather than restoring the page.
+>
 > Part of [Agent Operations on Formations](./prd-agent-operations.md) (G6).
 > Captures from [approvals](../packages/website/docs/modules/approvals.md) resolution paths and
 > reuses the embedding nearest-neighbor machinery from

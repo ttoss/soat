@@ -17,7 +17,7 @@ You bring the product. SOAT handles the infrastructure layer.
 
 Shipping AI applications means rebuilding the same infrastructure on every project: users, API keys, encrypted secrets, file storage, embeddings, conversation history, agent tool calling, traces, observability. SOAT solves all of it once and exposes it through five equivalent surfaces — REST, MCP, CLI, TypeScript SDK, and a built-in web app — so the same operation runs the same way whether you call it from a backend, Claude Desktop, a CI script, the bundled UI, or your own frontend.
 
-SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/getting-started/harness-loop-graph-ratchet): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). The first three are shipped in depth; the ratchet is where the platform is heading — see [What SOAT is becoming](#what-soat-is-becoming).
+SOAT organizes that surface around the [four layers of an agent system](https://soat.ttoss.dev/docs/getting-started/agent-system-layers): the **harness** (what an agent can reach and what it is forbidden), the **loop** (what proves a run did the job), the **graph** (what is allowed to happen next), and the **ratchet** (what proves a change to the agent was an improvement). The first three are shipped in depth; the ratchet is where the platform is heading — see [What SOAT is becoming](#what-soat-is-becoming).
 
 ## Highlights
 
@@ -38,13 +38,12 @@ SOAT organizes that surface around the [four layers of an agent system](https://
 
 ## What SOAT is becoming
 
-An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's direction is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [Harness, Loop, Graph, and Ratchet](https://soat.ttoss.dev/docs/getting-started/harness-loop-graph-ratchet).
+An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's direction is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [The Layers of an Agent System](https://soat.ttoss.dev/docs/getting-started/agent-system-layers).
 
 Shipped today: append-only agent versions with staged canary rollout, served-version stamping on every generation, and the approvals recurrence view that surfaces repeated human corrections. In design and coming next (see [`docs/roadmap.md`](./docs/roadmap.md)):
 
 - **[Evaluations](https://soat.ttoss.dev/docs/modules/evaluations)** — datasets, deterministic and LLM-judge scorers, and scored runs of the real agent, comparable against a baseline: "did this change make the agent worse?" as a pass/fail verdict.
 - **Eval-gated promotion** — a canary that promotes on a passing eval run instead of a hunch.
-- **[Learned Rules](https://soat.ttoss.dev/docs/modules/learned-rules)** — human corrections captured from approval decisions, clustered when they recur, and promoted (by a human, always) into versioned, scoped rules — with a graduation path to hard guardrail enforcement.
 
 The stance behind all of it: the platform owns the queue, the recurrence signal, and the verdict; a human owns the judgment. Promotion is never automatic.
 

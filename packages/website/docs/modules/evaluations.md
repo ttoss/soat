@@ -13,7 +13,7 @@ output, and runs comparable against a baseline.
 This module is designed but **not implemented**. There is no REST, MCP, CLI, or SDK surface
 for it yet, and nothing on this page is callable today. It is documented here because the
 concept is settled and it is the piece the rest of the
-[ratchet layer](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet)
+[ratchet layer](../getting-started/agent-system-layers.md#layer-4--the-ratchet)
 depends on — see [What to use today](#what-to-use-today) for the shipped alternatives.
 
 :::
@@ -35,7 +35,7 @@ can gate a change.
 
 Evaluations is the foundation of the **ratchet** — the layer that governs how the system
 changes, described in
-[Harness, Loop, Graph, and Ratchet](../getting-started/harness-loop-graph-ratchet.md#layer-4--the-ratchet).
+[The Layers of an Agent System](../getting-started/agent-system-layers.md#layer-4--the-ratchet).
 The loop asks whether a single run succeeded; an evaluation asks whether a *change* to the
 agent improved the distribution of runs, which no single run can answer.
 
@@ -43,9 +43,10 @@ It is also the dependency two other capabilities wait on:
 
 - **Eval-gated promotion** — a canary [release](./agents.md#staged-rollout) that promotes
   only when a scored run passes, rather than when someone decides it looks fine.
-- **[Learned rules](./learned-rules.md)** — rules are soft injected context, so whether
-  one actually changes behavior is an empirical question. Without a way to run a regression
-  set with and without a rule, promoting rules is building on faith.
+- **Reworded guidance** — an agent's `instructions` are soft context, so whether a change
+  to them actually changed behavior is an empirical question. Without a regression set to run
+  before and after, a rewording is a hunch with a
+  [version number](./agents.md#versioning-and-staged-rollout) attached.
 
 ## What it will own
 
