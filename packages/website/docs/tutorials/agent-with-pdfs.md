@@ -30,7 +30,7 @@ It maps directly onto the build plan:
 | **C. Retrieval** — automatic, agent-driven via API, and agent-driven via tool | Steps 10–12 |
 | **D. Citations** — `page` + `document_id` per result | Step 8 |
 
-:::note Requires native file ingestion
+:::note[Requires native file ingestion]
 `POST /api/v1/documents/ingest` and the `DocumentChunk` model land in
 [#245](https://github.com/ttoss/soat/pull/245). Run this tutorial against a server
 that includes that change.

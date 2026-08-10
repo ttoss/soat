@@ -739,7 +739,7 @@ curl -s "$SOAT_BASE_URL/api/v1/usage/meters?generation_id=$(printf '%s\n' "$INTA
 </TabItem>
 </Tabs>
 
-:::warning Trade-off: no recovery after a restart
+:::warning[Trade-off: no recovery after a restart]
 The state that resumes a generation paused on a [client tool](/docs/tutorials/client-tools) is itself content, so it is not persisted in this mode. A generation still pauses and resumes normally within a running server, but **a generation paused when the server restarts cannot be recovered**. If restart-recovery matters more than never-stored, use a retention window instead.
 :::
 

@@ -63,7 +63,7 @@ const userId = req.headers['x-soat-context-userid'];
 
 Do not match `X-Soat-Context-userId` as an exact string, and make any gateway, WAF, or log-routing rule that references these headers case-insensitive.
 
-:::note Changed in recent releases
+:::note[Changed in recent releases]
 
 Two changes to this rule landed in quick succession. If you are upgrading from before either, check both.
 

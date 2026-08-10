@@ -391,7 +391,7 @@ Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "
 
 The parameter values used on the last deploy are also recorded on `resolved_parameters` for auditability. Parameters declared `no_echo: true` are masked (`***`) so sensitive values are never persisted in plaintext.
 
-:::warning The template `metadata` block is the only metadata substitution site
+:::warning[The template `metadata` block is the only metadata substitution site]
 The formation-level `metadata` field — the one supplied alongside `template` on `create-formation` / `update-formation` (and returned as the formation's `metadata`) — is a **static** annotation bag. It is never resolved, so a `sub`/`param`/`ref` expression placed there would be stored verbatim and silently never substituted. To catch this, create/update **reject** such expressions in the formation `metadata` field with `400 FORMATION_INVALID_METADATA`. Put deploy-time substitutions in the template's top-level `metadata` block (above), which is resolved into `resolved_metadata`.
 :::
 

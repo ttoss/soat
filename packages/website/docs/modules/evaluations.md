@@ -8,7 +8,7 @@ sidebar_label: Evaluations (coming soon)
 Repeatable, scored test suites for an agent: a dataset of cases, scorers that grade the
 output, and runs comparable against a baseline.
 
-:::info Coming soon
+:::info[Coming soon]
 
 This module is designed but **not implemented**. There is no REST, MCP, CLI, or SDK surface
 for it yet, and nothing on this page is callable today. It is documented here because the

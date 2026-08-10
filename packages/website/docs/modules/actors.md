@@ -52,7 +52,7 @@ The module covers:
 
 `null` / absent `external_id` is never considered a duplicate — PostgreSQL NULL semantics are preserved.
 
-:::warning Choose this value knowing it egresses
+:::warning[Choose this value knowing it egresses]
 
 `external_id` is not internal-only. Whenever a generation runs in a [session](./sessions.md) bound to this actor, the value is auto-populated into `tool_context` and transmitted as the `X-Soat-Context-actorExternalId` request header to **every** `http` and `mcp` tool the agent calls — including endpoints you do not control.
 
