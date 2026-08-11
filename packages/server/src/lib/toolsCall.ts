@@ -33,6 +33,7 @@ export type InlineToolDefinition = {
   mcp?: object;
   actions?: string[];
   deniedActions?: string[];
+  contextKeys?: string[] | null;
   presetParameters?: object;
   pipeline?: object;
   outputMapping?: object;
@@ -51,6 +52,7 @@ export type CallableToolDefinition = {
   mcp?: object | null;
   actions?: string[] | null;
   deniedActions?: string[] | null;
+  contextKeys?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;

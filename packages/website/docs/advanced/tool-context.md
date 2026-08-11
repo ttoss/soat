@@ -30,6 +30,14 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
 
+By default a tool receives **every** key in the bag. A tool can narrow that to an allowlist with [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool) — the containment half of carrying a credential in `tool_context`, and the answer to "mind what egresses" below:
+
+```json
+{ "name": "list-orders", "type": "http", "context_keys": ["tenant"] }
+```
+
+The [auto-populated identity keys](#auto-populated-keys-sessions) are always forwarded regardless of the allowlist, and a key consumed by a `{{context:<key>}}` token in the tool's own headers is substituted regardless of it too.
+
 When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in.
 
 ## Placing a value in a real header
@@ -137,6 +145,8 @@ A key becomes an HTTP header name, so it must be a valid one. A request whose `t
 1. **Character set** — a key may contain only letters, digits and ``!#$%&'*+-.^_`|~``. A key with a space, colon, parenthesis, newline or non-ASCII character is rejected. (`meta.keys` lists the offending keys.)
 2. **No collisions** — two keys must not map to the same header field. Because header names are case-insensitive, `userId` and `UserId` produce two different header strings that HTTP folds into one, and one value would be silently dropped. (`meta.header` names the colliding header; `meta.keys` lists both keys.)
 
+A tool's `context_keys` entries are held to rule 1 as well, and rejected with the same code at `create-tool` / `update-tool`: an entry names a key, so an entry no key could ever match is a typo, not an allowlist.
+
 There is no length or total-header-bytes limit enforced by SOAT; the receiving server's own header limits apply.
 
 ## Configuring the header prefix
@@ -167,7 +177,7 @@ The forwarded headers are the point: a tool endpoint can trust them in a way it 
 
 **Verify the caller.** Any client that can reach your tool endpoint can set an `X-Soat-Context-*` header by hand. The headers are trustworthy only if the endpoint also authenticates the request as coming from SOAT (a shared secret in `execute.headers`, mTLS, or network-level restriction). Treat them as *attested by SOAT*, not as *unforgeable*.
 
-**Mind what egresses.** Every value is transmitted to every `http` and `mcp` tool the agent calls, including endpoints you do not control. This applies to the auto-populated `actorExternalId`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
+**Mind what egresses.** Unless a tool sets [`context_keys`](../modules/tools.md#scoping-which-context-keys-reach-a-tool), every value is transmitted to every `http`, `mcp` and `soat` tool the agent calls, including endpoints you do not control. Set `context_keys` on the tools that need a given key — particularly when a key holds a credential. This applies to the auto-populated `actorExternalId`: if an [Actor](../modules/actors.md)'s `external_id` holds a phone number or an email address, that PII reaches every third-party tool endpoint in the agent's tool set. When the tool set includes third-party endpoints, prefer an opaque internal identifier as `external_id` and correlate to the real contact detail on your own side.
 
 ## Example
 

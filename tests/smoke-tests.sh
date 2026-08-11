@@ -382,6 +382,49 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$CONTEXT_REF_TOOL_ID"
 echo "Context reference coverage: OK"
 
+# Per-tool context_keys allowlist: accepted on create, echoed back verbatim,
+# narrowable and clearable via update, and rejected when an entry could never be
+# a tool_context key. Which keys actually reach the wire is asserted in the
+# server suite against a local echo server, the only place the received headers
+# are observable.
+CTX_KEYS_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-context-keys-tool \
+  --type http \
+  --context-keys '["tenant","ocaToken"]' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\"}")
+CTX_KEYS_TOOL_ID=$(printf '%s\n' "$CTX_KEYS_TOOL_RESP" | jq -r '.id')
+if [ -z "$CTX_KEYS_TOOL_ID" ] || [ "$CTX_KEYS_TOOL_ID" = "null" ]; then
+  echo "ERROR: Failed to create a tool with context_keys" >&2
+  echo "$CTX_KEYS_TOOL_RESP" >&2
+  exit 1
+fi
+
+STORED_CTX_KEYS=$($SOAT_CLI get-tool --tool-id "$CTX_KEYS_TOOL_ID" | jq -c '.context_keys')
+if [ "$STORED_CTX_KEYS" != '["tenant","ocaToken"]' ]; then
+  echo "ERROR: Expected context_keys to round-trip verbatim, got '$STORED_CTX_KEYS'" >&2
+  exit 1
+fi
+
+NARROWED_CTX_KEYS=$($SOAT_CLI update-tool --tool-id "$CTX_KEYS_TOOL_ID" \
+  --context-keys '["tenant"]' | jq -c '.context_keys')
+if [ "$NARROWED_CTX_KEYS" != '["tenant"]' ]; then
+  echo "ERROR: Expected context_keys to narrow to [tenant], got '$NARROWED_CTX_KEYS'" >&2
+  exit 1
+fi
+
+# An entry that is not a valid key would silently never match — a fail-open
+# allowlist — so it is a write-time error.
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-context-keys-invalid-tool \
+  --type http \
+  --context-keys '["oca Token"]' \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\"}"
+
+$SOAT_CLI delete-tool --tool-id "$CTX_KEYS_TOOL_ID"
+echo "Context keys allowlist coverage: OK"
+
 # execute.auth computed credentials: an aws_sigv4 config is accepted and its
 # credential fields are echoed back as {{secret:...}} references, never
 # resolved. Malformed configs must fail at create time, not at first call.

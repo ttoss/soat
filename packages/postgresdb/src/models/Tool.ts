@@ -69,6 +69,13 @@ export class Tool extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare deniedActions: string[] | null;
 
+  // Optional allowlist of `tool_context` keys that may reach this tool as
+  // prefixed context headers. `null` forwards every key (the behavior of every
+  // tool created before this column existed); `[]` forwards none. The
+  // server-pinned identity keys are always forwarded regardless (#945).
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare contextKeys: string[] | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare presetParameters: object | null;
 

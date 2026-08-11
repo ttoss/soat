@@ -108,6 +108,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
   const body = ctx.request.body as Record<string, unknown>;
   const { name, type, description, actions } = body;
   const deniedActions = body.denied_actions;
+  const contextKeys = body.context_keys;
   const projectPublicId = body.project_id as string | undefined;
 
   if (!name || typeof name !== 'string') {
@@ -137,6 +138,7 @@ toolsRouter.post('/tools', async (ctx: Context) => {
     deniedActions: Array.isArray(deniedActions)
       ? (deniedActions as string[])
       : undefined,
+    contextKeys: parseNullableArray(contextKeys),
     guardrailIds: parseGuardrailIds(body.guardrail_ids),
     ...jsonFields,
   });
@@ -213,6 +215,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     pipeline,
   } = body;
   const deniedActions = body.denied_actions;
+  const contextKeys = body.context_keys;
   const presetParameters = body.preset_parameters;
   const outputMapping = body.output_mapping;
 
@@ -259,6 +262,7 @@ toolsRouter.patch('/tools/:tool_id', async (ctx: Context) => {
     mcp: parsedMcp,
     actions: parseNullableArray(actions),
     deniedActions: parseNullableArray(deniedActions),
+    contextKeys: parseNullableArray(contextKeys),
     presetParameters: parsedPresetParameters,
     pipeline: parsedPipeline,
     outputMapping: parsedOutputMapping,

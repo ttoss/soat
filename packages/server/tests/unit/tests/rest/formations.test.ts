@@ -2094,6 +2094,73 @@ resources:
       expect(toolResource.status).toBe('updated');
     });
 
+    // #945 item 3: a template can declare the per-tool context allowlist, and
+    // the read-back view reports it (no explicit `read` — the schema field is
+    // picked up from the lib mapper).
+    test('applies a tool resource declaring context_keys and reads it back', async () => {
+      const template = {
+        resources: {
+          ScopedTool: {
+            type: 'tool',
+            properties: {
+              name: 'formation-scoped-tool',
+              type: 'http',
+              execute: { url: 'https://api.example.com/scoped' },
+              context_keys: ['ocaToken'],
+            },
+          },
+        },
+      };
+
+      const created = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-keys-formation-${Date.now()}`,
+          template,
+        });
+      expect(created.status).toBe(201);
+      expect(created.body.status).toBe('active');
+
+      const plan = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations/plan')
+        .send({
+          project_id: projectId,
+          formation_id: created.body.id,
+          template,
+        });
+      expect(plan.status).toBe(200);
+      const change = plan.body.changes.find((c: { logical_id: string }) => {
+        return c.logical_id === 'ScopedTool';
+      });
+      expect(change.action).toBe('no-op');
+      expect(change.diff.current.context_keys).toEqual(['ocaToken']);
+    });
+
+    test('rejects a tool resource whose context_keys entry is not a valid key', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `ctx-keys-bad-formation-${Date.now()}`,
+          template: {
+            resources: {
+              BadScopedTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-bad-scoped-tool',
+                  type: 'http',
+                  execute: { url: 'https://api.example.com/scoped' },
+                  context_keys: ['oca Token'],
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(400);
+    });
+
     test('validates template with tool missing required name', async () => {
       const invalidToolTemplate = {
         resources: {

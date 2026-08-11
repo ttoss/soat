@@ -49,6 +49,7 @@ To invoke a tool automatically — on a cron schedule, from an inbound webhook, 
 | `mcp.headers`       | `object`                                        | Additional headers sent when connecting to the MCP server.                                                        |
 | `actions`           | `string[] \| null`                              | Allowlist of actions to expose. `soat`: SOAT platform action names, e.g. `["search-knowledge"]` (required). `mcp`: optional allowlist of MCP tool names to scope the server surface — `null` exposes every tool. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
 | `denied_actions`    | `string[] \| null`                              | `mcp` only: optional denylist of MCP tool names to hide, applied after `actions` and taking precedence over it. `null` denies nothing. See [mcp action scoping](#scoping-an-mcp-tool-to-a-subset-of-actions). |
+| `context_keys`      | `string[] \| null`                              | Allowlist of [`tool_context`](../advanced/tool-context.md) keys forwarded to this tool as context headers. `null` forwards every key (the default); `[]` forwards none. See [Scoping which context keys reach a tool](#scoping-which-context-keys-reach-a-tool). |
 | `preset_parameters` | `object \| null`                                | Fixed parameter values merged into every call. Keys are hidden from the model and injected automatically.         |
 | `pipeline`          | `object \| null`                                | Pipeline definition (`steps`, optional `output`). Required for `pipeline` type. See [pipeline](#pipeline).         |
 | `output_mapping`    | `object \| null`                                | JSON Logic mapping applied to the tool's raw result, for every tool type. See [output mapping](#output-mapping).   |
@@ -71,6 +72,8 @@ This is how a tool endpoint learns who the agent is acting for without trusting 
 When a target needs a context value in a header of its own, the tool declares it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
 
 `X-Soat-Context-` is the default prefix, not a fixed one: a self-hosted deployment can rename it with [`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation), so read your own deployment's prefix when writing the endpoint.
+
+By default **every** context key reaches every `http`, `mcp` and `soat` tool on the agent. Set [`context_keys`](#scoping-which-context-keys-reach-a-tool) on a tool to bound that, so a credential in `tool_context` only egresses to the tools that need it.
 
 ### Tool ID vs Tool Name
 
@@ -204,6 +207,33 @@ Use it when a per-user credential has to reach the target in the header the targ
 | Missing key at call time | The call fails with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header, rather than sending an empty credential. |
 | Read back | `GET`/`LIST` echo the token, never the resolved value — same as `{{secret:...}}`. |
 | Calling paths without context | `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node carry no `tool_context`, so a tool declaring this token cannot be invoked through them. Reach it through an agent generation, a session, or an orchestration `agent` node. |
+
+#### Scoping which context keys reach a tool
+
+A generation's `tool_context` is forwarded, in full, to every `http`, `mcp` and `soat` tool the agent has. When one of those keys is a credential, that means it egresses to third-party endpoints that have no business seeing it. `context_keys` bounds it per tool:
+
+```json
+{
+  "name": "list-orders",
+  "type": "http",
+  "execute": { "url": "https://api.example.com/v1/orders", "method": "GET" },
+  "context_keys": ["tenant"]
+}
+```
+
+With the caller sending `tool_context: { "ocaToken": "...", "tenant": "acme" }`, this tool receives `X-Soat-Context-tenant` and **not** `X-Soat-Context-ocaToken`.
+
+| | |
+| --- | --- |
+| Omitted or `null` | Every key is forwarded — the behavior of every tool created before this field existed. |
+| `[]` | No caller key is forwarded. |
+| Identity keys | `sessionId`, `actorId` and `actorExternalId` are server-derived, not caller data, and are always forwarded regardless of the list. |
+| `{{context:<key>}}` tokens | Substituted regardless of the list: the tool declared that header itself, so it has already consented to the value. A key used only in a token need not be listed — and listing nothing still lets the token resolve. |
+| `soat` tools | The list also bounds the `tool_context` propagated in the action's request body, so a nested generation the tool starts inherits only the listed keys. |
+| Matching | Case-insensitive, because a key names a header and header names are case-insensitive. |
+| Invalid entry | An entry outside the [key grammar](../advanced/tool-context.md) is rejected at write time with `400 INVALID_TOOL_CONTEXT_KEY`, rather than silently never matching. |
+
+An allowlist is per tool, not per agent: the same tool used by ten agents carries the same bound.
 
 #### Computed credentials (`execute.auth`)
 
