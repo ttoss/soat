@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.3](https://github.com/ttoss/soat/compare/v0.20.2...v0.20.3) (2026-08-11)
+
+### Bug Fixes
+
+* **cli:** stop declaring union body properties as strings ([#956](https://github.com/ttoss/soat/issues/956)) ([15a47e7](https://github.com/ttoss/soat/commit/15a47e785fc8807d1ee950bf2c524c53ba4b100f)), closes [#774](https://github.com/ttoss/soat/issues/774) [#955](https://github.com/ttoss/soat/issues/955)
+
 ## [0.20.2](https://github.com/ttoss/soat/compare/v0.20.1...v0.20.2) (2026-08-10)
 
 **Note:** Version bump only for package @soat/cli
