@@ -5269,10 +5269,16 @@ echo "Automated transition attribution: OK"
 # that run — and any child run it starts — calls its tools with the credential
 # the task was moved with. The run is where the bag is readable; the task never
 # returns it.
-SELF_RUN_ID=$(printf '%s\n' "$SELF_HISTORY" | jq -r 'map(select(.transition == "finish")) | .[0].orchestration_run_id')
-if [ -z "$SELF_RUN_ID" ] || [ "$SELF_RUN_ID" = "null" ]; then
-  echo "ERROR: the finish row recorded no orchestration run id" >&2
-  printf '%s\n' "$SELF_HISTORY" >&2
+# The run id comes from the run list, not from the task history: this flow's
+# `finish` row is the run's own `soat` tool moving the task with a run-as token,
+# so it is recorded as the user that started the chain with no run id attached
+# (#786/#887). This orchestration is dispatched by exactly one task, so its run
+# list has exactly one entry.
+SELF_RUNS=$($SOAT_CLI list-orchestration-runs --orchestration-id "$SELF_ORCH_ID")
+SELF_RUN_ID=$(printf '%s\n' "$SELF_RUNS" | jq -r '.data[0].id // empty')
+if [ -z "$SELF_RUN_ID" ]; then
+  echo "ERROR: the task dispatch started no orchestration run" >&2
+  printf '%s\n' "$SELF_RUNS" >&2
   exit 1
 fi
 SELF_RUN_GET=$($SOAT_CLI get-orchestration-run --orchestration-run-id "$SELF_RUN_ID")
