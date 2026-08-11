@@ -68,6 +68,8 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 This is how a tool endpoint learns who the agent is acting for without trusting the prompt. It is a header mechanism, not templating: nothing is interpolated into `execute`. See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
 
+`X-Soat-Context-` is the default prefix, not a fixed one: a self-hosted deployment can rename it with [`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation), so read your own deployment's prefix when writing the endpoint.
+
 ### Tool ID vs Tool Name
 
 A **tool ID** is the auto-generated resource identifier (e.g., `tool_k8x2f3np`). It is used when attaching tools to agents via [`tool_bindings`](./agents.md#tool-bindings) (or the deprecated `tool_ids` shorthand), and in `active_tool_ids` and `step_rules[].active_tool_ids`.
