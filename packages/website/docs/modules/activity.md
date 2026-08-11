@@ -76,6 +76,8 @@ Severity defaults per kind, and a producer may override it:
 | `exception_created` | `warning` | An exception was already filed — an anomaly, by definition |
 | `schedule_fired` | `info` | Routine autonomous operation |
 
+One producer exercises that override: `exception_created` **inherits the filed [exception](./exceptions.md#severity)'s own severity**, so it spans all three values rather than always reading `warning` — a `run_failed` exception (`critical`) records a `critical` activity entry. The kind's `warning` default applies only when the event carries no recognized severity. This is the only path that writes `critical`, so `severity` is not simply a restatement of `kind`: filtering `severity=critical` surfaces the feed's most serious entries, which a `kind` filter cannot express.
+
 ### Cursor pagination
 
 `GET /api/v1/activity` returns `next_cursor` — pass it back as `cursor` to fetch the next page; a `null` `next_cursor` means there is no more data. The cursor is an opaque, keyset (not offset) token encoding a `(created_at, id)` position, so a page never shifts as new entries arrive ahead of it — the failure mode an offset page has on a fast-moving, append-only feed.

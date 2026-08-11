@@ -277,6 +277,20 @@ const asStringOrNull = (value: unknown): string | null => {
   return typeof value === 'string' ? value : null;
 };
 
+/**
+ * Narrows an event's untyped severity to this module's vocabulary, which
+ * `ExceptionItem` deliberately shares. Returns `undefined` for anything else so
+ * the caller falls back to {@link DEFAULT_SEVERITY_BY_KIND} rather than writing
+ * a value the column's enum would reject.
+ */
+const asSeverityOrUndefined = (
+  value: unknown
+): ActivitySeverity | undefined => {
+  return value === 'info' || value === 'warning' || value === 'critical'
+    ? value
+    : undefined;
+};
+
 const fileApprovalResolvedActivity = async (
   event: SoatEvent
 ): Promise<void> => {
@@ -313,6 +327,13 @@ const fileExceptionCreatedActivity = async (
     summary: `Exception ${exceptionId ?? '(unknown)'} filed (${
       asStringOrNull(record.kind) ?? 'unknown'
     })`,
+    // Inherit the exception's own severity rather than taking this kind's
+    // `warning` default: an exception already carries a per-kind severity (a
+    // `run_failed` is `critical`), and defaulting here would make the feed's
+    // top-level severity understate the worst thing it records — leaving
+    // `critical` unreachable through any producer. Falls back to the default
+    // when the event carries no usable severity.
+    severity: asSeverityOrUndefined(record.severity),
     detail: {
       exceptionKind: record.kind,
       severity: record.severity,
