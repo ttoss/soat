@@ -12,10 +12,65 @@ import { DomainError } from '../errors';
  */
 
 /**
- * The key → header-name rule: prepend `X-Soat-Context-`. That is the whole
- * rule — the key is a caller-owned identifier and reaches the header name with
- * **no character transformed**, so the header is a string concatenation the
- * caller can compute without knowing anything about SOAT.
+ * RFC 7230 `token` characters — the grammar for a valid HTTP header name. A key
+ * outside this set produces a header name that `fetch` rejects with a
+ * `TypeError` at tool-call time, mid-generation. The same grammar constrains the
+ * configurable prefix, since prefix + key must be one valid header name.
+ *
+ * Exported as a character class rather than only a finished regex because
+ * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar (#945
+ * item 2): the key inside a template token is the same key that becomes a header,
+ * so the three checks — key, prefix, token — must not be able to disagree about
+ * which characters exist.
+ */
+export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
+
+const HEADER_TOKEN_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
+
+/**
+ * The prefix a `tool_context` key is stamped with, when the deployment does not
+ * configure one. Every SOAT deployment that has not set
+ * `TOOL_CONTEXT_HEADER_PREFIX` keeps exactly this behavior.
+ */
+export const DEFAULT_TOOL_CONTEXT_HEADER_PREFIX = 'X-Soat-Context-';
+
+/**
+ * The prefix is deployment configuration, not a caller input: a platform
+ * fronting SOAT must be able to keep the substrate's name out of the requests
+ * its agents send to third-party tool providers (#945).
+ *
+ * Read per call rather than captured at module load, so the value a deployment
+ * sets is the value used regardless of when the module graph was loaded — the
+ * same shape as `getEncryptionKey` in `secrets.ts`.
+ *
+ * An empty or unset value means "not configured" and falls back to the default.
+ * It deliberately cannot *remove* the prefix: an unprefixed key would let a
+ * caller-supplied `tool_context` entry land on an arbitrary header name —
+ * `Authorization` included — which is precisely the invariant the prefix exists
+ * to hold (#843/#850/#851).
+ */
+const getContextHeaderPrefix = (): string => {
+  const configured = process.env.TOOL_CONTEXT_HEADER_PREFIX;
+  if (!configured) return DEFAULT_TOOL_CONTEXT_HEADER_PREFIX;
+
+  // A prefix outside the header-name grammar fails inside `fetch`, on every
+  // tool call the deployment makes, with a `TypeError` that names neither the
+  // env var nor the prefix. Fail with something an operator can act on instead.
+  if (!HEADER_TOKEN_RE.test(configured)) {
+    throw new Error(
+      `TOOL_CONTEXT_HEADER_PREFIX '${configured}' is not a valid HTTP header-name prefix — it may only contain letters, digits and the characters !#$%&'*+-.^_\`|~.`
+    );
+  }
+
+  return configured;
+};
+
+/**
+ * The key → header-name rule: prepend the configured context prefix
+ * (`X-Soat-Context-` by default). That is the whole rule — the key is a
+ * caller-owned identifier and reaches the header name with **no character
+ * transformed**, so the header is a string concatenation the caller can compute
+ * from the prefix alone.
  *
  * Deliberately not title-casing, and deliberately not uppercasing the first
  * character either. Normalizing separators would silently change which header
@@ -29,22 +84,8 @@ import { DomainError } from '../errors';
  * only, at the cost of a rule every reader had to be warned not to extend.
  */
 export const buildContextHeaderName = (key: string): string => {
-  return `X-Soat-Context-${key}`;
+  return `${getContextHeaderPrefix()}${key}`;
 };
-
-/**
- * RFC 7230 `token` characters — the grammar for a valid HTTP header name. A key
- * outside this set produces a header name that `fetch` rejects with a
- * `TypeError` at tool-call time, mid-generation.
- *
- * Exported as a character class rather than a finished regex because
- * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar: the
- * key inside a template token is the same key, so the two must not be able to
- * disagree about which keys exist.
- */
-export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
-
-const HEADER_TOKEN_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
 
 /**
  * Throws `INVALID_TOOL_CONTEXT_KEY` (400) when a `tool_context` key cannot
@@ -132,7 +173,7 @@ const RESERVED_LOWER = new Set(
  * key (in any casing) is dropped from the caller bag, then the server-derived
  * identity — when the generation runs for a session — is stamped on top. A
  * generation with no session carries no identity keys at all, so a downstream
- * tool can trust that an `X-Soat-Context-SessionId` header is always
+ * tool can trust that a `<prefix>sessionId` context header is always
  * server-derived.
  */
 export const pinServerIdentityToolContext = (args: {

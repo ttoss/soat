@@ -34,7 +34,7 @@ When a generation pauses with `status: "requires_action"`, the `tool_context` fr
 
 ## Placing a value in a real header
 
-`tool_context` by itself can only ever produce `X-Soat-Context-<key>` headers. That prefix is a security invariant, not an inconvenience: if a caller-supplied key could name any header, it could overwrite the tool's own configured credential or the server-pinned identity headers, and context headers are spread **last** in the header build.
+`tool_context` by itself can only ever produce headers under the deployment's [context prefix](#configuring-the-header-prefix) (`X-Soat-Context-` by default). That a prefix is always applied, and that the caller cannot choose it, is a security invariant rather than an inconvenience: if a caller-supplied key could name any header, it could overwrite the tool's own configured credential or the server-pinned identity headers, and context headers are spread **last** in the header build.
 
 When a target needs the value in a header of its own — almost always `Authorization` — the **tool definition** says so, with a `{{context:<key>}}` token in its `headers`:
 
@@ -52,7 +52,7 @@ execute:
     X-Tenant: '{{context:tenant}}'
 ```
 
-The authority is split on purpose: the tool knows the header shape its endpoint expects, and the caller only supplies the value. Nothing about `tool_context` itself changes — the same call still also sends `X-Soat-Context-ocaToken`, so a target may read either.
+The authority is split on purpose: the tool knows the header shape its endpoint expects, and the caller only supplies the value. Nothing about `tool_context` itself changes — the same call still also sends the prefixed `…-ocaToken` context header, so a target may read either.
 
 | Rule | Behavior |
 | --- | --- |
@@ -67,7 +67,7 @@ The token is resolved at the point of use. `GET /tools` echoes back the token, n
 
 ## Key → header name
 
-The header name is `X-Soat-Context-` followed by your key, **verbatim**. No character is re-cased and no separator is collapsed:
+The header name is the context prefix — `X-Soat-Context-` unless your deployment [configures another one](#configuring-the-header-prefix) — followed by your key, **verbatim**. No character is re-cased and no separator is collapsed:
 
 | `tool_context` key | Forwarded header |
 | --- | --- |
@@ -138,6 +138,28 @@ A key becomes an HTTP header name, so it must be a valid one. A request whose `t
 2. **No collisions** — two keys must not map to the same header field. Because header names are case-insensitive, `userId` and `UserId` produce two different header strings that HTTP folds into one, and one value would be silently dropped. (`meta.header` names the colliding header; `meta.keys` lists both keys.)
 
 There is no length or total-header-bytes limit enforced by SOAT; the receiving server's own header limits apply.
+
+## Configuring the header prefix
+
+The prefix is deployment configuration, not part of the request. A self-hosted deployment sets `TOOL_CONTEXT_HEADER_PREFIX` to replace `X-Soat-Context-` on every context header it emits — the case for it is white-labeling: a platform fronting SOAT under its own name should not send that name to the third-party tool endpoints its agents call.
+
+```bash
+TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
+```
+
+| `tool_context` key | Forwarded header |
+| --- | --- |
+| `userId` | `X-Acme-Context-userId` |
+| `actor_external_id` | `X-Acme-Context-actor_external_id` |
+
+Everything else is unchanged: the prefix is prepended verbatim (include the trailing `-` yourself), the key is still never re-cased, the [auto-populated keys](#auto-populated-keys-sessions) still take the same names after the prefix, and the [validation rules](#validation) above are evaluated against the configured prefix.
+
+Two constraints:
+
+- **The value must be a valid HTTP header-name prefix** — letters, digits and ``!#$%&'*+-.^_`|~``. An invalid prefix fails the tool call with an error naming the variable, rather than surfacing as an opaque `fetch` failure mid-generation.
+- **The prefix cannot be removed.** An empty or unset value keeps the default. Without a prefix, a caller-supplied `tool_context` key could name any header at all — `Authorization` included — and override a credential the tool definition configured.
+
+Changing the prefix on a running deployment breaks every tool endpoint already reading the old header names, third-party endpoints included. Set it before wiring up tools, or migrate both sides together.
 
 ## Security
 

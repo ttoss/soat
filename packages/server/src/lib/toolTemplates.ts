@@ -19,7 +19,8 @@ const log = createDebug('soat:toolTemplates');
  * | `{{context:<key>}}` | the caller's `tool_context` for this call | `execute.headers` / `mcp.headers` only |
  *
  * `{{context:}}` exists because `tool_context` alone can only ever produce
- * `X-Soat-Context-*` headers — an invariant that must not be relaxed, since
+ * headers under the deployment's context prefix (`X-Soat-Context-` by default,
+ * see `buildContextHeaderName`) — an invariant that must not be relaxed, since
  * caller context must never be able to overwrite a tool's configured credential
  * headers or the server-pinned identity headers (#843/#850/#851). The token
  * inverts the authority: the **tool** declares which header its credential goes

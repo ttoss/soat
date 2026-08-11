@@ -66,9 +66,11 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 `execute.headers` is not the only source of headers on an outbound call. On every `http` and `mcp` tool call, the server also injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the session's `sessionId`, `actorId` and `actorExternalId`, which are auto-populated. These arrive **in addition to** the headers you configure, and are applied after them, so a context header wins over a tool-defined header of the same name.
 
-This is how a tool endpoint learns who the agent is acting for without trusting the prompt. The `X-Soat-Context-` prefix is fixed: a caller's key can never name an arbitrary header, so caller context cannot overwrite a tool's own credential.
+This is how a tool endpoint learns who the agent is acting for without trusting the prompt. The prefix is deployment configuration and a caller can never choose it, so caller context cannot overwrite a tool's own credential.
 
 When a target needs a context value in a header of its own, the tool declares it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
+
+`X-Soat-Context-` is the default prefix, not a fixed one: a self-hosted deployment can rename it with [`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation), so read your own deployment's prefix when writing the endpoint.
 
 ### Tool ID vs Tool Name
 
@@ -194,7 +196,7 @@ A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted
 }
 ```
 
-Use it when a per-user credential has to reach the target in the header the target expects. Without it, `tool_context` can only produce `X-Soat-Context-<key>` headers, and that prefix is deliberately not overridable.
+Use it when a per-user credential has to reach the target in the header the target expects. Without it, `tool_context` can only produce prefixed context headers, and a caller can never choose that prefix.
 
 | | |
 | --- | --- |

@@ -621,7 +621,7 @@ When a run is started by a [trigger](./triggers.md), the trigger id is propagate
 
 ### Run Tool Context
 
-`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as an `X-Soat-Context-<key>` header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph or in a node's `input_mapping`.
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph or in a node's `input_mapping`.
 
 The bag is stored **on the run** and re-read at every step, which is what makes it survive the ways a run gets driven:
 
@@ -637,7 +637,7 @@ The bag is stored **on the run** and re-read at every step, which is what makes 
 
 Rules that carry over from the shared contract:
 
-- The header name is `X-Soat-Context-` plus the key **verbatim** — no character is re-cased.
+- The header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) (`X-Soat-Context-` by default) plus the key **verbatim** — no character is re-cased.
 - A key that is not a valid HTTP header name, or two keys that map to the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`. The validation runs at start time, so **no run is created** — important because an async run answers `201` long before its first node executes.
 - The reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped from the caller's bag at generation time and cannot be addressed from here.
 

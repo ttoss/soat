@@ -583,8 +583,8 @@ components:
             `headers` values additionally accept `{{context:<key>}}` references,
             resolved per call from the caller's `tool_context`, so a per-user
             credential can be placed in the real header the target expects
-            (`Authorization: Bearer {{context:ocaToken}}`) instead of only in an
-            `X-Soat-Context-<key>` header. Valid **only** inside `headers` — a
+            (`Authorization: Bearer {{context:ocaToken}}`) instead of only in a
+            prefixed context header. Valid **only** inside `headers` — a
             context value is caller-supplied, so it may not steer the `url` — and
             a key missing from the `tool_context` at call time fails the tool call
             with `MISSING_TOOL_CONTEXT_KEY` rather than sending an empty

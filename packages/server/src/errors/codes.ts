@@ -95,7 +95,7 @@ export const ERROR_CODES = {
   INVALID_TOOL_CONTEXT_KEY: {
     httpStatus: 400,
     description:
-      "A tool_context key cannot be used as an HTTP header name. Keys are forwarded verbatim as X-Soat-Context-<key> headers, so a key may only contain letters, digits and the characters !#$%&'*+-.^_`|~, and two keys must not map to the same header name (header names are case-insensitive).",
+      "A tool_context key cannot be used as an HTTP header name. Keys are forwarded verbatim as <prefix><key> headers, where the prefix is the deployment's TOOL_CONTEXT_HEADER_PREFIX (X-Soat-Context- by default), so a key may only contain letters, digits and the characters !#$%&'*+-.^_`|~, and two keys must not map to the same header name (header names are case-insensitive).",
   },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,

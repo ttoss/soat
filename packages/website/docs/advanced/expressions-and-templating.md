@@ -123,7 +123,7 @@ The other valid double-curly form. A `{{context:<key>}}` token reads one key of 
 { "mcp": { "headers": { "Authorization": "Bearer {{context:ocaToken}}" } } }
 ```
 
-It exists because `tool_context` on its own can only produce `X-Soat-Context-<key>` headers — a security invariant, since a caller-named header could otherwise overwrite the tool's own credential. The token moves the header naming to the party that knows the header shape: the tool declares where the value goes, the caller supplies the value.
+It exists because `tool_context` on its own can only produce headers under the deployment's context prefix (`X-Soat-Context-` by default) — a security invariant, since a caller-named header could otherwise overwrite the tool's own credential. The token moves the header naming to the party that knows the header shape: the tool declares where the value goes, the caller supplies the value.
 
 Unlike `{{secret:...}}`, it is valid in **`execute.headers` and `mcp.headers` only** — never `execute.url`, `mcp.url`, `execute.auth`, or a body. A context value is caller-supplied, and a URL it could steer is a request to a host the tool's author never configured. A token anywhere else is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`.
 
