@@ -29,12 +29,26 @@ const isGroupBy = (value: string): value is UsageGroupBy => {
   return (USAGE_GROUP_BY as readonly string[]).includes(value);
 };
 
+// One measured dimension of a bucket, summed across its events. This is what
+// makes the rollup uniform over meter types: the token fields only describe
+// `llm_tokens`, so without a quantity per component an infra meter would report
+// as an all-zero bucket even though its events carry real amounts.
+export type UsageAggregateComponent = {
+  component: string;
+  unit: string;
+  quantity: number;
+  cost_usd: number | null;
+};
+
 export type UsageAggregateTotals = {
   cost_usd: number | null;
   input_tokens: number;
   output_tokens: number;
   cached_tokens: number;
   reasoning_tokens: number;
+  // Every component measured in the bucket, sorted by `component` then `unit`
+  // so the rollup is stable regardless of event order.
+  components: UsageAggregateComponent[];
 };
 
 export type UsageAggregateGroup = UsageAggregateTotals & {
@@ -50,6 +64,8 @@ export type UsageAggregate = {
   from: string | null;
   to: string | null;
   group_by: UsageGroupBy;
+  // The meter-type filter applied, echoed back; null when unfiltered.
+  meter_type: string | null;
   groups: UsageAggregateGroup[];
   totals: UsageAggregateTotals;
 };
@@ -135,7 +151,20 @@ const groupKeyForEvent = (
   return GROUP_KEY_EXTRACTORS[groupBy](event);
 };
 
-type Accumulator = EventTokens & { costs: Array<string | null> };
+// A component's running sum. Keyed by `component`+`unit` (never by name alone):
+// a quantity is only additive within one unit, so two units of the same
+// component stay two entries rather than silently summing into a wrong number.
+type ComponentAccumulator = {
+  component: string;
+  unit: string;
+  quantity: number;
+  costs: Array<string | null>;
+};
+
+type Accumulator = EventTokens & {
+  costs: Array<string | null>;
+  components: Map<string, ComponentAccumulator>;
+};
 
 const emptyAccumulator = (): Accumulator => {
   return {
@@ -144,7 +173,26 @@ const emptyAccumulator = (): Accumulator => {
     cachedTokens: 0,
     reasoningTokens: 0,
     costs: [],
+    components: new Map(),
   };
+};
+
+const addComponents = (acc: Accumulator, event: EventWithComponents): void => {
+  for (const component of event.components ?? []) {
+    const key = `${component.component}|${component.unit}`;
+    let entry = acc.components.get(key);
+    if (!entry) {
+      entry = {
+        component: component.component,
+        unit: component.unit,
+        quantity: 0,
+        costs: [],
+      };
+      acc.components.set(key, entry);
+    }
+    entry.quantity += Number(component.quantity);
+    entry.costs.push(component.costUsd);
+  }
 };
 
 const addEvent = (acc: Accumulator, event: EventWithComponents): void => {
@@ -154,16 +202,42 @@ const addEvent = (acc: Accumulator, event: EventWithComponents): void => {
   acc.cachedTokens += tokens.cachedTokens;
   acc.reasoningTokens += tokens.reasoningTokens;
   acc.costs.push(event.costUsd);
+  addComponents(acc, event);
+};
+
+const numberOrNull = (value: string | null): number | null => {
+  return value === null ? null : Number(value);
+};
+
+// Sorted by component then unit, so the array is stable across calls no matter
+// what order the events arrived in.
+const finalizeComponents = (
+  components: Map<string, ComponentAccumulator>
+): UsageAggregateComponent[] => {
+  return [...components.values()]
+    .map((entry) => {
+      return {
+        component: entry.component,
+        unit: entry.unit,
+        quantity: entry.quantity,
+        cost_usd: numberOrNull(sumComponentCostUsd(entry.costs)),
+      };
+    })
+    .sort((a, b) => {
+      return (
+        a.component.localeCompare(b.component) || a.unit.localeCompare(b.unit)
+      );
+    });
 };
 
 const finalizeTotals = (acc: Accumulator): UsageAggregateTotals => {
-  const summed = sumComponentCostUsd(acc.costs);
   return {
-    cost_usd: summed === null ? null : Number(summed),
+    cost_usd: numberOrNull(sumComponentCostUsd(acc.costs)),
     input_tokens: acc.inputTokens,
     output_tokens: acc.outputTokens,
     cached_tokens: acc.cachedTokens,
     reasoning_tokens: acc.reasoningTokens,
+    components: finalizeComponents(acc.components),
   };
 };
 
@@ -235,14 +309,34 @@ const createdAtWhere = (
   return createdAt;
 };
 
+// The event filter: always the project, plus the optional window and meter
+// type. `meterType` is not validated against a fixed set — it is a free-form
+// column and the meters listing filters it the same way, so an unknown type
+// yields an empty rollup rather than a 400.
+const eventsWhere = (args: {
+  projectId: number;
+  from: Date | null;
+  to: Date | null;
+  meterType?: string;
+}): Record<string | symbol, unknown> => {
+  const where: Record<string | symbol, unknown> = {
+    projectId: args.projectId,
+  };
+  const createdAt = createdAtWhere(args.from, args.to);
+  if (createdAt) where.createdAt = createdAt;
+  if (args.meterType !== undefined) where.meterType = args.meterType;
+  return where;
+};
+
 /**
  * Rolls a project's usage up over an optional `[from, to]` window, bucketed by
  * one dimension (`model` | `agent` | `run` | `day` | `meter_type` | `actor` |
- * `session`). Each group
- * and the grand total carry summed token counts and `cost_usd` (null when no
- * event in the bucket was priced). Scans the `(project_id, created_at)`-indexed
- * events with their component rows and aggregates in memory. `projectId` is the
- * internal id the caller has already resolved (and authorized).
+ * `session`), optionally narrowed to a single `meterType`. Each group and the
+ * grand total carry summed token counts, a measured `quantity` per component,
+ * and `cost_usd` (null when no event in the bucket was priced). Scans the
+ * `(project_id, created_at)`-indexed events with their component rows and
+ * aggregates in memory. `projectId` is the internal id the caller has already
+ * resolved (and authorized).
  */
 export const aggregateUsage = async (args: {
   projectId: number;
@@ -250,27 +344,28 @@ export const aggregateUsage = async (args: {
   from?: string;
   to?: string;
   groupBy?: string;
+  meterType?: string;
 }): Promise<UsageAggregate> => {
   const groupBy = parseGroupBy(args.groupBy);
   const from = parseBound(args.from, 'from');
   const to = parseBound(args.to, 'to');
 
   log(
-    'aggregateUsage: projectId=%d groupBy=%s from=%s to=%s',
+    'aggregateUsage: projectId=%d groupBy=%s from=%s to=%s meterType=%s',
     args.projectId,
     groupBy,
     from?.toISOString() ?? null,
-    to?.toISOString() ?? null
+    to?.toISOString() ?? null,
+    args.meterType ?? null
   );
 
-  const where: Record<string | symbol, unknown> = {
-    projectId: args.projectId,
-  };
-  const createdAt = createdAtWhere(from, to);
-  if (createdAt) where.createdAt = createdAt;
-
   const events: EventWithComponents[] = await db.UsageEvent.findAll({
-    where,
+    where: eventsWhere({
+      projectId: args.projectId,
+      from,
+      to,
+      meterType: args.meterType,
+    }),
     include: [
       { model: db.Agent, as: 'agent' },
       { model: db.OrchestrationRun, as: 'run' },
@@ -288,6 +383,7 @@ export const aggregateUsage = async (args: {
     from: from ? from.toISOString() : null,
     to: to ? to.toISOString() : null,
     group_by: groupBy,
+    meter_type: args.meterType ?? null,
     groups,
     totals,
   };

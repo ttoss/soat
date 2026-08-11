@@ -12,6 +12,7 @@ import {
   recordCompletionUsage,
   recordGenerationUsage,
 } from 'src/lib/usage';
+import { snapshotProjectStorage } from 'src/lib/usageStorage';
 import * as usageTokenEventModule from 'src/lib/usageTokenEvent';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
@@ -1125,6 +1126,158 @@ describe('Usage', () => {
       expect(res.body.groups).toEqual([]);
       expect(res.body.from).toBe(from);
       expect(res.body.totals.input_tokens).toBe(0);
+      expect(res.body.totals.cost_usd).toBeNull();
+      expect(res.body.totals.components).toEqual([]);
+    });
+  });
+
+  // An infra meter measures no tokens, so the token fields alone report it as
+  // an all-zero bucket even though the event carries a real quantity. The
+  // rollup therefore reports the measured quantity per component, the same
+  // dimension the receipt reports per line item.
+  describe('GET /api/v1/usage (aggregate) — measured quantities', () => {
+    const findGroup = (
+      body: { groups: Array<{ key: string | null }> },
+      key: string
+    ) => {
+      return body.groups.find((group) => {
+        return group.key === key;
+      });
+    };
+
+    type AggregateComponent = {
+      component: string;
+      unit: string;
+      quantity: number;
+      cost_usd: number | null;
+    };
+
+    const findComponent = (
+      components: AggregateComponent[],
+      component: string
+    ): AggregateComponent | undefined => {
+      return components.find((c) => {
+        return c.component === component;
+      });
+    };
+
+    // Storage metering has no HTTP entry point — the daily snapshot runs from
+    // the scheduler tick — so the emitter is driven directly to put a non-token
+    // meter with a real, fractional quantity into this project.
+    beforeAll(async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      await db.File.create({
+        publicId: generatePublicId(PUBLIC_ID_PREFIXES.file),
+        projectId: project!.id as number,
+        size: 400_000_000, // 400 MB → 0.4 gb_day
+        storageType: 'local',
+        storagePath: `seed/${generatePublicId(PUBLIC_ID_PREFIXES.file)}`,
+        filename: 'seed.bin',
+      });
+      const created = await snapshotProjectStorage({
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        now: new Date(),
+      });
+      expect(created).toBe(true);
+    });
+
+    test('a storage bucket reports its measured gb_day quantity, not zero', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+
+      const storage = findGroup(res.body, 'storage') as unknown as {
+        input_tokens: number;
+        components: AggregateComponent[];
+      };
+      expect(storage).toBeDefined();
+      // No tokens were measured — that part was never wrong.
+      expect(storage.input_tokens).toBe(0);
+
+      const gbDay = findComponent(storage.components, 'gb_day');
+      expect(gbDay).toBeDefined();
+      expect(gbDay!.unit).toBe('gb_day');
+      // 0.4 from the seeded file, plus the few KB other steps in this suite
+      // stored in the same project.
+      expect(gbDay!.quantity).toBeCloseTo(0.4, 3);
+      // Unpriced in this suite: the quantity is captured, the cost is unknown.
+      expect(gbDay!.cost_usd).toBeNull();
+    });
+
+    test('an llm_tokens bucket reports its token components as quantities too', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+
+      const llm = findGroup(res.body, 'llm_tokens') as unknown as {
+        input_tokens: number;
+        output_tokens: number;
+        components: AggregateComponent[];
+      };
+      expect(llm).toBeDefined();
+
+      const input = findComponent(llm.components, 'input_tokens');
+      const cached = findComponent(llm.components, 'cached_tokens');
+      const output = findComponent(llm.components, 'output_tokens');
+      expect(input).toBeDefined();
+      expect(output).toBeDefined();
+      expect(input!.unit).toBe('token');
+      // The token fields stay the reconstructed provider counts: `input_tokens`
+      // is uncached input + cached, while the component carries uncached input.
+      expect(input!.quantity + cached!.quantity).toBe(llm.input_tokens);
+      expect(output!.quantity).toBe(llm.output_tokens);
+    });
+
+    test('components are sorted by name so the rollup is stable', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+      const names = res.body.totals.components.map((c: AggregateComponent) => {
+        return c.component;
+      });
+      expect(names).toEqual([...names].sort());
+      expect(names).toContain('gb_day');
+      expect(names).toContain('input_tokens');
+    });
+
+    test('meter_type narrows the rollup to one meter', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model&meter_type=storage`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.meter_type).toBe('storage');
+      // Only the platform SKU remains — no LLM model ids in the dimension.
+      expect(
+        res.body.groups.map((g: { key: string | null }) => {
+          return g.key;
+        })
+      ).toEqual(['gb-day']);
+      expect(res.body.totals.components).toHaveLength(1);
+      expect(res.body.totals.components[0].component).toBe('gb_day');
+    });
+
+    test('meter_type echoes null when unfiltered', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.meter_type).toBeNull();
+      expect(res.body.groups.length).toBeGreaterThanOrEqual(2);
+    });
+
+    test('an unknown meter_type returns an empty rollup', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=model&meter_type=nope`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.groups).toEqual([]);
+      expect(res.body.totals.components).toEqual([]);
       expect(res.body.totals.cost_usd).toBeNull();
     });
   });

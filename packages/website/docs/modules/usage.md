@@ -184,6 +184,28 @@ Prices can also be **declared in a formation** with the `project_price` resource
 
 `GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), `meter_type`, `actor`, or `session`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`, or any non-session work under `group_by=actor`) collapses into a group with a `null` `key`, so the groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
+#### Measured quantities, not just tokens
+
+The token fields describe `llm_tokens` alone, so every group and the `totals` also carry a `components` array — the same measured dimension the receipt reports per line item, summed over the bucket:
+
+```json
+{
+  "key": "storage",
+  "cost_usd": null,
+  "input_tokens": 0,
+  "output_tokens": 0,
+  "components": [
+    { "component": "gb_day", "unit": "gb_day", "quantity": 0.4, "cost_usd": null }
+  ]
+}
+```
+
+An infra meter therefore aggregates to what it measured. Without `components`, a `storage`, `api_request` or `compute_execution` bucket reads as all-zero — indistinguishable from a meter that recorded nothing. As on the receipt, a `null` `cost_usd` means no price row covered the component; the quantity is still captured and does not mean the usage was free. Entries are keyed by `component` **and** `unit` (a quantity is only additive within one unit) and sorted by `component` then `unit`, so the array is stable across calls.
+
+#### Narrowing to one meter
+
+For platform meter types `provider` is `soat` and `model` names the billable SKU, so `group_by=model` legitimately mixes model ids with SKUs (`deepseek.v3.2` next to `gb-day`). Add `meter_type=llm_tokens` to ask the model question directly — or `meter_type=storage` to roll up one infra meter alone. The applied filter is echoed back as `meter_type` on the response (`null` when unfiltered), and an unrecognized value yields an empty rollup rather than an error, matching the `meter_type` filter on `GET /api/v1/usage/meters`.
+
 ### Spend guards
 
 Metered usage feeds the [guardrail](./guardrails.md) evaluator's `soat.usage.*` context, so a spend limit is enforced deterministically at the tool boundary rather than reported after the fact. Two granularities exist:
@@ -353,6 +375,43 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=meter_type&from=2026-07-01T00:00:00Z&to=2026-08-01T00:00:00Z" \
+  -H "Authorization: Bearer <token>"
+```
+
+</TabItem>
+</Tabs>
+
+Aggregate by model, restricted to LLM spend (so platform SKUs stay out of the model dimension):
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-usage \
+  --project-id proj_V1StGXR8Z5jdHi6B \
+  --group-by model \
+  --meter-type llm_tokens
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data, error } = await soat.usage.getUsage({
+  query: {
+    project_id: 'proj_V1StGXR8Z5jdHi6B',
+    group_by: 'model',
+    meter_type: 'llm_tokens',
+  },
+});
+if (error) throw new Error(JSON.stringify(error));
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl "https://api.example.com/api/v1/usage?project_id=proj_V1StGXR8Z5jdHi6B&group_by=model&meter_type=llm_tokens" \
   -H "Authorization: Bearer <token>"
 ```
 

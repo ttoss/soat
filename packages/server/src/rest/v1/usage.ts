@@ -93,8 +93,9 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
  * operationId: getUsage
  * Returns a project's usage rolled up over an optional [from, to] window,
  * bucketed by one dimension
- * (group_by=model|agent|run|day|meter_type|actor|session). Each
- * group and the grand total carry summed token counts and cost_usd. Requires
+ * (group_by=model|agent|run|day|meter_type|actor|session) and optionally
+ * narrowed to a single meter_type. Each group and the grand total carry summed
+ * token counts, a measured quantity per component, and cost_usd. Requires
  * usage:GetUsage on the project.
  */
 usageRouter.get('/usage', async (ctx: Context) => {
@@ -105,6 +106,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
     from,
     to,
     group_by: groupBy,
+    meter_type: meterType,
   } = ctx.query as Record<string, string | undefined>;
 
   if (!projectPublicId) {
@@ -135,6 +137,7 @@ usageRouter.get('/usage', async (ctx: Context) => {
     from,
     to,
     groupBy,
+    meterType,
   });
 });
 

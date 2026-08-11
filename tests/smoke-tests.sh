@@ -3563,6 +3563,44 @@ if [ "$USAGE_TOTAL" -ge 1 ]; then
     exit 1
   fi
   echo "Usage aggregate endpoint: OK (project $PROJECT_PUBLIC_ID)"
+
+  # 34b-iii-b. Measured quantities — the token fields describe llm_tokens only,
+  # so a non-token meter must report what it measured via `components`. The
+  # orchestration run earlier in this suite metered compute_execution in this
+  # same project (its run receipt asserted the meter exists), so that bucket has
+  # zero tokens and a positive compute_second quantity. Reporting it as an
+  # all-zero bucket is the regression this guards.
+  USAGE_QTY_OK=$(printf '%s\n' "$USAGE_AGG_RESP" | jq -r '
+    [.groups[] | select(.key == "compute_execution")] as $g
+    | ($g | length == 1)
+      and ($g[0].input_tokens == 0)
+      and ([$g[0].components[] | select(.component == "compute_second")
+             | select(.quantity > 0) | select(.unit == "compute_second")]
+           | length == 1)
+      and (.meter_type == null)')
+  if [ "$USAGE_QTY_OK" != "true" ]; then
+    echo "ERROR: get-usage reported the compute_execution meter without a measured quantity" >&2
+    echo "$USAGE_AGG_RESP" >&2
+    exit 1
+  fi
+  echo "Usage aggregate measured quantities: OK"
+
+  # 34b-iii-c. meter_type narrows the rollup, so `group_by=model` can be asked
+  # about models alone without platform SKUs sharing the dimension.
+  USAGE_FILTERED_RESP=$($SOAT_CLI get-usage \
+    --project-id "$PROJECT_PUBLIC_ID" \
+    --group-by meter_type \
+    --meter-type compute_execution | sanitize_json)
+  USAGE_FILTERED_OK=$(printf '%s\n' "$USAGE_FILTERED_RESP" | jq -r '
+    (.meter_type == "compute_execution")
+      and ((.groups | map(.key)) == ["compute_execution"])
+      and ((.totals.components | map(.component)) == ["compute_second"])')
+  if [ "$USAGE_FILTERED_OK" != "true" ]; then
+    echo "ERROR: get-usage --meter-type did not narrow the rollup" >&2
+    echo "$USAGE_FILTERED_RESP" >&2
+    exit 1
+  fi
+  echo "Usage aggregate meter_type filter: OK"
 fi
 
 # 34b-v. End-user attribution — a session-driven generation attributes its usage

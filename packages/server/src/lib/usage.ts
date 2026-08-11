@@ -9,6 +9,7 @@ import { emptyPage, paginatedList } from './pagination';
 // `usage.ts` owns the read path (list + receipt re-export).
 export type {
   UsageAggregate,
+  UsageAggregateComponent,
   UsageAggregateGroup,
   UsageAggregateTotals,
   UsageGroupBy,
