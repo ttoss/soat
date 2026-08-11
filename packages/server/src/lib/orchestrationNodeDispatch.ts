@@ -41,6 +41,10 @@ type DispatchArgs = {
   // The trigger firing (if any) that started the run — propagated onto in-run
   // generations' usage events for in-run trigger attribution.
   triggerId?: string;
+  // The run's `tool_context`, forwarded to the generation an `agent` node
+  // creates and inherited by the child run a `loop`/`sub_orchestration` node
+  // starts.
+  toolContext?: Record<string, string>;
   traceId: string | null;
   authHeader?: string;
   // 1-based attempt number for a resuming poll node; undefined for a first run.
@@ -71,6 +75,33 @@ const dispatchSimpleNode = (args: DispatchArgs): NodeExecutionResult | null => {
   }
 };
 
+/**
+ * The two nodes that start a child run. They take the same inputs — differing
+ * only in how many children they start and how the children's output is
+ * aggregated — so they are dispatched together rather than as two cases with
+ * one duplicated argument object.
+ */
+const dispatchNestedRunNode = (
+  args: DispatchArgs
+): Promise<NodeExecutionResult> | null => {
+  const { nodeDefn, state, projectIds, traceId, authHeader, toolContext } =
+    args;
+  if (nodeDefn.type !== 'loop' && nodeDefn.type !== 'sub_orchestration') {
+    return null;
+  }
+  const nested = {
+    node: nodeDefn,
+    state,
+    projectIds,
+    traceId,
+    authHeader,
+    toolContext,
+  };
+  return nodeDefn.type === 'loop'
+    ? executeLoopNode(nested)
+    : executeSubOrchestrationNode(nested);
+};
+
 const dispatchNodeExecution = async (
   args: DispatchArgs
 ): Promise<NodeExecutionResult> => {
@@ -81,6 +112,7 @@ const dispatchNodeExecution = async (
     projectId,
     runPublicId,
     triggerId,
+    toolContext,
     traceId,
     authHeader,
     pollAttempt,
@@ -88,6 +120,8 @@ const dispatchNodeExecution = async (
   } = args;
   const simple = dispatchSimpleNode(args);
   if (simple !== null) return simple;
+  const nested = dispatchNestedRunNode(args);
+  if (nested !== null) return nested;
   switch (nodeDefn.type) {
     case 'emit_event':
       return executeEmitEventNode({
@@ -105,6 +139,7 @@ const dispatchNodeExecution = async (
         authHeader,
         runPublicId,
         triggerId,
+        toolContext,
       });
     case 'tool':
       return executeToolNode({
@@ -128,22 +163,6 @@ const dispatchNodeExecution = async (
       return executeKnowledgeNode({ node: nodeDefn, state, projectIds });
     case 'memory_write':
       return executeMemoryWriteNode({ node: nodeDefn, state });
-    case 'loop':
-      return executeLoopNode({
-        node: nodeDefn,
-        state,
-        projectIds,
-        traceId,
-        authHeader,
-      });
-    case 'sub_orchestration':
-      return executeSubOrchestrationNode({
-        node: nodeDefn,
-        state,
-        projectIds,
-        traceId,
-        authHeader,
-      });
     default:
       throw new DomainError(
         'ORCHESTRATION_NODE_FAILED',
@@ -160,6 +179,7 @@ export const executeNodeById = async (args: {
   projectId?: number;
   runPublicId?: string;
   triggerId?: string;
+  toolContext?: Record<string, string>;
   traceId: string | null;
   authHeader?: string;
   pollAttempt?: number;
@@ -177,6 +197,7 @@ export const executeNodeById = async (args: {
     projectId,
     runPublicId,
     triggerId,
+    toolContext,
     traceId,
     authHeader,
     pollAttempt,
@@ -198,6 +219,7 @@ export const executeNodeById = async (args: {
     projectId,
     runPublicId,
     triggerId,
+    toolContext,
     traceId,
     authHeader,
     pollAttempt,

@@ -1438,9 +1438,18 @@ echo "Completed run: OK"
 # An async run (no --wait) therefore only reaches `succeeded` if that separate
 # process claimed the task and drove the run.
 echo "--- Async run drained by the standalone worker fleet ---"
+# `--tool-context` rides along here rather than in its own run: the worker path
+# is the one that proves the bag lives on the run row, since the process that
+# drives it has no request to read it from.
 ORCH_ASYNC_RESP=$(SOAT_TOKEN="$ORCH_API_KEY_RAW" $SOAT_CLI start-orchestration-run \
   --orchestration-id "$ORCH_ID" \
+  --tool-context '{"ocaToken":"smoke-run-token"}' \
   --input '{"theme":"worker-fleet"}')
+if [ "$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
+  echo "ERROR: start-orchestration-run did not persist tool_context" >&2
+  printf '%s\n' "$ORCH_ASYNC_RESP" >&2
+  exit 1
+fi
 ORCH_ASYNC_ID=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.id')
 ORCH_ASYNC_STATUS=$(printf '%s\n' "$ORCH_ASYNC_RESP" | jq -r '.status')
 if [ -z "$ORCH_ASYNC_ID" ] || [ "$ORCH_ASYNC_ID" = "null" ]; then
@@ -1472,6 +1481,12 @@ if [ "$ORCH_ASYNC_FINAL" != "succeeded" ]; then
 fi
 if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.state.title')" != "worker-fleet sonnet" ]; then
   echo "ERROR: worker-drained run produced unexpected state" >&2
+  printf '%s\n' "$ORCH_ASYNC_GET" >&2
+  exit 1
+fi
+# The bag survived the enqueue → claim → drive → settle round trip.
+if [ "$(printf '%s\n' "$ORCH_ASYNC_GET" | jq -r '.tool_context.ocaToken')" != "smoke-run-token" ]; then
+  echo "ERROR: worker-drained run lost its tool_context" >&2
   printf '%s\n' "$ORCH_ASYNC_GET" >&2
   exit 1
 fi

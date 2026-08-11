@@ -75,6 +75,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 | `required_action`  | object \| null | Present when status is `awaiting_input` (see [Human Nodes](#human-nodes)) |
 | `trace_id`         | string \| null | Linked observability trace, if any                                |
 | `input`            | object \| null | Initial input provided at run creation                            |
+| `tool_context`     | object \| null | Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of every agent node in the run (see [Run Tool Context](#run-tool-context)) |
 | `output`           | object \| null | Terminal node artifact(s) when the run has `succeeded`            |
 | `started_at`       | string \| null | ISO 8601 execution start timestamp                                |
 | `completed_at`     | string \| null | ISO 8601 terminal timestamp (`succeeded`/`failed`/`cancelled`/`expired`) |
@@ -617,6 +618,37 @@ Every generation an `agent` node dispatches meters against the run: its [usage](
 When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger via the [usage](./usage.md) event list (`?trigger_id=`).
 
 > **Note:** usage events are metered as each generation settles, so the roll-up is read from `get-orchestration-run`, not from the `start-orchestration-run` response. Even with `wait: true` the start response can carry `usage: null` — the run has settled but its final usage events may not have landed yet. Read the run once more to get the totals.
+
+### Run Tool Context
+
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as an `X-Soat-Context-<key>` header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph or in a node's `input_mapping`.
+
+The bag is stored **on the run** and re-read at every step, which is what makes it survive the ways a run gets driven:
+
+| Situation | Behavior |
+| --- | --- |
+| `wait: true` (inline drive) | forwarded to every `agent` node's generation |
+| `wait: false` (default, queued) | forwarded when a worker claims and drives the run |
+| Parked on a `delay`/`poll` wait (`sleeping`) | forwarded after the scheduler wakes the run |
+| Paused on a `human` node (`awaiting_input`) | forwarded after `human-input` or `resume` — neither request carries a `tool_context` of its own |
+| Paused on an [approval node](#approval-nodes) | forwarded after the approval is resolved |
+| Reclaimed after a driver crash (redrive) | forwarded on the re-drive |
+| `loop` / `sub_orchestration` child run | inherited by the child, so an agent several levels down still carries it |
+
+Rules that carry over from the shared contract:
+
+- The header name is `X-Soat-Context-` plus the key **verbatim** — no character is re-cased.
+- A key that is not a valid HTTP header name, or two keys that map to the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`. The validation runs at start time, so **no run is created** — important because an async run answers `201` long before its first node executes.
+- The reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped from the caller's bag at generation time and cannot be addressed from here.
+
+`tool_context` reaches the tool calls of **`agent` nodes only**. A `tool` node calls its tool directly, with no generation in between, and forwards no context headers.
+
+```bash
+soat start-orchestration-run \
+  --orchestration-id "$ORCH_ID" \
+  --tool-context '{"ocaToken":"eyJhbGciOiJIUzI1NiJ9.abc"}' \
+  --input '{"question":"what is my balance?"}'
+```
 
 ### Human Nodes
 

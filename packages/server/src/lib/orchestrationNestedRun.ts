@@ -21,6 +21,9 @@ export type NestedRunStarter = (args: {
   projectIds: number[];
   input: Record<string, unknown>;
   authHeader?: string;
+  // The parent run's `tool_context`, inherited by the child so an agent several
+  // levels down still calls its tools with the caller's context (#945).
+  toolContext?: Record<string, string>;
   wait: boolean;
 }) => Promise<{ output: Record<string, unknown> | null }>;
 

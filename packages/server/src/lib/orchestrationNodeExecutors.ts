@@ -150,6 +150,9 @@ export const executeAgentNode = async (args: {
   // trigger.
   runPublicId?: string;
   triggerId?: string;
+  // The run's `tool_context`, forwarded to this generation so the agent's
+  // `http`/`mcp`/`soat` tool calls carry the caller's context headers (#945).
+  toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
   const {
     node,
@@ -159,6 +162,7 @@ export const executeAgentNode = async (args: {
     authHeader,
     runPublicId,
     triggerId,
+    toolContext,
   } = args;
   const agentId = requireNodeField(node, 'agentId');
 
@@ -181,6 +185,7 @@ export const executeAgentNode = async (args: {
     orchestrationRunId: runPublicId,
     nodeId: node.id,
     triggerId,
+    toolContext,
   });
 
   if (result instanceof ReadableStream) {
@@ -399,6 +404,7 @@ const runLoopBatches = async (args: {
   orchestrationId: string;
   projectIds: number[];
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<unknown[]> => {
   const {
     items,
@@ -407,6 +413,7 @@ const runLoopBatches = async (args: {
     orchestrationId,
     projectIds,
     authHeader,
+    toolContext,
   } = args;
   const results: unknown[] = [];
   for (let i = 0; i < items.length; i += parallelism) {
@@ -420,6 +427,9 @@ const runLoopBatches = async (args: {
           projectIds,
           input: itemInput,
           authHeader,
+          // A child run is still this run's work, so it inherits the parent's
+          // context rather than starting with none (#945).
+          toolContext,
           // Nested runs must complete synchronously so their output can be
           // aggregated into this loop node's artifact.
           wait: true,
@@ -441,8 +451,9 @@ export const executeLoopNode = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader } = args;
+  const { node, state, projectIds, authHeader, toolContext } = args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const collectionPath = node.collection ?? 'state.items';
@@ -456,6 +467,7 @@ export const executeLoopNode = async (args: {
     orchestrationId,
     projectIds,
     authHeader,
+    toolContext,
   });
 
   return { kind: 'artifact', artifact: { results } };
@@ -467,8 +479,9 @@ export const executeSubOrchestrationNode = async (args: {
   projectIds: number[];
   traceId: string | null;
   authHeader?: string;
+  toolContext?: Record<string, string>;
 }): Promise<NodeExecutionResult> => {
-  const { node, state, projectIds, authHeader } = args;
+  const { node, state, projectIds, authHeader, toolContext } = args;
   const orchestrationId = requireNodeField(node, 'orchestrationId');
 
   const input = applyInputMapping(node.inputMapping, state);
@@ -478,6 +491,9 @@ export const executeSubOrchestrationNode = async (args: {
     projectIds,
     input,
     authHeader,
+    // A child run is still this run's work, so it inherits the parent's context
+    // rather than starting with none (#945).
+    toolContext,
     // A sub-orchestration is a synchronous child: its terminal output feeds this
     // node's artifact, so it must run to completion before continuing.
     wait: true,

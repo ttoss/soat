@@ -202,6 +202,10 @@ export type MappedOrchestrationRun = {
   required_action: object | null;
   trace_id: string | null;
   input: Record<string, unknown> | null;
+  // The caller context the run carries for its whole lifetime, forwarded as
+  // `X-Soat-Context-*` headers on the tool calls of every agent generation the
+  // run spawns. An opaque bag: copied as a value, its keys never re-cased.
+  tool_context: Record<string, string> | null;
   output: Record<string, unknown> | null;
   node_executions: MappedNodeExecution[];
   // Usage roll-up (tokens + cost_usd) summed across every metered generation the
@@ -318,6 +322,7 @@ export const mapOrchestrationRun = (
     required_action: mapRequiredAction(run.requiredAction),
     trace_id: run.traceId,
     input: run.input as Record<string, unknown> | null,
+    tool_context: run.toolContext ?? null,
     output: run.output as Record<string, unknown> | null,
     node_executions: (run.nodeExecutions ?? []).map(mapNodeExecution),
     ...(usage
