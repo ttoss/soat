@@ -81,6 +81,13 @@ const emitGateApproval = async (args: {
   projectId: number;
   transition: WorkflowTransition;
   note: string | null;
+  /**
+   * The `tool_context` the task held before the claim, restored alongside the
+   * claim itself. The park is what stores the requester's bag (#950), so a park
+   * that does not survive must not leave it behind for the next dispatch — which
+   * would run a later, unrelated move's work with this requester's credential.
+   */
+  previousToolContext: Record<string, string> | null;
 }): Promise<MappedApproval> => {
   const base = `Transition '${args.transition.name}' on task '${args.taskPublicId}' requires approval before it can move to '${args.transition.to}'.`;
   try {
@@ -95,7 +102,7 @@ const emitGateApproval = async (args: {
     });
   } catch (error) {
     await db.Task.update(
-      { pendingTransition: null },
+      { pendingTransition: null, toolContext: args.previousToolContext },
       {
         where: {
           publicId: args.taskPublicId,
@@ -128,6 +135,13 @@ export const parkTransitionForApproval = async (args: {
    */
   transitions: WorkflowTransition[];
   note: string | null;
+  /**
+   * The sanitized `tool_context` this move supplied, or `undefined` to keep the
+   * task's stored bag (#950). Written as part of the same guarded claim that
+   * takes the gate, so the bag and the pending transition it belongs to are
+   * never half-applied.
+   */
+  toolContext?: Record<string, string> | null;
 }): Promise<ReturnType<typeof mapTask>> => {
   const { task, transition, transitions } = args;
   const taskPublicId = task.publicId;
@@ -143,7 +157,12 @@ export const parkTransitionForApproval = async (args: {
   // while it is still open and in the from-state we validated. A concurrent park
   // (or any transition) loses the guarded UPDATE and gets a conflict.
   const [claimed] = await db.Task.update(
-    { pendingTransition: transition.name },
+    {
+      pendingTransition: transition.name,
+      ...(args.toolContext === undefined
+        ? {}
+        : { toolContext: args.toolContext }),
+    },
     {
       where: {
         publicId: taskPublicId,
@@ -165,6 +184,7 @@ export const parkTransitionForApproval = async (args: {
     projectId: task.projectId as number,
     transition,
     note: args.note,
+    previousToolContext: task.toolContext,
   });
 
   await db.Task.update(

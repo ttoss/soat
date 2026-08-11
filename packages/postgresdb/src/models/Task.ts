@@ -135,6 +135,22 @@ export class Task extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare lastResult: unknown;
 
+  // The caller context the *next* automation dispatch forwards as
+  // `X-Soat-Context-*` headers on its tool calls (#950). Supplied per move — at
+  // creation, and on each transition — and replaced wholesale by the move that
+  // supplies one, so the credential a dispatch runs with belongs to whoever last
+  // moved the task, matching the principal `resolveDispatchPrincipal` already
+  // inherits.
+  //
+  // Deliberately **write-only**: unlike `OrchestrationRun.toolContext`, it is
+  // absent from `mapTask` and therefore from every task read, webhook payload and
+  // audit export. A run is short-lived and single-caller; a task is long-lived and
+  // multi-actor, so a readable field here would park one principal's credential
+  // where every other principal on the board can read it. Cleared when the task
+  // reaches a terminal state, so a closed task holds no credential at rest.
+  @Column({ type: DataType.JSONB, allowNull: true, defaultValue: null })
+  declare toolContext: Record<string, string> | null;
+
   // Informational in v1: a user or actor public ID, not interpreted by the engine.
   @Column({ type: DataType.STRING, allowNull: true })
   declare assignee: string | null;

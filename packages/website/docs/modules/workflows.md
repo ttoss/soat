@@ -129,6 +129,7 @@ state in `from`) if a workflow needs one.
 | `automation_status` | string \| null   | `running` \| `completed` \| `failed` \| `unrouted` for the current state's dispatch |
 | `automation_chain_depth` | integer     | Server-owned, read-only: how many machine-driven transitions have run back-to-back with no outside intervention. Reset to `0` by any move a person, a plain API key, or an approval resolution makes. See [The automation chain budget](#the-automation-chain-budget) |
 | `pending_transition`| string \| null   | Name of a `requires_approval` transition parked awaiting a human decision; null otherwise |
+| `tool_context`      | object           | **Write-only.** Caller context for the task's automation dispatches, accepted on `create-task` and `transition-task` and never returned by a read. See [Dispatch tool context](#dispatch-tool-context) |
 | `entered_state_at`  | string           | When the task entered its current state                                 |
 | `created_at`        | string           | ISO 8601 creation timestamp                                             |
 | `updated_at`        | string           | ISO 8601 last-updated timestamp                                         |
@@ -383,6 +384,67 @@ Resolve the gate through the standard [approvals](./approvals.md) endpoints:
 
 The gated move, when it applies, is recorded in history as the `approval` principal.
 
+### Dispatch tool context
+
+A task's automations are a generation entry point like any other, so they can
+carry a [`tool_context`](../advanced/tool-context.md): a flat `Record<string, string>`
+forwarded as prefixed context headers (`X-Soat-Context-<key>` by default) on
+every `http`, `mcp` and `soat` tool call the task's dispatches make. This is how
+an automation reaches a tool that needs a per-user credential, instead of that
+credential having to live in the workflow definition or in the task payload.
+
+It reaches both dispatch kinds: an `agent` dispatch's generation, and an
+`orchestration` dispatch's run — which carries it on to every agent node and to
+any `loop` / `sub_orchestration` child run
+([Run Tool Context](./orchestrations.md#run-tool-context)).
+
+**It attaches per move.** Creation is the first move; every transition is another
+one:
+
+| Request | Effect on the stored bag |
+| --- | --- |
+| `create-task --tool-context '{…}'` | Sets it. This is what the entry state's `on_enter` runs with |
+| `transition-task --tool-context '{…}'` | **Replaces** it wholesale |
+| `transition-task` with no `tool_context` | **Keeps** the current one |
+| `transition-task --tool-context '{}'` | Clears it, without closing the task |
+| Any transition into a `terminal` state | Cleared — a closed task holds no credential |
+
+So the credential a dispatch runs with belongs to whoever last moved the task —
+matching the principal the dispatch already runs as (see
+[Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model))
+— while a bag survives every move that does not speak about it. That is what carries it across the pauses a long-lived task has:
+
+| Situation | Behavior |
+| --- | --- |
+| An automated hop (`on_complete` / `on_failure` routing) | Preserved — an `automation` move supplies no bag of its own |
+| A `retry` attempt | Preserved, and identical across attempts: a flake never changes which credential the work runs with |
+| An [approval gate](#approval-gated-transitions) | Preserved. The bag the *gated* move supplied is stored when the gate is parked, so the dispatch that runs when the approval resolves uses it — the resolution itself carries none |
+| A [stall](#stall-detection) | Untouched; a stall is an event, not a move |
+
+Two rules it shares with every other entry point:
+
+- The reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are
+  stripped from the caller's bag in any casing and re-derived server-side, so a
+  task-dispatched generation cannot forge them.
+- A key that could not become an HTTP header name is rejected at write time with
+  `INVALID_TOOL_CONTEXT_KEY` (400) — see
+  [Validation](../advanced/tool-context.md#validation).
+
+**The bag is write-only.** Unlike an orchestration run, which exposes its
+`tool_context`, a task never returns one: a run is short-lived and
+single-caller, while a task is long-lived and read by everyone who can see the
+board. Confine a key to the tools that need it with
+[`context_keys`](./tools.md#scoping-which-context-keys-reach-a-tool).
+
+```bash
+soat create-task --workflow-id wfl_01 --title 'Draft the post' \
+  --tool-context '{"ocaToken":"tok_user_42","tenant":"acme"}'
+
+# A later move hands the dispatch a different user's credential.
+soat transition-task --task-id task_01 --transition to_review \
+  --tool-context '{"ocaToken":"tok_user_77","tenant":"acme"}'
+```
+
 ### Stall detection
 
 A state may declare `stalled_after` (seconds). A background sweeper (the same
@@ -490,6 +552,7 @@ resources:
 | `TASK_GUARD_REJECTED`      | 400    | The transition guard evaluated to false                        |
 | `TASK_TRANSITION_CONFLICT` | 409    | The transition is not valid from the current state, or the task is closed |
 | `TASK_AUTOMATION_PROVENANCE_MISSING` | 500 | An `automation` transition would be persisted with `principal_id`, `generation_id`, and `orchestration_run_id` all null — rejected as a writer bug rather than silently recorded |
+| `INVALID_TOOL_CONTEXT_KEY`  | 400    | A `tool_context` key on `create-task` / `transition-task` is not a valid header name, or two keys collide on one header. See [Dispatch tool context](#dispatch-tool-context) |
 | `TASK_AUTOMATION_CHAIN_LIMIT` | 409 | The task has run `TASK_AUTOMATION_CHAIN_LIMIT` machine-driven transitions with no outside intervention; the next one is refused. See [The automation chain budget](#the-automation-chain-budget) |
 
 ## Webhook events

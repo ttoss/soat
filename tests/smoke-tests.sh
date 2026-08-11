@@ -5196,10 +5196,15 @@ if [ -z "$SELF_WF_ID" ] || [ "$SELF_WF_ID" = "null" ]; then
   exit 1
 fi
 
+# `--tool-context` rides along on this task rather than in a block of its own:
+# the orchestration dispatch is the only path where the bag becomes observable
+# through the public API, since the run echoes what the task handed it while the
+# task itself never returns its own (#950).
 SELF_TASK_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$SELF_WF_ID" \
-  --title "advances itself")
+  --title "advances itself" \
+  --tool-context '{"ocaToken":"smoke-task-token","tenant":"acme"}')
 SELF_TASK_ID=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.id')
 SELF_TASK_STATE=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.state')
 if [ "$SELF_TASK_STATE" != "working" ]; then
@@ -5259,6 +5264,59 @@ if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
   exit 1
 fi
 echo "Automated transition attribution: OK"
+
+# #950: the dispatched run carries the task's tool_context, so an agent node of
+# that run — and any child run it starts — calls its tools with the credential
+# the task was moved with. The run is where the bag is readable; the task never
+# returns it.
+SELF_RUN_ID=$(printf '%s\n' "$SELF_HISTORY" | jq -r 'map(select(.transition == "finish")) | .[0].orchestration_run_id')
+if [ -z "$SELF_RUN_ID" ] || [ "$SELF_RUN_ID" = "null" ]; then
+  echo "ERROR: the finish row recorded no orchestration run id" >&2
+  printf '%s\n' "$SELF_HISTORY" >&2
+  exit 1
+fi
+SELF_RUN_GET=$($SOAT_CLI get-orchestration-run --orchestration-run-id "$SELF_RUN_ID")
+if ! printf '%s\n' "$SELF_RUN_GET" | jq -e \
+  '.tool_context.ocaToken == "smoke-task-token" and .tool_context.tenant == "acme"' >/dev/null 2>&1; then
+  echo "ERROR: the task-dispatched run did not inherit the task's tool_context" >&2
+  printf '%s\n' "$SELF_RUN_GET" >&2
+  exit 1
+fi
+echo "Task tool_context reached the dispatched run: OK"
+
+# Write-only: a task never echoes the bag back, on create or on read.
+if ! printf '%s\n' "$SELF_TASK_RESP" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: create-task echoed tool_context back" >&2
+  printf '%s\n' "$SELF_TASK_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SELF_TASK_GET" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: get-task exposed the stored tool_context" >&2
+  printf '%s\n' "$SELF_TASK_GET" >&2
+  exit 1
+fi
+echo "Task tool_context is write-only: OK"
+
+# A key that could not become an HTTP header name is rejected at write time, on
+# both entry points — the same contract as every other tool_context surface.
+expect_cli_error_status 400 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$SELF_WF_ID" \
+  --title "bad context key" \
+  --tool-context '{"bad key":"v"}'
+CTX_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$WORKFLOW_ID" \
+  --title "context transition card" | jq -r '.id')
+expect_cli_error_status 400 transition-task \
+  --task-id "$CTX_TASK_ID" \
+  --transition start \
+  --tool-context '{"ocaToken":"a","ocatoken":"b"}'
+# A valid bag on the same transition is accepted and replaces the stored one.
+$SOAT_CLI transition-task --task-id "$CTX_TASK_ID" --transition start \
+  --tool-context '{"ocaToken":"smoke-transition-token"}' >/dev/null
+$SOAT_CLI delete-task --task-id "$CTX_TASK_ID" >/dev/null
+echo "Task tool_context validation: OK (400 as expected on both entry points)"
 
 # #879: a `soat` node whose action answers non-2xx fails the run. Before that
 # the error body was stored as the node's artifact and the run carried on as

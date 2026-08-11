@@ -98,6 +98,7 @@ describe('Tasks', () => {
         'ai-providers:CreateAiProvider',
         'agents:CreateAgent',
         'orchestrations:CreateOrchestration',
+        'orchestrations:GetRun',
       ],
       createNoPermUser: true,
     });
@@ -2833,6 +2834,428 @@ describe('Tasks', () => {
           expect(res.body.automation_chain_depth).toBe(0);
         }
       });
+    });
+  });
+  // #950 — a workflow/task automation is a generation entry point like any
+  // other, so the caller context its dispatches forward must come from
+  // somewhere. It attaches per move (creation counts as the first move) and the
+  // move that supplies one replaces the stored bag wholesale, so the credential
+  // a dispatch runs with belongs to the same principal `resolveDispatchPrincipal`
+  // already makes it run as.
+  describe('tool_context (#950)', () => {
+    let ctxWorkflowId: string;
+    let orchWorkflowId: string;
+    let retryWorkflowId: string;
+
+    const GEN_OK = {
+      id: 'gen_ctx950',
+      traceId: 'trc_ctx950',
+      status: 'completed' as const,
+      output: { model: 'm', content: 'ok', finishReason: 'stop' },
+    };
+
+    beforeAll(async () => {
+      const agentDispatch = {
+        dispatch: { kind: 'agent', agent_id: agentId },
+      };
+
+      ctxWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `ctx-${Math.random().toString(36).slice(2)}`,
+            states: [
+              // `idle` dispatches nothing, so a task can be parked with a bag
+              // before any dispatch reads it.
+              { name: 'idle', initial: true },
+              // No `on_complete`: the dispatch settles and the task stays put,
+              // so a second move can be made with a different bag.
+              { name: 'working', on_enter: agentDispatch },
+              { name: 'gated', on_enter: agentDispatch },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [
+              { name: 'begin', from: ['idle'], to: 'working' },
+              { name: 'again', from: ['working'], to: 'working' },
+              { name: 'wrap', from: ['working'], to: 'done' },
+              {
+                name: 'gate',
+                from: ['idle'],
+                to: 'gated',
+                requires_approval: true,
+              },
+            ],
+          })
+      ).body.id;
+
+      const orchestrationId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            project_id: projectId,
+            name: `ctx-pipeline-${Math.random().toString(36).slice(2)}`,
+            nodes: [
+              {
+                id: 'start',
+                type: 'transform',
+                expression: { var: '' },
+                state_mapping: { 'state.result': { var: 'output.output' } },
+              },
+            ],
+            edges: [],
+          })
+      ).body.id;
+
+      orchWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `ctx-orch-${Math.random().toString(36).slice(2)}`,
+            states: [
+              {
+                name: 'running',
+                initial: true,
+                on_enter: {
+                  dispatch: {
+                    kind: 'orchestration',
+                    orchestration_id: orchestrationId,
+                  },
+                  on_complete: [{ when: true, transition: 'to_done' }],
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [{ name: 'to_done', from: ['running'], to: 'done' }],
+          })
+      ).body.id;
+
+      retryWorkflowId = (
+        await authenticatedTestClient(userToken)
+          .post('/api/v1/workflows')
+          .send({
+            project_id: projectId,
+            name: `ctx-retry-${Math.random().toString(36).slice(2)}`,
+            states: [
+              {
+                name: 'flaky',
+                initial: true,
+                on_enter: {
+                  dispatch: { kind: 'agent', agent_id: agentId },
+                  retry: { max_attempts: 2, backoff_seconds: 0 },
+                },
+              },
+              { name: 'done', terminal: true },
+            ],
+            transitions: [{ name: 'to_done', from: ['flaky'], to: 'done' }],
+          })
+      ).body.id;
+    });
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      mockCreateGeneration.mockResolvedValue(GEN_OK);
+    });
+
+    /** Creates a task on the `ctx` workflow, optionally with a bag and state. */
+    const startCtxTask = async (args: {
+      toolContext?: Record<string, string>;
+      state?: string;
+      workflow?: string;
+    }) => {
+      return authenticatedTestClient(userToken)
+        .post('/api/v1/tasks')
+        .send({
+          project_id: projectId,
+          workflow_id: args.workflow ?? ctxWorkflowId,
+          title: 'context card',
+          ...(args.state ? { state: args.state } : {}),
+          ...(args.toolContext ? { tool_context: args.toolContext } : {}),
+        });
+    };
+
+    const move = (args: {
+      taskId: string;
+      transition: string;
+      toolContext?: Record<string, string>;
+    }) => {
+      return authenticatedTestClient(userToken)
+        .post(`/api/v1/tasks/${args.taskId}/transitions`)
+        .send({
+          transition: args.transition,
+          ...(args.toolContext ? { tool_context: args.toolContext } : {}),
+        });
+    };
+
+    /** Waits for the state's dispatch to settle (no on_complete rule routes it). */
+    const awaitDispatch = (taskId: string) => {
+      return pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.automation_status === 'completed';
+        },
+      });
+    };
+
+    /** The bag persisted on the task row — never observable through the API. */
+    const storedContext = async (taskId: string) => {
+      const row = await db.Task.findOne({ where: { publicId: taskId } });
+      return row!.toolContext;
+    };
+
+    const forwardedContext = (call: number) => {
+      return mockCreateGeneration.mock.calls[call]![0].toolContext;
+    };
+
+    test('a create-time bag reaches the entry state dispatch', async () => {
+      const created = await startCtxTask({
+        state: 'working',
+        toolContext: { ocaToken: 'tok_create', tenant: 'acme' },
+      });
+      expect(created.status).toBe(201);
+      await awaitDispatch(created.body.id);
+
+      expect(forwardedContext(0)).toEqual({
+        ocaToken: 'tok_create',
+        tenant: 'acme',
+      });
+    });
+
+    test("a transition's bag replaces the stored one (last writer wins)", async () => {
+      const created = await startCtxTask({
+        toolContext: { ocaToken: 'tok_create' },
+      });
+      expect(created.status).toBe(201);
+      const taskId = created.body.id;
+
+      const moved = await move({
+        taskId,
+        transition: 'begin',
+        toolContext: { ocaToken: 'tok_transition' },
+      });
+      expect(moved.status).toBe(200);
+      await awaitDispatch(taskId);
+
+      // The dispatch runs with the credential of whoever last moved the task.
+      expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_transition' });
+      expect(await storedContext(taskId)).toEqual({
+        ocaToken: 'tok_transition',
+      });
+    });
+
+    test('a transition without a bag keeps the stored one', async () => {
+      const created = await startCtxTask({
+        toolContext: { ocaToken: 'tok_kept' },
+      });
+      const taskId = created.body.id;
+
+      expect((await move({ taskId, transition: 'begin' })).status).toBe(200);
+      await awaitDispatch(taskId);
+      expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_kept' });
+
+      // Re-entering the state dispatches again, still with the same bag: an
+      // omitted `tool_context` is "unchanged", never "cleared".
+      expect((await move({ taskId, transition: 'again' })).status).toBe(200);
+      await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return (
+            t.automation_status === 'completed' &&
+            mockCreateGeneration.mock.calls.length >= 2
+          );
+        },
+      });
+      expect(forwardedContext(1)).toEqual({ ocaToken: 'tok_kept' });
+    });
+
+    test('reserved identity keys are stripped from the caller bag', async () => {
+      const created = await startCtxTask({
+        state: 'working',
+        toolContext: {
+          sessionId: 'ses_forged',
+          actorId: 'act_forged',
+          actorExternalId: 'ext_forged',
+          ocaToken: 'tok_keep',
+        },
+      });
+      expect(created.status).toBe(201);
+      await awaitDispatch(created.body.id);
+
+      // Identity is server-derived at the generation chokepoint (#843/#850/#851);
+      // a task-dispatched generation cannot smuggle one in through the task row.
+      expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_keep' });
+      expect(await storedContext(created.body.id)).toEqual({
+        ocaToken: 'tok_keep',
+      });
+    });
+
+    test('a bag of nothing but reserved keys persists nothing', async () => {
+      const created = await startCtxTask({
+        toolContext: { sessionId: 'ses_forged' },
+      });
+      expect(created.status).toBe(201);
+      expect(await storedContext(created.body.id)).toBeNull();
+    });
+
+    test('400 for a key that could not become a header — on create', async () => {
+      const res = await startCtxTask({ toolContext: { 'bad key': 'v' } });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    test('400 for two keys that collapse to one header — on transition', async () => {
+      const created = await startCtxTask({});
+      const res = await move({
+        taskId: created.body.id,
+        transition: 'begin',
+        toolContext: { ocaToken: 'a', ocatoken: 'b' },
+      });
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    test('the bag is never returned by a task read', async () => {
+      const created = await startCtxTask({
+        toolContext: { ocaToken: 'tok_secret' },
+      });
+      const taskId = created.body.id;
+      expect(created.body.tool_context).toBeUndefined();
+
+      const read = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks/${taskId}`
+      );
+      expect(read.status).toBe(200);
+      expect(read.body.tool_context).toBeUndefined();
+
+      const list = await authenticatedTestClient(userToken).get(
+        `/api/v1/tasks?project_id=${projectId}`
+      );
+      expect(list.status).toBe(200);
+      const listed = list.body.data.find((t: { id: string }) => {
+        return t.id === taskId;
+      });
+      expect(listed).toBeDefined();
+      expect(listed.tool_context).toBeUndefined();
+
+      // The row really does hold it — the absence above is the mapper, not an
+      // unwritten column.
+      expect(await storedContext(taskId)).toEqual({ ocaToken: 'tok_secret' });
+    });
+
+    test('a terminal transition scrubs the stored bag', async () => {
+      const created = await startCtxTask({
+        toolContext: { ocaToken: 'tok_closing' },
+      });
+      const taskId = created.body.id;
+      await move({ taskId, transition: 'begin' });
+      await awaitDispatch(taskId);
+
+      const closed = await move({ taskId, transition: 'wrap' });
+      expect(closed.status).toBe(200);
+      expect(closed.body.status).toBe('closed');
+      // A closed task holds no credential at rest.
+      expect(await storedContext(taskId)).toBeNull();
+    });
+
+    test('creating directly in a terminal state stores no bag', async () => {
+      const created = await startCtxTask({
+        state: 'done',
+        toolContext: { ocaToken: 'tok_doa' },
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.status).toBe('closed');
+      expect(await storedContext(created.body.id)).toBeNull();
+    });
+
+    test('the bag survives an approval gate and reaches the gated dispatch', async () => {
+      const created = await startCtxTask({
+        toolContext: { ocaToken: 'tok_before_gate' },
+      });
+      const taskId = created.body.id;
+
+      // The parked move supplies its own bag: the gate is a pause, so the
+      // transitioner's context has to outlive it.
+      const parked = await move({
+        taskId,
+        transition: 'gate',
+        toolContext: { ocaToken: 'tok_at_gate' },
+      });
+      expect(parked.status).toBe(200);
+      expect(parked.body.pending_transition).toBe('gate');
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+
+      const approvals = await authenticatedTestClient(userToken).get(
+        `/api/v1/approvals?project_id=${projectId}&status=pending`
+      );
+      const approval = approvals.body.data.find((a: { task_id: string }) => {
+        return a.task_id === taskId;
+      });
+      expect(approval).toBeDefined();
+
+      const approved = await authenticatedTestClient(userToken)
+        .post(`/api/v1/approvals/${approval.id}/approve`)
+        .send({});
+      expect(approved.status).toBe(200);
+
+      await awaitDispatch(taskId);
+      expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_at_gate' });
+    });
+
+    test('every retry attempt carries the same bag', async () => {
+      mockCreateGeneration
+        .mockRejectedValueOnce(
+          new DomainError('AI_PROVIDER_ERROR', 'transient 502', {
+            generation_id: 'gen_ctx_flake',
+          })
+        )
+        .mockResolvedValueOnce(GEN_OK);
+
+      const created = await startCtxTask({
+        workflow: retryWorkflowId,
+        toolContext: { ocaToken: 'tok_retry' },
+      });
+      expect(created.status).toBe(201);
+      await awaitDispatch(created.body.id);
+
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+      expect(forwardedContext(0)).toEqual({ ocaToken: 'tok_retry' });
+      expect(forwardedContext(1)).toEqual({ ocaToken: 'tok_retry' });
+    });
+
+    test('an orchestration dispatch inherits the task bag (#945 item 1)', async () => {
+      const created = await startCtxTask({
+        workflow: orchWorkflowId,
+        toolContext: { ocaToken: 'tok_orch' },
+      });
+      expect(created.status).toBe(201);
+      const taskId = created.body.id;
+
+      await pollTask({
+        token: userToken,
+        taskId,
+        predicate: (t) => {
+          return t.state === 'done';
+        },
+      });
+
+      const history = (
+        await authenticatedTestClient(userToken).get(
+          `/api/v1/tasks/${taskId}/history`
+        )
+      ).body;
+      const routed = history.find((h: { transition: string | null }) => {
+        return h.transition === 'to_done';
+      });
+      expect(typeof routed.orchestration_run_id).toBe('string');
+
+      const run = await authenticatedTestClient(userToken).get(
+        `/api/v1/orchestration-runs/${routed.orchestration_run_id}`
+      );
+      expect(run.status).toBe(200);
+      expect(run.body.tool_context).toEqual({ ocaToken: 'tok_orch' });
     });
   });
 });
