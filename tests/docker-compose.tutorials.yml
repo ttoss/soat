@@ -54,9 +54,10 @@ services:
     environment:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
-      # Only these tools have their forcing honored deterministically — the client-tools tutorial.
-      # Every other forced tool still goes to the real model.
-      TOOL_CHOICE_TOOLS: 'get_order_status'
+      # Only these tools have their forcing honored deterministically — the
+      # client-tools tutorial (get_order_status) and the tool-context tutorial
+      # (record_order). Every other forced tool still goes to the real model.
+      TOOL_CHOICE_TOOLS: 'get_order_status,record_order'
       # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
       # have no max_tokens field), and no tutorial asserts generated content —
       # only structure and forward progress. Uncapped output is what makes a
@@ -174,6 +175,12 @@ services:
     environment:
       SOAT_BASE_URL: 'http://server:5047'
       SOAT_WEBHOOK_BASE_URL: 'http://tutorials:8787'
+      # Tutorials run in parallel inside this one container, so a listener port
+      # can only belong to one of them. 8787 is the webhook listener
+      # (chat-with-llm); 8788 is the tool-context tutorial's header-echo
+      # endpoint. A second tutorial that needs its own listener takes the next
+      # port and its own variable rather than sharing one of these.
+      SOAT_TOOL_ECHO_BASE_URL: 'http://tutorials:8788'
       TUTORIAL_ID: '${TUTORIAL_ID:-}'
       VERBOSE: '0'
       # Point the converter tutorial's provider endpoints at the mock service.
