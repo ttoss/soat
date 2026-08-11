@@ -1,5 +1,5 @@
 ---
-description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet is the layer that keeps the other three honest."
+description: "The layers an agent system decomposes into — harness, loop, graph, ratchet — which SOAT module owns each one, why the graph should be the last thing you build, and why the ratchet — the layer that evaluates every change and keeps it from sliding backward — keeps the other three honest."
 sidebar_position: 3
 sidebar_label: Layers of an Agent System
 title: The Layers of an Agent System
@@ -22,9 +22,9 @@ It is also incomplete. All three layers describe a system *at rest* — what it 
 how it is checked, what runs next. None of them answers the question that decides whether
 an agent is still good in six months, which is why this page adds a fourth:
 
-- the **ratchet** — the mechanism of change: how a modification is proven to be an
-  improvement before it reaches production, and what stops the system from sliding
-  backward.
+- the **ratchet** — the mechanism of change: how a modification is evaluated against
+  evidence and proven to be an improvement before it reaches production, and what stops
+  the system from sliding backward.
 
 SOAT is built around that order. This page maps each layer to the modules that own it, so
 you know which part of the platform to reach for when a layer is the one failing.
@@ -191,6 +191,10 @@ or on demand — without one, "the flow" is still a person running a command.
 
 ## Layer 4 — The ratchet
 
+Where the loop asks *did this run succeed?*, the ratchet asks *did this change make the
+agent better?* — a question about the distribution of runs, which no single run can
+answer.
+
 Every layer so far hands the system authority over something: the harness over what it can
 *do*, the loop over how it is *checked*, the graph over what happens *next*. What no layer
 covers is the thing a human still does by hand every week — **changing the system**. An
@@ -199,9 +203,9 @@ chat for the fourth time. Each of those is a production change with no verdict a
 
 The ratchet is the mechanism that gives change a direction. Its shape is the same
 everywhere: **produce a verdict from evidence, gate the change on the verdict, keep the
-history append-only** so a bad change is recoverable rather than archaeological. Where the
-loop asks *did this run succeed?*, the ratchet asks *did this change make the agent
-better?* — a question about the distribution of runs, which no single run can answer.
+history append-only** so a bad change is recoverable rather than archaeological. Parts of
+this layer are shipped today and parts are the platform's active build front — see
+[Status](#status) below for the current state of each piece.
 
 ### It is not simply "after the graph"
 
