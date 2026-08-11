@@ -141,6 +141,51 @@ export const assertValidToolContextKeys = (
 };
 
 /**
+ * Throws `INVALID_TOOL_CONTEXT_KEY` (400) when a tool's `context_keys`
+ * allowlist contains something that could never be a `tool_context` key. An
+ * entry names the same thing a key does — one outbound header — so it is held to
+ * the same grammar. Validating here means a typo'd entry is a rejected write
+ * rather than a key that silently never matches, which would present as the
+ * tool mysteriously not receiving its credential at call time.
+ */
+export const assertValidToolContextAllowlist = (
+  // `unknown` rather than `string[] | null`: both callers hand this straight
+  // from an untyped request body or template property, and the check below is
+  // the thing that establishes the type. A cast at each call site would assert
+  // exactly what has not been verified yet.
+  contextKeys?: unknown
+): void => {
+  if (contextKeys === undefined || contextKeys === null) return;
+
+  // The value arrives from an untyped request body, and a malformed allowlist
+  // must never degrade to "no allowlist" — that would fail open, forwarding
+  // every key to a tool whose author asked for the opposite.
+  if (!Array.isArray(contextKeys)) {
+    throw new DomainError(
+      'INVALID_TOOL_CONTEXT_KEY',
+      'context_keys must be an array of tool_context key names, or null to forward every key.'
+    );
+  }
+
+  const invalid = contextKeys.filter((key) => {
+    return typeof key !== 'string' || !HEADER_TOKEN_RE.test(key);
+  });
+  if (invalid.length === 0) return;
+
+  throw new DomainError(
+    'INVALID_TOOL_CONTEXT_KEY',
+    `Invalid context_keys entry/entries ${invalid
+      .map((key) => {
+        return `'${String(key)}'`;
+      })
+      .join(
+        ', '
+      )} — an entry names a tool_context key, which becomes an HTTP header name, so it may only contain letters, digits and the characters !#$%&'*+-.^_\`|~.`,
+    { keys: invalid }
+  );
+};
+
+/**
  * The identity keys the server owns. They are derived from trusted state (the
  * session record and its actor) and stamped at the generation chokepoint
  * (`buildGenerationContext`), so a caller cannot address them from any
@@ -203,9 +248,55 @@ export const pinServerIdentityToolContext = (args: {
   return { ...stripped, ...identity };
 };
 
-export const buildContextHeaders = (
-  toolContext?: Record<string, string>
-): Record<string, string> => {
+/**
+ * Narrows a `tool_context` bag to what one tool is allowed to receive (#945
+ * item 3). `undefined`/`null` `contextKeys` means "forward everything" — every
+ * tool authored before the allowlist existed keeps its exact behavior — while an
+ * empty list forwards nothing but the identity keys.
+ *
+ * Matching is case-insensitive because an entry names an outbound header, and
+ * header names are case-insensitive (RFC 9110 §5.1) — `assertValidToolContextKeys`
+ * already refuses two keys differing only in case for that same reason. A
+ * case-sensitive match would let one header be allowed or denied depending on how
+ * the entry happened to be typed.
+ *
+ * The reserved identity keys survive any allowlist: they are derived from the
+ * session and its actor rather than supplied by the caller, and they are how a
+ * downstream tool knows who it is acting for. A tool cannot opt out of knowing
+ * that, and nothing is contained by hiding it — the containment this allowlist
+ * provides is over *caller* data, credentials above all.
+ */
+export const filterToolContext = (args: {
+  toolContext?: Record<string, string>;
+  contextKeys?: string[] | null;
+}): Record<string, string> | undefined => {
+  if (!args.toolContext || !args.contextKeys) return args.toolContext;
+
+  const allowed = new Set(
+    args.contextKeys.map((key) => {
+      return key.toLowerCase();
+    })
+  );
+
+  return Object.fromEntries(
+    Object.entries(args.toolContext).filter(([key]) => {
+      const lower = key.toLowerCase();
+      return allowed.has(lower) || RESERVED_LOWER.has(lower);
+    })
+  );
+};
+
+/**
+ * The bag → headers step. Takes the tool's allowlist rather than a pre-filtered
+ * bag so that the type system, not a convention, forces every forwarding site to
+ * state which keys it may forward — a new egress path cannot be added without
+ * answering the question.
+ */
+export const buildContextHeaders = (args: {
+  toolContext?: Record<string, string>;
+  contextKeys?: string[] | null;
+}): Record<string, string> => {
+  const toolContext = filterToolContext(args);
   if (!toolContext) return {};
   return Object.fromEntries(
     Object.entries(toolContext).map(([key, value]) => {

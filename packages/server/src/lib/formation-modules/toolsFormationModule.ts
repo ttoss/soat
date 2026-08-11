@@ -12,6 +12,7 @@ import {
   toOptionalString,
 } from '../resource-inputs/normalizers';
 import { validateExecuteAuth } from '../toolAuth';
+import { assertValidToolContextAllowlist } from '../toolContext';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
 import {
   describeToolTemplateTokenProblems,
@@ -92,6 +93,18 @@ export const toolsFormationModule = defineFormationModule({
 
     pushExecuteAuthErrors({ properties, basePath, errors });
 
+    // The same rule the REST write path enforces, from the same function, so a
+    // template cannot author a tool the API would reject — and so the error
+    // arrives at `validate-formation` rather than part-way through an apply.
+    try {
+      assertValidToolContextAllowlist(properties.context_keys);
+    } catch (error) {
+      errors.push({
+        path: `${basePath}.context_keys`,
+        message: error instanceof DomainError ? error.message : String(error),
+      });
+    }
+
     // Validate execute and mcp separately so each error points at the field
     // that actually carries the offending token. The rule itself (and its
     // wording) comes from `toolTemplates`, the same source the REST write path
@@ -152,6 +165,7 @@ export const toolsFormationModule = defineFormationModule({
       deniedActions: optional(
         toNullableArray<string>(properties.denied_actions)
       ),
+      contextKeys: toNullableArray<string>(properties.context_keys),
       presetParameters: optional(
         toNullableObject(properties.preset_parameters)
       ),
@@ -172,6 +186,7 @@ export const toolsFormationModule = defineFormationModule({
       mcp: toNullableObject(properties.mcp),
       actions: toNullableArray<string>(properties.actions),
       deniedActions: toNullableArray<string>(properties.denied_actions),
+      contextKeys: toNullableArray<string>(properties.context_keys),
       presetParameters: toNullableObject(properties.preset_parameters),
       pipeline: toNullableObject(properties.pipeline),
       outputMapping: toNullableObject(properties.output_mapping),

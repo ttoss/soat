@@ -145,6 +145,7 @@ type TypedHttpTool = {
   projectId: number;
   description: string | null;
   parameters: Record<string, unknown> | null;
+  contextKeys?: string[] | null;
   execute:
     | {
         url: string;
@@ -457,6 +458,9 @@ const buildHttpRequestInit = (args: {
   resolvedHeaders?: Record<string, string>;
   remainingArgs: Record<string, unknown>;
   toolContext?: Record<string, string>;
+  // The tool's `context_keys` allowlist: which `tool_context` keys may be
+  // forwarded as prefixed context headers (#945). Absent forwards all.
+  contextKeys?: string[] | null;
   // Verbatim headers merged last (e.g. `Idempotency-Key`), not context-prefixed.
   extraHeaders?: Record<string, string>;
 }): RequestInit => {
@@ -468,7 +472,10 @@ const buildHttpRequestInit = (args: {
     ...(isMultipart
       ? withoutContentType(args.resolvedHeaders)
       : args.resolvedHeaders),
-    ...buildContextHeaders(args.toolContext),
+    ...buildContextHeaders({
+      toolContext: args.toolContext,
+      contextKeys: args.contextKeys,
+    }),
     ...(args.extraHeaders ?? {}),
   };
   const init: RequestInit = { method: args.method, headers };
@@ -563,6 +570,7 @@ export const buildHttpToolExecute = (
     toolName: string;
     execute: HttpExecuteConfig;
     projectId: number;
+    contextKeys?: string[] | null;
     // Verbatim request headers (e.g. `Idempotency-Key`) merged last, after
     // execute headers and context headers.
     extraHeaders?: Record<string, string>;
@@ -607,6 +615,7 @@ export const buildHttpToolExecute = (
         resolvedHeaders: resolved.headers,
         remainingArgs,
         toolContext,
+        contextKeys: args.contextKeys,
         extraHeaders: args.extraHeaders,
       });
       // Credentials are computed last, over the final method, url, headers and
@@ -659,6 +668,7 @@ const resolveHttpTool = (
             toolName: typedTool.name,
             execute,
             projectId: typedTool.projectId,
+            contextKeys: typedTool.contextKeys,
           },
           toolContext
         )
@@ -707,6 +717,7 @@ const resolveMcpToolEntry = async (
         mcp,
         actions: typedTool.actions,
         deniedActions: typedTool.deniedActions,
+        contextKeys: typedTool.contextKeys,
       },
       toolContext,
       buildContextHeaders,
@@ -749,6 +760,7 @@ type AgentToolRow = {
   mcp: { url: string; headers?: Record<string, string> } | null;
   actions: string[] | null;
   deniedActions: string[] | null;
+  contextKeys: string[] | null;
   presetParameters: Record<string, unknown> | null;
   outputMapping: Record<string, unknown> | null;
   guardrailIds: string[] | null;
@@ -911,6 +923,7 @@ const ephemeralDefinitionToRow = (
     mcp: orNull(definition.mcp as AgentToolRow['mcp']),
     actions: orNull(definition.actions),
     deniedActions: orNull(definition.deniedActions),
+    contextKeys: orNull(definition.contextKeys),
     presetParameters: orNull(
       definition.presetParameters as Record<string, unknown> | undefined
     ),

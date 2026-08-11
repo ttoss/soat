@@ -2,6 +2,7 @@ import type { JSONSchema7, Tool } from 'ai';
 import { jsonSchema, tool } from 'ai';
 import createDebug from 'debug';
 
+import { buildSoatRequestBody } from './agentToolResolverSoatBody';
 import { HttpToolError } from './httpToolError';
 import { dispatchApiRequestOrThrow, withCallTimeout } from './inProcessApi';
 import { soatTools } from './soatTools';
@@ -77,11 +78,15 @@ export const resolveMcpTools = async (args: {
     // ergonomic way to scope a read+write server read-only — deny just the write
     // tools instead of enumerating every read tool in the allowlist.
     deniedActions?: string[] | null;
+    // Per-tool allowlist of `tool_context` keys that may be forwarded as
+    // prefixed context headers. `null`/`undefined` forwards all (#945).
+    contextKeys?: string[] | null;
   };
   toolContext?: Record<string, string>;
-  buildContextHeaders: (
-    toolContext?: Record<string, string>
-  ) => Record<string, string>;
+  buildContextHeaders: (args: {
+    toolContext?: Record<string, string>;
+    contextKeys?: string[] | null;
+  }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }): Promise<Record<string, Tool>> => {
   const result: Record<string, Tool> = {};
@@ -96,7 +101,10 @@ export const resolveMcpTools = async (args: {
     'Content-Type': 'application/json',
     Accept: 'application/json, text/event-stream',
     ...args.typedTool.mcp.headers,
-    ...args.buildContextHeaders(args.toolContext),
+    ...args.buildContextHeaders({
+      toolContext: args.toolContext,
+      contextKeys: args.typedTool.contextKeys,
+    }),
   };
 
   try {
@@ -179,89 +187,6 @@ const buildInputSchemaWithoutPresets = (
   };
 };
 
-const withToolContext = (args: {
-  body: Record<string, unknown>;
-  toolContext?: Record<string, string>;
-  acceptedBodyFields: string[];
-}) => {
-  if (!args.toolContext || !args.acceptedBodyFields.includes('tool_context')) {
-    return args.body;
-  }
-  return { ...args.body, tool_context: args.toolContext };
-};
-
-const withTraceIds = (args: {
-  body: Record<string, unknown>;
-  traceId?: string;
-  rootTraceId?: string | null;
-  acceptedBodyFields: string[];
-}) => {
-  const acceptsTrace =
-    args.acceptedBodyFields.includes('parent_trace_id') &&
-    args.acceptedBodyFields.includes('root_trace_id');
-  if (!args.traceId || !acceptsTrace) return args.body;
-  return {
-    ...args.body,
-    parent_trace_id: args.traceId,
-    root_trace_id: args.rootTraceId ?? args.traceId,
-  };
-};
-
-const withMaxCallDepth = (args: {
-  body: Record<string, unknown>;
-  remainingDepth?: number;
-  acceptedBodyFields: string[];
-}) => {
-  if (
-    args.remainingDepth === undefined ||
-    !args.acceptedBodyFields.includes('max_call_depth')
-  ) {
-    return args.body;
-  }
-  return {
-    ...args.body,
-    max_call_depth: Math.max(0, args.remainingDepth - 1),
-  };
-};
-
-/**
- * Assembles the request body a SOAT action is called with: the operation's own
- * body, plus the ambient fields the action's schema declares it accepts —
- * `tool_context`, the trace lineage, and the remaining call depth. Exported for
- * direct testing: which fields get injected into which action is a per-action
- * rule with a large input space (#371), and the schema check that enforces it is
- * invisible from the outside once the body has been sent.
- */
-export const buildSoatRequestBody = (args: {
-  def: (typeof soatTools)[number];
-  rawArgs: Record<string, unknown>;
-  toolContext?: Record<string, string>;
-  traceId?: string;
-  rootTraceId?: string | null;
-  remainingDepth?: number;
-}) => {
-  const soatBody = args.def.body ? args.def.body(args.rawArgs) : undefined;
-  if (!soatBody) return soatBody;
-
-  const acceptedBodyFields = args.def.acceptedBodyFields;
-  const withContext = withToolContext({
-    body: soatBody,
-    toolContext: args.toolContext,
-    acceptedBodyFields,
-  });
-  const withTrace = withTraceIds({
-    body: withContext,
-    traceId: args.traceId,
-    rootTraceId: args.rootTraceId,
-    acceptedBodyFields,
-  });
-  return withMaxCallDepth({
-    body: withTrace,
-    remainingDepth: args.remainingDepth,
-    acceptedBodyFields,
-  });
-};
-
 /**
  * Invokes a SOAT platform action on behalf of a `soat` tool.
  *
@@ -284,12 +209,14 @@ export const executeSoatTool = async (args: {
   rawArgs: Record<string, unknown>;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  contextKeys?: string[] | null;
   traceId?: string;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  buildContextHeaders: (
-    toolContext?: Record<string, string>
-  ) => Record<string, string>;
+  buildContextHeaders: (args: {
+    toolContext?: Record<string, string>;
+    contextKeys?: string[] | null;
+  }) => Record<string, string>;
   logToolCallingError: LogToolCallingError;
 }) => {
   // Path *and* query string. This used to be `def.path(...)` alone, which
@@ -302,6 +229,7 @@ export const executeSoatTool = async (args: {
     def: args.def,
     rawArgs: args.rawArgs,
     toolContext: args.toolContext,
+    contextKeys: args.contextKeys,
     traceId: args.traceId,
     rootTraceId: args.rootTraceId,
     remainingDepth: args.remainingDepth,
@@ -318,7 +246,10 @@ export const executeSoatTool = async (args: {
         path,
         headers: {
           ...(args.authHeader ? { Authorization: args.authHeader } : {}),
-          ...args.buildContextHeaders(args.toolContext),
+          ...args.buildContextHeaders({
+            toolContext: args.toolContext,
+            contextKeys: args.contextKeys,
+          }),
         },
         body,
         wrapError: (response) => {
@@ -356,13 +287,15 @@ const buildSoatActionTool = (args: {
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  contextKeys?: string[] | null;
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  buildContextHeaders: (
-    toolContext?: Record<string, string>
-  ) => Record<string, string>;
+  buildContextHeaders: (args: {
+    toolContext?: Record<string, string>;
+    contextKeys?: string[] | null;
+  }) => Record<string, string>;
   isSoatActionAllowedByBoundary: (args: {
     boundaryPolicy: unknown;
     iamAction: string;
@@ -396,6 +329,7 @@ const buildSoatActionTool = (args: {
         rawArgs,
         authHeader: args.authHeader,
         toolContext: args.toolContext,
+        contextKeys: args.contextKeys,
         traceId: args.traceId,
         rootTraceId: args.rootTraceId,
         remainingDepth: args.remainingDepth,
@@ -412,17 +346,20 @@ export const resolveSoatTools = (args: {
     description: string | null;
     actions: string[] | null;
     presetParameters?: Record<string, unknown> | null;
+    contextKeys?: string[] | null;
   };
   boundaryPolicy?: unknown;
   authHeader?: string;
   toolContext?: Record<string, string>;
+  contextKeys?: string[] | null;
   traceId?: string;
   parentTraceId?: string | null;
   rootTraceId?: string | null;
   remainingDepth?: number;
-  buildContextHeaders: (
-    toolContext?: Record<string, string>
-  ) => Record<string, string>;
+  buildContextHeaders: (args: {
+    toolContext?: Record<string, string>;
+    contextKeys?: string[] | null;
+  }) => Record<string, string>;
   isSoatActionAllowedByBoundary: (args: {
     boundaryPolicy: unknown;
     iamAction: string;
@@ -444,6 +381,7 @@ export const resolveSoatTools = (args: {
       boundaryPolicy: args.boundaryPolicy,
       authHeader: args.authHeader,
       toolContext: args.toolContext,
+      contextKeys: args.typedTool.contextKeys,
       traceId: args.traceId,
       parentTraceId: args.parentTraceId,
       rootTraceId: args.rootTraceId,

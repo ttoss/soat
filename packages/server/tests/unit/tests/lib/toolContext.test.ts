@@ -133,7 +133,9 @@ describe('TOOL_CONTEXT_HEADER_PREFIX', () => {
   test('buildContextHeaders applies the configured prefix to every key', () => {
     process.env.TOOL_CONTEXT_HEADER_PREFIX = 'X-Naturali-Context-';
     expect(
-      buildContextHeaders({ tenantId: 't1', region: 'us-east-1' })
+      buildContextHeaders({
+        toolContext: { tenantId: 't1', region: 'us-east-1' },
+      })
     ).toEqual({
       'X-Naturali-Context-tenantId': 't1',
       'X-Naturali-Context-region': 'us-east-1',

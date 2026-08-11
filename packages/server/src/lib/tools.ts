@@ -13,6 +13,7 @@ import { makeResourceAccessor } from './resourceAccessor';
 import { assertSecretRefsExist } from './secrets';
 import { soatTools } from './soatTools';
 import { validateExecuteAuth } from './toolAuth';
+import { assertValidToolContextAllowlist } from './toolContext';
 import {
   type CallableToolDefinition,
   callResolvedTool,
@@ -81,6 +82,7 @@ export type MappedTool = {
   mcp: object | null;
   actions: string[] | null;
   denied_actions: string[] | null;
+  context_keys: string[] | null;
   preset_parameters: object | null;
   pipeline: object | null;
   output_mapping: object | null;
@@ -119,6 +121,7 @@ const mapTool = (tool: ToolRow): MappedTool => {
     mcp: tool.mcp,
     actions: tool.actions,
     denied_actions: tool.deniedActions,
+    context_keys: tool.contextKeys,
     preset_parameters: tool.presetParameters,
     pipeline: tool.pipeline,
     output_mapping: tool.outputMapping,
@@ -147,6 +150,7 @@ const buildToolConfigFields = (args: CreateToolArgs) => {
     mcp: nullify(args.mcp),
     actions: nullify(args.actions),
     deniedActions: nullify(args.deniedActions),
+    contextKeys: nullify(args.contextKeys),
     presetParameters: nullify(args.presetParameters),
     pipeline: nullify(args.pipeline),
     outputMapping: nullify(args.outputMapping),
@@ -219,6 +223,11 @@ export const validateToolDefinition = async (args: {
   }
 
   validateExecuteAuth({ execute: definition.execute });
+
+  // A `context_keys` entry is a `tool_context` key, held to the same
+  // header-name grammar (`toolContext.ts`) so an entry cannot be one that no
+  // key could ever match.
+  assertValidToolContextAllowlist(definition.contextKeys);
 
   // Reject any {{...}} token that isn't a well-formed reference — and any
   // {{context:...}} token outside a headers record — before checking whether
@@ -293,6 +302,7 @@ const buildToolUpdates = (args: {
   mcp?: object | null;
   actions?: string[] | null;
   deniedActions?: string[] | null;
+  contextKeys?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;
@@ -308,6 +318,7 @@ const buildToolUpdates = (args: {
     'mcp',
     'actions',
     'deniedActions',
+    'contextKeys',
     'presetParameters',
     'pipeline',
     'outputMapping',
@@ -330,6 +341,7 @@ type ToolUpdateArgs = {
   mcp?: object | null;
   actions?: string[] | null;
   deniedActions?: string[] | null;
+  contextKeys?: string[] | null;
   presetParameters?: object | null;
   pipeline?: object | null;
   outputMapping?: object | null;
@@ -355,6 +367,9 @@ const validateToolUpdate = async (params: {
   }
   if (args.actions !== undefined && (args.type ?? tool.type) === 'soat') {
     validateSoatActions(args.actions);
+  }
+  if (args.contextKeys !== undefined) {
+    assertValidToolContextAllowlist(args.contextKeys);
   }
   if (args.execute !== undefined || args.mcp !== undefined) {
     validateExecuteAuth({ execute: args.execute });
@@ -405,6 +420,7 @@ const toCallableTool = (tool: MappedTool): CallableToolDefinition => {
     mcp: tool.mcp,
     actions: tool.actions,
     deniedActions: tool.denied_actions,
+    contextKeys: tool.context_keys,
     presetParameters: tool.preset_parameters,
     pipeline: tool.pipeline,
     outputMapping: tool.output_mapping,

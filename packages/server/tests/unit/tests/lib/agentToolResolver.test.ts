@@ -12,11 +12,11 @@ import {
 } from 'src/lib/agentToolResolver';
 import {
   buildMcpToolExecute,
-  buildSoatRequestBody,
   executeSoatTool,
   resolveMcpTools,
   resolveSoatTools,
 } from 'src/lib/agentToolResolverExternalTools';
+import { buildSoatRequestBody } from 'src/lib/agentToolResolverSoatBody';
 import { withCallTimeout } from 'src/lib/inProcessApi';
 import { soatTools } from 'src/lib/soatTools';
 import {
@@ -423,6 +423,7 @@ describe('resolveAgentTools', () => {
       name: string;
       port: number | undefined;
       headers: Record<string, string>;
+      contextKeys?: string[];
     }) => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -436,6 +437,7 @@ describe('resolveAgentTools', () => {
             method: 'POST',
             headers: args.headers,
           },
+          ...(args.contextKeys ? { context_keys: args.contextKeys } : {}),
         });
       expect(res.status).toBe(201);
       return res.body.id as string;
@@ -662,6 +664,147 @@ describe('resolveAgentTools', () => {
       } finally {
         await srv.close();
       }
+    });
+
+    // #945 item 3: which keys egress to THIS tool. Asserted against a live
+    // endpoint because the only thing that matters is what arrived on the wire.
+    describe('context_keys allowlist', () => {
+      test('forwards every key when the tool declares no allowlist', async () => {
+        const srv = await startHeaderCaptureServer();
+        try {
+          const toolId = await createHeaderTool({
+            name: 'ctxAllowAllTool',
+            port: srv.port,
+            headers: { 'X-Static': 'v' },
+          });
+
+          await callTool({
+            toolId,
+            toolName: 'ctxAllowAllTool',
+            toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+          });
+
+          const headers = srv.requests[0]!;
+          expect(headers['x-soat-context-ocatoken']).toBe('tok_abc');
+          expect(headers['x-soat-context-tenant']).toBe('acme');
+        } finally {
+          await srv.close();
+        }
+      });
+
+      test('forwards only the listed keys', async () => {
+        const srv = await startHeaderCaptureServer();
+        try {
+          const toolId = await createHeaderTool({
+            name: 'ctxAllowOneTool',
+            port: srv.port,
+            headers: { 'X-Static': 'v' },
+            contextKeys: ['tenant'],
+          });
+
+          await callTool({
+            toolId,
+            toolName: 'ctxAllowOneTool',
+            toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+          });
+
+          const headers = srv.requests[0]!;
+          expect(headers['x-soat-context-tenant']).toBe('acme');
+          // The credential did not egress to a tool that never asked for it.
+          expect(headers['x-soat-context-ocatoken']).toBeUndefined();
+        } finally {
+          await srv.close();
+        }
+      });
+
+      test('an empty allowlist forwards no caller keys at all', async () => {
+        const srv = await startHeaderCaptureServer();
+        try {
+          const toolId = await createHeaderTool({
+            name: 'ctxAllowNoneTool',
+            port: srv.port,
+            headers: { 'X-Static': 'v' },
+            contextKeys: [],
+          });
+
+          await callTool({
+            toolId,
+            toolName: 'ctxAllowNoneTool',
+            toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+          });
+
+          const headers = srv.requests[0]!;
+          expect(headers['x-soat-context-tenant']).toBeUndefined();
+          expect(headers['x-soat-context-ocatoken']).toBeUndefined();
+          expect(headers['x-static']).toBe('v');
+        } finally {
+          await srv.close();
+        }
+      });
+
+      // The server-pinned identity keys are how a downstream tool knows who it
+      // is acting for. They are not caller data and are never filtered out.
+      test('always forwards the server-pinned identity keys', async () => {
+        const srv = await startHeaderCaptureServer();
+        try {
+          const toolId = await createHeaderTool({
+            name: 'ctxIdentityTool',
+            port: srv.port,
+            headers: { 'X-Static': 'v' },
+            contextKeys: ['tenant'],
+          });
+
+          await callTool({
+            toolId,
+            toolName: 'ctxIdentityTool',
+            toolContext: {
+              tenant: 'acme',
+              ocaToken: 'tok_abc',
+              sessionId: 'ses_1',
+              actorId: 'act_1',
+              actorExternalId: 'ext_1',
+            },
+          });
+
+          const headers = srv.requests[0]!;
+          expect(headers['x-soat-context-sessionid']).toBe('ses_1');
+          expect(headers['x-soat-context-actorid']).toBe('act_1');
+          expect(headers['x-soat-context-actorexternalid']).toBe('ext_1');
+          expect(headers['x-soat-context-ocatoken']).toBeUndefined();
+        } finally {
+          await srv.close();
+        }
+      });
+
+      // A `{{context:...}}` key is not "forwarded" at all — it is substituted
+      // into a header the tool itself declared, so the tool has already
+      // consented to receiving it. Filtering must not break that.
+      test('still substitutes a {{context:...}} key that the allowlist omits', async () => {
+        const srv = await startHeaderCaptureServer();
+        try {
+          const toolId = await createHeaderTool({
+            name: 'ctxTemplateBeatsFilterTool',
+            port: srv.port,
+            headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+            contextKeys: ['tenant'],
+          });
+
+          await callTool({
+            toolId,
+            toolName: 'ctxTemplateBeatsFilterTool',
+            toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+          });
+
+          const headers = srv.requests[0]!;
+          expect(headers['authorization']).toBe('Bearer tok_abc');
+          // ...but it is still absent as a prefixed header, since the allowlist
+          // governs forwarding and the template governs substitution.
+          expect(headers['x-soat-context-ocatoken']).toBeUndefined();
+          expect(headers['x-soat-context-tenant']).toBe('acme');
+        } finally {
+          await srv.close();
+        }
+      });
     });
   });
 
@@ -1165,17 +1308,19 @@ describe('HttpToolError', () => {
 
 describe('buildContextHeaders', () => {
   test('returns empty object when toolContext is undefined', () => {
-    expect(buildContextHeaders(undefined)).toEqual({});
+    expect(buildContextHeaders({ toolContext: undefined })).toEqual({});
   });
 
-  test('returns empty object when called with no arguments', () => {
-    expect(buildContextHeaders()).toEqual({});
+  test('returns empty object for an empty args object', () => {
+    expect(buildContextHeaders({})).toEqual({});
   });
 
   test('prefixes toolContext keys with X-Soat-Context- and nothing else', () => {
     const result = buildContextHeaders({
-      environment: 'production',
-      tenantId: 'abc-123',
+      toolContext: {
+        environment: 'production',
+        tenantId: 'abc-123',
+      },
     });
 
     expect(result).toEqual({
@@ -1185,22 +1330,105 @@ describe('buildContextHeaders', () => {
   });
 
   test('preserves header values unchanged', () => {
-    const result = buildContextHeaders({ region: 'us-east-1' });
+    const result = buildContextHeaders({
+      toolContext: { region: 'us-east-1' },
+    });
 
     expect(result['X-Soat-Context-region']).toBe('us-east-1');
   });
 
   test('handles multiple context entries', () => {
     const result = buildContextHeaders({
-      a: '1',
-      b: '2',
-      c: '3',
+      toolContext: {
+        a: '1',
+        b: '2',
+        c: '3',
+      },
     });
 
     expect(Object.keys(result)).toHaveLength(3);
     expect(result['X-Soat-Context-a']).toBe('1');
     expect(result['X-Soat-Context-b']).toBe('2');
     expect(result['X-Soat-Context-c']).toBe('3');
+  });
+
+  // #945 item 3 — `contextKeys` is the per-tool allowlist. `undefined`/`null`
+  // means "forward all", which is what every tool created before it existed has.
+  test('forwards everything when contextKeys is null or undefined', () => {
+    const toolContext = { a: '1', b: '2' };
+
+    expect(buildContextHeaders({ toolContext, contextKeys: null })).toEqual({
+      'X-Soat-Context-a': '1',
+      'X-Soat-Context-b': '2',
+    });
+    expect(
+      buildContextHeaders({ toolContext, contextKeys: undefined })
+    ).toEqual({
+      'X-Soat-Context-a': '1',
+      'X-Soat-Context-b': '2',
+    });
+  });
+
+  test('forwards only listed keys when contextKeys is set', () => {
+    expect(
+      buildContextHeaders({
+        toolContext: { a: '1', b: '2', c: '3' },
+        contextKeys: ['a', 'c'],
+      })
+    ).toEqual({
+      'X-Soat-Context-a': '1',
+      'X-Soat-Context-c': '3',
+    });
+  });
+
+  test('an empty contextKeys list forwards nothing', () => {
+    expect(
+      buildContextHeaders({
+        toolContext: { a: '1', b: '2' },
+        contextKeys: [],
+      })
+    ).toEqual({});
+  });
+
+  // A key names a header, and header names are case-insensitive (RFC 9110
+  // §5.1) — `assertValidToolContextKeys` already refuses two keys that differ
+  // only in case for that reason. So an allowlist entry matches the key it
+  // names regardless of case; anything else would let the same header be both
+  // allowed and denied depending on how it was typed.
+  test('matches allowlist entries case-insensitively', () => {
+    expect(
+      buildContextHeaders({
+        toolContext: { ocaToken: 'tok', tenant: 'acme' },
+        contextKeys: ['OCATOKEN'],
+      })
+    ).toEqual({ 'X-Soat-Context-ocaToken': 'tok' });
+  });
+
+  test('a listed key that the bag does not carry adds no header', () => {
+    expect(
+      buildContextHeaders({
+        toolContext: { a: '1' },
+        contextKeys: ['a', 'absent'],
+      })
+    ).toEqual({ 'X-Soat-Context-a': '1' });
+  });
+
+  test('always forwards the server-pinned identity keys', () => {
+    expect(
+      buildContextHeaders({
+        toolContext: {
+          sessionId: 'ses_1',
+          actorId: 'act_1',
+          actorExternalId: 'ext_1',
+          ocaToken: 'tok',
+        },
+        contextKeys: [],
+      })
+    ).toEqual({
+      'X-Soat-Context-sessionId': 'ses_1',
+      'X-Soat-Context-actorId': 'act_1',
+      'X-Soat-Context-actorExternalId': 'ext_1',
+    });
   });
 
   // The key is caller-owned and reaches the header name untouched: no
@@ -1210,11 +1438,13 @@ describe('buildContextHeaders', () => {
   test('uses the key verbatim, transforming no character', () => {
     expect(
       buildContextHeaders({
-        actor_external_id: 'snake',
-        'actor-external-id': 'kebab',
-        actorExternalId: 'camel',
-        ActorExternalId: 'pascal',
-        'actor.external.id': 'dotted',
+        toolContext: {
+          actor_external_id: 'snake',
+          'actor-external-id': 'kebab',
+          actorExternalId: 'camel',
+          ActorExternalId: 'pascal',
+          'actor.external.id': 'dotted',
+        },
       })
     ).toEqual({
       'X-Soat-Context-actor_external_id': 'snake',
@@ -1234,7 +1464,9 @@ describe('buildContextHeaders', () => {
     ['ENV', 'X-Soat-Context-ENV'],
     ['sessionId', 'X-Soat-Context-sessionId'],
   ])('key %s maps to %s', (key, header) => {
-    expect(buildContextHeaders({ [key]: 'v' })).toEqual({ [header]: 'v' });
+    expect(buildContextHeaders({ toolContext: { [key]: 'v' } })).toEqual({
+      [header]: 'v',
+    });
   });
 });
 
@@ -1357,7 +1589,7 @@ describe('assertValidToolContextKeys', () => {
     };
     assertValidToolContextKeys(context);
     expect(() => {
-      return new Headers(buildContextHeaders(context));
+      return new Headers(buildContextHeaders({ toolContext: context }));
     }).not.toThrow();
   });
 });
@@ -2313,6 +2545,39 @@ describe('buildSoatRequestBody - trace field injection scoping (issue #371)', ()
       parent_trace_id: 'trc_123',
       root_trace_id: 'trc_123',
     });
+  });
+
+  // #945 item 3: this body is how a `soat` tool hands the bag to whatever it
+  // starts, so the tool's allowlist has to bound it here too — otherwise a
+  // credential excluded from the tool's own headers still reaches every tool of
+  // the nested generation.
+  test('filters the propagated tool_context through the tool context_keys', () => {
+    const body = buildSoatRequestBody({
+      def: soatDef('create-agent-generation'),
+      rawArgs: { agent_id: 'agt_1', messages: [] },
+      toolContext: { env: 'test', ocaToken: 'tok_abc', sessionId: 'ses_1' },
+      contextKeys: ['env'],
+    });
+
+    expect(body).toMatchObject({
+      // The identity key survives the allowlist; the credential does not.
+      tool_context: { env: 'test', sessionId: 'ses_1' },
+    });
+    expect(body).toHaveProperty('tool_context');
+    expect(
+      (body as { tool_context: Record<string, string> }).tool_context
+    ).not.toHaveProperty('ocaToken');
+  });
+
+  test('omits tool_context entirely when the allowlist leaves nothing', () => {
+    const body = buildSoatRequestBody({
+      def: soatDef('create-agent-generation'),
+      rawArgs: { agent_id: 'agt_1', messages: [] },
+      toolContext: { ocaToken: 'tok_abc' },
+      contextKeys: [],
+    });
+
+    expect(body).not.toHaveProperty('tool_context');
   });
 });
 

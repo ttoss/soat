@@ -898,6 +898,18 @@ components:
             Applied after `actions` and taking precedence over it — the
             ergonomic way to scope a read+write MCP server read-only by denying
             just the write tools. `null` denies nothing.
+        context_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Optional allowlist of `tool_context` keys forwarded to this tool as
+            prefixed context headers. `null` or omitted forwards every key;
+            `[]` forwards none. The server-pinned identity keys (`sessionId`,
+            `actorId`, `actorExternalId`) are always forwarded, and a key
+            consumed by a `{{context:<key>}}` token in this tool's own headers
+            is substituted regardless of this list.
         preset_parameters:
           type: object
           nullable: true

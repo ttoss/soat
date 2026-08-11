@@ -620,6 +620,23 @@ components:
             of enumerating every read tool in `actions`. Names not listed are
             exposed. `null` (default) denies nothing. Ignored for other tool
             types.
+        context_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Optional allowlist of `tool_context` keys that may be forwarded to
+            this tool as prefixed context headers (`X-Soat-Context-<key>` by
+            default). When `null`, every key in the caller's
+            `tool_context` is forwarded — the behavior of every tool created
+            before this field existed. When set, only the listed keys are, so a
+            per-user credential in `tool_context` can be confined to the tools
+            that need it; `[]` forwards none. The server-pinned identity keys
+            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            A key consumed by a `{{context:<key>}}` token in this tool's own
+            headers is substituted regardless of this list — the tool declared
+            that header itself.
         preset_parameters:
           type: object
           nullable: true
@@ -770,6 +787,23 @@ components:
             scope a read+write MCP server read-only by denying just the write
             tools. Omit or set `null` to deny nothing. Ignored for other tool
             types.
+        context_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Optional allowlist of `tool_context` keys that may be forwarded to
+            this tool as prefixed context headers (`X-Soat-Context-<key>` by
+            default). When `null` or omitted, every key in the caller's
+            `tool_context` is forwarded — the behavior of every tool created
+            before this field existed. When set, only the listed keys are, so a
+            per-user credential in `tool_context` can be confined to the tools
+            that need it; `[]` forwards none. The server-pinned identity keys
+            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            A key consumed by a `{{context:<key>}}` token in this tool's own
+            headers is substituted regardless of this list — the tool declared
+            that header itself.
         preset_parameters:
           type: object
           description: >-
@@ -891,6 +925,23 @@ components:
             Applied after `actions` and taking precedence over it. Use it to
             scope a read+write MCP server read-only by denying just the write
             tools. `null` denies nothing. Ignored for other tool types.
+        context_keys:
+          type: array
+          nullable: true
+          items:
+            type: string
+          description: >-
+            Optional allowlist of `tool_context` keys that may be forwarded to
+            this tool as prefixed context headers (`X-Soat-Context-<key>` by
+            default). When `null` or omitted, every key in the caller's
+            `tool_context` is forwarded — the behavior of every tool created
+            before this field existed. When set, only the listed keys are, so a
+            per-user credential in `tool_context` can be confined to the tools
+            that need it; `[]` forwards none. The server-pinned identity keys
+            (`sessionId`, `actorId`, `actorExternalId`) are always forwarded.
+            A key consumed by a `{{context:<key>}}` token in this tool's own
+            headers is substituted regardless of this list — the tool declared
+            that header itself.
         preset_parameters:
           type: object
           nullable: true

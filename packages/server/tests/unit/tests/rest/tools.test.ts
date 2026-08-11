@@ -1675,6 +1675,140 @@ describe('Tools', () => {
     });
   });
 
+  // #945 item 3: `context_keys` bounds which `tool_context` keys egress to this
+  // tool as prefixed context headers. Absent means "forward all" — the
+  // behavior every existing tool has.
+  describe('context_keys allowlist', () => {
+    test('is accepted on create and echoed back verbatim', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+          context_keys: ['ocaToken', 'tenant'],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.context_keys).toEqual(['ocaToken', 'tenant']);
+
+      const read = await authenticatedTestClient(adminToken).get(
+        `/api/v1/tools/${res.body.id}`
+      );
+      expect(read.status).toBe(200);
+      expect(read.body.context_keys).toEqual(['ocaToken', 'tenant']);
+    });
+
+    test('defaults to null when omitted', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-absent-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.context_keys).toBeNull();
+    });
+
+    // An empty list is meaningful and distinct from `null`: forward nothing.
+    test('accepts an empty list', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-empty-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+          context_keys: [],
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.context_keys).toEqual([]);
+    });
+
+    test('can be narrowed and cleared with PATCH', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-patch-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+          context_keys: ['ocaToken', 'tenant'],
+        });
+      expect(created.status).toBe(201);
+
+      const narrowed = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${created.body.id}`)
+        .send({ context_keys: ['tenant'] });
+      expect(narrowed.status).toBe(200);
+      expect(narrowed.body.context_keys).toEqual(['tenant']);
+
+      const cleared = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${created.body.id}`)
+        .send({ context_keys: null });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.context_keys).toBeNull();
+    });
+
+    // A `context_keys` entry IS a `tool_context` key, so it has to survive the
+    // trip to a header name — the same grammar the key check and the
+    // `{{context:...}}` token grammar read.
+    test('rejects an entry outside the header-name grammar on create', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-invalid-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+          context_keys: ['ocaToken', 'oca Token'],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+      expect(res.body.error.message).toMatch(/oca Token/);
+    });
+
+    test('rejects an entry outside the header-name grammar on update', async () => {
+      const created = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-invalid-patch-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+        });
+      expect(created.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${created.body.id}`)
+        .send({ context_keys: ['bad(key)'] });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+
+    test('rejects a non-string entry', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'ctx-keys-nonstring-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/do' },
+          context_keys: ['ocaToken', 42],
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+    });
+  });
+
   describe('Tool call validation and MCP calling', () => {
     let mcpServer: http.Server;
     let mcpServerUrl: string;
