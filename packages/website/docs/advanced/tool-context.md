@@ -34,7 +34,7 @@ When a generation pauses with `status: "requires_action"`, the `tool_context` fr
 
 ## Key → header name
 
-The header name is `X-Soat-Context-` followed by your key, **verbatim**. No character is re-cased and no separator is collapsed:
+The header name is the context prefix — `X-Soat-Context-` unless your deployment [configures another one](#configuring-the-header-prefix) — followed by your key, **verbatim**. No character is re-cased and no separator is collapsed:
 
 | `tool_context` key | Forwarded header |
 | --- | --- |
@@ -105,6 +105,28 @@ A key becomes an HTTP header name, so it must be a valid one. A request whose `t
 2. **No collisions** — two keys must not map to the same header field. Because header names are case-insensitive, `userId` and `UserId` produce two different header strings that HTTP folds into one, and one value would be silently dropped. (`meta.header` names the colliding header; `meta.keys` lists both keys.)
 
 There is no length or total-header-bytes limit enforced by SOAT; the receiving server's own header limits apply.
+
+## Configuring the header prefix
+
+The prefix is deployment configuration, not part of the request. A self-hosted deployment sets `TOOL_CONTEXT_HEADER_PREFIX` to replace `X-Soat-Context-` on every context header it emits — the case for it is white-labeling: a platform fronting SOAT under its own name should not send that name to the third-party tool endpoints its agents call.
+
+```bash
+TOOL_CONTEXT_HEADER_PREFIX=X-Acme-Context-
+```
+
+| `tool_context` key | Forwarded header |
+| --- | --- |
+| `userId` | `X-Acme-Context-userId` |
+| `actor_external_id` | `X-Acme-Context-actor_external_id` |
+
+Everything else is unchanged: the prefix is prepended verbatim (include the trailing `-` yourself), the key is still never re-cased, the [auto-populated keys](#auto-populated-keys-sessions) still take the same names after the prefix, and the [validation rules](#validation) above are evaluated against the configured prefix.
+
+Two constraints:
+
+- **The value must be a valid HTTP header-name prefix** — letters, digits and ``!#$%&'*+-.^_`|~``. An invalid prefix fails the tool call with an error naming the variable, rather than surfacing as an opaque `fetch` failure mid-generation.
+- **The prefix cannot be removed.** An empty or unset value keeps the default. Without a prefix, a caller-supplied `tool_context` key could name any header at all — `Authorization` included — and override a credential the tool definition configured.
+
+Changing the prefix on a running deployment breaks every tool endpoint already reading the old header names, third-party endpoints included. Set it before wiring up tools, or migrate both sides together.
 
 ## Security
 

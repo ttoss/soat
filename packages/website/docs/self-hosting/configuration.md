@@ -170,11 +170,16 @@ Mount a persistent volume to this path in Docker to prevent data loss between co
 
 ### Agent Generation
 
-| Variable                    | Default  | Description                                                                                     |
-| --------------------------- | -------- | ----------------------------------------------------------------------------------------------- |
-| `SOAT_TOOL_CALL_TIMEOUT_MS` | `300000` | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
+| Variable                     | Default           | Description                                                                                     |
+| ---------------------------- | ----------------- | ----------------------------------------------------------------------------------------------- |
+| `SOAT_TOOL_CALL_TIMEOUT_MS`  | `300000`          | Maximum time in milliseconds to wait for a single external tool call (MCP, SOAT, or HTTP tools) |
+| `TOOL_CONTEXT_HEADER_PREFIX` | `X-Soat-Context-` | Prefix prepended to every `tool_context` key to form the outbound request header name            |
 
 If an external tool server does not respond within this window, the call is aborted and the generation fails with an error. The default is 5 minutes. Set a lower value to fail fast in latency-sensitive environments.
+
+`TOOL_CONTEXT_HEADER_PREFIX` renames the [context headers](../advanced/tool-context.md#configuring-the-header-prefix) a deployment emits — useful when you front SOAT under your own product name and do not want that name reaching third-party tool providers. The prefix is prepended verbatim, so include the trailing `-` if you want one (`X-Acme-Context-` + `userId` → `X-Acme-Context-userId`). It must be a valid HTTP header-name prefix (letters, digits and ``!#$%&'*+-.^_`|~``); an invalid value fails the tool call with an error naming the variable. An empty or unset value keeps the default — the prefix cannot be removed, since an unprefixed key could otherwise land on a header like `Authorization`.
+
+Changing it is a **breaking change for every tool endpoint that already reads these headers**, including third-party endpoints you do not control. Set it before wiring up tools, or update both sides together.
 
 ### Embeddings
 
