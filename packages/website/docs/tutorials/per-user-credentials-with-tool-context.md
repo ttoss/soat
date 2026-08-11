@@ -1,0 +1,781 @@
+---
+description: 'Hand a per-user credential to an orchestration run with tool_context, land it as a real Authorization header with a {{context:...}} token, and confine it to one tool with context_keys.'
+keywords:
+  - tool context
+  - per-user credentials
+  - orchestration run
+  - Authorization header
+  - context_keys
+  - credential containment
+sidebar_position: 21
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Pass Per-User Credentials to Tools with Tool Context
+
+A scheduled or orchestrated flow often acts *on behalf of a user*: a cron starts a run for Alice, and the tools the run's agents call must authenticate as Alice — not as the platform. [`tool_context`](/docs/advanced/tool-context) is the channel for that: a flat key/value bag attached to the run, forwarded as request headers on every tool call the run's agents make.
+
+You will build the whole path and watch every guarantee that makes it safe:
+
+1. Create an `http` tool whose `Authorization` header is a [`{{context:userToken}}`](/docs/advanced/expressions-and-templating#context-references-context) token — the **tool** declares the header shape, the **caller** only supplies the value.
+2. Confine the credential with [`context_keys`](/docs/modules/tools#scoping-which-context-keys-reach-a-tool), so the raw token is never forwarded as a context header.
+3. Start an [orchestration run](/docs/modules/orchestrations#run-tool-context) with a `tool_context`, watch the run **pause at a human node** and resume — the bag is stored on the run, so it survives the pause with no request to travel in.
+4. Inspect the exact headers that reached the endpoint: the real bearer header, the allowlisted context key, and the **absence** of the raw token header.
+5. See the fail-closed path: a run started **without** the key fails the tool call with `MISSING_TOOL_CONTEXT_KEY` instead of sending an empty `Authorization: Bearer `.
+
+The tool endpoint is a header-echo listener you run locally, so the tutorial needs no external services. One small local model call is involved (the agent that makes the tool call), served by Ollama.
+
+## Prerequisites
+
+- SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
+- New to SOAT? Read [Key Concepts](/docs/getting-started/concepts) to understand projects, agents, tools, and runs first.
+- CLI installed and configured, or SDK set up. See [CLI](/docs/cli) or [SDK](/docs/sdk).
+- [Ollama](https://ollama.com) reachable by the server with the `qwen2.5:0.5b` model pulled, as in the [orchestration tutorial](/docs/tutorials/orchestrate-a-sonnet).
+- Server is at `http://localhost:5047`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+export SOAT_BASE_URL=http://localhost:5047
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { SoatClient } from '@soat/sdk';
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+export SOAT_BASE_URL=http://localhost:5047
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 1 — Log in as admin
+
+Admin is the built-in superuser role. See [Users](/docs/modules/users#examples) for authentication details.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+ADMIN_TOKEN=$(soat login-user --username admin --password Admin1234! | jq -r '.token')
+export SOAT_TOKEN=$ADMIN_TOKEN
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const soat = new SoatClient({ baseUrl: 'http://localhost:5047' });
+
+const { data: login } = await soat.users.loginUser({
+  body: { username: 'admin', password: 'Admin1234!' },
+});
+
+const adminSoat = new SoatClient({
+  baseUrl: 'http://localhost:5047',
+  token: login.token,
+});
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+ADMIN_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "admin", "password": "Admin1234!"}' | jq -r '.token')
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 2 — Create a project
+
+Everything in this tutorial lives inside one [project](/docs/modules/projects).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+PROJECT_ID=$(soat create-project --name "tool-context-tutorial" | jq -r '.id')
+echo "PROJECT_ID: $PROJECT_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: project } = await adminSoat.projects.createProject({
+  body: { name: 'tool-context-tutorial' },
+});
+const PROJECT_ID = project.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "tool-context-tutorial"}' | jq -r '.id')
+echo "PROJECT_ID: $PROJECT_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 3 — Create an AI provider
+
+Set up a local [AI provider](/docs/modules/ai-providers#examples) backed by Ollama, so the tutorial runs without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+AI_PROVIDER_ID=$(soat create-ai-provider \
+  --project-id "$PROJECT_ID" \
+  --name "Local Ollama" \
+  --provider "ollama" \
+  --default-model "qwen2.5:0.5b" | jq -r '.id')
+echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: aiProvider } = await adminSoat.aiProviders.createAiProvider({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'Local Ollama',
+    provider: 'ollama',
+    default_model: 'qwen2.5:0.5b',
+  },
+});
+const AI_PROVIDER_ID = aiProvider.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/ai-providers" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Local Ollama\",\"provider\":\"ollama\",\"default_model\":\"qwen2.5:0.5b\"}" \
+  | jq -r '.id')
+echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 4 — Start a header-echo endpoint
+
+The tool needs somewhere to call, and the whole point of this tutorial is to inspect **exactly which headers arrive there**. Start a tiny local HTTP listener that writes the headers of the last request it received to `tool-echo.json`.
+
+In the automated tutorial tests, `SOAT_WEBHOOK_BASE_URL` is injected so the server container can reach this listener — the same mechanism the [webhooks tutorial](/docs/tutorials/chat-with-llm) uses. Running the SOAT server in Docker against a listener on your host? Use `http://host.docker.internal:8787` as the base instead of `localhost`.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+ECHO_URL="${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}/orders"
+
+node -e '
+const http = require("http");
+const fs = require("fs");
+http
+  .createServer((req, res) => {
+    fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ recorded: true }));
+  })
+  .listen(8787);
+' > /dev/null 2>&1 &
+ECHO_PID=$!
+echo "Echo listener PID: $ECHO_PID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { createServer } from 'node:http';
+import { writeFileSync } from 'node:fs';
+
+const ECHO_URL = `${process.env.SOAT_WEBHOOK_BASE_URL ?? 'http://localhost:8787'}/orders`;
+
+createServer((req, res) => {
+  writeFileSync('tool-echo.json', JSON.stringify({ headers: req.headers }));
+  res.setHeader('Content-Type', 'application/json');
+  res.end(JSON.stringify({ recorded: true }));
+}).listen(8787);
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+ECHO_URL="${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}/orders"
+
+node -e '
+const http = require("http");
+const fs = require("fs");
+http
+  .createServer((req, res) => {
+    fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    res.setHeader("Content-Type", "application/json");
+    res.end(JSON.stringify({ recorded: true }));
+  })
+  .listen(8787);
+' > /dev/null 2>&1 &
+ECHO_PID=$!
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 5 — Create the tool: a `{{context:...}}` header plus a `context_keys` allowlist
+
+This one [tool definition](/docs/modules/tools#examples) carries both halves of the credential story:
+
+- **`Authorization: Bearer {{context:userToken}}`** — a [context reference](/docs/advanced/expressions-and-templating#context-references-context). At call time the server substitutes the `userToken` key of the run's `tool_context` into this header. The tool knows the header shape its endpoint expects; the caller never has to.
+- **`context_keys: ["tenant"]`** — the [containment allowlist](/docs/modules/tools#scoping-which-context-keys-reach-a-tool). Only `tenant` is forwarded as a prefixed `X-Soat-Context-*` header. In particular, the **raw `userToken` context header is not sent** — the credential reaches this endpoint only inside the header the tool declared, and reaches no other tool at all.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+ORDER_TOOL_ID=$(soat create-tool \
+  --project-id "$PROJECT_ID" \
+  --name "record_order" \
+  --type "http" \
+  --description "Records an order for the signed-in user" \
+  --parameters '{"type":"object","properties":{"note":{"type":"string","description":"Free-text note for the order"}}}' \
+  --execute '{"url":"'"$ECHO_URL"'","method":"POST","headers":{"Authorization":"Bearer {{context:userToken}}"}}' \
+  --context-keys '["tenant"]' | jq -r '.id')
+echo "ORDER_TOOL_ID: $ORDER_TOOL_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: orderTool } = await adminSoat.tools.createTool({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'record_order',
+    type: 'http',
+    description: 'Records an order for the signed-in user',
+    parameters: {
+      type: 'object',
+      properties: {
+        note: { type: 'string', description: 'Free-text note for the order' },
+      },
+    },
+    execute: {
+      url: ECHO_URL,
+      method: 'POST',
+      headers: { Authorization: 'Bearer {{context:userToken}}' },
+    },
+    context_keys: ['tenant'],
+  },
+});
+const ORDER_TOOL_ID = orderTool.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+ORDER_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/tools" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"record_order\",\"type\":\"http\",\"description\":\"Records an order for the signed-in user\",\"parameters\":{\"type\":\"object\",\"properties\":{\"note\":{\"type\":\"string\",\"description\":\"Free-text note for the order\"}}},\"execute\":{\"url\":\"$ECHO_URL\",\"method\":\"POST\",\"headers\":{\"Authorization\":\"Bearer {{context:userToken}}\"}},\"context_keys\":[\"tenant\"]}" \
+  | jq -r '.id')
+echo "ORDER_TOOL_ID: $ORDER_TOOL_ID"
+```
+
+</TabItem>
+</Tabs>
+
+The token is resolved at the point of use, never at rest: reading the tool back returns the literal template, exactly like a [`{{secret:...}}`](/docs/advanced/expressions-and-templating) reference.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat get-tool --tool-id "$ORDER_TOOL_ID" | jq -e '.execute.headers.Authorization == "Bearer {{context:userToken}}"'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: readBack } = await adminSoat.tools.getTool({
+  path: { tool_id: ORDER_TOOL_ID },
+});
+console.log(readBack.execute?.headers?.Authorization);
+// "Bearer {{context:userToken}}" — the template, never a resolved value
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s "$SOAT_BASE_URL/api/v1/tools/$ORDER_TOOL_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  | jq -e '.execute.headers.Authorization == "Bearer {{context:userToken}}"'
+```
+
+</TabItem>
+</Tabs>
+
+:::note[Why not put the token in `tool_context` under the key `Authorization`?]
+
+It would not work, on purpose. A `tool_context` key always lands under the deployment's context prefix (`X-Soat-Context-` by default) — a caller-supplied key can never name a standard header, because then it could overwrite a credential the tool definition configured. The `{{context:...}}` token keeps the authority split: the tool declares the header, the caller supplies only the value. See [Placing a value in a real header](/docs/advanced/tool-context#placing-a-value-in-a-real-header).
+
+:::
+
+---
+
+## Step 6 — Create the agent
+
+A small agent that carries the tool. `tool_choice` forces the first model call to invoke `record_order`, so the tool call — the thing this tutorial asserts on — does not depend on what a small local model feels like doing. See [client tools](/docs/tutorials/client-tools#step-5--create-the-agent) for the forcing semantics.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+AGENT_ID=$(soat create-agent \
+  --project-id "$PROJECT_ID" \
+  --ai-provider-id "$AI_PROVIDER_ID" \
+  --name "Order Clerk" \
+  --instructions "You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions." \
+  --tool-ids "[\"$ORDER_TOOL_ID\"]" \
+  --tool-choice '{"type":"tool","tool_name":"record_order"}' \
+  --max-steps 3 | jq -r '.id')
+echo "AGENT_ID: $AGENT_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: agent } = await adminSoat.agents.createAgent({
+  body: {
+    project_id: PROJECT_ID,
+    ai_provider_id: AI_PROVIDER_ID,
+    name: 'Order Clerk',
+    instructions:
+      'You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.',
+    tool_ids: [ORDER_TOOL_ID],
+    tool_choice: { type: 'tool', tool_name: 'record_order' },
+    max_steps: 3,
+  },
+});
+const AGENT_ID = agent.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Order Clerk\",\"instructions\":\"You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.\",\"tool_ids\":[\"$ORDER_TOOL_ID\"],\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"record_order\"},\"max_steps\":3}" \
+  | jq -r '.id')
+echo "AGENT_ID: $AGENT_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 7 — Create the orchestration: a pause before the tool call
+
+Two nodes: a [`human` node](/docs/modules/orchestrations#human-nodes) that parks the run, then the `agent` node that makes the tool call. The pause is the point — a paused run has **no request in flight** that could carry a `tool_context`, so the run resuming with the bag intact proves it is stored on the run itself, exactly as [Run Tool Context](/docs/modules/orchestrations#run-tool-context) promises for `awaiting_input`, `sleeping`, worker redrives, and child runs alike.
+
+Note what is *not* here: the token appears nowhere in the graph — not in a node, not in an `input_mapping`. The graph is reusable for every user; the credential arrives per run.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+ORCHESTRATION_ID=$(soat create-orchestration \
+  --project-id "$PROJECT_ID" \
+  --name "Record Order For User" \
+  --nodes '[
+    {"id":"confirm","type":"human","prompt":"Proceed with recording the order?","options":["proceed","cancel"]},
+    {"id":"record","type":"agent","agent_id":"'"$AGENT_ID"'","prompt":"Record order #1234 for the signed-in user."}
+  ]' \
+  --edges '[{"from":"confirm","to":"record"}]' | jq -r '.id')
+echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: orchestration } = await adminSoat.orchestrations.createOrchestration({
+  body: {
+    project_id: PROJECT_ID,
+    name: 'Record Order For User',
+    nodes: [
+      {
+        id: 'confirm',
+        type: 'human',
+        prompt: 'Proceed with recording the order?',
+        options: ['proceed', 'cancel'],
+      },
+      {
+        id: 'record',
+        type: 'agent',
+        agent_id: AGENT_ID,
+        prompt: 'Record order #1234 for the signed-in user.',
+      },
+    ],
+    edges: [{ from: 'confirm', to: 'record' }],
+  },
+});
+const ORCHESTRATION_ID = orchestration.id;
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+ORCHESTRATION_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestrations" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"name\":\"Record Order For User\",\"nodes\":[{\"id\":\"confirm\",\"type\":\"human\",\"prompt\":\"Proceed with recording the order?\",\"options\":[\"proceed\",\"cancel\"]},{\"id\":\"record\",\"type\":\"agent\",\"agent_id\":\"$AGENT_ID\",\"prompt\":\"Record order #1234 for the signed-in user.\"}],\"edges\":[{\"from\":\"confirm\",\"to\":\"record\"}]}" \
+  | jq -r '.id')
+echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 8 — Start the run with the user's credential
+
+This is the caller's whole job: pass `tool_context` when starting the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). In production this caller is a cron, a webhook handler, or a backend acting for a signed-in user — whoever holds the per-user token. With `--wait`, the call returns as soon as the run parks at the `confirm` node.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+RUN=$(soat start-orchestration-run \
+  --orchestration-id "$ORCHESTRATION_ID" \
+  --input '{}' \
+  --tool-context '{"userToken":"alice-token-123","tenant":"acme"}' \
+  --wait)
+
+RUN_ID=$(printf '%s' "$RUN" | jq -r '.id')
+printf '%s\n' "$RUN" | jq '{status, required_action}'
+printf '%s' "$RUN" | jq -e '.status == "awaiting_input"'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: run } = await adminSoat.orchestrations.startOrchestrationRun({
+  body: {
+    orchestration_id: ORCHESTRATION_ID,
+    input: {},
+    tool_context: { userToken: 'alice-token-123', tenant: 'acme' },
+    wait: true,
+  },
+});
+const RUN_ID = run.id;
+console.log(run.status); // "awaiting_input"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+RUN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"orchestration_id\":\"$ORCHESTRATION_ID\",\"input\":{},\"tool_context\":{\"userToken\":\"alice-token-123\",\"tenant\":\"acme\"},\"wait\":true}")
+
+RUN_ID=$(printf '%s' "$RUN" | jq -r '.id')
+printf '%s\n' "$RUN" | jq '{status, required_action}'
+```
+
+</TabItem>
+</Tabs>
+
+Expected output — the run is parked, holding the bag, with no generation started yet:
+
+```json
+{
+  "status": "awaiting_input",
+  "required_action": {
+    "type": "human_input",
+    "node_id": "confirm",
+    "prompt": "Proceed with recording the order?",
+    "options": ["proceed", "cancel"]
+  }
+}
+```
+
+---
+
+## Step 9 — Resume, and let the tool call happen
+
+Submit the human decision with [`submit-human-input`](/docs/modules/orchestrations#human-nodes). The resume request carries **no `tool_context` of its own** — the run re-reads the bag it stored at start. The `record` agent node then runs: the model is forced to call `record_order`, and the server builds the outbound request — substituting `{{context:userToken}}` into `Authorization` and forwarding the allowlisted `tenant` key as a context header.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+soat submit-human-input \
+  --orchestration-run-id "$RUN_ID" \
+  --node-id "confirm" \
+  --output '{"choice":"proceed"}' | jq '{status}'
+
+# → retry 120
+soat get-orchestration-run --orchestration-run-id "$RUN_ID" | jq -e '.status == "succeeded"'
+
+soat get-orchestration-run --orchestration-run-id "$RUN_ID" \
+  | jq '[.node_executions[] | {node_id, node_type, status}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+await adminSoat.orchestrations.submitHumanInput({
+  path: { orchestration_run_id: RUN_ID },
+  body: { node_id: 'confirm', output: { choice: 'proceed' } },
+});
+
+// Poll until the run settles
+let finished;
+do {
+  await new Promise((r) => setTimeout(r, 1000));
+  ({ data: finished } = await adminSoat.orchestrations.getOrchestrationRun({
+    path: { orchestration_id: ORCHESTRATION_ID, orchestration_run_id: RUN_ID },
+  }));
+} while (!['succeeded', 'failed'].includes(finished.status));
+console.log(finished.status); // "succeeded"
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID/human-input" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"node_id":"confirm","output":{"choice":"proceed"}}' | jq '{status}'
+
+curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{status}'
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## Step 10 — Inspect what actually reached the endpoint
+
+The echo listener recorded the headers of the tool call. Three assertions, one per guarantee:
+
+1. **The credential arrived in the real header** — `Authorization: Bearer alice-token-123`, substituted from the run's `tool_context` by the tool's `{{context:userToken}}` token.
+2. **The allowlisted key arrived as a context header** — `x-soat-context-tenant: acme`. (Header names arrive lowercased; [read them case-insensitively](/docs/advanced/tool-context#read-the-header-case-insensitively).)
+3. **The raw token did not** — no `x-soat-context-usertoken` header, because `context_keys: ["tenant"]` does not list it. The credential exists at this endpoint only where the tool declared it, and would not reach any other tool at all.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+jq '.headers | {authorization, "x-soat-context-tenant": .["x-soat-context-tenant"]}' tool-echo.json
+
+jq -e '.headers.authorization == "Bearer alice-token-123"' tool-echo.json
+jq -e '.headers["x-soat-context-tenant"] == "acme"' tool-echo.json
+jq -e '.headers | has("x-soat-context-usertoken") | not' tool-echo.json
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+import { readFileSync } from 'node:fs';
+
+const { headers } = JSON.parse(readFileSync('tool-echo.json', 'utf8'));
+
+console.log(headers['authorization']); // "Bearer alice-token-123"
+console.log(headers['x-soat-context-tenant']); // "acme"
+console.log('x-soat-context-usertoken' in headers); // false — contained
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+jq '.headers | {authorization, "x-soat-context-tenant": .["x-soat-context-tenant"]}' tool-echo.json
+```
+
+</TabItem>
+</Tabs>
+
+Expected output:
+
+```json
+{
+  "authorization": "Bearer alice-token-123",
+  "x-soat-context-tenant": "acme"
+}
+```
+
+:::tip[Self-hosting under your own brand?]
+
+The `X-Soat-Context-` prefix is deployment configuration: set [`TOOL_CONTEXT_HEADER_PREFIX`](/docs/advanced/tool-context#configuring-the-header-prefix) (e.g. `X-Acme-Context-`) and every context header is emitted under your name instead. The `{{context:...}}` mechanism is unaffected — it never uses the prefix.
+
+:::
+
+---
+
+## Step 11 — The fail-closed path: a run without the key
+
+Start the same orchestration **without** a `tool_context`. When the agent node reaches the tool call, substitution has no `userToken` to resolve — and the call fails with `MISSING_TOOL_CONTEXT_KEY`, naming the key and header, instead of sending `Authorization: Bearer ` with no value to the endpoint (which would come back as an opaque upstream `401`, several steps from the actual mistake).
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+BARE_RUN=$(soat start-orchestration-run \
+  --orchestration-id "$ORCHESTRATION_ID" \
+  --input '{}' \
+  --wait)
+BARE_RUN_ID=$(printf '%s' "$BARE_RUN" | jq -r '.id')
+
+soat submit-human-input \
+  --orchestration-run-id "$BARE_RUN_ID" \
+  --node-id "confirm" \
+  --output '{"choice":"proceed"}' | jq '{status}'
+
+# → retry 120
+soat get-orchestration-run --orchestration-run-id "$BARE_RUN_ID" | jq -e '.status == "failed"'
+
+soat get-orchestration-run --orchestration-run-id "$BARE_RUN_ID" \
+  | jq '[.node_executions[] | select(.status == "failed") | {node_id, error}]'
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+const { data: bareRun } = await adminSoat.orchestrations.startOrchestrationRun({
+  body: { orchestration_id: ORCHESTRATION_ID, input: {}, wait: true },
+});
+
+await adminSoat.orchestrations.submitHumanInput({
+  path: { orchestration_run_id: bareRun.id },
+  body: { node_id: 'confirm', output: { choice: 'proceed' } },
+});
+
+// Poll as in Step 9 — the run ends "failed", and the failed node's
+// error names MISSING_TOOL_CONTEXT_KEY, the key, and the header.
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+BARE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{\"orchestration_id\":\"$ORCHESTRATION_ID\",\"input\":{},\"wait\":true}" | jq -r '.id')
+
+curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs/$BARE_RUN_ID/human-input" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"node_id":"confirm","output":{"choice":"proceed"}}' | jq '{status}'
+```
+
+</TabItem>
+</Tabs>
+
+The run fails loudly at the boundary where the mistake is, not downstream of it. The two calling paths that can never carry a `tool_context` — direct `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node — fail the same way for a tool that declares a `{{context:...}}` token; route such tools through an agent node, a generation, or a session (see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
+
+---
+
+## Step 12 — Clean up
+
+Stop the [Node.js](https://nodejs.org) echo listener from Step 4.
+
+<Tabs groupId="client">
+<TabItem value="cli" label="CLI" default>
+
+```bash
+# → ignore
+kill $ECHO_PID
+```
+
+</TabItem>
+<TabItem value="sdk" label="SDK">
+
+```ts
+// Close the createServer() instance from Step 4, e.g. server.close()
+```
+
+</TabItem>
+<TabItem value="curl" label="curl">
+
+```bash
+# → ignore
+kill $ECHO_PID
+```
+
+</TabItem>
+</Tabs>
+
+---
+
+## What you built
+
+| Guarantee | Where you saw it |
+| --- | --- |
+| A per-user credential rides the run, not the graph | `tool_context` on `start-orchestration-run`; the orchestration definition never mentions it |
+| The bag survives a pause with no request to travel in | Run parked `awaiting_input` at the human node, resumed, and the tool call still carried the credential |
+| The credential lands in the header the target expects | `Authorization: Bearer alice-token-123`, declared by the tool as `{{context:userToken}}` |
+| The raw credential egresses only where allowlisted | `context_keys: ["tenant"]` — `x-soat-context-tenant` arrived, `x-soat-context-usertoken` did not |
+| A missing key fails closed | Run without `tool_context` → `MISSING_TOOL_CONTEXT_KEY`, never an empty `Authorization` header |
+
+## Where to go next
+
+- [Tool Context](/docs/advanced/tool-context) — the canonical contract: key→header rule, auto-populated session identity keys, precedence, validation, and the security notes (verify the caller; mind what egresses).
+- [Expressions & Templating](/docs/advanced/expressions-and-templating) — how `{{context:...}}` and `{{secret:...}}` compose, and why substitution is single-pass.
+- [Run Tool Context](/docs/modules/orchestrations#run-tool-context) — every way a run gets driven (queued, sleeping, redriven, child runs) and why the bag survives each one.
+- [Cap spend per end user](/docs/tutorials/cap-spend-per-end-user) — sessions and actors, where the identity keys in `tool_context` are auto-populated for you.

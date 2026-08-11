@@ -54,9 +54,10 @@ services:
     environment:
       PORT: '11434'
       OLLAMA_UPSTREAM_URL: 'http://ollama:11434'
-      # Only these tools have their forcing honored deterministically — the client-tools tutorial.
-      # Every other forced tool still goes to the real model.
-      TOOL_CHOICE_TOOLS: 'get_order_status'
+      # Only these tools have their forcing honored deterministically — the
+      # client-tools tutorial (get_order_status) and the tool-context tutorial
+      # (record_order). Every other forced tool still goes to the real model.
+      TOOL_CHOICE_TOOLS: 'get_order_status,record_order'
       # Nothing bounds how many tokens qwen2.5:0.5b emits per completion (agents
       # have no max_tokens field), and no tutorial asserts generated content —
       # only structure and forward progress. Uncapped output is what makes a
