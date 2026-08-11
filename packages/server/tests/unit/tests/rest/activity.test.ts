@@ -299,6 +299,26 @@ describe('Activity', () => {
       expect(found.project_id).toBe(projectId);
     });
 
+    // `manual` above happens to default to `warning`, the same value the
+    // activity kind defaults to, so it cannot tell inheritance from the
+    // default. `run_failed` defaults to `critical`, which the entry must carry:
+    // otherwise the feed's top-level severity understates the worst thing it
+    // records, and `critical` is unreachable through any producer.
+    test('exception_created inherits the exception severity', async () => {
+      const exception = await fileException({
+        projectId: projectInternalId,
+        kind: 'run_failed',
+        title: 'activity severity inheritance test',
+      });
+      expect(exception.severity).toBe('critical');
+
+      const found = await waitForActivity((e) => {
+        return e.kind === 'exception_created' && e.ref_id === exception.id;
+      });
+      expect(found).toBeTruthy();
+      expect(found.severity).toBe('critical');
+    });
+
     test('schedule_fired is written when a schedule trigger fires', async () => {
       const orchRes = await authenticatedTestClient(userToken)
         .post('/api/v1/orchestrations')
