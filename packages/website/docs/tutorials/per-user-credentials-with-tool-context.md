@@ -23,7 +23,7 @@ You will build the whole path and watch every guarantee that makes it safe:
 2. Confine the credential with [`context_keys`](/docs/modules/tools#scoping-which-context-keys-reach-a-tool), so the raw token is never forwarded as a context header.
 3. Start an [orchestration run](/docs/modules/orchestrations#run-tool-context) with a `tool_context`, watch the run **pause at a human node** and resume — the bag is stored on the run, so it survives the pause with no request to travel in.
 4. Inspect the exact headers that reached the endpoint: the real bearer header, the allowlisted context key, and the **absence** of the raw token header.
-5. See the fail-closed path: a run started **without** the key fails the tool call with `MISSING_TOOL_CONTEXT_KEY` instead of sending an empty `Authorization: Bearer `.
+5. See the fail-closed path: a calling path that carries no context fails with `MISSING_TOOL_CONTEXT_KEY` instead of sending an empty `Authorization: Bearer `.
 
 The tool endpoint is a header-echo listener you run locally, so the tutorial needs no external services. One small local model call is involved (the agent that makes the tool call), served by Ollama.
 
@@ -193,28 +193,35 @@ echo "AI_PROVIDER_ID: $AI_PROVIDER_ID"
 
 The tool needs somewhere to call, and the whole point of this tutorial is to inspect **exactly which headers arrive there**. Start a tiny local HTTP listener that writes the headers of the last request it received to `tool-echo.json`.
 
-In the automated tutorial tests, `SOAT_WEBHOOK_BASE_URL` is injected so the server container can reach this listener — the same mechanism the [webhooks tutorial](/docs/tutorials/chat-with-llm) uses. Running the SOAT server in Docker against a listener on your host? Use `http://host.docker.internal:8787` as the base instead of `localhost`.
+In the automated tutorial tests, `SOAT_TOOL_ECHO_BASE_URL` is injected so the server container can reach this listener — the same mechanism the [webhooks tutorial](/docs/tutorials/chat-with-llm) uses for its own listener. Running the SOAT server in Docker against a listener on your host? Use `http://host.docker.internal:8788` as the base instead of `localhost`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-ECHO_URL="${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}/orders"
+ECHO_URL="${SOAT_TOOL_ECHO_BASE_URL:-http://localhost:8788}/orders"
 
 node -e '
 const http = require("http");
 const fs = require("fs");
 http
   .createServer((req, res) => {
-    fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    if (req.method === "POST") {
+      fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    }
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ recorded: true }));
+    res.end(JSON.stringify({ ok: true }));
   })
-  .listen(8787);
-' > /dev/null 2>&1 &
+  .listen(8788);
+' > echo-listener.log 2>&1 &
 ECHO_PID=$!
 echo "Echo listener PID: $ECHO_PID"
+
+# → retry 10
+node -e 'require("http").get("http://localhost:8788/health", (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on("error", () => process.exit(1))'
 ```
+
+The readiness probe is a `GET`, and the listener only records `POST` bodies — so probing never overwrites the header record the assertions in Step 10 read.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -223,32 +230,36 @@ echo "Echo listener PID: $ECHO_PID"
 import { createServer } from 'node:http';
 import { writeFileSync } from 'node:fs';
 
-const ECHO_URL = `${process.env.SOAT_WEBHOOK_BASE_URL ?? 'http://localhost:8787'}/orders`;
+const ECHO_URL = `${process.env.SOAT_TOOL_ECHO_BASE_URL ?? 'http://localhost:8788'}/orders`;
 
 createServer((req, res) => {
-  writeFileSync('tool-echo.json', JSON.stringify({ headers: req.headers }));
+  if (req.method === 'POST') {
+    writeFileSync('tool-echo.json', JSON.stringify({ headers: req.headers }));
+  }
   res.setHeader('Content-Type', 'application/json');
-  res.end(JSON.stringify({ recorded: true }));
-}).listen(8787);
+  res.end(JSON.stringify({ ok: true }));
+}).listen(8788);
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-ECHO_URL="${SOAT_WEBHOOK_BASE_URL:-http://localhost:8787}/orders"
+ECHO_URL="${SOAT_TOOL_ECHO_BASE_URL:-http://localhost:8788}/orders"
 
 node -e '
 const http = require("http");
 const fs = require("fs");
 http
   .createServer((req, res) => {
-    fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    if (req.method === "POST") {
+      fs.writeFileSync("tool-echo.json", JSON.stringify({ headers: req.headers }));
+    }
     res.setHeader("Content-Type", "application/json");
-    res.end(JSON.stringify({ recorded: true }));
+    res.end(JSON.stringify({ ok: true }));
   })
-  .listen(8787);
-' > /dev/null 2>&1 &
+  .listen(8788);
+' > echo-listener.log 2>&1 &
 ECHO_PID=$!
 ```
 
@@ -666,68 +677,51 @@ The `X-Soat-Context-` prefix is deployment configuration: set [`TOOL_CONTEXT_HEA
 
 ---
 
-## Step 11 — The fail-closed path: a run without the key
+## Step 11 — The fail-closed path: a call with no context at all
 
-Start the same orchestration **without** a `tool_context`. When the agent node reaches the tool call, substitution has no `userToken` to resolve — and the call fails with `MISSING_TOOL_CONTEXT_KEY`, naming the key and header, instead of sending `Authorization: Bearer ` with no value to the endpoint (which would come back as an opaque upstream `401`, several steps from the actual mistake).
+When substitution has no `userToken` to resolve, the tool call **fails** with `MISSING_TOOL_CONTEXT_KEY` — naming the key and the header — instead of sending `Authorization: Bearer ` with no value to the endpoint, which would come back as an opaque upstream `401` several steps from the actual mistake.
+
+The shortest way to see it is a calling path that carries no `tool_context` by construction: [`call-tool`](/docs/modules/tools#examples) invokes a tool directly, with no generation and no run behind it. An orchestration `tool` node behaves the same way, for the same reason — see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header). Both are deterministic: no model is involved.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-BARE_RUN=$(soat start-orchestration-run \
-  --orchestration-id "$ORCHESTRATION_ID" \
-  --input '{}' \
-  --wait)
-BARE_RUN_ID=$(printf '%s' "$BARE_RUN" | jq -r '.id')
-
-soat submit-human-input \
-  --orchestration-run-id "$BARE_RUN_ID" \
-  --node-id "confirm" \
-  --output '{"choice":"proceed"}' | jq '{status}'
-
-# → retry 120
-soat get-orchestration-run --orchestration-run-id "$BARE_RUN_ID" | jq -e '.status == "failed"'
-
-soat get-orchestration-run --orchestration-run-id "$BARE_RUN_ID" \
-  | jq '[.node_executions[] | select(.status == "failed") | {node_id, error}]'
+# → expect-fail
+soat call-tool --tool-id "$ORDER_TOOL_ID" --input '{"note":"direct call"}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: bareRun } = await adminSoat.orchestrations.startOrchestrationRun({
-  body: { orchestration_id: ORCHESTRATION_ID, input: {}, wait: true },
+const { error } = await adminSoat.tools.callTool({
+  path: { tool_id: ORDER_TOOL_ID },
+  body: { input: { note: 'direct call' } },
 });
-
-await adminSoat.orchestrations.submitHumanInput({
-  path: { orchestration_run_id: bareRun.id },
-  body: { node_id: 'confirm', output: { choice: 'proceed' } },
-});
-
-// Poll as in Step 9 — the run ends "failed", and the failed node's
-// error names MISSING_TOOL_CONTEXT_KEY, the key, and the header.
+console.log(error?.error?.code); // "MISSING_TOOL_CONTEXT_KEY"
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-BARE_RUN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$ORDER_TOOL_ID/call" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"orchestration_id\":\"$ORCHESTRATION_ID\",\"input\":{},\"wait\":true}" | jq -r '.id')
-
-curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs/$BARE_RUN_ID/human-input" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"node_id":"confirm","output":{"choice":"proceed"}}' | jq '{status}'
+  -d '{"input":{"note":"direct call"}}' | jq '.error.code'
 ```
 
 </TabItem>
 </Tabs>
 
-The run fails loudly at the boundary where the mistake is, not downstream of it. The two calling paths that can never carry a `tool_context` — direct `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node — fail the same way for a tool that declares a `{{context:...}}` token; route such tools through an agent node, a generation, or a session (see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
+Expected output — the call is refused before anything reaches the endpoint:
+
+```json
+"MISSING_TOOL_CONTEXT_KEY"
+```
+
+A tool that declares a `{{context:...}}` token must therefore be reached through a path that carries context: an agent generation, a session, or an orchestration `agent` node — as in Steps 8 and 9.
 
 ---
 
@@ -771,7 +765,7 @@ kill $ECHO_PID
 | The bag survives a pause with no request to travel in | Run parked `awaiting_input` at the human node, resumed, and the tool call still carried the credential |
 | The credential lands in the header the target expects | `Authorization: Bearer alice-token-123`, declared by the tool as `{{context:userToken}}` |
 | The raw credential egresses only where allowlisted | `context_keys: ["tenant"]` — `x-soat-context-tenant` arrived, `x-soat-context-usertoken` did not |
-| A missing key fails closed | Run without `tool_context` → `MISSING_TOOL_CONTEXT_KEY`, never an empty `Authorization` header |
+| A missing key fails closed | `call-tool`, which carries no context, → `MISSING_TOOL_CONTEXT_KEY`, never an empty `Authorization` header |
 
 ## Where to go next
 
