@@ -85,7 +85,12 @@ export const ERROR_CODES = {
   INVALID_TEMPLATE_TOKEN: {
     httpStatus: 400,
     description:
-      'A {{...}} double-curly token was found that is not a {{secret:sec_...}} reference. Double curly braces are reserved for secret references; use single braces ({param}) for URL path parameters.',
+      'A {{...}} double-curly token was found that is not a {{secret:sec_...}} or {{context:<key>}} reference, or a {{context:<key>}} token was found outside execute.headers / mcp.headers. Double curly braces are reserved for those two reference kinds; use single braces ({param}) for URL path parameters.',
+  },
+  MISSING_TOOL_CONTEXT_KEY: {
+    httpStatus: 400,
+    description:
+      'A tool header references a {{context:<key>}} token whose key is not present in the tool_context for this call. The call is failed rather than sending the header with an empty value.',
   },
   INVALID_TOOL_CONTEXT_KEY: {
     httpStatus: 400,

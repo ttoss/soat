@@ -36,8 +36,15 @@ export const buildContextHeaderName = (key: string): string => {
  * RFC 7230 `token` characters — the grammar for a valid HTTP header name. A key
  * outside this set produces a header name that `fetch` rejects with a
  * `TypeError` at tool-call time, mid-generation.
+ *
+ * Exported as a character class rather than a finished regex because
+ * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar: the
+ * key inside a template token is the same key, so the two must not be able to
+ * disagree about which keys exist.
  */
-const HEADER_TOKEN_RE = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
+export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
+
+const HEADER_TOKEN_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
 
 /**
  * Throws `INVALID_TOOL_CONTEXT_KEY` (400) when a `tool_context` key cannot

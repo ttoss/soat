@@ -578,10 +578,24 @@ components:
             Credential fields accept `{{secret:...}}` references and should use
             them — a tool is readable by anyone who can `GET /tools`, and the
             stored reference is what is echoed back, never the resolved value.
+
+
+            `headers` values additionally accept `{{context:<key>}}` references,
+            resolved per call from the caller's `tool_context`, so a per-user
+            credential can be placed in the real header the target expects
+            (`Authorization: Bearer {{context:ocaToken}}`) instead of only in an
+            `X-Soat-Context-<key>` header. Valid **only** inside `headers` — a
+            context value is caller-supplied, so it may not steer the `url` — and
+            a key missing from the `tool_context` at call time fails the tool call
+            with `MISSING_TOOL_CONTEXT_KEY` rather than sending an empty
+            credential. See the Tool Context reference.
         mcp:
           type: object
           nullable: true
-          description: MCP server config (url, headers)
+          description: >-
+            MCP server config (`url`, `headers`). `headers` values accept
+            `{{secret:...}}` and `{{context:<key>}}` references, resolved right
+            before the outbound MCP request; `url` accepts `{{secret:...}}` only.
         actions:
           type: array
           nullable: true
@@ -720,9 +734,23 @@ components:
             Credential fields accept `{{secret:...}}` references and should use
             them — a tool is readable by anyone who can `GET /tools`, and the
             stored reference is what is echoed back, never the resolved value.
+
+
+            `headers` values additionally accept `{{context:<key>}}` references,
+            resolved per call from the caller's `tool_context`, so a per-user
+            credential can be placed in the real header the target expects
+            (`Authorization: Bearer {{context:ocaToken}}`) instead of only in an
+            `X-Soat-Context-<key>` header. Valid **only** inside `headers` — a
+            context value is caller-supplied, so it may not steer the `url` — and
+            a key missing from the `tool_context` at call time fails the tool call
+            with `MISSING_TOOL_CONTEXT_KEY` rather than sending an empty
+            credential. See the Tool Context reference.
         mcp:
           type: object
-          description: MCP server config (url, headers)
+          description: >-
+            MCP server config (`url`, `headers`). `headers` values accept
+            `{{secret:...}}` and `{{context:<key>}}` references, resolved right
+            before the outbound MCP request; `url` accepts `{{secret:...}}` only.
         actions:
           type: array
           items:
@@ -825,9 +853,24 @@ components:
             Credential fields accept `{{secret:...}}` references and should use
             them — a tool is readable by anyone who can `GET /tools`, and the
             stored reference is what is echoed back, never the resolved value.
+
+
+            `headers` values additionally accept `{{context:<key>}}` references,
+            resolved per call from the caller's `tool_context`, so a per-user
+            credential can be placed in the real header the target expects
+            (`Authorization: Bearer {{context:ocaToken}}`) instead of only in an
+            `X-Soat-Context-<key>` header. Valid **only** inside `headers` — a
+            context value is caller-supplied, so it may not steer the `url` — and
+            a key missing from the `tool_context` at call time fails the tool call
+            with `MISSING_TOOL_CONTEXT_KEY` rather than sending an empty
+            credential. See the Tool Context reference.
         mcp:
           type: object
           nullable: true
+          description: >-
+            MCP server config (`url`, `headers`). `headers` values accept
+            `{{secret:...}}` and `{{context:<key>}}` references, resolved right
+            before the outbound MCP request; `url` accepts `{{secret:...}}` only.
         actions:
           type: array
           nullable: true

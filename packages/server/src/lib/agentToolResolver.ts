@@ -25,10 +25,7 @@ import {
 import { HttpToolError } from './httpToolError';
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import { isPlainObject } from './plainObject';
-import {
-  resolveSecretRefsInRecord,
-  resolveSecretRefsInString,
-} from './secrets';
+import { resolveSecretRefsInString } from './secrets';
 import {
   applyHttpToolAuth,
   type HttpToolAuthConfig,
@@ -45,6 +42,7 @@ import {
   callTool,
   type InlineToolDefinition,
 } from './tools';
+import { resolveToolHeaderTemplates } from './toolTemplates';
 // Re-exported from its own module (both http and soat tool paths throw it).
 export { HttpToolError } from './httpToolError';
 
@@ -348,23 +346,29 @@ const resolveAuthSecrets = async (args: {
   };
 };
 
-// Resolves {{secret:...}} tokens in the request url and headers at the point
-// of use — the stored config (and anything echoed back by GET/LIST) keeps the
-// reference.
-const resolveHttpRequestSecrets = async (args: {
+// Resolves template tokens in the request url and headers at the point of use —
+// the stored config (and anything echoed back by GET/LIST) keeps the reference.
+//
+// The url and auth resolve `{{secret:...}}` only; headers additionally resolve
+// `{{context:...}}` against this call's `tool_context` (#945). The asymmetry is
+// the point: a context value is caller-supplied, so it may not steer the
+// outbound url — see `toolTemplates.ts`.
+const resolveHttpRequestTemplates = async (args: {
   url: string;
   headers?: Record<string, string>;
   auth?: HttpToolAuthConfig;
   projectId: number;
+  toolContext?: Record<string, string>;
 }) => {
   return {
     fetchUrl: await resolveSecretRefsInString({
       value: args.url,
       projectId: args.projectId,
     }),
-    headers: await resolveSecretRefsInRecord({
+    headers: await resolveToolHeaderTemplates({
       record: args.headers,
       projectId: args.projectId,
+      toolContext: args.toolContext,
     }),
     auth: await resolveAuthSecrets({
       auth: args.auth,
@@ -589,11 +593,12 @@ export const buildHttpToolExecute = (
         remainingArgs,
         hasBody,
       });
-      const resolved = await resolveHttpRequestSecrets({
+      const resolved = await resolveHttpRequestTemplates({
         url,
         headers: args.execute.headers,
         auth: args.execute.auth,
         projectId: args.projectId,
+        toolContext,
       });
       const init = buildHttpRequestInit({
         method,
@@ -691,9 +696,10 @@ const resolveMcpToolEntry = async (
         value: typedTool.mcp.url,
         projectId: typedTool.projectId,
       }),
-      headers: await resolveSecretRefsInRecord({
+      headers: await resolveToolHeaderTemplates({
         record: typedTool.mcp.headers,
         projectId: typedTool.projectId,
+        toolContext,
       }),
     };
     return await resolveMcpTools({
@@ -706,7 +712,18 @@ const resolveMcpToolEntry = async (
       buildContextHeaders,
       logToolCallingError,
     });
-  } catch {
+  } catch (error) {
+    // A missing `{{context:...}}` key is a caller error, not a network fault.
+    // This swallow exists so an unreachable MCP server does not abort resolution
+    // of every other tool; dropping the tool silently here would hide exactly
+    // the misconfiguration the token is meant to surface, and the agent would
+    // then fail several steps later with "no such tool".
+    if (
+      error instanceof DomainError &&
+      error.code === 'MISSING_TOOL_CONTEXT_KEY'
+    ) {
+      throw error;
+    }
     // Network errors resolving MCP tools should not abort entire resolution
     return {};
   }

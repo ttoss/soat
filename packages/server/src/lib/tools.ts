@@ -10,10 +10,7 @@ import {
   validatePipelineConfig,
 } from './pipelineTools';
 import { makeResourceAccessor } from './resourceAccessor';
-import {
-  assertNoInvalidTemplateTokens,
-  assertSecretRefsExist,
-} from './secrets';
+import { assertSecretRefsExist } from './secrets';
 import { soatTools } from './soatTools';
 import { validateExecuteAuth } from './toolAuth';
 import {
@@ -21,6 +18,7 @@ import {
   callResolvedTool,
   type InlineToolDefinition,
 } from './toolsCall';
+import { assertValidToolTemplateTokens } from './toolTemplates';
 
 const log = createDebug('soat:tools');
 
@@ -222,9 +220,10 @@ export const validateToolDefinition = async (args: {
 
   validateExecuteAuth({ execute: definition.execute });
 
-  // Reject any {{...}} token that isn't a {{secret:...}} reference before
-  // checking whether referenced secrets actually exist.
-  assertNoInvalidTemplateTokens({
+  // Reject any {{...}} token that isn't a well-formed reference — and any
+  // {{context:...}} token outside a headers record — before checking whether
+  // referenced secrets actually exist.
+  assertValidToolTemplateTokens({
     execute: definition.execute,
     mcp: definition.mcp,
   });
@@ -359,7 +358,7 @@ const validateToolUpdate = async (params: {
   }
   if (args.execute !== undefined || args.mcp !== undefined) {
     validateExecuteAuth({ execute: args.execute });
-    assertNoInvalidTemplateTokens({ execute: args.execute, mcp: args.mcp });
+    assertValidToolTemplateTokens({ execute: args.execute, mcp: args.mcp });
     await assertSecretRefsExist({
       value: { execute: args.execute, mcp: args.mcp },
       projectId: tool.projectId,

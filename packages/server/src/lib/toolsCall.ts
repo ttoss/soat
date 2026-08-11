@@ -11,12 +11,10 @@ import {
 import { applyToolOutputMapping } from './jsonLogicMapping';
 import type { PipelineStepCaller } from './pipelineTools';
 import { runPipeline } from './pipelineTools';
-import {
-  resolveSecretRefsInRecord,
-  resolveSecretRefsInString,
-} from './secrets';
+import { resolveSecretRefsInString } from './secrets';
 import { soatTools } from './soatTools';
 import { callTool } from './tools';
+import { resolveToolHeaderTemplates } from './toolTemplates';
 
 const noopLogToolCallingError = () => {};
 
@@ -202,13 +200,19 @@ export const callMcpTool = async (
       'MCP tool has an invalid mcp configuration.'
     );
   }
-  // {{secret:...}} tokens resolve at the point of use, right before the
-  // outbound MCP request — the stored config keeps the reference.
+  // Template tokens resolve at the point of use, right before the outbound MCP
+  // request — the stored config keeps the reference.
+  //
+  // This path carries no `tool_context` (see `callResolvedTool`), so a header
+  // holding a `{{context:...}}` token fails the call with
+  // `MISSING_TOOL_CONTEXT_KEY` naming the key. That is deliberate: the
+  // alternative is putting the literal `{{context:...}}` text on the wire as a
+  // credential, which fails as an opaque upstream 401 instead.
   const mcpUrl = await resolveSecretRefsInString({
     value: mcpConfig.url,
     projectId,
   });
-  const mcpHeaders = await resolveSecretRefsInRecord({
+  const mcpHeaders = await resolveToolHeaderTemplates({
     record: mcpConfig.headers,
     projectId,
   });

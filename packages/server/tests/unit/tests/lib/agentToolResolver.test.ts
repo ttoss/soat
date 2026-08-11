@@ -384,6 +384,287 @@ describe('resolveAgentTools', () => {
     expect(headers?.['x-soat-context-actorexternalid']).toBeUndefined();
   });
 
+  // #945 item 2: `{{context:<key>}}` in a tool's headers. `tool_context` alone
+  // can only produce `X-Soat-Context-*` headers — a security invariant that must
+  // not be relaxed — so the tool declares where its credential goes, and the
+  // caller only supplies the value.
+  describe('{{context:...}} header interpolation', () => {
+    // One local server per test, since each asserts on what one request carried.
+    const startHeaderCaptureServer = async () => {
+      const requests: IncomingHttpHeaders[] = [];
+      const server = createServer((req, res) => {
+        req.on('data', () => {});
+        req.on('end', () => {
+          requests.push(req.headers);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ ok: true }));
+        });
+      });
+      await new Promise<void>((resolve) => {
+        server.listen(0, '127.0.0.1', resolve);
+      });
+      const address = server.address();
+      const port =
+        address && typeof address === 'object' ? address.port : undefined;
+      return {
+        requests,
+        port,
+        close: async () => {
+          await new Promise<void>((resolve) => {
+            server.close(() => {
+              return resolve();
+            });
+          });
+        },
+      };
+    };
+
+    const createHeaderTool = async (args: {
+      name: string;
+      port: number | undefined;
+      headers: Record<string, string>;
+    }) => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: args.name,
+          type: 'http',
+          parameters: { type: 'object', properties: {} },
+          execute: {
+            url: `http://127.0.0.1:${args.port}/v1/do`,
+            method: 'POST',
+            headers: args.headers,
+          },
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    const callTool = async (args: {
+      toolId: string;
+      toolName: string;
+      toolContext?: Record<string, string>;
+    }) => {
+      const tools = await resolveAgentTools({
+        toolIds: [args.toolId],
+        toolContext: args.toolContext,
+      });
+      const resolved = tools[args.toolName];
+      if (!('execute' in resolved) || typeof resolved.execute !== 'function') {
+        throw new Error(`tool ${args.toolName} resolved without an execute`);
+      }
+      return resolved.execute({}, {} as never);
+    };
+
+    test('resolves the token into the real header the tool declared', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxAuthTool',
+          port: srv.port,
+          headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+        });
+
+        await callTool({
+          toolId,
+          toolName: 'ctxAuthTool',
+          toolContext: { ocaToken: 'tok_abc' },
+        });
+
+        expect(srv.requests).toHaveLength(1);
+        const headers = srv.requests[0]!;
+        // The whole point: a real `Authorization` header, not an
+        // `X-Soat-Context-*` one.
+        expect(headers['authorization']).toBe('Bearer tok_abc');
+        // The prefixed header is still sent too — the two mechanisms coexist.
+        expect(headers['x-soat-context-ocatoken']).toBe('tok_abc');
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('resolves several tokens, including two in one header value', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxMultiTool',
+          port: srv.port,
+          headers: {
+            Authorization: 'Bearer {{context:ocaToken}}',
+            'X-Pair': '{{context:tenant}}/{{context:ocaToken}}',
+          },
+        });
+
+        await callTool({
+          toolId,
+          toolName: 'ctxMultiTool',
+          toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+        });
+
+        const headers = srv.requests[0]!;
+        expect(headers['authorization']).toBe('Bearer tok_abc');
+        expect(headers['x-pair']).toBe('acme/tok_abc');
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('fails the tool call when the key is missing from a supplied tool_context, sending no request', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxMissingKeyTool',
+          port: srv.port,
+          headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+        });
+
+        await expect(
+          callTool({
+            toolId,
+            toolName: 'ctxMissingKeyTool',
+            toolContext: { tenant: 'acme' },
+          })
+        ).rejects.toThrow(/ocaToken/);
+
+        // An empty `Authorization: Bearer ` is worse than a failed call, so the
+        // request must not have gone out at all.
+        expect(srv.requests).toHaveLength(0);
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('fails the tool call when the generation carries no tool_context at all', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxNoContextTool',
+          port: srv.port,
+          headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+        });
+
+        await expect(
+          callTool({ toolId, toolName: 'ctxNoContextTool' })
+        ).rejects.toThrow(/ocaToken/);
+        expect(srv.requests).toHaveLength(0);
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('an empty-string context value is a value, not a missing key', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxEmptyValueTool',
+          port: srv.port,
+          headers: { 'X-Tenant': '{{context:tenant}}' },
+        });
+
+        await callTool({
+          toolId,
+          toolName: 'ctxEmptyValueTool',
+          toolContext: { tenant: '' },
+        });
+
+        expect(srv.requests).toHaveLength(1);
+        expect(srv.requests[0]!['x-tenant']).toBe('');
+      } finally {
+        await srv.close();
+      }
+    });
+
+    // The security property of resolving both token kinds in ONE pass: a
+    // substituted value is data, never template source. Without it, a caller
+    // could put `{{secret:sec_...}}` in a context value and read a project
+    // secret back out of the outbound header.
+    test('a context value that looks like a secret token is not resolved as one', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const secretRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/secrets')
+          .send({
+            project_id: projectId,
+            name: 'ctx-injection-secret',
+            value: 'SUPER-SECRET-VALUE',
+          });
+        expect(secretRes.status).toBe(201);
+        const secretId = secretRes.body.id as string;
+
+        const toolId = await createHeaderTool({
+          name: 'ctxInjectionTool',
+          port: srv.port,
+          headers: { 'X-Tenant': '{{context:tenant}}' },
+        });
+
+        await callTool({
+          toolId,
+          toolName: 'ctxInjectionTool',
+          toolContext: { tenant: `{{secret:${secretId}}}` },
+        });
+
+        const headers = srv.requests[0]!;
+        expect(headers['x-tenant']).toBe(`{{secret:${secretId}}}`);
+        expect(headers['x-tenant']).not.toContain('SUPER-SECRET-VALUE');
+      } finally {
+        await srv.close();
+      }
+    });
+
+    // The mirror of the case above: a secret's decrypted value is data too.
+    test('a secret value that looks like a context token is not resolved as one', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const secretRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/secrets')
+          .send({
+            project_id: projectId,
+            name: 'ctx-lookalike-secret',
+            value: '{{context:ocaToken}}',
+          });
+        expect(secretRes.status).toBe(201);
+
+        const toolId = await createHeaderTool({
+          name: 'ctxSecretLookalikeTool',
+          port: srv.port,
+          headers: {
+            'X-Both': `{{secret:${secretRes.body.id}}}|{{context:tenant}}`,
+          },
+        });
+
+        await callTool({
+          toolId,
+          toolName: 'ctxSecretLookalikeTool',
+          toolContext: { ocaToken: 'tok_abc', tenant: 'acme' },
+        });
+
+        // The secret resolved to its literal stored text; the context token that
+        // text contains was NOT substituted, while the tool's own one was.
+        expect(srv.requests[0]!['x-both']).toBe('{{context:ocaToken}}|acme');
+      } finally {
+        await srv.close();
+      }
+    });
+
+    test('a tool with no {{context:...}} token still works with no tool_context', async () => {
+      const srv = await startHeaderCaptureServer();
+      try {
+        const toolId = await createHeaderTool({
+          name: 'ctxUnaffectedTool',
+          port: srv.port,
+          headers: { 'X-Static': 'static-value' },
+        });
+
+        await callTool({ toolId, toolName: 'ctxUnaffectedTool' });
+
+        expect(srv.requests[0]!['x-static']).toBe('static-value');
+      } finally {
+        await srv.close();
+      }
+    });
+  });
+
   test('http tool execute throws HttpToolError on non-OK response with JSON body', async () => {
     const fetchMock = jest
       .spyOn(global, 'fetch')

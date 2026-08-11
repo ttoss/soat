@@ -245,67 +245,31 @@ export const assertSecretRefsExist = async (args: {
   await loadReferencedSecrets({ ids, projectId: args.projectId });
 };
 
-// The inner alternation lets a `${...}` sub placeholder's own closing brace
-// pass through without prematurely ending the `{{...}}` match — a plain
-// `[^}]*` body would stop at the sub's inner `}` and leave a mangled,
-// one-brace-short capture for `{{secret:${ApiSecret}}}`.
-const DOUBLE_CURLY_RE = /\{\{((?:[^{}]|\$\{[^}]*\})*)\}\}/g;
-// A resolved reference (`secret:sec_...`) or a formation `sub` placeholder
-// still awaiting resolution (`secret:${LogicalIdOrParam}`) are both valid —
-// a formation template is statically validated *before* `${...}` tokens
-// resolve, so `{ "sub": "Bearer {{secret:${ApiSecret}}}" }` is legitimate
-// template source, not an authoring mistake (see the "Composition" section
-// of the expressions & templating reference doc).
-const VALID_SECRET_TOKEN_RE = /^secret:(sec_[A-Za-z0-9]+|\$\{[^}]+\})$/;
-
 /**
- * Collects every `{{...}}` token inside a value (deep-walks strings, arrays,
- * and objects) whose content is not a well-formed `secret:sec_...` reference
- * (or an unresolved `secret:${...}` sub placeholder). Double curly braces are
- * reserved exclusively for secret references — this is a shape check only
- * (whether the referenced secret exists is {@link assertSecretRefsExist}'s
- * job), so it needs no DB access and is safe to call from pure, static
- * validation (e.g. `validate-formation`).
+ * Loads and decrypts every secret referenced by a `{{secret:...}}` token
+ * anywhere inside a value, keyed by public id. Throws `SECRET_NOT_FOUND` for a
+ * token referencing a nonexistent or out-of-project secret.
+ *
+ * Exposed so `toolTemplates.ts` can substitute secret and `{{context:...}}`
+ * tokens in a single pass — resolving them in two sequential passes would make
+ * whichever ran second treat the other's substituted value as template source.
+ * Never log or persist the returned values.
  */
-export const findInvalidTemplateTokens = (value: unknown): string[] => {
-  if (typeof value === 'string') {
-    return [...value.matchAll(DOUBLE_CURLY_RE)]
-      .map((m) => {
-        return m[0];
-      })
-      .filter((token) => {
-        return !VALID_SECRET_TOKEN_RE.test(token.slice(2, -2));
-      });
+export const loadSecretValues = async (args: {
+  value: unknown;
+  projectId: number;
+}): Promise<Map<string, string>> => {
+  const ids = [...new Set(collectSecretRefs(args.value))];
+  if (ids.length === 0) return new Map();
+  log('loadSecretValues: projectId=%d refs=%d', args.projectId, ids.length);
+  const byId = await loadReferencedSecrets({ ids, projectId: args.projectId });
+  const values = new Map<string, string>();
+  for (const [id, secret] of byId) {
+    if (secret.encryptedValue) {
+      values.set(id, decryptValue(secret.encryptedValue));
+    }
   }
-  if (Array.isArray(value)) return value.flatMap(findInvalidTemplateTokens);
-  if (typeof value === 'object' && value !== null) {
-    return Object.values(value as Record<string, unknown>).flatMap(
-      findInvalidTemplateTokens
-    );
-  }
-  return [];
-};
-
-/**
- * Throws `INVALID_TEMPLATE_TOKEN` (400) when `value` contains a `{{...}}`
- * token that is not a `{{secret:sec_...}}` reference — e.g. a `{{param}}`
- * placeholder copied from another templating system, which the URL/header
- * resolver would otherwise leave with stray braces in the outbound request.
- */
-export const assertNoInvalidTemplateTokens = (value: unknown): void => {
-  const invalid = [...new Set(findInvalidTemplateTokens(value))];
-  if (invalid.length === 0) return;
-  throw new DomainError(
-    'INVALID_TEMPLATE_TOKEN',
-    `Invalid template token(s) ${invalid
-      .map((t) => {
-        return `'${t}'`;
-      })
-      .join(
-        ', '
-      )} — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
-    { tokens: invalid }
-  );
+  return values;
 };
 
 /**
@@ -331,28 +295,6 @@ export const resolveSecretRefsInString = async (args: {
     if (!secret?.encryptedValue) return original;
     return decryptValue(secret.encryptedValue);
   });
-};
-
-/**
- * Resolves `{{secret:...}}` tokens in every value of a headers-shaped record.
- */
-export const resolveSecretRefsInRecord = async (args: {
-  record: Record<string, string> | undefined;
-  projectId: number;
-}): Promise<Record<string, string> | undefined> => {
-  if (!args.record) return args.record;
-  const entries = await Promise.all(
-    Object.entries(args.record).map(
-      async ([key, value]): Promise<[string, string]> => {
-        if (typeof value !== 'string') return [key, value];
-        return [
-          key,
-          await resolveSecretRefsInString({ value, projectId: args.projectId }),
-        ];
-      }
-    )
-  );
-  return Object.fromEntries(entries);
 };
 
 export const deleteSecret = async (args: {

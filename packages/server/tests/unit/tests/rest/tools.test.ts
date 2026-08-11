@@ -1502,6 +1502,179 @@ describe('Tools', () => {
     });
   });
 
+  // #945 item 2: `{{context:<key>}}` in a tool's headers, resolved per call from
+  // the effective `tool_context`. Deliberately a **headers-only** affordance —
+  // the token is how a tool declares the header shape its credential goes in,
+  // and a caller-controlled value must not be able to steer the outbound URL.
+  describe('Context references ({{context:...}}) in tool configs', () => {
+    test('a {{context:...}} token in execute.headers is accepted and stored verbatim', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-header-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      // The token is what is stored and echoed back; it resolves at call time.
+      expect(res.body.execute.headers.Authorization).toBe(
+        'Bearer {{context:ocaToken}}'
+      );
+    });
+
+    test('a {{context:...}} token in mcp.headers is accepted', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-header-mcp-tool',
+          type: 'mcp',
+          mcp: {
+            url: 'https://mcp.example.com/sse',
+            headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.mcp.headers.Authorization).toBe(
+        'Bearer {{context:ocaToken}}'
+      );
+    });
+
+    test('a {{context:...}} token in execute.url returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-url-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/{{context:tenant}}/convert',
+            method: 'GET',
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+      expect(res.body.error.message).toMatch(/only in .*headers/i);
+    });
+
+    test('a {{context:...}} token in mcp.url returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-mcp-url-tool',
+          type: 'mcp',
+          mcp: { url: 'https://mcp.example.com/{{context:tenant}}/sse' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('a {{context:...}} key that could not become a header name returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-bad-key-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { Authorization: 'Bearer {{context:bad key}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('an empty {{context:}} key returns 400', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-empty-key-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { Authorization: 'Bearer {{context:}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('updating a tool to put a {{context:...}} token in execute.url returns 400', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-update-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/convert' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({
+          execute: { url: 'https://api.example.com/{{context:tenant}}' },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+
+    test('updating a tool to add a {{context:...}} header is accepted', async () => {
+      const createRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-update-header-tool',
+          type: 'http',
+          execute: { url: 'https://api.example.com/convert' },
+        });
+      expect(createRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(adminToken)
+        .patch(`/api/v1/tools/${createRes.body.id}`)
+        .send({
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { 'X-Tenant': '{{context:tenant}}' },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.execute.headers['X-Tenant']).toBe('{{context:tenant}}');
+    });
+
+    test('a non-context, non-secret {{...}} token in headers is still rejected', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/tools')
+        .send({
+          project_id: projectId,
+          name: 'context-lookalike-tool',
+          type: 'http',
+          execute: {
+            url: 'https://api.example.com/convert',
+            headers: { Authorization: 'Bearer {{ctx:ocaToken}}' },
+          },
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('INVALID_TEMPLATE_TOKEN');
+    });
+  });
+
   describe('Tool call validation and MCP calling', () => {
     let mcpServer: http.Server;
     let mcpServerUrl: string;
