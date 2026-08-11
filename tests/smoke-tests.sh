@@ -5305,23 +5305,44 @@ echo "Task tool_context is write-only: OK"
 
 # A key that could not become an HTTP header name is rejected at write time, on
 # both entry points — the same contract as every other tool_context surface.
+#
+# On a workflow of its own: the two above have on_enter automation, and the
+# module's main workflow is deleted earlier in this section, so borrowing either
+# would make these checks depend on another block's lifetime.
+CTX_WF_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-tool-context-workflow \
+  --states '[{"name":"open","initial":true},{"name":"shut","terminal":true}]' \
+  --transitions '[{"name":"go","from":["open"],"to":"shut"}]' | jq -r '.id')
+if [ -z "$CTX_WF_ID" ] || [ "$CTX_WF_ID" = "null" ]; then
+  echo "ERROR: failed to create the tool_context validation workflow" >&2
+  exit 1
+fi
+
 expect_cli_error_status 400 create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --workflow-id "$SELF_WF_ID" \
+  --workflow-id "$CTX_WF_ID" \
   --title "bad context key" \
   --tool-context '{"bad key":"v"}'
+
 CTX_TASK_ID=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
-  --workflow-id "$WORKFLOW_ID" \
+  --workflow-id "$CTX_WF_ID" \
   --title "context transition card" | jq -r '.id')
+if [ -z "$CTX_TASK_ID" ] || [ "$CTX_TASK_ID" = "null" ]; then
+  echo "ERROR: failed to create the tool_context validation task" >&2
+  exit 1
+fi
 expect_cli_error_status 400 transition-task \
   --task-id "$CTX_TASK_ID" \
-  --transition start \
+  --transition go \
   --tool-context '{"ocaToken":"a","ocatoken":"b"}'
-# A valid bag on the same transition is accepted and replaces the stored one.
-$SOAT_CLI transition-task --task-id "$CTX_TASK_ID" --transition start \
+# A valid bag on the same transition is accepted; `shut` is terminal, so this
+# also runs the scrub-on-close path.
+$SOAT_CLI transition-task --task-id "$CTX_TASK_ID" --transition go \
   --tool-context '{"ocaToken":"smoke-transition-token"}' >/dev/null
 $SOAT_CLI delete-task --task-id "$CTX_TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$CTX_WF_ID" >/dev/null
 echo "Task tool_context validation: OK (400 as expected on both entry points)"
 
 # #879: a `soat` node whose action answers non-2xx fails the run. Before that
