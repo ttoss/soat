@@ -80,6 +80,12 @@ Severity defaults per kind, and a producer may override it:
 
 `GET /api/v1/activity` returns `next_cursor` — pass it back as `cursor` to fetch the next page; a `null` `next_cursor` means there is no more data. The cursor is an opaque, keyset (not offset) token encoding a `(created_at, id)` position, so a page never shifts as new entries arrive ahead of it — the failure mode an offset page has on a fast-moving, append-only feed.
 
+### Retention
+
+Entries are kept **indefinitely**. There is no delete endpoint, and — unlike the [audit log](./audit-log.md#append-only--retention), which prunes rows past a configured window on a daily sweep — no job prunes this table, so `activity_entries` grows monotonically with autonomous execution volume.
+
+Nothing the platform reads needs an aged entry: the [guardrail rate keys](#the-feed-as-a-guardrail-signal) count only a rolling 1-hour or 24-hour window, and the feed itself pages newest-first. Pruning old rows out of band is therefore safe on a high-volume project — there is simply no built-in sweep that does it.
+
 ### Producers
 
 Each kind is written by a single, dedicated producer:
