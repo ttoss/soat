@@ -1177,6 +1177,15 @@ components:
           type: object
           nullable: true
           description: Initial input provided at run creation.
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          nullable: true
+          description: >-
+            The `tool_context` supplied at run creation, forwarded as
+            `X-Soat-Context-<key>` headers on every tool call the run's agent
+            nodes make. Null when the run was started without one.
         output:
           type: object
           nullable: true
@@ -1338,6 +1347,30 @@ components:
         input:
           type: object
           description: Initial state for the run (merged with orchestration defaults).
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call made by an agent node of this run
+            — including the agents of any child run a `loop` or
+            `sub_orchestration` node starts. The header name is
+            `X-Soat-Context-` plus the key verbatim; no character is re-cased.
+
+
+            The bag is stored on the run and re-read on every step, so it
+            survives an `awaiting_input` pause, a `sleeping` wait, a background
+            worker drive and a crash redrive. A key that is not a valid HTTP
+            header name, or two keys that map to the same header, are rejected
+            with `400 INVALID_TOOL_CONTEXT_KEY` and no run is created.
+
+
+            The reserved identity keys (`sessionId`, `actorId`,
+            `actorExternalId`) are stripped at generation time — a caller cannot
+            address them from here.
+          example:
+            ocaToken: eyJhbGciOiJIUzI1NiJ9.abc
         wait:
           type: boolean
           default: false

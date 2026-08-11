@@ -31,6 +31,7 @@ import {
 } from './orchestrationAuth';
 import {
   parseRunInput,
+  parseRunToolContext,
   parseUpdateBody,
   parseVersionLabel,
   type RawCreateBody,
@@ -241,6 +242,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   const body = ctx.request.body as {
     orchestration_id?: unknown;
     input?: unknown;
+    tool_context?: unknown;
     wait?: unknown;
   };
   const orchestrationId =
@@ -255,6 +257,7 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
   if (!scope) return;
 
   const input = parseRunInput(body.input);
+  const toolContext = parseRunToolContext(body.tool_context);
   const authHeader = ctx.headers['authorization'] as string | undefined;
 
   const result = await startOrchestrationRun({
@@ -262,6 +265,9 @@ orchestrationsRouter.post('/orchestration-runs', async (ctx: Context) => {
     projectId: scope.primaryId,
     projectIds: scope.projectIds,
     input,
+    // Persisted on the run, not borrowed from this request: the run's later
+    // drives (a worker, a wake, a resume) have no request to read it from.
+    toolContext,
     authHeader,
     // Persisted on the run so a worker driving it later can act as the same
     // principal; the request's own header only reaches `wait` mode.

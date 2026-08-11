@@ -52,6 +52,7 @@ import {
 } from './orchestrationStartRun';
 import { kickWorker } from './orchestrationWorker';
 import type { RequestPrincipal } from './principals';
+import { assertValidToolContextKeys } from './toolContext';
 
 const log = createDebug('soat:orchestrations');
 
@@ -386,6 +387,7 @@ const createRunRecord = async (args: {
   state: Record<string, unknown>;
   artifacts: Record<string, unknown>;
   input?: Record<string, unknown>;
+  toolContext?: Record<string, string>;
   triggerId?: string;
   principal?: RequestPrincipal;
   authHeader?: string;
@@ -406,6 +408,7 @@ const createRunRecord = async (args: {
     activeNodes: [],
     artifacts: args.artifacts,
     input: args.input ?? null,
+    toolContext: args.toolContext ?? null,
     triggerId: args.triggerId ?? null,
     ...resolveRunPrincipal({
       principal: args.principal,
@@ -424,6 +427,12 @@ export const startOrchestrationRun = async (args: {
   projectId?: number;
   projectIds?: number[];
   input?: Record<string, unknown>;
+  // Caller context forwarded as `X-Soat-Context-*` headers on the tool calls of
+  // every agent generation this run — and every child run it spawns — produces.
+  // Validated here rather than at generation time only: an async run answers 201
+  // long before its first node executes, so a key that could not become a header
+  // has to be rejected while the caller is still listening.
+  toolContext?: Record<string, string>;
   authHeader?: string;
   wait?: boolean;
   // Public id of the trigger firing that started this run, when launched by a
@@ -445,6 +454,8 @@ export const startOrchestrationRun = async (args: {
     orchestrationPublicId: args.orchestrationPublicId,
     wait: args.wait,
   });
+
+  assertValidToolContextKeys(args.toolContext);
 
   const orch = await findOrchestrationForStartRun({
     orchestrationPublicId: args.orchestrationPublicId,
@@ -472,6 +483,7 @@ export const startOrchestrationRun = async (args: {
     state,
     artifacts,
     input: args.input,
+    toolContext: args.toolContext,
     triggerId: args.triggerId,
     principal: args.principal,
     authHeader: args.authHeader,

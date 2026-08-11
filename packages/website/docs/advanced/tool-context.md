@@ -16,6 +16,7 @@ This page is the canonical contract. `tool_context` is **not** templating — th
 | `POST /api/v1/sessions` / `PATCH /api/v1/sessions/{session_id}` | `tool_context` — persisted on the session, applied to every generation in it |
 | `POST /api/v1/sessions/{session_id}/messages` and `.../generate` | `tool_context` — per-request, this generation only |
 | `POST /api/v1/conversations/{conversation_id}/generate` | `tool_context` in the body |
+| `POST /api/v1/orchestration-runs` | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
 | Formation templates | `tool_context` on a `Session` resource |
 
 ## Which tools receive the headers
@@ -29,7 +30,7 @@ This page is the canonical contract. `tool_context` is **not** templating — th
 
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
 
-When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume.
+When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in.
 
 ## Key → header name
 

@@ -167,6 +167,21 @@ export class OrchestrationRun extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare input: object | null;
 
+  // The `tool_context` bag the caller supplied when starting the run, forwarded
+  // as `X-Soat-Context-*` headers on the tool calls of every agent generation
+  // the run spawns (#945). Persisted on the row rather than threaded from the
+  // request for the same reason as `principalKind`/`principalId`: a run outlives
+  // the request that started it, and the resume/wake/redrive paths carry no
+  // request body a bag could travel in. Every drive re-reads it from here, so a
+  // pause across `awaiting_input` or a background wake keeps the same context.
+  @Column({
+    type: DataType.JSONB,
+    allowNull: true,
+    defaultValue: null,
+    field: 'tool_context',
+  })
+  declare toolContext: Record<string, string> | null;
+
   @Column({ type: DataType.JSONB, allowNull: true })
   declare output: object | null;
 

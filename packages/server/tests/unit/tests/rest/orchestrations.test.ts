@@ -1293,6 +1293,367 @@ describe('Orchestrations', () => {
       }
     });
 
+    // #945 item 1: a run carries `tool_context` for its whole lifetime, so a
+    // scheduled/orchestrated flow can hand a per-user credential to the tools its
+    // agents call. The bag lives on the run row rather than on the request, which
+    // is what makes it survive a pause and a background drive.
+    describe('tool_context', () => {
+      // One provider/agent pair for the whole block: every case here asserts on
+      // the `createGeneration` args, never on a real provider call.
+      let contextAgentId: string;
+
+      beforeAll(async () => {
+        const aiProviderRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/ai-providers')
+          .send({
+            project_id: projectId,
+            name: 'Run Tool Context Provider',
+            provider: 'ollama',
+            default_model: 'llama3.2',
+          });
+        expect(aiProviderRes.status).toBe(201);
+
+        const agentRes = await authenticatedTestClient(adminToken)
+          .post('/api/v1/agents')
+          .send({
+            project_id: projectId,
+            name: 'Run Tool Context Agent',
+            ai_provider_id: aiProviderRes.body.id,
+          });
+        expect(agentRes.status).toBe(201);
+        contextAgentId = agentRes.body.id;
+      });
+
+      const agentNode = (id: string) => {
+        return {
+          id,
+          type: 'agent',
+          agent_id: contextAgentId,
+          input_mapping: { prompt: { var: 'input.question' } },
+        };
+      };
+
+      // Polls a background-driven run until it settles, bounded so a wiring
+      // break fails with a message instead of hanging the suite.
+      const waitForSucceeded = async (runId: string): Promise<void> => {
+        for (let i = 0; i < 100; i += 1) {
+          const res = await authenticatedTestClient(userToken).get(
+            `/api/v1/orchestration-runs/${runId}`
+          );
+          if (res.body.status === 'succeeded') return;
+          if (['failed', 'cancelled', 'expired'].includes(res.body.status)) {
+            throw new Error(
+              `run ${runId} settled as ${res.body.status}: ${JSON.stringify(
+                res.body.error
+              )}`
+            );
+          }
+          await new Promise<void>((resolve) => {
+            return setTimeout(resolve, 20);
+          });
+        }
+        throw new Error(`run ${runId} never succeeded`);
+      };
+
+      const stubGeneration = () => {
+        return jest
+          .spyOn(agentGenerationModule, 'createGeneration')
+          .mockResolvedValue({
+            id: 'gen_runctx01',
+            traceId: 'trc_runctx01',
+            status: 'completed',
+            output: {
+              model: 'llama3.2',
+              content: 'ok',
+              finishReason: 'stop',
+            },
+          });
+      };
+
+      test('is persisted on the run, echoed back, and forwarded to an agent node generation', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context Pipeline',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+              tool_context: { ocaToken: 'tok_abc', tenant: 'acme' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('succeeded');
+          expect(runRes.body.tool_context).toEqual({
+            ocaToken: 'tok_abc',
+            tenant: 'acme',
+          });
+
+          expect(generationSpy).toHaveBeenCalledTimes(1);
+          expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+            ocaToken: 'tok_abc',
+            tenant: 'acme',
+          });
+
+          const getRunRes = await authenticatedTestClient(userToken).get(
+            `/api/v1/orchestration-runs/${runRes.body.id}`
+          );
+          expect(getRunRes.status).toBe(200);
+          expect(getRunRes.body.tool_context).toEqual({
+            ocaToken: 'tok_abc',
+            tenant: 'acme',
+          });
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      test('a run started without tool_context reports null and forwards nothing', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Without Tool Context',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.tool_context).toBeNull();
+          expect(generationSpy.mock.calls[0]![0].toolContext).toBeUndefined();
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      // The whole point of persisting the bag: the resume arrives on a request
+      // that carries no `tool_context` of its own (the resume routes have no
+      // request body for one), so a threaded-arg design would silently drop it.
+      test('survives an awaiting_input pause and reaches the generation after human input', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context After Pause',
+            nodes: [
+              {
+                id: 'gate',
+                type: 'human',
+                prompt: 'Proceed?',
+                options: ['yes'],
+              },
+              agentNode('ask'),
+            ],
+            edges: [{ from: 'gate', to: 'ask' }],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+              tool_context: { ocaToken: 'tok_paused' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('awaiting_input');
+          expect(generationSpy).not.toHaveBeenCalled();
+
+          const resumeRes = await authenticatedTestClient(userToken)
+            .post(`/api/v1/orchestration-runs/${runRes.body.id}/human-input`)
+            .send({ node_id: 'gate', output: { decision: 'yes' } });
+          expect(resumeRes.status).toBe(200);
+          expect(resumeRes.body.status).toBe('succeeded');
+          expect(resumeRes.body.tool_context).toEqual({
+            ocaToken: 'tok_paused',
+          });
+
+          expect(generationSpy).toHaveBeenCalledTimes(1);
+          expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+            ocaToken: 'tok_paused',
+          });
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      // A background-driven run has no request to borrow from at all — the bag
+      // is read off the row by the worker.
+      test('reaches the generation of a queued run driven in the background', async () => {
+        const createRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context Queued',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(createRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              orchestration_id: createRes.body.id,
+              input: { question: 'hello' },
+              tool_context: { ocaToken: 'tok_queued' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('queued');
+
+          await waitForSucceeded(runRes.body.id as string);
+
+          expect(generationSpy).toHaveBeenCalledTimes(1);
+          expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+            ocaToken: 'tok_queued',
+          });
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      // A child run spawned by a sub_orchestration node is still "this run's
+      // agents", so it inherits the parent's bag.
+      test('is inherited by a sub_orchestration child run', async () => {
+        const childRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context Child',
+            nodes: [agentNode('ask')],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(childRes.status).toBe(201);
+
+        const parentRes = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name: 'Run Tool Context Parent',
+            nodes: [
+              {
+                id: 'child',
+                type: 'sub_orchestration',
+                orchestration_id: childRes.body.id,
+                input_mapping: { question: { var: 'input.question' } },
+              },
+            ],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(parentRes.status).toBe(201);
+
+        const generationSpy = stubGeneration();
+
+        try {
+          const runRes = await authenticatedTestClient(userToken)
+            .post('/api/v1/orchestration-runs')
+            .send({
+              wait: true,
+              orchestration_id: parentRes.body.id,
+              input: { question: 'hello' },
+              tool_context: { ocaToken: 'tok_nested' },
+            });
+          expect(runRes.status).toBe(201);
+          expect(runRes.body.status).toBe('succeeded');
+
+          expect(generationSpy).toHaveBeenCalledTimes(1);
+          expect(generationSpy.mock.calls[0]![0].toolContext).toEqual({
+            ocaToken: 'tok_nested',
+          });
+        } finally {
+          generationSpy.mockRestore();
+        }
+      });
+
+      // Rejected keys: the run must not exist afterwards, which is why the
+      // validation lives at the start path and not only at generation time (an
+      // async run answers 201 before its first node runs). Each case owns its
+      // orchestration so it can assert an exact run count and run alone.
+      const createRejectionOrchestration = async (name: string) => {
+        const res = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestrations')
+          .send({
+            name,
+            nodes: [{ id: 'noop', type: 'transform', expression: 1 }],
+            edges: [],
+            project_id: projectId,
+          });
+        expect(res.status).toBe(201);
+        return res.body.id as string;
+      };
+
+      const expectNoRuns = async (orchId: string) => {
+        const list = await authenticatedTestClient(userToken).get(
+          `/api/v1/orchestration-runs?orchestration_id=${orchId}`
+        );
+        expect(list.status).toBe(200);
+        expect(list.body.total).toBe(0);
+      };
+
+      test('a key that cannot become a header returns 400 and creates no run', async () => {
+        const orchId = await createRejectionOrchestration(
+          'Run Tool Context Bad Key'
+        );
+
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: orchId,
+            tool_context: { 'bad key': 'value' },
+          });
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+
+        await expectNoRuns(orchId);
+      });
+
+      test('two keys colliding on one header name return 400 and create no run', async () => {
+        const orchId = await createRejectionOrchestration(
+          'Run Tool Context Colliding Keys'
+        );
+
+        const response = await authenticatedTestClient(userToken)
+          .post('/api/v1/orchestration-runs')
+          .send({
+            wait: true,
+            orchestration_id: orchId,
+            tool_context: { ocaToken: 'a', ocatoken: 'b' },
+          });
+        expect(response.status).toBe(400);
+        expect(response.body.error.code).toBe('INVALID_TOOL_CONTEXT_KEY');
+
+        await expectNoRuns(orchId);
+      });
+    });
+
     // #747: an agent node's output_schema silently reverted to `{ content }`
     // when the model wrapped its JSON in a markdown code fence — the standard
     // shape a model returns structured JSON in, even when told to return it

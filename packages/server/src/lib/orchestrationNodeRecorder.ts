@@ -321,6 +321,11 @@ const runNodeAndRecord = async (
     projectId: ctx.runRecord.projectId as number,
     runPublicId: ctx.runRecord.publicId as string,
     triggerId: ctx.runRecord.triggerId ?? undefined,
+    // Read off the run row, exactly like `triggerId` above, so every drive of
+    // the run — the inline one, a worker claiming a queued run, a wake from
+    // `sleeping`, a human/approval resume, a redrive after a crash — carries the
+    // same context without any of them having to thread it (#945).
+    toolContext: ctx.runRecord.toolContext ?? undefined,
     traceId: ctx.traceId,
     authHeader: ctx.authHeader,
     pollAttempt: ctx.pollAttempt,
