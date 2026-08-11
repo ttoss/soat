@@ -374,7 +374,7 @@ It would not work, on purpose. A `tool_context` key always lands under the deplo
 
 ## Step 6 — Create the agent
 
-A small agent that carries the tool. `tool_choice` forces the first model call to invoke `record_order`, so the tool call — the thing this tutorial asserts on — does not depend on what a small local model feels like doing. See [client tools](/docs/tutorials/client-tools#step-5--create-the-agent) for the forcing semantics.
+A small agent that carries the tool. A step-1 [`step_rules`](/docs/modules/agents) entry forces the first model call to invoke `record_order`, so the tool call — the thing this tutorial asserts on — does not depend on what a small local model feels like doing. See [client tools](/docs/tutorials/client-tools#step-5--create-the-agent) for the forcing semantics.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -386,7 +386,7 @@ AGENT_ID=$(soat create-agent \
   --name "Order Clerk" \
   --instructions "You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions." \
   --tool-ids "[\"$ORDER_TOOL_ID\"]" \
-  --tool-choice '{"type":"tool","tool_name":"record_order"}' \
+  --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"record_order"}}]' \
   --max-steps 3 | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
@@ -403,7 +403,9 @@ const { data: agent } = await adminSoat.agents.createAgent({
     instructions:
       'You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.',
     tool_ids: [ORDER_TOOL_ID],
-    tool_choice: { type: 'tool', tool_name: 'record_order' },
+    step_rules: [
+      { step: 1, tool_choice: { type: 'tool', tool_name: 'record_order' } },
+    ],
     max_steps: 3,
   },
 });
@@ -417,7 +419,7 @@ const AGENT_ID = agent.id;
 AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Order Clerk\",\"instructions\":\"You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.\",\"tool_ids\":[\"$ORDER_TOOL_ID\"],\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"record_order\"},\"max_steps\":3}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Order Clerk\",\"instructions\":\"You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.\",\"tool_ids\":[\"$ORDER_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"record_order\"}}],\"max_steps\":3}" \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```
