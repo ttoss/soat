@@ -6,7 +6,7 @@ description: 'How session and actor context reaches a tool endpoint as X-Soat-Co
 
 `tool_context` is a flat `Record<string, string>` a caller attaches to a generation. Every entry is forwarded as an HTTP **request header** on each tool call the generation makes, so a server-side tool can authorize against the caller's identity instead of trusting data embedded in the prompt.
 
-This page is the canonical contract. `tool_context` is **not** templating — the values are never interpolated into a URL or body, and there is no `{{context:...}}` token (see [Expressions & Templating](./expressions-and-templating.md)).
+This page is the canonical contract. `tool_context` is **not** general templating: a value is never interpolated into a URL or a request body. The one place a value is read by name is a tool's own `headers`, via a `{{context:<key>}}` token the **tool** declares — see [Placing a value in a real header](#placing-a-value-in-a-real-header) below and [Expressions & Templating](./expressions-and-templating.md).
 
 ## Where it is accepted
 
@@ -31,6 +31,39 @@ This page is the canonical contract. `tool_context` is **not** templating — th
 Context headers are applied **after** any headers configured on the tool's `execute.headers` / `mcp.headers`, so a context header wins over a tool-defined header with the same name.
 
 When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in.
+
+## Placing a value in a real header
+
+`tool_context` by itself can only ever produce headers under the deployment's [context prefix](#configuring-the-header-prefix) (`X-Soat-Context-` by default). That a prefix is always applied, and that the caller cannot choose it, is a security invariant rather than an inconvenience: if a caller-supplied key could name any header, it could overwrite the tool's own configured credential or the server-pinned identity headers, and context headers are spread **last** in the header build.
+
+When a target needs the value in a header of its own — almost always `Authorization` — the **tool definition** says so, with a `{{context:<key>}}` token in its `headers`:
+
+```yaml
+mcp:
+  headers:
+    Authorization: 'Bearer {{context:ocaToken}}'
+```
+
+```yaml
+execute:
+  url: https://api.example.com/v1/orders
+  headers:
+    Authorization: 'Bearer {{context:ocaToken}}'
+    X-Tenant: '{{context:tenant}}'
+```
+
+The authority is split on purpose: the tool knows the header shape its endpoint expects, and the caller only supplies the value. Nothing about `tool_context` itself changes — the same call still also sends the prefixed `…-ocaToken` context header, so a target may read either.
+
+| Rule | Behavior |
+| --- | --- |
+| Where the token is allowed | `execute.headers` and `mcp.headers` only. Anywhere else — `execute.url`, `mcp.url`, `execute.auth`, a body — is rejected at write time with `400 INVALID_TEMPLATE_TOKEN`. A context value is caller-supplied, so it must not be able to steer the outbound URL. |
+| Key grammar | Identical to a `tool_context` key's — one grammar, so the two cannot disagree about which keys exist. An invalid key is rejected at write time, not at first call. |
+| Missing key at call time | The tool call **fails** with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header. An `Authorization: Bearer ` with no value would reach the endpoint and come back as an opaque upstream `401`, several steps from the actual mistake. |
+| Empty-string value | A value, not a missing key — the header is sent empty, because that is what the caller asked for. |
+| With `{{secret:...}}` | Both kinds may appear in the same header value and are substituted in a **single pass**, so a substituted value is never re-scanned as template source: a `tool_context` value containing `{{secret:sec_...}}` stays literal text, and so does a secret whose plaintext contains `{{context:...}}`. |
+| Calling paths with no context | `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node carry no `tool_context`, so a tool declaring `{{context:...}}` cannot be invoked through them — the call fails with `MISSING_TOOL_CONTEXT_KEY`. Bind such a tool to an agent and call it through a generation, session or orchestration `agent` node. |
+
+The token is resolved at the point of use. `GET /tools` echoes back the token, never the resolved value — the same as `{{secret:...}}`.
 
 ## Key → header name
 

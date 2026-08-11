@@ -11,9 +11,12 @@ import {
   toNullableString,
   toOptionalString,
 } from '../resource-inputs/normalizers';
-import { findInvalidTemplateTokens } from '../secrets';
 import { validateExecuteAuth } from '../toolAuth';
 import { createTool, deleteTool, getTool, updateTool } from '../tools';
+import {
+  describeToolTemplateTokenProblems,
+  findToolTemplateTokenProblems,
+} from '../toolTemplates';
 import { defineFormationModule } from './defineFormationModule';
 import { isObjectRecord } from './formationSpecLoader';
 
@@ -90,14 +93,15 @@ export const toolsFormationModule = defineFormationModule({
     pushExecuteAuthErrors({ properties, basePath, errors });
 
     // Validate execute and mcp separately so each error points at the field
-    // that actually carries the offending token.
+    // that actually carries the offending token. The rule itself (and its
+    // wording) comes from `toolTemplates`, the same source the REST write path
+    // throws from.
     for (const field of ['execute', 'mcp'] as const) {
-      const invalidTokens = findInvalidTemplateTokens(properties[field]);
-      for (const token of new Set(invalidTokens)) {
-        errors.push({
-          path: `${basePath}.${field}`,
-          message: `Invalid template token '${token}' — double curly braces are reserved for {{secret:sec_...}} references; use single braces ({param}) for URL path parameters.`,
-        });
+      const message = describeToolTemplateTokenProblems(
+        findToolTemplateTokenProblems(properties[field])
+      );
+      if (message) {
+        errors.push({ path: `${basePath}.${field}`, message });
       }
     }
   },

@@ -48,8 +48,14 @@ const CHECKS = [
   // backtick, or end of line), so "as any other write" (English prose) is not
   // flagged while `(x as any).foo` and `foo as unknown;` are.
   { label: 'forbidden cast (as any / as unknown)', re: /\bas\s+(any|unknown)\s*([).,;\]}>`]|$)/ },
-  // Only flag `:camelCase` route-style path params, not every colon.
-  { label: 'camelCase path param (use snake_case)', re: /:[a-z]+[A-Z][a-zA-Z]*/ },
+  // Only flag `:camelCase` route-style path params, not every colon. The
+  // lookbehind exempts the two double-curly template tokens, whose key is not a
+  // path param and is legitimately camelCase (`{{context:ocaToken}}` — context
+  // keys follow the auto-populated `sessionId`/`actorId` spelling).
+  {
+    label: 'camelCase path param (use snake_case)',
+    re: /(?<!\{\{(?:context|secret)):[a-z]+[A-Z][a-zA-Z]*/,
+  },
   { label: 'stale action: documents:SearchDocuments', re: /documents:SearchDocuments|\bSearchDocuments\b/ },
   { label: 'stale soat-tool action: search-documents', re: /\bsearch-documents\b/ },
   // Vocabulary reclaim (workflows PRD D1a): the two senses of "workflow" must

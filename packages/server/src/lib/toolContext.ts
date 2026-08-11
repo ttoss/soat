@@ -16,8 +16,16 @@ import { DomainError } from '../errors';
  * outside this set produces a header name that `fetch` rejects with a
  * `TypeError` at tool-call time, mid-generation. The same grammar constrains the
  * configurable prefix, since prefix + key must be one valid header name.
+ *
+ * Exported as a character class rather than only a finished regex because
+ * `toolTemplates.ts` composes it into the `{{context:<key>}}` token grammar (#945
+ * item 2): the key inside a template token is the same key that becomes a header,
+ * so the three checks — key, prefix, token — must not be able to disagree about
+ * which characters exist.
  */
-const HEADER_TOKEN_RE = /^[A-Za-z0-9!#$%&'*+\-.^_`|~]+$/;
+export const TOOL_CONTEXT_KEY_CHARS = "A-Za-z0-9!#$%&'*+\\-.^_`|~";
+
+const HEADER_TOKEN_RE = new RegExp(`^[${TOOL_CONTEXT_KEY_CHARS}]+$`);
 
 /**
  * The prefix a `tool_context` key is stamped with, when the deployment does not

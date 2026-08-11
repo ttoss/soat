@@ -340,6 +340,48 @@ expect_cli_error_status 400 create-tool \
 $SOAT_CLI delete-tool --tool-id "$SECRET_REF_TOOL_ID"
 echo "Secret reference coverage: OK"
 
+# Context references ({{context:...}}) in tool headers: accepted in `headers`,
+# echoed back verbatim, and rejected outside `headers`. Calling such a tool
+# through `/tools/{id}/call` — a path that carries no tool_context — must fail
+# closed rather than put the literal token on the wire as a credential.
+# Resolution against a real tool_context is covered by the server suite against a
+# local echo server, which can assert the received header; there is no
+# deterministic agent turn here that would call an http tool.
+CONTEXT_REF_TOKEN="Bearer {{context:ocaToken}}"
+CONTEXT_REF_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-context-ref-tool \
+  --type http \
+  --execute "{\"url\":\"$SERVER_URL/api/v1/projects\",\"method\":\"GET\",\"headers\":{\"Authorization\":\"$CONTEXT_REF_TOKEN\"}}")
+CONTEXT_REF_TOOL_ID=$(printf '%s\n' "$CONTEXT_REF_TOOL_RESP" | jq -r '.id')
+if [ -z "$CONTEXT_REF_TOOL_ID" ] || [ "$CONTEXT_REF_TOOL_ID" = "null" ]; then
+  echo "ERROR: Failed to create tool with a {{context:...}} reference" >&2
+  echo "$CONTEXT_REF_TOOL_RESP" >&2
+  exit 1
+fi
+
+CONTEXT_REF_TOOL_GET=$($SOAT_CLI get-tool --tool-id "$CONTEXT_REF_TOOL_ID")
+STORED_CONTEXT_HEADER=$(printf '%s\n' "$CONTEXT_REF_TOOL_GET" | jq -r '.execute.headers.Authorization')
+if [ "$STORED_CONTEXT_HEADER" != "$CONTEXT_REF_TOKEN" ]; then
+  echo "ERROR: Expected stored header to echo the {{context:...}} token, got '$STORED_CONTEXT_HEADER'" >&2
+  echo "$CONTEXT_REF_TOOL_GET" >&2
+  exit 1
+fi
+
+# No tool_context on this path — the call must fail, not send `Bearer ` empty.
+expect_cli_error_status 400 call-tool --tool-id "$CONTEXT_REF_TOOL_ID"
+
+# Outside `headers`, the token is a write-time error: a caller-supplied value
+# must not be able to steer the outbound URL.
+expect_cli_error_status 400 create-tool \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-context-ref-url-tool \
+  --type http \
+  --execute '{"url":"https://api.example.com/{{context:tenant}}/convert","method":"GET"}'
+
+$SOAT_CLI delete-tool --tool-id "$CONTEXT_REF_TOOL_ID"
+echo "Context reference coverage: OK"
+
 # execute.auth computed credentials: an aws_sigv4 config is accepted and its
 # credential fields are echoed back as {{secret:...}} references, never
 # resolved. Malformed configs must fail at create time, not at first call.

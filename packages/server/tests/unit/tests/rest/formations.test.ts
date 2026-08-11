@@ -3813,6 +3813,58 @@ resources:
       expect(res.body.valid).toBe(false);
     });
 
+    // #945 item 2: the formation validator shares the token rules with the REST
+    // write path, so a template cannot author a tool the API would reject.
+    test('validate accepts a {{context:...}} token in a tool header', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              ApiTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-context-header-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://api.example.com/convert',
+                    headers: { Authorization: 'Bearer {{context:ocaToken}}' },
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(true);
+    });
+
+    test('validate rejects a {{context:...}} token in a tool url', async () => {
+      const res = await authenticatedTestClient(adminToken)
+        .post('/api/v1/formations/validate')
+        .send({
+          template: {
+            resources: {
+              ApiTool: {
+                type: 'tool',
+                properties: {
+                  name: 'formation-context-url-tool',
+                  type: 'http',
+                  execute: {
+                    url: 'https://api.example.com/{{context:tenant}}/convert',
+                  },
+                },
+              },
+            },
+          },
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.valid).toBe(false);
+      expect(JSON.stringify(res.body.errors)).toMatch(/only in .*headers/i);
+    });
+
     test('deploy resolves the sub to the secret physical id inside the header string', async () => {
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/formations')

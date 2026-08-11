@@ -66,7 +66,9 @@ HTTP header names in `execute.headers` and `mcp.headers` are opaque and preserve
 
 `execute.headers` is not the only source of headers on an outbound call. On every `http` and `mcp` tool call, the server also injects the generation's [`tool_context`](../advanced/tool-context.md) as `X-Soat-Context-*` request headers — including the session's `sessionId`, `actorId` and `actorExternalId`, which are auto-populated. These arrive **in addition to** the headers you configure, and are applied after them, so a context header wins over a tool-defined header of the same name.
 
-This is how a tool endpoint learns who the agent is acting for without trusting the prompt. It is a header mechanism, not templating: nothing is interpolated into `execute`. See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
+This is how a tool endpoint learns who the agent is acting for without trusting the prompt. The prefix is deployment configuration and a caller can never choose it, so caller context cannot overwrite a tool's own credential.
+
+When a target needs a context value in a header of its own, the tool declares it with a [`{{context:<key>}}` token](#context-references-in-headers). See the [Tool Context reference](../advanced/tool-context.md) for the key→header rule and the security notes.
 
 `X-Soat-Context-` is the default prefix, not a fixed one: a self-hosted deployment can rename it with [`TOOL_CONTEXT_HEADER_PREFIX`](../self-hosting/configuration.md#agent-generation), so read your own deployment's prefix when writing the endpoint.
 
@@ -176,7 +178,32 @@ Never paste raw credentials into `execute.headers` — `GET /tools/{id}` echoes 
 
 `{{secret:...}}` tokens are supported in `execute.url` (e.g. for APIs that take a key as a query parameter) and in `execute.headers` values. The token is resolved to the decrypted secret value right before the outbound request; the stored tool — and everything returned by `GET`/`LIST` — keeps the reference. The referenced secret must exist in the same project, validated at tool create/update time (`400 SECRET_NOT_FOUND` otherwise).
 
-Secret references are the **only** valid double-curly syntax: any other `{{...}}` token anywhere in `execute` or `mcp` is rejected at create/update time with `400 INVALID_TEMPLATE_TOKEN` — use single braces (`{param}`) for [URL path placeholders](#http). See [Expressions & Templating](../advanced/expressions-and-templating.md) for the full pattern reference.
+Secret and [context](#context-references-in-headers) references are the **only** valid double-curly forms: any other `{{...}}` token anywhere in `execute` or `mcp` is rejected at create/update time with `400 INVALID_TEMPLATE_TOKEN` — use single braces (`{param}`) for [URL path placeholders](#http). See [Expressions & Templating](../advanced/expressions-and-templating.md) for the full pattern reference.
+
+#### Context references in headers
+
+A `{{context:<key>}}` token in `execute.headers` or `mcp.headers` is substituted, per call, with one key of the caller's [`tool_context`](../advanced/tool-context.md):
+
+```json
+{
+  "name": "list-orders",
+  "type": "http",
+  "execute": {
+    "url": "https://api.example.com/v1/orders",
+    "method": "GET",
+    "headers": { "Authorization": "Bearer {{context:ocaToken}}" }
+  }
+}
+```
+
+Use it when a per-user credential has to reach the target in the header the target expects. Without it, `tool_context` can only produce prefixed context headers, and a caller can never choose that prefix.
+
+| | |
+| --- | --- |
+| Valid in | `execute.headers` and `mcp.headers` only. In `execute.url`, `mcp.url`, `execute.auth` or a body it is rejected with `400 INVALID_TEMPLATE_TOKEN` — a caller-supplied value must not be able to steer the outbound URL. |
+| Missing key at call time | The call fails with `400 MISSING_TOOL_CONTEXT_KEY`, naming the key and header, rather than sending an empty credential. |
+| Read back | `GET`/`LIST` echo the token, never the resolved value — same as `{{secret:...}}`. |
+| Calling paths without context | `POST /api/v1/tools/{tool_id}/call` and an orchestration `tool` node carry no `tool_context`, so a tool declaring this token cannot be invoked through them. Reach it through an agent generation, a session, or an orchestration `agent` node. |
 
 #### Computed credentials (`execute.auth`)
 
@@ -335,7 +362,7 @@ An `mcp` tool represents a connection to a [Model Context Protocol](https://mode
 
 The SOAT server acts as a proxy: it receives the model's tool call, forwards it to the MCP server, and feeds the result back into the loop.
 
-`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute).
+`mcp.url` and `mcp.headers` values support [secret references](./secrets.md#secret-references-secret) — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}` — resolved right before the MCP server is contacted, exactly like [`http` tool headers](#secret-references-in-execute). `mcp.headers` also supports [`{{context:<key>}}`](#context-references-in-headers), which is how a per-user token reaches an MCP server that authenticates with `Authorization`.
 
 #### Scoping an MCP tool to a subset of actions
 
@@ -522,6 +549,8 @@ If the tool declares [`execute.auth`](#computed-credentials-executeauth) and the
 If an `http` tool's target responds with a 2xx status but a body that isn't valid JSON (HTML, plain text, or an empty `204 No Content`), the tool result is the raw response text instead of a parse error.
 
 A tool whose result is empty — a `soat` action that answered `204`, for instance — responds `200` with a JSON `null` body rather than an empty one.
+
+This endpoint carries no [`tool_context`](../advanced/tool-context.md), so a tool whose headers declare a [`{{context:<key>}}` token](#context-references-in-headers) cannot be called here: the call fails with `400 MISSING_TOOL_CONTEXT_KEY`. Such tools are meant to be reached through an agent.
 
 ## Examples
 
