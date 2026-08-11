@@ -11,6 +11,7 @@ import {
   emitTaskEvent,
   findTaskInstance,
   mapTask,
+  sanitizeTaskToolContext,
   stateByName,
   type TaskInstance,
   type TaskPrincipal,
@@ -123,6 +124,19 @@ type TransitionArgs = {
    * Without this the composed cycle is invisible here; see `isChainHop`.
    */
   viaRunToken?: boolean;
+  /**
+   * Caller context for the dispatches the task makes from here on (#950).
+   *
+   * The precedence rule is the whole rule: **supplying one replaces the stored
+   * bag wholesale; omitting it (`undefined`) keeps what the task already has.**
+   * So the credential a dispatch runs with belongs to whoever last moved the
+   * task — the same principal `resolveDispatchPrincipal` already makes it run as
+   * — and a bag survives every move that does not speak about it, which is what
+   * carries it across an approval gate, a retry and an automation hop.
+   *
+   * An explicit `{}` clears it (see `sanitizeTaskToolContext`).
+   */
+  toolContext?: Record<string, string> | null;
 };
 
 /** How far a task may travel on automation alone before the engine refuses. */
@@ -235,6 +249,12 @@ const performTransitionTxn = async (args: {
   transitionArgs: TransitionArgs;
   transitions: WorkflowTransition[];
   states: WorkflowState[];
+  /**
+   * The already-sanitized bag to persist, or `undefined` to leave the stored one
+   * alone. Sanitized by the caller so an invalid key is a rejected write rather
+   * than a throw from inside the locked transaction.
+   */
+  toolContext: Record<string, string> | null | undefined;
 }): Promise<{
   previousDispatch: ActiveDispatch | null;
   toState: string;
@@ -279,6 +299,13 @@ const performTransitionTxn = async (args: {
     // sweeper for the new state.
     task.pendingTransition = null;
     task.pendingApprovalId = null;
+    // Last writer wins, and a terminal move scrubs: a closed task can never
+    // dispatch again, so keeping the bag would only park a credential at rest.
+    if (closed) {
+      task.toolContext = null;
+    } else if (args.toolContext !== undefined) {
+      task.toolContext = args.toolContext;
+    }
     task.stallDeadlineAt =
       closed || !toStateDef
         ? null
@@ -378,6 +405,14 @@ export const transitionTask = async (args: TransitionArgs) => {
     );
   }
 
+  // Sanitized before anything is claimed or locked: a key that could not become
+  // a header must be a rejected write the caller is still listening for, not a
+  // throw from inside the transaction (or after the approval gate is claimed).
+  const toolContext =
+    args.toolContext === undefined
+      ? undefined
+      : sanitizeTaskToolContext(args.toolContext);
+
   // Approval-gated: a `requires_approval` transition fired by anyone other than
   // the `approval` principal (the resolution itself) parks as an ApprovalItem
   // instead of applying. The gated move is re-fired here as the `approval`
@@ -394,6 +429,11 @@ export const transitionTask = async (args: TransitionArgs) => {
       // transition was resolved from, never the live workflow row.
       transitions,
       note: args.note ?? null,
+      // The gate is a pause, not a cancellation: the requester's context is
+      // persisted now so the dispatch that runs when the gate resolves — under
+      // the `approval` principal, which supplies none of its own — still carries
+      // the credential the move was made with.
+      toolContext,
     });
   }
 
@@ -401,6 +441,7 @@ export const transitionTask = async (args: TransitionArgs) => {
     transitionArgs: args,
     transitions,
     states,
+    toolContext,
   });
 
   await cancelDispatchOnExit({

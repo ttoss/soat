@@ -5234,10 +5234,15 @@ if [ -z "$SELF_WF_ID" ] || [ "$SELF_WF_ID" = "null" ]; then
   exit 1
 fi
 
+# `--tool-context` rides along on this task rather than in a block of its own:
+# the orchestration dispatch is the only path where the bag becomes observable
+# through the public API, since the run echoes what the task handed it while the
+# task itself never returns its own (#950).
 SELF_TASK_RESP=$($SOAT_CLI create-task \
   --project-id "$PROJECT_PUBLIC_ID" \
   --workflow-id "$SELF_WF_ID" \
-  --title "advances itself")
+  --title "advances itself" \
+  --tool-context '{"ocaToken":"smoke-task-token","tenant":"acme"}')
 SELF_TASK_ID=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.id')
 SELF_TASK_STATE=$(printf '%s\n' "$SELF_TASK_RESP" | jq -r '.state')
 if [ "$SELF_TASK_STATE" != "working" ]; then
@@ -5297,6 +5302,86 @@ if ! printf '%s\n' "$SELF_HISTORY" | jq -e --arg uid "$ADMIN_USER_ID" \
   exit 1
 fi
 echo "Automated transition attribution: OK"
+
+# #950: the dispatched run carries the task's tool_context, so an agent node of
+# that run — and any child run it starts — calls its tools with the credential
+# the task was moved with. The run is where the bag is readable; the task never
+# returns it.
+# The run id comes from the run list, not from the task history: this flow's
+# `finish` row is the run's own `soat` tool moving the task with a run-as token,
+# so it is recorded as the user that started the chain with no run id attached
+# (#786/#887). This orchestration is dispatched by exactly one task, so its run
+# list has exactly one entry.
+SELF_RUNS=$($SOAT_CLI list-orchestration-runs --orchestration-id "$SELF_ORCH_ID")
+SELF_RUN_ID=$(printf '%s\n' "$SELF_RUNS" | jq -r '.data[0].id // empty')
+if [ -z "$SELF_RUN_ID" ]; then
+  echo "ERROR: the task dispatch started no orchestration run" >&2
+  printf '%s\n' "$SELF_RUNS" >&2
+  exit 1
+fi
+SELF_RUN_GET=$($SOAT_CLI get-orchestration-run --orchestration-run-id "$SELF_RUN_ID")
+if ! printf '%s\n' "$SELF_RUN_GET" | jq -e \
+  '.tool_context.ocaToken == "smoke-task-token" and .tool_context.tenant == "acme"' >/dev/null 2>&1; then
+  echo "ERROR: the task-dispatched run did not inherit the task's tool_context" >&2
+  printf '%s\n' "$SELF_RUN_GET" >&2
+  exit 1
+fi
+echo "Task tool_context reached the dispatched run: OK"
+
+# Write-only: a task never echoes the bag back, on create or on read.
+if ! printf '%s\n' "$SELF_TASK_RESP" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: create-task echoed tool_context back" >&2
+  printf '%s\n' "$SELF_TASK_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$SELF_TASK_GET" | jq -e 'has("tool_context") | not' >/dev/null 2>&1; then
+  echo "ERROR: get-task exposed the stored tool_context" >&2
+  printf '%s\n' "$SELF_TASK_GET" >&2
+  exit 1
+fi
+echo "Task tool_context is write-only: OK"
+
+# A key that could not become an HTTP header name is rejected at write time, on
+# both entry points — the same contract as every other tool_context surface.
+#
+# On a workflow of its own: the two above have on_enter automation, and the
+# module's main workflow is deleted earlier in this section, so borrowing either
+# would make these checks depend on another block's lifetime.
+CTX_WF_ID=$($SOAT_CLI create-workflow \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name smoke-tool-context-workflow \
+  --states '[{"name":"open","initial":true},{"name":"shut","terminal":true}]' \
+  --transitions '[{"name":"go","from":["open"],"to":"shut"}]' | jq -r '.id')
+if [ -z "$CTX_WF_ID" ] || [ "$CTX_WF_ID" = "null" ]; then
+  echo "ERROR: failed to create the tool_context validation workflow" >&2
+  exit 1
+fi
+
+expect_cli_error_status 400 create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$CTX_WF_ID" \
+  --title "bad context key" \
+  --tool-context '{"bad key":"v"}'
+
+CTX_TASK_ID=$($SOAT_CLI create-task \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --workflow-id "$CTX_WF_ID" \
+  --title "context transition card" | jq -r '.id')
+if [ -z "$CTX_TASK_ID" ] || [ "$CTX_TASK_ID" = "null" ]; then
+  echo "ERROR: failed to create the tool_context validation task" >&2
+  exit 1
+fi
+expect_cli_error_status 400 transition-task \
+  --task-id "$CTX_TASK_ID" \
+  --transition go \
+  --tool-context '{"ocaToken":"a","ocatoken":"b"}'
+# A valid bag on the same transition is accepted; `shut` is terminal, so this
+# also runs the scrub-on-close path.
+$SOAT_CLI transition-task --task-id "$CTX_TASK_ID" --transition go \
+  --tool-context '{"ocaToken":"smoke-transition-token"}' >/dev/null
+$SOAT_CLI delete-task --task-id "$CTX_TASK_ID" >/dev/null
+$SOAT_CLI delete-workflow --workflow-id "$CTX_WF_ID" >/dev/null
+echo "Task tool_context validation: OK (400 as expected on both entry points)"
 
 # #879: a `soat` node whose action answers non-2xx fails the run. Before that
 # the error body was stored as the node's artifact and the run carried on as

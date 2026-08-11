@@ -17,6 +17,8 @@ This page is the canonical contract. `tool_context` is **not** general templatin
 | `POST /api/v1/sessions/{session_id}/messages` and `.../generate` | `tool_context` — per-request, this generation only |
 | `POST /api/v1/conversations/{conversation_id}/generate` | `tool_context` in the body |
 | `POST /api/v1/orchestration-runs` | `tool_context` — persisted on the run, applied to the generation of every `agent` node it executes, and inherited by `loop`/`sub_orchestration` child runs (see [Run Tool Context](../modules/orchestrations.md#run-tool-context)) |
+| `POST /api/v1/tasks` | `tool_context` — persisted on the task, applied to the dispatches of the entry state's `on_enter` |
+| `POST /api/v1/tasks/{task_id}/transitions` | `tool_context` — **replaces** the task's stored bag; omitting it keeps it (see [Dispatch tool context](../modules/workflows.md#dispatch-tool-context)) |
 | Formation templates | `tool_context` on a `Session` resource |
 
 ## Which tools receive the headers
@@ -38,7 +40,9 @@ By default a tool receives **every** key in the bag. A tool can narrow that to a
 
 The [auto-populated identity keys](#auto-populated-keys-sessions) are always forwarded regardless of the allowlist, and a key consumed by a `{{context:<key>}}` token in the tool's own headers is substituted regardless of it too.
 
-When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in.
+When a generation pauses with `status: "requires_action"`, the `tool_context` from the original request is preserved and reapplied on resume. An orchestration run gets the same guarantee from its own row rather than from the paused generation: it survives an `awaiting_input` pause, a `sleeping` wait, a background worker drive and a crash redrive, none of which carry a request a bag could travel in. A [task](../modules/workflows.md#dispatch-tool-context) stores its bag the same way, which is what carries it across an approval gate, a retry and an automated hop — its pauses are measured in days, not seconds.
+
+Where a session's and a run's bag is readable, a **task's is write-only**: a task is long-lived and read by every principal on the board, so its stored bag is never returned by a read and is cleared when the task closes.
 
 ## Placing a value in a real header
 

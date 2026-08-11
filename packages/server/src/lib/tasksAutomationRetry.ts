@@ -136,6 +136,15 @@ type AttemptContext = {
   inputs: Record<string, unknown>;
   retry: RetryPolicy | null;
   principal?: RequestPrincipal;
+  /**
+   * The task's caller context (#950), read off the task row by
+   * `runStateAutomation` rather than threaded down from the transition that
+   * caused this dispatch — which is what carries it across an approval gate, a
+   * retry and an automation hop with no per-path plumbing to forget. Read once,
+   * before the first attempt, and reused by every retry: a flake must not
+   * silently change which credential the work runs with.
+   */
+  toolContext?: Record<string, string>;
 };
 
 // One attempt: marks the (re)dispatch running with its attempt number, then runs
@@ -166,6 +175,7 @@ const runOneAttempt = async (args: {
     taskPublicId: ctx.taskPublicId,
     inputs: ctx.inputs,
     principal: ctx.principal,
+    toolContext: ctx.toolContext,
     onDispatchStarted: async ({ generationId, orchestrationRunId }) => {
       await writeAttemptState({
         taskPublicId: ctx.taskPublicId,

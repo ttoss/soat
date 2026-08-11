@@ -8,6 +8,10 @@ import { paginatedList } from './pagination';
 import type { RequestPrincipal } from './principals';
 import { runStateAutomation } from './tasksAutomation';
 import { resolveTaskDefinition } from './taskWorkflowDefinition';
+import {
+  assertValidToolContextKeys,
+  pinServerIdentityToolContext,
+} from './toolContext';
 import { validatePayload, type WorkflowState } from './workflowsValidation';
 
 export { transitionTask } from './tasksTransition';
@@ -69,6 +73,35 @@ export const mapTask = (instance: TaskInstance) => {
     created_at: instance.createdAt,
     updated_at: instance.updatedAt,
   };
+};
+
+/**
+ * Turns a caller-supplied `tool_context` into the bag to persist on the task:
+ * validated against the header-name grammar every other entry point uses, with
+ * the reserved identity keys stripped in any casing.
+ *
+ * The strip is belt-and-braces — `buildGenerationContext` re-pins identity at
+ * the generation chokepoint (#850), so a forged `sessionId` could never reach a
+ * tool header either way — but a task row is long-lived and read by operators,
+ * and storing a key the server will overwrite would make the record lie about
+ * what the dispatch will send.
+ *
+ * An empty bag (all-reserved, or a literal `{}`) persists as `null` rather than
+ * `{}`: "no context" has one representation, and a caller can therefore drop a
+ * credential from an open task by sending `tool_context: {}` without having to
+ * close it.
+ */
+export const sanitizeTaskToolContext = (
+  toolContext: Record<string, string> | null | undefined
+): Record<string, string> | null => {
+  if (!toolContext) return null;
+  assertValidToolContextKeys(toolContext);
+  const stripped = pinServerIdentityToolContext({
+    toolContext,
+    identity: null,
+  });
+  if (!stripped || Object.keys(stripped).length === 0) return null;
+  return stripped;
 };
 
 /**
@@ -339,6 +372,13 @@ export const createTask = async (args: {
    * Defaults to the `initial` state.
    */
   state?: string | null;
+  /**
+   * Caller context for the automation dispatches this task makes, forwarded as
+   * `X-Soat-Context-*` headers on their tool calls (#950). Creation is the first
+   * move, so this is the bag the entry state's `on_enter` runs with; each later
+   * transition may replace it.
+   */
+  toolContext?: Record<string, string> | null;
   principal: TaskPrincipal;
 }) => {
   log(
@@ -367,6 +407,7 @@ export const createTask = async (args: {
   const payload = (args.payload ?? {}) as Record<string, unknown>;
   validatePayload({ payloadSchema: workflow.payloadSchema, payload });
 
+  const toolContext = sanitizeTaskToolContext(args.toolContext);
   const closed = entryState.terminal === true;
   const enteredStateAt = new Date();
 
@@ -381,6 +422,9 @@ export const createTask = async (args: {
     status: closed ? 'closed' : 'open',
     payload,
     assignee: args.assignee ?? null,
+    // A task created straight into a terminal state dispatches nothing and can
+    // never be moved again, so it never holds a credential at rest.
+    toolContext: closed ? null : toolContext,
     activeDispatch: null,
     automationStatus: null,
     pendingTransition: null,

@@ -110,6 +110,7 @@ const runAgentDispatch = async (args: {
   taskPublicId: string;
   inputs: Record<string, unknown>;
   principal?: RequestPrincipal;
+  toolContext?: Record<string, string>;
 }): Promise<DispatchResult> => {
   const authHeader = await buildRunAuthHeader({
     principalKind: args.principal?.principalType ?? null,
@@ -123,6 +124,7 @@ const runAgentDispatch = async (args: {
     projectIds: [args.projectId],
     messages: buildAgentMessages(args.inputs),
     authHeader,
+    toolContext: args.toolContext,
     stream: false,
   })) as GenerationResult;
 
@@ -143,6 +145,13 @@ export const runDispatch = async (args: {
   inputs: Record<string, unknown>;
   // The identity the dispatch runs as, for both kinds; see `dispatchOnEnter`.
   principal?: RequestPrincipal;
+  /**
+   * The task's caller context, forwarded as `X-Soat-Context-*` headers on the
+   * tool calls this dispatch makes (#950). For an orchestration dispatch it is
+   * handed to the run, which carries it to every agent node — and to every child
+   * run a `loop` or `sub_orchestration` node starts (#945 item 1).
+   */
+  toolContext?: Record<string, string>;
   // Called as soon as a dispatch id is known but before the (blocking) wait
   // completes. For orchestration dispatches this fires at run creation, so the
   // run id can be persisted while the run is still in flight (#606).
@@ -158,6 +167,7 @@ export const runDispatch = async (args: {
       taskPublicId: args.taskPublicId,
       inputs: args.inputs,
       principal: args.principal,
+      toolContext: args.toolContext,
     });
   }
 
@@ -173,6 +183,7 @@ export const runDispatch = async (args: {
     projectIds: [args.projectId],
     input: args.inputs,
     principal: args.principal,
+    toolContext: args.toolContext,
     onRunCreated: args.onDispatchStarted
       ? ({ orchestrationRunId }) => {
           return args.onDispatchStarted!({

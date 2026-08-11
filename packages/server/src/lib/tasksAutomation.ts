@@ -327,11 +327,10 @@ export const runStateAutomation = async (args: {
     inputs,
     retry,
     principal: args.principal,
+    toolContext: task.toolContext ?? undefined,
   });
 
-  if (outcome.kind === 'abandoned') {
-    return;
-  }
+  if (outcome.kind === 'abandoned') return;
   if (outcome.kind === 'failed') {
     // Only the last attempt reaches here, so `on_failure` (or the parked
     // `automation_status: 'failed'`) fires once per dispatch, never per attempt.

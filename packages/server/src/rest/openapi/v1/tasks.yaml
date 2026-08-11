@@ -471,6 +471,29 @@ components:
             instead of the workflow's `initial` state. Must name a state
             declared on the workflow, or the request is rejected with
             `TASK_STATE_NOT_FOUND` (400). Defaults to the `initial` state.
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Key-value pairs forwarded as `X-Soat-Context-<key>` headers on every
+            `http`, `mcp` and `soat` tool call made by this task's automation
+            dispatches — the agent generations a state's `on_enter` starts, and
+            the agent nodes of any orchestration run it starts. The header name
+            is `X-Soat-Context-` plus the key verbatim; no character is re-cased.
+
+            Creation is the task's first move, so this is the bag the entry
+            state's `on_enter` runs with. Each transition may replace it (see
+            `TransitionTaskRequest.tool_context`).
+
+            The reserved identity keys (`sessionId`, `actorId`,
+            `actorExternalId`) are stripped in any casing and re-derived
+            server-side, so a task-dispatched generation cannot forge them. A key
+            outside the HTTP header-name grammar is rejected with
+            `INVALID_TOOL_CONTEXT_KEY` (400).
+
+            Write-only: the stored bag is never returned by any task read, and it
+            is cleared when the task reaches a terminal state.
     UpdateTaskRequest:
       type: object
       properties:
@@ -495,3 +518,25 @@ components:
         note:
           type: string
           nullable: true
+        tool_context:
+          type: object
+          additionalProperties:
+            type: string
+          description: >-
+            Caller context for the automation dispatches the task makes from
+            here on, forwarded as `X-Soat-Context-<key>` headers on their tool
+            calls.
+
+            Supplying it **replaces** the task's stored bag wholesale; omitting
+            it keeps the current one, so the context follows whoever last moved
+            the task and survives every move that does not speak about it —
+            including an approval gate, a retry, and an automation hop. Send an
+            empty object to clear it without closing the task.
+
+            The reserved identity keys (`sessionId`, `actorId`,
+            `actorExternalId`) are stripped in any casing and re-derived
+            server-side. A key outside the HTTP header-name grammar is rejected
+            with `INVALID_TOOL_CONTEXT_KEY` (400).
+
+            Write-only: never returned by a task read, and cleared when the
+            transition closes the task.
