@@ -125,6 +125,22 @@ describe('MCP tools - happy path', () => {
     expect(Array.isArray(result.groups)).toBe(true);
     expect(result.totals.input_tokens).toBe(0);
     expect(result.totals.cost_usd).toBeNull();
+    // Measured quantities per component, so infra meters are not reported as
+    // all-zero buckets. Nothing metered here, so the list is empty.
+    expect(result.totals.components).toEqual([]);
+    expect(result.meter_type).toBeNull();
+  });
+
+  test('get-usage narrows the rollup to one meter type', async () => {
+    const res = await mcpCall('get-usage', {
+      project_id: projectId,
+      group_by: 'model',
+      meter_type: 'storage',
+    });
+    expect(res.status).toBe(200);
+    const result = parseResult(res);
+    expect(result.meter_type).toBe('storage');
+    expect(result.groups).toEqual([]);
   });
 
   test('create-, list-, and delete-usage-threshold manage a threshold', async () => {

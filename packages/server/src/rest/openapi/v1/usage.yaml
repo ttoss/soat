@@ -143,10 +143,12 @@ paths:
       summary: Get aggregated usage for a project
       description: >
         Returns a project's usage rolled up over an optional `[from, to]` time
-        window, bucketed by a single dimension. Each group and the grand total
-        carry summed token counts and `cost_usd` (null when no event in the
-        bucket was priced). This is the per-project cost-by-range/by-category
-        query — a monthly figure without scanning raw meter rows client-side.
+        window, bucketed by a single dimension and optionally narrowed to one
+        `meter_type`. Each group and the grand total carry summed token counts, a
+        measured `quantity` per component (so infra meters report their real
+        amount, not zeros), and `cost_usd` (null when no event in the bucket was
+        priced). This is the per-project cost-by-range/by-category query — a
+        monthly figure without scanning raw meter rows client-side.
       operationId: getUsage
       parameters:
         - name: project_id
@@ -182,6 +184,15 @@ paths:
           schema:
             type: string
             format: date-time
+        - name: meter_type
+          in: query
+          required: false
+          description: >
+            Narrow the rollup to one meter type (e.g. `llm_tokens`,
+            `compute_execution`, `api_request`, `storage`). Omit to include
+            every meter. An unknown type yields an empty rollup, not an error.
+          schema:
+            type: string
       responses:
         '200':
           description: The aggregated usage rollup
@@ -624,9 +635,43 @@ components:
           type: string
           format: date-time
 
+    UsageAggregateComponent:
+      type: object
+      description: >
+        One measured dimension of a bucket, summed across its events. This is
+        what makes the rollup uniform over meter types: the token fields only
+        describe `llm_tokens`, so an infra meter's amount is read here.
+      properties:
+        component:
+          type: string
+          description: >
+            The measured dimension: `input_tokens`, `cached_tokens`,
+            `output_tokens`, `reasoning_tokens`, `compute_second`, `request`,
+            `gb_day`, …
+        unit:
+          type: string
+          description: >
+            Unit `quantity` is measured in: `token`, `compute_second`,
+            `request`, `gb_day`.
+        quantity:
+          type: number
+          description: >
+            Summed measured amount in `unit`. Non-integer for fractional
+            measures (GB-days, compute seconds).
+          example: 0.4
+        cost_usd:
+          type: number
+          nullable: true
+          description: >
+            Sum of the priced component costs; null when no price row covered
+            the component — the quantity is still captured, it does not mean the
+            usage was free.
+
     UsageAggregateTotals:
       type: object
-      description: Summed token counts and cost for a bucket (or the grand total).
+      description: >
+        Summed token counts, measured component quantities, and cost for a
+        bucket (or the grand total).
       properties:
         cost_usd:
           type: number
@@ -641,6 +686,15 @@ components:
           type: integer
         reasoning_tokens:
           type: integer
+        components:
+          type: array
+          description: >
+            Every component measured in the bucket, sorted by `component` then
+            `unit`. The token fields above cover `llm_tokens` only, so this is
+            where a `storage` / `api_request` / `compute_execution` bucket
+            reports what it actually measured.
+          items:
+            $ref: '#/components/schemas/UsageAggregateComponent'
 
     UsageAggregate:
       type: object
@@ -661,6 +715,10 @@ components:
         group_by:
           type: string
           enum: [model, agent, run, day, meter_type, actor, session]
+        meter_type:
+          type: string
+          nullable: true
+          description: Meter-type filter applied, echoed back; null when unfiltered
         groups:
           type: array
           description: One entry per distinct value in the chosen dimension.
