@@ -98,6 +98,7 @@ const resolveContextAndRecord = async (args: {
   sessionId?: string;
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
+  pinnedAgentVersion?: number | null;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -116,6 +117,7 @@ const resolveContextAndRecord = async (args: {
     // split on the actor behind this session, so the same end user keeps the
     // same agent version across calls.
     sessionId: args.sessionId,
+    pinnedAgentVersion: args.pinnedAgentVersion,
   });
 
   // The identity this generation runs as, persisted rather than left to the
@@ -222,6 +224,10 @@ export type CreateGenerationArgs = {
   // Caller-supplied guardrail context (guardrails.md — Guards and Guardrail
   // Context); the `context.*` namespace guards read at tool-dispatch time.
   guardrailContext?: Record<string, unknown> | null;
+  // Forces one archived agent version instead of letting release assignment
+  // pick per generation. Set by eval runs, which must measure every item
+  // against the same config (docs/prd-evaluations.md — Version pinning).
+  pinnedAgentVersion?: number | null;
 };
 
 export const createGeneration = async (
@@ -280,6 +286,7 @@ export const createGeneration = async (
     sessionId: args.sessionId,
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
+    pinnedAgentVersion: args.pinnedAgentVersion,
   });
 
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);

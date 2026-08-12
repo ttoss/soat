@@ -1,0 +1,95 @@
+{
+  "module": "evaluations",
+  "operations": [
+    {
+      "operationId": "listDatasets",
+      "action": "evaluations:ListDatasets",
+      "description": "List datasets in a project"
+    },
+    {
+      "operationId": "createDataset",
+      "action": "evaluations:CreateDataset",
+      "description": "Create a dataset"
+    },
+    {
+      "operationId": "getDataset",
+      "action": "evaluations:GetDataset",
+      "description": "Get a dataset by ID"
+    },
+    {
+      "operationId": "updateDataset",
+      "action": "evaluations:CreateDataset",
+      "description": "Update a dataset's name or description"
+    },
+    {
+      "operationId": "deleteDataset",
+      "action": "evaluations:DeleteDataset",
+      "description": "Delete a dataset, its items, and the evals bound to it"
+    },
+    {
+      "operationId": "listDatasetItems",
+      "action": "evaluations:ListDatasets",
+      "description": "List the test cases in a dataset"
+    },
+    {
+      "operationId": "createDatasetItem",
+      "action": "evaluations:CreateDataset",
+      "description": "Add a test case to a dataset"
+    },
+    {
+      "operationId": "updateDatasetItem",
+      "action": "evaluations:CreateDataset",
+      "description": "Update a test case in a dataset"
+    },
+    {
+      "operationId": "deleteDatasetItem",
+      "action": "evaluations:CreateDataset",
+      "description": "Delete a test case from a dataset"
+    },
+    {
+      "operationId": "listEvals",
+      "action": "evaluations:ListEvals",
+      "description": "List evals in a project"
+    },
+    {
+      "operationId": "createEval",
+      "action": "evaluations:CreateEval",
+      "description": "Create an eval binding an agent, a dataset, and scorers"
+    },
+    {
+      "operationId": "getEval",
+      "action": "evaluations:GetEval",
+      "description": "Get an eval by ID"
+    },
+    {
+      "operationId": "updateEval",
+      "action": "evaluations:CreateEval",
+      "description": "Update an eval's agent, dataset, scorers, or pass threshold"
+    },
+    {
+      "operationId": "deleteEval",
+      "action": "evaluations:DeleteEval",
+      "description": "Delete an eval and its runs"
+    },
+    {
+      "operationId": "startEvalRun",
+      "action": "evaluations:RunEval",
+      "description": "Run an eval against its dataset and score every item"
+    },
+    {
+      "operationId": "listEvalRuns",
+      "action": "evaluations:ListEvals",
+      "description": "List an eval's runs"
+    },
+    {
+      "operationId": "getEvalRun",
+      "action": "evaluations:GetEval",
+      "description": "Get an eval run's status and aggregate scores"
+    },
+    {
+      "operationId": "listEvalResults",
+      "action": "evaluations:ListEvals",
+      "description": "List the per-item results of an eval run"
+    }
+  ]
+}

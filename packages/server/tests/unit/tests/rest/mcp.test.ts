@@ -2256,6 +2256,114 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
     });
   });
+
+  // ── Evaluations ────────────────────────────────────────────────────────────
+
+  describe('Evaluations', () => {
+    let datasetId: string;
+    let evalAgentId: string;
+    let evalId: string;
+
+    beforeAll(async () => {
+      const datasetRes = await mcpCall('create-dataset', {
+        project_id: projectId,
+        name: 'MCP Dataset',
+        description: 'Curated through the MCP surface',
+      });
+      expect(datasetRes.status).toBe(200);
+      datasetId = parseResult(datasetRes).id;
+
+      const agentRes = await mcpCall('create-agent', {
+        project_id: projectId,
+        ai_provider_id: chatAiProviderId,
+        name: 'MCP Eval Agent',
+      });
+      expect(agentRes.status).toBe(200);
+      evalAgentId = parseResult(agentRes).id;
+    });
+
+    test('create-dataset returns a dataset with a public id', () => {
+      expect(datasetId).toMatch(/^dset_/);
+    });
+
+    test('create-dataset-item stores message-shaped input verbatim', async () => {
+      const res = await mcpCall('create-dataset-item', {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'When is my invoice issued?' }],
+        expected_output: 'On the first of each month.',
+        metadata: { topic: 'billing' },
+      });
+
+      expect(res.status).toBe(200);
+      const item = parseResult(res);
+      expect(item.id).toMatch(/^dsit_/);
+      // Field names reach the tool exactly as the spec declares them.
+      expect(item.expected_output).toBe('On the first of each month.');
+      expect(item.metadata).toEqual({ topic: 'billing' });
+    });
+
+    test('list-datasets and list-dataset-items page the fixtures', async () => {
+      const datasets = await mcpCall('list-datasets', {
+        project_id: projectId,
+      });
+      expect(datasets.status).toBe(200);
+      expect(parseResult(datasets).total).toBeGreaterThan(0);
+
+      const items = await mcpCall('list-dataset-items', {
+        dataset_id: datasetId,
+      });
+      expect(items.status).toBe(200);
+      expect(parseResult(items).total).toBe(1);
+    });
+
+    test('create-eval binds an agent, a dataset, and scorers', async () => {
+      const res = await mcpCall('create-eval', {
+        project_id: projectId,
+        name: 'MCP Eval',
+        agent_id: evalAgentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'contains', value: 'invoice' }],
+        pass_threshold: 0.5,
+      });
+
+      expect(res.status).toBe(200);
+      const created = parseResult(res);
+      evalId = created.id;
+      expect(evalId).toMatch(/^eval_/);
+      // The scorer config round-trips untouched — it is an opaque bag.
+      expect(created.scorers).toEqual([{ type: 'contains', value: 'invoice' }]);
+      expect(created.pass_threshold).toBe(0.5);
+    });
+
+    test('get-eval and list-eval-runs read the eval back', async () => {
+      const get = await mcpCall('get-eval', { eval_id: evalId });
+      expect(get.status).toBe(200);
+      expect(parseResult(get).agent_id).toBe(evalAgentId);
+
+      const runs = await mcpCall('list-eval-runs', { eval_id: evalId });
+      expect(runs.status).toBe(200);
+      expect(parseResult(runs).total).toBe(0);
+    });
+
+    test('start-eval-run surfaces the Phase 1 async rejection as a tool error', async () => {
+      const res = await mcpCall('start-eval-run', {
+        eval_id: evalId,
+        wait: false,
+      });
+
+      expect(res.status).toBe(200);
+      expect(JSON.stringify(res.body)).toMatch(/Phase 2/);
+    });
+
+    test('delete-eval and delete-dataset remove them', async () => {
+      expect((await mcpCall('delete-eval', { eval_id: evalId })).status).toBe(
+        200
+      );
+      expect(
+        (await mcpCall('delete-dataset', { dataset_id: datasetId })).status
+      ).toBe(200);
+    });
+  });
 });
 
 describe('MCP OAuth discovery (RFC 9728)', () => {

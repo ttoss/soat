@@ -398,7 +398,7 @@ permissions JSON, `pnpm --filter @soat/sdk generate` +
 `tests/unit/tests/rest/evaluations.test.ts` (+ `lib/` scorer tests under the
 keep-list rule: pure algorithms with large input spaces), smoke-test steps.
 
-### Phase 1 — Datasets + Evals + Sync Deterministic Runs ❌ Not started
+### Phase 1 — Datasets + Evals + Sync Deterministic Runs ✅ Shipped
 
 Datasets/items CRUD, Eval CRUD, and synchronous execution (`wait: true`,
 dataset capped at 25 items for sync) with `exact_match`, `contains`,

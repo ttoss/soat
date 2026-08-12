@@ -1,0 +1,1221 @@
+openapi: 3.0.3
+info:
+  title: SOAT Evaluations API
+  version: 1.0.0
+  description: >-
+    API for datasets, evals, and eval runs — the repeatable test suites that
+    verify agent behavior before a change rolls out (Evaluations resource)
+  contact:
+    name: SOAT Team
+    url: https://github.com/ttoss/soat
+servers:
+  - url: '{baseUrl}'
+    description: Base URL of your SOAT deployment (e.g. https://your-soat.com or http://localhost:5047)
+    variables:
+      baseUrl:
+        description: The base URL of your SOAT deployment
+        default: http://localhost:5047
+tags:
+  - name: Evaluations
+    description: Datasets, evals, and eval runs
+security:
+  - bearerAuth: []
+paths:
+  /api/v1/datasets:
+    get:
+      tags:
+        - Evaluations
+      summary: List datasets
+      description: Returns the datasets defined in a project
+      operationId: listDatasets
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of datasets
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Dataset'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Evaluations
+      summary: Create a dataset
+      description: >-
+        Creates a project-scoped dataset — a named collection of test cases an
+        eval runs an agent against. Names are unique per project.
+
+
+        Datasets are operator-owned **fixtures**. The platform's content purge
+        never deletes or mutates a dataset item, so erasing a generation cannot
+        silently stop a test suite from being runnable.
+      operationId: createDataset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Unique name within the project
+                  example: billing-regressions
+                description:
+                  type: string
+                  nullable: true
+                  description: What this suite covers
+                  example: Questions the billing agent regressed on in Q2
+      responses:
+        '201':
+          description: Dataset created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '400':
+          description: Bad request (missing or invalid name)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: A dataset with that name already exists in the project
+        '500':
+          description: Internal server error
+  /api/v1/datasets/{dataset_id}:
+    get:
+      tags:
+        - Evaluations
+      summary: Get a dataset
+      description: Returns a specific dataset
+      operationId: getDataset
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Dataset details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found
+    put:
+      tags:
+        - Evaluations
+      summary: Update a dataset
+      description: Updates a dataset's name and/or description
+      operationId: updateDataset
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: billing-regressions
+                description:
+                  type: string
+                  nullable: true
+                  example: Questions the billing agent regressed on in Q2
+      responses:
+        '200':
+          description: Dataset updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Dataset'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found
+        '409':
+          description: A dataset with that name already exists in the project
+    delete:
+      tags:
+        - Evaluations
+      summary: Delete a dataset
+      description: >-
+        Deletes a dataset, its items, and every eval bound to it. Results of
+        runs that already scored those items keep their frozen copies of the
+        input and expected output.
+      operationId: deleteDataset
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Dataset deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found
+  /api/v1/datasets/{dataset_id}/items:
+    get:
+      tags:
+        - Evaluations
+      summary: List dataset items
+      description: Returns the test cases in a dataset, oldest first
+      operationId: listDatasetItems
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of dataset items
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/DatasetItem'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found
+    post:
+      tags:
+        - Evaluations
+      summary: Add a dataset item
+      description: >-
+        Adds one test case. `input` is replayed verbatim as the generation's
+        messages, so it must be a non-empty array of `{ role, content }`.
+      operationId: createDatasetItem
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - input
+              properties:
+                input:
+                  $ref: '#/components/schemas/DatasetItemInput'
+                expected_output:
+                  type: string
+                  nullable: true
+                  description: Reference answer for exact_match / llm_judge scorers
+                  example: Your invoice is issued on the first of each month.
+                metadata:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: Free-form tags, opaque to the platform
+                  example:
+                    topic: billing
+      responses:
+        '201':
+          description: Dataset item created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetItem'
+        '400':
+          description: Bad request (input is not message-shaped)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset not found
+  /api/v1/datasets/{dataset_id}/items/{item_id}:
+    put:
+      tags:
+        - Evaluations
+      summary: Update a dataset item
+      description: >-
+        Updates a test case. Runs that already scored it are unaffected — each
+        result carries its own frozen copy of the input and expected output.
+      operationId: updateDatasetItem
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+        - name: item_id
+          in: path
+          required: true
+          description: Dataset item ID
+          schema:
+            type: string
+            example: dsit_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                input:
+                  $ref: '#/components/schemas/DatasetItemInput'
+                expected_output:
+                  type: string
+                  nullable: true
+                  example: Your invoice is issued on the first of each month.
+                metadata:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  example:
+                    topic: billing
+      responses:
+        '200':
+          description: Dataset item updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetItem'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset or item not found
+    delete:
+      tags:
+        - Evaluations
+      summary: Delete a dataset item
+      description: >-
+        Deletes a test case. Results of runs that already scored it stay
+        readable; their `dataset_item_id` becomes null.
+      operationId: deleteDatasetItem
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+        - name: item_id
+          in: path
+          required: true
+          description: Dataset item ID
+          schema:
+            type: string
+            example: dsit_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Dataset item deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset or item not found
+  /api/v1/evals:
+    get:
+      tags:
+        - Evaluations
+      summary: List evals
+      description: Returns the evals defined in a project
+      operationId: listEvals
+      parameters:
+        - name: project_id
+          in: query
+          description: Project ID (required if not using project key auth)
+          schema:
+            type: string
+            example: proj_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of evals
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Eval'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '500':
+          description: Internal server error
+    post:
+      tags:
+        - Evaluations
+      summary: Create an eval
+      description: >-
+        Binds an agent under test to a dataset and a list of scorers. The agent
+        and the dataset must belong to the same project as the eval; a
+        cross-project reference is rejected with 400.
+
+
+        Scorer config is frozen here rather than read from the agent at run
+        time, so two runs of the same eval are always judged by the same
+        criteria and their comparison measures the agent instead of the config
+        drifting underneath it. Each scorer `type` may appear at most once.
+      operationId: createEval
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - agent_id
+                - dataset_id
+                - scorers
+              properties:
+                project_id:
+                  x-soat-ref: projects
+                  type: string
+                  description: Project ID (required if not using project key auth)
+                  example: proj_V1StGXR8Z5jdHi6B
+                name:
+                  type: string
+                  description: Unique name within the project
+                  example: billing-regression-suite
+                agent_id:
+                  x-soat-ref: agents
+                  type: string
+                  description: The agent under test
+                  example: agent_V1StGXR8Z5jdHi6B
+                dataset_id:
+                  type: string
+                  description: The dataset to run it against
+                  example: dset_V1StGXR8Z5jdHi6B
+                scorers:
+                  $ref: '#/components/schemas/Scorers'
+                pass_threshold:
+                  type: number
+                  nullable: true
+                  description: >-
+                    0–1. The run passes iff its pass rate — passed items over
+                    non-errored items — is at least this. Null reports scores
+                    without gating on them.
+                  example: 0.8
+      responses:
+        '201':
+          description: Eval created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eval'
+        '400':
+          description: Bad request (unknown scorer type, cross-project reference, invalid threshold)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '409':
+          description: An eval with that name already exists in the project
+        '500':
+          description: Internal server error
+  /api/v1/evals/{eval_id}:
+    get:
+      tags:
+        - Evaluations
+      summary: Get an eval
+      description: Returns a specific eval
+      operationId: getEval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Eval details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eval'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval not found
+    put:
+      tags:
+        - Evaluations
+      summary: Update an eval
+      description: >-
+        Updates an eval. Changing `agent_id` re-validates the scorers against
+        the new agent, since an `output_schema` scorer that was legal against
+        the old one may not be.
+      operationId: updateEval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: billing-regression-suite
+                agent_id:
+                  x-soat-ref: agents
+                  type: string
+                  example: agent_V1StGXR8Z5jdHi6B
+                dataset_id:
+                  type: string
+                  example: dset_V1StGXR8Z5jdHi6B
+                scorers:
+                  $ref: '#/components/schemas/Scorers'
+                pass_threshold:
+                  type: number
+                  nullable: true
+                  example: 0.8
+      responses:
+        '200':
+          description: Eval updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Eval'
+        '400':
+          description: Bad request
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval not found
+        '409':
+          description: An eval with that name already exists in the project
+    delete:
+      tags:
+        - Evaluations
+      summary: Delete an eval
+      description: Deletes an eval, its runs, and their results
+      operationId: deleteEval
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+      responses:
+        '204':
+          description: Eval deleted successfully
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval not found
+  /api/v1/evals/{eval_id}/runs:
+    get:
+      tags:
+        - Evaluations
+      summary: List eval runs
+      description: Returns an eval's runs, newest first
+      operationId: listEvalRuns
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of eval runs
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvalRun'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval not found
+    post:
+      tags:
+        - Evaluations
+      summary: Start an eval run
+      description: >-
+        Runs the eval against its dataset, creating one real agent generation
+        per item and scoring the outputs.
+
+
+        `wait` is **required** and must be `true`: Phase 1 executes
+        synchronously and returns a terminal run. `wait: false` is rejected with
+        400 until asynchronous runs land in Phase 2 — requiring the field now
+        means the same request flips to a `queued` run additively, instead of
+        silently changing what an omitted field means.
+
+
+        The whole run is pinned to **one** agent version, stamped on
+        `agent_version`: pass one explicitly to evaluate a canary before
+        promoting it, or omit it to use the active release's stable version (or
+        the live draft when no release is in effect). Without the pin, release
+        assignment would bucket each item independently and blend two configs
+        into a single score.
+
+
+        A dataset larger than the 25-item synchronous cap is rejected with 400
+        rather than partially scored.
+      operationId: startEvalRun
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - wait
+              properties:
+                wait:
+                  type: boolean
+                  description: >-
+                    Must be true in Phase 1 — the run executes synchronously and
+                    the response carries its terminal status and scores.
+                  example: true
+                agent_version:
+                  type: integer
+                  nullable: true
+                  description: >-
+                    An archived agent version to evaluate. Defaults to the
+                    active release's stable version, or the live draft version
+                    when no release is in effect.
+                  example: 3
+                baseline_run_id:
+                  type: string
+                  nullable: true
+                  description: >-
+                    A terminal run of the same eval to compare against. Phase 1
+                    validates and records the link; the per-scorer deltas it
+                    feeds are computed in Phase 2.
+                  example: evrun_V1StGXR8Z5jdHi6B
+      responses:
+        '201':
+          description: Eval run finished
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRun'
+        '400':
+          description: >-
+            Bad request (wait missing or false, dataset empty or over the sync
+            cap, unknown agent_version, invalid baseline, scorers no longer
+            valid against the agent)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval not found
+        '500':
+          description: Internal server error
+  /api/v1/evals/{eval_id}/runs/{run_id}:
+    get:
+      tags:
+        - Evaluations
+      summary: Get an eval run
+      description: Returns a run's status, counts, and aggregate scores
+      operationId: getEvalRun
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Eval run details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRun'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval or run not found
+  /api/v1/evals/{eval_id}/runs/{run_id}/results:
+    get:
+      tags:
+        - Evaluations
+      summary: List eval run results
+      description: Returns the per-item results of a run, oldest first
+      operationId: listEvalResults
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          required: false
+          description: Number of results to skip
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of eval results
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                  - limit
+                  - offset
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EvalResult'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval or run not found
+components:
+  schemas:
+    DatasetItemInput:
+      type: array
+      description: Messages replayed verbatim as the generation's input
+      items:
+        type: object
+        required:
+          - role
+          - content
+        properties:
+          role:
+            type: string
+            example: user
+          content:
+            description: Message content — a string, or AI SDK content parts
+            example: When is my invoice issued?
+    Scorers:
+      type: array
+      description: >-
+        Scorer configs, a discriminated union on `type`. Each type may appear at
+        most once. Every scorer produces `{ score: 0–1, passed: boolean }`;
+        binary scorers emit 0 or 1.
+
+
+        `exact_match` compares the trimmed output text to `expected_output`.
+        `contains` looks for `value` in the output text. `json_logic` evaluates
+        `expression` over `{ input, output, object, expected, item.metadata }`,
+        where `object` is the structured output (absent when the agent has no
+        `output_schema`). `output_schema` validates the structured output
+        against the scorer's own `schema`, falling back to the agent's; it
+        requires the agent to carry an `output_schema`, because without one the
+        platform emits no structured output and every item would score 0.
+
+
+        `llm_judge` is specified but ships with Phase 2 and is rejected with 400
+        until then.
+      items:
+        oneOf:
+          - $ref: '#/components/schemas/ExactMatchScorer'
+          - $ref: '#/components/schemas/ContainsScorer'
+          - $ref: '#/components/schemas/JsonLogicScorer'
+          - $ref: '#/components/schemas/OutputSchemaScorer'
+    ExactMatchScorer:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [exact_match]
+    ContainsScorer:
+      type: object
+      required:
+        - type
+        - value
+      properties:
+        type:
+          type: string
+          enum: [contains]
+        value:
+          type: string
+          example: invoice
+        case_sensitive:
+          type: boolean
+          default: false
+    JsonLogicScorer:
+      type: object
+      required:
+        - type
+        - expression
+      properties:
+        type:
+          type: string
+          enum: [json_logic]
+        expression:
+          type: object
+          additionalProperties: true
+          description: A JSON Logic expression; a truthy result scores 1
+    OutputSchemaScorer:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+          enum: [output_schema]
+        schema:
+          type: object
+          additionalProperties: true
+          description: >-
+            JSON Schema the structured output is validated against. Frozen here
+            so two runs stay comparable; falls back to the agent's
+            `output_schema` when omitted.
+    ScorerResult:
+      type: object
+      properties:
+        scorer:
+          type: string
+          description: The scorer type that produced this entry
+          example: contains
+        score:
+          type: number
+          example: 1
+        passed:
+          type: boolean
+        reasoning:
+          type: string
+          description: Present for judge scorers (Phase 2)
+    Dataset:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dset_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    DatasetItem:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dsit_V1StGXR8Z5jdHi6B
+        dataset_id:
+          type: string
+          example: dset_V1StGXR8Z5jdHi6B
+        input:
+          $ref: '#/components/schemas/DatasetItemInput'
+        expected_output:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+        source_generation_id:
+          type: string
+          nullable: true
+          description: >-
+            The generation this item was curated from. Always null until the
+            `from-generation` route lands in Phase 2. A curated item is a
+            deliberate fixture: erasing the source generation neither deletes
+            nor mutates it.
+          example: gen_V1StGXR8Z5jdHi6B
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    Eval:
+      type: object
+      properties:
+        id:
+          type: string
+          example: eval_V1StGXR8Z5jdHi6B
+        project_id:
+          x-soat-ref: projects
+          type: string
+        name:
+          type: string
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          example: agent_V1StGXR8Z5jdHi6B
+        dataset_id:
+          type: string
+          example: dset_V1StGXR8Z5jdHi6B
+        scorers:
+          $ref: '#/components/schemas/Scorers'
+        pass_threshold:
+          type: number
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    AggregateScores:
+      type: object
+      nullable: true
+      description: Per-scorer rollup plus the run-level pass rate; null until the run is terminal
+      properties:
+        scorers:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              mean:
+                type: number
+              pass_rate:
+                type: number
+        pass_rate:
+          type: number
+          nullable: true
+          description: Passed items over non-errored items; null when nothing was scorable
+        scored_item_count:
+          type: integer
+          description: Items that produced a score — errored items are excluded
+    EvalRun:
+      type: object
+      properties:
+        id:
+          type: string
+          example: evrun_V1StGXR8Z5jdHi6B
+        eval_id:
+          type: string
+          example: eval_V1StGXR8Z5jdHi6B
+        agent_version:
+          type: integer
+          description: The one agent version every item in this run executed against
+          example: 3
+        status:
+          type: string
+          enum: [queued, running, completed, failed, canceled]
+        baseline_run_id:
+          type: string
+          nullable: true
+          example: evrun_V1StGXR8Z5jdHi6B
+        aggregate_scores:
+          $ref: '#/components/schemas/AggregateScores'
+        passed:
+          type: boolean
+          nullable: true
+          description: Null when the eval declares no pass_threshold
+        item_count:
+          type: integer
+        completed_count:
+          type: integer
+        errored_count:
+          type: integer
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    EvalResult:
+      type: object
+      properties:
+        id:
+          type: string
+          example: evres_V1StGXR8Z5jdHi6B
+        eval_run_id:
+          type: string
+          example: evrun_V1StGXR8Z5jdHi6B
+        dataset_item_id:
+          type: string
+          nullable: true
+          description: Null once the dataset item has been deleted
+          example: dsit_V1StGXR8Z5jdHi6B
+        input:
+          $ref: '#/components/schemas/DatasetItemInput'
+        expected_output:
+          type: string
+          nullable: true
+        generation_id:
+          type: string
+          nullable: true
+          example: gen_V1StGXR8Z5jdHi6B
+        output:
+          type: string
+          nullable: true
+          description: >-
+            The agent's final output text. Cleared when the linked generation's
+            content is purged; the scores and the frozen input survive.
+        scores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScorerResult'
+        passed:
+          type: boolean
+          description: AND over the per-scorer passed flags
+        error:
+          type: string
+          nullable: true
+          description: >-
+            Item-level failure reason. A generation that did not complete — a
+            `requires_action` pause, a provider failure — is recorded here and
+            excluded from the aggregates rather than scored 0.
+        created_at:
+          type: string
+          format: date-time
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: JWT token or sk_ api key
