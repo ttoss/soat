@@ -5652,6 +5652,144 @@ echo "requests-quota enforcement (unscoped key): OK"
 echo "Quotas: OK"
 
 echo ""
+echo "=== Evaluations ==="
+
+# Dataset
+echo "--- Creating dataset ---"
+DATASET_RESP=$($SOAT_CLI create-dataset \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-dataset" \
+  --description "Smoke test fixtures")
+DATASET_ID=$(printf '%s\n' "$DATASET_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DATASET_ID" | grep -q '^dset_'; then
+  echo "ERROR: dataset id expected to start with 'dset_', got '$DATASET_ID'" >&2
+  printf '%s\n' "$DATASET_RESP" >&2
+  exit 1
+fi
+echo "Dataset id: $DATASET_ID"
+
+echo "--- Adding a dataset item ---"
+DATASET_ITEM_RESP=$($SOAT_CLI create-dataset-item \
+  --dataset_id "$DATASET_ID" \
+  --input '[{"role":"user","content":"Say hello."}]' \
+  --expected_output "hello" \
+  --metadata '{"topic":"greeting"}')
+DATASET_ITEM_ID=$(printf '%s\n' "$DATASET_ITEM_RESP" | jq -r '.id')
+if ! printf '%s\n' "$DATASET_ITEM_ID" | grep -q '^dsit_'; then
+  echo "ERROR: dataset item id expected to start with 'dsit_', got '$DATASET_ITEM_ID'" >&2
+  printf '%s\n' "$DATASET_ITEM_RESP" >&2
+  exit 1
+fi
+
+echo "--- Listing dataset items ---"
+DATASET_ITEMS_RESP=$($SOAT_CLI list-dataset-items --dataset_id "$DATASET_ID")
+if ! printf '%s\n' "$DATASET_ITEMS_RESP" | jq -e '.total == 1' >/dev/null 2>&1; then
+  echo "ERROR: expected exactly one dataset item" >&2
+  printf '%s\n' "$DATASET_ITEMS_RESP" >&2
+  exit 1
+fi
+
+# Eval
+echo "--- Creating eval ---"
+# A json_logic scorer that only asserts the agent produced *some* text: the
+# model's wording is not deterministic, so nothing here grades its content.
+EVAL_RESP=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
+  --pass_threshold 0.5)
+EVAL_ID=$(printf '%s\n' "$EVAL_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_ID" | grep -q '^eval_'; then
+  echo "ERROR: eval id expected to start with 'eval_', got '$EVAL_ID'" >&2
+  printf '%s\n' "$EVAL_RESP" >&2
+  exit 1
+fi
+echo "Eval id: $EVAL_ID"
+
+echo "--- Rejecting an asynchronous run (Phase 2) ---"
+set +e
+EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false 2>&1)
+EVAL_ASYNC_EXIT=$?
+set -e
+if [ "$EVAL_ASYNC_EXIT" -eq 0 ]; then
+  echo "ERROR: expected wait=false to be rejected until asynchronous runs ship" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+  exit 1
+fi
+EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.status // empty' 2>/dev/null)
+if [ "$EVAL_ASYNC_STATUS" != "400" ]; then
+  echo "ERROR: expected 400 for wait=false, got '$EVAL_ASYNC_STATUS'" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+  exit 1
+fi
+
+echo "--- Running the eval ---"
+EVAL_RUN_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait true)
+EVAL_RUN_ID=$(printf '%s\n' "$EVAL_RUN_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_RUN_ID" | grep -q '^evrun_'; then
+  echo "ERROR: eval run id expected to start with 'evrun_', got '$EVAL_RUN_ID'" >&2
+  printf '%s\n' "$EVAL_RUN_RESP" >&2
+  exit 1
+fi
+# Structural assertions only — whether the model's answer scores is its own
+# business; the run reaching a terminal state over exactly one item is not.
+if ! printf '%s\n' "$EVAL_RUN_RESP" | jq -e '.status == "completed"' >/dev/null 2>&1; then
+  echo "ERROR: eval run did not complete" >&2
+  printf '%s\n' "$EVAL_RUN_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVAL_RUN_RESP" | jq -e \
+  '.item_count == 1 and (.completed_count + .errored_count) == 1 and (.agent_version | type == "number")' \
+  >/dev/null 2>&1; then
+  echo "ERROR: eval run counts or pinned agent_version missing" >&2
+  printf '%s\n' "$EVAL_RUN_RESP" >&2
+  exit 1
+fi
+echo "Eval run id: $EVAL_RUN_ID"
+
+echo "--- Reading eval run results ---"
+EVAL_RESULTS_RESP=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+if ! printf '%s\n' "$EVAL_RESULTS_RESP" | jq -e --arg item "$DATASET_ITEM_ID" \
+  '.total == 1 and .data[0].dataset_item_id == $item and (.data[0].input | length) == 1' \
+  >/dev/null 2>&1; then
+  echo "ERROR: eval results did not carry the frozen item snapshot" >&2
+  printf '%s\n' "$EVAL_RESULTS_RESP" >&2
+  exit 1
+fi
+
+echo "--- Listing and getting eval runs ---"
+EVAL_RUNS_RESP=$($SOAT_CLI list-eval-runs --eval_id "$EVAL_ID")
+if ! printf '%s\n' "$EVAL_RUNS_RESP" | jq -e '.total >= 1' >/dev/null 2>&1; then
+  echo "ERROR: expected at least one eval run" >&2
+  printf '%s\n' "$EVAL_RUNS_RESP" >&2
+  exit 1
+fi
+EVAL_RUN_GET_RESP=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+if ! printf '%s\n' "$EVAL_RUN_GET_RESP" | jq -e --arg id "$EVAL_RUN_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: GET eval run returned unexpected payload" >&2
+  printf '%s\n' "$EVAL_RUN_GET_RESP" >&2
+  exit 1
+fi
+
+echo "--- Deleting the dataset item leaves the run results readable ---"
+$SOAT_CLI delete-dataset-item --dataset_id "$DATASET_ID" --item_id "$DATASET_ITEM_ID"
+EVAL_RESULTS_AFTER=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+if ! printf '%s\n' "$EVAL_RESULTS_AFTER" | jq -e \
+  '.total == 1 and .data[0].dataset_item_id == null and (.data[0].input | length) == 1' \
+  >/dev/null 2>&1; then
+  echo "ERROR: eval results lost their frozen snapshot after the item was deleted" >&2
+  printf '%s\n' "$EVAL_RESULTS_AFTER" >&2
+  exit 1
+fi
+
+echo "--- Cleaning up evaluations fixtures ---"
+$SOAT_CLI delete-eval --eval_id "$EVAL_ID"
+$SOAT_CLI delete-dataset --dataset_id "$DATASET_ID"
+echo "Evaluations: OK"
+
+echo ""
 echo "--- Smoke: GET /app returns HTML ---"
 APP_HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/app")
 if [ "$APP_HTTP_CODE" != "200" ]; then

@@ -136,6 +136,8 @@ export const buildGenerationContext = async (args: {
   knowledgeConfig?: object;
   guardrailContext?: Record<string, unknown> | null;
   sessionId?: string | null;
+  /** Forces one archived agent version — see `resolveServedAgentVersion`. */
+  pinnedAgentVersion?: number | null;
 }): Promise<GenerationContext> => {
   const toolContext = await resolvePinnedToolContext(args);
 
@@ -157,6 +159,7 @@ export const buildGenerationContext = async (args: {
   const { typedAgent, agentVersion } = await resolveServedAgentVersion({
     agent: liveAgent,
     sessionId: args.sessionId,
+    pinnedVersion: args.pinnedAgentVersion,
   });
 
   const boundToolIds = deriveLegacyToolFields(

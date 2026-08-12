@@ -60,7 +60,7 @@ route, and the `model_route` formation resource).
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | 🟡 Phases 1–2 shipped; P3 (eval-gated promotion) remains | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ❌ Not started | gates agent-versions P3 |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | 🟡 Phase 1 shipped; P2–P3 remain | gates agent-versions P3 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -75,14 +75,14 @@ satisfied by shipped work.
 
 ```
 cross-initiative ──────────────────────────────────────────────────────────
-  evaluations P2 (async) ◄── queue-backed durable runtime ✔
+  evaluations P2 (async) ◄── queue-backed durable runtime ✔ + evaluations P1 ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P7 (ranking, evals)          [P6 injection hardening ✔ shipped]
 
 feedback + governance loops ────────────────────────────────────────────────
   approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
   learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
-  agent-versions P3 (eval-gated promotion) ◄── evaluations P1
+  agent-versions P3 (eval-gated promotion) ◄── evaluations P1 ✔
   approvals P4 (activity feed) ✔ ◄── audit-log (substrate) + guardrails (A/B labels)
 ```
 
@@ -94,7 +94,7 @@ feedback + governance loops ─────────────────�
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
-| evaluations P1 | agent-versions P3 | eval verdict is the promotion gate |
+| evaluations P1 ✔ | agent-versions P3 | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
 
 ## Recommended build order
@@ -105,12 +105,14 @@ feedback + governance loops ─────────────────�
 2. ~~**Audit log**~~ — **fully shipped** (P2 selective-write of
    decision-changing guardrail evaluations, P3 read-auditing flag +
    `audit.entry_created` webhook, and the per-project NDJSON export).
-   **Evaluations P1–P2** remain — the substrate the activity feed and
-   agent-versions promotion gate need.
+   **Evaluations P1** is now shipped — datasets, evals, and synchronous
+   deterministic runs — so the promotion gate's substrate exists. **P2**
+   (`llm_judge`, async runs on the queue, baseline deltas, trace curation)
+   remains.
 3. ~~**Agent-versions**~~ — **Phases 1–2 shipped**: append-only config history
    with restore, and the deterministic stable/canary split with the served
-   version stamped on every generation. **P3 (eval-gated promotion)** remains,
-   blocked on evaluations P1.
+   version stamped on every generation. **P3 (eval-gated promotion)** remains;
+   its blocker (evaluations P1) is now shipped, so it is unblocked.
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
    ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
@@ -168,10 +170,12 @@ initiatives table above already said 🟡 — the table was right._
 
 ### Evaluations
 
-_Not started._
+_Phase 1 shipped (`evaluations.ts`, `evaluationDatasets.ts`, `evaluationRuns.ts`,
+`evaluationScorers.ts`); live behavior is documented in the
+[evaluations module doc](../packages/website/docs/modules/evaluations.md)._
 
-- [ ] **Phase 1** Datasets + evals + sync deterministic runs: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`)
-- [ ] **Phase 2** `llm_judge` scorer; async execution on the RunTask queue (**needs Orchestration-queue P1** ✔); baseline comparison + pass/fail gating; curate dataset items from traces/generations
+- [x] ~~**Phase 1** Datasets + evals + sync deterministic runs~~ — **shipped**: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`, 25-item cap); run-level version pinning; frozen per-result item snapshots; generation-purge cascade to `EvalResult.output`
+- [ ] **Phase 2** `llm_judge` scorer; async execution on the RunTask queue (**needs Orchestration-queue P1** ✔); baseline **deltas** (the `baseline_run_id` link itself is validated and persisted by P1); curate dataset items from traces/generations; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight
 - [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
 - [ ] Webhook events (`eval_run.completed` / `.failed`)
 

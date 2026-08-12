@@ -2,6 +2,7 @@ import { Op } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import { redactEvalResultOutputs } from './evaluationPurge';
 import { emitResourceEvent } from './eventBus';
 import { deleteStorageObjects } from './fileStorage';
 import { getGeneration, type PersistedGeneration } from './generations';
@@ -110,6 +111,10 @@ export const purgeGenerationContent = async (args: {
           redactedAt: new Date(),
         })),
   });
+
+  // The generation's content also lives as a copy on any eval result that
+  // scored it; a purge that left those behind would not be a purge.
+  await redactEvalResultOutputs({ generationDbIds: [gen.id as number] });
 
   const purged = await getGeneration({
     publicId: args.publicId,
@@ -223,6 +228,21 @@ const commitTracePurge = async (args: {
     args.traceDbIds.length,
     purgedGenerations
   );
+
+  // Same cascade as the single-generation purge, for every generation in the
+  // subtree — an eval result's copied output is content, wherever it was
+  // erased from.
+  const generationRows = await db.Generation.findAll({
+    where: { traceId: args.traceDbIds },
+    attributes: ['id'],
+    transaction: args.transaction,
+  });
+  await redactEvalResultOutputs({
+    generationDbIds: generationRows.map((row) => {
+      return row.id as number;
+    }),
+    transaction: args.transaction,
+  });
 
   if (args.fileDbIds.length > 0) {
     await db.File.destroy({

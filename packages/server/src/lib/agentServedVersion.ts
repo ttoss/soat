@@ -152,9 +152,48 @@ export type ServedAgentVersion = {
 export const resolveServedAgentVersion = async (args: {
   agent: TypedAgent;
   sessionId?: string | null;
+  /**
+   * Forces one archived version, bypassing release assignment entirely.
+   *
+   * An eval run sets this so every item is measured against the same config
+   * (docs/prd-evaluations.md — Version pinning): an eval generation has no
+   * session, so its assignment key would be null and `assignReleaseVersion`
+   * would bucket each item *randomly*, blending two versions into one score.
+   * The caller validates the version exists before pinning; a missing archive
+   * degrades to the live row here for the same reason every other lookup
+   * failure does — a bookkeeping gap must not fail a generation — and the
+   * returned `agentVersion` still names whatever config actually ran.
+   */
+  pinnedVersion?: number | null;
 }): Promise<ServedAgentVersion> => {
   const agentDbId = args.agent.id;
   const version = args.agent.version ?? 1;
+
+  if (args.pinnedVersion != null && agentDbId !== undefined) {
+    if (args.pinnedVersion === version) {
+      return { typedAgent: args.agent, agentVersion: version };
+    }
+    const pinned = await loadArchivedConfig({
+      agentDbId,
+      version: args.pinnedVersion,
+    });
+    if (pinned) {
+      log('resolveServedAgentVersion: pinned version=%d', args.pinnedVersion);
+      return {
+        typedAgent: buildTypedAgentFromConfig({
+          live: args.agent,
+          config: pinned,
+        }),
+        agentVersion: args.pinnedVersion,
+      };
+    }
+    log(
+      'resolveServedAgentVersion: missing archive for pinned version=%d, serving live version=%d',
+      args.pinnedVersion,
+      version
+    );
+    return { typedAgent: args.agent, agentVersion: version };
+  }
 
   const release: ActiveRelease | null = parseActiveRelease(
     args.agent.activeRelease

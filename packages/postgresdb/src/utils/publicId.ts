@@ -59,6 +59,11 @@ export const PUBLIC_ID_PREFIXES = {
   auditEntry: 'audit_',
   exception: 'exc_',
   activityEntry: 'acte_',
+  dataset: 'dset_',
+  datasetItem: 'dsit_',
+  evaluation: 'eval_',
+  evalRun: 'evrun_',
+  evalResult: 'evres_',
 } as const;
 
 /**
