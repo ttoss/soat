@@ -42,6 +42,7 @@ Every event links back to the resources it attributes spend to: the [generation]
 | `ai_provider_id` | string \| null  | AI provider instance billed; correlates the event to the price book                          |
 | `trigger_id`     | string \| null  | Trigger that initiated the generation (agent-target triggers); null otherwise                |
 | `action_id`      | string \| null  | Caller-supplied logical action label, for rolling spend up per action                        |
+| `source`         | string \| null  | The workload behind the spend when it is not ordinary agent traffic; see [Workload source](#workload-source) |
 | `meter_type`     | string          | What the event measures: `llm_tokens`, `compute_execution`, `api_request`, or `storage`         |
 | `provider`       | string          | As-billed SKU vendor slug (e.g. `openai`); `soat` for platform meter types                   |
 | `model`          | string          | Model identifier the provider billed; the billable SKU for platform meter types              |
@@ -145,6 +146,26 @@ Each served API request is counted in memory per (project, API key), and a perio
 ### Trigger and action attribution
 
 `action_id` is a caller-supplied label passed on the generate request (`action_id`), persisted on the [generation](./generations.md) and copied onto its event so spend can be rolled up per logical action independent of the agent or generation. `trigger_id` is set automatically when a [trigger](./triggers.md) initiates the generation — both for a direct **agent-target** trigger and for generations produced inside an [orchestration](./orchestrations.md) run started by a trigger (the run carries the trigger id and propagates it to every in-run generation). Filter the event list by either (`?trigger_id=` / `?action_id=`) to roll usage up by trigger or action.
+
+### Workload source
+
+`source` names the workload that produced the spend, so verification and background work are
+separable from the traffic serving real users.
+
+| `source` | What produced the event |
+| --- | --- |
+| `null` | An ordinary agent generation — already identified by `generation_id` / `agent_id` |
+| `eval` | An [eval run](./evaluations.md#eval-spend-is-separable-from-production-spend)'s item generations |
+| `eval_judge` | An `llm_judge` scorer's own grading completion |
+| `chat` | A standalone [chat](./chats.md) completion |
+| `discussion` | A [discussion](./discussions.md) turn |
+| `memory_extraction` / `memory_consolidation` | A [memory](./memories.md) pass |
+
+Verification spend is `source IN ('eval','eval_judge')` — and the two are kept distinct so a
+rollup can price *running* a suite apart from *grading* it, since a judge doubles the calls.
+Like every other dimension, `source` is set by the platform at the metering choke point and
+copied from the generation's own column, so a caller cannot bill eval spend as production or
+the reverse.
 
 ### End-user attribution
 

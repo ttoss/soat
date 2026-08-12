@@ -1563,23 +1563,37 @@ describe('Evaluations', () => {
     });
 
     /**
-     * The events emitted while `action` runs. `emitResourceEvent` resolves the
-     * project public id asynchronously before emitting, so the capture window
-     * stays open one macrotask past the action.
+     * The eval-run events emitted while `action` runs.
+     *
+     * `emitResourceEvent` dispatches fire-and-forget and resolves the project
+     * public id with a real DB read first, so the emit lands *after* the action
+     * resolves. The window therefore polls for `expected` events on a bound
+     * rather than sleeping a fixed settling time (`.claude/rules/tests.md`);
+     * A run other than the one under test can also settle inside the window
+     * (the reaper sweeps every stale run), so the predicate names *this* run
+     * rather than counting events.
      */
-    const withCapture = async (
-      action: () => Promise<void>
-    ): Promise<SoatEvent[]> => {
+    const withCapture = async (args: {
+      action: () => Promise<void>;
+      /**
+       * Stops the window as soon as this holds. Omit to wait the whole bound
+       * out, which is what makes "no event fired" a real assertion.
+       */
+      until?: (events: SoatEvent[]) => boolean;
+    }): Promise<SoatEvent[]> => {
       const captured: SoatEvent[] = [];
       const handler = (event: SoatEvent) => {
         if (event.type.startsWith('eval_run.')) captured.push(event);
       };
       eventBus.on('soat:event', handler);
       try {
-        await action();
-        await new Promise<void>((resolve) => {
-          setImmediate(resolve);
-        });
+        await args.action();
+        for (let tick = 0; tick < 100; tick += 1) {
+          if (args.until?.(captured)) break;
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 10);
+          });
+        }
       } finally {
         // Never leak a listener onto the shared bus: it would fire for every
         // later test in the run and break under randomized file order.
@@ -1590,14 +1604,19 @@ describe('Evaluations', () => {
 
     test('a completed run fires eval_run.completed exactly once, with the verdict', async () => {
       let runId = '';
-      const events = await withCapture(async () => {
-        mockCreateGeneration.mockResolvedValueOnce(
-          completedGeneration('gen_e1', 'Paris')
-        );
-        const res = await asUser()
-          .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait: true });
-        runId = res.body.id as string;
+      const events = await withCapture({
+        until: (captured) => {
+          return captured.length >= 1;
+        },
+        action: async () => {
+          mockCreateGeneration.mockResolvedValueOnce(
+            completedGeneration('gen_e1', 'Paris')
+          );
+          const res = await asUser()
+            .post(`/api/v1/evals/${evalId}/runs`)
+            .send({ wait: true });
+          runId = res.body.id as string;
+        },
       });
 
       expect(events).toHaveLength(1);
@@ -1616,14 +1635,19 @@ describe('Evaluations', () => {
     });
 
     test('a queued run fires the event once, from the worker that settles it', async () => {
-      const events = await withCapture(async () => {
-        await asUser()
-          .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait: false });
-        mockCreateGeneration.mockResolvedValueOnce(
-          completedGeneration('gen_e2', 'Lyon')
-        );
-        await drainEvalQueueOnce();
+      const events = await withCapture({
+        until: (captured) => {
+          return captured.length >= 1;
+        },
+        action: async () => {
+          await asUser()
+            .post(`/api/v1/evals/${evalId}/runs`)
+            .send({ wait: false });
+          mockCreateGeneration.mockResolvedValueOnce(
+            completedGeneration('gen_e2', 'Lyon')
+          );
+          await drainEvalQueueOnce();
+        },
       });
 
       expect(events).toHaveLength(1);
@@ -1641,10 +1665,19 @@ describe('Evaluations', () => {
         startedAt: new Date(),
       });
 
-      const events = await withCapture(async () => {
-        await reapAbandonedEvalRuns({
-          now: new Date(Date.now() + 86_400_000),
-        });
+      const events = await withCapture({
+        // Named, not counted: the reaper settles every stale run in the
+        // database, so other runs' events can land in this window too.
+        until: (captured) => {
+          return captured.some((event) => {
+            return event.resourceId === abandoned.publicId;
+          });
+        },
+        action: async () => {
+          await reapAbandonedEvalRuns({
+            now: new Date(Date.now() + 86_400_000),
+          });
+        },
       });
 
       const failure = events.find((event) => {
@@ -1660,13 +1693,15 @@ describe('Evaluations', () => {
     });
 
     test('a canceled run fires no lifecycle event — it produced no verdict', async () => {
-      const events = await withCapture(async () => {
-        const run = await asUser()
-          .post(`/api/v1/evals/${evalId}/runs`)
-          .send({ wait: false });
-        await asUser().post(
-          `/api/v1/evals/${evalId}/runs/${run.body.id}/cancel`
-        );
+      const events = await withCapture({
+        action: async () => {
+          const run = await asUser()
+            .post(`/api/v1/evals/${evalId}/runs`)
+            .send({ wait: false });
+          await asUser().post(
+            `/api/v1/evals/${evalId}/runs/${run.body.id}/cancel`
+          );
+        },
       });
 
       expect(events).toEqual([]);

@@ -60,7 +60,7 @@ route, and the `model_route` formation resource).
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | 🟡 Phases 1–2 shipped; P3 (eval-gated promotion) remains | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | 🟡 Phase 1 shipped; P2–P3 remain | gates agent-versions P3 |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | 🟡 Phases 1–2 shipped (P2 minus `from-generation` curation, deferred); P3 remains | gates agent-versions P3 |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -75,7 +75,7 @@ satisfied by shipped work.
 
 ```
 cross-initiative ──────────────────────────────────────────────────────────
-  evaluations P2 (async) ◄── queue-backed durable runtime ✔ + evaluations P1 ✔
+  evaluations P2 (async) ✔ ◄── evaluations P1 ✔ + createSweep/createScheduler ✔
   memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
   knowledge P5/P7 (ranking, evals)          [P6 injection hardening ✔ shipped]
 
@@ -90,7 +90,7 @@ feedback + governance loops ─────────────────�
 
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
-| queue-backed durable runtime ✔ | evaluations P2 | async eval runs ride the RunTask queue |
+| createSweep / createScheduler ✔ | evaluations P2 ✔ | async eval runs claim their own `EvalRunTask` queue on the shared poller seam — not `orchestration_run_tasks`, whose claim joins through `orchestration_runs` (see the PRD's Phase 2 deviation note) |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
@@ -105,10 +105,13 @@ feedback + governance loops ─────────────────�
 2. ~~**Audit log**~~ — **fully shipped** (P2 selective-write of
    decision-changing guardrail evaluations, P3 read-auditing flag +
    `audit.entry_created` webhook, and the per-project NDJSON export).
-   **Evaluations P1** is now shipped — datasets, evals, and synchronous
-   deterministic runs — so the promotion gate's substrate exists. **P2**
-   (`llm_judge`, async runs on the queue, baseline deltas, trace curation)
-   remains.
+   **Evaluations P1 and P2** are now shipped — datasets, evals, synchronous and
+   queued runs, all five scorers including `llm_judge`, baseline deltas over the
+   item intersection, `eval_run.completed`/`.failed` webhooks, cancellation, a
+   lease reaper, and `source: eval` / `eval_judge` spend attribution — so the
+   promotion gate's substrate and its event are both in place. Only
+   **`from-generation` trace curation** is left in P2, deferred on an
+   unverifiable premise (see the PRD).
 3. ~~**Agent-versions**~~ — **Phases 1–2 shipped**: append-only config history
    with restore, and the deterministic stable/canary split with the served
    version stamped on every generation. **P3 (eval-gated promotion)** remains;
@@ -170,14 +173,17 @@ initiatives table above already said 🟡 — the table was right._
 
 ### Evaluations
 
-_Phase 1 shipped (`evaluations.ts`, `evaluationDatasets.ts`, `evaluationRuns.ts`,
-`evaluationScorers.ts`); live behavior is documented in the
+_Phases 1–2 shipped (`evaluations.ts`, `evaluationDatasets.ts`,
+`evaluationRuns.ts`, `evaluationRunExecution.ts`, `evaluationScorers.ts`,
+`evaluationJudge.ts`, `evaluationDeltas.ts`, `evaluationQueue.ts`,
+`evaluationWorker.ts`, `evaluationEvents.ts`); live behavior is documented in the
 [evaluations module doc](../packages/website/docs/modules/evaluations.md)._
 
 - [x] ~~**Phase 1** Datasets + evals + sync deterministic runs~~ — **shipped**: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`, 25-item cap); run-level version pinning; frozen per-result item snapshots; generation-purge cascade to `EvalResult.output`
-- [ ] **Phase 2** `llm_judge` scorer; async execution on the RunTask queue (**needs Orchestration-queue P1** ✔); baseline **deltas** (the `baseline_run_id` link itself is validated and persisted by P1); curate dataset items from traces/generations; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight
+- [x] ~~**Phase 2** `llm_judge` scorer; async execution; baseline **deltas**; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight~~ — **shipped**, plus `eval_run.completed`/`.failed` webhooks, `cancel`, and an atomic finalize claim so the completion event fires exactly once. Async runs use a dedicated `EvalRunTask` queue on the shared `createSweep`/`createScheduler` seam rather than `orchestration_run_tasks` — that table's claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold (deviation recorded in the PRD)
+- [ ] ⏭️ **Deferred** — curate dataset items from traces/generations (`from-generation`). Neither a generation's input messages nor its output text is persisted in a platform-owned shape; both live only in the AI SDK `steps` blob on the trace's file. Building it needs either a reader of that provider-shaped blob (empty for zero-retention/purged generations) or a new content column holding end-user prompts — a privacy-class call the open-questions gate forwards
 - [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
-- [ ] Webhook events (`eval_run.completed` / `.failed`)
+- [x] ~~Webhook events (`eval_run.completed` / `.failed`)~~ — **shipped** with Phase 2, carrying `{eval_id, eval_run_id, passed, aggregate_scores}` inline: the promotion-gate event agent-versions P3 consumes
 
 ### Model routing
 

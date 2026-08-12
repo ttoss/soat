@@ -5708,20 +5708,79 @@ if ! printf '%s\n' "$EVAL_ID" | grep -q '^eval_'; then
 fi
 echo "Eval id: $EVAL_ID"
 
-echo "--- Rejecting an asynchronous run (Phase 2) ---"
-set +e
-EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false 2>&1)
-EVAL_ASYNC_EXIT=$?
-set -e
-if [ "$EVAL_ASYNC_EXIT" -eq 0 ]; then
-  echo "ERROR: expected wait=false to be rejected until asynchronous runs ship" >&2
+echo "--- Queuing an asynchronous run and polling to terminal ---"
+EVAL_ASYNC_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
+EVAL_ASYNC_RUN_ID=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_ASYNC_RESP" | jq -e '.status == "queued"' >/dev/null 2>&1; then
+  echo "ERROR: expected wait=false to answer with a queued run" >&2
   printf '%s\n' "$EVAL_ASYNC_RESP" >&2
   exit 1
 fi
-EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_RESP" | jq -r '.status // empty' 2>/dev/null)
-if [ "$EVAL_ASYNC_STATUS" != "400" ]; then
-  echo "ERROR: expected 400 for wait=false, got '$EVAL_ASYNC_STATUS'" >&2
-  printf '%s\n' "$EVAL_ASYNC_RESP" >&2
+echo "Queued eval run id: $EVAL_ASYNC_RUN_ID"
+
+# The worker drives the item in the background, so poll rather than assume. One
+# real generation per item means this can take a while on the sandbox model.
+EVAL_ASYNC_STATUS=""
+i=0
+while [ "$i" -lt 60 ]; do
+  EVAL_ASYNC_GET=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID")
+  EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.status')
+  case "$EVAL_ASYNC_STATUS" in
+    completed|failed|canceled) break ;;
+  esac
+  i=$((i + 1))
+  sleep 2
+done
+if [ "$EVAL_ASYNC_STATUS" != "completed" ]; then
+  echo "ERROR: queued eval run did not complete (status '$EVAL_ASYNC_STATUS')" >&2
+  printf '%s\n' "$EVAL_ASYNC_GET" >&2
+  exit 1
+fi
+# Exactly one result row for the one item: at-least-once redelivery must not
+# double-count, and the run must settle from the worker that drained it.
+if ! printf '%s\n' "$EVAL_ASYNC_GET" | jq -e \
+  '.item_count == 1 and (.completed_count + .errored_count) == 1 and .finished_at != null' \
+  >/dev/null 2>&1; then
+  echo "ERROR: queued eval run settled with unexpected counts" >&2
+  printf '%s\n' "$EVAL_ASYNC_GET" >&2
+  exit 1
+fi
+EVAL_ASYNC_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID")
+if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '.total == 1' >/dev/null 2>&1; then
+  echo "ERROR: expected exactly one result row for the queued run" >&2
+  printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
+  exit 1
+fi
+
+echo "--- Cancelling an already-finished run is rejected ---"
+set +e
+EVAL_CANCEL_LATE=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID" 2>&1)
+EVAL_CANCEL_LATE_EXIT=$?
+set -e
+if [ "$EVAL_CANCEL_LATE_EXIT" -eq 0 ]; then
+  echo "ERROR: expected cancelling a finished run to fail" >&2
+  printf '%s\n' "$EVAL_CANCEL_LATE" >&2
+  exit 1
+fi
+EVAL_CANCEL_LATE_STATUS=$(printf '%s\n' "$EVAL_CANCEL_LATE" | jq -r '.status // empty' 2>/dev/null)
+if [ "$EVAL_CANCEL_LATE_STATUS" != "400" ]; then
+  echo "ERROR: expected 400 cancelling a finished run, got '$EVAL_CANCEL_LATE_STATUS'" >&2
+  printf '%s\n' "$EVAL_CANCEL_LATE" >&2
+  exit 1
+fi
+
+echo "--- Cancelling a queued run stops it ---"
+EVAL_CANCEL_RUN=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
+EVAL_CANCEL_RUN_ID=$(printf '%s\n' "$EVAL_CANCEL_RUN" | jq -r '.id')
+EVAL_CANCELLED=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_CANCEL_RUN_ID")
+# The worker may legitimately have finished the single item before the cancel
+# landed, so accept either terminal state — what must hold is that the run is
+# terminal and, when cancelled, publishes no partial aggregate.
+if ! printf '%s\n' "$EVAL_CANCELLED" | jq -e \
+  '(.status == "canceled" and .aggregate_scores == null) or .status == "completed"' \
+  >/dev/null 2>&1; then
+  echo "ERROR: cancel left the run in an unexpected state" >&2
+  printf '%s\n' "$EVAL_CANCELLED" >&2
   exit 1
 fi
 
@@ -5756,6 +5815,95 @@ if ! printf '%s\n' "$EVAL_RESULTS_RESP" | jq -e --arg item "$DATASET_ITEM_ID" \
   >/dev/null 2>&1; then
   echo "ERROR: eval results did not carry the frozen item snapshot" >&2
   printf '%s\n' "$EVAL_RESULTS_RESP" >&2
+  exit 1
+fi
+
+echo "--- Running against a baseline reports deltas over the item intersection ---"
+EVAL_BASELINE_RESP=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait true \
+  --baseline_run_id "$EVAL_RUN_ID")
+if ! printf '%s\n' "$EVAL_BASELINE_RESP" | jq -e --arg base "$EVAL_RUN_ID" \
+  '.baseline_run_id == $base
+   and .aggregate_scores.baseline.run_id == $base
+   and .aggregate_scores.baseline.compared_item_count <= 1
+   and (.aggregate_scores.baseline.added_item_count | type == "number")
+   and (.aggregate_scores.baseline.removed_item_count | type == "number")' \
+  >/dev/null 2>&1; then
+  echo "ERROR: eval run did not report a baseline comparison" >&2
+  printf '%s\n' "$EVAL_BASELINE_RESP" >&2
+  exit 1
+fi
+
+echo "--- Rejecting a baseline from another eval ---"
+EVAL_OTHER_RESP=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-other" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"contains","value":"a"}]')
+EVAL_OTHER_ID=$(printf '%s\n' "$EVAL_OTHER_RESP" | jq -r '.id')
+set +e
+EVAL_FOREIGN_BASE=$($SOAT_CLI start-eval-run --eval_id "$EVAL_OTHER_ID" --wait true \
+  --baseline_run_id "$EVAL_RUN_ID" 2>&1)
+EVAL_FOREIGN_EXIT=$?
+set -e
+if [ "$EVAL_FOREIGN_EXIT" -eq 0 ]; then
+  echo "ERROR: expected a baseline from another eval to be rejected" >&2
+  printf '%s\n' "$EVAL_FOREIGN_BASE" >&2
+  exit 1
+fi
+$SOAT_CLI delete-eval --eval_id "$EVAL_OTHER_ID"
+
+echo "--- Running an llm_judge scorer ---"
+EVAL_JUDGE_RESP=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-judge" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"llm_judge","ai_provider_id":"'"$AI_PROVIDER_ID"'","prompt":"Rate from 0 to 1 how helpful the answer is. Reply with only JSON: {\"score\": 0.5, \"reasoning\": \"why\"}. Answer: {{output}}","pass_threshold":0.5}]')
+EVAL_JUDGE_ID=$(printf '%s\n' "$EVAL_JUDGE_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_JUDGE_ID" | grep -q '^eval_'; then
+  echo "ERROR: judged eval was not created" >&2
+  printf '%s\n' "$EVAL_JUDGE_RESP" >&2
+  exit 1
+fi
+EVAL_JUDGE_RUN=$($SOAT_CLI start-eval-run --eval_id "$EVAL_JUDGE_ID" --wait true)
+EVAL_JUDGE_RUN_ID=$(printf '%s\n' "$EVAL_JUDGE_RUN" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_JUDGE_RUN" | jq -e '.status == "completed"' >/dev/null 2>&1; then
+  echo "ERROR: judged eval run did not complete" >&2
+  printf '%s\n' "$EVAL_JUDGE_RUN" >&2
+  exit 1
+fi
+# The sandbox model may or may not answer in the required JSON shape, so the
+# item may be scored or errored — both are valid outcomes of a real judge call.
+# What must hold is that exactly one of the two happened, and that a judge that
+# failed to answer errored the item instead of scoring it 0.
+EVAL_JUDGE_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_JUDGE_ID" --run_id "$EVAL_JUDGE_RUN_ID")
+if ! printf '%s\n' "$EVAL_JUDGE_RESULTS" | jq -e \
+  '.total == 1
+   and (.data[0]
+        | (.error != null and (.scores | length) == 0)
+          or (.error == null and .scores[0].scorer == "llm_judge"
+              and .scores[0].score >= 0 and .scores[0].score <= 1))' \
+  >/dev/null 2>&1; then
+  echo "ERROR: judged result was neither scored in range nor cleanly errored" >&2
+  printf '%s\n' "$EVAL_JUDGE_RESULTS" >&2
+  exit 1
+fi
+$SOAT_CLI delete-eval --eval_id "$EVAL_JUDGE_ID"
+
+echo "--- Rejecting an llm_judge scorer with no pass_threshold ---"
+set +e
+EVAL_JUDGE_BAD=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-judge-bad" \
+  --agent_id "$AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"llm_judge","prompt":"rate {{output}}"}]' 2>&1)
+EVAL_JUDGE_BAD_EXIT=$?
+set -e
+if [ "$EVAL_JUDGE_BAD_EXIT" -eq 0 ]; then
+  echo "ERROR: expected an llm_judge scorer without pass_threshold to be rejected" >&2
+  printf '%s\n' "$EVAL_JUDGE_BAD" >&2
   exit 1
 fi
 

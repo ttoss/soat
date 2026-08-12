@@ -46,6 +46,7 @@ Generations can be listed via `GET /generations` (filter by `agent_id`, `trace_i
 | `orchestration_run_id`      | string \| null | Orchestration run that dispatched the generation                                                     |
 | `node_id`                   | string \| null | Node within that run                                                                                 |
 | `agent_version`             | number \| null | Agent config version that served the generation                                                      |
+| `source`                    | string \| null | `eval` when an [eval run](./evaluations.md) produced this generation; `null` for ordinary traffic     |
 | `routing`                   | object \| null | What the [model route](./model-routes.md) did for this generation                                     |
 | `extraction`                | object \| null | Memory-extraction summary for this turn (see [`extraction`](#extraction--memory-extraction-summary))  |
 | `content_redacted_at`       | string \| null | When the generation's content was purged; `null` while content is intact                             |

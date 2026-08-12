@@ -28,6 +28,12 @@ describe('MCP tools - happy path', () => {
   let chatAiProviderId: string;
 
   beforeAll(async () => {
+    // A queued eval run kicks the in-process eval worker, which would execute
+    // its dataset item as a real generation in the background. Disabled so the
+    // `start-eval-run` / `cancel-eval-run` tools are asserted on their own
+    // responses rather than racing background work.
+    process.env.EVAL_WORKER_DISABLED = 'true';
+
     await testClient
       .post('/api/v1/users/bootstrap')
       .send({ username: 'mcphappy', password: 'mcphappypass' });
@@ -440,6 +446,10 @@ describe('MCP tools - happy path', () => {
   });
 
   // ── Files ────────────────────────────────────────────────────────────────
+
+  afterAll(() => {
+    delete process.env.EVAL_WORKER_DISABLED;
+  });
 
   describe('Files tools', () => {
     let fileId: string;
@@ -2345,14 +2355,32 @@ describe('MCP tools - happy path', () => {
       expect(parseResult(runs).total).toBe(0);
     });
 
-    test('start-eval-run surfaces the Phase 1 async rejection as a tool error', async () => {
+    test('start-eval-run queues a run through the MCP surface', async () => {
       const res = await mcpCall('start-eval-run', {
         eval_id: evalId,
         wait: false,
       });
 
       expect(res.status).toBe(200);
-      expect(JSON.stringify(res.body)).toMatch(/Phase 2/);
+      const run = parseResult(res);
+      expect(run.id).toMatch(/^evrun_/);
+      expect(run.status).toBe('queued');
+    });
+
+    test('cancel-eval-run settles the queued run', async () => {
+      const started = await mcpCall('start-eval-run', {
+        eval_id: evalId,
+        wait: false,
+      });
+      const runId = parseResult(started).id as string;
+
+      const res = await mcpCall('cancel-eval-run', {
+        eval_id: evalId,
+        run_id: runId,
+      });
+
+      expect(res.status).toBe(200);
+      expect(parseResult(res).status).toBe('canceled');
     });
 
     test('delete-eval and delete-dataset remove them', async () => {

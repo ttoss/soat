@@ -470,11 +470,40 @@ schema change.
 - SDK/CLI regenerated; smoke test drives dataset → eval → run → results via
   `$SOAT_CLI`
 
-### Phase 2 — LLM Judge + Async Queue + Baselines + Curation ❌ Not started
+### Phase 2 — LLM Judge + Async Queue + Baselines 🟡 Shipped, minus curation
 
-`llm_judge` scorer; async runs on the `RunTask` queue (`kind: eval_item`);
-`baseline_run_id` deltas; `eval_run.completed`/`.failed` webhooks;
-`from-generation` curation.
+`llm_judge` scorer; async runs on a dedicated eval queue; `baseline_run_id`
+deltas; `eval_run.completed`/`.failed` webhooks; `cancel`; a lease reaper;
+`source: eval` / `eval_judge` usage attribution.
+
+**Deviation from the async-queue decision above.** The PRD specified one task per
+item on the existing `orchestration_run_tasks` queue (`kind: eval_item`), on the
+grounds that "leases, redelivery, and concurrency limits come for free." That
+premise does not hold: the table carries a NOT NULL FK to `orchestration_runs`,
+and its claim is a SQL join over tasks → runs → projects that reads each
+project's `max_concurrent_runs`. An eval item has no orchestration run to join
+through, so sharing the table would have meant nullable FKs on a shipped hot
+path, a rewritten claim query, a `ClaimedTask` shape that no longer names what it
+points at, and an SQS driver silently unable to honour the limit the decision was
+banking on. Phase 2 therefore uses its own `EvalRunTask` table and shares the
+mechanics that actually matter — claim, lease, redelivery, batching, the timer —
+through `createSweep` / `createScheduler`, the same seam the platform's other
+seven pollers already use. That is reuse of the abstraction rather than of the
+table, and it satisfies the decision's real intent ("rather than inventing a
+second worker") without editing the orchestration runtime.
+
+**`from-generation` curation is deferred, not shipped.** The criterion below
+assumes the platform can read a past generation's input messages and output text.
+It cannot: neither is persisted in any platform-owned shape — `Generation` has no
+messages or output column, and `PURGED_GENERATION_CONTENT` covers only
+`metadata` / `error` / `extraction` / `pendingState`. Both live solely inside the
+AI SDK `steps` blob written to the trace's file, which the platform only ever
+*writes*. Building the route would mean either (a) the platform's first reader of
+that blob, keyed on an SDK-internal shape, yielding empty items for
+zero-retention and purged generations, or (b) persisting request messages in a new
+content column — a privacy-class decision (it stores end-user prompts) that the
+open-questions gate always forwards. Forwarded for a product call rather than
+resolved.
 
 **Acceptance criteria:**
 
@@ -489,6 +518,12 @@ schema change.
   is additive; `wait` may now take `default: false`, matching
   `orchestrations.yaml`. A redelivered item task inserts no duplicate
   `EvalResult` (unique `(eval_run_id, dataset_item_id)` asserted, count == 1)
+- Two additions the phase needed beyond the original list, both covered:
+  **settling is atomic** (a conditional `UPDATE` on `finished_at IS NULL` claims
+  the right to finalize, so concurrent workers draining a run's last items fire
+  `eval_run.completed` exactly once — a gate that receives a verdict twice can
+  act twice), and **`cancel`** drops outstanding tasks and settles the run while
+  keeping already-scored results and publishing no partial aggregate
 - Run with `baseline_run_id` returns per-scorer `delta` values equal to
   (current mean − baseline mean) within float tolerance, computed over the item
   intersection with divergence counts flagged when the item sets differ
@@ -497,10 +532,11 @@ schema change.
 - `eval_run.completed` fires exactly once per terminal run with the documented
   payload, asserted via a webhook test receiver; `eval_run.failed` on run
   failure
-- `from-generation` copies the generation's input messages and output into a
-  new item with `source_generation_id` set; `404` for a generation outside the
-  caller's project; the operation's spec description carries the
-  fixture-ownership warning from [Retention & erasure](#retention--erasure)
+- ⏭️ **Deferred** — `from-generation` copies the generation's input messages and
+  output into a new item with `source_generation_id` set; `404` for a generation
+  outside the caller's project; the operation's spec description carries the
+  fixture-ownership warning from [Retention & erasure](#retention--erasure).
+  Blocked on where that content would come from — see the deviation note above
 - Eval generations carry `source: eval` attribution, asserted where the
   [metering choke point](../packages/website/docs/modules/usage.md#coverage) records it
 
