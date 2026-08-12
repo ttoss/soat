@@ -207,7 +207,7 @@ CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 
 ## Step 3 - Run two generations and capture generation_id + trace_id
 
-Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions async generation](/docs/modules/sessions#async-generation) endpoints to produce assistant replies and capture the correlation IDs.
+Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions background generation](/docs/modules/sessions#background-generation) endpoints to produce assistant replies and capture the correlation IDs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
