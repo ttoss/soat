@@ -91,9 +91,10 @@ sessionSubResourcesRouter.post(
         model?: string;
         tool_context?: Record<string, string>;
       }) ?? {};
-    const isAsync = ctx.query['async'] === 'true';
+    // Background by default; ?wait=true blocks until the generation settles.
+    const wait = ctx.query['wait'] === 'true';
 
-    if (isAsync) {
+    if (!wait) {
       generateSessionResponse({
         agentId,
         sessionId: ctx.params.session_id,

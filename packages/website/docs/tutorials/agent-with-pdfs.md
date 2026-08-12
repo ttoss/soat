@@ -302,7 +302,7 @@ to the whole subtree later with a single `document_paths` prefix.
 Ingestion is **asynchronous by default**: the endpoint returns `202 Accepted` with
 `status: pending` and processing runs in the background (see
 [Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion)). Here
-we pass `--async false` so the call blocks until the document is `ready` — that way the
+we pass `--wait true` so the call blocks until the document is `ready` — that way the
 next steps can search the chunks immediately without polling. The final `chunk_count` is
 read separately from [`GET /documents/:id/status`](/docs/modules/documents#polling-ingestion-status),
 which reports live ingestion progress rather than the document's own (caller-owned)
@@ -319,7 +319,7 @@ PRINTER_DOC_ID=$(soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$PRINTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq -r '.id')
+  --wait true | jq -r '.id')
 soat get-document-status --document-id "$PRINTER_DOC_ID" \
   | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
@@ -328,7 +328,7 @@ ROUTER_DOC_ID=$(soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$ROUTER_FILE_ID" \
   --path-prefix "/manuals/" \
-  --async false | jq -r '.id')
+  --wait true | jq -r '.id')
 soat get-document-status --document-id "$ROUTER_DOC_ID" \
   | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 1 }
@@ -339,7 +339,7 @@ soat get-document-status --document-id "$ROUTER_DOC_ID" \
 
 ```ts
 const { data: printerDoc } = await adminSoat.documents.ingestDocument({
-  query: { async: false },
+  query: { wait: true },
   body: {
     project_id: PROJECT_ID,
     file_id: PRINTER_FILE_ID,
@@ -352,7 +352,7 @@ const { data: printerStatus } = await adminSoat.documents.getDocumentStatus({
 console.log(printerStatus.status, printerStatus.chunk_count); // "ready" 1
 
 const { data: routerDoc } = await adminSoat.documents.ingestDocument({
-  query: { async: false },
+  query: { wait: true },
   body: {
     project_id: PROJECT_ID,
     file_id: ROUTER_FILE_ID,
@@ -369,7 +369,7 @@ console.log(routerStatus.status, routerStatus.chunk_count); // "ready" 1
 <TabItem value="curl" label="curl">
 
 ```bash
-PRINTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+PRINTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
@@ -378,7 +378,7 @@ curl -s "$SOAT_URL/api/v1/documents/$PRINTER_DOC_ID/status" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 
-ROUTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+ROUTER_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$ROUTER_FILE_ID\",\"path_prefix\":\"/manuals/\"}" \
@@ -424,7 +424,7 @@ SIZED_DOC_ID=$(soat ingest-document \
   --chunk-strategy "size" \
   --chunk-size 60 \
   --chunk-overlap 10 \
-  --async false | jq -r '.id')
+  --wait true | jq -r '.id')
 soat get-document-status --document-id "$SIZED_DOC_ID" \
   | jq '{id: .id, status: .status, chunk_count: .chunk_count}'
 # → { "id": "doc_...", "status": "ready", "chunk_count": 3 }   # multiple windows from one page
@@ -444,7 +444,7 @@ const { data: printerFileSize } = await adminSoat.files.uploadFileBase64({
 });
 
 const { data: sized } = await adminSoat.documents.ingestDocument({
-  query: { async: false },
+  query: { wait: true },
   body: {
     project_id: PROJECT_ID,
     file_id: printerFileSize.id,
@@ -470,7 +470,7 @@ PRINTER_FILE_ID_SIZE=$(curl -s -X POST "$SOAT_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"printer-x1000.pdf\",\"content_type\":\"application/pdf\",\"content\":\"$PRINTER_PDF_B64\"}" \
   | jq -r '.id')
 
-SIZED_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?async=false" \
+SIZED_DOC_ID=$(curl -s -X POST "$SOAT_URL/api/v1/documents/ingest?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$PRINTER_FILE_ID_SIZE\",\"path_prefix\":\"/manuals-size/\",\"chunk_strategy\":\"size\",\"chunk_size\":60,\"chunk_overlap\":10}" \

@@ -523,7 +523,7 @@ Two steps: the model call that proposed `get_order_status`, and the resumed call
 
 ## Where to go next
 
-- **Sessions** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions): `generate-session-response` returns `requires_action` and `submit-session-tool-outputs` resumes it, with SOAT keeping the conversation history for you.
+- **Sessions** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions): `generate-session-response --wait true` returns `requires_action` and `submit-session-tool-outputs` resumes it, with SOAT keeping the conversation history for you.
 - **Gate the call before it reaches your app** — attach a [guardrail](/docs/modules/guardrails) to classify each client call, or require human sign-off with [approvals](/docs/modules/approvals). See [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
 - **Reshape the output** — [`output_mapping`](/docs/modules/tools#output-mapping) applies a JSON Logic transform to the output your app submits before the model sees it.
 - **Track spend per end user** — attribute each session's generations to an [actor](/docs/modules/actors) and cap budgets: [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).

@@ -160,7 +160,7 @@ describe('Usage', () => {
       .send({ message: 'hello from the end user' });
 
     const sessionGenRes = await authenticatedTestClient(userToken)
-      .post(`/api/v1/sessions/${sessionId}/generate`)
+      .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
       .send({});
     expect(sessionGenRes.status).toBe(200);
     expect(sessionGenRes.body.status).toBe('completed');
@@ -328,7 +328,7 @@ describe('Usage', () => {
         .post(`/api/v1/sessions/${actorlessSessionId}/messages`)
         .send({ message: 'anonymous end user' });
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${actorlessSessionId}/generate`)
+        .post(`/api/v1/sessions/${actorlessSessionId}/generate?wait=true`)
         .send({});
       expect(genRes.status).toBe(200);
 

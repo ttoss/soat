@@ -293,7 +293,7 @@ export const ERROR_CODES = {
   FILE_TOO_LARGE_FOR_SYNC: {
     httpStatus: 413,
     description:
-      'The file is too large to ingest synchronously. Retry without `?async=false` (or with `?async=true`) to run ingestion in the background and poll the document status.',
+      'The file is too large to ingest synchronously. Retry without `?wait=true` to run ingestion in the background and poll the document status.',
   },
   FILE_ALREADY_INGESTED: {
     httpStatus: 409,
@@ -327,7 +327,7 @@ export const ERROR_CODES = {
   CONVERTER_FAILED: {
     httpStatus: 422,
     description:
-      'The ingestion converter (tool or agent) failed to run, an agent converter returned an async deferral (unsupported — agent converters are always awaited inline), or a tool converter returned an async deferral during synchronous ingestion (`?async=false`, which cannot wait for a callback).',
+      'The ingestion converter (tool or agent) failed to run, an agent converter returned an async deferral (unsupported — agent converters are always awaited inline), or a tool converter returned an async deferral during synchronous ingestion (`?wait=true`, which cannot wait for a callback).',
   },
   CONVERTER_OUTPUT_INVALID: {
     httpStatus: 422,

@@ -381,11 +381,11 @@ BLAKE_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
 
 soat add-session-message --session-id "$ADA_SESSION_ID" \
   --message "What are your support hours?" > /dev/null
-ADA_GEN_ID=$(soat generate-session-response --session-id "$ADA_SESSION_ID" | jq -r '.generation_id')
+ADA_GEN_ID=$(soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq -r '.generation_id')
 
 soat add-session-message --session-id "$BLAKE_SESSION_ID" \
   --message "What are your support hours?" > /dev/null
-BLAKE_GEN_ID=$(soat generate-session-response --session-id "$BLAKE_SESSION_ID" | jq -r '.generation_id')
+BLAKE_GEN_ID=$(soat generate-session-response --wait true --session-id "$BLAKE_SESSION_ID" | jq -r '.generation_id')
 
 soat get-generation --generation-id "$ADA_GEN_ID" | jq '{actor: "Ada", agent_version}'
 soat get-generation --generation-id "$BLAKE_GEN_ID" | jq '{actor: "Blake", agent_version}'
@@ -396,7 +396,7 @@ Assignment is **sticky**: run a second turn for the same actor and it lands on t
 ```bash
 soat add-session-message --session-id "$ADA_SESSION_ID" \
   --message "And on weekends?" > /dev/null
-ADA_GEN_2_ID=$(soat generate-session-response --session-id "$ADA_SESSION_ID" | jq -r '.generation_id')
+ADA_GEN_2_ID=$(soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq -r '.generation_id')
 
 soat get-generation --generation-id "$ADA_GEN_2_ID" | jq '{actor: "Ada", turn: 2, agent_version}'
 ```
@@ -425,6 +425,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: adaTurn } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: adaSession.id },
+  query: { wait: true },
   body: {},
 });
 
@@ -450,7 +451,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"What are your support hours?"}' > /dev/null
 
-ADA_GEN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate" \
+ADA_GEN_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" -d '{}' \
   | jq -r '.generation_id')
 

@@ -824,7 +824,7 @@ describe('Agent versions', () => {
       const generateInSession = async (sessionId: string): Promise<void> => {
         // Fails upstream (no reachable provider) after the record is written.
         await authenticatedTestClient(userToken).post(
-          `/api/v1/sessions/${sessionId}/generate`
+          `/api/v1/sessions/${sessionId}/generate?wait=true`
         );
       };
 

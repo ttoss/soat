@@ -81,9 +81,9 @@ Path examples:
 
 `POST /api/v1/documents/ingest` returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll `GET /api/v1/documents/:id` until `status` is `ready` or `failed`.
 
-Pass `?async=false` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (This mirrors the `?async=` toggle on `POST /api/v1/sessions/:id/generate`, except ingestion defaults to async.)
+Pass `?wait=true` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (`wait` is the platform-wide sync/async toggle — the same knob as `wait` on `POST /api/v1/sessions/:id/generate`, `start-orchestration-run`, and `start-eval-run`. Every endpoint defaults to background execution; `wait=true` opts into blocking.)
 
-Synchronous ingestion is bounded by file size: a file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC` rather than blocking the request until it times out. Retry such files in async mode and poll the status endpoint.
+Synchronous ingestion is bounded by file size: a file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC` rather than blocking the request until it times out. Retry such files in the default background mode (omit `?wait=true`) and poll the status endpoint.
 
 ### Polling Ingestion Status
 
@@ -120,7 +120,7 @@ If an ingestion worker dies mid-processing, a document can be left in `processin
 
 ### Re-ingesting a Document
 
-`POST /api/v1/documents/:id/ingest` re-runs ingestion for an existing document against its already-stored source file. Existing chunks are discarded and the document is reset to `status: pending` before re-processing. Use it to recover a stuck or failed document, or to re-chunk an existing document with a different `chunk_strategy`, without deleting and re-uploading the file. It accepts the same `chunk_strategy` / `chunk_size` / `chunk_overlap` body fields and `?async=` toggle as `POST /documents/ingest`, and returns `202` (async, default) or `201` (sync).
+`POST /api/v1/documents/:id/ingest` re-runs ingestion for an existing document against its already-stored source file. Existing chunks are discarded and the document is reset to `status: pending` before re-processing. Use it to recover a stuck or failed document, or to re-chunk an existing document with a different `chunk_strategy`, without deleting and re-uploading the file. It accepts the same `chunk_strategy` / `chunk_size` / `chunk_overlap` body fields and `?wait=` toggle as `POST /documents/ingest`, and returns `202` (background, default) or `201` (`?wait=true`).
 
 **Lifecycle states:**
 
@@ -203,7 +203,7 @@ If `project_id` is supplied but the caller's policies do not grant the required 
 | `EMBEDDING_MODEL`      | Yes      | Model name, e.g. `qwen3-embedding:0.6b`                      |
 | `EMBEDDING_DIMENSIONS` | Yes      | Vector dimensions — must match the model output, e.g. `1024` |
 | `OLLAMA_BASE_URL`      | No       | Ollama server URL, defaults to `http://localhost:11434`      |
-| `SYNC_INGESTION_MAX_BYTES` | No   | Max file size (bytes) allowed for synchronous ingestion (`?async=false`). Larger files return `413`. Defaults to `10485760` (10 MB). |
+| `SYNC_INGESTION_MAX_BYTES` | No   | Max file size (bytes) allowed for synchronous ingestion (`?wait=true`). Larger files return `413`. Defaults to `10485760` (10 MB). |
 | `INGESTION_STALL_TIMEOUT_MS` | No | How long (ms) a document may stay in `pending`/`processing` with no progress before it is auto-failed with `INGESTION_TIMEOUT`. Defaults to `300000` (5 min). |
 
 ### Ollama setup example

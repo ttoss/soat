@@ -333,8 +333,8 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunk_overlap?: number;
   };
 
-  // Async by default; ?async=false runs synchronously and returns 201.
-  const isAsync = ctx.query['async'] !== 'false';
+  // Background by default; ?wait=true blocks and returns 201.
+  const wait = ctx.query['wait'] === 'true';
 
   const targetProjectId = await resolveWriteProjectId({
     ctx,
@@ -350,10 +350,10 @@ documentsRouter.post('/documents/ingest', async (ctx: Context) => {
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
-    async: isAsync,
+    wait,
   });
 
-  ctx.status = isAsync ? 202 : 201;
+  ctx.status = wait ? 201 : 202;
   ctx.body = result;
 });
 
@@ -375,18 +375,18 @@ documentsRouter.post('/documents/:document_id/ingest', async (ctx: Context) => {
     chunk_overlap?: number;
   };
 
-  // Async by default; ?async=false runs synchronously and returns 201.
-  const isAsync = ctx.query['async'] !== 'false';
+  // Background by default; ?wait=true blocks and returns 201.
+  const wait = ctx.query['wait'] === 'true';
 
   const result = await reingestDocument({
     id: ctx.params.document_id,
     chunkStrategy: body.chunk_strategy,
     chunkSize: body.chunk_size,
     chunkOverlap: body.chunk_overlap,
-    async: isAsync,
+    wait,
   });
 
-  ctx.status = isAsync ? 202 : 201;
+  ctx.status = wait ? 201 : 202;
   ctx.body = result;
 });
 

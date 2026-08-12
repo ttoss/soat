@@ -180,13 +180,13 @@ paths:
       operationId: ingestDocument
       x-iam-action: documents:IngestDocument
       parameters:
-        - name: async
+        - name: wait
           in: query
           required: false
-          description: When omitted or `true` (default), processing runs in the background and `202 Accepted` is returned immediately with `status=pending`. Pass `false` to run synchronously and receive `201 Created` with `status=ready`.
+          description: When omitted or `false` (default), processing runs in the background and `202 Accepted` is returned immediately with `status=pending`. Pass `true` to block until processing completes and receive `201 Created` with `status=ready`.
           schema:
             type: boolean
-            default: true
+            default: false
       requestBody:
         required: true
         content:
@@ -230,7 +230,7 @@ paths:
                   example: 200
       responses:
         '201':
-          description: Ingestion completed synchronously (only when `?async=false`). The document is fully indexed and ready for search.
+          description: Ingestion completed synchronously (only when `?wait=true`). The document is fully indexed and ready for search.
           content:
             application/json:
               schema:
@@ -266,7 +266,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '413':
-          description: The file is too large to ingest synchronously (`?async=false`). Retry in async mode and poll the document status.
+          description: The file is too large to ingest synchronously (`?wait=true`). Retry in background mode and poll the document status.
           content:
             application/json:
               schema:
@@ -471,8 +471,8 @@ paths:
         source file. Existing chunks are discarded and the document is reset to
         `status=pending` before re-processing. Use this to recover a document
         stuck in `processing`/`failed` or to re-chunk with a different strategy
-        without re-uploading the file. Async by default (`202`); pass
-        `?async=false` to run synchronously (`201`).
+        without re-uploading the file. Background by default (`202`); pass
+        `?wait=true` to run synchronously (`201`).
       operationId: reingestDocument
       x-iam-action: documents:IngestDocument
       parameters:
@@ -483,13 +483,13 @@ paths:
           schema:
             type: string
             example: 'doc_V1StGXR8Z5jdHi6B'
-        - name: async
+        - name: wait
           in: query
           required: false
-          description: When omitted or `true` (default), processing runs in the background and `202 Accepted` is returned immediately with `status=pending`. Pass `false` to run synchronously and receive `201 Created` with `status=ready`.
+          description: When omitted or `false` (default), processing runs in the background and `202 Accepted` is returned immediately with `status=pending`. Pass `true` to block until processing completes and receive `201 Created` with `status=ready`.
           schema:
             type: boolean
-            default: true
+            default: false
       requestBody:
         required: false
         content:
@@ -512,7 +512,7 @@ paths:
                   example: 200
       responses:
         '201':
-          description: Re-ingestion completed synchronously (only when `?async=false`).
+          description: Re-ingestion completed synchronously (only when `?wait=true`).
           content:
             application/json:
               schema:
@@ -542,7 +542,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '413':
-          description: The file is too large to re-ingest synchronously (`?async=false`). Retry in async mode.
+          description: The file is too large to re-ingest synchronously (`?wait=true`). Retry in background mode.
           content:
             application/json:
               schema:

@@ -898,7 +898,7 @@ echo "Document status endpoint: OK"
 echo "--- Re-ingesting document ---"
 REINGEST_RESP=$($SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
-  --async false \
+  --wait true \
   --chunk-strategy whole)
 REINGEST_STATUS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.status')
 REINGEST_CHUNKS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.chunk_count')
@@ -939,7 +939,7 @@ fi
 
 UNSCOPED_REINGEST_RESP=$(SOAT_TOKEN="$DOC_UNSCOPED_KEY_RAW" $SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
-  --async false \
+  --wait true \
   --chunk-strategy whole)
 UNSCOPED_REINGEST_STATUS=$(printf '%s\n' "$UNSCOPED_REINGEST_RESP" | jq -r '.status')
 if [ "$UNSCOPED_REINGEST_STATUS" != "ready" ]; then
@@ -1013,7 +1013,7 @@ CONVERTER_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$CONVERTER_FILE_ID" \
   --path-prefix /smoke/ \
-  --async false)
+  --wait true)
 CONVERTER_DOC_ID=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.id')
 CONVERTER_DOC_STATUS=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.status')
 echo "Converter-ingested document id: $CONVERTER_DOC_ID status: $CONVERTER_DOC_STATUS"
@@ -1086,7 +1086,7 @@ ASYNC_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --content_type image/x-smoke-test-async)
 ASYNC_FILE_ID=$(printf '%s\n' "$ASYNC_UPLOAD_RESP" | jq -r '.id')
 
-# Async by default (no --async false) — the request returns immediately.
+# Async by default (no --wait true) — the request returns immediately.
 ASYNC_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$ASYNC_FILE_ID" \
@@ -3627,7 +3627,7 @@ fi
 
 $SOAT_CLI add-session-message \
   --session-id "$EUA_SESSION_ID" --message "hello from the smoke end user" >/dev/null
-$SOAT_CLI generate-session-response --session-id "$EUA_SESSION_ID" >/dev/null
+$SOAT_CLI generate-session-response --wait true --session-id "$EUA_SESSION_ID" >/dev/null
 
 # Filter the raw meters by actor: every returned row must carry that actor, and
 # the session-driven event must carry the session too.
