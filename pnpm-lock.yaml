@@ -323,6 +323,9 @@ importers:
       dotenv:
         specifier: ^17.4.2
         version: 17.4.2
+      google-auth-library:
+        specifier: ^10.9.1
+        version: 10.9.1
       json-logic-engine:
         specifier: ^5.0.7
         version: 5.0.7

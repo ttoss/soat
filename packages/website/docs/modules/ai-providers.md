@@ -111,6 +111,19 @@ Like `bedrock`, the authentication mode is determined by the shape of the linked
 
 **Application Default Credentials** — link no secret at all. The server falls back to [ADC](https://cloud.google.com/docs/authentication/application-default-credentials): `GOOGLE_APPLICATION_CREDENTIALS`, Workload Identity, the GCE/GKE metadata server, or a local `gcloud auth application-default login`. This is the recommended mode when SOAT itself runs on Google Cloud, because no key material is stored anywhere.
 
+#### Federating an AWS identity (SOAT on ECS or EC2)
+
+ADC also covers the case where SOAT runs on **AWS** and reaches Vertex through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds), so no service-account key is stored. Point `GOOGLE_APPLICATION_CREDENTIALS` at the configuration `gcloud iam workload-identity-pools create-cred-config --aws` writes — it holds no secret material — and SOAT exchanges the task's own AWS identity for a Google access token.
+
+SOAT supplies the AWS half of that exchange from the **AWS default credential chain** rather than from the `credential_source` in the file. That matters on ECS: `google-auth-library` reads AWS credentials only from the `AWS_ACCESS_KEY_ID` environment variables or EC2 IMDS, and a task role is delivered on neither — it arrives on the container credentials endpoint named by `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`. Left to the stock configuration, a task either finds no credentials or, where IMDS is reachable, authenticates as the **EC2 instance role** instead; a pool provider scoped to the task role then rejects the exchange with `unauthorized_client`.
+
+Requirements:
+
+- `AWS_REGION` (or `AWS_DEFAULT_REGION`) must be set on the server process — it signs the `GetCallerIdentity` call that proves the identity. Without it, generations fail with `AI_PROVIDER_MISCONFIGURED`.
+- The pool provider's attribute condition must admit whichever role the credential chain resolves to. On ECS with a task role, that is the task role.
+
+This applies only to the ADC path, and only when the file is an AWS-sourced `external_account` configuration. A linked service-account secret, express mode, a non-AWS external account, and every other ADC source behave exactly as before.
+
 The provider's `config` object accepts two fields:
 
 | Field      | Default       | Description                                                                                               |
