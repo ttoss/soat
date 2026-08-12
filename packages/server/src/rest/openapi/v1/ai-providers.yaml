@@ -323,6 +323,54 @@ paths:
             The AI provider still has dependents. Live references always block;
             soft dependents block unless force=true. See error.meta for counts,
             offending IDs, and the forcible flag.
+  /api/v1/ai-providers/{ai_provider_id}/models:
+    get:
+      tags:
+        - AI Providers
+      summary: List the models this provider can run
+      description: >
+        Asks the provider which models it can run, using this provider record's
+        own credentials and configuration, and returns provider-native model ids
+        — the same strings `default_model` and an agent's `model` carry.
+
+        Which models are reachable is a property of the credential, not of the
+        provider type: a Vertex provider sees only the publisher models its
+        Google Cloud project and location serve, and a Bedrock provider only the
+        foundation models enabled in its region. Reading the list is how a caller
+        avoids pinning a model that fails at generation time.
+
+        Not every provider type can answer. `azure` lists deployments an operator
+        named rather than models, and `ollama` lists whatever was pulled onto that
+        host, so both return `400 MODEL_LISTING_UNSUPPORTED`.
+      operationId: listAiProviderModels
+      parameters:
+        - name: ai_provider_id
+          in: path
+          required: true
+          description: AI Provider ID
+          schema:
+            type: string
+            example: aip_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: The models this provider can run
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProviderModelsResponse'
+        '400':
+          description: >
+            The provider type cannot enumerate models, or the record is missing
+            configuration the listing needs (a Vertex project, a Bedrock region,
+            a linked API key).
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: AI provider not found
+        '502':
+          description: The provider rejected the listing request
   /api/v1/ai-providers/{ai_provider_id}/prices:
     get:
       tags:
@@ -478,6 +526,78 @@ components:
                 type: string
                 format: date-time
                 description: Must be in the future; past prices are immutable
+
+    ProviderModelsResponse:
+      type: object
+      required:
+        - provider
+        - models
+      properties:
+        provider:
+          type: string
+          description: The provider slug the listing came from
+          example: vertex
+        models:
+          type: array
+          items:
+            type: object
+            required:
+              - id
+            properties:
+              id:
+                type: string
+                description: >
+                  The provider-native model id, ready to use as `default_model`
+                  or an agent's `model`
+                example: gemini-2.5-flash
+              display_name:
+                type: string
+                description: The provider's own human-readable name, when it reports one
+                example: Gemini 2.5 Flash
+              vendor:
+                type: string
+                description: Who makes the model, when the provider reports it
+                example: google
+              input_modalities:
+                type: array
+                description: Lowercased input modalities, when the provider reports them
+                items:
+                  type: string
+                example:
+                  - text
+                  - image
+              output_modalities:
+                type: array
+                description: Lowercased output modalities, when the provider reports them
+                items:
+                  type: string
+                example:
+                  - text
+              streaming:
+                type: boolean
+                description: Whether the model supports streaming responses
+              lifecycle:
+                type: string
+                description: >
+                  `active`, `legacy` or `deprecated`, as the provider reports it.
+                  A model that is not `active` still serves today but should not
+                  be pinned by anything new.
+                enum:
+                  - active
+                  - legacy
+                  - deprecated
+              inference_types:
+                type: array
+                description: >
+                  Lowercased inference types the model supports, when reported.
+                  A Bedrock model offering only `inference_profile` must be
+                  invoked through a cross-region profile id rather than the bare
+                  model id.
+                items:
+                  type: string
+                example:
+                  - on_demand
+                  - inference_profile
 
   securitySchemes:
     bearerAuth:

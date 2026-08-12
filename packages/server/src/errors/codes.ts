@@ -107,6 +107,16 @@ export const ERROR_CODES = {
     description:
       'The AI provider record is missing configuration the provider type requires — for example a `vertex` provider with no Google Cloud project in `config.project` and no service-account key file linked as its secret.',
   },
+  MODEL_LISTING_UNSUPPORTED: {
+    httpStatus: 400,
+    description:
+      'The AI provider type cannot enumerate the models it can run. Azure lists deployments an operator named rather than models, and Ollama lists whatever was pulled onto that host, so neither answers the question.',
+  },
+  MODEL_LISTING_FAILED: {
+    httpStatus: 502,
+    description:
+      "The provider rejected the model listing request, or answered it with something other than JSON. The provider's own status and message are carried in the error message.",
+  },
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

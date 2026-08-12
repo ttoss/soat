@@ -18,6 +18,7 @@ describe('AI Providers', () => {
         'ai-providers:CreateAiProvider',
         'ai-providers:UpdateAiProvider',
         'ai-providers:DeleteAiProvider',
+        'ai-providers:ListAiProviderModels',
         'ai-providers:GetAiProviderPrices',
         'ai-providers:ManageAiProviderPrices',
       ],
@@ -662,6 +663,74 @@ describe('AI Providers', () => {
           })
         ).toHaveLength(1);
       });
+    });
+  });
+
+  describe('GET /api/v1/ai-providers/:aiProviderId/models', () => {
+    let azureProviderId: string;
+    let vertexProviderId: string;
+
+    beforeAll(async () => {
+      const azureRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Azure Listing',
+          provider: 'azure',
+          default_model: 'gpt-4o',
+        });
+      azureProviderId = azureRes.body.id;
+
+      const vertexRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Vertex Listing',
+          provider: 'vertex',
+          default_model: 'gemini-2.5-flash',
+        });
+      vertexProviderId = vertexRes.body.id;
+    });
+
+    test('unauthenticated request returns 401', async () => {
+      const response = await testClient.get(
+        `/api/v1/ai-providers/${azureProviderId}/models`
+      );
+      expect(response.status).toBe(401);
+    });
+
+    test('unknown ID returns 404', async () => {
+      const response = await authenticatedTestClient(userToken).get(
+        '/api/v1/ai-providers/aip_doesnotexist/models'
+      );
+      expect(response.status).toBe(404);
+    });
+
+    test('user without permission returns 403', async () => {
+      const response = await authenticatedTestClient(noPermToken).get(
+        `/api/v1/ai-providers/${azureProviderId}/models`
+      );
+      expect(response.status).toBe(403);
+    });
+
+    test('a provider type that cannot enumerate models returns 400', async () => {
+      // Authorization is reached and passed first — this 400 is the provider
+      // type's answer, not a permission problem.
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/ai-providers/${azureProviderId}/models`
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('MODEL_LISTING_UNSUPPORTED');
+    });
+
+    test('a vertex provider with no project configured returns 400', async () => {
+      // Fails on the missing config before any network call, so this asserts the
+      // misconfiguration path without reaching Google.
+      const response = await authenticatedTestClient(userToken).get(
+        `/api/v1/ai-providers/${vertexProviderId}/models`
+      );
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('AI_PROVIDER_MISCONFIGURED');
     });
   });
 });
