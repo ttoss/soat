@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 import { db } from 'src/db';
+import * as agentNonStreamGenerationModule from 'src/lib/agentNonStreamGeneration';
 import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
 
@@ -25,6 +26,9 @@ describe('Agents', () => {
         'agents:UpdateAgent',
         'agents:DeleteAgent',
         'agents:CreateAgentGeneration',
+        // A background generation hands back a generation id to poll, so the
+        // generate tests need to read one back.
+        'generations:GetGeneration',
         'tools:CreateTool',
         'tools:ListTools',
         'tools:GetTool',
@@ -1568,7 +1572,7 @@ describe('Agents', () => {
 
   // ── Generation ───────────────────────────────────────────────────────────
 
-  describe('POST /api/v1/agents/:agentId/generate', () => {
+  describe('POST /api/v1/agents/:agentId/generate?wait=true', () => {
     let agentId: string;
 
     beforeAll(async () => {
@@ -1584,7 +1588,7 @@ describe('Agents', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       expect(response.status).toBe(401);
@@ -1592,7 +1596,7 @@ describe('Agents', () => {
 
     test('missing messages returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({});
 
       expect(response.status).toBe(400);
@@ -1601,7 +1605,7 @@ describe('Agents', () => {
 
     test('empty messages array returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [] });
 
       expect(response.status).toBe(400);
@@ -1610,7 +1614,7 @@ describe('Agents', () => {
 
     test('unknown agentId returns 404', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/agents/agt_doesnotexist0000/generate')
+        .post('/api/v1/agents/agt_doesnotexist0000/generate?wait=true')
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       expect(response.status).toBe(404);
@@ -1619,7 +1623,7 @@ describe('Agents', () => {
 
     test('accepts toolContext in request body', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
           tool_context: { user_id: 'u1', env: 'test' },
@@ -1633,9 +1637,77 @@ describe('Agents', () => {
       expect([200, 502]).toContain(response.status);
     });
 
+    test('background by default: returns 202 with a pollable generation handle', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(202);
+      expect(response.body.status).toBe('accepted');
+      expect(response.body.generation_id).toBeDefined();
+      expect(response.body.trace_id).toBeDefined();
+
+      // The handle must be usable: the generation record is written before the
+      // response, so a caller can poll it without racing the dispatch.
+      const poll = await authenticatedTestClient(userToken).get(
+        `/api/v1/generations/${response.body.generation_id}`
+      );
+      expect(poll.status).toBe(200);
+      expect(poll.body.id).toBe(response.body.generation_id);
+    });
+
+    test('a background generation that fails records the failure for polling', async () => {
+      // Sanctioned force-failure stub (tests.md — "Force-failure stubs for
+      // `.catch()` resilience branches"): the background path swallows the
+      // dispatch error and records it on the generation, and no real provider
+      // call fails deterministically in unit CI. The happy path above runs
+      // against the real pipeline.
+      jest
+        .spyOn(agentNonStreamGenerationModule, 'runNonStreamGeneration')
+        .mockRejectedValueOnce(new Error('provider exploded'));
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(202);
+      const generationId = response.body.generation_id;
+
+      // The whole point of the background mode: a failure after admission is
+      // discoverable by polling rather than lost with the request.
+      let status: string | undefined;
+      for (let attempt = 0; attempt < 50 && status !== 'failed'; attempt += 1) {
+        const poll = await authenticatedTestClient(userToken).get(
+          `/api/v1/generations/${generationId}`
+        );
+        status = poll.body.status;
+      }
+
+      expect(status).toBe('failed');
+
+      jest.restoreAllMocks();
+    });
+
+    test('background mode still rejects an invalid body synchronously', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [] });
+
+      expect(response.status).toBe(400);
+    });
+
+    test('stream with wait=false is rejected as contradictory', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate?wait=false`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
     test('user without CreateAgentGeneration permission returns 404 (no accessible projects)', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       // noPermToken has no policies → projectIds=[] → agent not found in empty scope
@@ -1660,7 +1732,7 @@ describe('Agents', () => {
       expect(createRes.body.knowledge_config).toBeDefined();
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${knowledgeAgentId}/generate`)
+        .post(`/api/v1/agents/${knowledgeAgentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Tell me something' }] });
 
       // Knowledge search (embeddings) is mocked and always succeeds; only the
@@ -1693,7 +1765,7 @@ describe('Agents', () => {
 
       // No live Ollama server in this suite — see the toolContext test above.
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${writeMemAgentId}/generate`)
+        .post(`/api/v1/agents/${writeMemAgentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
         });
@@ -1719,7 +1791,7 @@ describe('Agents', () => {
       const knowledgeAgentId = createRes.body.id;
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${knowledgeAgentId}/generate`)
+        .post(`/api/v1/agents/${knowledgeAgentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'Tell me something' }],
           knowledge_config: { memory_ids: ['mem_per_generation'] },
@@ -1758,7 +1830,7 @@ describe('Agents', () => {
       const structuredAgentId = createRes.body.id;
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${structuredAgentId}/generate`)
+        .post(`/api/v1/agents/${structuredAgentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Summarize this.' }] });
 
       // No live Ollama server in this suite — see the toolContext test above.
@@ -1778,7 +1850,7 @@ describe('Agents', () => {
       const structuredAgentId = createRes.body.id;
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${structuredAgentId}/generate`)
+        .post(`/api/v1/agents/${structuredAgentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'Hello' }],
           stream: true,
@@ -1963,7 +2035,7 @@ describe('Agents', () => {
           name: 'gen-agent',
         });
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${created.body.id}/generate`)
+        .post(`/api/v1/agents/${created.body.id}/generate?wait=true`)
         .send({ prompt: 'hi', reasoning: { effort: 'high' } });
       expect(res.status).toBe(400);
     });

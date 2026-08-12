@@ -64,6 +64,10 @@ const CHECKS = [
   // pipeline" are both forbidden.
   { label: "forbidden term: 'orchestration workflow' (an orchestration is a pipeline)", re: /orchestration workflows?/i },
   { label: "forbidden term: 'workflow pipeline' (keep the two senses separate)", re: /workflow pipelines?/i },
+  // The sync/async execution toggle is `wait` everywhere (documents, sessions,
+  // orchestrations, evaluations). The retired `?async=` query parameter must
+  // not be documented again in any form.
+  { label: "stale toggle: '?async=' (the sync/async toggle is 'wait')", re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/ },
   {
     label: 'wrong public-ID prefix (see publicId.ts)',
     re: /\b(agt_|trc_|actr_|act_[0-9A-Za-z]|tol_|fl_[0-9A-Za-z]|af_[0-9A-Za-z]|afr_|afo_|prj_|usr_|cht_|fil_|me_[0-9A-Za-z])/,

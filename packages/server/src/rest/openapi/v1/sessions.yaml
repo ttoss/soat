@@ -248,18 +248,20 @@ paths:
       summary: Trigger agent generation
       description: >
         Triggers the agent to generate a response based on the current
-        conversation. Returns the assistant reply or a requires_action status
-        if the agent needs client tool outputs. Pass ?async=true for a
-        202 accepted response when you do not need to wait for the result.
+        conversation. Background by default: returns `202 Accepted`
+        immediately while the generation runs. Pass ?wait=true to block and
+        receive the assistant reply (or a requires_action status if the agent
+        needs client tool outputs) in the response.
       operationId: generateSessionResponse
       parameters:
         - $ref: '#/components/parameters/SessionId'
-        - name: async
+        - name: wait
           in: query
           required: false
-          description: When true, generation runs in the background and 202 is returned immediately
+          description: When omitted or `false` (default), generation runs in the background and `202 Accepted` is returned immediately. Pass `true` to block until the generation settles and receive the result.
           schema:
             type: boolean
+            default: false
       requestBody:
         required: false
         content:
@@ -268,13 +270,13 @@ paths:
               $ref: '#/components/schemas/GenerateSessionRequest'
       responses:
         '200':
-          description: Agent reply or requires_action
+          description: Agent reply or requires_action (only when `?wait=true`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenerateSessionResponse'
         '202':
-          description: Generation accepted (async mode)
+          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`)
           content:
             application/json:
               schema:

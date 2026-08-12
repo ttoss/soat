@@ -25,7 +25,7 @@ export { finalizeIngestedPages } from './documentIngestionCore';
 
 const log = createDebug('soat:documents');
 
-// Files larger than this cannot be ingested synchronously (`?async=false`):
+// Files larger than this cannot be ingested synchronously (`?wait=true`):
 // parsing + embedding a large file blocks the request long enough to time out
 // behind most proxies. Configurable via SYNC_INGESTION_MAX_BYTES.
 const SYNC_INGESTION_DEFAULT_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
@@ -59,7 +59,7 @@ const assertSyncIngestible = (
   if (size > max) {
     throw new DomainError(
       'FILE_TOO_LARGE_FOR_SYNC',
-      `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit. Retry in async mode (omit ?async=false) and poll GET /documents/{id}/status.`
+      `File is ${size} bytes, which exceeds the ${max}-byte synchronous ingestion limit. Retry in background mode (omit ?wait=true) and poll GET /documents/{id}/status.`
     );
   }
 };
@@ -169,11 +169,11 @@ const runIngestionPipeline = async (args: IngestionPipelineArgs) => {
 
   if (resolved.status === 'pending') {
     if (!args.isAsync) {
-      // Synchronous ingestion (?async=false) cannot wait for a callback that
+      // Synchronous ingestion (?wait=true) cannot wait for a callback that
       // may arrive arbitrarily later — the converter must respond inline.
       throw new DomainError(
         'CONVERTER_FAILED',
-        `Converter '${resolved.converterId}' deferred with { status: "pending" }, which synchronous ingestion (?async=false) cannot wait for. Retry without ?async=false.`
+        `Converter '${resolved.converterId}' deferred with { status: "pending" }, which synchronous ingestion (?wait=true) cannot wait for. Retry without ?wait=true.`
       );
     }
 
@@ -249,10 +249,10 @@ const processDocumentIngestion = async (args: {
 };
 
 /**
- * Validate the file and create a Document record. When `async` is true
+ * Validate the file and create a Document record. When `wait` is false
  * (default) processing is deferred to the next event loop tick and the
- * document is returned with `status=pending` (HTTP 202). When `async` is
- * false the pipeline runs synchronously and the document is returned with
+ * document is returned with `status=pending` (HTTP 202). When `wait` is
+ * true the pipeline runs synchronously and the document is returned with
  * `status=ready` (HTTP 201).
  */
 export const enqueueDocumentIngestion = async (args: {
@@ -263,16 +263,16 @@ export const enqueueDocumentIngestion = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-  async?: boolean;
+  wait?: boolean;
 }) => {
-  const runAsync = args.async !== false;
+  const runAsync = args.wait !== true;
 
   log(
-    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s async=%s',
+    'enqueueDocumentIngestion: fileId=%s projectId=%d strategy=%s wait=%s',
     args.fileId,
     args.projectId,
     args.chunkStrategy ?? 'page',
-    runAsync
+    !runAsync
   );
 
   const file = await loadIngestibleFile(args.fileId);
@@ -351,7 +351,7 @@ export const reingestDocument = async (args: {
   chunkStrategy?: ChunkStrategy;
   chunkSize?: number;
   chunkOverlap?: number;
-  async?: boolean;
+  wait?: boolean;
 }) => {
   const doc = (await db.Document.findOne({
     where: { publicId: args.id },
@@ -362,15 +362,15 @@ export const reingestDocument = async (args: {
 
   const file = await ensureReingestibleFile({ id: args.id, file: doc.file });
 
-  const runAsync = args.async !== false;
+  const runAsync = args.wait !== true;
   if (!runAsync) {
     assertSyncIngestible(file);
   }
 
   log(
-    'reingestDocument: id=%s async=%s strategy=%s',
+    'reingestDocument: id=%s wait=%s strategy=%s',
     args.id,
-    runAsync,
+    !runAsync,
     args.chunkStrategy ?? 'page'
   );
 

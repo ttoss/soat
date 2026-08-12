@@ -264,6 +264,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'doc',
+      id: 'advanced/sync-and-async',
+      label: 'Synchronous & Asynchronous',
+    },
+    {
+      type: 'doc',
       id: 'advanced/tool-context',
       label: 'Tool Context',
     },

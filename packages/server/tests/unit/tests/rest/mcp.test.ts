@@ -796,7 +796,7 @@ describe('MCP tools - happy path', () => {
     test('reingest-document re-processes an existing document', async () => {
       const res = await mcpCall('reingest-document', {
         document_id: documentId,
-        async: false,
+        wait: true,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
@@ -2684,5 +2684,25 @@ describe('MCP tool surface excludes what a tool call cannot carry', () => {
     // A tool call is one request and one result; there is no channel to stream
     // deltas over, so the field is not offered rather than refused on use.
     expect(generate?.inputSchema?.properties?.stream).toBeUndefined();
+  });
+
+  test('create-agent-generation is offered without its wait field', () => {
+    const generate = tools.find((t) => {
+      return t.name === 'create-agent-generation';
+    });
+
+    // Same reasoning as `stream`, opposite direction: a tool call has no way to
+    // poll a background generation later, so the nested call must block. The
+    // value is forced server-side rather than left to the model.
+    expect(generate?.inputSchema?.properties?.wait).toBeUndefined();
+  });
+
+  test('generate-conversation-message is offered without its wait field', () => {
+    const generate = tools.find((t) => {
+      return t.name === 'generate-conversation-message';
+    });
+
+    expect(generate).toBeDefined();
+    expect(generate?.inputSchema?.properties?.wait).toBeUndefined();
   });
 });

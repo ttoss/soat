@@ -468,7 +468,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({
           project_id: projectId,
           file_id: fileId,
@@ -500,7 +500,7 @@ describe('IngestionRules', () => {
       });
 
       const ingestRes = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
       expect(ingestRes.status).toBe(201);
       expect(ingestRes.body.status).toBe('ready');
@@ -508,7 +508,7 @@ describe('IngestionRules', () => {
 
       ocrGeneration();
       const reRes = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .post(`/api/v1/documents/${docId}/ingest?wait=true`)
         .send({});
 
       expect(reRes.status).toBe(201);
@@ -530,7 +530,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({
           project_id: projectId,
           file_id: fileId,
@@ -563,7 +563,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -591,7 +591,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -608,7 +608,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(400);
@@ -627,7 +627,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -648,7 +648,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -669,7 +669,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -689,7 +689,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -712,7 +712,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -737,7 +737,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -760,7 +760,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -777,7 +777,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -793,7 +793,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -814,7 +814,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);
@@ -839,7 +839,7 @@ describe('IngestionRules', () => {
       });
 
       const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ project_id: projectId, file_id: fileId });
 
       expect(res.status).toBe(201);

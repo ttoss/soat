@@ -1056,7 +1056,7 @@ Trigger the orchestrator agent to run the full sonnet pipeline. The orchestrator
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-RESULT=$(soat create-agent-generation \
+RESULT=$(soat create-agent-generation --wait true \
   --agent-id "$ORCHESTRATOR_ID" \
   --messages '[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]')
 
@@ -1079,6 +1079,7 @@ Expected output:
 ```ts
 const { data: generation } = await authClient.agents.createAgentGeneration({
   path: { agent_id: ORCHESTRATOR_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -1097,7 +1098,7 @@ console.log('Trace:', TRACE_ID);
 <TabItem value="curl" label="curl">
 
 ```bash
-RESULT=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$ORCHESTRATOR_ID/generate" \
+RESULT=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$ORCHESTRATOR_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]}')

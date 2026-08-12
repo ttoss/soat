@@ -104,7 +104,7 @@ Content-Type: application/json
 { "auto_generate": false }
 ```
 
-The explicit `POST .../generate` endpoint continues to work regardless of this setting. Async generation (`?async=true`) is also supported on `POST .../messages` when `auto_generate` is enabled.
+The explicit `POST .../generate` endpoint continues to work regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
 
 ### Message Delay (Debounce)
 
@@ -185,9 +185,9 @@ These three keys are always taken from the session and actor, regardless of what
 
 Note that `actorExternalId` carries the actor's `external_id` to every `http` and `mcp` tool the agent calls; see [Actors](./actors.md#external_id-and-idempotent-creation) if that value holds PII.
 
-### Async Generation
+### Background Generation
 
-Pass `?async=true` to `POST .../generate` to return immediately with `202 Accepted`:
+`POST .../generate` runs in the background by default and returns immediately with `202 Accepted`. Pass `?wait=true` to block until the generation settles and receive the assistant reply in the response. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
 
 ```json
 { "status": "accepted", "session_id": "sess_..." }
@@ -239,7 +239,7 @@ All events include `session_id`. Generation events additionally include `generat
 ```bash
 soat create-session --agent-id agent_01 --name "My Session"
 soat add-session-message --session-id sess_01 --message "Hello!"
-soat generate-session-response --session-id sess_01
+soat generate-session-response --wait true --session-id sess_01
 ```
 
 </TabItem>
@@ -263,6 +263,7 @@ await soat.sessions.addSessionMessage({
 
 const { data: reply } = await soat.sessions.generateSessionResponse({
   path: { session_id: session.id },
+  query: { wait: true },
 });
 ```
 
@@ -280,7 +281,7 @@ curl -X POST https://api.example.com/api/v1/sessions/sess_01/messages \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello!"}'
 
-curl -X POST https://api.example.com/api/v1/sessions/sess_01/generate \
+curl -X POST https://api.example.com/api/v1/sessions/sess_01/generate?wait=true \
   -H "Authorization: Bearer <token>"
 ```
 

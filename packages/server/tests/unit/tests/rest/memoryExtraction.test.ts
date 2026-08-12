@@ -205,7 +205,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -240,7 +240,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -265,7 +265,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -287,7 +287,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -311,7 +311,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -355,7 +355,7 @@ describe('Memory Extraction', () => {
       mockRunExtractionCompletion.mockResolvedValueOnce('["User loves sushi"]');
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -388,7 +388,7 @@ describe('Memory Extraction', () => {
       mockRunExtractionCompletion.mockResolvedValueOnce('["User uses vim"]');
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -417,7 +417,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
       expect(res.status).toBe(200);
 
@@ -468,7 +468,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'The deadline is Friday.' }],
         });
@@ -494,7 +494,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'List your tools.' }],
           extract: false,
@@ -522,7 +522,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'I started on Monday.' }],
           extract: true,
@@ -565,7 +565,7 @@ describe('Memory Extraction', () => {
       );
 
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'I prefer dark mode.' }],
         });

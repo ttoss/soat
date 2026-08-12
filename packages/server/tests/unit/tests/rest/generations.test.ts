@@ -95,10 +95,10 @@ describe('Generations', () => {
     jest.clearAllMocks();
   });
 
-  describe('provider failure surfacing on POST /api/v1/agents/:agent_id/generate', () => {
+  describe('provider failure surfacing on POST /api/v1/agents/:agent_id/generate?wait=true', () => {
     test('returns 502 AI_PROVIDER_ERROR with generation and trace IDs in meta', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(502);
@@ -169,7 +169,7 @@ describe('Generations', () => {
       });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'optimize my ads' }] });
 
       expect(response.status).toBe(200);
@@ -308,7 +308,7 @@ describe('Generations', () => {
 
     beforeAll(async () => {
       const genResponse = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           action_id: 'act_attribution_probe',
@@ -364,10 +364,10 @@ describe('Generations', () => {
     });
   });
 
-  describe('caller-supplied metadata on POST /api/v1/agents/:agent_id/generate', () => {
+  describe('caller-supplied metadata on POST /api/v1/agents/:agent_id/generate?wait=true', () => {
     test('rejects non-object metadata with 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           metadata: 'not-an-object',
@@ -381,7 +381,7 @@ describe('Generations', () => {
       // The provider is unreachable, so the generation fails with 502 — but the
       // record is created (with metadata) before the model call is attempted.
       const genResponse = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           metadata: { ticket_id: 'OPS-4821', team: 'payments' },
@@ -507,7 +507,7 @@ describe('Generations', () => {
     // Each purge is destructive, so seed a dedicated generation per test.
     const seedGeneration = async (suffix: string): Promise<string> => {
       const genResponse = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: `hello ${suffix}` }],
           action_id: `act_${suffix}`,

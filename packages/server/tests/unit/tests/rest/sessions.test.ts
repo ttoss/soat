@@ -667,7 +667,7 @@ describe('Sessions', () => {
 
     test('unauthenticated request returns 401', async () => {
       const response = await testClient.post(
-        `/api/v1/sessions/${sessionId}/generate`
+        `/api/v1/sessions/${sessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(401);
@@ -675,20 +675,20 @@ describe('Sessions', () => {
 
     test('unknown session returns 404', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/sess_doesnotexist/generate`
+        `/api/v1/sessions/sess_doesnotexist/generate?wait=true`
       );
 
       expect(response.status).toBe(404);
     });
 
-    test('async mode returns 202 accepted', async () => {
+    test('background by default: request without wait returns 202 accepted', async () => {
       // Add a message first so there is something to generate from
       await authenticatedTestClient(userToken)
         .post(`/api/v1/sessions/${sessionId}/messages`)
         .send({ message: 'Tell me about deployment' });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${sessionId}/generate?async=true`
+        `/api/v1/sessions/${sessionId}/generate`
       );
 
       expect(response.status).toBe(202);
@@ -702,7 +702,7 @@ describe('Sessions', () => {
         .send({ message: 'Another message' });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/generate?async=true`)
+        .post(`/api/v1/sessions/${sessionId}/generate?wait=false`)
         .send({ tool_context: { req_key: 'val' } });
 
       expect(response.status).toBe(202);
@@ -830,7 +830,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${contextSessionId}/generate`
+        `/api/v1/sessions/${contextSessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(200);
@@ -871,7 +871,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${metadataSessionId}/generate`
+        `/api/v1/sessions/${metadataSessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(200);
@@ -920,7 +920,7 @@ describe('Sessions', () => {
 
     test('generating for a closed session returns 409 SESSION_CLOSED', async () => {
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${closedSessionId}/generate`
+        `/api/v1/sessions/${closedSessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(409);
@@ -1042,7 +1042,7 @@ describe('Sessions', () => {
 
       // 2. Trigger async generation (returns 202, background task starts)
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${orderingSessionId}/generate?async=true`)
+        .post(`/api/v1/sessions/${orderingSessionId}/generate?wait=false`)
         .expect(202);
 
       // 3. Poll until the mock has been entered (resolveGeneration is assigned)
@@ -1177,7 +1177,7 @@ describe('Sessions', () => {
 
       // Start first generation (async, fire-and-forget)
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${cancelSessionId}/generate?async=true`)
+        .post(`/api/v1/sessions/${cancelSessionId}/generate?wait=false`)
         .expect(202);
 
       // Wait until the first mock has started (generatingAt is set in DB)
@@ -1185,7 +1185,7 @@ describe('Sessions', () => {
 
       // Trigger second generation — should cancel the first and start fresh
       const secondRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${cancelSessionId}/generate?async=true`
+        `/api/v1/sessions/${cancelSessionId}/generate?wait=false`
       );
       expect(secondRes.status).toBe(202);
 
@@ -1216,7 +1216,7 @@ describe('Sessions', () => {
 
       // Sync generate — waits for completion
       const res = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate?wait=true`
       );
       expect(res.status).toBe(200);
 
@@ -1239,7 +1239,7 @@ describe('Sessions', () => {
       });
 
       const secondRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate?wait=true`
       );
       expect(secondRes.status).toBe(200);
     });
@@ -1251,7 +1251,7 @@ describe('Sessions', () => {
       );
 
       const res = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate?wait=true`
       );
       // The error propagates as a 500
       expect(res.status).toBe(500);
@@ -1275,7 +1275,7 @@ describe('Sessions', () => {
       });
 
       const recoveryRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${cancelSessionId}/generate`
+        `/api/v1/sessions/${cancelSessionId}/generate?wait=true`
       );
       expect(recoveryRes.status).toBe(200);
     });
@@ -1300,7 +1300,7 @@ describe('Sessions', () => {
 
       // Within the 5-minute timeout window, the guard should reject the call.
       const blockedRes = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${staleSessionId}/generate`
+        `/api/v1/sessions/${staleSessionId}/generate?wait=true`
       );
       expect(blockedRes.status).toBe(409);
       expect(blockedRes.body.error.code).toBe('GENERATION_ALREADY_IN_PROGRESS');
@@ -1320,7 +1320,7 @@ describe('Sessions', () => {
 
       const recoveredRes = await withAdvancedClock(6 * 60 * 1000, () => {
         return authenticatedTestClient(userToken).post(
-          `/api/v1/sessions/${staleSessionId}/generate`
+          `/api/v1/sessions/${staleSessionId}/generate?wait=true`
         );
       });
       expect(recoveredRes.status).toBe(200);
@@ -1453,7 +1453,7 @@ describe('Sessions', () => {
 
         // Trigger async generation to set generatingAt in the background
         await authenticatedTestClient(userToken)
-          .post(`/api/v1/sessions/${busySessionId}/generate?async=true`)
+          .post(`/api/v1/sessions/${busySessionId}/generate?wait=false`)
           .expect(202);
 
         // Wait for createGeneration to be called via Promise signaling (timer-independent).
@@ -1556,7 +1556,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${syncSessionId}/generate`
+        `/api/v1/sessions/${syncSessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(200);
@@ -1602,7 +1602,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${sessionId}/generate`
+        `/api/v1/sessions/${sessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(200);
@@ -1925,7 +1925,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken).post(
-        `/api/v1/sessions/${withActorSessionId}/generate`
+        `/api/v1/sessions/${withActorSessionId}/generate?wait=true`
       );
 
       expect(response.status).toBe(200);
@@ -1962,7 +1962,7 @@ describe('Sessions', () => {
       });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${withActorSessionId}/generate`)
+        .post(`/api/v1/sessions/${withActorSessionId}/generate?wait=true`)
         .send({
           tool_context: { tenant: 'request', sessionId: 'ses_forged' },
         });
@@ -2028,7 +2028,7 @@ describe('Sessions', () => {
       const { genRes, msgRes } = await withAdvancedClock(1500, async () => {
         // Generate should fail with SESSION_EXPIRED
         const generate = await authenticatedTestClient(userToken)
-          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
           .send({});
 
         // Once marked expired in the DB, posting a message must also be
@@ -2069,7 +2069,7 @@ describe('Sessions', () => {
         .send({ message: 'hello' });
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/generate`)
+        .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
         .send({});
 
       expect(genRes.status).toBe(200);
@@ -2149,7 +2149,7 @@ describe('Sessions', () => {
       // Advance the clock past the 1-second TTL instead of sleeping.
       const genRes = await withAdvancedClock(1500, () => {
         return authenticatedTestClient(userToken).post(
-          `/api/v1/sessions/${sessionId}/generate`
+          `/api/v1/sessions/${sessionId}/generate?wait=true`
         );
       });
       expect(genRes.status).toBe(410);
@@ -2186,7 +2186,7 @@ describe('Sessions', () => {
         .send({ message: 'hello' });
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/sessions/${sessionId}/generate`)
+        .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
         .send({});
 
       expect(genRes.status).toBe(200);
@@ -2207,10 +2207,10 @@ describe('Sessions', () => {
       // must still reject with SESSION_EXPIRED without re-writing the status.
       const { first, second } = await withAdvancedClock(1500, async () => {
         const firstRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
           .send({});
         const secondRes = await authenticatedTestClient(userToken)
-          .post(`/api/v1/sessions/${sessionId}/generate`)
+          .post(`/api/v1/sessions/${sessionId}/generate?wait=true`)
           .send({});
         return { first: firstRes, second: secondRes };
       });

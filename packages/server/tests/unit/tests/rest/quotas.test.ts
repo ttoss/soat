@@ -1242,7 +1242,7 @@ describe('Quotas', () => {
       });
 
       const blocked = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentPublicId}/generate`)
+        .post(`/api/v1/agents/${agentPublicId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(blocked.status).toBe(429);
@@ -1367,7 +1367,7 @@ describe('Quotas', () => {
       });
 
       const blocked = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/sessions/${bob.sessionId}/generate`)
+        .post(`/api/v1/sessions/${bob.sessionId}/generate?wait=true`)
         .send({});
 
       expect(blocked.status).toBe(429);
@@ -1393,7 +1393,7 @@ describe('Quotas', () => {
         .send({ role: 'user', content: 'hello' });
 
       const allowed = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/sessions/${alice.sessionId}/generate`)
+        .post(`/api/v1/sessions/${alice.sessionId}/generate?wait=true`)
         .send({});
 
       expect(allowed.status).not.toBe(429);

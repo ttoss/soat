@@ -12,7 +12,7 @@
 
 | Component                                | Status         | Notes                                                                 |
 | ---------------------------------------- | -------------- | --------------------------------------------------------------------- |
-| Async run generate (`?async=true`)       | ❌ Not started | `in_progress` + poll for Discussion runs; depends on the session async/poll mechanism |
+| Background run generate (omit `wait`)    | ❌ Not started | `in_progress` + poll for Discussion runs; depends on the session background/poll mechanism |
 | `budget` guard                           | ❌ Not started | Optional cap on total internal completions per run                    |
 
 ## Phase 3 remainder — Async & Budget (deferred slice)
@@ -24,10 +24,12 @@ not agent generations (they overlap with the "async run" item deferred from Phas
 
 **Acceptance criteria:**
 
-- [ ] **Async run:** `POST /discussions/{discussion_id}/runs?async=true` returns `202` immediately
-      with the run in `status: "pending"` (or `running`); `GET /discussions/runs/{run_id}` polls it
-      to a terminal `completed`/`failed` state carrying the same inlined `outcome` as the
-      synchronous path. Synchronous behavior unchanged when the flag is absent.
+- [ ] **Background run:** `POST /discussions/{discussion_id}/runs` (with `wait` omitted or
+      `false`) returns `202` immediately with the run in `status: "pending"` (or `running`);
+      `GET /discussions/runs/{run_id}` polls it to a terminal `completed`/`failed` state carrying
+      the same inlined `outcome` as the blocking path. `wait=true` keeps the blocking behavior —
+      the platform-wide toggle, see `.claude/rules/case-convention.md` and the documents/sessions
+      modules.
 - [ ] **Budget guard:** an optional `budget` (max total completions per run) on the Discussion
       config, validated at write time to be ≤ the engine cap (`MAX_TOTAL_COMPLETIONS = 24`);
       a run that would exceed it stops deliberating and synthesizes from the turns taken so far
@@ -40,7 +42,7 @@ turns, transcript persisted as a Conversation with Actor authorship + outcome Do
 invocation via the `discussion` tool type). The following seams were deliberately left clean for a
 later phase:
 
-- **Async run** (`?async=true`, `in_progress` + poll) — depends on the session async mechanism
+- **Background run** (omit `wait`, `in_progress` + poll) — depends on the session background mechanism
   (shared with the Phase 3 deferred item above). The `discussion` tool type gains a non-blocking
   variant only after the agent-side async/poll mechanism exists; until then the tool stays synchronous.
 - **Human participants** via `paused` + `required_action`, mirroring `executeHumanNode` in
@@ -53,7 +55,7 @@ later phase:
 
 **Acceptance criteria (for the deferred slice, when picked up):**
 
-- [ ] **Async run:** `POST /discussions/{discussion_id}/runs?async=true` returns `202` with a
+- [ ] **Background run:** `POST /discussions/{discussion_id}/runs` (omit `wait`) returns `202` with a
       pollable run; `GET /discussions/runs/{run_id}` reaches `completed` with the same `outcome`
       contract as the synchronous path; the `discussion` tool type gains a non-blocking variant
       only after the agent-side async/poll mechanism exists (until then the tool stays synchronous).

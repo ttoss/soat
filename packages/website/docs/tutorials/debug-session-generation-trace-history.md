@@ -207,7 +207,7 @@ CONV_ID=$(printf '%s' "$SESSION_RESP" | jq -r '.conversation_id')
 
 ## Step 3 - Run two generations and capture generation_id + trace_id
 
-Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions async generation](/docs/modules/sessions#async-generation) endpoints to produce assistant replies and capture the correlation IDs.
+Use [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace) and [Sessions background generation](/docs/modules/sessions#background-generation) endpoints to produce assistant replies and capture the correlation IDs.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -217,7 +217,7 @@ soat add-session-message \
   --session-id "$SESSION_ID" \
   --message "Explain what a generation is in one sentence." > /dev/null
 
-GEN_1=$(soat generate-session-response \
+GEN_1=$(soat generate-session-response --wait true \
   --session-id "$SESSION_ID")
 
 GEN_1_ID=$(printf '%s\n' "$GEN_1" | jq -r '.generation_id')
@@ -227,7 +227,7 @@ soat add-session-message \
   --session-id "$SESSION_ID" \
   --message "Now explain what a trace is in one sentence." > /dev/null
 
-GEN_2=$(soat generate-session-response \
+GEN_2=$(soat generate-session-response --wait true \
   --session-id "$SESSION_ID")
 
 GEN_2_ID=$(printf '%s\n' "$GEN_2" | jq -r '.generation_id')
@@ -248,6 +248,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: gen1 } = await adminSoat.sessions.generateSessionResponse({
   path: { agent_id: agent.id, session_id: session.id },
+  query: { wait: true },
 });
 
 await adminSoat.sessions.addSessionMessage({
@@ -257,6 +258,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: gen2 } = await adminSoat.sessions.generateSessionResponse({
   path: { agent_id: agent.id, session_id: session.id },
+  query: { wait: true },
 });
 
 const debugLinks = [
@@ -282,7 +284,7 @@ curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Content-Type: application/json" \
   -d '{"message":"Explain what a generation is in one sentence."}' > /dev/null
 
-GEN_1=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate" \
+GEN_1=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}')
@@ -292,7 +294,7 @@ curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Content-Type: application/json" \
   -d '{"message":"Now explain what a trace is in one sentence."}' > /dev/null
 
-GEN_2=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate" \
+GEN_2=$(curl -s -X POST "$SOAT_URL/api/v1/sessions/$SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{}')

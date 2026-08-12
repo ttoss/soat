@@ -137,7 +137,7 @@ A **tool** converter is called via the same server-side path as every other tool
 { "status": "pending" }                                // long-running deferral — see below
 ```
 
-Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`. `{ "status": "pending" }` is only honored for a tool converter ingested in the default **async** mode (see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion)) — an agent converter, or a synchronous ingest request (`?async=false`), fails with `CONVERTER_FAILED` instead, since neither can wait for a later callback.
+Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error fails it with `CONVERTER_FAILED`. `{ "status": "pending" }` is only honored for a tool converter ingested in the default **async** mode (see [Synchronous vs Async (Callback) Conversion](#synchronous-vs-async-callback-conversion)) — an agent converter, or a synchronous ingest request (`?wait=true`), fails with `CONVERTER_FAILED` instead, since neither can wait for a later callback.
 
 ### File Delivery
 
@@ -152,13 +152,13 @@ Any other shape fails the document with `CONVERTER_OUTPUT_INVALID`; a tool error
 
 A converter tool that returns text (or `{ pages }`) directly is **synchronous** — ingestion continues to chunk and embed inline. An agent converter is always synchronous: its generation is awaited inline and it has no deferral path.
 
-A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?async=false`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) delivers the result to the Documents module's ingestion-callback endpoint — see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) in the API reference for its path, query token, and request schema.
+A tool that returns `{ status: "pending" }` is **asynchronous** — but only when the document is being ingested in the default async mode (`POST /documents/ingest` without `?wait=true`). The document stays in `processing` while the external job runs, then the tool (or the service it wires) delivers the result to the Documents module's ingestion-callback endpoint — see [Deliver an async converter result](/docs/api/documents/complete-ingestion-callback) in the API reference for its path, query token, and request schema.
 
 The callback's document ID and token come from the `callback` block ingestion injected into the tool's input (see [Converter Tool Contract](#converter-tool-contract)); its body uses the same output contract as a synchronous converter, adapted for a JSON body (a single page is `{ "text": "..." }` rather than a bare string, since a top-level JSON string is not a valid HTTP JSON body).
 
 The callback is authorized by a single-use, signed token scoped to that document and ingestion attempt — not by an IAM action, since the external converter is not a SOAT user. It is accepted (`204`) only while that attempt is still `processing`; a replayed callback, a callback for a superseded attempt (after re-ingest), or one that arrives after the stall timeout already failed the document is rejected with `409 INGESTION_CALLBACK_CONFLICT`. An invalid or mismatched token is rejected with `401 INGESTION_CALLBACK_INVALID_TOKEN`. Once a valid result arrives, ingestion runs the normal chunk + embed tail and marks the document `ready`.
 
-If a synchronous ingest request (`?async=false`) or an agent converter encounters `{ status: "pending" }`, the document fails immediately with `CONVERTER_FAILED` — neither can wait for a callback that may arrive arbitrarily later. Design a tool that might defer to only do so under async ingestion.
+If a synchronous ingest request (`?wait=true`) or an agent converter encounters `{ status: "pending" }`, the document fails immediately with `CONVERTER_FAILED` — neither can wait for a callback that may arrive arbitrarily later. Design a tool that might defer to only do so under async ingestion.
 
 A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)). This is the converter-specific counterpart of the [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery) in the documents module — both use the same lazy "recover on next read" mechanism (checked whenever the document is fetched, not a background cron), but the callback path additionally guards against a callback racing the timeout sweeper: the two finish a conversion via an atomic compare-and-set that only one can win, so a legitimate callback that arrives just as the sweeper fires is never silently dropped — it either wins outright or, if the sweeper already won, is rejected with a clear `409` rather than corrupting the failed state.
 
@@ -168,7 +168,7 @@ Converter-related `failure_reason` values that can appear on a failed document (
 
 | `failure_reason` | Meaning |
 |------------------|---------|
-| `CONVERTER_FAILED` | The converter tool/agent call errored, an agent converter returned an async deferral (unsupported), or a tool converter returned an async deferral during synchronous ingestion (`?async=false`) |
+| `CONVERTER_FAILED` | The converter tool/agent call errored, an agent converter returned an async deferral (unsupported), or a tool converter returned an async deferral during synchronous ingestion (`?wait=true`) |
 | `CONVERTER_OUTPUT_INVALID` | The tool (or callback) returned an unrecognized output shape |
 | `CONVERSION_TIMEOUT` | An async conversion did not call back within `CONVERSION_STALL_TIMEOUT_MS` |
 

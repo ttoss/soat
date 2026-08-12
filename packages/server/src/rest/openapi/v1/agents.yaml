@@ -336,8 +336,11 @@ paths:
       summary: Run an agent generation
       description: >
         Sends messages to the agent, resolves its tools, and runs the AI model
-        loop. Supports streaming via `stream: true`. Client tools pause the
-        generation and return `requires_action`.
+        loop. Background by default: returns `202 Accepted` with a
+        `generation_id` to poll via `GET /api/v1/generations/{generation_id}`.
+        Pass `?wait=true` to block and receive the result inline, where client
+        tools pause the generation and return `requires_action`. Streaming
+        (`stream: true`) implies waiting.
       operationId: createAgentGeneration
       parameters:
         - name: agent_id
@@ -345,6 +348,17 @@ paths:
           required: true
           schema:
             type: string
+        - name: wait
+          in: query
+          required: false
+          # Pinned to `true` for tool calls: a nested agent-to-agent call has no
+          # channel to poll a background generation later, so it must block —
+          # the mirror image of `stream`, which a tool call cannot receive.
+          x-soat-tool-forced: 'true'
+          description: "When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately with a `generation_id` to poll. Pass `true` to block until the generation settles and receive the result. Mutually exclusive with `stream: true`. A `soat` tool call always waits."
+          schema:
+            type: boolean
+            default: false
       requestBody:
         required: true
         content:
@@ -378,7 +392,7 @@ paths:
                   stream: true
       responses:
         '200':
-          description: Generation result or SSE stream
+          description: "Generation result or SSE stream (only when `?wait=true` or `stream: true`)"
           content:
             application/json:
               schema:
@@ -387,6 +401,12 @@ paths:
               schema:
                 type: string
                 description: 'SSE stream of delta chunks ending with `data: [DONE]`.'
+        '202':
+          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). Poll `GET /api/v1/generations/{generation_id}` for the result.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AcceptedGenerationResponse'
         '400':
           description: Bad Request
           content:
@@ -1753,6 +1773,28 @@ components:
                 description: ID of the tool call to respond to
               output:
                 description: Result of the tool execution
+
+    AcceptedGenerationResponse:
+      type: object
+      description: >
+        Handle for a generation running in the background. The generation
+        record already exists when this is returned, so the id is immediately
+        pollable via `GET /api/v1/generations/{generation_id}`.
+      required:
+        - status
+        - generation_id
+        - trace_id
+      properties:
+        status:
+          type: string
+          enum: [accepted]
+          example: accepted
+        generation_id:
+          type: string
+          example: 'gen_V1StGXR8Z5jdHi6B'
+        trace_id:
+          type: string
+          example: 'trace_V1StGXR8Z5jdHi6B'
 
     AgentGenerationResponse:
       type: object

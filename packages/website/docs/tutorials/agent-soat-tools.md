@@ -576,7 +576,7 @@ Alice asks the agent to update the public note via a [session](/docs/modules/ses
 ALICE_TOKEN=$(soat login-user --username alice-agent-soat-tools --password Alice1234! | jq -r '.token')
 
 # Run the generation
-RESULT=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+RESULT=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -609,6 +609,7 @@ const aliceClient = new SoatClient({
 // Run the generation
 const { data: generation } = await aliceClient.agents.createAgentGeneration({
   path: { agent_id: agentId },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -632,7 +633,7 @@ ALICE_TOKEN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/users/login" \
   -H "Content-Type: application/json" \
   -d '{"username":"alice-agent-soat-tools","password":"Alice1234!"}' | jq -r '.token')
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
@@ -656,7 +657,7 @@ You can also start a generation with [Agents](/docs/modules/agents#tool-output-m
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-TOOL_OUTPUT_RESULT=$(soat create-agent-generation \
+TOOL_OUTPUT_RESULT=$(soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[
     {"role":"system","content":"Repeat the user message exactly."},
@@ -682,6 +683,7 @@ echo "$TOOL_OUTPUT_RESULT" | jq '.'
 const { data: toolOutputGeneration } =
   await aliceClient.agents.createAgentGeneration({
     path: { agent_id: agentId },
+    query: { wait: true },
     body: {
       messages: [
         { role: 'system', content: 'Repeat the user message exactly.' },
@@ -707,7 +709,7 @@ console.log('Result:', toolOutputGeneration!.result);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ALICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{

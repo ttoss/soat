@@ -782,7 +782,7 @@ Now trigger the orchestrator with the theme "artificial intelligence". With fixe
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-RESULT=$(soat create-agent-generation \
+RESULT=$(soat create-agent-generation --wait true \
   --agent-id "$ORCHESTRATOR_ID" \
   --messages '[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]')
 
@@ -833,6 +833,7 @@ Not human, though it bears a mask.
 ```ts
 const { data: result } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: ORCHESTRATOR_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -856,7 +857,7 @@ const TRACE_ID = result.trace_id;
 <TabItem value="curl" label="curl">
 
 ```bash
-RESULT=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$ORCHESTRATOR_ID/generate" \
+RESULT=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$ORCHESTRATOR_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Write a sonnet about the theme: artificial intelligence"}]}')

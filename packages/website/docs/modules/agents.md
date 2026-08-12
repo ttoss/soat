@@ -293,6 +293,25 @@ Use `POST /agents/{agent_id}/generate` to run a generation. The request accepts:
 | `max_call_depth`  | number        | no       | Maximum nesting depth for agent-to-agent calls (default: `10`)                                                                              |
 | `stream`          | boolean       | no       | Stream results as Server-Sent Events                                                                                                        |
 | `tool_context`    | object        | no       | Key-value pairs forwarded as `X-Soat-Context-*` headers on tool calls — see [Tool Context](#tool-context)                                   |
+| `wait` (query)    | boolean       | no       | Block until the generation settles. Defaults to `false` — see [Background Generation](#background-generation)                                |
+
+#### Background Generation
+
+`POST /agents/{agent_id}/generate` runs in the background by default and returns `202 Accepted` immediately:
+
+```json
+{
+  "status": "accepted",
+  "generation_id": "gen_V1StGXR8Z5jdHi6B",
+  "trace_id": "trace_V1StGXR8Z5jdHi6B"
+}
+```
+
+The generation record exists before the response is written, so `generation_id` is immediately pollable via `GET /generations/{generation_id}` — it reports `in_progress` until the run reaches `completed` or `failed`. Validation, permissions, the call-depth guard and quota admission all still run **synchronously**, so a bad request is still a `400`/`403`/`404`/`429` rather than a failure you discover by polling.
+
+Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it.
+
+See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `soat` tool calls interact with it (both always wait).
 
 #### Tool Output Message Content
 
@@ -706,7 +725,7 @@ curl -X POST https://api.example.com/api/v1/agents \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id agent_01 \
   --prompt "What is the capital of France?"
 ```
@@ -717,6 +736,7 @@ soat create-agent-generation \
 ```ts
 const { data, error } = await soat.agents.createAgentGeneration({
   path: { agent_id: 'agent_01' },
+  query: { wait: true },
   body: { prompt: 'What is the capital of France?' },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -726,7 +746,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
+curl -X POST https://api.example.com/api/v1/agents/agent_01/generate?wait=true \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"prompt": "What is the capital of France?"}'
