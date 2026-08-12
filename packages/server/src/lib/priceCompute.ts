@@ -39,6 +39,61 @@ export const sumComponentCostUsd = (
   return total.toFixed(COST_DECIMALS);
 };
 
+/** Decimal places in a DECIMAL string: `'0.150'` → 3, `'12'` → 0. */
+const decimalPlaces = (value: string): number => {
+  const dot = value.indexOf('.');
+  return dot === -1 ? 0 : value.length - dot - 1;
+};
+
+/** A DECIMAL string as an integer at `scale` decimal places: `'1.25'`@4 → 12500n. */
+const toScaledInt = (value: string, scale: number): bigint => {
+  const negative = value.startsWith('-');
+  const abs = negative ? value.slice(1) : value;
+  const dot = abs.indexOf('.');
+  const whole = dot === -1 ? abs : abs.slice(0, dot);
+  const fraction = dot === -1 ? '' : abs.slice(dot + 1);
+  const digits = `${whole || '0'}${fraction.padEnd(scale, '0')}`;
+  const scaled = BigInt(digits);
+  return negative ? -scaled : scaled;
+};
+
+/**
+ * Sums measured quantities exactly.
+ *
+ * Quantities arrive as DECIMAL strings and a rollup sums many of them, so a
+ * plain `+=` on numbers accumulates binary-float error into a figure a customer
+ * reads: 2070.155 compute-seconds was reported as 2070.1550000000016. Costs
+ * never showed this because `sumComponentCostUsd` fixes the scale on the way
+ * out, but a quantity has no single scale to round to — `gb_day` carries nine
+ * decimals where tokens carry none — so rounding would either drop precision
+ * from the small measures or leave the drift in place.
+ *
+ * Instead the summands are widened to a common scale, added as integers (exact
+ * at any magnitude, via `bigint`), and converted back once. The result is the
+ * double nearest the true decimal, which is what serializes cleanly.
+ */
+export const sumQuantities = (quantities: string[]): number => {
+  if (quantities.length === 0) return 0;
+
+  const scale = quantities.reduce((acc, quantity) => {
+    return Math.max(acc, decimalPlaces(quantity));
+  }, 0);
+
+  const total = quantities.reduce((acc, quantity) => {
+    return acc + toScaledInt(quantity, scale);
+  }, 0n);
+
+  if (scale === 0) return Number(total);
+
+  const negative = total < 0n;
+  const digits = (negative ? -total : total)
+    .toString()
+    .padStart(scale + 1, '0');
+  const whole = digits.slice(0, digits.length - scale);
+  const fraction = digits.slice(digits.length - scale);
+  return Number(`${negative ? '-' : ''}${whole}.${fraction}`);
+};
+
 export type TokenComponent = {
   component: string;
   quantity: number;
