@@ -786,7 +786,7 @@ describe('MCP tools - happy path', () => {
     test('reingest-document re-processes an existing document', async () => {
       const res = await mcpCall('reingest-document', {
         document_id: documentId,
-        async: false,
+        wait: true,
       });
       expect(res.status).toBe(200);
       const result = parseResult(res);
