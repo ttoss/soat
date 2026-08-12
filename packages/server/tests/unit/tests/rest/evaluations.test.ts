@@ -3,8 +3,10 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 
 import { db } from 'src/db';
+import { finalizeIfUnclaimed } from 'src/lib/evaluationRunExecution';
 import {
   drainEvalQueueOnce,
+  kickEvalWorker,
   reapAbandonedEvalRuns,
 } from 'src/lib/evaluationWorker';
 import { eventBus, type SoatEvent } from 'src/lib/eventBus';
@@ -2087,6 +2089,201 @@ describe('Evaluations', () => {
 
       expect(run.errored_count).toBe(1);
       expect(result.error).toMatch(/outside the 0–1 range/);
+    });
+  });
+
+  // ── Worker internals (Phase 2) ───────────────────────────────────────────
+
+  describe('worker settling and configuration', () => {
+    let evalId: string;
+
+    beforeAll(async () => {
+      const datasetId = (await createDataset('worker-suite')).id;
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'a' }],
+        expected_output: 'Paris',
+      });
+
+      evalId = (
+        await createEval({
+          name: 'worker-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        })
+      ).id;
+    });
+
+    const startQueued = async () => {
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+      return res.body;
+    };
+
+    // The at-least-once tail: a lease can expire after the run already settled.
+    // The task must be dropped without spending another generation, and the
+    // settled run must not be finalized (or announced) a second time.
+    test('a task redelivered after the run settled is dropped, not re-run', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+      const runDbId = runRow!.id as number;
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_w1', 'Paris')
+      );
+      await drainEvalQueueOnce();
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const settled = await db.EvalRun.findByPk(runDbId);
+      expect(settled!.status).toBe('completed');
+      const settledAt = settled!.finishedAt;
+
+      const [result] = await db.EvalResult.findAll({
+        where: { evalRunId: runDbId },
+      });
+      await db.EvalRunTask.create({
+        evalRunId: runDbId,
+        datasetItemId: result.datasetItemId as number,
+        availableAt: new Date(),
+        attempts: 2,
+      });
+
+      expect(await drainEvalQueueOnce()).toBe(1);
+
+      // No second generation, and the terminal state is untouched.
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+      await settled!.reload();
+      expect(settled!.status).toBe('completed');
+      expect(settled!.finishedAt).toEqual(settledAt);
+      expect(await db.EvalResult.count({ where: { evalRunId: runDbId } })).toBe(
+        1
+      );
+      // The task was still acked rather than left to redeliver forever.
+      expect(
+        await db.EvalRunTask.count({ where: { evalRunId: runDbId } })
+      ).toBe(0);
+    });
+
+    // The guard that makes "exactly once per terminal run" a property of the
+    // code: two workers racing a run's last item both see an empty queue.
+    test('only the first caller wins the settle claim', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_w2', 'Paris')
+      );
+      await drainEvalQueueOnce();
+
+      await runRow!.reload();
+      const settleArgs = {
+        run: runRow!,
+        evalPublicId: evalId,
+        projectId: (await db.Eval.findOne({ where: { publicId: evalId } }))!
+          .projectId as number,
+        passThreshold: null,
+      };
+
+      // The drain already settled it, so this stands in for the losing worker.
+      expect(await finalizeIfUnclaimed(settleArgs)).toBe(false);
+    });
+
+    test('honours EVAL_WORKER_BATCH when claiming', async () => {
+      process.env.EVAL_WORKER_BATCH = '1';
+      try {
+        await startQueued();
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_w3', 'Paris')
+        );
+        expect(await drainEvalQueueOnce()).toBe(1);
+      } finally {
+        delete process.env.EVAL_WORKER_BATCH;
+      }
+    });
+
+    test('falls back to the default batch when EVAL_WORKER_BATCH is not a number', async () => {
+      process.env.EVAL_WORKER_BATCH = 'lots';
+      try {
+        await startQueued();
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_w4', 'Paris')
+        );
+        expect(await drainEvalQueueOnce()).toBe(1);
+      } finally {
+        delete process.env.EVAL_WORKER_BATCH;
+      }
+    });
+
+    test('honours EVAL_RUN_ABANDONED_AFTER_MS as the reaper grace period', async () => {
+      const evaluation = await db.Eval.findOne({ where: { publicId: evalId } });
+      const abandoned = await db.EvalRun.create({
+        evalId: evaluation!.id as number,
+        agentVersion: 1,
+        status: 'running',
+        itemCount: 1,
+        startedAt: new Date(),
+      });
+
+      // A two-day grace period against a `now` one day out: under the
+      // 30-minute default this run would be reaped, so it surviving is what
+      // proves the configured value is the one the sweep read.
+      process.env.EVAL_RUN_ABANDONED_AFTER_MS = String(2 * 86_400_000);
+      try {
+        expect(
+          await reapAbandonedEvalRuns({
+            now: new Date(Date.now() + 86_400_000),
+          })
+        ).toBe(0);
+      } finally {
+        delete process.env.EVAL_RUN_ABANDONED_AFTER_MS;
+      }
+
+      await abandoned.reload();
+      expect(abandoned.status).toBe('running');
+    });
+
+    // A run whose `finished_at` is already set has been claimed by someone else,
+    // so the reaper must leave it rather than settling it twice.
+    test('the reaper skips a stale run whose settle claim is already taken', async () => {
+      const evaluation = await db.Eval.findOne({ where: { publicId: evalId } });
+      const claimed = await db.EvalRun.create({
+        evalId: evaluation!.id as number,
+        agentVersion: 1,
+        status: 'running',
+        itemCount: 1,
+        startedAt: new Date(),
+        finishedAt: new Date(),
+      });
+
+      await reapAbandonedEvalRuns({ now: new Date(Date.now() + 86_400_000) });
+
+      await claimed.reload();
+      expect(claimed.status).toBe('running');
+    });
+
+    test('kickEvalWorker drains when the worker is not disabled', async () => {
+      await startQueued();
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_w5', 'Paris')
+      );
+
+      delete process.env.EVAL_WORKER_DISABLED;
+      try {
+        kickEvalWorker();
+        // The kick is fire-and-forget, so poll the observable side effect.
+        for (let tick = 0; tick < 100; tick += 1) {
+          if (mockCreateGeneration.mock.calls.length > 0) break;
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 10);
+          });
+        }
+      } finally {
+        process.env.EVAL_WORKER_DISABLED = 'true';
+      }
+
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
     });
   });
 

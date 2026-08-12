@@ -227,6 +227,19 @@ export const validateScorers = (args: {
   return null;
 };
 
+/**
+ * An Eval's `scorers` column as an array.
+ *
+ * The column is NOT NULL and {@link validateScorers} rejects anything but a
+ * non-empty array at create, at update, and again at run start, so the fallback
+ * is unreachable through every entry point — it is here only so a hand-edited
+ * row cannot crash a run mid-flight.
+ */
+export const scorerList = (scorers: unknown): unknown[] => {
+  /* istanbul ignore next -- unreachable; see above. */
+  return Array.isArray(scorers) ? scorers : [];
+};
+
 // ── Scoring ────────────────────────────────────────────────────────────────
 
 const binary = (scorer: string, hit: boolean): ScorerOutcome => {

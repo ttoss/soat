@@ -15,7 +15,6 @@
 import createDebug from 'debug';
 
 import { db } from '../db';
-import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
 import type { GenerationResult } from './agentGenerationTypes';
 import { computeBaselineComparison } from './evaluationDeltas';
@@ -247,10 +246,18 @@ export const executeAndRecordItem = async (args: {
 
 type ResultRow = InstanceType<(typeof db)['EvalResult']>;
 
+/**
+ * `scores` is a NOT NULL JSONB column only ever written from `scoreOutput`, so it
+ * is always an array — there is no absent-value case to defend against.
+ */
+const resultScores = (row: ResultRow): ScorerOutcome[] => {
+  return row.scores as ScorerOutcome[];
+};
+
 const toComparable = (row: ResultRow) => {
   return {
     datasetItemId: row.datasetItemId,
-    scores: Array.isArray(row.scores) ? (row.scores as ScorerOutcome[]) : [],
+    scores: resultScores(row),
     errored: row.error !== null,
     passed: row.passed,
   };
@@ -302,9 +309,7 @@ export const finalizeEvalRun = async (args: {
   const aggregate: AggregateScores = aggregateScores({
     results: results.map((row) => {
       return {
-        scores: Array.isArray(row.scores)
-          ? (row.scores as ScorerOutcome[])
-          : [],
+        scores: resultScores(row),
         passed: row.passed,
         errored: row.error !== null,
       };
@@ -407,12 +412,36 @@ export const claimRunFinalization = async (args: {
   return affected === 1;
 };
 
-/** Guards a run id that must name a live, non-terminal run. */
-export const requireActiveRun = (args: { run: EvalRunRowInstance }): void => {
-  if (args.run.status === 'completed' || args.run.status === 'failed') {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      `Eval run '${args.run.publicId}' has already finished (status '${args.run.status}').`
-    );
+/**
+ * Finalizes a run **iff** this caller wins the settle claim; returns whether it
+ * did.
+ *
+ * The one place the claim and the finalize are paired, so neither worker call
+ * site can drift into finalizing without claiming first — which is what would
+ * let `eval_run.completed` fire twice for one run.
+ */
+export const finalizeIfUnclaimed = async (args: {
+  run: EvalRunRowInstance;
+  evalPublicId: string;
+  projectId: number;
+  passThreshold: number | null;
+  now?: Date;
+}): Promise<boolean> => {
+  if (
+    !(await claimRunFinalization({
+      runDbId: args.run.id as number,
+      now: args.now,
+    }))
+  ) {
+    log('finalizeIfUnclaimed: run=%s already settling', args.run.publicId);
+    return false;
   }
+
+  await finalizeEvalRun({
+    run: args.run,
+    evalPublicId: args.evalPublicId,
+    projectId: args.projectId,
+    passThreshold: args.passThreshold,
+  });
+  return true;
 };

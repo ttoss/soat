@@ -27,8 +27,9 @@ import {
   claimRunFinalization,
   executeAndRecordItem,
   failEvalRun,
-  finalizeEvalRun,
+  finalizeIfUnclaimed,
 } from './evaluationRunExecution';
+import { scorerList } from './evaluationScorers';
 import { createScheduler } from './scheduler';
 
 const log = createDebug('soat:evaluations');
@@ -62,6 +63,11 @@ const abandonedAfterMs = (): number => {
     : DEFAULT_ABANDONED_AFTER_MS;
 };
 
+/** A run that still has work ahead of it, as opposed to one already settled. */
+const isLive = (status: string): boolean => {
+  return status === 'queued' || status === 'running';
+};
+
 type LoadedRun = {
   run: InstanceType<(typeof db)['EvalRun']>;
   evalPublicId: string;
@@ -74,11 +80,14 @@ const loadRunContext = async (args: {
   evalRunId: number;
 }): Promise<LoadedRun | null> => {
   const run = await db.EvalRun.findByPk(args.evalRunId);
+  /* istanbul ignore next -- a task's FK to its run is NOT NULL with CASCADE
+     delete, so a claimable task always has a live run; and the Eval FK on the
+     run is NOT NULL with CASCADE too. Neither is reachable through any entry
+     point — the guards exist so a future caller cannot crash the drain loop. */
   if (!run) return null;
 
   const evaluation = await db.Eval.findByPk(run.evalId as number);
-  /* istanbul ignore next -- the FK is NOT NULL with CASCADE delete, so a live
-     run always has its Eval. */
+  /* istanbul ignore next -- see above. */
   if (!evaluation) return null;
 
   return {
@@ -105,23 +114,15 @@ const settleIfDrained = async (args: { evalRunId: number }): Promise<void> => {
   if (pending > 0) return;
 
   const context = await loadRunContext({ evalRunId: args.evalRunId });
+  /* istanbul ignore next -- see `loadRunContext`. */
   if (!context) return;
 
-  // A canceled run already settled itself and dropped its tasks; there is
-  // nothing left to finalize and its partial aggregate is deliberately absent.
-  if (context.run.status === 'canceled') return;
+  // A run that is no longer live has nothing left to settle: it was cancelled
+  // (which dropped its tasks and deliberately published no partial aggregate),
+  // or a redelivered task arrived after it had already completed.
+  if (!isLive(context.run.status)) return;
 
-  if (!(await claimRunFinalization({ runDbId: args.evalRunId }))) {
-    log('settleIfDrained: run=%s already settling', context.run.publicId);
-    return;
-  }
-
-  await finalizeEvalRun({
-    run: context.run,
-    evalPublicId: context.evalPublicId,
-    projectId: context.projectId,
-    passThreshold: context.passThreshold,
-  });
+  await finalizeIfUnclaimed(context);
 };
 
 /** The agent, item and scorer config one task needs to execute. */
@@ -142,12 +143,14 @@ const loadItemTarget = async (args: {
     | null;
   const item = await db.DatasetItem.findByPk(args.datasetItemDbId);
 
+  /* istanbul ignore next -- the agent FK is NOT NULL, and deleting a dataset
+     item cascades its task away before it can be claimed. */
   if (!evaluation?.agent || !item) return null;
 
   return {
     agent: evaluation.agent,
     item,
-    scorers: Array.isArray(evaluation.scorers) ? evaluation.scorers : [],
+    scorers: scorerList(evaluation.scorers),
   };
 };
 
@@ -166,10 +169,11 @@ const handleEvalItemTask = async (args: {
   const context = await loadRunContext({
     evalRunId: args.task.evalRunId as number,
   });
+  /* istanbul ignore next -- see `loadRunContext`. */
   if (!context) return;
 
   const { run } = context;
-  if (run.status !== 'queued' && run.status !== 'running') {
+  if (!isLive(run.status)) {
     log(
       'handleEvalItemTask: run=%s is %s, dropping task %s',
       run.publicId,
@@ -303,13 +307,8 @@ export const reapAbandonedEvalRuns = async (args?: {
     if (pending > 0) continue;
 
     const context = await loadRunContext({ evalRunId: run.id as number });
-    /* istanbul ignore next -- the run was just read, and its Eval FK is NOT
-       NULL. */
+    /* istanbul ignore next -- see `loadRunContext`. */
     if (!context) continue;
-
-    if (!(await claimRunFinalization({ runDbId: run.id as number, now }))) {
-      continue;
-    }
 
     const resultCount = await db.EvalResult.count({
       where: { evalRunId: run.id as number },
@@ -317,13 +316,11 @@ export const reapAbandonedEvalRuns = async (args?: {
 
     if (resultCount >= (run.itemCount as number)) {
       log('reapAbandonedEvalRuns: finalizing stalled run=%s', run.publicId);
-      await finalizeEvalRun({
-        run: context.run,
-        evalPublicId: context.evalPublicId,
-        projectId: context.projectId,
-        passThreshold: context.passThreshold,
-      });
+      if (!(await finalizeIfUnclaimed({ ...context, now }))) continue;
     } else {
+      if (!(await claimRunFinalization({ runDbId: run.id as number, now }))) {
+        continue;
+      }
       log(
         'reapAbandonedEvalRuns: failing abandoned run=%s results=%d/%d',
         run.publicId,

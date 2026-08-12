@@ -32,7 +32,7 @@ import {
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
-import { validateScorers } from './evaluationScorers';
+import { scorerList, validateScorers } from './evaluationScorers';
 import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
@@ -270,9 +270,7 @@ const executeSyncRun = async (args: {
         runDbId: run.id as number,
         agent: plan.agent,
         agentVersion: plan.agentVersion,
-        scorers: Array.isArray(plan.evaluation.scorers)
-          ? plan.evaluation.scorers
-          : [],
+        scorers: scorerList(plan.evaluation.scorers),
         item,
       });
     }
