@@ -99,6 +99,7 @@ const resolveContextAndRecord = async (args: {
   metadata?: Record<string, unknown> | null;
   guardrailContext?: Record<string, unknown> | null;
   pinnedAgentVersion?: number | null;
+  source?: string | null;
 }): Promise<GenerationContext> => {
   const ctx = await buildGenerationContext({
     agentId: args.agentId,
@@ -151,6 +152,7 @@ const resolveContextAndRecord = async (args: {
     orchestrationRunId: args.orchestrationRunId ?? null,
     nodeId: args.nodeId ?? null,
     agentVersion: ctx.agentVersion ?? null,
+    source: args.source ?? null,
     metadata: args.metadata ?? null,
   }).catch((error) => {
     log(
@@ -228,6 +230,11 @@ export type CreateGenerationArgs = {
   // pick per generation. Set by eval runs, which must measure every item
   // against the same config (docs/prd-evaluations.md — Version pinning).
   pinnedAgentVersion?: number | null;
+  // Labels the workload behind this generation when it is not production
+  // traffic — `eval` for an eval run's items. Copied onto the usage event at
+  // the metering choke point so verification spend is separable from
+  // production spend (docs/prd-evaluations.md, Phase 2).
+  source?: string | null;
 };
 
 /**
@@ -299,6 +306,7 @@ const prepareGeneration = async (
     metadata: args.metadata,
     guardrailContext: args.guardrailContext,
     pinnedAgentVersion: args.pinnedAgentVersion,
+    source: args.source,
   });
 
   return { kind: 'ready', ctx, traceId };

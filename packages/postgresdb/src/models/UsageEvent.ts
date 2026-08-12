@@ -52,6 +52,9 @@ import { UsageComponent } from './UsageComponent';
     { name: 'usage_events_actor_id_idx', fields: ['actor_id'] },
     { name: 'usage_events_session_id_idx', fields: ['session_id'] },
     { name: 'usage_events_meter_type_idx', fields: ['meter_type'] },
+    // A rollup that excludes verification spend filters on this; leaving it
+    // unindexed would sequential-scan the largest table in the schema.
+    { name: 'usage_events_source_idx', fields: ['source'] },
     { name: 'usage_events_ai_provider_id_idx', fields: ['ai_provider_id'] },
     {
       name: 'usage_events_idempotency_key_unique',
@@ -215,6 +218,16 @@ export class UsageEvent extends Model {
   // metadata, so spend can roll up per action. Null when not labelled.
   @Column({ type: DataType.STRING, allowNull: true })
   declare actionId: string | null;
+
+  // The workload that produced the spend. For a generation-backed event: `eval`
+  // (an eval run's item generations) or null (ordinary agent traffic, already
+  // identified by `generation_id` / `agent_id`). For a generation-less
+  // completion it names the path — `chat`, `discussion`, `memory_extraction`,
+  // `memory_consolidation`, `eval_judge` — the same label its idempotency key
+  // carries. Verification spend is therefore `source IN ('eval','eval_judge')`
+  // (docs/prd-evaluations.md, Phase 2).
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare source: string | null;
 
   // Meter-type discriminator: `llm_tokens`, `compute_execution`, `api_request`,
   // `storage`. Selects which components an event carries.

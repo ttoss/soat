@@ -26,13 +26,12 @@ changes, described in
 The loop asks whether a single run succeeded; an evaluation asks whether a *change* to the
 agent improved the distribution of runs, which no single run can answer.
 
-:::info[Phase 1]
+:::info[Phase 2]
 
-Datasets, evals, and **synchronous** runs with the four deterministic scorers are shipped.
-Three things are specified and not yet built: the `llm_judge` scorer, asynchronous runs
-(`wait: false`), and baseline **deltas** — a `baseline_run_id` is validated and recorded
-today, but the per-scorer deltas it feeds arrive with Phase 2. Each is rejected by name
-rather than silently ignored. See
+Datasets, evals, all five scorers (including `llm_judge`), synchronous **and** queued runs,
+baseline deltas, lifecycle webhooks, and cancellation are shipped. Two things remain
+specified and not built: curating a dataset item **from a generation**, and scheduled evals
+with `eval` / `dataset` formation resources. See
 [`docs/prd-evaluations.md`](https://github.com/ttoss/soat/blob/main/docs/prd-evaluations.md).
 
 :::
@@ -61,9 +60,9 @@ is gone has nothing to run.
 | `id` | string | Public identifier (e.g. `dsit_…`) |
 | `dataset_id` | string | ID of the owning dataset |
 | `input` | array | `{ role, content }` messages, replayed verbatim as the generation's input |
-| `expected_output` | string | Reference answer for `exact_match` (and, in Phase 2, `llm_judge`); may be `null` |
+| `expected_output` | string | Reference answer for `exact_match` and `llm_judge`; may be `null` |
 | `metadata` | object | Free-form tags (e.g. `{"topic": "billing"}`), opaque to the platform and readable from `json_logic` scorers |
-| `source_generation_id` | string | The generation the item was curated from. Always `null` until the `from-generation` route lands in Phase 2 |
+| `source_generation_id` | string | The generation the item was curated from; `null` for a hand-written item. Curating from a generation is [not yet available](#what-is-not-here-yet) |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 ### Eval
@@ -91,7 +90,7 @@ naming the field — the resource may well exist, it is the request that is wron
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
-| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, and `scored_item_count`; `null` until the run is terminal |
+| `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold` |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
@@ -110,7 +109,7 @@ One row per dataset item per run.
 | `expected_output` | string | **Frozen copy** of the item's expected output at run time |
 | `generation_id` | string | The generation that produced the output, or `null` |
 | `output` | string | The agent's final output text; cleared when the linked generation's content is [purged](#retention-and-erasure) |
-| `scores` | array | `[{ scorer, score, passed }]`, one entry per scorer |
+| `scores` | array | `[{ scorer, score, passed, reasoning? }]`, one entry per scorer in the order the eval declares them. `reasoning` is present for `llm_judge` only |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
 | `error` | string | Item-level failure reason; set instead of scoring, never alongside it |
 | `created_at` | string | ISO 8601 creation timestamp |
@@ -130,11 +129,11 @@ thresholds stay scorer-agnostic.
 | `contains` | `value`, `case_sensitive` (default `false`) | 1 when `value` occurs in the output text |
 | `json_logic` | `expression` | 1 when the [JSON Logic](https://jsonlogic.com) expression evaluates truthy |
 | `output_schema` | `schema` (optional) | 1 when the structured output validates against the schema |
-| `llm_judge` | — | **Phase 2.** Rejected with `400` naming the phase |
+| `llm_judge` | `prompt`, `pass_threshold`, `ai_provider_id` (optional), `model` (optional) | The judge's 0–1 score; see [LLM judge](#llm-judge) |
 
-A scorer reads the generation's two output channels explicitly. `exact_match` and
-`contains` read the final **text**; `output_schema` validates the **structured object** the
-platform already parsed, and never re-parses the text.
+A scorer reads the generation's two output channels explicitly. `exact_match`, `contains`
+and `llm_judge` read the final **text**; `output_schema` validates the **structured object**
+the platform already parsed, and never re-parses the text.
 
 `json_logic` sees both, through these variables:
 
@@ -163,6 +162,44 @@ produced at all; the **scorer's** is the frozen criterion it is judged against. 
 runs at eval-create (best-effort — the agent's schema is mutable) and again at run start,
 which is authoritative.
 
+### LLM judge
+
+An `llm_judge` scorer grades the output with a model completion. It is just a completion: it
+resolves its model through the ordinary [AI providers](./ai-providers.md) path — the scorer's
+`ai_provider_id` must belong to the eval's project, and the project's default
+[model route](./model-routes.md) applies when the scorer pins none — so it traces and meters
+like any other call. It runs **tool-less**, so a judged output cannot trigger side effects.
+
+The `prompt` carries three slots:
+
+| Slot | Filled with |
+| --- | --- |
+| `{{input}}` | The item's input messages (JSON when not a plain string) |
+| `{{output}}` | The agent's final output text |
+| `{{expected}}` | The item's `expected_output`, or empty when it has none |
+
+Slots are filled in **one pass**. A slot value that itself contains `{{output}}` is never
+re-expanded — a judged output is untrusted text, and re-scanning it would let an agent's own
+answer rewrite the prompt that grades it. An unrecognised `{{…}}` is left as written rather
+than blanked, so a typo is visible.
+
+The judge must answer with a JSON object carrying a numeric `score` between 0 and 1 and an
+optional `reasoning` string. Prose or a code fence around it is tolerated (the first `{…}`
+span is parsed); the contract itself is not. A reply that is not a JSON object, a non-numeric
+score, or a score outside 0–1 marks the **item** errored — never the run failed, and never a
+score of 0 (see [Errors are not zeros](#errors-are-not-zeros)). An out-of-range score is
+rejected rather than clamped: a judge answering `87` out of 100 is a broken prompt, and
+clamping it to 1 would report a suspiciously perfect run.
+
+`pass_threshold` is **required** on the scorer, with no default. A judge emits a continuous
+score, so nothing about the score itself says where "good enough" is, and a defaulted cutoff
+would silently decide the gate every run-level verdict is computed from. The item passes the
+scorer when `score >= pass_threshold`.
+
+`reasoning` is stored on the result for audit. Judges drift with model updates, so the judge
+model is pinned per scorer config — but deltas between runs judged by **different** models are
+not comparable; re-run the baseline when the judge changes.
+
 ### Frozen inputs
 
 Dataset items keep full CRUD, and a run does not depend on them staying put: each result
@@ -190,7 +227,8 @@ blend two configs into a single score.
 
 Three levels, each derived from the one below:
 
-1. **Per scorer, per item** — a binary scorer passes when its score is 1.
+1. **Per scorer, per item** — a binary scorer passes when its score is 1; an `llm_judge`
+   scorer passes when its score is at least the scorer's own `pass_threshold`.
 2. **Per item** — `EvalResult.passed` is the AND over its per-scorer flags.
 3. **Per run** — `EvalRun.passed` is `null` when the eval has no `pass_threshold`;
    otherwise it is true when the **pass rate** — passed items over non-errored items — is
@@ -210,24 +248,129 @@ no output to grade, and scoring that 0 would report a behavioral regression that
 happen. Agents whose tool set forces a client round-trip stay un-evaluable until a later
 phase can supply synthetic tool outputs.
 
-### Synchronous runs
+The same rule covers a scorer that could not reach a verdict — an `llm_judge` call failing,
+or answering something unparseable. The agent's answer was never graded, so recording 0 would
+fabricate a regression. The generation stays linked on the result either way: it happened,
+and it cost money.
 
-`wait` is **required** and must be `true`. The run executes items sequentially and reaches
-a terminal status before the response returns.
+### Synchronous and queued runs
 
-- `wait: false` returns `400` naming asynchronous runs as a Phase 2 capability. Requiring
-  the field now means that same request flips to a `queued` run **additively** when the
-  queue lands, instead of silently changing what an omitted field means in the one field
-  callers gate deployments on.
-- A dataset larger than **25 items** is rejected with `400` naming the cap, rather than
-  scored partially — a subset reported as the run's verdict would read as a complete
-  pass/fail over the whole dataset. This `400` is stable across phases.
-- An **empty** dataset is rejected too: a run that measured nothing must not produce a
-  verdict.
+`wait` selects how a run executes. Both modes share **one** execution and finalize path, so a
+`wait: true` run and a `wait: false` run of the same eval are directly comparable.
 
-A client that disconnects mid-run leaves the run row `running` — queryable with `started_at`
-set and `finished_at` null. Phase 2's lease reaper closes that gap; nothing retries or
-cleans the row today.
+| `wait` | Behavior |
+| --- | --- |
+| `true` | Executes items sequentially in-process and returns the run **terminal**, with its scores. Capped at **25 items**. |
+| `false` (default) | Enqueues one task per item and returns immediately with `status: "queued"`. No item cap. |
+
+An **empty** dataset is rejected in both modes: a run that measured nothing must not produce
+a verdict. A `wait: true` run over more than 25 items is rejected with `400` naming the cap
+rather than scored partially — a subset reported as the run's verdict would read as a
+complete pass/fail over the whole dataset. The cap is a property of synchronous execution
+only; that is what `wait: false` is for.
+
+#### How a queued run progresses
+
+Each item becomes one queued task. A worker claims tasks in batches, executes each item, and
+writes its result; the worker that drains the run's **last** task settles the run and fires
+[`eval_run.completed`](#lifecycle-webhooks). Poll `GET /evals/{eval_id}/runs/{run_id}`, or
+subscribe to the webhook, to learn the verdict.
+
+Delivery is **at-least-once**, and that is safe without extra bookkeeping: a result row is
+unique per `(run, item)`, so a redelivered task re-runs the item into the same row instead of
+double-counting it. Settling is guarded by an atomic claim, so several workers finishing at
+the same instant still fire the completion event exactly once — a promotion gate that
+received the same verdict twice could act twice.
+
+The batch size bounds concurrent provider calls, and therefore the spend rate, not just rows.
+
+#### Recovering a run left mid-flight
+
+A background reaper settles non-terminal runs that have no outstanding work and have gone
+quiet past a grace period (30 minutes by default). Two shapes get opposite treatment:
+
+- **Every item has a result but the run never settled** — a finalize that crashed between
+  the last write and the update. The measurements are all there, so the run is **finalized**.
+- **Items are missing** — an abandoned `wait: true` run whose client disconnected, or work
+  that was dropped. Nothing will ever complete it, so it is settled `failed` and
+  `eval_run.failed` fires, because a gate waiting on a verdict must not wait forever.
+
+A run that still has queued tasks is left alone; the worker owns it.
+
+### Canceling a run
+
+`POST /evals/{eval_id}/runs/{run_id}/cancel` drops a queued or running run's outstanding
+tasks — so it stops consuming provider budget on the next tick — and settles it `canceled`.
+A run that has already finished is rejected with `400`.
+
+Results already written are **kept**: they are real measurements of generations that were
+really paid for, and `completed_count` / `errored_count` report what ran. `aggregate_scores`
+is deliberately left `null`, for the same reason the synchronous cap exists — a partial
+roll-up in the field a completed run uses would read as a whole-dataset verdict. A canceled
+run fires no lifecycle event: it produced no verdict.
+
+### Baseline deltas
+
+Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another eval is a
+`400`) and the finished run's `aggregate_scores.baseline` reports how it moved:
+
+| Field | Meaning |
+| --- | --- |
+| `run_id` | The baseline compared against |
+| `compared_item_count` | Items present and scorable in **both** runs — the basis of every delta |
+| `added_item_count` | Scorable here but not in the baseline (added since, or errored there) |
+| `removed_item_count` | Scorable in the baseline but not here (removed since, or errored here) |
+| `pass_rate_delta` | Run-level pass-rate delta over the intersection; `null` when the two runs share no comparable item |
+| `scorers` | Per scorer type, `mean_delta` and `pass_rate_delta` |
+
+Positive deltas mean this run scored **higher** than the baseline.
+
+Every number is computed over the **item intersection**, recomputing both sides rather than
+subtracting the two runs' stored aggregates. Items have full CRUD and a run may error on an
+item the baseline scored, so comparing stored aggregates would quietly attribute **dataset
+drift to the agent** — the fabricated regression this module exists to prevent. Divergence is
+reported through the counts instead of being averaged in, and a scorer that only one of the
+two runs ran is omitted rather than compared against nothing.
+
+### Lifecycle webhooks
+
+Two [webhook](./webhooks.md) events carry a run's outcome:
+
+| Event | Fires when |
+| --- | --- |
+| `eval_run.completed` | A run reached a terminal status with its items scored |
+| `eval_run.failed` | A run could not be executed to completion |
+
+Both carry `{ eval_id, eval_run_id, passed, aggregate_scores }`. The verdict and the
+aggregates are inline rather than only an id to fetch: this event **is** the promotion gate,
+and a gate that has to make a second call to learn its answer is a gate that can fail open
+when that call does. Exactly one event fires per terminal run, from the single finalize path
+both run modes share.
+
+### Eval spend is separable from production spend
+
+Every item is a real generation, and `llm_judge` doubles the calls — so eval
+[usage](./usage.md) is labelled at the metering choke point:
+
+| `source` | What it paid for |
+| --- | --- |
+| `eval` | An eval run's item generations |
+| `eval_judge` | An `llm_judge` scorer's own completion |
+
+Verification spend is therefore `source IN ('eval','eval_judge')`, and the two labels are
+distinct so a rollup can price *running* a suite apart from *grading* it. Ordinary agent
+traffic carries no `source`. A run also inherits the platform's ordinary cost controls —
+[quotas](./quotas.md) and usage thresholds still apply — but a very large dataset is a
+footgun until per-run item limits are tuned.
+
+:::warning[Eval runs have real side effects]
+
+A run creates real generations, so an agent with a write-capable `http` or `mcp`
+[tool](./tools.md) performs N real writes per run. There is no tool-stub mode, deliberately:
+running the real agent is the premise that makes a score mean anything. Point an eval'd
+agent's tools at a staging target.
+
+:::
 
 ### Retention and erasure
 
@@ -263,22 +406,50 @@ soat create-eval --project_id "$PROJECT_ID" --name billing-regression-suite \
   --pass_threshold 0.8
 ```
 
-Run it and read the per-item results:
+Run it synchronously and read the per-item results:
 
 ```bash
 soat start-eval-run --eval_id "$EVAL_ID" --wait true
 soat list-eval-results --eval_id "$EVAL_ID" --run_id "$RUN_ID"
 ```
 
-Evaluate a specific archived version — the shape a promotion gate uses:
+Queue a larger run and poll for the verdict:
 
 ```bash
-soat start-eval-run --eval_id "$EVAL_ID" --wait true --agent_version 3
+soat start-eval-run --eval_id "$EVAL_ID" --wait false   # → status: queued
+soat get-eval-run --eval_id "$EVAL_ID" --run_id "$RUN_ID"
+soat cancel-eval-run --eval_id "$EVAL_ID" --run_id "$RUN_ID"
+```
+
+Add an LLM judge alongside a deterministic scorer:
+
+```bash
+soat create-eval --project_id "$PROJECT_ID" --name billing-judged-suite \
+  --agent_id "$AGENT_ID" --dataset_id "$DATASET_ID" \
+  --scorers '[
+    {"type":"contains","value":"invoice"},
+    {"type":"llm_judge",
+     "ai_provider_id":"'"$PROVIDER_ID"'",
+     "prompt":"Rate 0-1 how well the answer matches the reference. Answer with {\"score\": <0-1>, \"reasoning\": \"<why>\"}. Question: {{input}} Answer: {{output}} Reference: {{expected}}",
+     "pass_threshold":0.7}
+  ]' \
+  --pass_threshold 0.8
+```
+
+Evaluate a specific archived version against a baseline — the shape a promotion gate uses:
+
+```bash
+soat start-eval-run --eval_id "$EVAL_ID" --wait true \
+  --agent_version 3 --baseline_run_id "$BASELINE_RUN_ID"
 ```
 
 ## What is not here yet
 
-- **`llm_judge`, async runs, baseline deltas, and `from-generation` curation** — Phase 2.
+- **`from-generation` curation** — building a dataset item from a past generation. The
+  generation's input messages and output text are not persisted in any platform-owned shape
+  today (they exist only inside the provider-shaped step blob on the
+  [trace](./traces.md)'s file), so the route is deferred rather than built on a reader of
+  that blob.
 - **Scheduled evals and `eval` / `dataset` formation resources** — Phase 3.
 - **Eval-gated promotion** — a canary [release](./agents.md#staged-rollout) that promotes
   only when a scored run passes. It consumes this module's verdict; see

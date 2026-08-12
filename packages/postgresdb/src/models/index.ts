@@ -19,6 +19,7 @@ export { DocumentChunk } from './DocumentChunk';
 export { Eval } from './Eval';
 export { EvalResult } from './EvalResult';
 export { EvalRun } from './EvalRun';
+export { EvalRunTask } from './EvalRunTask';
 export { ExceptionItem } from './ExceptionItem';
 export { File } from './File';
 export { Formation } from './Formation';

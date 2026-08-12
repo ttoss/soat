@@ -1,16 +1,17 @@
 /**
- * Eval runs — the execution half of the evaluations module
- * (docs/prd-evaluations.md, Phase 1).
+ * Starting, and stopping, eval runs (docs/prd-evaluations.md).
  *
  * A run creates **one real agent generation per dataset item** through the
  * ordinary `createGeneration` machinery, so it exercises the agent's true
  * instructions, tools, model and knowledge rather than a simulation of them;
  * each result links the generation (and through it the trace) for drill-down.
  *
- * Phase 1 is synchronous and sequential: `wait: true` is required, the dataset
- * is capped at {@link SYNC_ITEM_CAP} items, and the run reaches a terminal
- * status before the request returns. Async execution on the `RunTask` queue,
- * baseline deltas and the lifecycle webhooks arrive in Phase 2.
+ * Two modes, one execution path (`evaluationRunExecution.ts`):
+ *
+ * - `wait: true` — synchronous and sequential, dataset capped at
+ *   {@link SYNC_ITEM_CAP} items, terminal before the request returns.
+ * - `wait: false` — one queued task per item, answered `queued` immediately.
+ *   The worker executes items and the last one to finish finalizes the run.
  *
  * The list/get side lives in `evaluationRunReads.ts`.
  */
@@ -18,8 +19,12 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { createGeneration } from './agentGeneration';
-import type { GenerationResult } from './agentGenerationTypes';
+import { discardEvalItemTasks, enqueueEvalItemTasks } from './evaluationQueue';
+import {
+  executeAndRecordItem,
+  failEvalRun,
+  finalizeEvalRun,
+} from './evaluationRunExecution';
 import {
   type EvalRunRow,
   mapEvalRun,
@@ -27,31 +32,25 @@ import {
   TERMINAL_EVAL_RUN_STATUSES,
 } from './evaluationRunReads';
 import { getEvalRow } from './evaluations';
-import {
-  aggregateScores,
-  resolveRunPassed,
-  scoreOutput,
-  type ScorerOutcome,
-  validateScorers,
-} from './evaluationScorers';
-import type { GenerationInputMessage } from './generationInputMessages';
+import { scorerList, validateScorers } from './evaluationScorers';
+import { kickEvalWorker } from './evaluationWorker';
 import { isPlainObject } from './plainObject';
 import { parseActiveRelease } from './releaseAssignment';
 
 const log = createDebug('soat:evaluations');
 
 /**
- * The most items a synchronous run will execute.
+ * The most items a **synchronous** run will execute.
  *
- * A run over a larger dataset is **rejected**, not truncated: scoring a subset
- * and reporting it as the run's verdict would read as a complete pass/fail over
- * the whole dataset. The `400` is stable across phases — `wait: true` never
- * becomes async — so the same request keeps returning it once the queue lands.
+ * A `wait: true` run over a larger dataset is **rejected**, not truncated:
+ * scoring a subset and reporting it as the run's verdict would read as a complete
+ * pass/fail over the whole dataset. The `400` is stable across phases —
+ * `wait: true` never becomes async — and an over-cap dataset is exactly what
+ * `wait: false` is for.
  */
 export const SYNC_ITEM_CAP = 25;
 
 type AgentRow = InstanceType<(typeof db)['Agent']>;
-type DatasetItemRow = InstanceType<(typeof db)['DatasetItem']>;
 
 // ── Run-start resolution ───────────────────────────────────────────────────
 
@@ -104,9 +103,9 @@ export const resolveRunAgentVersion = async (args: {
 /**
  * Resolves the optional baseline link.
  *
- * Phase 1 validates and persists it; the per-scorer deltas it feeds are
- * computed in Phase 2. Validating now means a caller wiring up a gate finds a
- * wrong baseline immediately rather than at the run where deltas first appear.
+ * Validated at start rather than at finalize so a caller wiring up a gate finds a
+ * wrong baseline immediately, instead of at the end of a run that already spent
+ * the money.
  */
 const resolveBaselineRun = async (args: {
   evalDbId: number;
@@ -141,23 +140,27 @@ const resolveBaselineRun = async (args: {
   return baseline.id as number;
 };
 
-const assertSyncRunSupported = (wait: unknown): void => {
-  if (wait === true) return;
-  if (wait === false) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'Asynchronous eval runs are not available yet; they ship with Evaluations Phase 2. Pass wait: true.'
-    );
+/**
+ * Reads the `wait` flag.
+ *
+ * Defaulting to `false` — matching `orchestrations.yaml` — is safe now and was
+ * not in Phase 1: a caller who omits `wait` gets a `queued` run, which is what
+ * omitting it will always mean from here on. Phase 1 required the field
+ * precisely so this default could be introduced without any existing caller's
+ * behavior changing (docs/prd-evaluations.md — Phase 2 acceptance criteria).
+ */
+const parseWait = (wait: unknown): boolean => {
+  if (wait === undefined || wait === null) return false;
+  if (typeof wait !== 'boolean') {
+    throw new DomainError('VALIDATION_FAILED', 'wait must be a boolean.');
   }
-  throw new DomainError(
-    'VALIDATION_FAILED',
-    'wait is required and must be true.'
-  );
+  return wait;
 };
 
 const assertRunnableItemCount = (args: {
   count: number;
   datasetPublicId: string;
+  wait: boolean;
 }): void => {
   if (args.count === 0) {
     throw new DomainError(
@@ -165,212 +168,40 @@ const assertRunnableItemCount = (args: {
       `Dataset '${args.datasetPublicId}' has no items; there is nothing to evaluate.`
     );
   }
-  if (args.count > SYNC_ITEM_CAP) {
+  if (args.wait && args.count > SYNC_ITEM_CAP) {
     throw new DomainError(
       'VALIDATION_FAILED',
-      `A synchronous run is capped at ${SYNC_ITEM_CAP} items and this dataset has ${args.count}. Reduce the dataset, or wait for asynchronous runs (Evaluations Phase 2).`
+      `A synchronous run is capped at ${SYNC_ITEM_CAP} items and this dataset has ${args.count}. Reduce the dataset, or start the run with wait: false to execute it on the queue.`
     );
   }
-};
-
-// ── Item execution ─────────────────────────────────────────────────────────
-
-type ItemOutcome = {
-  scores: ScorerOutcome[];
-  passed: boolean;
-  errored: boolean;
-  output: string | null;
-  error: string | null;
-  generationDbId: number | null;
-};
-
-const errorMessage = (error: unknown): string => {
-  return error instanceof Error ? error.message : String(error);
-};
-
-const generationDbIdOf = async (publicId: string): Promise<number | null> => {
-  const row = await db.Generation.findOne({
-    where: { publicId },
-    attributes: ['id'],
-  });
-  return row ? (row.id as number) : null;
-};
-
-const erroredOutcome = (
-  error: string,
-  generationDbId: number | null
-): ItemOutcome => {
-  return {
-    scores: [],
-    passed: false,
-    errored: true,
-    output: null,
-    error,
-    generationDbId,
-  };
-};
-
-/**
- * Runs one item and scores it.
- *
- * A non-`completed` generation is an item-level **error**, never a score of 0.
- * A `requires_action` result — an agent with client-side tools pausing for tool
- * outputs — carries no `output` at all; scoring it 0 would report a behavioral
- * regression for what is really an un-evaluable target. Such an item is
- * excluded from the aggregates and counted in `erroredCount`.
- */
-const runItem = async (args: {
-  projectIds?: number[];
-  agentPublicId: string;
-  agentVersion: number;
-  agentOutputSchema: unknown;
-  scorers: unknown[];
-  input: unknown;
-  expectedOutput: string | null;
-  itemMetadata: unknown;
-}): Promise<ItemOutcome> => {
-  let generation: GenerationResult | ReadableStream;
-  try {
-    generation = await createGeneration({
-      projectIds: args.projectIds,
-      agentId: args.agentPublicId,
-      messages: args.input as GenerationInputMessage[],
-      // `stream: false` makes the `ReadableStream` arm of the return type
-      // unreachable; the guard below keeps the narrowing honest.
-      stream: false,
-      pinnedAgentVersion: args.agentVersion,
-    });
-  } catch (error) {
-    return erroredOutcome(errorMessage(error), null);
-  }
-
-  /* istanbul ignore next -- `stream: false` above means createGeneration never
-     returns a stream here; the branch exists only to narrow the union. */
-  if (generation instanceof ReadableStream) {
-    return erroredOutcome(
-      'Generation returned a stream; eval runs require stream=false.',
-      null
-    );
-  }
-
-  const generationDbId = await generationDbIdOf(generation.id);
-
-  if (generation.status !== 'completed' || !generation.output) {
-    return erroredOutcome(
-      `Generation did not complete (status '${generation.status}'); the item could not be evaluated.`,
-      generationDbId
-    );
-  }
-
-  const scores = scoreOutput({
-    scorers: args.scorers,
-    input: args.input,
-    output: {
-      content: generation.output.content,
-      object: generation.output.object,
-    },
-    expectedOutput: args.expectedOutput,
-    itemMetadata: args.itemMetadata,
-    agentOutputSchema: args.agentOutputSchema,
-  });
-
-  return {
-    scores,
-    passed: scores.every((outcome) => {
-      return outcome.passed;
-    }),
-    errored: false,
-    output: generation.output.content,
-    error: null,
-    generationDbId,
-  };
-};
-
-/**
- * Executes every item in order, writing one `EvalResult` per item as it goes.
- *
- * Sequential by design in Phase 1 — the item cap bounds the worst case, and
- * bounded parallelism is an additive optimization with no contract change.
- */
-const executeItems = async (args: {
-  projectIds?: number[];
-  runDbId: number;
-  agent: AgentRow;
-  agentVersion: number;
-  scorers: unknown[];
-  items: DatasetItemRow[];
-}): Promise<ItemOutcome[]> => {
-  const outcomes: ItemOutcome[] = [];
-
-  for (const item of args.items) {
-    const outcome = await runItem({
-      projectIds: args.projectIds,
-      agentPublicId: args.agent.publicId,
-      agentVersion: args.agentVersion,
-      agentOutputSchema: args.agent.outputSchema,
-      scorers: args.scorers,
-      input: item.input,
-      expectedOutput: item.expectedOutput,
-      itemMetadata: item.metadata,
-    });
-
-    await db.EvalResult.create({
-      evalRunId: args.runDbId,
-      datasetItemId: item.id as number,
-      // Frozen at run time: editing or deleting the item afterwards can no
-      // longer rewrite what this run was scored against.
-      input: item.input,
-      expectedOutput: item.expectedOutput,
-      generationId: outcome.generationDbId,
-      output: outcome.output,
-      scores: outcome.scores,
-      passed: outcome.passed,
-      error: outcome.error,
-    });
-
-    outcomes.push(outcome);
-  }
-
-  return outcomes;
-};
-
-const finalizeRun = async (args: {
-  run: InstanceType<(typeof db)['EvalRun']>;
-  outcomes: ItemOutcome[];
-  passThreshold: number | null;
-}): Promise<void> => {
-  const aggregate = aggregateScores({ results: args.outcomes });
-
-  await args.run.update({
-    status: 'completed',
-    aggregateScores: aggregate,
-    passed: resolveRunPassed({
-      passThreshold: args.passThreshold,
-      aggregate,
-    }),
-    completedCount: args.outcomes.filter((outcome) => {
-      return !outcome.errored;
-    }).length,
-    erroredCount: args.outcomes.filter((outcome) => {
-      return outcome.errored;
-    }).length,
-    finishedAt: new Date(),
-  });
 };
 
 // ── Starting a run ─────────────────────────────────────────────────────────
 
-export const startEvalRun = async (args: {
+type RunPlan = {
+  evaluation: Awaited<ReturnType<typeof getEvalRow>>;
+  agent: AgentRow;
+  items: Array<InstanceType<(typeof db)['DatasetItem']>>;
+  agentVersion: number;
+  baselineRunDbId: number | null;
+};
+
+/**
+ * Everything a run needs resolved and validated **before** a row exists: the
+ * Eval and its agent, the scorers re-checked against the agent as it is now, the
+ * items, the pinned version, and the baseline link.
+ *
+ * All of it up front so a rejected request creates no `EvalRun` at all — a
+ * `failed` row for a request that never ran would pollute the run history a gate
+ * reads.
+ */
+const planRun = async (args: {
   projectIds?: number[];
   evalId: string;
-  wait: unknown;
+  wait: boolean;
   agentVersion?: unknown;
   baselineRunId?: unknown;
-}): Promise<ReturnType<typeof mapEvalRun>> => {
-  log('startEvalRun: evalId=%s', args.evalId);
-
-  assertSyncRunSupported(args.wait);
-
+}): Promise<RunPlan> => {
   const evaluation = await getEvalRow({
     projectIds: args.projectIds,
     id: args.evalId,
@@ -401,59 +232,179 @@ export const startEvalRun = async (args: {
   assertRunnableItemCount({
     count: items.length,
     datasetPublicId: dataset.publicId,
+    wait: args.wait,
   });
 
-  const agentVersion = await resolveRunAgentVersion({
+  return {
+    evaluation,
     agent,
-    requestedVersion: args.agentVersion,
-  });
-  const baselineRunDbId = await resolveBaselineRun({
-    evalDbId: evaluation.id as number,
-    baselineRunId: args.baselineRunId,
-  });
-
-  const run = await db.EvalRun.create({
-    evalId: evaluation.id as number,
-    agentVersion,
-    status: 'running',
-    baselineRunId: baselineRunDbId,
-    itemCount: items.length,
-    startedAt: new Date(),
-  });
-
-  log(
-    'startEvalRun: run=%s items=%d agentVersion=%d',
-    run.publicId,
-    items.length,
-    agentVersion
-  );
-
-  let outcomes: ItemOutcome[];
-  try {
-    outcomes = await executeItems({
-      projectIds: args.projectIds,
-      runDbId: run.id as number,
+    items,
+    agentVersion: await resolveRunAgentVersion({
       agent,
-      agentVersion,
-      scorers: Array.isArray(evaluation.scorers) ? evaluation.scorers : [],
-      items,
-    });
+      requestedVersion: args.agentVersion,
+    }),
+    baselineRunDbId: await resolveBaselineRun({
+      evalDbId: evaluation.id as number,
+      baselineRunId: args.baselineRunId,
+    }),
+  };
+};
+
+/** Executes every item in order, then settles the run. */
+const executeSyncRun = async (args: {
+  projectIds?: number[];
+  plan: RunPlan;
+  run: InstanceType<(typeof db)['EvalRun']>;
+}): Promise<void> => {
+  const { plan, run } = args;
+  const projectId = plan.evaluation.projectId as number;
+
+  try {
+    // Sequential by design: the item cap bounds the worst case, and bounded
+    // parallelism is an additive optimization with no contract change. A caller
+    // that wants concurrency uses `wait: false`.
+    for (const item of plan.items) {
+      await executeAndRecordItem({
+        projectIds: args.projectIds,
+        projectId,
+        runDbId: run.id as number,
+        agent: plan.agent,
+        agentVersion: plan.agentVersion,
+        scorers: scorerList(plan.evaluation.scorers),
+        item,
+      });
+    }
   } catch (error) {
     // An infrastructure failure (not an item's generation failing — that is
     // caught per item) leaves the run recorded as `failed` rather than stuck
-    // `running`, then propagates.
-    await run.update({ status: 'failed', finishedAt: new Date() });
-    log('startEvalRun: run=%s failed: %s', run.publicId, errorMessage(error));
+    // `running`, fires the lifecycle event, then propagates.
+    await failEvalRun({
+      run,
+      evalPublicId: plan.evaluation.publicId,
+      projectId,
+      reason: error instanceof Error ? error.message : String(error),
+    });
     throw error;
   }
 
-  await finalizeRun({
+  await finalizeEvalRun({
     run,
-    outcomes,
+    evalPublicId: plan.evaluation.publicId,
+    projectId,
     passThreshold:
-      evaluation.passThreshold === null
+      plan.evaluation.passThreshold === null
         ? null
-        : Number(evaluation.passThreshold),
+        : Number(plan.evaluation.passThreshold),
+  });
+};
+
+export const startEvalRun = async (args: {
+  projectIds?: number[];
+  evalId: string;
+  wait: unknown;
+  agentVersion?: unknown;
+  baselineRunId?: unknown;
+}): Promise<ReturnType<typeof mapEvalRun>> => {
+  const wait = parseWait(args.wait);
+  log('startEvalRun: evalId=%s wait=%s', args.evalId, wait);
+
+  const plan = await planRun({ ...args, wait });
+
+  const run = await db.EvalRun.create({
+    evalId: plan.evaluation.id as number,
+    agentVersion: plan.agentVersion,
+    // A queued run has not started yet — `startedAt` is stamped by the first
+    // worker that picks up one of its items.
+    status: wait ? 'running' : 'queued',
+    baselineRunId: plan.baselineRunDbId,
+    itemCount: plan.items.length,
+    startedAt: wait ? new Date() : null,
+  });
+
+  log(
+    'startEvalRun: run=%s items=%d agentVersion=%d wait=%s',
+    run.publicId,
+    plan.items.length,
+    plan.agentVersion,
+    wait
+  );
+
+  if (wait) {
+    await executeSyncRun({ projectIds: args.projectIds, plan, run });
+  } else {
+    await enqueueEvalItemTasks({
+      evalRunId: run.id as number,
+      datasetItemIds: plan.items.map((item) => {
+        return item.id as number;
+      }),
+    });
+    // Lets a single-process deployment drive the queue without a separate
+    // worker, exactly as `enqueueRunTask` callers do for orchestrations.
+    kickEvalWorker();
+  }
+
+  return mapEvalRun(await reloadEvalRun(run as EvalRunRow));
+};
+
+// ── Canceling a run ────────────────────────────────────────────────────────
+
+/**
+ * Cancels a queued or running run.
+ *
+ * Drops the run's outstanding item tasks so it stops consuming provider budget
+ * on the next worker tick, and settles the row `canceled` with whatever it had
+ * already scored. Results already written are left exactly as they are — they are
+ * real measurements of real generations that were really paid for.
+ *
+ * `aggregate_scores` is deliberately **not** computed for a canceled run: a
+ * partial roll-up presented in the same field a completed run uses is the
+ * "subset reported as a whole-dataset verdict" failure the sync cap exists to
+ * prevent. `completed_count` / `errored_count` still report what ran, and the
+ * per-item results remain readable.
+ */
+export const cancelEvalRun = async (args: {
+  projectIds?: number[];
+  evalId: string;
+  runId: string;
+}): Promise<ReturnType<typeof mapEvalRun>> => {
+  log('cancelEvalRun: evalId=%s runId=%s', args.evalId, args.runId);
+
+  const evaluation = await getEvalRow({
+    projectIds: args.projectIds,
+    id: args.evalId,
+  });
+
+  const run = await db.EvalRun.findOne({
+    where: { publicId: args.runId, evalId: evaluation.id as number },
+  });
+  if (!run) {
+    throw new DomainError(
+      'RESOURCE_NOT_FOUND',
+      `Eval run '${args.runId}' not found.`
+    );
+  }
+  if (TERMINAL_EVAL_RUN_STATUSES.includes(run.status)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `Eval run '${args.runId}' has already finished (status '${run.status}').`
+    );
+  }
+
+  await discardEvalItemTasks({ evalRunId: run.id as number });
+
+  const results = await db.EvalResult.findAll({
+    where: { evalRunId: run.id as number },
+    attributes: ['error'],
+  });
+  const erroredCount = results.filter((row) => {
+    return row.error !== null;
+  }).length;
+
+  await run.update({
+    status: 'canceled',
+    completedCount: results.length - erroredCount,
+    erroredCount,
+    finishedAt: new Date(),
   });
 
   return mapEvalRun(await reloadEvalRun(run as EvalRunRow));

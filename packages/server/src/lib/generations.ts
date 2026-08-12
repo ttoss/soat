@@ -47,6 +47,10 @@ type GenerationAttribution = {
   orchestrationRunId?: string | null;
   nodeId?: string | null;
   agentVersion?: number | null;
+  // The workload behind the generation when it is not production traffic
+  // (`eval`). Read back at metering time onto the usage event's own `source`
+  // column (docs/prd-evaluations.md, Phase 2).
+  source?: string | null;
 };
 
 // Normalizes the optional attribution args to their column values, so the
@@ -58,6 +62,7 @@ const attributionColumns = (args: GenerationAttribution) => {
     orchestrationRunId: args.orchestrationRunId ?? null,
     nodeId: args.nodeId ?? null,
     agentVersion: args.agentVersion ?? null,
+    source: args.source ?? null,
   };
 };
 

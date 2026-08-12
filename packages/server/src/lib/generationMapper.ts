@@ -19,6 +19,7 @@ export type PersistedGeneration = {
   orchestration_run_id: string | null;
   node_id: string | null;
   agent_version: number | null;
+  source: string | null;
   routing: Record<string, unknown> | null;
   extraction: Record<string, unknown> | null;
   metadata: Record<string, unknown> | null;
@@ -60,6 +61,9 @@ export const mapGeneration = (
     orchestration_run_id: gen.orchestrationRunId,
     node_id: gen.nodeId,
     agent_version: gen.agentVersion,
+    // `eval` when an eval run produced this generation; null for production
+    // traffic. Part of the attribution skeleton a content purge preserves.
+    source: gen.source,
     routing: gen.routing,
     extraction: gen.extraction,
     // Caller-owned bag, verbatim. `pendingState` has no entry here at all.

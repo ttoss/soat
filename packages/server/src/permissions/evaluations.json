@@ -90,6 +90,11 @@
       "operationId": "listEvalResults",
       "action": "evaluations:ListEvals",
       "description": "List the per-item results of an eval run"
+    },
+    {
+      "operationId": "cancelEvalRun",
+      "action": "evaluations:RunEval",
+      "description": "Cancel a queued or running eval run"
     }
   ]
 }
