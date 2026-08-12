@@ -1184,6 +1184,66 @@ describe('Usage', () => {
       expect(created).toBe(true);
     });
 
+    // A rollup sums many DECIMAL quantities, and the two seeded here are the
+    // textbook float trap: 0.1 + 0.2 is 0.30000000000000004 when accumulated as
+    // numbers. Production showed the same drift as 2070.1550000000016
+    // compute-seconds — a billing-adjacent figure that has to read exactly.
+    test('sums fractional quantities exactly across events', async () => {
+      // A project of its own, so the two quantities below are the only storage
+      // events in the rollup. `setupProjectWithUsers` cannot be reused here —
+      // it bootstraps the first admin, which only succeeds once per database.
+      const projectRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/projects')
+        .send({ name: 'usage-quantity-arithmetic' });
+      expect(projectRes.status).toBe(201);
+      const quantityProjectId = projectRes.body.id;
+
+      const project = await db.Project.findOne({
+        where: { publicId: quantityProjectId },
+      });
+      const internalId = project!.id as number;
+
+      const seedFile = async (size: number): Promise<void> => {
+        await db.File.create({
+          publicId: generatePublicId(PUBLIC_ID_PREFIXES.file),
+          projectId: internalId,
+          size,
+          storageType: 'local',
+          storagePath: `seed/${generatePublicId(PUBLIC_ID_PREFIXES.file)}`,
+          filename: 'seed.bin',
+        });
+      };
+
+      // Day one: 100 MB stored → 0.1 gb_day.
+      await seedFile(100_000_000);
+      await snapshotProjectStorage({
+        projectId: internalId,
+        projectPublicId: quantityProjectId,
+        now: new Date('2026-07-01T00:00:00.000Z'),
+      });
+      // Day two: 200 MB stored → 0.2 gb_day.
+      await seedFile(100_000_000);
+      await snapshotProjectStorage({
+        projectId: internalId,
+        projectPublicId: quantityProjectId,
+        now: new Date('2026-07-02T00:00:00.000Z'),
+      });
+
+      const res = await authenticatedTestClient(adminToken).get(
+        `/api/v1/usage?project_id=${quantityProjectId}&group_by=meter_type`
+      );
+      expect(res.status).toBe(200);
+
+      const storage = findGroup(res.body, 'storage') as unknown as {
+        components: AggregateComponent[];
+      };
+      const gbDay = findComponent(storage.components, 'gb_day');
+      // Exactly 0.3 — not 0.30000000000000004. `toBe` on purpose: the point is
+      // the serialized figure, which `toBeCloseTo` would not catch.
+      expect(gbDay!.quantity).toBe(0.3);
+      expect(res.body.totals.components[0].quantity).toBe(0.3);
+    });
+
     test('a storage bucket reports its measured gb_day quantity, not zero', async () => {
       const res = await authenticatedTestClient(userToken).get(
         `/api/v1/usage?project_id=${projectId}&group_by=meter_type`

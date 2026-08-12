@@ -2,6 +2,7 @@ import {
   buildTokenComponents,
   computeComponentCostUsd,
   sumComponentCostUsd,
+  sumQuantities,
   validatePriceInput,
 } from 'src/lib/priceCompute';
 
@@ -43,6 +44,57 @@ describe('priceCompute', () => {
     test('returns null when nothing is priced', () => {
       expect(sumComponentCostUsd([null, null])).toBeNull();
       expect(sumComponentCostUsd([])).toBeNull();
+    });
+  });
+
+  /**
+   * Quantities are DECIMAL strings, and a rollup sums many of them. Accumulating
+   * with `+=` on numbers leaks binary-float error into a billing-adjacent field:
+   * the production meter reported 2070.1550000000016 compute-seconds for a
+   * project whose events summed to exactly 2070.155. Costs never showed this
+   * because `sumComponentCostUsd` fixes the scale on the way out; a quantity has
+   * no fixed scale to round to (gb_day carries nine decimals, tokens none), so
+   * the sum itself has to be exact.
+   */
+  describe('sumQuantities', () => {
+    test('sums integers exactly', () => {
+      expect(sumQuantities(['724352', '4330368'])).toBe(5054720);
+      expect(sumQuantities(['2471'])).toBe(2471);
+    });
+
+    test('sums fractional quantities without float drift', () => {
+      // The classic float trap: 0.1 + 0.2 !== 0.3 in binary floating point.
+      expect(sumQuantities(['0.1', '0.2'])).toBe(0.3);
+      // The production case, reduced: many 3-decimal compute-second readings.
+      expect(sumQuantities(['1035.075', '1035.08'])).toBe(2070.155);
+    });
+
+    test('keeps the full scale of a small measure', () => {
+      // gb_day quantities are tiny and must not be rounded away.
+      expect(sumQuantities(['0.000208672', '0.000208672'])).toBe(0.000417344);
+    });
+
+    test('sums across mixed scales', () => {
+      expect(sumQuantities(['1', '0.5', '0.000000001'])).toBe(1.500000001);
+    });
+
+    test('is zero for no quantities', () => {
+      expect(sumQuantities([])).toBe(0);
+    });
+
+    test('handles a long run of decimals without accumulating error', () => {
+      // 1000 × 0.001 is exactly 1; a float accumulator drifts off it.
+      expect(
+        sumQuantities(
+          Array.from({ length: 1000 }, () => {
+            return '0.001';
+          })
+        )
+      ).toBe(1);
+    });
+
+    test('sums negative and positive quantities', () => {
+      expect(sumQuantities(['1.5', '-0.5'])).toBe(1);
     });
   });
 

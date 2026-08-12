@@ -3,7 +3,7 @@ import createDebug from 'debug';
 
 import { db } from '../db';
 import { DomainError } from '../errors';
-import { sumComponentCostUsd } from './priceCompute';
+import { sumComponentCostUsd, sumQuantities } from './priceCompute';
 
 const log = createDebug('soat:usage');
 
@@ -154,10 +154,14 @@ const groupKeyForEvent = (
 // A component's running sum. Keyed by `component`+`unit` (never by name alone):
 // a quantity is only additive within one unit, so two units of the same
 // component stay two entries rather than silently summing into a wrong number.
+//
+// Quantities are collected as the DECIMAL strings they arrive as, not added into
+// a number here: `sumQuantities` adds them exactly at the end, so a fractional
+// measure does not accumulate float drift on the way to a customer's meter.
 type ComponentAccumulator = {
   component: string;
   unit: string;
-  quantity: number;
+  quantities: string[];
   costs: Array<string | null>;
 };
 
@@ -185,12 +189,12 @@ const addComponents = (acc: Accumulator, event: EventWithComponents): void => {
       entry = {
         component: component.component,
         unit: component.unit,
-        quantity: 0,
+        quantities: [],
         costs: [],
       };
       acc.components.set(key, entry);
     }
-    entry.quantity += Number(component.quantity);
+    entry.quantities.push(String(component.quantity));
     entry.costs.push(component.costUsd);
   }
 };
@@ -219,7 +223,7 @@ const finalizeComponents = (
       return {
         component: entry.component,
         unit: entry.unit,
-        quantity: entry.quantity,
+        quantity: sumQuantities(entry.quantities),
         cost_usd: numberOrNull(sumComponentCostUsd(entry.costs)),
       };
     })
