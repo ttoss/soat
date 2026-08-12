@@ -821,7 +821,7 @@ describe('Conversations', () => {
     });
   });
 
-  describe('POST /api/v1/conversations/:id/generate', () => {
+  describe('POST /api/v1/conversations/:id/generate?wait=true', () => {
     let convId: string;
 
     beforeAll(async () => {
@@ -833,55 +833,92 @@ describe('Conversations', () => {
 
     test('returns 400 when actorId is missing', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({});
       expect(res.status).toBe(400);
     });
 
     test('returns 501 when stream is requested', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: 'agt_test', stream: true });
       expect(res.status).toBe(501);
     });
 
     test('returns 404 for unknown agent', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: 'agt_does_not_exist' });
       expect(res.status).toBe(404);
     });
 
     test('returns 404 for unknown conversation', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post('/api/v1/conversations/conv_does_not_exist/generate')
+        .post('/api/v1/conversations/conv_does_not_exist/generate?wait=true')
         .send({ agent_id: 'agt_test' });
       expect(res.status).toBe(404);
     });
 
     test('returns 403 for a user without conversation permission', async () => {
       const res = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: 'agt_test' });
       expect(res.status).toBe(403);
     });
 
     test('returns 401 when unauthenticated', async () => {
       const res = await testClient
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: 'agt_test' });
       expect(res.status).toBe(401);
     });
 
     test('accepts toolContext in request body', async () => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({
           agent_id: 'agt_does_not_exist',
           tool_context: { user_id: 'u1' },
         });
 
       // agent_id does not exist, so 404
+      expect(res.status).toBe(404);
+    });
+
+    test('background by default: returns 202 accepted', async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'ConversationBackgroundProvider',
+          provider: 'openai',
+          default_model: 'gpt-4o',
+        });
+      expect(aiProvRes.status).toBe(201);
+
+      const agentRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/agents')
+        .send({
+          ai_provider_id: aiProvRes.body.id,
+          project_id: projectId,
+          name: 'Conversation Background Agent',
+        });
+      expect(agentRes.status).toBe(201);
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: agentRes.body.id });
+
+      expect(res.status).toBe(202);
+      expect(res.body.status).toBe('accepted');
+      expect(res.body.conversation_id).toBe(convId);
+    });
+
+    test('background mode still resolves the agent synchronously (404)', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/conversations/${convId}/generate`)
+        .send({ agent_id: 'agt_does_not_exist' });
+
       expect(res.status).toBe(404);
     });
 
@@ -925,7 +962,7 @@ describe('Conversations', () => {
       });
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentRes.body.id });
 
       expect(res.status).toBe(200);
@@ -1191,7 +1228,7 @@ describe('Conversations', () => {
       });
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
 
       expect(res.status).toBe(200);
@@ -1223,7 +1260,7 @@ describe('Conversations', () => {
       });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
 
       // Add a follow-up user message
@@ -1244,7 +1281,7 @@ describe('Conversations', () => {
       });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
 
       const secondCallMessages: Array<{ role: string; content: unknown }> =
@@ -1290,7 +1327,7 @@ describe('Conversations', () => {
       });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${convId}/generate`)
+        .post(`/api/v1/conversations/${convId}/generate?wait=true`)
         .send({ agent_id: agentId });
 
       const sentMessages: Array<{ role: string; content: unknown }> =
@@ -1341,7 +1378,7 @@ describe('Conversations', () => {
       });
 
       await authenticatedTestClient(userToken)
-        .post(`/api/v1/conversations/${leakConvId}/generate`)
+        .post(`/api/v1/conversations/${leakConvId}/generate?wait=true`)
         .send({ agent_id: agentId });
 
       const msgsRes = await authenticatedTestClient(userToken).get(

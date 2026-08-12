@@ -171,7 +171,7 @@ AGENT_ID=$(soat create-agent \
   --name "Metered Agent" \
   --instructions "You are a concise assistant. Keep answers under 20 words." | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
-GENERATION_ID=$(soat create-agent-generation \
+GENERATION_ID=$(soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"Name three uses for a paperclip."}]' | jq -r '.id')
 echo "GENERATION_ID: $GENERATION_ID"
@@ -201,6 +201,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
 
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: agent.id },
+  query: { wait: true },
   body: { messages: [{ role: 'user', content: 'Name three uses for a paperclip.' }] },
 });
 const GENERATION_ID = generation.id;
@@ -216,7 +217,7 @@ AI_PROVIDER_ID=$(curl -s -X POST "$SOAT_URL/api/v1/ai-providers" \
 AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Metered Agent\",\"instructions\":\"You are a concise assistant. Keep answers under 20 words.\"}" | jq -r '.id')
-GENERATION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+GENERATION_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Name three uses for a paperclip."}]}' | jq -r '.id')
 echo "GENERATION_ID: $GENERATION_ID"

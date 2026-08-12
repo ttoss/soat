@@ -188,13 +188,19 @@ export const buildPathFn = (
 };
 
 export const buildQueryFn = (
-  queryParams: Array<{ name: string }>
+  queryParams: Array<{ name: string; forcedValue?: string }>
 ): ((args: Record<string, unknown>) => string) | undefined => {
   if (queryParams.length === 0) return undefined;
 
   return (args: Record<string, unknown>) => {
     const search = new URLSearchParams();
-    for (const { name } of queryParams) {
+    for (const { name, forcedValue } of queryParams) {
+      // `x-soat-tool-forced` param: the platform pins the value, so the model
+      // neither sees nor chooses it (see `isForcedToolParam`).
+      if (forcedValue !== undefined) {
+        search.append(name, forcedValue);
+        continue;
+      }
       const value = args[name];
       if (value === undefined || value === null) continue;
       if (Array.isArray(value)) {
@@ -312,6 +318,44 @@ export const normalizeSubschema = (value: unknown): unknown => {
  * Both are invisible to REST, SDK and CLI callers, which read the spec's
  * schemas rather than this projection of them.
  */
+/**
+ * The value a `x-soat-tool-forced` parameter is pinned to for tool calls, or
+ * `undefined` when the parameter is a normal caller-chosen one.
+ *
+ * The third marker in the family described above, for a parameter whose *only*
+ * correct value in a tool context is fixed. `wait` is the case it exists for: a
+ * tool call is one request returning one result, with no channel to poll a
+ * background run later, so a nested `create-agent-generation` must block — the
+ * mirror image of `stream`, which a tool call equally cannot receive.
+ */
+export const forcedToolParamValue = (
+  parameter: unknown
+): string | undefined => {
+  const val = (parameter as { 'x-soat-tool-forced'?: unknown })[
+    'x-soat-tool-forced'
+  ];
+  return typeof val === 'string' ? val : undefined;
+};
+
+/** One query parameter as projected onto the tool surface. */
+export type ToolQueryParam = {
+  name: string;
+  description: string;
+  required: boolean;
+  type: string;
+  /** Set for `x-soat-tool-forced` params; see `forcedToolParamValue`. */
+  forcedValue?: string;
+};
+
+/** The query params a model may choose: forced ones are pinned server-side. */
+export const modelChosenQueryParams = <T extends { forcedValue?: string }>(
+  params: T[]
+): T[] => {
+  return params.filter((p) => {
+    return p.forcedValue === undefined;
+  });
+};
+
 export const isHiddenFromToolSchema = (property: unknown): boolean => {
   const val = property as {
     'x-soat-server-managed'?: unknown;

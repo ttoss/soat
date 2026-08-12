@@ -464,7 +464,7 @@ soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$IMAGE_FILE_ID" \
   --path-prefix "/images/" \
-  --async false | jq -e '.status == "ready"'
+  --wait true | jq -e '.status == "ready"'
 # prints `true` once the image is OCR'd, chunked, and embedded
 # (chunk_count is reported by `soat get-document-status`; Step 14 confirms the text is searchable)
 ```
@@ -490,7 +490,7 @@ const { data: imageFile } = await adminSoat.files.uploadFileBase64({
 });
 
 const { data: imageDoc } = await adminSoat.documents.ingestDocument({
-  query: { async: false },
+  query: { wait: true },
   body: { project_id: PROJECT_ID, file_id: imageFile.id, path_prefix: '/images/' },
 });
 const { data: imageStatus } = await adminSoat.documents.getDocumentStatus({
@@ -511,7 +511,7 @@ IMAGE_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"receipt.png\",\"content_type\":\"image/png\",\"content\":\"$RECEIPT_PNG_B64\"}" \
   | jq -r '.id')
 
-IMAGE_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
+IMAGE_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$IMAGE_FILE_ID\",\"path_prefix\":\"/images/\"}" \
@@ -820,7 +820,7 @@ soat ingest-document \
   --project-id "$PROJECT_ID" \
   --file-id "$AUDIO_FILE_ID" \
   --path-prefix "/audio/" \
-  --async false | jq -e '.status == "ready"'
+  --wait true | jq -e '.status == "ready"'
 # prints `true` once the audio is transcribed, chunked, and embedded
 # (chunk_count is reported by `soat get-document-status`; Step 14 confirms the text is searchable)
 ```
@@ -846,7 +846,7 @@ const { data: audioFile } = await adminSoat.files.uploadFileBase64({
 });
 
 const { data: audioDoc } = await adminSoat.documents.ingestDocument({
-  query: { async: false },
+  query: { wait: true },
   body: { project_id: PROJECT_ID, file_id: audioFile.id, path_prefix: '/audio/' },
 });
 const { data: audioStatus } = await adminSoat.documents.getDocumentStatus({
@@ -867,7 +867,7 @@ AUDIO_FILE_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/files/upload/base64" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"filename\":\"meeting.mp3\",\"content_type\":\"audio/mpeg\",\"content\":\"$MEETING_MP3_B64\"}" \
   | jq -r '.id')
 
-AUDIO_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?async=false" \
+AUDIO_DOC_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/documents/ingest?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"file_id\":\"$AUDIO_FILE_ID\",\"path_prefix\":\"/audio/\"}" \

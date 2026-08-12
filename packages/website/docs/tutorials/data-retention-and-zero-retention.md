@@ -196,7 +196,7 @@ SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
 soat add-session-message --session-id "$SESSION_ID" \
   --message "My account number is 4455-9982. What are your support hours?" > /dev/null
 
-TURN=$(soat generate-session-response --session-id "$SESSION_ID")
+TURN=$(soat generate-session-response --wait true --session-id "$SESSION_ID")
 GENERATION_ID=$(printf '%s\n' "$TURN" | jq -r '.generation_id')
 TRACE_ID=$(printf '%s\n' "$TURN" | jq -r '.trace_id')
 
@@ -227,6 +227,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: turn } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: session.id },
+  query: { wait: true },
   body: {},
 });
 
@@ -255,7 +256,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"My account number is 4455-9982. What are your support hours?"}' > /dev/null
 
-TURN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate" \
+TURN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" -d '{}')
 
 GENERATION_ID=$(printf '%s\n' "$TURN" | jq -r '.generation_id')
@@ -627,7 +628,7 @@ INTAKE_SESSION_ID=$(soat create-session --agent-id "$INTAKE_AGENT_ID" \
 soat add-session-message --session-id "$INTAKE_SESSION_ID" \
   --message "My card ends in 4242. Is my payment late?" > /dev/null
 
-INTAKE_TURN=$(soat generate-session-response --session-id "$INTAKE_SESSION_ID")
+INTAKE_TURN=$(soat generate-session-response --wait true --session-id "$INTAKE_SESSION_ID")
 INTAKE_GENERATION_ID=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.generation_id')
 INTAKE_TRACE_ID=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.trace_id')
 
@@ -659,6 +660,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: intakeTurn } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: intakeSession.id },
+  query: { wait: true },
   body: {},
 });
 
@@ -681,7 +683,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$INTAKE_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"My card ends in 4242. Is my payment late?"}' > /dev/null
 
-INTAKE_TURN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$INTAKE_SESSION_ID/generate" \
+INTAKE_TURN=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$INTAKE_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" -d '{}')
 
 INTAKE_TRACE_ID=$(printf '%s\n' "$INTAKE_TURN" | jq -r '.trace_id')

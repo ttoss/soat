@@ -280,7 +280,7 @@ ADA_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
 
 soat add-session-message --session-id "$ADA_SESSION_ID" \
   --message "Name one use for a paperclip."
-soat generate-session-response --session-id "$ADA_SESSION_ID" | jq '{status}'
+soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq '{status}'
 ```
 
 Expected output (the assistant's wording will vary — only the status matters):
@@ -304,6 +304,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { data: turn } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: adaSession.id },
+  query: { wait: true },
   body: {},
 });
 console.log(turn.status); // completed
@@ -321,7 +322,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"Name one use for a paperclip."}' > /dev/null
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{status}'
 ```
@@ -559,7 +560,7 @@ soat add-session-message --session-id "$ADA_SESSION_ID" --message "And another u
 
 ```bash
 # → expect-fail
-soat generate-session-response --session-id "$ADA_SESSION_ID"
+soat generate-session-response --wait true --session-id "$ADA_SESSION_ID"
 ```
 
 Expected output — the error carries the quota that fired and when the window resets:
@@ -588,7 +589,7 @@ BLAKE_SESSION_ID=$(soat create-session --agent-id "$AGENT_ID" \
   --actor-id "$BLAKE_ID" --name "Blake session" | jq -r '.id')
 soat add-session-message --session-id "$BLAKE_SESSION_ID" \
   --message "Name one use for a rubber band."
-soat generate-session-response --session-id "$BLAKE_SESSION_ID" | jq '{status}'
+soat generate-session-response --wait true --session-id "$BLAKE_SESSION_ID" | jq '{status}'
 soat get-usage --project-id "$PROJECT_ID" --group-by actor | jq '.groups'
 ```
 
@@ -616,6 +617,7 @@ await adminSoat.sessions.addSessionMessage({
 
 const { error } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: adaSession.id },
+  query: { wait: true },
   body: {},
 });
 console.log(error.error.code, error.error.meta.resets_at); // QUOTA_EXCEEDED ...
@@ -629,6 +631,7 @@ await adminSoat.sessions.addSessionMessage({
 });
 const { data: blakeTurn } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: blakeSession.id },
+  query: { wait: true },
   body: {},
 });
 console.log(blakeTurn.status); // completed — a separate budget
@@ -642,7 +645,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"And another use?"}' > /dev/null
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{error}'
 
@@ -654,7 +657,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"Name one use for a rubber band."}' > /dev/null
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{status}'
 ```
@@ -677,7 +680,7 @@ A generation already **in flight is never killed** — its tokens are spent and 
 
 ```bash
 soat update-quota --quota-id "$QUOTA_ID" --limit 100000 | jq '{limit, mode}'
-soat generate-session-response --session-id "$ADA_SESSION_ID" | jq '{status}'
+soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq '{status}'
 ```
 
 Expected output:
@@ -698,6 +701,7 @@ await adminSoat.quotas.updateQuota({
 
 const { data: resumed } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: adaSession.id },
+  query: { wait: true },
   body: {},
 });
 console.log(resumed.status); // completed
@@ -711,7 +715,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/quotas/$QUOTA_ID" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"limit":100000}' | jq '{limit, mode}'
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{status}'
 ```
@@ -737,7 +741,7 @@ COST_QUOTA_ID=$(soat create-quota --project-id "$PROJECT_ID" \
   --scope project --metric cost_usd --window calendar_month --limit 5 | jq -r '.id')
 
 soat add-session-message --session-id "$BLAKE_SESSION_ID" --message "Another use?"
-soat generate-session-response --session-id "$BLAKE_SESSION_ID" | jq '{status}'
+soat generate-session-response --wait true --session-id "$BLAKE_SESSION_ID" | jq '{status}'
 
 soat list-exceptions --project-id "$PROJECT_ID" --kind quota_unpriced \
   | jq '.data[0] | {kind, severity, status, title, occurrence_count, detail}'
@@ -787,6 +791,7 @@ await adminSoat.sessions.addSessionMessage({
 });
 await adminSoat.sessions.generateSessionResponse({
   path: { session_id: blakeSession.id },
+  query: { wait: true },
   body: {},
 });
 
@@ -809,7 +814,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"Another use?"}' > /dev/null
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{status}'
 
@@ -833,7 +838,7 @@ Dropping a hard cap onto live traffic is how you find out your estimate was wron
 soat update-quota --quota-id "$QUOTA_ID" --limit 1 --mode monitor | jq '{limit, mode}'
 
 soat add-session-message --session-id "$ADA_SESSION_ID" --message "One more use?"
-soat generate-session-response --session-id "$ADA_SESSION_ID" | jq '{status}'
+soat generate-session-response --wait true --session-id "$ADA_SESSION_ID" | jq '{status}'
 ```
 
 Expected output — a 1-token cap that a real turn blows straight past, and the turn still completes:
@@ -887,6 +892,7 @@ await adminSoat.sessions.addSessionMessage({
 });
 const { data: allowed } = await adminSoat.sessions.generateSessionResponse({
   path: { session_id: adaSession.id },
+  query: { wait: true },
   body: {},
 });
 console.log(allowed.status); // completed — monitor mode does not block
@@ -911,7 +917,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/messages" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"message":"One more use?"}' > /dev/null
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$ADA_SESSION_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{}' | jq '{status}'
 

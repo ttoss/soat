@@ -2,7 +2,10 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import { mapGenerationRequiredAction } from 'src/lib/agentGenerationHelpers';
-import { generateConversationMessage } from 'src/lib/conversationGeneration';
+import {
+  generateConversationMessage,
+  resolveConversationAndAgent,
+} from 'src/lib/conversationGeneration';
 import {
   addConversationMessage,
   removeConversationMessage,
@@ -272,6 +275,34 @@ conversationSubResourcesRouter.post(
       ))
     ) {
       throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
+
+    // Background by default; ?wait=true blocks until the generation settles.
+    // The agent is resolved first either way, so an unknown agent is still a
+    // synchronous 404 rather than a failure the caller can only discover by
+    // polling the conversation.
+    if (ctx.query['wait'] !== 'true') {
+      await resolveConversationAndAgent({
+        conversationId: ctx.params.conversation_id,
+        agentId: body.agent_id,
+      });
+
+      generateConversationMessage({
+        conversationId: ctx.params.conversation_id,
+        agentId: body.agent_id,
+        model: body.model,
+        toolContext: body.tool_context,
+      }).catch(() => {
+        // Fire-and-forget: the reply lands as a conversation message, and
+        // failures surface on the generation record the caller polls.
+      });
+
+      ctx.status = 202;
+      ctx.body = {
+        status: 'accepted',
+        conversation_id: ctx.params.conversation_id,
+      };
+      return;
     }
 
     const result = await generateConversationMessage({

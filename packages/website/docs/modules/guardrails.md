@@ -498,7 +498,7 @@ The application supplies the `context.*` values guards evaluate over. If the gua
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id agent_01 \
   --prompt "Raise the campaign budget to 450" \
   --guardrail-context '{"max_daily_budget": 500, "cost_ceiling": 1000}'
@@ -510,6 +510,7 @@ soat create-agent-generation \
 ```ts
 const { data, error } = await soat.agents.createAgentGeneration({
   path: { agent_id: 'agent_01' },
+  query: { wait: true },
   body: {
     prompt: 'Raise the campaign budget to 450',
     guardrail_context: { max_daily_budget: 500, cost_ceiling: 1000 },
@@ -522,7 +523,7 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/agents/agent_01/generate \
+curl -X POST https://api.example.com/api/v1/agents/agent_01/generate?wait=true \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{

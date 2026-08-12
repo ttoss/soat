@@ -326,7 +326,7 @@ Start a generation the same way as for any [agent](/docs/modules/agents#examples
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-GEN_RESPONSE=$(soat create-agent-generation \
+GEN_RESPONSE=$(soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]')
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
@@ -344,6 +344,7 @@ echo "Generation $GEN_ID paused; pending tool call: $TOOL_CALL_ID"
 ```ts
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: agentId },
+  query: { wait: true },
   body: {
     messages: [
       { role: 'user', content: 'What is the status of order ord_1042?' },
@@ -360,7 +361,7 @@ console.log(toolCall.tool_name, toolCall.args); // "get_order_status" { orderId:
 <TabItem value="curl" label="curl">
 
 ```bash
-GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}')
@@ -523,7 +524,7 @@ Two steps: the model call that proposed `get_order_status`, and the resumed call
 
 ## Where to go next
 
-- **Sessions** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions): `generate-session-response` returns `requires_action` and `submit-session-tool-outputs` resumes it, with SOAT keeping the conversation history for you.
+- **Sessions** — the same pause-and-resume loop works in long-lived [sessions](/docs/modules/sessions): `generate-session-response --wait true` returns `requires_action` and `submit-session-tool-outputs` resumes it, with SOAT keeping the conversation history for you.
 - **Gate the call before it reaches your app** — attach a [guardrail](/docs/modules/guardrails) to classify each client call, or require human sign-off with [approvals](/docs/modules/approvals). See [Gate a Dangerous Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails).
 - **Reshape the output** — [`output_mapping`](/docs/modules/tools#output-mapping) applies a JSON Logic transform to the output your app submits before the model sees it.
 - **Track spend per end user** — attribute each session's generations to an [actor](/docs/modules/actors) and cap budgets: [Cap Spend Per End User](/docs/tutorials/cap-spend-per-end-user).

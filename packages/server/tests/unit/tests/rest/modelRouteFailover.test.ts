@@ -247,7 +247,7 @@ describe('Model route failover through agent generation', () => {
 
   const generate = (agentId: string, content = 'hello') => {
     return authenticatedTestClient(userToken)
-      .post(`/api/v1/agents/${agentId}/generate`)
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
       .send({ messages: [{ role: 'user', content }] });
   };
 
@@ -361,7 +361,7 @@ describe('Model route failover through agent generation', () => {
     });
 
     const res = await authenticatedTestClient(userToken)
-      .post(`/api/v1/agents/${agentId}/generate`)
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
       .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
 
     expect(res.status).toBe(200);

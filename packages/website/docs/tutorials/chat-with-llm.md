@@ -572,7 +572,7 @@ echo "WEBHOOK_ID: $WEBHOOK_ID"
 
 ## Step 10 - Trigger async generation
 
-Disable `auto_generate`, add a user message, then trigger generation with `async=true`. See [Sessions — Async Generation](/docs/modules/sessions#examples) for status codes and how to poll for completion.
+Disable `auto_generate`, add a user message, then trigger generation. Background execution is the default — the call returns `202 Accepted` immediately (pass `wait=true` when you need the reply in the response). See [Sessions — Background Generation](/docs/modules/sessions#examples) for status codes and how to poll for completion.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -587,8 +587,7 @@ soat add-session-message \
   --message "Give me 1 concise fact about Sao Paulo."
 
 soat generate-session-response \
-  --session-id "$SESSION_ID" \
-  --async true
+  --session-id "$SESSION_ID"
 ```
 
 Expected immediate response (accepted):
@@ -621,7 +620,6 @@ if (addErr) throw new Error(JSON.stringify(addErr));
 const { data: accepted, error: generateErr } =
   await adminSoat.sessions.generateSessionResponse({
     path: { session_id: SESSION_ID },
-    query: { async: true },
   });
 
 if (generateErr) throw new Error(JSON.stringify(generateErr));
@@ -643,7 +641,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/messages" \
   -H "Content-Type: application/json" \
   -d '{"message":"Give me 1 concise fact about Sao Paulo."}'
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate?async=true" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$SESSION_ID/generate" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json"
 ```
@@ -729,6 +727,6 @@ curl -s "$SOAT_BASE_URL/api/v1/conversations/$CONV_ID/messages" \
 
 ## What's next
 
-- **Manual generation**: Create a session without `auto_generate` and call `generate-session-response` (`soat generate-session-response --session-id …`) explicitly for full control over when the model responds.
+- **Manual generation**: Create a session without `auto_generate` and call `soat generate-session-response --session-id … --wait true` explicitly for full control over when the model responds (omit `--wait true` to run it in the background).
 - **Session tags**: Use `replace-session-tags` / `merge-session-tags` to attach metadata (e.g. user ID, conversation topic) to a session for filtering.
 - **Agents with tools**: Attach SOAT tools or HTTP tools to the agent so the model can take actions. See the [Agents module](/docs/modules/agents#examples).

@@ -898,7 +898,7 @@ echo "Document status endpoint: OK"
 echo "--- Re-ingesting document ---"
 REINGEST_RESP=$($SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
-  --async false \
+  --wait true \
   --chunk-strategy whole)
 REINGEST_STATUS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.status')
 REINGEST_CHUNKS=$(printf '%s\n' "$REINGEST_RESP" | jq -r '.chunk_count')
@@ -939,7 +939,7 @@ fi
 
 UNSCOPED_REINGEST_RESP=$(SOAT_TOKEN="$DOC_UNSCOPED_KEY_RAW" $SOAT_CLI reingest-document \
   --document-id "$PDF_DOC_ID" \
-  --async false \
+  --wait true \
   --chunk-strategy whole)
 UNSCOPED_REINGEST_STATUS=$(printf '%s\n' "$UNSCOPED_REINGEST_RESP" | jq -r '.status')
 if [ "$UNSCOPED_REINGEST_STATUS" != "ready" ]; then
@@ -1013,7 +1013,7 @@ CONVERTER_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$CONVERTER_FILE_ID" \
   --path-prefix /smoke/ \
-  --async false)
+  --wait true)
 CONVERTER_DOC_ID=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.id')
 CONVERTER_DOC_STATUS=$(printf '%s\n' "$CONVERTER_DOC_RESP" | jq -r '.status')
 echo "Converter-ingested document id: $CONVERTER_DOC_ID status: $CONVERTER_DOC_STATUS"
@@ -1086,7 +1086,7 @@ ASYNC_UPLOAD_RESP=$($SOAT_CLI upload-file-base64 \
   --content_type image/x-smoke-test-async)
 ASYNC_FILE_ID=$(printf '%s\n' "$ASYNC_UPLOAD_RESP" | jq -r '.id')
 
-# Async by default (no --async false) — the request returns immediately.
+# Async by default (no --wait true) — the request returns immediately.
 ASYNC_DOC_RESP=$($SOAT_CLI ingest-document \
   --project-id "$PROJECT_PUBLIC_ID" \
   --file-id "$ASYNC_FILE_ID" \
@@ -2027,7 +2027,7 @@ fi
 echo "Routed agent id: $ROUTED_AGENT_ID"
 
 echo "--- Running routed agent generation (must fail over to the healthy target) ---"
-ROUTED_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$ROUTED_AGENT_ID" \
+ROUTED_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$ROUTED_AGENT_ID" \
   --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
 ROUTED_GEN_STATUS=$(printf '%s\n' "$ROUTED_GEN_RESP" | jq -r '.status')
 if [ "$ROUTED_GEN_STATUS" != "completed" ]; then
@@ -2073,7 +2073,7 @@ fi
 echo "Inheriting agent id: $INHERITING_AGENT_ID"
 
 echo "--- Inheriting agent generation (must fail over via the project default) ---"
-INHERITED_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$INHERITING_AGENT_ID" \
+INHERITED_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$INHERITING_AGENT_ID" \
   --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
 INHERITED_GEN_STATUS=$(printf '%s\n' "$INHERITED_GEN_RESP" | jq -r '.status')
 if [ "$INHERITED_GEN_STATUS" != "completed" ]; then
@@ -2335,7 +2335,7 @@ echo "Agent id: $AGENT_ID"
 
 # 21. Run the agent — ask it to list projects (non-streaming)
 echo "--- Running agent generation ---"
-GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \
+GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' | sanitize_json)
 echo "Generation response:"
 printf '%s\n' "$GEN_RESP" | jq .
@@ -2411,7 +2411,7 @@ if [ -z "$SCHEMA_AGENT_ID" ] || [ "$SCHEMA_AGENT_ID" = "null" ]; then
   printf '%s\n' "$SCHEMA_AGENT_RESP" >&2
   exit 1
 fi
-SCHEMA_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$SCHEMA_AGENT_ID" \
+SCHEMA_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$SCHEMA_AGENT_ID" \
   --messages '[{"role":"user","content":"Give your verdict."}]' 2>&1 || true)
 if ! printf '%s\n' "$SCHEMA_GEN_RESP" | jq -e '.error.code == "OUTPUT_SCHEMA_VALIDATION_FAILED"' >/dev/null 2>&1; then
   echo "ERROR: expected OUTPUT_SCHEMA_VALIDATION_FAILED for output violating output_schema" >&2
@@ -2423,7 +2423,7 @@ $SOAT_CLI delete-agent --agent-id "$SCHEMA_AGENT_ID" --force >/dev/null 2>&1 || 
 
 # 22b. Run the same agent generation with SSE streaming
 echo "--- Running agent generation (SSE stream) ---"
-AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --agent-id "$AGENT_ID" \
+AGENT_STREAM_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"List all the projects. Use the list-projects tool."}]' \
   --stream true)
 if ! printf '%s\n' "$AGENT_STREAM_RESP" | grep -q "data: \[DONE\]"; then
@@ -2565,7 +2565,7 @@ if [ "$(printf '%s\n' "$VER_RELEASE" | jq -r '.active_release.canary_version')" 
   exit 1
 fi
 
-VER_GEN=$($SOAT_CLI create-agent-generation --agent-id "$VER_AGENT_ID" \
+VER_GEN=$($SOAT_CLI create-agent-generation --wait true --agent-id "$VER_AGENT_ID" \
   --messages '[{"role":"user","content":"Say hello."}]' | sanitize_json)
 VER_GEN_ID=$(printf '%s\n' "$VER_GEN" | jq -r '.id')
 if [ -z "$VER_GEN_ID" ] || [ "$VER_GEN_ID" = "null" ]; then
@@ -2743,7 +2743,7 @@ echo "Tool-output agent id: $TOOL_OUTPUT_AGENT_ID"
 
 # 22e. Run generation using tool_output content extracted via output_path
 echo "--- Running tool_output message content generation ---"
-TOOL_OUTPUT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$TOOL_OUTPUT_AGENT_ID" \
+TOOL_OUTPUT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$TOOL_OUTPUT_AGENT_ID" \
   --messages '[{"role":"user","content":{"type":"tool_output","tool_id":"'"$PROJECT_DETAIL_TOOL_ID"'","output_path":".name"}}]' | sanitize_json)
 echo "Tool-output generation response:"
 printf '%s\n' "$TOOL_OUTPUT_GEN_RESP" | jq .
@@ -2821,7 +2821,7 @@ echo "guardrail attach: OK"
 # (return-pending).
 echo "--- Running generation against the guardrail-gated tool ---"
 set +e
-$SOAT_CLI create-agent-generation --agent-id "$GATED_AGENT_ID" \
+$SOAT_CLI create-agent-generation --wait true --agent-id "$GATED_AGENT_ID" \
   --messages '[{"role":"user","content":"fetch the project"}]' >/dev/null 2>&1
 set -e
 
@@ -2960,7 +2960,7 @@ echo "Activity-recorded agent id: $ACT_AGENT_ID"
 
 echo "--- Running generation under the activity-rate guard ---"
 set +e
-$SOAT_CLI create-agent-generation --agent-id "$ACT_AGENT_ID" \
+$SOAT_CLI create-agent-generation --wait true --agent-id "$ACT_AGENT_ID" \
   --messages '[{"role":"user","content":"fetch the project"}]' \
   --guardrail_context '{"action_rate_ceiling":1000000}' >/dev/null 2>&1
 set -e
@@ -3172,7 +3172,7 @@ echo "MCP root alias: OK"
 echo "--- Running MCP agent generation ---"
 # Bound this call to keep smoke runs deterministic when model/tool orchestration stalls.
 set +e
-MCP_GEN_RAW=$(timeout -k 5s 30s $SOAT_CLI create-agent-generation --agent-id "$MCP_AGENT_ID" \
+MCP_GEN_RAW=$(timeout -k 5s 30s $SOAT_CLI create-agent-generation --wait true --agent-id "$MCP_AGENT_ID" \
   --messages '[{"role":"user","content":"List all agents. Use the list-agents tool exactly once."}]' 2>&1)
 MCP_GEN_EXIT=$?
 set -e
@@ -3268,7 +3268,7 @@ echo "Client Agent id: $CLIENT_AGENT_ID"
 # therefore deterministic — no retry loop, and a failure here is a real
 # regression in the client-tool pause path rather than a model coin flip.
 echo "--- Starting client-tool generation ---"
-CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$CLIENT_AGENT_ID" \
+CLIENT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$CLIENT_AGENT_ID" \
   --messages '[{"role":"user","content":"Call get_weather with cityName Paris and wait for tool output. Do not answer directly."}]' | sanitize_json)
 CLIENT_GEN_STATUS=$(printf '%s\n' "$CLIENT_GEN_RESP" | jq -r '.status')
 
@@ -3450,7 +3450,7 @@ if [ -n "$CLIENT_TRACE_ID" ] && [ "$CLIENT_TRACE_ID" != "null" ]; then
     exit 1
   fi
 
-  ZR_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$ZR_AGENT_ID" \
+  ZR_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$ZR_AGENT_ID" \
     --messages '[{"role":"user","content":"say hello"}]' | sanitize_json)
   ZR_TRACE_ID=$(printf '%s\n' "$ZR_GEN_RESP" | jq -r '.trace_id')
 
@@ -3627,7 +3627,7 @@ fi
 
 $SOAT_CLI add-session-message \
   --session-id "$EUA_SESSION_ID" --message "hello from the smoke end user" >/dev/null
-$SOAT_CLI generate-session-response --session-id "$EUA_SESSION_ID" >/dev/null
+$SOAT_CLI generate-session-response --wait true --session-id "$EUA_SESSION_ID" >/dev/null
 
 # Filter the raw meters by actor: every returned row must carry that actor, and
 # the session-driven event must carry the session too.
@@ -3937,7 +3937,7 @@ echo "SOAT Agent id: $SOAT_AGENT_ID"
 
 # 39. Run generation with the SOAT-backed agent
 echo "--- Running SOAT agent generation ---"
-SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --agent-id "$SOAT_AGENT_ID" \
+SOAT_GEN_RESP=$($SOAT_CLI create-agent-generation --wait true --agent-id "$SOAT_AGENT_ID" \
   --messages '[{"role":"user","content":"List all projects. Use the soat-platform tool."}]' | sanitize_json)
 echo "SOAT generation response:"
 printf '%s\n' "$SOAT_GEN_RESP" | jq .
@@ -4099,7 +4099,7 @@ echo "--- Generating conversation message ---"
 CONVO_GEN_STATUS="in_progress"
 CONVO_GEN_ATTEMPTS=0
 while [ "$CONVO_GEN_STATUS" = "in_progress" ] && [ "$CONVO_GEN_ATTEMPTS" -lt "30" ]; do
-  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --conversation-id "$NAMED_CONVO_ID" --agent_id "$CONVO_GEN_AGENT_ID" | sanitize_json)
+  CONVO_GEN_RESP=$($SOAT_CLI generate-conversation-message --wait true --conversation-id "$NAMED_CONVO_ID" --agent_id "$CONVO_GEN_AGENT_ID" | sanitize_json)
   CONVO_GEN_STATUS=$(printf '%s\n' "$CONVO_GEN_RESP" | jq -r '.status')
   CONVO_GEN_ATTEMPTS=$((CONVO_GEN_ATTEMPTS + 1))
   if [ "$CONVO_GEN_STATUS" = "in_progress" ]; then

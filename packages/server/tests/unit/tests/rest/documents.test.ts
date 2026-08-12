@@ -962,7 +962,7 @@ describe('Documents', () => {
       expect(response.body.error.code).toBe('UNSUPPORTED_FILE_TYPE');
     });
 
-    test('?async=false returns 201 with status ready synchronously', async () => {
+    test('?wait=true returns 201 with status ready synchronously', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'sync-ingest.pdf',
@@ -970,7 +970,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -979,7 +979,7 @@ describe('Documents', () => {
       expect(status.chunk_count).toBeGreaterThan(0);
     });
 
-    test('?async=false sets failure reason on unparseable file', async () => {
+    test('?wait=true sets failure reason on unparseable file', async () => {
       extractPdfPagesSpy.mockResolvedValueOnce([]);
 
       const fileId = await uploadFile({
@@ -989,7 +989,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -998,7 +998,7 @@ describe('Documents', () => {
       expect(status.error).toBe('FILE_PARSE_FAILED');
     });
 
-    test('?async=false sets failure reason RESOURCE_NOT_FOUND when file bytes are missing from storage', async () => {
+    test('?wait=true sets failure reason RESOURCE_NOT_FOUND when file bytes are missing from storage', async () => {
       const fileId = await uploadFile({
         buffer: ONE_PAGE_PDF_BUFFER,
         filename: 'bytes-missing.pdf',
@@ -1013,7 +1013,7 @@ describe('Documents', () => {
       fs.unlinkSync(fileRecord!.storagePath);
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -1033,7 +1033,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -1055,7 +1055,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -1064,7 +1064,7 @@ describe('Documents', () => {
       expect(status.error).toBe('boom while parsing');
     });
 
-    test('?async=false on a file over the sync limit returns 413 (issue #3)', async () => {
+    test('?wait=true on a file over the sync limit returns 413 (issue #3)', async () => {
       const prev = process.env.SYNC_INGESTION_MAX_BYTES;
       process.env.SYNC_INGESTION_MAX_BYTES = '16';
 
@@ -1076,12 +1076,12 @@ describe('Documents', () => {
         });
 
         const ingestRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/documents/ingest?async=false')
+          .post('/api/v1/documents/ingest?wait=true')
           .send({ file_id: fileId, project_id: projectId });
 
         expect(ingestRes.status).toBe(413);
         expect(ingestRes.body.error.code).toBe('FILE_TOO_LARGE_FOR_SYNC');
-        expect(ingestRes.body.error.message).toMatch(/async/i);
+        expect(ingestRes.body.error.message).toMatch(/background/i);
       } finally {
         if (prev === undefined) delete process.env.SYNC_INGESTION_MAX_BYTES;
         else process.env.SYNC_INGESTION_MAX_BYTES = prev;
@@ -1123,7 +1123,7 @@ describe('Documents', () => {
         });
 
         const ingestRes = await authenticatedTestClient(userToken)
-          .post('/api/v1/documents/ingest?async=false')
+          .post('/api/v1/documents/ingest?wait=true')
           .send({ file_id: fileId, project_id: projectId });
 
         // A garbage env override must not block sync ingestion of a small file.
@@ -1143,7 +1143,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({
           file_id: fileId,
           project_id: projectId,
@@ -1166,7 +1166,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
 
       expect(ingestRes.status).toBe(201);
@@ -1239,7 +1239,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       expect(ingestRes.status).toBe(201);
       const docId = ingestRes.body.id as string;
@@ -1266,7 +1266,7 @@ describe('Documents', () => {
       extractSpy.mockResolvedValueOnce([]);
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
@@ -1405,7 +1405,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       expect(ingestRes.status).toBe(201);
       const docId = ingestRes.body.id as string;
@@ -1414,7 +1414,7 @@ describe('Documents', () => {
 
       extractSpy.mockResolvedValueOnce(['Page 1', 'Page 2', 'Page 3']);
       const reRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .post(`/api/v1/documents/${docId}/ingest?wait=true`)
         .send({ chunk_strategy: 'whole' });
 
       expect(reRes.status).toBe(201);
@@ -1432,7 +1432,7 @@ describe('Documents', () => {
       });
 
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
@@ -1454,7 +1454,7 @@ describe('Documents', () => {
         contentType: 'application/pdf',
       });
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
@@ -1464,7 +1464,7 @@ describe('Documents', () => {
       );
 
       const reRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .post(`/api/v1/documents/${docId}/ingest?wait=true`)
         .send({});
 
       expect(reRes.status).toBe(201);
@@ -1485,7 +1485,7 @@ describe('Documents', () => {
         contentType: 'application/pdf',
       });
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
@@ -1502,7 +1502,7 @@ describe('Documents', () => {
         contentType: 'application/pdf',
       });
       const ingestRes = await authenticatedTestClient(userToken)
-        .post('/api/v1/documents/ingest?async=false')
+        .post('/api/v1/documents/ingest?wait=true')
         .send({ file_id: fileId, project_id: projectId });
       const docId = ingestRes.body.id as string;
 
@@ -1558,7 +1558,7 @@ describe('Documents', () => {
 
     test('POST /documents/:id/ingest (re-ingest) succeeds', async () => {
       const res = await authenticatedTestClient(unscopedKey)
-        .post(`/api/v1/documents/${docId}/ingest?async=false`)
+        .post(`/api/v1/documents/${docId}/ingest?wait=true`)
         .send({});
 
       expect(res.status).toBe(201);

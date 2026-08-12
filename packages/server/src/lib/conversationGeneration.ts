@@ -14,9 +14,12 @@ type ConversationMessage = InstanceType<(typeof db)['ConversationMessage']> & {
   actor?: InstanceType<(typeof db)['Actor']> | null;
 };
 
-type GenerationContext = {
+type ConversationAndAgent = {
   conversation: InstanceType<(typeof db)['Conversation']>;
   generatingAgent: InstanceType<(typeof db)['Agent']>;
+};
+
+type GenerationContext = ConversationAndAgent & {
   messages: Array<ConversationMessage>;
   snapshotPosition: number;
 };
@@ -154,10 +157,17 @@ const runGenerationForAgent = async (args: {
   });
 };
 
-const loadGenerationContext = async (args: {
+/**
+ * Resolves the conversation and the agent that must generate in it, throwing
+ * `RESOURCE_NOT_FOUND` for either. Exported because a background generation
+ * has to run these same two checks *before* answering `202` — otherwise an
+ * unknown agent would turn from a synchronous `404` into a failure the caller
+ * could only discover by polling.
+ */
+export const resolveConversationAndAgent = async (args: {
   conversationId: string;
   agentId: string;
-}): Promise<GenerationContext> => {
+}): Promise<ConversationAndAgent> => {
   const conversation = await db.Conversation.findOne({
     where: { publicId: args.conversationId },
   });
@@ -173,6 +183,18 @@ const loadGenerationContext = async (args: {
   if (!generatingAgent) {
     throw new DomainError('RESOURCE_NOT_FOUND', 'Agent not found');
   }
+
+  return { conversation, generatingAgent };
+};
+
+const loadGenerationContext = async (args: {
+  conversationId: string;
+  agentId: string;
+}): Promise<GenerationContext> => {
+  const { conversation, generatingAgent } = await resolveConversationAndAgent({
+    conversationId: args.conversationId,
+    agentId: args.agentId,
+  });
 
   const maxContextMessages = (
     generatingAgent as unknown as { maxContextMessages: number | null }

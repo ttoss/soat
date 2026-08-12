@@ -29,7 +29,7 @@ describe('Agent Generation Routes', () => {
 
   test('POST /api/v1/agents/:id/generate returns 401 when unauthenticated', async () => {
     const response = await testClient
-      .post('/api/v1/agents/agent_test_id/generate')
+      .post('/api/v1/agents/agent_test_id/generate?wait=true')
       .send({ messages: [{ role: 'user', content: 'hello' }] });
 
     expect(response.status).toBe(401);
@@ -107,7 +107,7 @@ describe('Agent Generation Routes', () => {
         new DomainError('AI_PROVIDER_NOT_FOUND', 'AI provider not found')
       );
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Hello' }] });
 
       expect(response.status).toBe(400);
@@ -186,7 +186,7 @@ describe('Agent Generation Routes', () => {
 
     test('returns 400 when messages is missing or empty', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [] });
 
       expect(response.status).toBe(400);
@@ -194,7 +194,7 @@ describe('Agent Generation Routes', () => {
 
     test('returns 404 when user cannot access target agent', async () => {
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(404);
@@ -205,7 +205,7 @@ describe('Agent Generation Routes', () => {
       // a separate code path from the normal (non-depth-guard) not-found
       // case covered above.
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           max_call_depth: 0,
@@ -218,7 +218,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockRejectedValueOnce(new Error('boom'));
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(500);
@@ -257,7 +257,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockResolvedValueOnce(mockResult as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(200);
@@ -274,7 +274,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockResolvedValueOnce(mockResult);
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [
             {
@@ -317,7 +317,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockResolvedValueOnce(mockResult);
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [
             {
@@ -346,7 +346,7 @@ describe('Agent Generation Routes', () => {
       );
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(response.status).toBe(400);
@@ -370,7 +370,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockResolvedValueOnce(readable as ReadableStream);
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
 
       expect(response.status).toBe(200);
@@ -388,7 +388,7 @@ describe('Agent Generation Routes', () => {
       mockCreateGeneration.mockResolvedValueOnce(errorStream as ReadableStream);
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }], stream: true });
 
       expect(response.status).toBe(200);
@@ -399,7 +399,7 @@ describe('Agent Generation Routes', () => {
       // Do NOT queue a mock — let the real createGeneration run so the
       // depth-guard branch (with agent resolution) is exercised.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           max_call_depth: 0,
@@ -649,7 +649,7 @@ describe('Agent Generation Routes', () => {
       nextToolCall = { name: 'show_dialog', args: { message: 'confirm?' } };
 
       const paused = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${pausingAgentId}/generate`)
+        .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'ask me' }],
           action_id: 'act_pause_probe',
@@ -814,7 +814,7 @@ describe('Agent Generation Routes', () => {
         nextContent = blob;
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
           .send({ messages: [{ role: 'user', content: 'write a theme' }] });
 
         expect(response.status).toBe(502);
@@ -838,7 +838,7 @@ describe('Agent Generation Routes', () => {
         nextContent = blob;
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
           .send({ messages: [{ role: 'user', content: 'write a theme' }] });
 
         const trace = await db.Trace.findOne({
@@ -852,7 +852,7 @@ describe('Agent Generation Routes', () => {
 
       test('an ordinary answer from the same tool-bound agent still completes', async () => {
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${pausingAgentId}/generate`)
+          .post(`/api/v1/agents/${pausingAgentId}/generate?wait=true`)
           .send({ messages: [{ role: 'user', content: 'write a theme' }] });
 
         expect(response.status).toBe(200);
@@ -865,7 +865,7 @@ describe('Agent Generation Routes', () => {
         nextContent = blob;
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${agentId}/generate`)
+          .post(`/api/v1/agents/${agentId}/generate?wait=true`)
           .send({ messages: [{ role: 'user', content: 'write a theme' }] });
 
         expect(response.status).toBe(200);
@@ -893,7 +893,7 @@ describe('Agent Generation Routes', () => {
         nextContent = JSON.stringify({ name: 'show_dialog' });
 
         const response = await authenticatedTestClient(userToken)
-          .post(`/api/v1/agents/${schemaAgentRes.body.id}/generate`)
+          .post(`/api/v1/agents/${schemaAgentRes.body.id}/generate?wait=true`)
           .send({ messages: [{ role: 'user', content: 'write a theme' }] });
 
         expect(response.status).toBe(200);

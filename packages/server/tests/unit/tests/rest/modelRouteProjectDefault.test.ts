@@ -524,7 +524,7 @@ describe('Project default model route', () => {
 
       // The next generation runs on the new route's targets.
       const generated = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agent.body.id}/generate`)
+        .post(`/api/v1/agents/${agent.body.id}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
       expect(generated.status).toBe(200);
       const record = await authenticatedTestClient(userToken).get(
@@ -711,7 +711,7 @@ describe('Project default model route', () => {
       expect(agent.status).toBe(201);
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agent.body.id}/generate`)
+        .post(`/api/v1/agents/${agent.body.id}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(res.status).toBe(200);

@@ -1097,7 +1097,7 @@ describe('SOAT self-call', () => {
         args: { project_id: projectId },
       };
       const res = await authenticatedTestClient(token)
-        .post(`/api/v1/agents/${continuationAgentId}/generate`)
+        .post(`/api/v1/agents/${continuationAgentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'Use your tool.' }] });
       expect(res.status).toBe(200);
       return res.body.id as string;
