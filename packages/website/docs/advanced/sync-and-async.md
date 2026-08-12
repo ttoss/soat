@@ -14,7 +14,7 @@ This page is the canonical definition. Module pages describe what their own hand
 
 | | Value | Response | Use when |
 | --- | --- | --- | --- |
-| **Default** | `wait` omitted or `false` | `202 Accepted` + a handle to poll | The work may take a while and you have somewhere to put the result: a poll loop, a webhook, a UI that refreshes |
+| **Default** | `wait` omitted or `false` | `202 Accepted` — or `201 Created` when a run is created — plus a handle to poll (see [Status codes](#status-codes)) | The work may take a while and you have somewhere to put the result: a poll loop, a webhook, a UI that refreshes |
 | **Blocking** | `wait=true` | `200`/`201` + the settled result | A script that needs the answer on the next line, or any flow that must observe `requires_action` |
 
 `wait` is a **query parameter** on the generation and ingestion endpoints, and a **body field** on the run endpoints (`start-orchestration-run`, `start-eval-run`) — the same name and the same meaning either way.
@@ -38,11 +38,11 @@ soat create-agent-generation --agent-id agent_01 --wait true \
 | [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message) | `conversation_id` | `GET /conversations/{conversation_id}/messages` |
 | [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and `POST /documents/{document_id}/ingest` | the document, in `status: pending` | `GET /documents/{document_id}/status` |
 | [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | `GET /orchestration-runs/{run_id}` |
-| [`POST /evaluation-runs`](../modules/evaluations.md) | — `wait: true` is currently required; background runs are a later phase | — |
+| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | `GET /evals/{eval_id}/runs/{run_id}` |
 
 ## What the default does **not** change
 
-Backgrounding defers the slow part, never the checks. Everything that can reject a request still runs **before** the `202`:
+Backgrounding defers the slow part, never the checks. Everything that can reject a request still runs **before** the accepted response:
 
 - **Authentication and permissions** — a caller without the IAM action gets `401`/`403`, not an accepted job that fails later.
 - **Input validation** — a malformed body is `400 VALIDATION_FAILED`.
@@ -50,7 +50,23 @@ Backgrounding defers the slow part, never the checks. Everything that can reject
 - **Admission control** — a breached [quota](../modules/quotas.md) is `429`, and the agent-to-agent [call-depth guard](../modules/agents.md#nested-agent-calls) still fires.
 - **The record write** — the generation record exists before the response is written, so the `generation_id` you receive is immediately readable. It reports `in_progress` until the run reaches `completed` or `failed`.
 
-The practical consequence: a `202` means *admitted*, and the only failures you have to discover by polling are the ones that happen during the model call itself.
+The practical consequence: an accepted response means *admitted*, and the only failures you have to discover by polling are the ones that happen during the model call itself.
+
+## Status codes
+
+The accepted response is **not** the same status everywhere, because the two families of
+endpoint are doing different things:
+
+| Family | Background | Blocking | Why |
+| --- | --- | --- | --- |
+| Work on an existing resource — [agent](../modules/agents.md#background-generation), [session](../modules/sessions.md#background-generation) and [conversation](../modules/conversations.md#generating-the-next-message) generation, [document ingestion](../modules/documents.md#async-file-ingestion) | `202 Accepted` | `200` (`201` for ingestion) | The request is *accepting work*; there is no new resource whose creation the status could report |
+| Run creation — [orchestration runs](../modules/orchestrations.md#durable-background-execution), [eval runs](../modules/evaluations.md#synchronous-and-queued-runs) | `201 Created` | `201 Created` | A run row is created either way and is immediately readable; the mode shows up in its `status` (`queued`), not in the status code |
+
+So branch on `wait` and on the run's own `status` field, never on `202` alone — a queued
+orchestration or eval run answers `201`.
+
+The rule that *is* uniform: the response always carries something you can poll, and a caller
+that omitted `wait` never receives a settled result.
 
 ## Two combinations that are resolved for you
 
