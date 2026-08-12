@@ -22,6 +22,7 @@ A module is a named resource (e.g., `files`, `users`) that is exposed through th
 - [ ] Tests updated in `packages/server/tests/unit/tests/<module>.test.ts`
 - [ ] Live QA pass run for the new/changed behavior against a running server
 - [ ] Formation schema synced if the module has a formation resource type (see [Formations Sync](#formations-sync))
+- [ ] Any operation that can outlast a request exposes the `wait` toggle, defaulting to background (see `.claude/rules/sync-async.md`)
 
 ## REST
 
