@@ -139,6 +139,27 @@ The provider's `config` object accepts two fields:
 
 An `apiKey` in `config` is accepted as an express-mode fallback when no secret is linked, the same as for `bedrock`.
 
+### Listing the models a provider can run
+
+`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own credentials and configuration, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry.
+
+Which models are reachable is a property of the **credential**, not of the provider type: a `vertex` provider sees only the publisher models its Google Cloud project and location serve, and a `bedrock` provider only the foundation models enabled in its region. Two providers of the same slug in the same project can legitimately return different lists, which is why the listing hangs off a provider rather than off a slug. Reading it is how a caller avoids pinning a model that fails at generation time with a 404 that reads like an auth failure.
+
+Each entry carries what the provider reports and omits what it does not: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves today but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id rather than the bare model id.
+
+Not every provider type can answer:
+
+| Provider | Listing |
+|---|---|
+| `openai`, `groq`, `xai`, `gateway`, `custom` | `GET {base_url}/models`, so a self-hosted or proxied endpoint works too |
+| `anthropic` | `GET /v1/models` |
+| `google` | AI Studio's model list |
+| `vertex` | the publisher models for the provider's `config.project` and `config.location` |
+| `bedrock` | `ListFoundationModels` in the provider's `config.region` |
+| `azure`, `ollama` | **unsupported** — Azure lists deployments an operator named, and Ollama lists whatever was pulled onto that host, so neither answers "which models can this provider run" |
+
+Errors: `MODEL_LISTING_UNSUPPORTED` (400) for `azure` and `ollama`; `AI_PROVIDER_MISCONFIGURED` (400) when the record lacks what the listing needs (a Vertex `config.project`, a Bedrock region, a linked API key); `MODEL_LISTING_FAILED` (502) when the provider rejects the request or answers with something other than JSON — its own status and message are carried in the error message. Authorized by `ai-providers:ListAiProviderModels` on the provider's project.
+
 ### Price overrides
 
 A project can price its own provider instances without a global admin. A **per-provider price override** is a [price-book](./usage.md#pricebook) row bound to a specific AI provider — an enterprise-negotiated rate or a gateway with markup — that wins over the global default when [usage](./usage.md) cost is computed for that provider. Manage them with:

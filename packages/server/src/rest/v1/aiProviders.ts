@@ -4,6 +4,7 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { db } from 'src/db';
 import { DomainError } from 'src/errors';
+import { listAiProviderModels } from 'src/lib/aiProviderModels';
 import {
   createAiProvider,
   deleteAiProvider,
@@ -265,6 +266,35 @@ aiProvidersRouter.patch(
     });
 
     ctx.body = updated;
+  }
+);
+
+aiProvidersRouter.get(
+  '/ai-providers/:ai_provider_id/models',
+  async (ctx: Context) => {
+    requireAuth(ctx);
+
+    const existing = await getAiProvider({ id: ctx.params.ai_provider_id });
+    if (!existing) {
+      throw new DomainError('RESOURCE_NOT_FOUND', 'AI provider not found');
+    }
+
+    const allowed = await ctx.authUser.isAllowed({
+      projectPublicId: existing.project_id!,
+      action: 'ai-providers:ListAiProviderModels',
+      resource: buildSrn({
+        projectPublicId: existing.project_id!,
+        resourceType: 'aiProvider',
+        resourceId: existing.id,
+      }),
+    });
+    if (!allowed) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
+
+    ctx.body = await listAiProviderModels({
+      aiProviderId: ctx.params.ai_provider_id,
+    });
   }
 );
 

@@ -3747,6 +3747,13 @@ if [ "$OVERRIDE_GET_OK" != "true" ]; then
 fi
 echo "Per-provider price override: OK"
 
+# 34d-ter. Model listing — the smoke stack's provider is `ollama`, whose model
+# list is whatever that host pulled rather than what the provider can run, so
+# the documented 400 is the correct end-to-end answer here. This still exercises
+# routing, auth and the permission check on the new operation.
+expect_cli_error_status 400 list-ai-provider-models --ai_provider_id "$AI_PROVIDER_ID"
+echo "Model listing rejects an unsupported provider: OK"
+
 # 34d-bis. AI provider deletion policy — soft dependents (price overrides) block
 # a plain delete with 409 but clear under force=true; live references (agents)
 # always block, even with force. Uses throwaway providers so the shared

@@ -27,6 +27,11 @@
       "description": "Delete an AI provider"
     },
     {
+      "operationId": "listAiProviderModels",
+      "action": "ai-providers:ListAiProviderModels",
+      "description": "List the models an AI provider can run"
+    },
+    {
       "operationId": "getAiProviderPrices",
       "action": "ai-providers:GetAiProviderPrices",
       "description": "List per-provider price overrides for an AI provider"
