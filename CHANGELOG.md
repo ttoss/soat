@@ -3,6 +3,33 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.4](https://github.com/ttoss/soat/compare/v0.20.3...v0.20.4) (2026-08-12)
+
+### Bug Fixes
+
+* **server:** sum usage quantities as exact decimals ([#958](https://github.com/ttoss/soat/issues/958)) ([1075a04](https://github.com/ttoss/soat/commit/1075a04555a773425b8f53fc36af0534575f6a1a)), closes [#953](https://github.com/ttoss/soat/issues/953)
+
+### Features
+
+* **server:** source AWS credentials from the provider chain for vertex ([#959](https://github.com/ttoss/soat/issues/959)) ([b6338f9](https://github.com/ttoss/soat/commit/b6338f939bc6dbc1cd740e0449b8a159ba931cea))
+
+## [0.20.3](https://github.com/ttoss/soat/compare/v0.20.2...v0.20.3) (2026-08-11)
+
+### Bug Fixes
+
+* **cli:** stop declaring union body properties as strings ([#956](https://github.com/ttoss/soat/issues/956)) ([15a47e7](https://github.com/ttoss/soat/commit/15a47e785fc8807d1ee950bf2c524c53ba4b100f)), closes [#774](https://github.com/ttoss/soat/issues/774) [#955](https://github.com/ttoss/soat/issues/955)
+* **server:** inherit exception severity on activity entries, document feed retention ([#943](https://github.com/ttoss/soat/issues/943)) ([9cdf28e](https://github.com/ttoss/soat/commit/9cdf28e636b4f99c6c063ab5d0120aa4011a5478)), closes [high-volume](https://github.com/hi/issues/volume)
+* **website:** use MDX directive syntax for titled admonitions ([#942](https://github.com/ttoss/soat/issues/942)) ([ba5e251](https://github.com/ttoss/soat/commit/ba5e2514c363d721328ed8ebcaf79e5ad6c8a286))
+
+### Features
+
+* **server:** add a per-tool context_keys allowlist ([#949](https://github.com/ttoss/soat/issues/949)) ([fdfc095](https://github.com/ttoss/soat/commit/fdfc0953170120bff6ac2594edb4f523b376d167))
+* **server:** carry tool_context on orchestration runs ([#946](https://github.com/ttoss/soat/issues/946)) ([8a38e95](https://github.com/ttoss/soat/commit/8a38e95eec5bc8295cb14887e92f4f48dbfb4bc6)), closes [#945](https://github.com/ttoss/soat/issues/945)
+* **server:** carry tool_context through task automation dispatches ([#951](https://github.com/ttoss/soat/issues/951)) ([3c4f6a9](https://github.com/ttoss/soat/commit/3c4f6a994116f90ee245ef80fcac0a6198f196e7)), closes [850/#851](https://github.com/ttoss/soat/issues/851) [#950](https://github.com/ttoss/soat/issues/950) [786/#887](https://github.com/ttoss/soat/issues/887)
+* **server:** make the tool-context header prefix configurable ([#947](https://github.com/ttoss/soat/issues/947)) ([00e3bee](https://github.com/ttoss/soat/commit/00e3bee875da87217f971b1ed575c3e3494da46d)), closes [850/#851](https://github.com/ttoss/soat/issues/851) [#945](https://github.com/ttoss/soat/issues/945)
+* **server:** report measured quantities in the usage rollup ([#953](https://github.com/ttoss/soat/issues/953)) ([f0c8efa](https://github.com/ttoss/soat/commit/f0c8efa3142d9cbd951fe41551e23c35a5976fde)), closes [#952](https://github.com/ttoss/soat/issues/952)
+* **server:** resolve {{context:<key>}} tokens in tool headers ([#948](https://github.com/ttoss/soat/issues/948)) ([78929d2](https://github.com/ttoss/soat/commit/78929d24af3e659a548bea788ac4046a00ee2b7d)), closes [#945](https://github.com/ttoss/soat/issues/945) [850/#851](https://github.com/ttoss/soat/issues/851)
+
 ## [0.20.2](https://github.com/ttoss/soat/compare/v0.20.1...v0.20.2) (2026-08-10)
 
 **Note:** Version bump only for package ttoss-soat

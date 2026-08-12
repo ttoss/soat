@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.4](https://github.com/ttoss/soat/compare/v0.20.3...v0.20.4) (2026-08-12)
+
+**Note:** Version bump only for package @soat/postgresdb
+
+## [0.20.3](https://github.com/ttoss/soat/compare/v0.20.2...v0.20.3) (2026-08-11)
+
+### Features
+
+* **server:** add a per-tool context_keys allowlist ([#949](https://github.com/ttoss/soat/issues/949)) ([fdfc095](https://github.com/ttoss/soat/commit/fdfc0953170120bff6ac2594edb4f523b376d167))
+* **server:** carry tool_context on orchestration runs ([#946](https://github.com/ttoss/soat/issues/946)) ([8a38e95](https://github.com/ttoss/soat/commit/8a38e95eec5bc8295cb14887e92f4f48dbfb4bc6)), closes [#945](https://github.com/ttoss/soat/issues/945)
+* **server:** carry tool_context through task automation dispatches ([#951](https://github.com/ttoss/soat/issues/951)) ([3c4f6a9](https://github.com/ttoss/soat/commit/3c4f6a994116f90ee245ef80fcac0a6198f196e7)), closes [850/#851](https://github.com/ttoss/soat/issues/851) [#950](https://github.com/ttoss/soat/issues/950) [786/#887](https://github.com/ttoss/soat/issues/887)
+
 ## [0.20.2](https://github.com/ttoss/soat/compare/v0.20.1...v0.20.2) (2026-08-10)
 
 **Note:** Version bump only for package @soat/postgresdb

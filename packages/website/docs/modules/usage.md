@@ -200,7 +200,7 @@ The token fields describe `llm_tokens` alone, so every group and the `totals` al
 }
 ```
 
-An infra meter therefore aggregates to what it measured. Without `components`, a `storage`, `api_request` or `compute_execution` bucket reads as all-zero — indistinguishable from a meter that recorded nothing. As on the receipt, a `null` `cost_usd` means no price row covered the component; the quantity is still captured and does not mean the usage was free. Entries are keyed by `component` **and** `unit` (a quantity is only additive within one unit) and sorted by `component` then `unit`, so the array is stable across calls.
+An infra meter therefore aggregates to what it measured. Without `components`, a `storage`, `api_request` or `compute_execution` bucket reads as all-zero — indistinguishable from a meter that recorded nothing. As on the receipt, a `null` `cost_usd` means no price row covered the component; the quantity is still captured and does not mean the usage was free. Entries are keyed by `component` **and** `unit` (a quantity is only additive within one unit) and sorted by `component` then `unit`, so the array is stable across calls. Quantities are summed as exact decimals, so a bucket of fractional measures reports `0.3` rather than a float-drifted `0.30000000000000004` — the figure is safe to display and to re-bill from.
 
 #### Narrowing to one meter
 
