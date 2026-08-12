@@ -40,6 +40,7 @@
     "croner": "^10.0.1",
     "debug": "^4.4.3",
     "dotenv": "^17.4.2",
+    "google-auth-library": "^10.9.1",
     "json-logic-engine": "^5.0.7",
     "jsonwebtoken": "^9.0.3",
     "pg": "^8.22.0",

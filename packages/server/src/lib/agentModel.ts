@@ -12,6 +12,7 @@ import type { AiProviderSlug } from '@soat/postgresdb';
 import type { LanguageModel } from 'ai';
 
 import { DomainError } from '../errors';
+import { loadAwsExternalAccountAuthClient } from './vertexAwsCredentials';
 
 type BuildModelArgs = {
   provider: AiProviderSlug;
@@ -200,8 +201,34 @@ export const resolveVertexSettings = (args: {
     : { project, location };
 };
 
+/**
+ * Attaches an AWS-federated auth client when Application Default Credentials
+ * are in play and the configured ADC file federates an AWS identity.
+ *
+ * Kept out of `resolveVertexSettings` so that stays a pure function of the
+ * provider record: this branch depends on the process environment and the
+ * file it names, neither of which the provider row knows about.
+ *
+ * Only the ADC case is touched. Express mode carries no `project`, and a
+ * linked service-account key already produced its own `googleAuthOptions` —
+ * both are explicit choices the provider record made, and neither should be
+ * overridden by what happens to be on disk.
+ */
+const withAwsWorkloadIdentity = (settings: VertexSettings): VertexSettings => {
+  if (!('project' in settings) || settings.googleAuthOptions) {
+    return settings;
+  }
+  const authClient = loadAwsExternalAccountAuthClient();
+  if (!authClient) {
+    return settings;
+  }
+  return { ...settings, googleAuthOptions: { authClient } };
+};
+
 const buildVertexModel = (args: BuildModelArgs): LanguageModel => {
-  return createVertex(resolveVertexSettings(args))(args.model);
+  return createVertex(withAwsWorkloadIdentity(resolveVertexSettings(args)))(
+    args.model
+  );
 };
 
 const buildOllamaModel = (args: BuildModelArgs): LanguageModel => {
