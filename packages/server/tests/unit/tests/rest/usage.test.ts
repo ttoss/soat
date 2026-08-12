@@ -133,7 +133,7 @@ describe('Usage', () => {
     agentId = agentRes.body.id;
 
     const genRes = await authenticatedTestClient(userToken)
-      .post(`/api/v1/agents/${agentId}/generate`)
+      .post(`/api/v1/agents/${agentId}/generate?wait=true`)
       .send({ messages: [{ role: 'user', content: 'hello' }] });
     expect(genRes.status).toBe(200);
     expect(genRes.body.status).toBe('completed');
@@ -423,7 +423,7 @@ describe('Usage', () => {
   describe('trigger and action attribution', () => {
     test('records a caller-supplied action_id and filters by it', async () => {
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'labelled' }],
           action_id: 'action-A',
@@ -789,7 +789,7 @@ describe('Usage', () => {
       await seed('output_tokens', '0.000002');
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'priced' }] });
       expect(genRes.status).toBe(200);
 
@@ -846,7 +846,7 @@ describe('Usage', () => {
       );
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'override' }] });
       expect(genRes.status).toBe(200);
 
@@ -937,7 +937,7 @@ describe('Usage', () => {
       await seed('output_tokens', '0.000001');
 
       const genRes = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'receipt' }] });
       expect(genRes.status).toBe(200);
 
@@ -1377,7 +1377,7 @@ describe('Usage', () => {
 
     const generate = async (content: string): Promise<string> => {
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content }] });
       expect(res.status).toBe(200);
       return res.body.id as string;

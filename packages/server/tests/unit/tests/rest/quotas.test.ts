@@ -1242,7 +1242,7 @@ describe('Quotas', () => {
       });
 
       const blocked = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/agents/${agentPublicId}/generate`)
+        .post(`/api/v1/agents/${agentPublicId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(blocked.status).toBe(429);

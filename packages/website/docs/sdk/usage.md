@@ -96,6 +96,7 @@ if (msgError) throw new Error(JSON.stringify(msgError));
 const { data: reply, error: genError } =
   await soat.conversations.generateConversationMessage({
     path: { conversation_id: conv.id },
+    query: { wait: true },
     body: { actor_id: 'act_...' },
   });
 
@@ -147,6 +148,7 @@ if (agentError) throw new Error(JSON.stringify(agentError));
 
 const { data: gen, error: genError } = await soat.agents.createAgentGeneration({
   path: { agent_id: agent.id },
+  query: { wait: true },
   body: {
     messages: [{ role: 'user', content: 'What files are available?' }],
   },

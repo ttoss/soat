@@ -330,6 +330,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
 
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: agent.id },
+  query: { wait: true },
   body: {
     messages: [
       { role: 'user', content: 'Summarize reports/2026-08.txt in one sentence.' },
@@ -346,7 +347,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Reports Analyst\",\"instructions\":\"You read report files from object storage.\",\"tool_bindings\":[{\"tool_id\":\"$S3_TOOL_ID\"}]}" | jq -r '.id')
 
-curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Summarize reports/2026-08.txt in one sentence."}]}' | jq '{status}'
 ```

@@ -98,11 +98,15 @@ The unique index `(conversation_id, position)` enforces that no two messages sha
 Any [Agent](./agents.md) can generate the next message from the conversation history. For a provider-backed agent driving a fresh thread, see [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
 
 ```
-POST /api/v1/conversations/:id/generate
+POST /api/v1/conversations/:id/generate?wait=true
 { "agent_id": "agent_...", "stream": false }
 ```
 
-Flow:
+The call runs in the background by default and returns `202 Accepted` immediately (`{ "status": "accepted", "conversation_id": "conv_..." }`); the reply lands as a new message when it completes, so poll `GET /conversations/:id/messages` for it. The agent is still resolved **synchronously**, so an unknown `agent_id` is a `404` rather than a failure you discover by polling.
+
+Pass `?wait=true` to block and receive the result inline, as the flow below describes. Waiting is required to observe `requires_action` (client tools), so a client-tool flow should always pass it. `wait` is the platform-wide sync/async toggle — the same knob as on [agent generation](./agents.md#background-generation), [document ingestion](./documents.md#async-file-ingestion), and [sessions](./sessions.md#background-generation). A `soat` tool call always waits.
+
+Flow (with `?wait=true`):
 
 1. Load all messages ordered by `position`.
 2. Compose the effective system prompt from the agent's `instructions`.
@@ -117,6 +121,7 @@ Flow:
    ```ts
    const { data } = await soat.conversations.generateConversationMessage({
      path: { conversation_id },
+     query: { wait: true },
      body: { agent_id: agentId },
    });
    // data.content is always the AI-generated text when data.status === 'completed'
@@ -217,7 +222,7 @@ curl -X POST https://api.example.com/api/v1/conversations/conv_01/messages \
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat generate-conversation-message \
+soat generate-conversation-message --wait true \
   --conversation-id conv_01 \
   --agent-id agent_01
 ```
@@ -229,6 +234,7 @@ soat generate-conversation-message \
 // SDK
 const { data: reply } = await soat.conversations.generateConversationMessage({
   path: { conversation_id: 'conv_01' },
+  query: { wait: true },
   body: { agent_id: 'agent_01' },
 });
 ```
@@ -237,7 +243,7 @@ const { data: reply } = await soat.conversations.generateConversationMessage({
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/conversations/conv_01/generate \
+curl -X POST https://api.example.com/api/v1/conversations/conv_01/generate?wait=true \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{"agent_id": "agent_01"}'

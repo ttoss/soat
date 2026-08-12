@@ -606,7 +606,7 @@ Send a user message that requires combining personal customer facts (from memory
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"Alice has a P1 outage since 3 hours ago. How should we handle it and how do we best reach her?"}]' \
   | jq '{status: .status, output: .output.content}'
@@ -634,6 +634,7 @@ Neither fact appeared in the user message.
 ```ts
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: AGENT_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -654,7 +655,7 @@ console.log(generation.output.content);
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Alice has a P1 outage since 3 hours ago. How should we handle it and how do we best reach her?"}]}' \
@@ -676,7 +677,7 @@ Send a message that introduces a new fact not yet in memory:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"Just so you know, Alice moved to the West Coast and is now in the PT timezone."}]' \
   | jq '{status: .status, output: .output.content}'
@@ -688,6 +689,7 @@ soat create-agent-generation \
 ```ts
 const { data: gen2 } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: AGENT_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -705,7 +707,7 @@ console.log(gen2.status); // "completed"
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"Just so you know, Alice moved to the West Coast and is now in the PT timezone."}]}' \
@@ -818,7 +820,7 @@ Now send a message that reveals a new fact, without asking the agent to remember
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"By the way, Alice signed a 2-year contract renewal last week."}]' \
   | jq '{status: .status}'
@@ -838,6 +840,7 @@ soat list-memory-entries --memory-id "$MEMORY_ID" \
 ```ts
 await adminSoat.agents.createAgentGeneration({
   path: { agent_id: AGENT_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -863,7 +866,7 @@ console.log(extracted.map((e) => e.content));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"By the way, Alice signed a 2-year contract renewal last week."}]}' \

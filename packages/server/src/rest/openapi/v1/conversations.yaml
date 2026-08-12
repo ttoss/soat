@@ -432,9 +432,14 @@ paths:
       summary: Generate the next message in a conversation
       description: |
         Generates the next message using the specified actor's linked agent or chat.
-        On `completed`, the reply is persisted as a new ConversationMessage authored
-        by that actor. On `requires_action`, nothing is persisted; the caller must
-        submit tool outputs via the Agents module and re-invoke generate.
+        Background by default: returns `202 Accepted` immediately and the reply
+        lands as a new ConversationMessage when it completes — poll
+        `GET /api/v1/conversations/{conversation_id}/messages` for it.
+        Pass `?wait=true` to block and receive the result inline. On
+        `completed`, the reply is persisted as a new ConversationMessage
+        authored by that actor. On `requires_action`, nothing is persisted; the
+        caller must submit tool outputs via the Agents module and re-invoke
+        generate — so a flow using client tools should pass `?wait=true`.
       operationId: generateConversationMessage
       parameters:
         - name: conversation_id
@@ -442,6 +447,15 @@ paths:
           required: true
           schema:
             type: string
+        - name: wait
+          in: query
+          required: false
+          # Pinned to `true` for tool calls; see the agents generate operation.
+          x-soat-tool-forced: 'true'
+          description: When omitted or `false` (default), the generation runs in the background and `202 Accepted` is returned immediately. Pass `true` to block until the generation settles and receive the result. A `soat` tool call always waits.
+          schema:
+            type: boolean
+            default: false
       requestBody:
         required: true
         content:
@@ -477,11 +491,28 @@ paths:
                     `400 INVALID_TOOL_CONTEXT_KEY`.
       responses:
         '200':
-          description: Generation completed or requires action
+          description: Generation completed or requires action (only when `?wait=true`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/GenerateConversationMessageResponse'
+        '202':
+          description: Generation accepted and running in the background (default, when `wait` is omitted or `false`). The reply is persisted as a ConversationMessage when it completes.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - conversation_id
+                properties:
+                  status:
+                    type: string
+                    enum: [accepted]
+                    example: accepted
+                  conversation_id:
+                    type: string
+                    example: 'conv_V1StGXR8Z5jdHi6B'
         '400':
           description: Invalid request
           content:

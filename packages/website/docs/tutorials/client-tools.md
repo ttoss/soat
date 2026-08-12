@@ -326,7 +326,7 @@ Start a generation the same way as for any [agent](/docs/modules/agents#examples
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-GEN_RESPONSE=$(soat create-agent-generation \
+GEN_RESPONSE=$(soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"What is the status of order ord_1042?"}]')
 echo "$GEN_RESPONSE" | jq '{status, required_action}'
@@ -344,6 +344,7 @@ echo "Generation $GEN_ID paused; pending tool call: $TOOL_CALL_ID"
 ```ts
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: agentId },
+  query: { wait: true },
   body: {
     messages: [
       { role: 'user', content: 'What is the status of order ord_1042?' },
@@ -360,7 +361,7 @@ console.log(toolCall.tool_name, toolCall.args); // "get_order_status" { orderId:
 <TabItem value="curl" label="curl">
 
 ```bash
-GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate" \
+GEN_RESPONSE=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is the status of order ord_1042?"}]}')

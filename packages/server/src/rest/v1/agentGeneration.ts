@@ -8,7 +8,11 @@ import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
 import type { GenerationResult } from 'src/lib/agentGeneration';
-import { createGeneration, submitToolOutputs } from 'src/lib/agentGeneration';
+import {
+  createGeneration,
+  startGeneration,
+  submitToolOutputs,
+} from 'src/lib/agentGeneration';
 import { mapGenerationResult } from 'src/lib/agentGenerationHelpers';
 import type { GenerationInputMessage } from 'src/lib/generationInputMessages';
 import { validateGenerationMetadata } from 'src/lib/generationMetadata';
@@ -119,6 +123,69 @@ const validateGenerateBody = (body: {
 
 export const agentGenerationRouter = new Router<Context>();
 
+type GenerateRequestBody = {
+  messages?: unknown;
+  stream?: boolean;
+  trace_id?: string;
+  parent_trace_id?: string;
+  root_trace_id?: string;
+  max_call_depth?: unknown;
+  tool_context?: Record<string, string>;
+  knowledge_config?: object;
+  action_id?: string;
+  extract?: boolean;
+  metadata?: unknown;
+  guardrail_context?: unknown;
+};
+
+/**
+ * Maps the wire body onto the lib's generation args. Shared by the blocking and
+ * background paths so the two can never drift in what they forward.
+ */
+const buildGenerationArgs = (args: {
+  ctx: Context;
+  body: GenerateRequestBody;
+  projectIds?: number[];
+}) => {
+  const { ctx, body } = args;
+  return {
+    projectIds: args.projectIds,
+    agentId: ctx.params.agent_id,
+    messages: body.messages as GenerationInputMessage[],
+    traceId: body.trace_id,
+    parentTraceId: body.parent_trace_id,
+    rootTraceId: body.root_trace_id,
+    remainingDepth:
+      typeof body.max_call_depth === 'number' ? body.max_call_depth : undefined,
+    authHeader: (ctx.headers.authorization as string) ?? '',
+    authUser: ctx.authUser,
+    toolContext: body.tool_context,
+    knowledgeConfig: toObjectOrUndefined(body.knowledge_config),
+    actionId: typeof body.action_id === 'string' ? body.action_id : undefined,
+    metadata: isRecord(body.metadata) ? body.metadata : undefined,
+    guardrailContext: isRecord(body.guardrail_context)
+      ? body.guardrail_context
+      : undefined,
+  };
+};
+
+/**
+ * Resolves whether this request blocks. Background is the default; a stream
+ * holds the request open by definition, so `stream: true` implies waiting, and
+ * asking for both a stream and a background run is contradictory rather than
+ * silently resolved either way.
+ */
+const resolveWait = (args: { ctx: Context; stream?: boolean }): boolean => {
+  const requested = args.ctx.query['wait'];
+  if (args.stream === true && requested === 'false') {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'stream and wait=false are mutually exclusive: a streamed generation must hold the request open. Omit stream, or omit wait=false.'
+    );
+  }
+  return requested === 'true' || args.stream === true;
+};
+
 agentGenerationRouter.post(
   '/agents/:agent_id/generate',
   async (ctx: Context) => {
@@ -130,69 +197,43 @@ agentGenerationRouter.post(
       resourceType: 'agent',
     });
 
-    const {
-      messages,
-      stream,
-      trace_id: traceId,
-      parent_trace_id: parentTraceId,
-      root_trace_id: rootTraceId,
-      max_call_depth: maxCallDepth,
-      tool_context: toolContext,
-      knowledge_config: knowledgeConfig,
-      action_id: actionId,
-      extract,
-      metadata,
-      guardrail_context: guardrailContext,
-    } = ctx.request.body as {
-      messages?: unknown;
-      stream?: boolean;
-      trace_id?: string;
-      parent_trace_id?: string;
-      root_trace_id?: string;
-      max_call_depth?: unknown;
-      tool_context?: Record<string, string>;
-      knowledge_config?: object;
-      action_id?: string;
-      extract?: boolean;
-      metadata?: unknown;
-      guardrail_context?: unknown;
-    };
+    const body = ctx.request.body as GenerateRequestBody;
 
-    const bodyError = validateGenerateBody({ messages, metadata });
+    const bodyError = validateGenerateBody({
+      messages: body.messages,
+      metadata: body.metadata,
+    });
     if (bodyError) {
       throw new DomainError('VALIDATION_FAILED', bodyError);
     }
 
+    const generationArgs = buildGenerationArgs({ ctx, body, projectIds });
+
+    if (!resolveWait({ ctx, stream: body.stream })) {
+      const accepted = await startGeneration(generationArgs);
+      ctx.status = 202;
+      ctx.body = {
+        status: accepted.status,
+        generation_id: accepted.id,
+        trace_id: accepted.traceId,
+      };
+      return;
+    }
+
     const result = await createGeneration({
-      projectIds,
-      agentId: ctx.params.agent_id,
-      messages: messages as GenerationInputMessage[],
-      stream: stream === true,
-      traceId,
-      parentTraceId,
-      rootTraceId,
-      remainingDepth:
-        typeof maxCallDepth === 'number' ? maxCallDepth : undefined,
-      authHeader: (ctx.headers.authorization as string) ?? '',
-      authUser: ctx.authUser,
-      toolContext,
-      knowledgeConfig: toObjectOrUndefined(knowledgeConfig),
-      actionId: typeof actionId === 'string' ? actionId : undefined,
-      metadata: isRecord(metadata) ? metadata : undefined,
-      guardrailContext: isRecord(guardrailContext)
-        ? guardrailContext
-        : undefined,
+      ...generationArgs,
+      stream: body.stream === true,
     });
 
     fireExtractionForCompletedResult({
       agentId: ctx.params.agent_id,
       projectIds,
       result,
-      messages: messages as ExtractionMessage[],
-      extract: typeof extract === 'boolean' ? extract : undefined,
+      messages: body.messages as ExtractionMessage[],
+      extract: typeof body.extract === 'boolean' ? body.extract : undefined,
     });
 
-    await handleGenerationResult(ctx, result, stream);
+    await handleGenerationResult(ctx, result, body.stream);
   }
 );
 

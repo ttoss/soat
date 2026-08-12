@@ -12,11 +12,14 @@ import {
   buildPathFn,
   buildQueryFn,
   dereferenceSchema,
+  forcedToolParamValue,
   isHiddenFromToolSchema,
+  modelChosenQueryParams,
   normalizeSubschema,
   resolveParameter as resolveOpenApiParameter,
   resolveSchema as resolveOpenApiSchema,
   sanitizeDescription,
+  type ToolQueryParam,
 } from './soatToolsSchemaHelpers';
 
 const log = createDebug('soat:tools');
@@ -213,12 +216,7 @@ const buildTypedProperty = (param: {
  */
 export const buildInputSchema = (
   pathParams: Array<{ name: string }>,
-  queryParams: Array<{
-    name: string;
-    description: string;
-    required: boolean;
-    type: string;
-  }>,
+  allQueryParams: ToolQueryParam[],
   bodyProps: Array<{
     name: string;
     description: string;
@@ -231,6 +229,8 @@ export const buildInputSchema = (
     anyOf?: unknown[];
   }>
 ): JsonObjectSchema => {
+  // A forced param is pinned by the platform, so it is never offered here.
+  const queryParams = modelChosenQueryParams(allQueryParams);
   if (pathParams.length + queryParams.length + bodyProps.length === 0) {
     return {
       type: 'object',
@@ -298,12 +298,7 @@ export const extractPathParams = (args: {
 export const extractQueryParams = (args: {
   parameters: Array<{ name?: string; in?: string; [key: string]: unknown }>;
   spec: OpenApiSpec;
-}): Array<{
-  name: string;
-  description: string;
-  required: boolean;
-  type: string;
-}> => {
+}): ToolQueryParam[] => {
   return (args.parameters || [])
     .map((p) => {
       return resolveParameter(p, args.spec);
@@ -317,6 +312,7 @@ export const extractQueryParams = (args: {
         description: p.description || '',
         required: p.required || false,
         type: p.schema?.type || 'string',
+        forcedValue: forcedToolParamValue(p),
       };
     });
 };

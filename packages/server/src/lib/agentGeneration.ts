@@ -230,9 +230,21 @@ export type CreateGenerationArgs = {
   pinnedAgentVersion?: number | null;
 };
 
-export const createGeneration = async (
+/**
+ * Everything that must happen before the provider is called: input validation,
+ * the depth guard, the quota check, and writing the `in_progress` generation
+ * record. Split out so the blocking and background entry points share one
+ * ordering — a background caller must still get a real `400`/`404`/`429` for a
+ * bad request, and must still get a generation id that already exists in the
+ * database before the response is written.
+ */
+type GenerationPrep =
+  | { kind: 'short_circuit'; result: GenerationResult }
+  | { kind: 'ready'; ctx: GenerationContext; traceId: string };
+
+const prepareGeneration = async (
   args: CreateGenerationArgs
-): Promise<GenerationResult | ReadableStream> => {
+): Promise<GenerationPrep> => {
   // Rejects a caller-supplied key that could not become a header before any
   // provider call or usage metering happens. The session path validates its
   // persisted keys at write time too; this covers the direct API, triggers,
@@ -250,7 +262,7 @@ export const createGeneration = async (
     parentTraceId: args.parentTraceId,
     rootTraceId: args.rootTraceId,
   });
-  if (depthGuard) return depthGuard;
+  if (depthGuard) return { kind: 'short_circuit', result: depthGuard };
 
   // Pre-generation token/cost quota check (Quotas Phase 2). Runs before any
   // context building or provider call, so a breached budget blocks the new
@@ -289,6 +301,16 @@ export const createGeneration = async (
     pinnedAgentVersion: args.pinnedAgentVersion,
   });
 
+  return { kind: 'ready', ctx, traceId };
+};
+
+export const createGeneration = async (
+  args: CreateGenerationArgs
+): Promise<GenerationResult | ReadableStream> => {
+  const prep = await prepareGeneration(args);
+  if (prep.kind === 'short_circuit') return prep.result;
+  const { ctx, traceId } = prep;
+
   log('createGeneration: agentId=%s stream=%s', args.agentId, args.stream);
 
   try {
@@ -309,6 +331,70 @@ export const createGeneration = async (
       model: ctx.model,
     });
   }
+};
+
+/** The handle a background generation hands back in place of a result. */
+export type AcceptedGeneration = {
+  id: string;
+  traceId: string;
+  status: 'accepted';
+};
+
+/**
+ * Starts a generation and returns as soon as it is admitted, leaving the
+ * provider call to run in the background. The caller polls
+ * `GET /generations/{id}` with the returned id, which is why the prep phase —
+ * including the `in_progress` record write — is awaited first: a handle that
+ * raced the record would 404 on the caller's first poll.
+ *
+ * A failure after admission is recorded on the generation record (the caller
+ * reads it as `status: failed`), never rethrown — there is no request left to
+ * receive it.
+ */
+export const startGeneration = async (
+  args: CreateGenerationArgs
+): Promise<AcceptedGeneration> => {
+  const prep = await prepareGeneration(args);
+  if (prep.kind === 'short_circuit') {
+    // The depth guard already produced a terminal record; hand back its ids so
+    // the caller polls the same generation it would have received inline.
+    return {
+      id: prep.result.id,
+      traceId: prep.result.traceId,
+      status: 'accepted',
+    };
+  }
+  const { ctx, traceId } = prep;
+
+  log(
+    'startGeneration: agentId=%s generationId=%s',
+    args.agentId,
+    ctx.generationId
+  );
+
+  void dispatchGeneration({
+    // Streaming needs the request that is already being answered, so a
+    // background generation is never a stream; the route rejects the
+    // combination rather than silently dropping the caller's stream.
+    stream: false,
+    ctx,
+    traceId,
+    agentId: args.agentId,
+    parentTraceId: args.parentTraceId,
+    rootTraceId: args.rootTraceId,
+    abortSignal: args.abortSignal,
+  }).catch(async (error) => {
+    await recordGenerationFailure({
+      generationId: ctx.generationId,
+      traceId,
+      error,
+      model: ctx.model,
+    }).catch(() => {
+      // Recording is best-effort: the request is already gone.
+    });
+  });
+
+  return { id: ctx.generationId, traceId, status: 'accepted' };
 };
 
 // ── Submit Tool Outputs ───────────────────────────────────────────────────

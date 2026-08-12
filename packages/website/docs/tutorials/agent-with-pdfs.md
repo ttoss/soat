@@ -625,7 +625,7 @@ runs. The agent never sees a "tool call" — the context is just there.
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"What is the default admin password for the R200 router?"}]' \
   | jq '{status: .status, output: .output.content}'
@@ -649,6 +649,7 @@ injected automatically.
 ```ts
 const { data: generation } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: AGENT_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -666,7 +667,7 @@ console.log(generation.output.content); // "...admin1234..."
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate" \
+curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"What is the default admin password for the R200 router?"}]}' \
@@ -853,7 +854,7 @@ would pause the generation with `requires_action`:
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-agent-generation \
+soat create-agent-generation --wait true \
   --agent-id "$TOOL_AGENT_ID" \
   --messages '[{"role":"user","content":"How many devices can the R200 router support?"}]' \
   | jq '{status: .status, output: .output.content}'
@@ -874,6 +875,7 @@ Expected shape (exact wording varies by model):
 ```ts
 const { data: toolGeneration } = await adminSoat.agents.createAgentGeneration({
   path: { agent_id: TOOL_AGENT_ID },
+  query: { wait: true },
   body: {
     messages: [
       {
@@ -891,7 +893,7 @@ console.log(toolGeneration.output.content); // "...32 connected devices..."
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -s -X POST "$SOAT_URL/api/v1/agents/$TOOL_AGENT_ID/generate" \
+curl -s -X POST "$SOAT_URL/api/v1/agents/$TOOL_AGENT_ID/generate?wait=true" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"messages":[{"role":"user","content":"How many devices can the R200 router support?"}]}' \

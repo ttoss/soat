@@ -761,7 +761,7 @@ describe('Agent versions', () => {
      */
     const servedVersionOf = async (agentId: string): Promise<number> => {
       const generated = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agentId}/generate`)
+        .post(`/api/v1/agents/${agentId}/generate?wait=true`)
         .send({ messages: [{ role: 'user', content: 'hello' }] });
 
       expect(generated.status).toBe(502);
@@ -900,7 +900,7 @@ describe('Agent versions', () => {
       const agent = await createAgent({});
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/agents/${agent.id}/generate`)
+        .post(`/api/v1/agents/${agent.id}/generate?wait=true`)
         .send({
           messages: [{ role: 'user', content: 'hello' }],
           metadata: { agent_version: 99 },
