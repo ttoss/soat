@@ -17,28 +17,31 @@
  */
 import createDebug from 'debug';
 
+import { DomainError } from '../errors';
+import type { BaselineComparison } from './evaluationDeltas';
 import { evaluateLogic } from './jsonLogicMapping';
 import { validateStructuredOutput } from './outputSchema';
 import { isPlainObject } from './plainObject';
 
 const log = createDebug('soat:evaluations');
 
-/**
- * Scorer types Phase 1 executes. `llm_judge` is specified by the PRD but lands
- * with Phase 2 (it needs the ai-providers completion path), so it is rejected
- * by name rather than silently accepted and never run.
- */
+/** Every scorer type the module executes. */
 export const SCORER_TYPES = [
   'exact_match',
   'contains',
   'json_logic',
   'output_schema',
+  'llm_judge',
 ] as const;
 
 export type ScorerType = (typeof SCORER_TYPES)[number];
 
-/** Declared in the PRD, not executable until Phase 2. */
-export const DEFERRED_SCORER_TYPES = ['llm_judge'] as const;
+/**
+ * The one scorer whose score comes from a provider call rather than from the
+ * output alone. Everything else here is pure, which is why judging is injected
+ * (see {@link scoreOutput}) instead of imported.
+ */
+export const JUDGE_SCORER_TYPE = 'llm_judge';
 
 /** The config keys each scorer type accepts, beyond `type`. */
 const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
@@ -46,6 +49,7 @@ const SCORER_FIELDS: Record<ScorerType, readonly string[]> = {
   contains: ['value', 'case_sensitive'],
   json_logic: ['expression'],
   output_schema: ['schema'],
+  llm_judge: ['ai_provider_id', 'model', 'prompt', 'pass_threshold'],
 };
 
 export type ScorerOutcome = {
@@ -78,6 +82,23 @@ type ScorerCheck = (args: {
   path: string;
   agentHasOutputSchema: boolean;
 }) => string | null;
+
+/**
+ * A finite number in `[0, 1]`.
+ *
+ * `llm_judge.pass_threshold` is required with no default: a judge emits a
+ * continuous score, so nothing about the score itself says where "good enough"
+ * is — and a defaulted cutoff would silently decide the gate every run-level
+ * `passed` is computed from (docs/prd-evaluations.md — Pass semantics).
+ */
+const isUnitInterval = (value: unknown): boolean => {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+  );
+};
 
 /**
  * The per-type config rules, keyed by type so a new entry in
@@ -119,6 +140,24 @@ const SCORER_CHECKS: Record<ScorerType, ScorerCheck> = {
     }
     return null;
   },
+  llm_judge: ({ scorer, path }) => {
+    if (typeof scorer.prompt !== 'string' || scorer.prompt.trim() === '') {
+      return `${path}.prompt is required and must be a non-empty string.`;
+    }
+    if (!isUnitInterval(scorer.pass_threshold)) {
+      return `${path}.pass_threshold is required and must be a number between 0 and 1.`;
+    }
+    if (
+      scorer.ai_provider_id !== undefined &&
+      typeof scorer.ai_provider_id !== 'string'
+    ) {
+      return `${path}.ai_provider_id must be an ai provider id.`;
+    }
+    if (scorer.model !== undefined && typeof scorer.model !== 'string') {
+      return `${path}.model must be a string.`;
+    }
+    return null;
+  },
 };
 
 const validateOneScorer = (args: {
@@ -129,9 +168,6 @@ const validateOneScorer = (args: {
   const { scorer, path } = args;
   const type = scorer.type;
 
-  if ((DEFERRED_SCORER_TYPES as readonly unknown[]).includes(type)) {
-    return `${path}.type '${String(type)}' is not available yet; it ships with Evaluations Phase 2.`;
-  }
   if (typeof type !== 'string' || !isScorerType(type)) {
     return `${path}.type must be one of ${SCORER_TYPES.join(' / ')}.`;
   }
@@ -275,19 +311,117 @@ const scoreOutputSchema = (args: {
 };
 
 /**
- * Runs every scorer against one item's generation output.
+ * How a judge verdict is obtained. Injected rather than imported so this module
+ * holds no I/O: the run path passes `runJudgeCompletion` from
+ * `evaluationJudge.ts`, and a test can drive the threshold boundary directly.
+ *
+ * A rejection propagates out of {@link scoreOutput} — the caller records the
+ * item as **errored**. A judge that cannot answer says nothing about the agent,
+ * so it must not land as a score of 0.
+ */
+export type JudgeRunner = (args: {
+  scorer: Record<string, unknown>;
+  input: unknown;
+  output: string;
+  expected: string | null;
+}) => Promise<{ score: number; reasoning?: string }>;
+
+const scoreJudge = async (args: {
+  scorer: Record<string, unknown>;
+  input: unknown;
+  output: ScoredOutput;
+  expectedOutput: string | null;
+  runJudge: JudgeRunner;
+}): Promise<ScorerOutcome> => {
+  const verdict = await args.runJudge({
+    scorer: args.scorer,
+    input: args.input,
+    output: args.output.content,
+    expected: args.expectedOutput,
+  });
+
+  // Unlike the binary scorers, the score is continuous and `passed` comes from
+  // the scorer's own required cutoff — `>=`, so a verdict exactly at the
+  // threshold passes.
+  const threshold = Number(args.scorer.pass_threshold);
+  return {
+    scorer: JUDGE_SCORER_TYPE,
+    score: verdict.score,
+    passed: verdict.score >= threshold,
+    ...(verdict.reasoning === undefined
+      ? {}
+      : { reasoning: verdict.reasoning }),
+  };
+};
+
+const scoreOne = async (args: {
+  scorer: Record<string, unknown>;
+  context: Record<string, unknown>;
+  input: unknown;
+  output: ScoredOutput;
+  expectedOutput: string | null;
+  agentOutputSchema: unknown;
+  runJudge?: JudgeRunner;
+}): Promise<ScorerOutcome> => {
+  const { scorer } = args;
+
+  switch (scorer.type as ScorerType) {
+    case 'exact_match':
+      return scoreExactMatch({
+        output: args.output,
+        expectedOutput: args.expectedOutput,
+      });
+    case 'contains':
+      return scoreContains({ scorer, output: args.output });
+    case 'json_logic':
+      return scoreJsonLogic({ scorer, context: args.context });
+    case 'llm_judge': {
+      /* istanbul ignore next -- validateScorers rejects a judge scorer at Eval
+         create, and the run path always supplies a runner, so an Eval with a
+         judge and no runner is unreachable through any entry point. */
+      if (!args.runJudge) {
+        throw new DomainError(
+          'VALIDATION_FAILED',
+          'An llm_judge scorer needs a judge runner; none was supplied.'
+        );
+      }
+      return scoreJudge({
+        scorer,
+        input: args.input,
+        output: args.output,
+        expectedOutput: args.expectedOutput,
+        runJudge: args.runJudge,
+      });
+    }
+    case 'output_schema':
+    default:
+      return scoreOutputSchema({
+        scorer,
+        output: args.output,
+        agentOutputSchema: args.agentOutputSchema,
+      });
+  }
+};
+
+/**
+ * Runs every scorer against one item's generation output, in the order the Eval
+ * declares them.
  *
  * Called only for a `completed` generation — a non-`completed` one is an
  * item-level *error* and is never scored (see `evaluationRuns.ts`).
+ *
+ * Async only because of `llm_judge`; every other scorer stays a pure function of
+ * its arguments. An Eval with no judge never awaits anything real.
  */
-export const scoreOutput = (args: {
+export const scoreOutput = async (args: {
   scorers: unknown[];
   input: unknown;
   output: ScoredOutput;
   expectedOutput: string | null;
   itemMetadata: unknown;
   agentOutputSchema: unknown;
-}): ScorerOutcome[] => {
+  runJudge?: JudgeRunner;
+}): Promise<ScorerOutcome[]> => {
   const context = buildJsonLogicContext({
     input: args.input,
     output: args.output,
@@ -295,27 +429,24 @@ export const scoreOutput = (args: {
     itemMetadata: args.itemMetadata,
   });
 
-  return args.scorers.map((raw) => {
+  const outcomes: ScorerOutcome[] = [];
+
+  for (const raw of args.scorers) {
     const scorer = asRecord(raw) ?? {};
-    switch (scorer.type as ScorerType) {
-      case 'exact_match':
-        return scoreExactMatch({
-          output: args.output,
-          expectedOutput: args.expectedOutput,
-        });
-      case 'contains':
-        return scoreContains({ scorer, output: args.output });
-      case 'json_logic':
-        return scoreJsonLogic({ scorer, context });
-      case 'output_schema':
-      default:
-        return scoreOutputSchema({
-          scorer,
-          output: args.output,
-          agentOutputSchema: args.agentOutputSchema,
-        });
-    }
-  });
+    outcomes.push(
+      await scoreOne({
+        scorer,
+        context,
+        input: args.input,
+        output: args.output,
+        expectedOutput: args.expectedOutput,
+        agentOutputSchema: args.agentOutputSchema,
+        runJudge: args.runJudge,
+      })
+    );
+  }
+
+  return outcomes;
 };
 
 // ── Aggregation ────────────────────────────────────────────────────────────
@@ -325,6 +456,12 @@ export type AggregateScores = {
   scorers: Record<string, { mean: number; pass_rate: number }>;
   pass_rate: number | null;
   scored_item_count: number;
+  /**
+   * Present only when the run named a `baseline_run_id`. Computed over the item
+   * intersection with divergence counts, so a delta is never presented as a
+   * clean comparison when the two runs' item sets differ (`evaluationDeltas.ts`).
+   */
+  baseline?: BaselineComparison;
 };
 
 const ratio = (numerator: number, denominator: number): number => {

@@ -12,6 +12,7 @@ import {
 import { startApprovalScheduler } from './lib/approvalScheduler';
 import { startAuditRetentionScheduler } from './lib/auditScheduler';
 import { startContentRetentionScheduler } from './lib/contentRetentionScheduler';
+import { startEvalWorker } from './lib/evaluationWorker';
 import { startOrchestrationScheduler } from './lib/orchestrationScheduler';
 import { startOrchestrationWorker } from './lib/orchestrationWorker';
 import { startTasksScheduler } from './lib/tasksScheduler';
@@ -63,6 +64,11 @@ const startServer = async () => {
     // `api_request` events per window).
     startUsageStorageScheduler();
     startUsageRequestScheduler();
+    // Start the eval worker so asynchronous eval runs (`wait: false`) execute
+    // their items, and so runs left mid-flight by a disconnected client are
+    // reaped instead of sitting `running` forever. Disable with
+    // EVAL_WORKER_DISABLED when a dedicated worker fleet owns draining.
+    startEvalWorker();
   } catch (error) {
     // This is a fatal, process-terminating failure, so print to stderr
     // unconditionally rather than via the opt-in `debug` logger — otherwise the

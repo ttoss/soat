@@ -1,4 +1,13 @@
+import type { Server } from 'node:http';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
+
 import { db } from 'src/db';
+import {
+  drainEvalQueueOnce,
+  reapAbandonedEvalRuns,
+} from 'src/lib/evaluationWorker';
+import { eventBus, type SoatEvent } from 'src/lib/eventBus';
 
 import {
   createScopedPrincipal,
@@ -8,8 +17,7 @@ import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Evaluations — datasets, evals, and synchronous runs
- * (docs/prd-evaluations.md, Phase 1).
+ * Evaluations — datasets, evals, and runs (docs/prd-evaluations.md, Phases 1–2).
  *
  * Every assertion drives the REST entry point. The scorer algebra itself is
  * covered directly in `lib/evaluationScorers.test.ts` (keep-list rule 1), and
@@ -88,6 +96,11 @@ describe('Evaluations', () => {
   };
 
   beforeAll(async () => {
+    // The in-process kick is disabled so queued runs are driven *explicitly* by
+    // `drainEvalQueueOnce` below: a background kick racing the assertions would
+    // execute items with no queued `mockCreateGeneration` implementation.
+    process.env.EVAL_WORKER_DISABLED = 'true';
+
     const setup = await setupProjectWithUsers({
       prefix: 'evals',
       policyActions: [
@@ -184,10 +197,20 @@ describe('Evaluations', () => {
     projectKey = keyRes.body.key;
   });
 
-  afterEach(() => {
+  afterAll(() => {
+    delete process.env.EVAL_WORKER_DISABLED;
+  });
+
+  afterEach(async () => {
     // Shared spy: clear queued implementations and call counts, but never
     // restore — restoring would unwire it for every later test.
     jest.clearAllMocks();
+    // The eval queue is shared process state, so a test that starts a queued run
+    // without draining it would otherwise hand its tasks to the next test's
+    // drain (and eat that test's queued generation mocks). Every test that cares
+    // about the queue creates what it needs, so nothing depends on a task
+    // surviving past the test that enqueued it.
+    await db.EvalRunTask.destroy({ where: {}, truncate: true });
   });
 
   // ── Datasets ─────────────────────────────────────────────────────────────
@@ -318,9 +341,8 @@ describe('Evaluations', () => {
     });
 
     test('an admin listing without a project filter sees every project', async () => {
-      const res = await authenticatedTestClient(adminToken).get(
-        '/api/v1/datasets'
-      );
+      const res =
+        await authenticatedTestClient(adminToken).get('/api/v1/datasets');
 
       expect(res.status).toBe(200);
       expect(
@@ -459,7 +481,10 @@ describe('Evaluations', () => {
     test('rejects non-object metadata with 400', async () => {
       const res = await asUser()
         .post(`/api/v1/datasets/${datasetId}/items`)
-        .send({ input: [{ role: 'user', content: 'hi' }], metadata: 'billing' });
+        .send({
+          input: [{ role: 'user', content: 'hi' }],
+          metadata: 'billing',
+        });
 
       expect(res.status).toBe(400);
     });
@@ -550,19 +575,19 @@ describe('Evaluations', () => {
       expect(res.body.error.message).toContain('scorers.0.type');
     });
 
-    test('llm_judge is rejected as a Phase 2 scorer', async () => {
+    test('an llm_judge scorer without a pass_threshold is rejected', async () => {
       const res = await asUser()
         .post('/api/v1/evals')
         .send({
           project_id: projectId,
-          name: 'judge-eval',
+          name: 'judge-no-threshold-eval',
           agent_id: agentId,
           dataset_id: datasetId,
-          scorers: [{ type: 'llm_judge' }],
+          scorers: [{ type: 'llm_judge', prompt: 'rate {{output}}' }],
         });
 
       expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/Phase 2/);
+      expect(res.body.error.message).toMatch(/pass_threshold is required/);
     });
 
     test('an output_schema scorer against an agent with no output_schema is rejected', async () => {
@@ -754,20 +779,46 @@ describe('Evaluations', () => {
       ).id;
     });
 
-    test('omitting `wait` is rejected with 400', async () => {
+    // Phase 1 required `wait` precisely so this default could arrive without
+    // changing any existing caller's behavior: omitting it used to be a 400, so
+    // no caller can have been relying on it meaning "synchronous".
+    test('omitting `wait` queues the run, matching the documented default', async () => {
       const res = await asUser().post(`/api/v1/evals/${evalId}/runs`).send({});
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('queued');
+    });
+
+    test('a non-boolean `wait` is rejected with 400', async () => {
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: 'yes' });
 
       expect(res.status).toBe(400);
       expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('`wait: false` is rejected, naming async as a Phase 2 capability', async () => {
+    test('an over-cap dataset is accepted for a queued run — the cap is sync-only', async () => {
+      const bigDataset = (await createDataset('queued-oversized-suite')).id;
+      for (let index = 0; index < 26; index += 1) {
+        await addItem(bigDataset, {
+          input: [{ role: 'user', content: `q${index}` }],
+        });
+      }
+      const bigEval = await createEval({
+        name: 'queued-oversized-eval',
+        agent_id: agentId,
+        dataset_id: bigDataset,
+        scorers: [{ type: 'exact_match' }],
+      });
+
       const res = await asUser()
-        .post(`/api/v1/evals/${evalId}/runs`)
+        .post(`/api/v1/evals/${bigEval.id}/runs`)
         .send({ wait: false });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error.message).toMatch(/Phase 2/);
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('queued');
+      expect(res.body.item_count).toBe(26);
     });
 
     test('an empty dataset is rejected rather than scored as a vacuous pass', async () => {
@@ -1068,6 +1119,939 @@ describe('Evaluations', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.baseline_run_id).toBe(baselineId);
+    });
+  });
+
+  // ── Asynchronous runs on the queue (Phase 2) ─────────────────────────────
+
+  describe('asynchronous eval runs', () => {
+    let evalId: string;
+    let itemIds: string[];
+
+    beforeAll(async () => {
+      const datasetId = (await createDataset('async-suite')).id;
+      itemIds = [];
+      for (const content of ['a', 'b']) {
+        const item = await addItem(datasetId, {
+          input: [{ role: 'user', content }],
+          expected_output: 'Paris',
+        });
+        itemIds.push(item.id as string);
+      }
+
+      evalId = (
+        await createEval({
+          name: 'async-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+          pass_threshold: 0.5,
+        })
+      ).id;
+    });
+
+    const startQueued = async () => {
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+      return res.body;
+    };
+
+    test('returns a queued run immediately, with nothing scored yet', async () => {
+      const run = await startQueued();
+
+      expect(run.status).toBe('queued');
+      expect(run.item_count).toBe(2);
+      expect(run.completed_count).toBe(0);
+      expect(run.aggregate_scores).toBeNull();
+      expect(run.passed).toBeNull();
+      expect(run.started_at).toBeNull();
+      // Not a single generation yet — the response came back before any work.
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
+
+    test('enqueues exactly one task per dataset item', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({
+        where: { publicId: run.id },
+      });
+
+      expect(
+        await db.EvalRunTask.count({
+          where: { evalRunId: runRow!.id as number },
+        })
+      ).toBe(2);
+    });
+
+    test('the worker scores every item and settles the run', async () => {
+      const run = await startQueued();
+
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_q1', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_q2', 'Lyon'));
+
+      expect(await drainEvalQueueOnce()).toBe(2);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+
+      const after = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.id}`
+      );
+      expect(after.body.status).toBe('completed');
+      expect(after.body.completed_count).toBe(2);
+      expect(after.body.errored_count).toBe(0);
+      expect(after.body.aggregate_scores.pass_rate).toBeCloseTo(0.5);
+      // One of two items matched, and the eval's threshold is 0.5.
+      expect(after.body.passed).toBe(true);
+      expect(after.body.finished_at).not.toBeNull();
+
+      const results = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.id}/results`
+      );
+      expect(results.body.total).toBe(2);
+      expect(
+        results.body.data.map((result: { dataset_item_id: string }) => {
+          return result.dataset_item_id;
+        })
+      ).toEqual(expect.arrayContaining(itemIds));
+    });
+
+    test('every task is acked, so a later drain finds nothing', async () => {
+      await startQueued();
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_q3', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_q4', 'Paris'));
+
+      await drainEvalQueueOnce();
+      expect(await drainEvalQueueOnce()).toBe(0);
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+    });
+
+    // At-least-once delivery: a redelivered item must re-run into the *same*
+    // result row rather than adding a second one, or the run would count an item
+    // twice and its pass rate would be wrong. Redelivery is exercised while the
+    // run is still in flight, which is when it actually happens — once a run has
+    // settled, the worker drops its tasks without spending a generation on them.
+    test('a redelivered item task inserts no duplicate result', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+      const runDbId = runRow!.id as number;
+
+      // Score one of the two items, leaving the run `running` with work left.
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_r1', 'Paris')
+      );
+      expect(await drainEvalQueueOnce({ limit: 1 })).toBe(1);
+
+      const [scored] = await db.EvalResult.findAll({
+        where: { evalRunId: runDbId },
+      });
+      const replayedItemId = scored.datasetItemId as number;
+
+      // Re-enqueue that item — exactly what an expired lease redelivers.
+      await db.EvalRunTask.create({
+        evalRunId: runDbId,
+        datasetItemId: replayedItemId,
+        availableAt: new Date(),
+        attempts: 1,
+      });
+
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_r2', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_r3', 'Paris'));
+      expect(await drainEvalQueueOnce()).toBe(2);
+
+      // The item really did run twice — this is not a "nothing happened" pass.
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(3);
+      expect(
+        await db.EvalResult.count({
+          where: { evalRunId: runDbId, datasetItemId: replayedItemId },
+        })
+      ).toBe(1);
+      // Two items, two rows — the replay did not inflate the run.
+      expect(await db.EvalResult.count({ where: { evalRunId: runDbId } })).toBe(
+        2
+      );
+
+      const settled = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.id}`
+      );
+      expect(settled.body.status).toBe('completed');
+      expect(settled.body.completed_count).toBe(2);
+    });
+
+    test('a queued run with an over-cap dataset needs no cap exemption', async () => {
+      // Guards the split: the 25-item cap is a property of synchronous
+      // execution, so a queued run of the same eval must not inherit it.
+      const bigDataset = (await createDataset('async-oversized-suite')).id;
+      for (let index = 0; index < 26; index += 1) {
+        await addItem(bigDataset, {
+          input: [{ role: 'user', content: `q${index}` }],
+        });
+      }
+      const bigEval = await createEval({
+        name: 'async-oversized-eval',
+        agent_id: agentId,
+        dataset_id: bigDataset,
+        scorers: [{ type: 'exact_match' }],
+      });
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${bigEval.id}/runs`)
+        .send({ wait: false });
+
+      expect(res.status).toBe(201);
+      expect(res.body.item_count).toBe(26);
+    });
+  });
+
+  // ── Canceling a run (Phase 2) ────────────────────────────────────────────
+
+  describe('POST /api/v1/evals/{eval_id}/runs/{run_id}/cancel', () => {
+    let evalId: string;
+
+    beforeAll(async () => {
+      const datasetId = (await createDataset('cancel-suite')).id;
+      await addItem(datasetId, { input: [{ role: 'user', content: 'a' }] });
+      await addItem(datasetId, { input: [{ role: 'user', content: 'b' }] });
+
+      evalId = (
+        await createEval({
+          name: 'cancel-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        })
+      ).id;
+    });
+
+    const startQueued = async () => {
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      expect(res.status).toBe(201);
+      return res.body;
+    };
+
+    test('cancels a queued run and drops its outstanding work', async () => {
+      const run = await startQueued();
+
+      const res = await asUser().post(
+        `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('canceled');
+      expect(res.body.finished_at).not.toBeNull();
+
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+      expect(
+        await db.EvalRunTask.count({
+          where: { evalRunId: runRow!.id as number },
+        })
+      ).toBe(0);
+    });
+
+    test('a canceled run stops spending: the worker runs none of its items', async () => {
+      const run = await startQueued();
+      await asUser().post(`/api/v1/evals/${evalId}/runs/${run.id}/cancel`);
+
+      expect(await drainEvalQueueOnce()).toBe(0);
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+    });
+
+    // A partial roll-up in the field a completed run uses would read as a
+    // whole-dataset verdict — the same failure the sync cap exists to prevent.
+    test('keeps results already scored but publishes no aggregate', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+      const runDbId = runRow!.id as number;
+
+      // Drive one of the two items, then cancel before the second.
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_c1', 'Paris')
+      );
+      await drainEvalQueueOnce({ limit: 1 });
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(1);
+
+      const res = await asUser().post(
+        `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.aggregate_scores).toBeNull();
+      expect(res.body.completed_count).toBe(1);
+      expect(await db.EvalResult.count({ where: { evalRunId: runDbId } })).toBe(
+        1
+      );
+    });
+
+    test('a finished run cannot be canceled', async () => {
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_c2', 'x'))
+        .mockResolvedValueOnce(completedGeneration('gen_c3', 'x'));
+      const finished = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: true });
+      expect(finished.body.status).toBe('completed');
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+
+      const res = await asUser().post(
+        `/api/v1/evals/${evalId}/runs/${finished.body.id}/cancel`
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/already finished/);
+    });
+
+    test('an unknown run returns 404', async () => {
+      const res = await asUser().post(
+        `/api/v1/evals/${evalId}/runs/evrun_missing/cancel`
+      );
+      expect(res.status).toBe(404);
+    });
+
+    test('unauthenticated returns 401', async () => {
+      const res = await testClient.post(
+        `/api/v1/evals/${evalId}/runs/evrun_x/cancel`
+      );
+      expect(res.status).toBe(401);
+    });
+
+    test('a user without evaluations:RunEval returns 403', async () => {
+      const res = await authenticatedTestClient(noPermToken).post(
+        `/api/v1/evals/${evalId}/runs/evrun_x/cancel`
+      );
+      expect(res.status).toBe(403);
+    });
+  });
+
+  // ── The lease reaper (Phase 2) ───────────────────────────────────────────
+
+  describe('reapAbandonedEvalRuns', () => {
+    let evalId: string;
+
+    beforeAll(async () => {
+      const datasetId = (await createDataset('reaper-suite')).id;
+      await addItem(datasetId, { input: [{ role: 'user', content: 'a' }] });
+      await addItem(datasetId, { input: [{ role: 'user', content: 'b' }] });
+
+      evalId = (
+        await createEval({
+          name: 'reaper-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        })
+      ).id;
+    });
+
+    /** A far-future `now`, so the grace period has certainly elapsed. */
+    const wellPastGrace = () => {
+      return new Date(Date.now() + 86_400_000);
+    };
+
+    // This is the Phase 1 debt: a client that disconnected mid-run left the row
+    // `running` with nothing to clean it. It must settle, so a gate waiting on a
+    // verdict stops waiting.
+    test('settles an abandoned run as failed rather than leaving it running', async () => {
+      const evaluation = await db.Eval.findOne({ where: { publicId: evalId } });
+      const abandoned = await db.EvalRun.create({
+        evalId: evaluation!.id as number,
+        agentVersion: 1,
+        status: 'running',
+        itemCount: 2,
+        startedAt: new Date(),
+      });
+
+      // The reaper sweeps every stale run in the database, so the assertion is
+      // about this run's outcome rather than a global count the rest of the file
+      // would perturb.
+      await reapAbandonedEvalRuns({ now: wellPastGrace() });
+
+      await abandoned.reload();
+      expect(abandoned.status).toBe('failed');
+      expect(abandoned.finishedAt).not.toBeNull();
+    });
+
+    // The opposite treatment: every measurement is present, so the run is
+    // finalized rather than thrown away.
+    test('finalizes a run whose items all scored but never settled', async () => {
+      const run = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+      const runRow = await db.EvalRun.findOne({
+        where: { publicId: run.body.id },
+      });
+
+      mockCreateGeneration
+        .mockResolvedValueOnce(completedGeneration('gen_x1', 'Paris'))
+        .mockResolvedValueOnce(completedGeneration('gen_x2', 'Paris'));
+      await drainEvalQueueOnce();
+      expect(mockCreateGeneration).toHaveBeenCalledTimes(2);
+
+      // Rewind the run to the state a crash between the last ack and the
+      // update would have left: results present, nothing settled. Reloaded
+      // first because `instance.update` writes only fields that differ from the
+      // in-memory copy — a stale instance would silently keep `finished_at`,
+      // and the reaper's finalize claim is guarded on exactly that column.
+      await runRow!.reload();
+      await runRow!.update({
+        status: 'running',
+        aggregateScores: null,
+        finishedAt: null,
+      });
+
+      await reapAbandonedEvalRuns({ now: wellPastGrace() });
+
+      await runRow!.reload();
+      expect(runRow!.status).toBe('completed');
+      expect(runRow!.aggregateScores).not.toBeNull();
+    });
+
+    test('leaves a run with queued work alone — the drain sweep owns it', async () => {
+      const run = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+
+      await reapAbandonedEvalRuns({ now: wellPastGrace() });
+
+      const after = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.body.id}`
+      );
+      expect(after.body.status).toBe('queued');
+    });
+
+    test('leaves a fresh run alone until the grace period elapses', async () => {
+      const run = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: false });
+
+      // Real `now`: the run was created seconds ago, well inside the grace
+      // period, so a legitimately slow synchronous run is never mistaken for an
+      // abandoned one.
+      expect(await reapAbandonedEvalRuns()).toBe(0);
+
+      const after = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.body.id}`
+      );
+      expect(after.body.status).toBe('queued');
+    });
+  });
+
+  // ── Lifecycle webhooks (Phase 2) ─────────────────────────────────────────
+
+  describe('eval run lifecycle events', () => {
+    let evalId: string;
+
+    beforeAll(async () => {
+      const datasetId = (await createDataset('events-suite')).id;
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'a' }],
+        expected_output: 'Paris',
+      });
+
+      evalId = (
+        await createEval({
+          name: 'events-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+          pass_threshold: 1,
+        })
+      ).id;
+    });
+
+    /**
+     * The events emitted while `action` runs. `emitResourceEvent` resolves the
+     * project public id asynchronously before emitting, so the capture window
+     * stays open one macrotask past the action.
+     */
+    const withCapture = async (
+      action: () => Promise<void>
+    ): Promise<SoatEvent[]> => {
+      const captured: SoatEvent[] = [];
+      const handler = (event: SoatEvent) => {
+        if (event.type.startsWith('eval_run.')) captured.push(event);
+      };
+      eventBus.on('soat:event', handler);
+      try {
+        await action();
+        await new Promise<void>((resolve) => {
+          setImmediate(resolve);
+        });
+      } finally {
+        // Never leak a listener onto the shared bus: it would fire for every
+        // later test in the run and break under randomized file order.
+        eventBus.off('soat:event', handler);
+      }
+      return captured;
+    };
+
+    test('a completed run fires eval_run.completed exactly once, with the verdict', async () => {
+      let runId = '';
+      const events = await withCapture(async () => {
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_e1', 'Paris')
+        );
+        const res = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: true });
+        runId = res.body.id as string;
+      });
+
+      expect(events).toHaveLength(1);
+      const [event] = events;
+      expect(event.type).toBe('eval_run.completed');
+      expect(event.resourceType).toBe('eval_run');
+      expect(event.resourceId).toBe(runId);
+      // The payload is the promotion gate's input: a consumer must be able to
+      // decide from the event alone, without a second call that could fail open.
+      expect(event.data).toEqual({
+        eval_id: evalId,
+        eval_run_id: runId,
+        passed: true,
+        aggregate_scores: expect.objectContaining({ pass_rate: 1 }),
+      });
+    });
+
+    test('a queued run fires the event once, from the worker that settles it', async () => {
+      const events = await withCapture(async () => {
+        await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false });
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration('gen_e2', 'Lyon')
+        );
+        await drainEvalQueueOnce();
+      });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].type).toBe('eval_run.completed');
+      expect(events[0].data.passed).toBe(false);
+    });
+
+    test('an abandoned run fires eval_run.failed, so a gate stops waiting', async () => {
+      const evaluation = await db.Eval.findOne({ where: { publicId: evalId } });
+      const abandoned = await db.EvalRun.create({
+        evalId: evaluation!.id as number,
+        agentVersion: 1,
+        status: 'running',
+        itemCount: 1,
+        startedAt: new Date(),
+      });
+
+      const events = await withCapture(async () => {
+        await reapAbandonedEvalRuns({
+          now: new Date(Date.now() + 86_400_000),
+        });
+      });
+
+      const failure = events.find((event) => {
+        return event.resourceId === abandoned.publicId;
+      });
+      expect(failure?.type).toBe('eval_run.failed');
+      expect(failure?.data).toEqual({
+        eval_id: evalId,
+        eval_run_id: abandoned.publicId,
+        passed: null,
+        aggregate_scores: null,
+      });
+    });
+
+    test('a canceled run fires no lifecycle event — it produced no verdict', async () => {
+      const events = await withCapture(async () => {
+        const run = await asUser()
+          .post(`/api/v1/evals/${evalId}/runs`)
+          .send({ wait: false });
+        await asUser().post(
+          `/api/v1/evals/${evalId}/runs/${run.body.id}/cancel`
+        );
+      });
+
+      expect(events).toEqual([]);
+    });
+  });
+
+  // ── Usage attribution (Phase 2) ──────────────────────────────────────────
+
+  describe('eval spend attribution', () => {
+    test("an eval run's generations are marked source: eval", async () => {
+      const datasetId = (await createDataset('usage-suite')).id;
+      await addItem(datasetId, { input: [{ role: 'user', content: 'a' }] });
+      const usageEval = await createEval({
+        name: 'usage-eval',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+      });
+
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_u1', 'Paris')
+      );
+      const res = await asUser()
+        .post(`/api/v1/evals/${usageEval.id}/runs`)
+        .send({ wait: true });
+      expect(res.status).toBe(201);
+
+      // Asserted on the generation the eval created, which is the column the
+      // metering choke point copies onto the usage event: eval spend has to be
+      // separable from the spend serving real users.
+      const call = mockCreateGeneration.mock.calls[0][0];
+      expect(call.source).toBe('eval');
+      expect(call.stream).toBe(false);
+    });
+  });
+
+  // ── Baseline deltas (Phase 2) ────────────────────────────────────────────
+
+  describe('baseline deltas', () => {
+    let evalId: string;
+    let extraItemId: string;
+    let datasetId: string;
+
+    beforeAll(async () => {
+      datasetId = (await createDataset('baseline-suite')).id;
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'a' }],
+        expected_output: 'Paris',
+      });
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'b' }],
+        expected_output: 'Paris',
+      });
+
+      evalId = (
+        await createEval({
+          name: 'baseline-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        })
+      ).id;
+    });
+
+    /**
+     * A synchronous run answering `answers[i]` for the i-th item.
+     *
+     * Exactly one queued generation per item: `jest.clearAllMocks()` clears call
+     * counts but not queued `mockResolvedValueOnce` implementations, so an
+     * over-queued mock would leak into the next run and silently shift its
+     * scores.
+     */
+    const runWith = async (args: {
+      answers: string[];
+      baselineRunId?: string;
+    }) => {
+      const callsBefore = mockCreateGeneration.mock.calls.length;
+      for (const [index, answer] of args.answers.entries()) {
+        mockCreateGeneration.mockResolvedValueOnce(
+          completedGeneration(`gen_bd${index}`, answer)
+        );
+      }
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({
+          wait: true,
+          ...(args.baselineRunId === undefined
+            ? {}
+            : { baseline_run_id: args.baselineRunId }),
+        });
+      expect(res.status).toBe(201);
+      // Relative to this call, since a test may start two runs and the shared
+      // spy's counter is only cleared between tests.
+      expect(mockCreateGeneration.mock.calls.length - callsBefore).toBe(
+        args.answers.length
+      );
+      return res.body;
+    };
+
+    test('a run without a baseline reports no comparison', async () => {
+      const run = await runWith({ answers: ['Paris', 'Paris'] });
+
+      expect(run.aggregate_scores.baseline).toBeUndefined();
+    });
+
+    test('an improvement over the baseline reports positive deltas', async () => {
+      const baseline = await runWith({ answers: ['Paris', 'Lyon'] });
+      expect(baseline.aggregate_scores.pass_rate).toBeCloseTo(0.5);
+
+      const current = await runWith({
+        answers: ['Paris', 'Paris'],
+        baselineRunId: baseline.id,
+      });
+
+      const comparison = current.aggregate_scores.baseline;
+      expect(comparison.run_id).toBe(baseline.id);
+      expect(comparison.compared_item_count).toBe(2);
+      expect(comparison.added_item_count).toBe(0);
+      expect(comparison.removed_item_count).toBe(0);
+      expect(comparison.pass_rate_delta).toBeCloseTo(0.5);
+      expect(comparison.scorers.exact_match.mean_delta).toBeCloseTo(0.5);
+      expect(comparison.scorers.exact_match.pass_rate_delta).toBeCloseTo(0.5);
+    });
+
+    test('a regression reports negative deltas', async () => {
+      const baseline = await runWith({ answers: ['Paris', 'Paris'] });
+      const current = await runWith({
+        answers: ['Lyon', 'Lyon'],
+        baselineRunId: baseline.id,
+      });
+
+      expect(
+        current.aggregate_scores.baseline.scorers.exact_match.mean_delta
+      ).toBeCloseTo(-1);
+    });
+
+    // The guarantee that makes a delta trustworthy: an item added between the
+    // two runs is counted, never averaged in, so dataset drift can't read as
+    // agent regression.
+    test('an item added since the baseline is counted, not averaged in', async () => {
+      const baseline = await runWith({ answers: ['Paris', 'Paris'] });
+
+      const added = await addItem(datasetId, {
+        input: [{ role: 'user', content: 'c' }],
+        expected_output: 'Paris',
+      });
+      extraItemId = added.id as string;
+
+      // All three items answer correctly, so a naive comparison would also see
+      // "no change" — the counts are what prove the intersection was used.
+      const current = await runWith({
+        answers: ['Paris', 'Paris', 'Paris'],
+        baselineRunId: baseline.id,
+      });
+
+      const comparison = current.aggregate_scores.baseline;
+      expect(comparison.compared_item_count).toBe(2);
+      expect(comparison.added_item_count).toBe(1);
+      expect(comparison.removed_item_count).toBe(0);
+      expect(comparison.scorers.exact_match.mean_delta).toBe(0);
+
+      await asUser().delete(
+        `/api/v1/datasets/${datasetId}/items/${extraItemId}`
+      );
+    });
+
+    test('a baseline from a different eval is rejected with 400', async () => {
+      const otherEval = await createEval({
+        name: 'baseline-other-eval',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+      });
+      const foreign = await runWith({ answers: ['Paris', 'Paris'] });
+
+      const res = await asUser()
+        .post(`/api/v1/evals/${otherEval.id}/runs`)
+        .send({ wait: true, baseline_run_id: foreign.id });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toMatch(/not a run of this eval/);
+    });
+  });
+
+  // ── llm_judge end to end (Phase 2) ───────────────────────────────────────
+
+  /**
+   * The judge runs against a local OpenAI-compatible stub rather than a mock, so
+   * the real `generateText` serialization, the provider resolution and the
+   * verdict parsing all execute (`.claude/rules/tests.md` — prefer a local fake
+   * server over a mock at an external boundary). Only the *agent's* generation
+   * stays mocked, as everywhere else in this file.
+   */
+  describe('llm_judge runs', () => {
+    let judgeServer: Server;
+    let judgeProviderId: string;
+    let judgePrompts: string[] = [];
+    let judgeReply = '{"score": 0.9, "reasoning": "close enough"}';
+
+    beforeAll(async () => {
+      judgeServer = createServer((req, res) => {
+        let raw = '';
+        req.on('data', (chunk) => {
+          raw += chunk as string;
+        });
+        req.on('end', () => {
+          const body = JSON.parse(raw) as {
+            messages?: Array<{ content?: string }>;
+          };
+          judgePrompts.push(body.messages?.[0]?.content ?? '');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(
+            JSON.stringify({
+              id: 'chatcmpl-judge',
+              object: 'chat.completion',
+              created: 0,
+              model: 'judge-model',
+              choices: [
+                {
+                  index: 0,
+                  message: { role: 'assistant', content: judgeReply },
+                  finish_reason: 'stop',
+                },
+              ],
+              usage: {
+                prompt_tokens: 1,
+                completion_tokens: 1,
+                total_tokens: 2,
+              },
+            })
+          );
+        });
+      });
+      await new Promise<void>((resolve) => {
+        judgeServer.listen(0, '127.0.0.1', resolve);
+      });
+      const { port } = judgeServer.address() as AddressInfo;
+
+      const providerRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Judge Provider',
+          provider: 'ollama',
+          default_model: 'judge-model',
+          base_url: `http://127.0.0.1:${String(port)}/v1`,
+        });
+      expect(providerRes.status).toBe(201);
+      judgeProviderId = providerRes.body.id;
+    });
+
+    afterAll(async () => {
+      await new Promise<void>((resolve, reject) => {
+        judgeServer.close((error) => {
+          return error ? reject(error) : resolve();
+        });
+      });
+    });
+
+    beforeEach(() => {
+      judgePrompts = [];
+      judgeReply = '{"score": 0.9, "reasoning": "close enough"}';
+    });
+
+    /** An eval whose single scorer is a judge with the given threshold. */
+    const judgeEval = async (args: { name: string; passThreshold: number }) => {
+      const datasetId = (await createDataset(`${args.name}-suite`)).id;
+      await addItem(datasetId, {
+        input: [{ role: 'user', content: 'capital of France?' }],
+        expected_output: 'Paris, France',
+      });
+
+      return createEval({
+        name: args.name,
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [
+          {
+            type: 'llm_judge',
+            ai_provider_id: judgeProviderId,
+            model: 'judge-model',
+            prompt:
+              'Q: {{input}} A: {{output}} Ref: {{expected}}. Answer with JSON.',
+            pass_threshold: args.passThreshold,
+          },
+        ],
+      });
+    };
+
+    const runJudged = async (evalId: string) => {
+      mockCreateGeneration.mockResolvedValueOnce(
+        completedGeneration('gen_j1', 'Paris')
+      );
+      const res = await asUser()
+        .post(`/api/v1/evals/${evalId}/runs`)
+        .send({ wait: true });
+      expect(res.status).toBe(201);
+
+      const results = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${res.body.id}/results`
+      );
+      return { run: res.body, result: results.body.data[0] };
+    };
+
+    test('renders every slot into the prompt the judge actually receives', async () => {
+      const judged = await judgeEval({
+        name: 'judge-render-eval',
+        passThreshold: 0.7,
+      });
+      await runJudged(judged.id);
+
+      expect(judgePrompts).toHaveLength(1);
+      // Asserted at the wire, so this proves the real serialization — the agent
+      // output, the item's input messages and the reference answer all arrive.
+      expect(judgePrompts[0]).toContain('A: Paris');
+      expect(judgePrompts[0]).toContain('Ref: Paris, France');
+      expect(judgePrompts[0]).toContain('capital of France?');
+      expect(judgePrompts[0]).not.toContain('{{output}}');
+    });
+
+    test('scores the item from the parsed verdict and stores the reasoning', async () => {
+      const judged = await judgeEval({
+        name: 'judge-score-eval',
+        passThreshold: 0.7,
+      });
+      const { result } = await runJudged(judged.id);
+
+      expect(result.scores).toEqual([
+        {
+          scorer: 'llm_judge',
+          score: 0.9,
+          passed: true,
+          reasoning: 'close enough',
+        },
+      ]);
+      expect(result.error).toBeNull();
+    });
+
+    test('per-item passed flips exactly at the threshold', async () => {
+      const judged = await judgeEval({
+        name: 'judge-threshold-eval',
+        passThreshold: 0.9,
+      });
+      judgeReply = '{"score": 0.89}';
+
+      const { result } = await runJudged(judged.id);
+
+      expect(result.scores[0].score).toBeCloseTo(0.89);
+      expect(result.scores[0].passed).toBe(false);
+      expect(result.passed).toBe(false);
+    });
+
+    // A judge that cannot answer says nothing about the agent, so it must not
+    // land as a score of 0 (a fabricated regression) nor fail the whole run.
+    test('a malformed judge reply errors the item, not the run', async () => {
+      const judged = await judgeEval({
+        name: 'judge-malformed-eval',
+        passThreshold: 0.7,
+      });
+      judgeReply = 'I think it was pretty good, honestly.';
+
+      const { run, result } = await runJudged(judged.id);
+
+      expect(run.status).toBe('completed');
+      expect(run.errored_count).toBe(1);
+      expect(run.completed_count).toBe(0);
+      expect(result.error).toMatch(/did not answer with a JSON object/);
+      expect(result.scores).toEqual([]);
+      // Excluded from the aggregates rather than depressing them.
+      expect(run.aggregate_scores.scored_item_count).toBe(0);
+      expect(run.aggregate_scores.pass_rate).toBeNull();
+    });
+
+    test('an out-of-range judge score errors the item rather than being clamped', async () => {
+      const judged = await judgeEval({
+        name: 'judge-range-eval',
+        passThreshold: 0.7,
+      });
+      judgeReply = '{"score": 87}';
+
+      const { run, result } = await runJudged(judged.id);
+
+      expect(run.errored_count).toBe(1);
+      expect(result.error).toMatch(/outside the 0–1 range/);
     });
   });
 

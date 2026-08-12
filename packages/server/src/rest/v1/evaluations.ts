@@ -16,7 +16,7 @@ import {
   listEvalResults,
   listEvalRuns,
 } from 'src/lib/evaluationRunReads';
-import { startEvalRun } from 'src/lib/evaluationRuns';
+import { cancelEvalRun, startEvalRun } from 'src/lib/evaluationRuns';
 import {
   createEval,
   deleteEval,
@@ -448,6 +448,29 @@ evaluationsRouter.get(
       evalId: ctx.params.eval_id,
       runId: ctx.params.run_id,
       ...parsePagination(ctx),
+    });
+  }
+);
+
+/**
+ * @openapi
+ * /api/v1/evals/{eval_id}/runs/{run_id}/cancel:
+ *   post:
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{run_id}~1cancel/post'
+ */
+evaluationsRouter.post(
+  '/evals/:eval_id/runs/:run_id/cancel',
+  async (ctx: Context) => {
+    const projectIds = await requireProjectAccess({
+      ctx,
+      action: 'evaluations:RunEval',
+      resourceType: 'eval',
+    });
+
+    ctx.body = await cancelEvalRun({
+      projectIds,
+      evalId: ctx.params.eval_id,
+      runId: ctx.params.run_id,
     });
   }
 );

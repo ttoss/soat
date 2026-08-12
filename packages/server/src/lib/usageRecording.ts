@@ -137,6 +137,10 @@ const writeGenerationEvent = async (args: {
       aiProviderId: attribution.aiProviderId,
       triggerId: attribution.triggerId,
       actionId: attribution.actionId,
+      // `eval` for an eval run's item generations, null for production traffic.
+      // Copied off the generation's own column, so a caller cannot bill eval
+      // spend as production or vice versa.
+      source: generation.source,
     },
     idempotencyKey,
     provider: attribution.provider,
@@ -166,7 +170,15 @@ const writeGenerationEvent = async (args: {
  * against the logs.
  */
 export type CompletionUsageSource =
-  'chat' | 'discussion' | 'memory_consolidation' | 'memory_extraction';
+  | 'chat'
+  | 'discussion'
+  | 'memory_consolidation'
+  | 'memory_extraction'
+  // An `llm_judge` scorer grading one eval item. Separate from the `eval`
+  // source the graded item generations carry, so a rollup can price *running* a
+  // suite apart from *grading* it — judging doubles the calls, which is the
+  // evaluations module's headline cost risk.
+  | 'eval_judge';
 
 /**
  * Writes one `llm_tokens` usage event for a completed provider call that has no
@@ -229,6 +241,10 @@ export const recordCompletionUsage = async (args: {
         aiProviderId: args.aiProviderId,
         triggerId: null,
         actionId: null,
+        // A generation-less completion has no generation or agent row to
+        // identify the workload by, so it labels itself: the same value that
+        // names it in the idempotency key.
+        source: args.source,
       },
       idempotencyKey: `completion:${args.source}:${randomUUID()}`,
       provider: args.provider,

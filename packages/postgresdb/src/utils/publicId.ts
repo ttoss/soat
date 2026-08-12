@@ -64,6 +64,7 @@ export const PUBLIC_ID_PREFIXES = {
   evaluation: 'eval_',
   evalRun: 'evrun_',
   evalResult: 'evres_',
+  evalRunTask: 'evtsk_',
 } as const;
 
 /**

@@ -137,6 +137,13 @@ export type TokenEventAttribution = {
   aiProviderId: number | null;
   triggerId: string | null;
   actionId: string | null;
+  /**
+   * The workload behind the spend when it is not production traffic (`eval`,
+   * `eval_judge`); `null` for ordinary traffic. Required rather than optional so
+   * a new metering call site has to say which it is instead of defaulting into
+   * production spend.
+   */
+  source: string | null;
 };
 
 /**
@@ -170,6 +177,7 @@ export const persistTokenEvent = async (args: {
         aiProviderId: attribution.aiProviderId,
         triggerId: attribution.triggerId,
         actionId: attribution.actionId,
+        source: attribution.source,
         meterType: 'llm_tokens',
         provider: args.provider,
         model: args.model,

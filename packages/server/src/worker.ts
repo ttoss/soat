@@ -8,6 +8,7 @@ import {
   logDatabaseConnectionError,
   syncSchemaWithAdvisoryLock,
 } from './db';
+import { startEvalWorker, stopEvalWorker } from './lib/evaluationWorker';
 import {
   startOrchestrationScheduler,
   stopOrchestrationScheduler,
@@ -60,7 +61,11 @@ const startWorker = async () => {
     await syncSchemaWithAdvisoryLock({ sequelize: database.sequelize });
     startOrchestrationScheduler();
     startOrchestrationWorker();
-    log('startWorker: orchestration worker running');
+    // The same process also drains the eval queue, so a deployment that moves
+    // background work off the API tier moves *all* of it: an API running with
+    // EVAL_WORKER_DISABLED would otherwise leave async eval runs queued forever.
+    startEvalWorker();
+    log('startWorker: orchestration and eval workers running');
   } catch (error) {
     logDatabaseConnectionError(error);
     process.exit(1);
@@ -74,6 +79,7 @@ const gracefulShutdown = (signal: string) => {
   log('gracefulShutdown: received %s, draining', signal);
   stopOrchestrationScheduler();
   stopOrchestrationWorker();
+  stopEvalWorker();
   void drainInFlight().then((remaining) => {
     log('gracefulShutdown: exiting (%d task(s) still in flight)', remaining);
     process.exit(0);

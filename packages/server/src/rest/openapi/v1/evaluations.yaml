@@ -736,11 +736,16 @@ paths:
         per item and scoring the outputs.
 
 
-        `wait` is **required** and must be `true`: Phase 1 executes
-        synchronously and returns a terminal run. `wait: false` is rejected with
-        400 until asynchronous runs land in Phase 2 — requiring the field now
-        means the same request flips to a `queued` run additively, instead of
-        silently changing what an omitted field means.
+        `wait: true` executes the run synchronously and returns it terminal,
+        with its scores. The dataset is capped at 25 items for a synchronous
+        run; a larger one is rejected with 400 rather than partially scored.
+
+
+        `wait: false` (the default) enqueues one task per item and returns
+        immediately with `status: "queued"`. A worker executes the items and the
+        run settles itself; poll `GET /evals/{eval_id}/runs/{run_id}` for the
+        terminal status, or subscribe to the `eval_run.completed` webhook. There
+        is no item cap on a queued run.
 
 
         The whole run is pinned to **one** agent version, stamped on
@@ -751,8 +756,11 @@ paths:
         into a single score.
 
 
-        A dataset larger than the 25-item synchronous cap is rejected with 400
-        rather than partially scored.
+        With `baseline_run_id`, the finished run's `aggregate_scores.baseline`
+        carries per-scorer deltas against that run, computed over the items
+        present and scorable in **both** runs, with the divergence counted. A
+        delta over a shifted dataset is therefore never presented as a clean
+        comparison.
       operationId: startEvalRun
       parameters:
         - name: eval_id
@@ -768,14 +776,14 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - wait
               properties:
                 wait:
                   type: boolean
+                  default: false
                   description: >-
-                    Must be true in Phase 1 — the run executes synchronously and
-                    the response carries its terminal status and scores.
+                    True runs the eval synchronously (25-item cap) and returns a
+                    terminal run with its scores. False — the default — enqueues
+                    the items and returns a `queued` run immediately.
                   example: true
                 agent_version:
                   type: integer
@@ -789,22 +797,24 @@ paths:
                   type: string
                   nullable: true
                   description: >-
-                    A terminal run of the same eval to compare against. Phase 1
-                    validates and records the link; the per-scorer deltas it
-                    feeds are computed in Phase 2.
+                    A terminal run of the same eval to compare against. The
+                    finished run's `aggregate_scores.baseline` reports per-scorer
+                    deltas over the item intersection. A run of a different eval
+                    is rejected with 400.
                   example: evrun_V1StGXR8Z5jdHi6B
       responses:
         '201':
-          description: Eval run finished
+          description: >-
+            Eval run finished (`wait: true`) or queued (`wait: false`)
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/EvalRun'
         '400':
           description: >-
-            Bad request (wait missing or false, dataset empty or over the sync
-            cap, unknown agent_version, invalid baseline, scorers no longer
-            valid against the agent)
+            Bad request (non-boolean wait, dataset empty or over the synchronous
+            cap, unknown agent_version, invalid baseline, scorers no longer valid
+            against the agent)
         '401':
           description: Unauthorized
         '403':
@@ -913,6 +923,57 @@ paths:
           description: Forbidden
         '404':
           description: Eval or run not found
+  /api/v1/evals/{eval_id}/runs/{run_id}/cancel:
+    post:
+      tags:
+        - Evaluations
+      summary: Cancel an eval run
+      description: >-
+        Cancels a queued or running run: its outstanding item tasks are dropped
+        so it stops consuming provider budget, and the run settles as `canceled`.
+
+
+        Results already written are kept — they are real measurements of
+        generations that were really paid for — and `completed_count` /
+        `errored_count` report what ran. `aggregate_scores` is deliberately left
+        null: a partial roll-up in the same field a completed run uses would read
+        as a whole-dataset verdict.
+
+
+        A run that has already finished is rejected with 400.
+      operationId: cancelEvalRun
+      parameters:
+        - name: eval_id
+          in: path
+          required: true
+          description: Eval ID
+          schema:
+            type: string
+            example: eval_V1StGXR8Z5jdHi6B
+        - name: run_id
+          in: path
+          required: true
+          description: Eval run ID
+          schema:
+            type: string
+            example: evrun_V1StGXR8Z5jdHi6B
+      responses:
+        '200':
+          description: Eval run canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EvalRun'
+        '400':
+          description: The run has already finished
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Eval or run not found
+        '500':
+          description: Internal server error
 components:
   schemas:
     DatasetItemInput:
@@ -948,14 +1009,17 @@ components:
         platform emits no structured output and every item would score 0.
 
 
-        `llm_judge` is specified but ships with Phase 2 and is rejected with 400
-        until then.
+        `llm_judge` grades the output with a model completion, returning a
+        continuous score plus its `reasoning`. Its `pass_threshold` is required:
+        a continuous score says nothing about where "good enough" is, and a
+        defaulted cutoff would silently decide the gate.
       items:
         oneOf:
           - $ref: '#/components/schemas/ExactMatchScorer'
           - $ref: '#/components/schemas/ContainsScorer'
           - $ref: '#/components/schemas/JsonLogicScorer'
           - $ref: '#/components/schemas/OutputSchemaScorer'
+          - $ref: '#/components/schemas/LlmJudgeScorer'
     ExactMatchScorer:
       type: object
       required:
@@ -1007,6 +1071,52 @@ components:
             JSON Schema the structured output is validated against. Frozen here
             so two runs stay comparable; falls back to the agent's
             `output_schema` when omitted.
+    LlmJudgeScorer:
+      type: object
+      required:
+        - type
+        - prompt
+        - pass_threshold
+      properties:
+        type:
+          type: string
+          enum: [llm_judge]
+        prompt:
+          type: string
+          description: >-
+            The judge prompt. `{{input}}`, `{{output}}` and `{{expected}}` are
+            replaced with the item's input messages, the agent's output text, and
+            the item's `expected_output`. Slots are filled in one pass, so a slot
+            value that itself contains `{{output}}` is not re-expanded. The judge
+            must answer with a JSON object carrying a numeric `score` between 0
+            and 1 and an optional `reasoning` string; a reply that does not marks
+            the **item** errored, never the run failed and never a score of 0.
+          example: >-
+            Rate 0-1 how well the answer matches the reference. Answer with
+            {"score": <0-1>, "reasoning": "<why>"}. Question: {{input}} Answer:
+            {{output}} Reference: {{expected}}
+        pass_threshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: >-
+            The item passes this scorer when the judge's score is greater than or
+            equal to this value. Required.
+          example: 0.7
+        ai_provider_id:
+          type: string
+          nullable: true
+          description: >-
+            The AI provider that runs the judge; it must belong to the eval's
+            project. Omit to use the project's default model route.
+          example: aip_V1StGXR8Z5jdHi6B
+        model:
+          type: string
+          nullable: true
+          description: >-
+            Overrides the provider's default model. Pinned per scorer, because
+            deltas between runs judged by different models are not comparable.
+          example: gpt-4o-mini
     ScorerResult:
       type: object
       properties:
@@ -1021,7 +1131,7 @@ components:
           type: boolean
         reasoning:
           type: string
-          description: Present for judge scorers (Phase 2)
+          description: The judge's stated rationale; present for `llm_judge` only
     Dataset:
       type: object
       properties:
@@ -1064,10 +1174,9 @@ components:
           type: string
           nullable: true
           description: >-
-            The generation this item was curated from. Always null until the
-            `from-generation` route lands in Phase 2. A curated item is a
-            deliberate fixture: erasing the source generation neither deletes
-            nor mutates it.
+            The generation this item was curated from. A curated item is a
+            deliberate fixture: erasing the source generation neither deletes nor
+            mutates it.
           example: gen_V1StGXR8Z5jdHi6B
         created_at:
           type: string
@@ -1125,6 +1234,53 @@ components:
         scored_item_count:
           type: integer
           description: Items that produced a score — errored items are excluded
+        baseline:
+          $ref: '#/components/schemas/BaselineComparison'
+    BaselineComparison:
+      type: object
+      nullable: true
+      description: >-
+        Comparison against the run named by `baseline_run_id`; absent when the
+        run named none.
+
+
+        Every number here is computed over the **item intersection** — the dataset
+        items present and scorable in both runs — because a delta only means
+        something when both sides answered the same question. The
+        compared/added/removed counts make any dataset drift visible instead of
+        letting it read as agent regression. Positive deltas mean this run scored
+        higher than the baseline.
+      properties:
+        run_id:
+          type: string
+          example: evrun_V1StGXR8Z5jdHi6B
+        compared_item_count:
+          type: integer
+          description: Items scorable in both runs — the basis of every delta
+        added_item_count:
+          type: integer
+          description: Scorable here but not in the baseline (added, or errored there)
+        removed_item_count:
+          type: integer
+          description: Scorable in the baseline but not here (removed, or errored here)
+        pass_rate_delta:
+          type: number
+          nullable: true
+          description: >-
+            Run-level pass-rate delta over the intersection; null when the two
+            runs share no comparable item
+        scorers:
+          type: object
+          description: >-
+            Per-scorer deltas, keyed by scorer type. A scorer only one of the two
+            runs ran is omitted rather than compared against nothing.
+          additionalProperties:
+            type: object
+            properties:
+              mean_delta:
+                type: number
+              pass_rate_delta:
+                type: number
     EvalRun:
       type: object
       properties:
@@ -1150,7 +1306,9 @@ components:
         passed:
           type: boolean
           nullable: true
-          description: Null when the eval declares no pass_threshold
+          description: >-
+            Null when the eval declares no pass_threshold, and until the run is
+            terminal
         item_count:
           type: integer
         completed_count:

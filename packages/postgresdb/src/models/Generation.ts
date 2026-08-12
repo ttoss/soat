@@ -187,6 +187,16 @@ export class Generation extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare nodeId: string | null;
 
+  // What kind of workload produced this generation, when it is not ordinary
+  // production traffic: `eval` for an eval run's items. Null means production.
+  // Read back at metering time and copied onto the UsageEvent's own `source`
+  // column, so eval spend is separable from production spend in cost rollups
+  // (docs/prd-evaluations.md, Phase 2). A typed column rather than the
+  // `metadata` bag for the same reason as the four above: it is billing
+  // identity the platform sets, never a caller.
+  @Column({ type: DataType.STRING, allowNull: true })
+  declare source: string | null;
+
   // The agent config version that served this generation
   // (docs/prd-agent-versions.md, Phase 2). Forging it would misattribute a
   // canary's behavior to the stable version in every downstream comparison.
