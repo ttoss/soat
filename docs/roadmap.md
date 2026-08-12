@@ -158,10 +158,12 @@ evaluations P1 exists to measure rule efficacy — both gates in
 
 ### Agent versions
 
-_Not started._
+_Phases 1–2 shipped (`agentVersions.ts`, `releaseAssignment.ts`,
+`agentServedVersion.ts`); this section previously said "not started" while the
+initiatives table above already said 🟡 — the table was right._
 
-- [ ] **Phase 1** Version snapshots + list/get/restore: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
-- [ ] **Phase 2** Releases + deterministic canary: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
+- [x] ~~**Phase 1** Version snapshots + list/get/restore~~ — **shipped**: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
+- [x] ~~**Phase 2** Releases + deterministic canary~~ — **shipped**: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
 - [ ] **Phase 3** Eval-gated promotion (`promotion_gate`) — needs **Evaluations Phase 1+**
 
 ### Evaluations

@@ -92,7 +92,7 @@ Indexes: `(datasetId)`, `(sourceGenerationId)`.
 | agentId       | INTEGER     | FK → Agent, NOT NULL (the agent under test)                   |
 | datasetId     | INTEGER     | FK → Dataset, NOT NULL (same project — validated in lib)      |
 | scorers       | JSONB       | NOT NULL; array of scorer configs (discriminated union below) |
-| passThreshold | DECIMAL     | NULL; 0–1; run `passed` iff mean score ≥ threshold            |
+| passThreshold | DECIMAL     | NULL; 0–1; run `passed` iff pass rate ≥ threshold (see [Pass semantics](#pass-semantics)) |
 | createdAt / updatedAt | TIMESTAMP | NOT NULL                                            |
 
 Indexes: unique `(projectId, name)`, `(projectId)`, `(agentId)`.
@@ -104,6 +104,7 @@ Indexes: unique `(projectId, name)`, `(projectId)`, `(agentId)`.
 | id              | INTEGER     | PK                                                                 |
 | publicId        | VARCHAR(32) | UNIQUE, `evrun_` prefix                                            |
 | evalId          | INTEGER     | FK → Eval, NOT NULL                                                |
+| agentVersion    | INTEGER     | NOT NULL; the one agent version every item ran against (see [Version pinning](#version-pinning)) |
 | status          | VARCHAR     | `queued` \| `running` \| `completed` \| `failed` \| `canceled`     |
 | baselineRunId   | INTEGER     | FK → EvalRun, NULL; must belong to the same Eval                   |
 | aggregateScores | JSONB       | NULL until terminal; per-scorer mean/pass-rate + deltas vs baseline|
@@ -121,16 +122,20 @@ Indexes: `(evalId, createdAt)`.
 | id            | INTEGER     | PK                                                                |
 | publicId      | VARCHAR(32) | UNIQUE, `evres_` prefix                                           |
 | evalRunId     | INTEGER     | FK → EvalRun, NOT NULL, CASCADE delete                            |
-| datasetItemId | INTEGER     | FK → DatasetItem, NOT NULL                                        |
+| datasetItemId | INTEGER     | FK → DatasetItem, NULL, ON DELETE SET NULL (see [Item snapshot](#item-snapshot)) |
+| input         | JSONB       | NOT NULL; frozen copy of the item's `input` at run time           |
+| expectedOutput | TEXT       | NULL; frozen copy of the item's `expected_output` at run time     |
 | generationId  | INTEGER     | FK → Generation, NULL (null when the generation itself errored)   |
-| output        | TEXT        | NULL; the agent's final output text                               |
+| output        | TEXT        | NULL; the agent's final output text (redacted by generation purge — see [Retention](#retention--erasure)) |
 | scores        | JSONB       | NOT NULL; `[{scorer, score, passed, reasoning?}]` per scorer      |
 | passed        | BOOLEAN     | NOT NULL; AND over per-scorer `passed`                            |
 | error         | TEXT        | NULL; item-level failure reason                                   |
 | createdAt     | TIMESTAMP   | NOT NULL                                                          |
 
 Indexes: `(evalRunId)`, unique `(evalRunId, datasetItemId)` — one result per
-item per run, which also makes queue redelivery idempotent.
+item per run, which also makes queue redelivery idempotent. (The column is
+always populated at insert time — items are only deletable *after* a run, and
+PostgreSQL unique indexes ignore NULLs, so a later `SET NULL` cannot collide.)
 
 ## Scorers
 
@@ -141,9 +146,9 @@ REST bodies per the case convention):
 | --------------- | --------------------------------------------------------------- | -------------------------------------------- |
 | `exact_match`   | — (compares output to `expected_output`, trimmed)               | 0 or 1                                       |
 | `contains`      | `value`, `case_sensitive` (default false)                       | 0 or 1                                       |
-| `json_logic`    | `expression` — JSON Logic over `{input, output, expected, item.metadata}` | truthy → 1, falsy → 0              |
+| `json_logic`    | `expression` — JSON Logic over `{input, output, object, expected, item.metadata}` (`object` is the structured output, when the agent has an `output_schema`) | truthy → 1, falsy → 0              |
 | `output_schema` | `schema` (optional JSON Schema); falls back to the agent's `output_schema`, which must be set either way | 0 or 1 — validates the generation's structured `object` output |
-| `llm_judge`     | `ai_provider_id`, `model`, `prompt` with `{{input}}` / `{{output}}` / `{{expected}}` slots | 0–1 + `reasoning` |
+| `llm_judge`     | `ai_provider_id`, `model`, `prompt` with `{{input}}` / `{{output}}` / `{{expected}}` slots, `pass_threshold` (required, 0–1) | 0–1 + `reasoning`; `passed` iff score ≥ its `pass_threshold` |
 
 **Decision:** `json_logic` reuses the shared `LogicEngine` in
 `packages/server/src/lib/jsonLogicMapping.ts` (`evaluateLogic`) — the same
@@ -157,6 +162,28 @@ judges are just completions, and they meter/trace like any other call.
 **Decision:** every scorer returns `{score: 0–1, passed: boolean}`; binary
 scorers emit 0/1. One shape keeps aggregation, deltas, and thresholds
 scorer-agnostic, so new scorer types need no aggregation changes.
+
+### Pass semantics
+
+**Decision (2026-08, owner sign-off): run-level `passed` gates on the pass
+rate, never on a pooled mean.** Three levels, each derived from the one below:
+
+1. **Per scorer, per item** — a binary scorer passes iff its score is 1; an
+   `llm_judge` scorer passes iff its score ≥ the scorer's own **required**
+   `pass_threshold`. Every scorer therefore produces a well-defined `passed`
+   without special-casing downstream.
+2. **Per item** — `EvalResult.passed` is the AND over its per-scorer `passed`
+   (as already specified in the data model).
+3. **Per run** — `EvalRun.passed` is `null` when the Eval has no
+   `pass_threshold`; otherwise it is true iff the **pass rate** — passed items
+   over non-errored items — is ≥ `Eval.pass_threshold`.
+
+The rejected alternative, "mean of all scores ≥ threshold" (this PRD's original
+wording), pools 0/1 binaries with 0–1 judge fractions into a unit-less number
+whose meaning shifts whenever a scorer is added — a gate value nobody can
+reason about. `aggregate_scores` still reports per-scorer means and pass rates
+(plus baseline deltas), so the continuous signal is not lost; it just does not
+gate.
 
 **Decision (2026-07): the `output_schema` scorer carries its own optional
 `schema`; the agent's `output_schema` is only a fallback.** Binding the scorer
@@ -192,7 +219,10 @@ explicitly.** `createGeneration` returns `output.content` (the final text) and,
 for an agent with an `output_schema`, `output.object` (the structured output the
 platform already parsed and validated). Text scorers (`exact_match`, `contains`,
 `llm_judge`, and `json_logic`'s `output` var) read `output.content`; the
-`output_schema` scorer validates `output.object` (never re-parses the text). A
+`output_schema` scorer validates `output.object` (never re-parses the text), and
+`json_logic` additionally exposes it as the `object` var so value-level
+assertions over structured output (`object.category == expected`) need no text
+re-parsing either — absent when the agent has no `output_schema`. A
 missing `object` on an otherwise `completed` generation (the model returned no
 structured output) scores 0.
 
@@ -217,7 +247,68 @@ generation per item** through the existing `createGeneration` machinery
 the run exercises the agent's true instructions, tools, model, and knowledge,
 and each `EvalResult` links its `generation_id`/trace for drill-down.
 
-**Decision (2026-07): `wait: true` means "run synchronously or fail" — never
+Phase 1 sync runs execute items **sequentially** — the 25-item cap bounds the
+worst case, and a run of real generations can take minutes, which callers of
+`wait: true` must expect. Bounded parallelism is an additive later optimization
+with no contract change; async runs get concurrency from the queue.
+
+### Item snapshot
+
+**Decision (2026-08, owner sign-off): the run freezes what it ran against —
+each `EvalResult` carries a copy of its item's `input` and `expected_output`
+taken at run time, and `dataset_item_id` becomes a nullable
+`ON DELETE SET NULL` link.** This is the same argument that froze the
+`output_schema` scorer's `schema` into the Eval config, applied to the data:
+items have full CRUD, so without a frozen copy, editing or deleting items
+between two runs silently makes their scores incomparable — and a baseline
+delta would report dataset drift as agent regression, the exact fabricated
+signal this module exists to prevent. With the copy on the result row, results
+are self-contained forever, items stay freely editable and deletable (deleting
+one no longer collides with a NOT NULL FK or cascades history away), and no
+separate snapshot model is needed.
+
+Baseline deltas are computed **only over items present in both runs** (matched
+by `dataset_item_id`); when the two runs' item sets diverge, the divergence is
+flagged in `aggregate_scores` (compared/added/removed counts) so a delta over a
+shifted dataset is never presented as a clean comparison.
+
+### Version pinning
+
+**Decision (2026-08, owner sign-off): a run resolves ONE agent version at
+run-start, stamps it on `EvalRun.agent_version`, and every item runs against
+it.** Without pinning, the served-version machinery would sabotage the run:
+release assignment keys on the session's actor, an eval generation has no
+session, and a null key gets a **random bucket per generation**
+(`releaseAssignment.ts`) — so under an active canary, one run would blend two
+versions into a single score, and its baseline delta would be noise.
+
+`POST /evals/{eval_id}/runs` accepts an optional `agent_version` (any archived
+version number) to name the version under test — this is how the promotion gate
+in `docs/prd-agent-versions.md` evals a canary before promoting it. When
+omitted, the run uses the agent's live draft config (stamping its current
+version), or the active release's **stable** version when a release is in
+effect — never a random assignment. An `agent_version` with no archived config
+is rejected `400` at run-start.
+
+### Retention & erasure
+
+**Decision (2026-08, owner sign-off): generation purge cascades to eval
+results; datasets are operator-owned fixtures that purge never touches.** The
+platform's content purge redacts a generation's stored content — but
+`EvalResult.output` is a copy of that content on another table, and a purge
+that leaves copies behind is not a purge. So purging a generation (directly or
+via its trace) also redacts the `output` of any `EvalResult` linking it, the
+same redaction semantics as the generation row; scores, `passed`, and the
+frozen `input`/`expected_output` survive, so run aggregates remain meaningful.
+
+Dataset items sit on the other side of the line, including items curated
+`from-generation`: they are deliberate, operator-owned **test fixtures**, and
+erasing the source generation does not delete or mutate them — a test suite
+must not silently stop being runnable because of an unrelated erasure request.
+The `from-generation` route's documentation must state this explicitly: the
+copy is deliberate, and an erasure request covering the source content requires
+the operator to delete the curated item themselves. The module doc carries both
+halves of this posture.
 silently truncate or downgrade.** A sync run over a dataset larger than the
 sync item cap (25) is rejected `400` naming the cap, rather than scoring a
 partial subset (which would read as a complete pass/fail over the whole
@@ -250,7 +341,9 @@ so eval spend is separable from production spend in cost rollups.
 
 `POST /evals/{eval_id}/runs` accepts `baseline_run_id` (a terminal run of the
 same Eval). On completion, `aggregate_scores` includes per-scorer deltas
-against the baseline, and `passed` is computed from `pass_threshold`. Webhook
+against the baseline — computed over the item intersection, with divergence
+flagged (see [Item snapshot](#item-snapshot)) — and `passed` is computed from
+`pass_threshold` per [Pass semantics](#pass-semantics). Webhook
 events `eval_run.completed` and `eval_run.failed` fire through the existing
 webhooks module with `{eval_id, eval_run_id, passed, aggregate_scores}` —
 this event + verdict pair is the promotion gate consumed by
@@ -261,20 +354,20 @@ this event + verdict pair is the promotion gate consumed by
 Snake_case bodies; MCP tools and SDK/CLI derive from the OpenAPI spec
 (`packages/server/src/rest/openapi/v1/evaluations.yaml`) via `soatTools.ts`.
 
-| Method | Path                                                    | Description                                    |
-| ------ | ------------------------------------------------------- | ---------------------------------------------- |
-| POST/GET | `/api/v1/datasets`                                    | Create / list datasets (`project_id` filter)   |
-| GET/PUT/DELETE | `/api/v1/datasets/{dataset_id}`                 | Get / update / delete a dataset                |
-| POST/GET | `/api/v1/datasets/{dataset_id}/items`                 | Add / list items                               |
-| PUT/DELETE | `/api/v1/datasets/{dataset_id}/items/{item_id}`     | Update / delete an item                        |
-| POST   | `/api/v1/datasets/{dataset_id}/items/from-generation`   | Curate an item from a generation (Phase 2)     |
-| POST/GET | `/api/v1/evals`                                       | Create / list evals                            |
-| GET/PUT/DELETE | `/api/v1/evals/{eval_id}`                       | Get / update / delete an eval                  |
-| POST   | `/api/v1/evals/{eval_id}/runs`                          | Start a run (`wait`, `baseline_run_id`)        |
-| GET    | `/api/v1/evals/{eval_id}/runs`                          | List runs                                      |
-| GET    | `/api/v1/evals/{eval_id}/runs/{run_id}`                 | Run status + aggregate scores + deltas         |
-| GET    | `/api/v1/evals/{eval_id}/runs/{run_id}/results`         | Per-item results (paginated)                   |
-| POST   | `/api/v1/evals/{eval_id}/runs/{run_id}/cancel`          | Cancel a queued/running run                    |
+| Method | Path                                                    | Description                                    | Phase |
+| ------ | ------------------------------------------------------- | ---------------------------------------------- | ----- |
+| POST/GET | `/api/v1/datasets`                                    | Create / list datasets (`project_id` filter)   | 1 |
+| GET/PUT/DELETE | `/api/v1/datasets/{dataset_id}`                 | Get / update / delete a dataset                | 1 |
+| POST/GET | `/api/v1/datasets/{dataset_id}/items`                 | Add / list items                               | 1 |
+| PUT/DELETE | `/api/v1/datasets/{dataset_id}/items/{item_id}`     | Update / delete an item                        | 1 |
+| POST   | `/api/v1/datasets/{dataset_id}/items/from-generation`   | Curate an item from a generation               | 2 |
+| POST/GET | `/api/v1/evals`                                       | Create / list evals                            | 1 |
+| GET/PUT/DELETE | `/api/v1/evals/{eval_id}`                       | Get / update / delete an eval                  | 1 |
+| POST   | `/api/v1/evals/{eval_id}/runs`                          | Start a run (`wait`, `baseline_run_id`, optional `agent_version`) | 1 (`baseline_run_id` deltas: 2) |
+| GET    | `/api/v1/evals/{eval_id}/runs`                          | List runs                                      | 1 |
+| GET    | `/api/v1/evals/{eval_id}/runs/{run_id}`                 | Run status + aggregate scores + deltas         | 1 |
+| GET    | `/api/v1/evals/{eval_id}/runs/{run_id}/results`         | Per-item results (paginated)                   | 1 |
+| POST   | `/api/v1/evals/{eval_id}/runs/{run_id}/cancel`          | Cancel a queued/running run                    | 2 |
 
 ## Permissions
 
@@ -330,7 +423,23 @@ schema change.
   returns `400`; an unknown scorer `type` returns `400` naming the field
 - A sync run against a 3-item dataset with `mockCreateGeneration` produces 3
   `EvalResult` rows, one linked generation ID each, correct per-scorer 0/1
-  scores for all four scorer types, and `passed` derived from `pass_threshold`
+  scores for all four scorer types, and run `passed` derived from
+  `pass_threshold` as a **pass rate** over non-errored items
+  ([Pass semantics](#pass-semantics))
+- Each `EvalResult` carries the frozen `input`/`expected_output` copies;
+  editing then deleting a dataset item **after** a run leaves the run's results
+  intact and readable (`dataset_item_id` nulled, copies unchanged)
+- `EvalRun.agent_version` is stamped on every run; a run with `agent_version`
+  naming an archived version executes against that config
+  (`mockCreateGeneration` asserted via the served instructions), an unknown
+  version returns `400`, and a run against an agent with an active release
+  pins the whole run to one version — never per-item random assignment
+- Purging a linked generation redacts the `EvalResult.output` of its result
+  row; scores and the frozen input survive
+  ([Retention & erasure](#retention--erasure))
+- `json_logic` expressions can assert over the `object` var for a schema-bound
+  agent, and `object` is absent (not an error) for an agent without an
+  `output_schema`
 - Text scorers (`exact_match`, `contains`) read `output.content`; the
   `output_schema` scorer validates `output.object` and scores 0 when it is
   absent — asserted with `mockCreateGeneration` returning each output channel
@@ -372,21 +481,26 @@ schema change.
 - `llm_judge` renders `{{input}}`/`{{output}}`/`{{expected}}` into the prompt
   and parses `{score, reasoning}` — asserted against a local fake
   OpenAI-compatible server (tests.md pattern); a malformed judge response
-  marks the item errored, not the run failed
+  marks the item errored, not the run failed; a judge config without
+  `pass_threshold` is rejected `400` at Eval-create, and per-item `passed`
+  flips exactly at the threshold ([Pass semantics](#pass-semantics))
 - Async run: `POST .../runs` with `wait: false` returns `status: "queued"`
   immediately — the same request that returned `400` in Phase 1, so the change
   is additive; `wait` may now take `default: false`, matching
   `orchestrations.yaml`. A redelivered item task inserts no duplicate
   `EvalResult` (unique `(eval_run_id, dataset_item_id)` asserted, count == 1)
 - Run with `baseline_run_id` returns per-scorer `delta` values equal to
-  (current mean − baseline mean) within float tolerance; a baseline from a
-  different Eval returns `400`
+  (current mean − baseline mean) within float tolerance, computed over the item
+  intersection with divergence counts flagged when the item sets differ
+  ([Item snapshot](#item-snapshot)); a baseline from a different Eval returns
+  `400`
 - `eval_run.completed` fires exactly once per terminal run with the documented
   payload, asserted via a webhook test receiver; `eval_run.failed` on run
   failure
 - `from-generation` copies the generation's input messages and output into a
   new item with `source_generation_id` set; `404` for a generation outside the
-  caller's project
+  caller's project; the operation's spec description carries the
+  fixture-ownership warning from [Retention & erasure](#retention--erasure)
 - Eval generations carry `source: eval` attribution, asserted where the
   [metering choke point](../packages/website/docs/modules/usage.md#coverage) records it
 
@@ -462,7 +576,49 @@ Q: Does a sync run ever persist `queued`?
 A: No, `running` → terminal — resolved by pareto (a state no code can reach or
    observe is dead surface); checked: Phase 1 scope contains no queue, so
    nothing could transition a row out of `queued`.
+
+Q: Should `json_logic` expressions see the structured `object` output?
+A: Yes, as an `object` var — resolved by pareto (additive before the contract
+   freezes; value-level assertions otherwise force text re-parsing); checked:
+   `GenerationResult.output` declares `object?` and `evaluateLogic` takes an
+   arbitrary data context, so it is one more key in the vars object.
+
+Q: Sync-run execution — sequential or parallel?
+A: Sequential in Phase 1, duration documented — resolved by long-term
+   (parallelism is additive later with zero contract change; the 25-item cap
+   bounds the worst case); checked: nothing in Phase 1 scope depends on run
+   latency.
+
+Q: What about write-capable tools during eval runs?
+A: Documented risk + operator guidance, fix deferred to the synthetic-outputs
+   phase — resolved by pareto (a named risk worsens nothing; a tool-stub mode
+   now would contradict the real-generation premise this PRD already settled);
+   checked: no tool-stub seam exists in `agentToolResolver`, so building one is
+   its own initiative, not a criterion here.
+
+Q: `cancel` is in the REST table but out of Phase 1 — confusing?
+A: Phase column added to the endpoint table — resolved by pareto; doc clarity
+   only.
 ```
+
+Four further questions were forwarded (2026-08) as high-risk classes — public
+API contract, privacy — and decided by the owner; each is recorded as a
+**Decision (2026-08, owner sign-off)** block above:
+
+- **Item snapshot** — results freeze `input`/`expected_output`;
+  `dataset_item_id` nullable `ON DELETE SET NULL`; deltas over the
+  intersection ([Item snapshot](#item-snapshot)).
+- **Version pinning** — one version per run, stamped on
+  `EvalRun.agent_version`, optional `agent_version` selector; checked this
+  session: `resolveAssignmentKey` returns null without a session and a null
+  key gets a random bucket per generation (`releaseAssignment.ts`), so an
+  unpinned run under a canary blends versions.
+- **Retention & erasure** — generation purge cascades to `EvalResult.output`;
+  curated dataset items are operator-owned fixtures
+  ([Retention & erasure](#retention--erasure)); checked this session:
+  `purgeGenerationContent` redacts only the generation row's own columns.
+- **Pass semantics** — pass-rate gating, required `llm_judge.pass_threshold`
+  ([Pass semantics](#pass-semantics)).
 
 ### Forwarded, not self-resolved
 
@@ -473,7 +629,9 @@ as recommendations rather than settled decisions:
   required `wait` field, and every `400` above are public contract surface. The
   gate routes public API contracts to a human regardless of which test appears
   to resolve them, so these need sign-off before the Phase 1 implementation
-  freezes them into the OpenAPI spec, SDK, and CLI.
+  freezes them into the OpenAPI spec, SDK, and CLI. (The four 2026-08 questions
+  listed at the end of the decision log received that sign-off; the remaining
+  Phase 1 contract surface still needs its pre-implementation pass.)
 - **Unverifiable premise.** Whether a schema-bound agent's `output.content`
   still carries the final text under AI SDK structured output could not be
   checked (package dependencies are not installed in the deciding session, and
@@ -488,6 +646,13 @@ as recommendations rather than settled decisions:
   usage-metering thresholds, the sync-run item cap, and queue concurrency
   limits; still, a 10k-item dataset is a footgun until per-run item limits are
   tuned.
+- **Eval runs have real side effects** — an agent with a write-capable `http`
+  or `mcp` tool executes N real writes per run, nightly under Phase 3
+  schedules. There is no tool-stub mode, deliberately (real generations are the
+  module's premise); the operator guidance — stated in the module doc — is to
+  point an eval'd agent's tools at a staging target. Synthetic tool outputs
+  (the deferred client-tool phase) are the eventual seam for side-effect-free
+  runs.
 - **Judge reliability** — LLM judges drift with model updates; deltas between
   runs judged by different models are not comparable. The judge model is
   pinned per scorer config, and `reasoning` is stored for audit, but baseline
