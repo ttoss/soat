@@ -1,3 +1,6 @@
+import type { Server } from 'node:http';
+import { createServer } from 'node:http';
+
 import { DomainError } from 'src/errors';
 import type { FetchLike } from 'src/lib/aiProviderModels';
 import {
@@ -35,6 +38,54 @@ const fakeFetch = (
   };
   return { fetchImpl, calls };
 };
+
+describe('enumerateProviderModels — against a real HTTP server', () => {
+  // No `fetchImpl` here: this drives the module's own default, so real `fetch`,
+  // real request serialization and real header delivery are exercised end to
+  // end. A faked seam would skip all three.
+  let server: Server;
+  let baseUrl: string;
+  let seenAuthorization: string | undefined;
+
+  beforeAll(async () => {
+    server = createServer((req, res) => {
+      seenAuthorization = req.headers.authorization;
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({ data: [{ id: 'local-model', owned_by: 'me' }] })
+      );
+    });
+    await new Promise<void>((resolve) => {
+      return server.listen(0, '127.0.0.1', resolve);
+    });
+    const address = server.address();
+    if (address === null || typeof address === 'string') {
+      throw new Error('expected an assigned TCP port');
+    }
+    baseUrl = `http://127.0.0.1:${address.port}/v1`;
+  });
+
+  afterAll(async () => {
+    await new Promise<void>((resolve, reject) => {
+      return server.close((error) => {
+        return error ? reject(error) : resolve();
+      });
+    });
+  });
+
+  test('lists models over real HTTP, sending the credential as a Bearer token', async () => {
+    const models = await enumerateProviderModels({
+      provider: 'custom',
+      baseUrl,
+      secretValue: 'sk-local',
+    });
+
+    expect(seenAuthorization).toBe('Bearer sk-local');
+    expect(models).toEqual([
+      { id: 'local-model', vendor: 'me', streaming: true },
+    ]);
+  });
+});
 
 describe('isModelListingSupported', () => {
   test('reports the slugs that can enumerate models', () => {

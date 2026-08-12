@@ -254,6 +254,9 @@ const enumerateGoogleAiStudio = async (
  * credentials: an AWS-federated ADC file when one is configured, otherwise
  * stock Application Default Credentials.
  */
+/* istanbul ignore next -- resolving real Google credentials cannot run in CI;
+   every caller-visible branch around it is driven through
+   `accessTokenProvider`. */
 const defaultVertexAccessToken = async (): Promise<string> => {
   const authClient = loadAwsExternalAccountAuthClient();
   const auth = authClient
@@ -333,6 +336,8 @@ const enumerateVertex = async (
  * The AWS control-plane call, imported lazily so the Bedrock client is only
  * loaded by a deployment that actually lists Bedrock models.
  */
+/* istanbul ignore next -- calling the real AWS control plane cannot run in CI;
+   the mapping it feeds is driven through `listFoundationModels`. */
 const defaultListFoundationModels = async (args: {
   region: string;
 }): Promise<BedrockModelSummary[]> => {
