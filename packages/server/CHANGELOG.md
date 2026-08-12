@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.4](https://github.com/ttoss/soat/compare/v0.20.3...v0.20.4) (2026-08-12)
+
+### Bug Fixes
+
+* **server:** sum usage quantities as exact decimals ([#958](https://github.com/ttoss/soat/issues/958)) ([1075a04](https://github.com/ttoss/soat/commit/1075a04555a773425b8f53fc36af0534575f6a1a)), closes [#953](https://github.com/ttoss/soat/issues/953)
+
+### Features
+
+* **server:** source AWS credentials from the provider chain for vertex ([#959](https://github.com/ttoss/soat/issues/959)) ([b6338f9](https://github.com/ttoss/soat/commit/b6338f939bc6dbc1cd740e0449b8a159ba931cea))
+
 ## [0.20.3](https://github.com/ttoss/soat/compare/v0.20.2...v0.20.3) (2026-08-11)
 
 ### Bug Fixes
