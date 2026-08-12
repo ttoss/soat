@@ -299,7 +299,7 @@ AGENT_ID=$(soat create-agent \
   --instructions "You read report files from object storage. Use get-s3-object when asked about a report." \
   --tool-bindings '[{"tool_id":"'"$S3_TOOL_ID"'"}]' | jq -r '.id')
 
-soat create-agent-generation --agent-id "$AGENT_ID" \
+soat create-agent-generation --wait true --agent-id "$AGENT_ID" \
   --messages '[{"role":"user","content":"Summarize reports/2026-08.txt in one sentence."}]' \
   | jq '{status}'
 ```

@@ -20,7 +20,7 @@ This page is the canonical definition. Module pages describe what their own hand
 `wait` is a **query parameter** on the generation and ingestion endpoints, and a **body field** on the run endpoints (`start-orchestration-run`, `start-eval-run`) — the same name and the same meaning either way.
 
 ```bash
-# Background (default): returns immediately
+# Background (default): returns a handle immediately
 soat create-agent-generation --agent-id agent_01 \
   --messages '[{"role":"user","content":"Summarize Q1"}]'
 
