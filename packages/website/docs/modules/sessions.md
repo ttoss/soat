@@ -187,7 +187,7 @@ Note that `actorExternalId` carries the actor's `external_id` to every `http` an
 
 ### Background Generation
 
-`POST .../generate` runs in the background by default and returns immediately with `202 Accepted` (`wait` is the platform-wide sync/async toggle — the same knob as on document ingestion, `start-orchestration-run`, and `start-eval-run`; every endpoint defaults to background execution). Pass `?wait=true` to block until the generation settles and receive the assistant reply in the response. The default `202` body:
+`POST .../generate` runs in the background by default and returns immediately with `202 Accepted`. Pass `?wait=true` to block until the generation settles and receive the assistant reply in the response. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract. The default `202` body:
 
 ```json
 { "status": "accepted", "session_id": "sess_..." }

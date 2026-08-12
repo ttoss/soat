@@ -384,14 +384,19 @@ export const startGeneration = async (
     rootTraceId: args.rootTraceId,
     abortSignal: args.abortSignal,
   }).catch(async (error) => {
-    await recordGenerationFailure({
-      generationId: ctx.generationId,
-      traceId,
-      error,
-      model: ctx.model,
-    }).catch(() => {
-      // Recording is best-effort: the request is already gone.
-    });
+    // A `try` rather than a second `.catch`: recording is best-effort (the
+    // request is already gone), but the swallow must not itself become an
+    // unreachable function on a fire-and-forget path.
+    try {
+      await recordGenerationFailure({
+        generationId: ctx.generationId,
+        traceId,
+        error,
+        model: ctx.model,
+      });
+    } catch {
+      log('startGeneration: failed to record generation failure');
+    }
   });
 
   return { id: ctx.generationId, traceId, status: 'accepted' };

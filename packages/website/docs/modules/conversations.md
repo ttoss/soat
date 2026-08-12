@@ -104,7 +104,7 @@ POST /api/v1/conversations/:id/generate?wait=true
 
 The call runs in the background by default and returns `202 Accepted` immediately (`{ "status": "accepted", "conversation_id": "conv_..." }`); the reply lands as a new message when it completes, so poll `GET /conversations/:id/messages` for it. The agent is still resolved **synchronously**, so an unknown `agent_id` is a `404` rather than a failure you discover by polling.
 
-Pass `?wait=true` to block and receive the result inline, as the flow below describes. Waiting is required to observe `requires_action` (client tools), so a client-tool flow should always pass it. `wait` is the platform-wide sync/async toggle — the same knob as on [agent generation](./agents.md#background-generation), [document ingestion](./documents.md#async-file-ingestion), and [sessions](./sessions.md#background-generation). A `soat` tool call always waits.
+Pass `?wait=true` to block and receive the result inline, as the flow below describes. Waiting is required to observe `requires_action` (client tools), so a client-tool flow should always pass it. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 
 Flow (with `?wait=true`):
 

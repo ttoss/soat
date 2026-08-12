@@ -311,12 +311,7 @@ The generation record exists before the response is written, so `generation_id` 
 
 Pass `?wait=true` to block and receive the result inline. Waiting is required to observe `requires_action` (client tools) in the response, so a client-tool flow should always pass it.
 
-`wait` is the platform-wide sync/async toggle — the same knob as on [document ingestion](./documents.md#async-file-ingestion), [sessions](./sessions.md#background-generation), `start-orchestration-run`, and `start-eval-run`.
-
-Two combinations are handled rather than left ambiguous:
-
-- **`stream: true`** implies waiting — a stream holds the request open by definition. Asking for both a stream and a background run (`?wait=false`) is rejected with `400 VALIDATION_FAILED`.
-- **A `soat` tool call** (agent-to-agent nesting) always waits, whatever the model asks for: a tool call is one request returning one result, with no channel to poll later. The field is not offered on the tool at all, exactly like `stream`.
+See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract — including how `stream` and `soat` tool calls interact with it (both always wait).
 
 #### Tool Output Message Content
 

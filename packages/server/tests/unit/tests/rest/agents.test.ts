@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 
 import { db } from 'src/db';
+import * as agentNonStreamGenerationModule from 'src/lib/agentNonStreamGeneration';
 import * as knowledgeModule from 'src/lib/knowledge';
 import { saveTrace } from 'src/lib/traces';
 
@@ -1653,6 +1654,38 @@ describe('Agents', () => {
       );
       expect(poll.status).toBe(200);
       expect(poll.body.id).toBe(response.body.generation_id);
+    });
+
+    test('a background generation that fails records the failure for polling', async () => {
+      // Sanctioned force-failure stub (tests.md — "Force-failure stubs for
+      // `.catch()` resilience branches"): the background path swallows the
+      // dispatch error and records it on the generation, and no real provider
+      // call fails deterministically in unit CI. The happy path above runs
+      // against the real pipeline.
+      jest
+        .spyOn(agentNonStreamGenerationModule, 'runNonStreamGeneration')
+        .mockRejectedValueOnce(new Error('provider exploded'));
+
+      const response = await authenticatedTestClient(userToken)
+        .post(`/api/v1/agents/${agentId}/generate`)
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(202);
+      const generationId = response.body.generation_id;
+
+      // The whole point of the background mode: a failure after admission is
+      // discoverable by polling rather than lost with the request.
+      let status: string | undefined;
+      for (let attempt = 0; attempt < 50 && status !== 'failed'; attempt += 1) {
+        const poll = await authenticatedTestClient(userToken).get(
+          `/api/v1/generations/${generationId}`
+        );
+        status = poll.body.status;
+      }
+
+      expect(status).toBe('failed');
+
+      jest.restoreAllMocks();
     });
 
     test('background mode still rejects an invalid body synchronously', async () => {

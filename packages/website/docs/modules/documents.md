@@ -81,7 +81,7 @@ Path examples:
 
 `POST /api/v1/documents/ingest` returns `202 Accepted` immediately by default. The document record is created with `status: pending` and chunk extraction + embedding run in the background. Poll `GET /api/v1/documents/:id` until `status` is `ready` or `failed`.
 
-Pass `?wait=true` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. (`wait` is the platform-wide sync/async toggle — the same knob as `wait` on `POST /api/v1/sessions/:id/generate`, `start-orchestration-run`, and `start-eval-run`. Every endpoint defaults to background execution; `wait=true` opts into blocking.)
+Pass `?wait=true` to block until processing completes. The endpoint then returns `201 Created` with `status: ready` (or `status: failed` on error) — no polling required. This is useful for small files or scripted workflows where latency is acceptable. See [Synchronous & Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide `wait` contract.
 
 Synchronous ingestion is bounded by file size: a file larger than `SYNC_INGESTION_MAX_BYTES` (default 10 MB) is rejected with `413 FILE_TOO_LARGE_FOR_SYNC` rather than blocking the request until it times out. Retry such files in the default background mode (omit `?wait=true`) and poll the status endpoint.
 
