@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.20.5](https://github.com/ttoss/soat/compare/v0.20.4...v0.20.5) (2026-08-12)
+
+### Features
+
+* **server:** ask an AI provider which models it can run ([#962](https://github.com/ttoss/soat/issues/962)) ([eec9b86](https://github.com/ttoss/soat/commit/eec9b867135a7d83a164e79654622c2c054692ee))
+
 ## [0.20.4](https://github.com/ttoss/soat/compare/v0.20.3...v0.20.4) (2026-08-12)
 
 ### Bug Fixes
