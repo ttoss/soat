@@ -30,7 +30,10 @@ import { Eval } from './Eval';
       unique: true,
       fields: ['public_id'],
     },
-    { name: 'eval_runs_eval_id_created_at_idx', fields: ['eval_id', 'created_at'] },
+    {
+      name: 'eval_runs_eval_id_created_at_idx',
+      fields: ['eval_id', 'created_at'],
+    },
   ],
   updatedAt: false,
   hooks: {
