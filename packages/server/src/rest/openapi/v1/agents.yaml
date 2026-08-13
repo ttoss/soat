@@ -784,6 +784,13 @@ paths:
         release. The canary is pinned by version, so an edit that landed
         mid-rollout is not promoted in its place — it stays an unreleased draft
         in the version history.
+
+
+        When the release carries a `promotion_gate`, the eval it names must have
+        a run that finished `completed` with `passed: true` **and** was pinned to
+        the canary version (`agent_version`); otherwise the call is a `409` and
+        the rollout is left running untouched. The run that cleared the gate is
+        recorded as `eval_run_id` on the version that goes live.
       operationId: promoteAgentRelease
       parameters:
         - name: agent_id
@@ -817,7 +824,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
-          description: Conflict — the agent has no active release
+          description: >-
+            Conflict — the agent has no active release
+            (`NO_ACTIVE_RELEASE`), or its `promotion_gate` has no passing eval
+            run against the canary version (`PROMOTION_GATE_UNMET`)
           content:
             application/json:
               schema:
@@ -1110,6 +1120,17 @@ components:
           maximum: 100
           description: Percentage of traffic assigned to `canary_version`
           example: 20
+        promotion_gate:
+          x-soat-ref: evals
+          type: string
+          nullable: true
+          description: >-
+            Eval that must have a passing run against `canary_version` before
+            `promote` is allowed, or null for an ungated rollout. The gate
+            constrains only how the rollout ends — traffic is split the same way
+            either way. See
+            [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion).
+          example: eval_V1StGXR8Z5jdHi6B
 
     AgentVersion:
       type: object
@@ -1158,6 +1179,15 @@ components:
             created this version. Restore, promote and abort set one
             automatically (e.g. `restored from v1`).
           example: pre-tone-change
+        eval_run_id:
+          x-soat-ref: eval-runs
+          type: string
+          nullable: true
+          description: >-
+            The eval run that cleared the release's `promotion_gate` when this
+            version was promoted. Null for every version that did not go live
+            through a gated promotion — which is most of them.
+          example: evrun_V1StGXR8Z5jdHi6B
         created_by:
           x-soat-ref: users
           type: string
@@ -1203,6 +1233,15 @@ components:
           maximum: 100
           description: Percentage of traffic to assign to `canary_version`
           example: 20
+        promotion_gate:
+          x-soat-ref: evals
+          type: string
+          nullable: true
+          description: >-
+            Eval to gate promotion on. It must belong to this project and
+            evaluate this agent; anything else is a `400`. Omit it, or send
+            null, for a rollout that can be promoted at will.
+          example: eval_V1StGXR8Z5jdHi6B
 
     ToolBinding:
       type: object

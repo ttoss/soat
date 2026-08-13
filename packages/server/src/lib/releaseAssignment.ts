@@ -25,6 +25,15 @@ export type ActiveRelease = {
   stable_version: number;
   canary_version: number;
   canary_percent: number;
+  /**
+   * Public ID of an eval that must have a passing run against the canary
+   * version before `promote` is allowed, or null when the rollout is promoted
+   * on judgement alone (docs/prd-agent-versions.md, Phase 3).
+   *
+   * Assignment ignores it entirely — a gate constrains how a rollout *ends*,
+   * never which version a request is served.
+   */
+  promotion_gate: string | null;
 };
 
 export type ReleaseAssignment = {
@@ -45,6 +54,30 @@ const isPercent = (value: unknown): value is number => {
     value >= 0 &&
     value <= BUCKETS
   );
+};
+
+/** Distinguishes "no gate" (a valid release) from "unreadable gate". */
+const MALFORMED_GATE = Symbol('malformed promotion_gate');
+
+/**
+ * Reads the stored `promotion_gate`.
+ *
+ * An **absent** key is "no gate": every release stored before Phase 3 lacks it,
+ * and so does every ungated one since, so treating it as unreadable would drop a
+ * running rollout back to the live config.
+ *
+ * A key that is present but malformed is the opposite case — it was written to
+ * constrain promotion, so it takes the release down with it (see
+ * {@link parseActiveRelease}). Promotion then answers `NO_ACTIVE_RELEASE`, which
+ * is the closed direction; reading it as "no gate" would let a junk value
+ * promote a canary that nothing ever validated.
+ */
+const readPromotionGate = (
+  value: unknown
+): string | null | typeof MALFORMED_GATE => {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value === '') return MALFORMED_GATE;
+  return value;
 };
 
 /**
@@ -70,10 +103,14 @@ export const parseActiveRelease = (value: unknown): ActiveRelease | null => {
     return null;
   }
 
+  const gate = readPromotionGate(candidate.promotion_gate);
+  if (gate === MALFORMED_GATE) return null;
+
   return {
     stable_version: candidate.stable_version,
     canary_version: candidate.canary_version,
     canary_percent: candidate.canary_percent,
+    promotion_gate: gate,
   };
 };
 

@@ -29,6 +29,12 @@ export const agentVersionStore = makeVersionStore({
     return db.AgentVersion;
   },
   foreignKey: 'agentId',
+  // Loaded so a version response can name the eval run that promoted it
+  // (docs/prd-agent-versions.md, Phase 3). The archive engine has no concept of
+  // an eval run; it only carries the association through to `mapAgentVersion`.
+  extraIncludes: () => {
+    return [{ model: db.EvalRun, as: 'evalRun' }];
+  },
 });
 
 /**

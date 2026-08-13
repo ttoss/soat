@@ -3,6 +3,12 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import { agents, type MappedAgent } from './agentAccessor';
+import {
+  recordPromotionEvalRun,
+  requirePromotionGate,
+  resolvePromotionGate,
+  validatePromotionGateInput,
+} from './agentPromotionGate';
 import { getAgent, updateAgent } from './agents';
 import {
   type AgentConfigSnapshot,
@@ -46,6 +52,23 @@ const CANARY_PERCENT_MAX = 100;
 
 // ── Mapping ──────────────────────────────────────────────────────────────
 
+/**
+ * Reads the loaded `evalRun` association off an archived version.
+ *
+ * The shared archive row type stops at the columns every versioned resource
+ * carries, so the agent's own association is narrowed here rather than widening
+ * that type with a field guardrails have no notion of.
+ */
+const versionEvalRunId = (version: ArchivedVersionRow): string | null => {
+  if (!('evalRun' in version)) return null;
+
+  const evalRun = version.evalRun;
+  if (typeof evalRun !== 'object' || evalRun === null) return null;
+  if (!('publicId' in evalRun)) return null;
+
+  return typeof evalRun.publicId === 'string' ? evalRun.publicId : null;
+};
+
 export const mapAgentVersion = (
   version: ArchivedVersionRow,
   agentPublicId: string
@@ -53,6 +76,7 @@ export const mapAgentVersion = (
   return {
     agent_id: agentPublicId,
     ...mapArchivedVersionFields(version),
+    eval_run_id: versionEvalRunId(version),
   };
 };
 
@@ -71,6 +95,15 @@ const findAgentInstance = async (args: {
   });
   if (!agent) throw agents.notFound(args.id);
   return agent as AgentInstance;
+};
+
+/** The identity the promotion gate resolves its eval and runs against. */
+const agentRef = (agent: AgentInstance) => {
+  return {
+    dbId: agent.id as number,
+    publicId: agent.publicId,
+    projectId: agent.projectId,
+  };
 };
 
 // ── Applying an archived config ───────────────────────────────────────────
@@ -187,6 +220,7 @@ export const validateReleaseInput = (args: {
   stableVersion: unknown;
   canaryVersion: unknown;
   canaryPercent: unknown;
+  promotionGate?: unknown;
 }): string | null => {
   const isVersion = (value: unknown): boolean => {
     return typeof value === 'number' && Number.isInteger(value) && value >= 1;
@@ -211,7 +245,7 @@ export const validateReleaseInput = (args: {
   ) {
     return `canary_percent must be an integer between 0 and ${CANARY_PERCENT_MAX}.`;
   }
-  return null;
+  return validatePromotionGateInput(args.promotionGate);
 };
 
 /**
@@ -228,21 +262,29 @@ export const setAgentRelease = async (args: {
   stableVersion: unknown;
   canaryVersion: unknown;
   canaryPercent: unknown;
+  promotionGate?: unknown;
 }): Promise<MappedAgent> => {
   log(
-    'setAgentRelease: agentId=%s stable=%o canary=%o percent=%o',
+    'setAgentRelease: agentId=%s stable=%o canary=%o percent=%o gate=%o',
     args.agentId,
     args.stableVersion,
     args.canaryVersion,
-    args.canaryPercent
+    args.canaryPercent,
+    args.promotionGate
   );
 
   const message = validateReleaseInput({
     stableVersion: args.stableVersion,
     canaryVersion: args.canaryVersion,
     canaryPercent: args.canaryPercent,
+    promotionGate: args.promotionGate,
   });
   if (message) throw new DomainError('VALIDATION_FAILED', message);
+
+  const agent = await findAgentInstance({
+    projectIds: args.projectIds,
+    id: args.agentId,
+  });
 
   // Validation above proved all three are integers, so these conversions are
   // identities that also satisfy the type checker without a cast.
@@ -250,12 +292,13 @@ export const setAgentRelease = async (args: {
     stable_version: Number(args.stableVersion),
     canary_version: Number(args.canaryVersion),
     canary_percent: Number(args.canaryPercent),
+    // Resolved against this agent's own evals, so a gate that could never be
+    // satisfied is a `400` here rather than a `409` at promotion time.
+    promotion_gate: await resolvePromotionGate({
+      agent: agentRef(agent),
+      promotionGate: args.promotionGate,
+    }),
   };
-
-  const agent = await findAgentInstance({
-    projectIds: args.projectIds,
-    id: args.agentId,
-  });
 
   await agentVersionStore.assertVersionsExist({
     resource: toResourceRef(agent),
@@ -297,6 +340,7 @@ const settleRelease = async (args: {
   version: number;
   label: string;
   createdByUserId?: number | null;
+  evalRunDbId?: number | null;
 }): Promise<MappedAgent> => {
   await agentVersionArchive.applyArchivedVersion({
     projectIds: args.projectIds,
@@ -314,6 +358,14 @@ const settleRelease = async (args: {
   });
   await agent.update({ activeRelease: null });
 
+  // The version the apply left live — a freshly archived one, or the settled
+  // version itself when the live row already held its config.
+  await recordPromotionEvalRun({
+    agentDbId: agent.id as number,
+    version: agent.version,
+    evalRunDbId: args.evalRunDbId ?? null,
+  });
+
   return getAgent({ projectIds: args.projectIds, id: args.agentId });
 };
 
@@ -329,10 +381,19 @@ export const promoteAgentRelease = async (args: {
   const release = requireActiveRelease(agent);
 
   log(
-    'promoteAgentRelease: agentId=%s canary=%d',
+    'promoteAgentRelease: agentId=%s canary=%d gate=%s',
     args.agentId,
-    release.canary_version
+    release.canary_version,
+    release.promotion_gate
   );
+
+  // Checked before anything is written: a blocked promotion must leave the
+  // rollout exactly as it was, still serving the split.
+  const evalRunDbId = await requirePromotionGate({
+    gate: release.promotion_gate,
+    agent: agentRef(agent),
+    version: release.canary_version,
+  });
 
   // Pins the canary explicitly instead of assuming the live row still holds it:
   // an edit landing mid-rollout would otherwise get promoted in its place.
@@ -342,6 +403,7 @@ export const promoteAgentRelease = async (args: {
     version: release.canary_version,
     label: `promoted v${release.canary_version}`,
     createdByUserId: args.createdByUserId,
+    evalRunDbId,
   });
 };
 

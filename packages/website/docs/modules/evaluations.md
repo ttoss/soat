@@ -223,6 +223,11 @@ Pinning is not a convenience. Release assignment keys on the session's actor; an
 generation has no session, so an unpinned run would get a **random bucket per item** and
 blend two configs into a single score.
 
+The pin is also what an [eval-gated promotion](./agents.md#eval-gated-promotion) matches on:
+a release naming this eval as its `promotion_gate` promotes only once a run of it finished
+`completed` with `passed: true` **and** carried the canary's `agent_version`. A green run
+against another version is not evidence about the canary and does not open the gate.
+
 ### Pass semantics
 
 Three levels, each derived from the one below:
@@ -443,6 +448,16 @@ soat start-eval-run --eval_id "$EVAL_ID" --wait true \
   --agent_version 3 --baseline_run_id "$BASELINE_RUN_ID"
 ```
 
+Gate a canary rollout on this eval, then produce the run that opens the gate:
+
+```bash
+soat set-agent-release --agent-id "$AGENT_ID" \
+  --stable-version 2 --canary-version 3 --canary-percent 20 \
+  --promotion-gate "$EVAL_ID"
+soat start-eval-run --eval_id "$EVAL_ID" --wait true --agent_version 3
+soat promote-agent-release --agent-id "$AGENT_ID"
+```
+
 ## What is not here yet
 
 - **`from-generation` curation** — building a dataset item from a past generation. The
@@ -451,9 +466,6 @@ soat start-eval-run --eval_id "$EVAL_ID" --wait true \
   [trace](./traces.md)'s file), so the route is deferred rather than built on a reader of
   that blob.
 - **Scheduled evals and `eval` / `dataset` formation resources** — Phase 3.
-- **Eval-gated promotion** — a canary [release](./agents.md#staged-rollout) that promotes
-  only when a scored run passes. It consumes this module's verdict; see
-  [`docs/prd-agent-versions.md`](https://github.com/ttoss/soat/blob/main/docs/prd-agent-versions.md).
 
 Sequencing lives in
 [`docs/roadmap.md`](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).

@@ -306,8 +306,8 @@ is not built yet.
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
 | [Agent versions](/docs/modules/agents#versioning-and-staged-rollout) — history, restore, canary split, served-version stamping | Shipped — see [Agent Versioning and Canary Rollout](/docs/tutorials/agent-versioning-and-canary-rollout) |
 | [Approvals recurrence view](/docs/modules/approvals#recurrence-view)   | Shipped                                                                                        |
-| [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Coming soon                                                                              |
-| Eval-gated promotion of a canary release                               | Coming soon — depends on evaluations                                                           |
+| [Evaluations](/docs/modules/evaluations) — datasets, scorers, runs, baselines | Shipped                                                                                  |
+| [Eval-gated promotion](/docs/modules/agents#eval-gated-promotion) of a canary release | Shipped                                                                         |
 | [Memories](/docs/modules/memories) forgetting — importance scoring, recency blending, compaction | Coming soon                                                                    |
 
 ## Diagnose before you build

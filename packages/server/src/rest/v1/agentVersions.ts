@@ -117,6 +117,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
     stable_version?: unknown;
     canary_version?: unknown;
     canary_percent?: unknown;
+    promotion_gate?: unknown;
   };
 
   // Shape validation lives in the lib so the rule has one home; the handler
@@ -127,6 +128,7 @@ agentVersionsRouter.put('/agents/:agent_id/release', async (ctx: Context) => {
     stableVersion: body.stable_version,
     canaryVersion: body.canary_version,
     canaryPercent: body.canary_percent,
+    promotionGate: body.promotion_gate,
   });
 });
 
