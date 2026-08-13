@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.22.0](https://github.com/ttoss/soat/compare/v0.21.0...v0.22.0) (2026-08-13)
+
+### Bug Fixes
+
+* **server:** OpenAPI spec drift burn-down + full-surface contract enforcement ([#977](https://github.com/ttoss/soat/issues/977)) ([6b429ab](https://github.com/ttoss/soat/commit/6b429ab24a924826f431f9135ef3ce57a04739c0)), closes [#661](https://github.com/ttoss/soat/issues/661)
+
+### Features
+
+* **agents:** announce a failed generation on the event bus ([#978](https://github.com/ttoss/soat/issues/978)) ([6fdafd1](https://github.com/ttoss/soat/commit/6fdafd1775161a4e21932d8b3f6ab9d75a480ecc))
+
 # [0.21.0](https://github.com/ttoss/soat/compare/v0.20.5...v0.21.0) (2026-08-13)
 
 * feat(discussions)!: remove the discussions module (#973) ([c2d9b02](https://github.com/ttoss/soat/commit/c2d9b02c9c9b9476359340ccb7423f4374bf7db4)), closes [#973](https://github.com/ttoss/soat/issues/973)
