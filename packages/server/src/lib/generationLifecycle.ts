@@ -27,6 +27,14 @@ export const recordGenerationFailure = async (args: {
   error: unknown;
   /** The model the failed turn ran on — a routed one stamps its attempts. */
   model?: LanguageModel;
+  /**
+   * The project the turn belongs to. Optional only because the failure must be
+   * *persisted* even from a path that cannot name it; when both are present the
+   * failure is also announced, which is the only channel a background caller
+   * has (it already got its `202` and went away).
+   */
+  projectId?: number;
+  projectPublicId?: string;
 }): Promise<unknown> => {
   const errorPayload = buildGenerationErrorPayload(args.error);
 
@@ -55,6 +63,36 @@ export const recordGenerationFailure = async (args: {
     // visible rather than silent.
     saveRoutingMetadata({ generationId: args.generationId, model: args.model }),
   ]);
+
+  // A completed turn announces itself; a failed one has to as well, or the only
+  // way to learn a background generation died is to poll the record. Emitting
+  // must never mask the original error, so it is wrapped the same way the
+  // completion path wraps its own.
+  if (args.projectId !== undefined && args.projectPublicId !== undefined) {
+    try {
+      emitResourceEvent({
+        type: 'agents.generation.failed',
+        projectId: args.projectId,
+        projectPublicId: args.projectPublicId,
+        resourceType: 'generation',
+        resourceId: args.generationId,
+        // snake_case: an event payload is a wire surface, reaching subscribers
+        // through the webhook dispatcher verbatim.
+        data: {
+          id: args.generationId,
+          trace_id: args.traceId,
+          status: 'failed',
+          error: errorPayload,
+        },
+      });
+    } catch (error) {
+      log(
+        'recordGenerationFailure: failed to emit failure event generationId=%s error=%s',
+        args.generationId,
+        error instanceof Error ? error.message : String(error)
+      );
+    }
+  }
 
   // Meta keys are
   // written in snake_case to match the external REST contract.

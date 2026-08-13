@@ -312,6 +312,19 @@ const prepareGeneration = async (
   return { kind: 'ready', ctx, traceId };
 };
 
+/**
+ * The project a failed turn belongs to, in the shape `recordGenerationFailure`
+ * needs to announce it. `TypedAgent.project.id` is `unknown` — the row is built
+ * from several sources — so it is narrowed rather than asserted: when it is not
+ * a number the failure is still persisted, just not announced.
+ */
+const failureProject = (ctx: GenerationContext) => {
+  const id = ctx.typedAgent.project.id;
+  return typeof id === 'number'
+    ? { projectId: id, projectPublicId: ctx.typedAgent.project.publicId }
+    : {};
+};
+
 export const createGeneration = async (
   args: CreateGenerationArgs
 ): Promise<GenerationResult | ReadableStream> => {
@@ -337,6 +350,7 @@ export const createGeneration = async (
       traceId,
       error,
       model: ctx.model,
+      ...failureProject(ctx),
     });
   }
 };
@@ -401,6 +415,7 @@ export const startGeneration = async (
         traceId,
         error,
         model: ctx.model,
+        ...failureProject(ctx),
       });
     } catch {
       log('startGeneration: failed to record generation failure');

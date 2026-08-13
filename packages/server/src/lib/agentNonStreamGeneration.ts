@@ -421,6 +421,8 @@ export const runToolOutputsGeneration = async (args: {
       traceId: args.pending.traceId,
       error: toProviderDomainError(error) ?? error,
       model: args.pending.resolvedModel,
+      projectId: args.pending.projectId,
+      projectPublicId: args.pending.projectPublicId,
     });
   }
 };
