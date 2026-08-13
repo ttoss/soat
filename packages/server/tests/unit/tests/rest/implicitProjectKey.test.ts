@@ -328,7 +328,6 @@ describe('Implicit projectId via project-scoped API key', () => {
       '/api/v1/approvals',
       '/api/v1/audit-log',
       '/api/v1/conversations',
-      '/api/v1/discussions',
       '/api/v1/documents',
       '/api/v1/exceptions',
       '/api/v1/formations',

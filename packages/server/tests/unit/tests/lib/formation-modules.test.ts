@@ -154,7 +154,6 @@ const NON_OBJECT: Array<[string, string]> = [
   ['orchestration', 'Orchestration `properties` must be an object'],
   ['ai_provider', 'AI provider `properties` must be an object'],
   ['actor', 'Actor `properties` must be an object'],
-  ['discussion', 'Discussion `properties` must be an object'],
   ['tool', 'Tool `properties` must be an object'],
   ['document', 'Document `properties` must be an object'],
   ['workflow', 'Workflow `properties` must be an object'],
@@ -520,26 +519,6 @@ const CASES: RoundTripCase[] = [
         },
         update: { description: 'updated description' },
         expectAfterUpdate: { description: 'updated description' },
-      };
-    },
-  },
-  {
-    resourceType: 'discussion',
-    build: (seed) => {
-      return {
-        create: { name: `Disc ${seed}`, ai_provider_id: aiProviderId },
-        expectRead: { name: `Disc ${seed}`, ai_provider_id: aiProviderId },
-        // Discussion templates must accept camelCase top-level keys too.
-        camel: { name: `Camel Disc ${seed}`, aiProviderId, maxRounds: 3 },
-        camelExpectRead: {
-          name: `Camel Disc ${seed}`,
-          ai_provider_id: aiProviderId,
-          max_rounds: 3,
-        },
-        // Discussion validation enforces required fields on update too, so the
-        // update payload must carry `name` and `ai_provider_id`.
-        update: { name: `Disc ${seed} updated`, ai_provider_id: aiProviderId },
-        expectAfterUpdate: { name: `Disc ${seed} updated` },
       };
     },
   },

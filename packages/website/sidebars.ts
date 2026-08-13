@@ -107,7 +107,6 @@ const sidebars: SidebarsConfig = {
           items: [
             'modules/orchestrations',
             'modules/workflows',
-            'modules/discussions',
             'modules/triggers',
             'modules/webhooks',
             'modules/approvals',
@@ -191,7 +190,6 @@ const sidebars: SidebarsConfig = {
         'tutorials/orchestration-control-flow',
         'tutorials/approval-gate',
         'tutorials/create-an-agent-squad',
-        'tutorials/review-panel-discussion',
         'tutorials/close-the-monthly-books',
       ],
     },

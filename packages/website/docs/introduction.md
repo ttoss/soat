@@ -43,7 +43,6 @@ The platform is organized around the [four layers of an agent system](/docs/gett
 - [Orchestrations](/docs/modules/orchestrations) — deterministic DAG pipelines with parallel rounds, conditions, retries, and durable resumption
 - [Workflows](/docs/modules/workflows) — state graphs that durable tasks live in and move through, including backward
 - [Triggers](/docs/modules/triggers) start a flow on a cron schedule, an inbound webhook, or on demand
-- [Discussions](/docs/modules/discussions) — structured multi-agent panel reasoning
 
 ### Governance & safety
 

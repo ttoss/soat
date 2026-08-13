@@ -199,7 +199,7 @@ Two project settings turn the manual purge into a policy:
 
 `initiator_generation_id` is populated only when an agent calls another agent via a SOAT tool: the child generation records the calling generation's ID, while top-level generations leave it `null`. This is the sole case in which the field is set.
 
-Deep reasoning lives in the [Discussions](./discussions.md) module. A discussion run records its deliberation as a Conversation transcript and its outcome as a Document referenced from the run, so it does not appear as `metadata` on, or as a child generation of, the calling generation.
+Multi-step reasoning is composed by the calling application, so intermediate steps appear as ordinary generations of their own rather than as `metadata` on, or child generations of, the calling generation.
 
 ### Tool context
 

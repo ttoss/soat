@@ -17,9 +17,9 @@ import { generateText } from 'ai';
 import createDebug from 'debug';
 
 import { DomainError } from '../errors';
-import { resolveDiscussionModel } from './discussionCompletion';
 import { meterCompletion, routedMaxRetries } from './modelRoutes';
 import { isPlainObject } from './plainObject';
+import { resolveProjectScopedModel } from './projectScopedModel';
 
 const log = createDebug('soat:evaluations');
 
@@ -148,7 +148,7 @@ export const parseJudgeVerdict = (text: string): JudgeVerdict => {
 /**
  * Runs one judge completion and returns its parsed verdict.
  *
- * Model resolution is project-scoped and reuses `resolveDiscussionModel`: the
+ * Model resolution is project-scoped (`resolveProjectScopedModel`): the
  * scorer's `ai_provider_id` must belong to the eval's project (so a scorer
  * config can never borrow another project's provider secret), and a project
  * default model route applies when the scorer pins no provider. That is the same
@@ -173,7 +173,7 @@ export const runJudgeCompletion = async (args: {
   const pinnedModel =
     typeof args.scorer.model === 'string' ? args.scorer.model : null;
 
-  const { model, modelName, attribution } = await resolveDiscussionModel({
+  const { model, modelName, attribution } = await resolveProjectScopedModel({
     projectId: args.projectId,
     aiProviderId,
     model: pinnedModel,

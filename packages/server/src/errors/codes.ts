@@ -120,7 +120,7 @@ export const ERROR_CODES = {
   AI_PROVIDER_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:
-      'The AI provider still has dependents. Live references (chats, agents, discussions, model-route targets) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records, discussion participants) block only until force=true, which drops the overrides and unlinks usage/participant history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
+      'The AI provider still has dependents. Live references (chats, agents, model-route targets) always block deletion and must be deleted or repointed first. Soft dependents (price overrides, usage records) block only until force=true, which drops the overrides and unlinks usage history. The error meta reports the counts, a sample of offending IDs, and a `forcible` flag.',
   },
   AGENT_HAS_DEPENDENTS: {
     httpStatus: 409,
@@ -269,11 +269,6 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description:
       'The referenced file has a content type that cannot be ingested. Supported types: application/pdf, text/plain, text/markdown.',
-  },
-  INVALID_DISCUSSION_CONFIG: {
-    httpStatus: 400,
-    description:
-      'The discussion config is invalid (e.g. max_rounds out of range, no participants, too many participants, or an invalid effort value).',
   },
   INVALID_OUTPUT_SCHEMA: {
     httpStatus: 400,

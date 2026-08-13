@@ -145,7 +145,7 @@ describe('validateStructuredOutput', () => {
 //
 // Real `generateText` against a local OpenAI-compatible stub, real DB, real
 // buildCompletedGenerationResult — the same local-fake-server pattern
-// agentNonStreamGeneration.test.ts and discussionCompletion.test.ts use. This
+// agentNonStreamGeneration.test.ts and memoryExtractionCompletion.test.ts use. This
 // is what proves the validator is actually reached by a generation: before the
 // fix, the stub's degenerate object completed the generation with
 // `output.object` set and no error anywhere.

@@ -1334,46 +1334,6 @@ components:
           nullable: true
           description: Public ID of an actor to associate with this conversation
 
-    DiscussionResourceProperties:
-      description: >-
-        Declares a discussion (deliberation config) within the formation's
-        project. Providing participants replaces the full set on update.
-      type: object
-      additionalProperties: false
-      required:
-        - name
-      properties:
-        name:
-          type: string
-          description: Display name of the discussion
-        description:
-          type: string
-          nullable: true
-        ai_provider_id:
-          x-soat-ref: ai-providers
-          type: string
-          nullable: true
-          description: >-
-            Default AI provider participants and synthesis fall back to. Omit (or
-            declare `null`) to inherit the project's `default_model_route_id`,
-            which requires the project to have one.
-        model:
-          type: string
-          nullable: true
-          description: Default model (falls back to the provider's default_model)
-        max_rounds:
-          type: integer
-          nullable: true
-          description: Rounds of deliberation (1–3, default 1)
-        synthesis:
-          type: object
-          nullable: true
-          description: Override for the final synthesis pass
-        participants:
-          type: array
-          description: The deliberation participants (max 5)
-          items:
-            type: object
 
     FileResourceProperties:
       description: >-
@@ -1802,7 +1762,6 @@ components:
             - memory
             - memory_entry
             - model_route
-            - discussion
             - eval
             - orchestration
             - policy
@@ -1826,7 +1785,6 @@ components:
             - $ref: '#/components/schemas/DatasetItemResourceProperties'
             - $ref: '#/components/schemas/EvalResourceProperties'
             - $ref: '#/components/schemas/ConversationResourceProperties'
-            - $ref: '#/components/schemas/DiscussionResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'
             - $ref: '#/components/schemas/FileResourceProperties'
             - $ref: '#/components/schemas/GuardrailResourceProperties'

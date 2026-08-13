@@ -13,7 +13,6 @@ Every place SOAT lets you map, transform, or interpolate values uses one of six 
 | [JSON Logic](#json-logic) | `{"var": "input.x"}`, `{"cat": [...]}`, `{"if": [...]}`, … | Orchestration `input_mapping`, `state_mapping`, `expression`, `exit_condition`; pipeline step `input` and pipeline `output`; tool `output_mapping` | Run / call time |
 | [Dotted paths](#dotted-paths) | `state.a.b`, `text`, `MySecret.value` | Orchestration `state_mapping` keys, loop `collection`, and the `nodes.<id>` namespace; `output_path` on `tool_output` message content; formation `ref_attr` | Run / call / apply time |
 | [`{param}`](#single-curly-param) | `/users/{user_id}` | `execute.url` of `http` tools | Call time |
-| [Discussion tokens](#discussion-prompt-tokens) | `{topic}`, `{transcript}`, `{steps.<name>}`, `{steps.<name>.last}` | Discussion step prompts | Turn time |
 | [`{{secret:...}}`](#secret-references-secret) | `{{secret:sec_01HXYZ}}` | `execute.url`, `execute.headers`, `mcp.url`, `mcp.headers` | Call time |
 | [`{{context:...}}`](#context-references-context) | `{{context:ocaToken}}` | `execute.headers`, `mcp.headers` | Call time |
 | [`${...}`](#dollar-curly-formations-and-body-params) | `${ParamName}`, `${LogicalId}`, `${body.field}` | Formation `sub` expressions; `execute.url` | Apply time (`${Name}`) / call time (`${body.x}`) |
@@ -91,19 +90,6 @@ This is the canonical URL placeholder syntax and intentionally matches OpenAPI p
 :::warning[Single braces, not double]
 `{{city}}` is **not** a supported placeholder — double braces are reserved for [secret](#secret-references-secret) and [context](#context-references-context) references. Creating or updating a tool (directly, or via a formation) with any other `{{...}}` token in `execute`/`mcp` fields is rejected with `400 INVALID_TEMPLATE_TOKEN`. Always write `{city}`.
 :::
-
-## Discussion prompt tokens
-
-A discussion always compiles to at most two engine steps: the fixed `deliberation` step (one branch per participant) and an optional `synthesis` step. Participant and synthesis prompts support a fixed allowlist of `{token}` substitutions, resolved before each turn:
-
-| Token | Replaced with |
-| ----- | ------------- |
-| `{topic}` | The discussion run's topic |
-| `{transcript}` | Prior turns within the current step (enables the shared sequential transcript) |
-| `{steps.deliberation}` | Concatenated output of the deliberation step (only meaningful from `synthesis`) |
-| `{steps.deliberation.last}` | Only the deliberation step's final turn |
-
-Unknown tokens are left untouched (safe for literal braces in a prompt), but a `{token}` outside this allowlist — e.g. `{steps.synthesis}`, a self-reference, or a typo — is surfaced as a non-blocking entry in the discussion's `template_warnings` field, returned on every create, update, and read.
 
 ## Secret references (`{{secret:...}}`)
 

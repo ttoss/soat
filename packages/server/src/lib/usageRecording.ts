@@ -171,7 +171,6 @@ const writeGenerationEvent = async (args: {
  */
 export type CompletionUsageSource =
   | 'chat'
-  | 'discussion'
   | 'memory_consolidation'
   | 'memory_extraction'
   // An `llm_judge` scorer grading one eval item. Separate from the `eval`
@@ -182,7 +181,7 @@ export type CompletionUsageSource =
 
 /**
  * Writes one `llm_tokens` usage event for a completed provider call that has no
- * Generation record behind it — a chat completion, a discussion turn, or a
+ * Generation record behind it — a chat completion or a
  * memory extraction/consolidation pass. Attribution is explicit rather than read
  * off a generation: `generationId` and `traceId` are always null, `agentId` is
  * set only where the call is anchored to an agent.

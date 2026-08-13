@@ -222,7 +222,7 @@ export class UsageEvent extends Model {
   // The workload that produced the spend. For a generation-backed event: `eval`
   // (an eval run's item generations) or null (ordinary agent traffic, already
   // identified by `generation_id` / `agent_id`). For a generation-less
-  // completion it names the path — `chat`, `discussion`, `memory_extraction`,
+  // completion it names the path — `chat`, `memory_extraction`,
   // `memory_consolidation`, `eval_judge` — the same label its idempotency key
   // carries. Verification spend is therefore `source IN ('eval','eval_judge')`
   // (the evaluations module doc).
