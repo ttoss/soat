@@ -4,8 +4,11 @@ import { aiProvidersFormationModule } from './formation-modules/aiProvidersForma
 import { apiKeysFormationModule } from './formation-modules/apiKeysFormationModule';
 import { chatsFormationModule } from './formation-modules/chatsFormationModule';
 import { conversationsFormationModule } from './formation-modules/conversationsFormationModule';
+import { datasetItemsFormationModule } from './formation-modules/datasetItemsFormationModule';
+import { datasetsFormationModule } from './formation-modules/datasetsFormationModule';
 import { discussionsFormationModule } from './formation-modules/discussionsFormationModule';
 import { documentsFormationModule } from './formation-modules/documentsFormationModule';
+import { evalsFormationModule } from './formation-modules/evalsFormationModule';
 import { filesFormationModule } from './formation-modules/filesFormationModule';
 import { guardrailsFormationModule } from './formation-modules/guardrailsFormationModule';
 import { ingestionRulesFormationModule } from './formation-modules/ingestionRulesFormationModule';
@@ -60,6 +63,9 @@ registerFormationModule({ module: secretsFormationModule });
 registerFormationModule({ module: sessionsFormationModule });
 registerFormationModule({ module: orchestrationsFormationModule });
 registerFormationModule({ module: triggersFormationModule });
+registerFormationModule({ module: datasetsFormationModule });
+registerFormationModule({ module: datasetItemsFormationModule });
+registerFormationModule({ module: evalsFormationModule });
 registerFormationModule({ module: workflowsFormationModule });
 
 export const getFormationModule = (args: {

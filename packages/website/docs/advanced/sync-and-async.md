@@ -68,6 +68,10 @@ orchestration or eval run answers `201`.
 The rule that *is* uniform: the response always carries something you can poll, and a caller
 that omitted `wait` never receives a settled result.
 
+A [trigger](../modules/triggers.md) firing has no `wait` of its own: it always starts an
+eval run in the background, because a cron tick cannot hold a request open for a whole
+dataset. The firing record names the `evrun_…` to poll.
+
 ## Two combinations that are resolved for you
 
 **Streaming implies waiting.** `stream: true` holds the response open by definition, so it is a blocking call whether or not you pass `wait`. Asking for both a stream and a background run (`stream: true` with `?wait=false`) is contradictory and returns `400 VALIDATION_FAILED` rather than silently dropping one of the two.

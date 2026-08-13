@@ -81,6 +81,14 @@ describe('Formations', () => {
                 'quotas:UpdateQuota',
                 'quotas:DeleteQuota',
                 'guardrails:GetGuardrail',
+                'evaluations:CreateDataset',
+                'evaluations:GetDataset',
+                'evaluations:DeleteDataset',
+                'evaluations:CreateEval',
+                'evaluations:GetEval',
+                'evaluations:DeleteEval',
+                'evaluations:ListEvals',
+                'evaluations:ListDatasets',
               ],
             },
           ],
@@ -4390,6 +4398,166 @@ resources:
       await authenticatedTestClient(userToken).delete(
         `/api/v1/formations/${create.body.id}`
       );
+    });
+  });
+  // ── Evaluations resources (docs/prd-evaluations.md, Phase 3) ──────────────
+
+  describe('evaluation formation resources', () => {
+    let evalAgentId: string;
+
+    const evalTemplate = (passThreshold: number) => {
+      return {
+        resources: {
+          Suite: {
+            type: 'dataset',
+            properties: { name: `formation-suite-${passThreshold}` },
+          },
+          Case: {
+            type: 'dataset_item',
+            properties: {
+              dataset_id: { ref: 'Suite' },
+              input: [{ role: 'user', content: 'capital of France?' }],
+              expected_output: 'Paris',
+            },
+          },
+          Regression: {
+            type: 'eval',
+            properties: {
+              name: `formation-eval-${passThreshold}`,
+              agent_id: evalAgentId,
+              dataset_id: { ref: 'Suite' },
+              scorers: [{ type: 'exact_match' }],
+              pass_threshold: passThreshold,
+            },
+          },
+        },
+      };
+    };
+
+    beforeAll(async () => {
+      const provider = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: 'Formations Eval Provider',
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      evalAgentId = (
+        await authenticatedTestClient(adminToken).post('/api/v1/agents').send({
+          project_id: projectId,
+          name: 'Formations Eval Agent',
+          ai_provider_id: provider.body.id,
+        })
+      ).body.id;
+    });
+
+    test('a template provisions the dataset, its item, and the eval bound by ref', async () => {
+      const create = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `eval-stack-${Date.now()}`,
+          template: evalTemplate(0.8),
+        });
+
+      expect(create.status).toBe(201);
+      const byLogicalId = Object.fromEntries(
+        (
+          create.body.resources as Array<{
+            logical_id: string;
+            physical_resource_id: string;
+            status: string;
+          }>
+        ).map((resource) => {
+          return [resource.logical_id, resource];
+        })
+      );
+      expect(byLogicalId.Suite.physical_resource_id).toMatch(/^dset_/);
+      expect(byLogicalId.Case.physical_resource_id).toMatch(/^dsit_/);
+      expect(byLogicalId.Regression.physical_resource_id).toMatch(/^eval_/);
+
+      const datasetId = byLogicalId.Suite.physical_resource_id;
+      const evalId = byLogicalId.Regression.physical_resource_id;
+
+      // The `ref` really resolved: both children point at the created dataset.
+      const evaluation = await authenticatedTestClient(userToken).get(
+        `/api/v1/evals/${evalId}`
+      );
+      expect(evaluation.body.dataset_id).toBe(datasetId);
+      expect(evaluation.body.agent_id).toBe(evalAgentId);
+      expect(evaluation.body.pass_threshold).toBe(0.8);
+
+      const items = await authenticatedTestClient(userToken).get(
+        `/api/v1/datasets/${datasetId}/items`
+      );
+      expect(items.body.total).toBe(1);
+      expect(items.body.data[0].expected_output).toBe('Paris');
+
+      // Changing the gate updates the eval in place — same physical id.
+      const update = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              ...evalTemplate(0.8).resources,
+              Regression: {
+                type: 'eval',
+                properties: {
+                  name: 'formation-eval-0.8',
+                  agent_id: evalAgentId,
+                  dataset_id: { ref: 'Suite' },
+                  scorers: [{ type: 'exact_match' }],
+                  pass_threshold: 0.5,
+                },
+              },
+            },
+          },
+        });
+      expect(update.status).toBe(200);
+      const updatedEval = await authenticatedTestClient(userToken).get(
+        `/api/v1/evals/${evalId}`
+      );
+      expect(updatedEval.status).toBe(200);
+      expect(updatedEval.body.pass_threshold).toBe(0.5);
+
+      // Removing the eval from the template deletes it, leaving the fixtures.
+      const removed = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${create.body.id}`)
+        .send({
+          template: {
+            resources: {
+              Suite: evalTemplate(0.8).resources.Suite,
+              Case: evalTemplate(0.8).resources.Case,
+            },
+          },
+        });
+      expect(removed.status).toBe(200);
+      expect(
+        (
+          await authenticatedTestClient(userToken).get(
+            `/api/v1/evals/${evalId}`
+          )
+        ).status
+      ).toBe(404);
+      expect(
+        (
+          await authenticatedTestClient(userToken).get(
+            `/api/v1/datasets/${datasetId}`
+          )
+        ).status
+      ).toBe(200);
+
+      await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${create.body.id}`
+      );
+      expect(
+        (
+          await authenticatedTestClient(userToken).get(
+            `/api/v1/datasets/${datasetId}`
+          )
+        ).status
+      ).toBe(404);
     });
   });
 });

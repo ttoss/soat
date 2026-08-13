@@ -1169,6 +1169,9 @@ describe('Evaluations', () => {
       expect(run.aggregate_scores).toBeNull();
       expect(run.passed).toBeNull();
       expect(run.started_at).toBeNull();
+      // A run started through the API has no schedule origin; `trigger_id` is
+      // only set when a trigger fired it (Phase 3).
+      expect(run.trigger_id).toBeNull();
       // Not a single generation yet — the response came back before any work.
       expect(mockCreateGeneration).not.toHaveBeenCalled();
     });

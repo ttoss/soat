@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: SOAT Triggers API
   version: 1.0.0
-  description: API for managing triggers that activate orchestrations, agents, and tools
+  description: API for managing triggers that activate orchestrations, agents, tools, and evals
   contact:
     name: SOAT Team
     url: https://github.com/ttoss/soat
@@ -50,6 +50,7 @@ paths:
               - orchestration
               - agent
               - tool
+              - eval
         - name: limit
           in: query
           required: false
@@ -200,7 +201,10 @@ paths:
 
   /api/v1/triggers/{trigger_id}/fire:
     post:
-      description: Fires a trigger synchronously and returns the terminal firing record.
+      description: >-
+        Fires a trigger synchronously and returns the terminal firing record.
+        The firing itself always settles here; an `eval` target's run is queued
+        rather than executed inline, so the record names a `queued` run to poll.
       tags:
         - Triggers
       summary: Fire a trigger
@@ -392,9 +396,10 @@ components:
             - orchestration
             - agent
             - tool
+            - eval
         target_id:
           type: string
-          description: Public ID of the target resource (orchestration, agent, or tool)
+          description: Public ID of the target resource (orchestration, agent, tool, or eval)
         action:
           type: string
           nullable: true
@@ -402,7 +407,10 @@ components:
         input:
           type: object
           nullable: true
-          description: Static input, shallow-merged under fire-time input
+          description: >-
+            Static input, shallow-merged under fire-time input. For `eval`
+            targets the effective input may carry `agent_version` and
+            `baseline_run_id`, which are passed to the queued run.
         cron:
           type: string
           nullable: true
@@ -463,6 +471,7 @@ components:
             - orchestration
             - agent
             - tool
+            - eval
         target_id:
           type: string
         action:
@@ -494,6 +503,7 @@ components:
             - orchestration
             - agent
             - tool
+            - eval
         target_id:
           type: string
         action:
@@ -517,7 +527,10 @@ components:
       properties:
         input:
           type: object
-          description: Fire-time input, shallow-merged over the trigger's static input
+          description: >-
+            Fire-time input, shallow-merged over the trigger's static input.
+            For `eval` targets it may carry `agent_version` and
+            `baseline_run_id`.
 
     TriggerSecretResponse:
       type: object

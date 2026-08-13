@@ -18,11 +18,11 @@ type_ to one _target_ and records every activation as an auditable **trigger
 firing**. This delivers a full activation matrix — any starter can activate any
 target:
 
-| Starter ↓ / Target → | Orchestration | Agent | Tool |
-| -------------------- | ------------- | ----- | ---- |
-| **Manual** — `POST /api/v1/triggers/{id}/fire` | ✅ | ✅ | ✅ |
-| **Webhook** — signed `POST /hooks/triggers/{trigger_id}` | ✅ | ✅ | ✅ |
-| **Schedule** — 5-field cron (UTC) | ✅ | ✅ | ✅ |
+| Starter ↓ / Target → | Orchestration | Agent | Tool | Eval |
+| -------------------- | ------------- | ----- | ---- | ---- |
+| **Manual** — `POST /api/v1/triggers/{id}/fire` | ✅ | ✅ | ✅ | ✅ |
+| **Webhook** — signed `POST /hooks/triggers/{trigger_id}` | ✅ | ✅ | ✅ | ✅ |
+| **Schedule** — 5-field cron (UTC) | ✅ | ✅ | ✅ | ✅ |
 
 Firings execute in-process: a manual fire is **synchronous** and returns the
 terminal firing; webhook and schedule fires are **fire-and-forget** and the
@@ -46,7 +46,7 @@ firing record is the source of truth for the outcome.
 | `name`         | string                                  | Human-readable name, unique per project                                           |
 | `description`  | string \| null                          | Optional description                                                              |
 | `type`         | `manual` \| `webhook` \| `schedule`     | Starter type. **Immutable after creation**                                        |
-| `target_type`  | `orchestration` \| `agent` \| `tool`    | Kind of resource activated                                                        |
+| `target_type`  | `orchestration` \| `agent` \| `tool` \| `eval` | Kind of resource activated                                                   |
 | `target_id`    | string                                  | Public ID of the target; must exist in the same project at create/update time     |
 | `action`       | string \| null                          | Tool targets only: the action for `soat`/`mcp` tools (required for those, rejected otherwise) |
 | `input`        | object \| null                          | Static input, shallow-merged under fire-time input (fire-time keys win)           |
@@ -107,6 +107,15 @@ How the effective input reaches each target:
 - **Tool** → passed as the tool call input, with `trigger.action` forwarded for
   `soat`/`mcp` tools. `client`-type tools cannot execute server-side and are
   rejected at trigger creation time.
+- **Eval** → starts a **queued** run of the [eval](./evaluations.md) (one real
+  agent generation per dataset item, so it is never executed inline on the
+  firing). `input.agent_version` and `input.baseline_run_id` are forwarded to
+  the run; anything else is ignored. The firing's `result.result_id` is the
+  `evrun_…` id to poll, and the run records the trigger in its `trigger_id`.
+
+Each target type also has a permission: a caller can only bind (or fire) a
+trigger to a target it could start itself — `orchestrations:StartRun`,
+`agents:CreateAgentGeneration`, `tools:CallTool`, or `evaluations:RunEval`.
 
 ### Firing Status Semantics
 

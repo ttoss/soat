@@ -540,21 +540,52 @@ resolved.
 - Eval generations carry `source: eval` attribution, asserted where the
   [metering choke point](../packages/website/docs/modules/usage.md#coverage) records it
 
-### Phase 3 — Scheduled Evals + Formation Resource ❌ Not started
+### Phase 3 — Scheduled Evals + Formation Resource ✅ Shipped
 
 Schedules integration (cron [triggers](../packages/website/docs/modules/triggers.md)) so an eval
-run fires on a cron cadence; `eval` and `dataset` formation resource types.
+run fires on a cron cadence; `eval`, `dataset`, and `dataset_item` formation
+resource types.
+
+**Two deviations from the sketch above, both widening it.**
+
+*A third resource type.* The sketch named `eval` and `dataset`. A dataset with no
+items is not runnable — a run over an empty dataset is a `400` by design — so a
+template that can declare only the two produces a stack whose eval can never
+execute. The items therefore ship as their own `dataset_item` type, the
+`memory` / `memory_entry` shape the platform already uses for parent-plus-fixtures.
+The alternative — an `items` array inside `DatasetResourceProperties` — would make
+the formation the owner of the whole item set, so an apply would delete items
+curated through the API (exactly the fixtures `source_generation_id` exists to
+mark) and churn item ids on every reconcile.
+
+*No `evaluationsFormationModule.ts`.* The sketch named one module for all of it;
+`defineFormationModule` is per resource type (the schema name is **derived** from
+the type), so this is three small modules — `datasetsFormationModule`,
+`datasetItemsFormationModule`, `evalsFormationModule` — each declaring only its
+property→lib-arg mapping. Writing one module that switched on type would have
+reintroduced the skeleton that factory exists to delete.
 
 **Acceptance criteria:**
 
 - A schedule targeting an Eval starts a run per fire; the run records its
-  schedule origin
-- `EvalResourceProperties` / `DatasetResourceProperties` added to
-  `formations.yaml`; `evaluationsFormationModule.ts` implements build/update/
-  read; unknown-field and required-field template validation rejects with
-  `400` (formationSpecLoader allowlist)
+  schedule origin in `EvalRun.trigger_id` (denormalized, like
+  `OrchestrationRun.triggerId`, so a deleted trigger cannot rewrite a past
+  measurement's provenance)
+- The firing always starts a **queued** run: a suite is one real generation per
+  item with no cap, so a cron tick never blocks on it
+  (`.claude/rules/sync-async.md`). The firing record carries the `evrun_…` to poll
+- Binding a trigger to an eval requires `evaluations:RunEval` on top of
+  `triggers:CreateTrigger` — the same no-privilege-escalation guard the other
+  three target types use; a caller without it gets `403`
+- `Dataset`/`DatasetItem`/`EvalResourceProperties` added to `formations.yaml`;
+  unknown-field and required-field template validation rejects with `400`
+  (formationSpecLoader allowlist), and the derived-schema-name contract test
+  covers the three new types automatically
 - `update-formation` round-trip: a template declaring an eval creates it,
-  changing `pass_threshold` updates in place, removal deletes it
+  changing `pass_threshold` updates it in place (same physical id), removal
+  deletes it while leaving the dataset it referenced
+- `dataset_id` is immutable on a `dataset_item`: a template that moves an item
+  is rejected rather than silently applying the rest of its properties
 - Future sketch (not built): `human` scorer type parking results as
   `pending_review` for annotation queues
 
@@ -675,6 +706,41 @@ as recommendations rather than settled decisions:
   criteria pin it with a test instead of assuming it; the fallback if it proves
   empty is stated there.
 
+### Phase 3 decisions
+
+```txt
+Q: Should a trigger firing run the eval inline (like the orchestration target)
+   or queue it?
+A: Queue it — resolved by long-term (durability ladder + the shipped
+   sync/async rule); checked: `.claude/rules/sync-async.md` requires background
+   default for work that outlasts a request, an eval has no item cap on the
+   queued path (`SYNC_ITEM_CAP` applies only to `wait: true`), and a scheduler
+   tick holding a request open for N real generations is the failure that rule
+   names. The firing record carries the run id, so nothing is lost.
+
+Q: Does the run's schedule origin belong in an FK to `Trigger` or a
+   denormalized id?
+A: Denormalized `VARCHAR(32)` — resolved by pareto; improves nothing else's
+   cost and matches `OrchestrationRun.triggerId` verbatim (pattern hygiene);
+   checked: an FK with `ON DELETE SET NULL` would erase a finished run's
+   provenance when the trigger is deleted, and a run is a historical
+   measurement.
+
+Q: Should dataset items be an `items` array inside the dataset resource, or
+   their own `dataset_item` resource type?
+A: Their own type — resolved by long-term (pattern hygiene + debt containment);
+   checked: `memory`/`memory_entry` is the shipped precedent for the same
+   parent-plus-fixtures shape, item ids stay stable across applies, and an
+   items array would make an apply delete API-curated items, which is data loss
+   in the one place (`source_generation_id`) the module marks as deliberate.
+
+Q: Should `dataset_id` be mutable on a `dataset_item` template?
+A: No, rejected with a `400` — resolved by pareto; the alternative (ignore the
+   declared value) reports success for an apply that did not happen; checked:
+   the lib addresses an item through its parent for authorization, so a move
+   has no single-call form either.
+```
+
 ## Risks
 
 - **Eval runs spend real money** — every item is a real generation, and
@@ -701,3 +767,4 @@ as recommendations rather than settled decisions:
   variance, not regression. Aggregate scores over datasets (not single items)
   and thresholds below 1.0 are the intended mitigation; seed/temperature
   pinning is out of scope.
+
