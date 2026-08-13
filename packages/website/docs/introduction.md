@@ -67,10 +67,10 @@ The platform is organized around the [four layers of an agent system](/docs/gett
 
 Everything above records what agents _did_ or constrains what they _may do_. The direction of the platform is the layer that governs what they _become_: the **ratchet** — produce a verdict from evidence, gate every change on the verdict, keep history append-only so nothing regresses silently.
 
-The shipped foundation is already in place: versioned agents, canary rollout, and the approvals recurrence view. Building on it, designed and coming next:
+The ratchet is now closed end to end: versioned agents, canary rollout, the approvals recurrence view, and —
 
 - **[Evaluations](/docs/modules/evaluations)** — datasets, scorers, and scored runs of the real agent, comparable against a baseline, answering "did this change make the agent worse?" with a pass/fail verdict
-- **Eval-gated promotion** — a canary release that promotes on a passing eval run rather than a judgment call
+- **[Eval-gated promotion](/docs/modules/agents#eval-gated-promotion)** — a canary release that promotes only on a passing eval run against that canary, not on a judgment call
 
 Promotion stays human-gated by design: the platform owns the queue, the recurrence signal, and the verdict — a human owns the judgment. The full framing is in [The Layers of an Agent System](/docs/getting-started/agent-system-layers), and sequencing lives in the [roadmap](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).
 

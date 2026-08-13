@@ -127,6 +127,11 @@ export const ERROR_CODES = {
     description:
       'The agent is referenced by one or more generations or traces and cannot be deleted. Delete the dependent records first.',
   },
+  PROMOTION_GATE_UNMET: {
+    httpStatus: 409,
+    description:
+      "The release's promotion_gate has no passing eval run against the canary version. Run the eval with agent_version pinned to the canary, or abort the rollout.",
+  },
   NO_ACTIVE_RELEASE: {
     httpStatus: 409,
     description:

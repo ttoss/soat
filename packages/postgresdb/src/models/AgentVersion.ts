@@ -9,6 +9,7 @@ import {
 
 import { generatePublicId, PUBLIC_ID_PREFIXES } from '../utils/publicId';
 import { Agent } from './Agent';
+import { EvalRun } from './EvalRun';
 import { User } from './User';
 
 /**
@@ -80,6 +81,29 @@ export class AgentVersion extends Model {
   /** Optional human tag for this version, e.g. `pre-tone-change`. */
   @Column({ type: DataType.STRING, allowNull: true })
   declare label: string | null;
+
+  /**
+   * The eval run that validated this version, set when an eval-gated promotion
+   * made it live (docs/prd-agent-versions.md, Phase 3). Null for every version
+   * that was not promoted through a gate — which is most of them.
+   *
+   * `SET NULL` rather than `CASCADE`: the run is provenance for a config that
+   * is live in production, so deleting the run must not delete the config it
+   * validated.
+   */
+  @ForeignKey(() => {
+    return EvalRun;
+  })
+  @Column({ type: DataType.INTEGER, allowNull: true })
+  declare evalRunId: number | null;
+
+  @BelongsTo(
+    () => {
+      return EvalRun;
+    },
+    { onDelete: 'SET NULL' }
+  )
+  declare evalRun: EvalRun | null;
 
   /**
    * The user whose action produced this version. Null for writes with no

@@ -2,10 +2,11 @@ import {
   createScopedPrincipal,
   setupProjectWithUsers,
 } from '../../fixtures/bootstrap';
+import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Agent versioning and staged rollout (docs/prd-agent-versions.md, Phases 1–2).
+ * Agent versioning and staged rollout (docs/prd-agent-versions.md, Phases 1–3).
  *
  * Every assertion drives the REST entry point: version snapshots are written by
  * the shared lib choke point, so a `PUT`, a `PATCH`, and a formation apply are
@@ -40,6 +41,10 @@ describe('Agent versions', () => {
         'agents:GetAgentVersion',
         'agents:RestoreAgentVersion',
         'agents:SetAgentRelease',
+        'evaluations:CreateDataset',
+        'evaluations:CreateEval',
+        'evaluations:GetEval',
+        'evaluations:RunEval',
         'agents:CreateAgentGeneration',
         'agents:CreateSession',
         'agents:SendSessionMessage',
@@ -536,6 +541,9 @@ describe('Agent versions', () => {
         stable_version: 1,
         canary_version: 2,
         canary_percent: 20,
+        // An ungated rollout still reports the field, so a client never has to
+        // distinguish "no gate" from "an older server that had no gates".
+        promotion_gate: null,
       });
     });
 
@@ -918,6 +926,320 @@ describe('Agent versions', () => {
       expect(record.status).toBe(200);
       expect(record.body.agent_version).toBe(1);
       expect(record.body.metadata).toEqual({ agent_version: 99 });
+    });
+  });
+
+  // ── Phase 3: eval-gated promotion ────────────────────────────────────────
+
+  /**
+   * A gate is an eval that must be green *against the canary version* before
+   * the canary can go live. Everything here drives the two real entry points —
+   * the release API and the evaluations API — with only the agent's generation
+   * mocked, which is the one external boundary (`.claude/rules/tests.md`).
+   */
+  describe('eval-gated promotion', () => {
+    let datasetId: string;
+
+    /** An eval of `agent` that passes only when the agent answers "Paris". */
+    const createGateEval = async (name: string, targetAgentId: string) => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/evals')
+        .send({
+          project_id: projectId,
+          name,
+          agent_id: targetAgentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+          pass_threshold: 1,
+        });
+      expect(res.status).toBe(201);
+      return res.body.id as string;
+    };
+
+    /**
+     * A two-version agent mid-rollout, with the canary gated on a fresh eval.
+     * Each test gets its own so a run started by one cannot satisfy another's
+     * gate.
+     */
+    const gatedAgent = async (name: string) => {
+      const agent = await createAgent({ instructions: 'stable prompt' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'canary prompt' });
+
+      const evalId = await createGateEval(name, agent.id);
+
+      const release = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({
+          stable_version: 1,
+          canary_version: 2,
+          canary_percent: 50,
+          promotion_gate: evalId,
+        });
+      expect(release.status).toBe(200);
+
+      return { agentId: agent.id as string, evalId };
+    };
+
+    /** Runs the gate's eval against one version, answering `answer` once. */
+    const runEval = async (args: {
+      evalId: string;
+      version: number;
+      answer: string;
+    }) => {
+      mockCreateGeneration.mockResolvedValueOnce({
+        id: `gen_gate_${args.version}_${args.answer}`,
+        traceId: `trc_gate_${args.version}_${args.answer}`,
+        status: 'completed' as const,
+        output: {
+          model: 'test-model',
+          content: args.answer,
+          finishReason: 'stop' as const,
+        },
+      });
+
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/evals/${args.evalId}/runs`)
+        .send({ wait: true, agent_version: args.version });
+
+      expect(res.status).toBe(201);
+      expect(res.body.agent_version).toBe(args.version);
+      return res.body as { id: string; passed: boolean };
+    };
+
+    const promote = (agentId: string) => {
+      return authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/release/promote`
+      );
+    };
+
+    const liveVersionRow = async (agentId: string) => {
+      const agent = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}`
+      );
+      expect(agent.status).toBe(200);
+      const version = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}/versions/${agent.body.version}`
+      );
+      expect(version.status).toBe(200);
+      return version.body;
+    };
+
+    beforeAll(async () => {
+      const dataset = await authenticatedTestClient(userToken)
+        .post('/api/v1/datasets')
+        .send({ project_id: projectId, name: 'gate-dataset' });
+      expect(dataset.status).toBe(201);
+      datasetId = dataset.body.id;
+
+      const item = await authenticatedTestClient(userToken)
+        .post(`/api/v1/datasets/${datasetId}/items`)
+        .send({
+          input: [{ role: 'user', content: 'Capital of France?' }],
+          expected_output: 'Paris',
+        });
+      expect(item.status).toBe(201);
+    });
+
+    afterEach(() => {
+      // Shared spy: clear queued implementations without unwiring it.
+      jest.clearAllMocks();
+    });
+
+    test('the gate is stored on the release and echoed back', async () => {
+      const { agentId, evalId } = await gatedAgent('gate-echo');
+
+      const agent = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}`
+      );
+      expect(agent.body.active_release.promotion_gate).toBe(evalId);
+    });
+
+    test('promote with no run at all returns 409 and leaves the rollout running', async () => {
+      const { agentId, evalId } = await gatedAgent('gate-no-run');
+
+      const res = await promote(agentId);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_GATE_UNMET');
+      expect(res.body.error.message).toContain(evalId);
+      expect(res.body.error.meta).toEqual({
+        promotion_gate: evalId,
+        agent_version: 2,
+      });
+
+      // A blocked promotion changes nothing: the split keeps serving.
+      const agent = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}`
+      );
+      expect(agent.body.active_release.canary_version).toBe(2);
+      expect(agent.body.instructions).toBe('canary prompt');
+    });
+
+    test('a passing run against the canary promotes and links the run', async () => {
+      const { agentId, evalId } = await gatedAgent('gate-green');
+
+      const run = await runEval({ evalId, version: 2, answer: 'Paris' });
+      expect(run.passed).toBe(true);
+
+      const res = await promote(agentId);
+
+      expect(res.status).toBe(200);
+      expect(res.body.active_release).toBeNull();
+      expect(res.body.instructions).toBe('canary prompt');
+
+      // The version now live records what validated it — the headline
+      // integration with docs/prd-evaluations.md.
+      expect((await liveVersionRow(agentId)).eval_run_id).toBe(run.id);
+    });
+
+    test('a passing run against a different version does not satisfy the gate', async () => {
+      const { agentId, evalId } = await gatedAgent('gate-wrong-version');
+
+      // Green — but it measured the stable config, which says nothing about
+      // the canary being promoted.
+      const run = await runEval({ evalId, version: 1, answer: 'Paris' });
+      expect(run.passed).toBe(true);
+
+      const res = await promote(agentId);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_GATE_UNMET');
+    });
+
+    test('a failing run against the canary does not satisfy the gate', async () => {
+      const { agentId, evalId } = await gatedAgent('gate-red');
+
+      const run = await runEval({ evalId, version: 2, answer: 'Lyon' });
+      expect(run.passed).toBe(false);
+
+      const res = await promote(agentId);
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('PROMOTION_GATE_UNMET');
+    });
+
+    test('abort is never blocked by an unmet gate', async () => {
+      const { agentId } = await gatedAgent('gate-abort');
+
+      // The gate exists to stop a bad canary going live, so it must never trap
+      // an operator inside a rollout they want to end.
+      const res = await authenticatedTestClient(userToken).post(
+        `/api/v1/agents/${agentId}/release/abort`
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.active_release).toBeNull();
+      expect(res.body.instructions).toBe('stable prompt');
+    });
+
+    test('an ungated promotion records no eval run', async () => {
+      const agent = await createAgent({ instructions: 'ungated stable' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'ungated canary' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({ stable_version: 1, canary_version: 2, canary_percent: 10 });
+
+      expect((await promote(agent.id)).status).toBe(200);
+      expect((await liveVersionRow(agent.id)).eval_run_id).toBeNull();
+    });
+
+    test('a gate naming an eval of another agent is rejected', async () => {
+      const agent = await createAgent({ instructions: 'gate-foreign stable' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'gate-foreign canary' });
+
+      const other = await createAgent({ instructions: 'a different agent' });
+      const foreignEval = await createGateEval('gate-foreign', other.id);
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({
+          stable_version: 1,
+          canary_version: 2,
+          canary_percent: 10,
+          promotion_gate: foreignEval,
+        });
+
+      // Rejected at set time rather than stored: an eval of another agent can
+      // be green for reasons that say nothing about this config.
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+      expect(res.body.error.message).toContain('different agent');
+    });
+
+    test('a gate naming an unknown eval is rejected', async () => {
+      const agent = await createAgent({ instructions: 'gate-unknown stable' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'gate-unknown canary' });
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({
+          stable_version: 1,
+          canary_version: 2,
+          canary_percent: 10,
+          promotion_gate: 'eval_missing',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a non-string gate is rejected', async () => {
+      const agent = await createAgent({ instructions: 'gate-typed stable' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'gate-typed canary' });
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({
+          stable_version: 1,
+          canary_version: 2,
+          canary_percent: 10,
+          promotion_gate: 42,
+        });
+
+      expect(res.status).toBe(400);
+    });
+
+    test('an explicit null gate is an ungated rollout', async () => {
+      const agent = await createAgent({ instructions: 'gate-null stable' });
+      await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}`)
+        .send({ instructions: 'gate-null canary' });
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agent.id}/release`)
+        .send({
+          stable_version: 1,
+          canary_version: 2,
+          canary_percent: 10,
+          promotion_gate: null,
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.active_release.promotion_gate).toBeNull();
+      expect((await promote(agent.id)).status).toBe(200);
+    });
+
+    test('re-setting a release can drop the gate', async () => {
+      const { agentId } = await gatedAgent('gate-dropped');
+
+      const res = await authenticatedTestClient(userToken)
+        .put(`/api/v1/agents/${agentId}/release`)
+        .send({ stable_version: 1, canary_version: 2, canary_percent: 50 });
+
+      expect(res.status).toBe(200);
+      expect(res.body.active_release.promotion_gate).toBeNull();
+      // Ungated again, so promotion needs no evidence.
+      expect((await promote(agentId)).status).toBe(200);
     });
   });
 

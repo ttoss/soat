@@ -17,7 +17,7 @@
 | `active_release` (stable/canary split)             | ✅ Shipped     | Deterministic per-actor assignment                           |
 | Served-version stamping on generations             | ✅ Shipped     | `agent_version` in generation metadata (reserved key)        |
 | Promote / abort release endpoints                  | ✅ Shipped     | Both pin their version explicitly                            |
-| Eval-gated promotion (`promotion_gate`)            | ❌ Not started | Requires [prd-evaluations.md](./prd-evaluations.md) Phase 1+ |
+| Eval-gated promotion (`promotion_gate`)            | ✅ Shipped     | `409` until a passing run pinned to the canary version exists |
 
 ## Decisions Taken During Implementation
 
@@ -65,6 +65,39 @@ A: Exclusion — resolved by long-term. An allowlist fails silently (a new field
    stops being restored, with nothing to notice); exclusion fails loudly (a
    bookkeeping field leaking in sprays spurious versions). A test pins the exact
    key set so adding an agent field forces a deliberate choice.
+
+Q: Thread `evalRunId` through the shared version-archive engine, or stamp it on
+   the promoted version after the config apply?
+A: Stamp after — resolved by long-term (boundary integrity). Threading it would
+   put an evaluations concept into `resourceVersions.ts`, which guardrails,
+   workflows and orchestrations also use, across five signatures; and it would
+   still miss the case where the apply is a no-op (the live row already held the
+   canary config) and archives no new version to carry the field. Reading the
+   agent's resulting `version` covers both shapes. Checked: promoting an agent
+   whose live row already holds the canary leaves `version` unchanged, and the
+   test asserts `eval_run_id` lands on the version that is actually live.
+
+Q: Does the gate also block `abort`?
+A: No — resolved by pareto. A gate exists to stop a bad canary reaching users;
+   applying it to abort would trap an operator inside the rollout they are trying
+   to end, which is the failure the gate exists to prevent, inverted. Checked: a
+   test aborts a gated release with no run at all and gets 200.
+
+Q: Should `promote` start the eval run itself when the gate has no evidence?
+A: No — resolved by long-term (debt containment). Promotion would then spend
+   provider budget as a side effect of a call that reads as a pointer move, and a
+   `wait`-shaped decision would have to be invented for an endpoint that has none
+   (`.claude/rules/sync-async.md`). Producing evidence stays an explicit
+   `start-eval-run` with `agent_version` pinned. Checked: the evaluations API
+   already accepts that pin, and the gate matches on the run's stamped version.
+
+Q: What does a *malformed* stored `promotion_gate` mean at read time?
+A: The whole release degrades to "none" — resolved by long-term (durability).
+   `parseActiveRelease`'s existing doctrine is that an unreadable release falls
+   back to the live config, and a gate that cannot be read was still meant to
+   gate: reading it as "ungated" would let a junk value promote a canary nothing
+   validated. An absent key stays ungated, since every pre-Phase-3 row lacks it.
+   Checked: a lib test pins both directions.
 ```
 
 ## Deviations From This Document
@@ -81,6 +114,11 @@ A: Exclusion — resolved by long-term. An allowlist fails silently (a new field
   `GenerationResult` construction site (stream, non-stream, tool-outputs, depth
   guard, recovery) would touch five files to duplicate data a documented endpoint
   already returns.
+- **The gate is checked, never produced.** `promote` looks for a passing run; it
+  does not start one. See the Decisions entry above.
+- **`AgentVersion.evalRunId` is written after the promotion's config apply**,
+  onto whichever version the apply left live, rather than being threaded through
+  the shared archive engine. See the Decisions entry above.
 - **Two agent fields are not covered by the canary overlay**, because they are
   consumed outside the generation-context seam: `single_session_per_actor`
   (evaluated once, at session creation) and `max_context_messages` (applied by
@@ -275,7 +313,7 @@ generation metadata (visible in traces).
   clears it with stable unchanged.
 - Setting a release referencing a nonexistent version returns `400`.
 
-### Phase 3 — Eval-Gated Promotion ❌ Not started
+### Phase 3 — Eval-Gated Promotion ✅ Shipped
 
 **Goal:** "Promotion requires a green eval" as an enforced invariant, not a
 convention.

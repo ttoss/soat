@@ -5921,6 +5921,91 @@ if ! printf '%s\n' "$EVAL_RUN_GET_RESP" | jq -e --arg id "$EVAL_RUN_ID" '.id == 
   exit 1
 fi
 
+echo "--- Agent versioning: eval-gated promotion ---"
+# A dedicated agent and eval, so gating a rollout cannot disturb the suite's
+# main agent or the runs asserted above.
+GATE_AGENT_RESP=$($SOAT_CLI create-agent \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" \
+  --name "smoke-gate-agent" \
+  --instructions "Answer in one word.")
+GATE_AGENT_ID=$(printf '%s\n' "$GATE_AGENT_RESP" | jq -r '.id')
+if ! printf '%s\n' "$GATE_AGENT_ID" | grep -q '^agent_'; then
+  echo "ERROR: gate agent was not created" >&2
+  printf '%s\n' "$GATE_AGENT_RESP" >&2
+  exit 1
+fi
+# Version 2 — the canary the gate will guard.
+$SOAT_CLI update-agent --agent-id "$GATE_AGENT_ID" \
+  --instructions "Answer in two words." >/dev/null
+
+GATE_EVAL_RESP=$($SOAT_CLI create-eval \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-gate" \
+  --agent_id "$GATE_AGENT_ID" \
+  --dataset_id "$DATASET_ID" \
+  --scorers '[{"type":"json_logic","expression":{"!=":[{"var":"output"},""]}}]' \
+  --pass_threshold 0.5)
+GATE_EVAL_ID=$(printf '%s\n' "$GATE_EVAL_RESP" | jq -r '.id')
+
+GATE_RELEASE=$($SOAT_CLI set-agent-release --agent-id "$GATE_AGENT_ID" \
+  --stable-version 1 --canary-version 2 --canary-percent 50 \
+  --promotion-gate "$GATE_EVAL_ID")
+if ! printf '%s\n' "$GATE_RELEASE" | jq -e --arg gate "$GATE_EVAL_ID" \
+  '.active_release.promotion_gate == $gate' >/dev/null 2>&1; then
+  echo "ERROR: the release did not record its promotion_gate" >&2
+  printf '%s\n' "$GATE_RELEASE" >&2
+  exit 1
+fi
+
+# No run exists yet, so the gate must block — this half is deterministic.
+expect_cli_error_status 409 promote-agent-release --agent-id "$GATE_AGENT_ID"
+echo "promote blocked before any eval run: OK"
+
+# An eval of another agent can never gate this one.
+expect_cli_error_status 400 set-agent-release --agent-id "$GATE_AGENT_ID" \
+  --stable-version 1 --canary-version 2 --canary-percent 50 \
+  --promotion-gate "$EVAL_ID"
+
+GATE_RUN_RESP=$($SOAT_CLI start-eval-run --eval_id "$GATE_EVAL_ID" --wait true --agent_version 2)
+GATE_RUN_ID=$(printf '%s\n' "$GATE_RUN_RESP" | jq -r '.id')
+if ! printf '%s\n' "$GATE_RUN_RESP" | jq -e '.status == "completed" and .agent_version == 2' >/dev/null 2>&1; then
+  echo "ERROR: the gate's eval run did not complete against version 2" >&2
+  printf '%s\n' "$GATE_RUN_RESP" >&2
+  exit 1
+fi
+
+# Whether the sandbox model's answer passes is its own business, so the gate is
+# asserted in whichever direction the verdict went — both are real assertions
+# about it, and neither depends on the model.
+GATE_PASSED=$(printf '%s\n' "$GATE_RUN_RESP" | jq -r '.passed')
+if [ "$GATE_PASSED" = "true" ]; then
+  GATE_PROMOTED=$($SOAT_CLI promote-agent-release --agent-id "$GATE_AGENT_ID")
+  if ! printf '%s\n' "$GATE_PROMOTED" | jq -e '.active_release == null' >/dev/null 2>&1; then
+    echo "ERROR: a satisfied gate did not let the promotion through" >&2
+    printf '%s\n' "$GATE_PROMOTED" >&2
+    exit 1
+  fi
+  GATE_LIVE_VERSION=$(printf '%s\n' "$GATE_PROMOTED" | jq -r '.version')
+  GATE_VERSION_ROW=$($SOAT_CLI get-agent-version --agent-id "$GATE_AGENT_ID" --version "$GATE_LIVE_VERSION")
+  if ! printf '%s\n' "$GATE_VERSION_ROW" | jq -e --arg run "$GATE_RUN_ID" \
+    '.eval_run_id == $run' >/dev/null 2>&1; then
+    echo "ERROR: the promoted version did not link the run that cleared the gate" >&2
+    printf '%s\n' "$GATE_VERSION_ROW" >&2
+    exit 1
+  fi
+  echo "promote after a passing run, with eval_run_id recorded: OK"
+else
+  # A run that did not pass is not evidence: the gate must still hold.
+  expect_cli_error_status 409 promote-agent-release --agent-id "$GATE_AGENT_ID"
+  $SOAT_CLI abort-agent-release --agent-id "$GATE_AGENT_ID" >/dev/null
+  echo "promote still blocked by a non-passing run: OK"
+fi
+
+$SOAT_CLI delete-eval --eval_id "$GATE_EVAL_ID"
+$SOAT_CLI delete-agent --agent-id "$GATE_AGENT_ID" --force true >/dev/null
+echo "Eval-gated promotion: OK"
+
 echo "--- Deleting the dataset item leaves the run results readable ---"
 $SOAT_CLI delete-dataset-item --dataset_id "$DATASET_ID" --item_id "$DATASET_ITEM_ID"
 EVAL_RESULTS_AFTER=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
