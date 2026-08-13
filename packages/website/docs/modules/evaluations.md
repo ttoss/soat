@@ -37,6 +37,15 @@ baseline deltas, lifecycle webhooks, cancellation, scheduled runs via
 
 > See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
 
+## Related Tutorials
+
+- [Evaluate an Agent - Step 3 (Build a dataset)](/docs/tutorials/evaluate-an-agent#step-3--build-a-dataset)
+- [Evaluate an Agent - Step 6 (Measure a prompt change against a baseline)](/docs/tutorials/evaluate-an-agent#step-6--fix-the-prompt-then-measure-the-fix)
+- [Judge Open-Ended Answers - Step 3 (Bind an llm_judge scorer)](/docs/tutorials/judge-open-ended-answers#step-3--bind-the-judge)
+- [Judge Open-Ended Answers - Step 5 (Run queued and poll)](/docs/tutorials/judge-open-ended-answers#step-5--run-it-queued-instead-of-blocking)
+- [Gate a Canary Promotion on an Eval - Step 4 (Set a promotion gate)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-4--start-a-gated-canary-release)
+- [Gate a Canary Promotion on an Eval - Step 8 (Schedule nightly runs)](/docs/tutorials/gate-a-canary-promotion-on-an-eval#step-8--keep-feeding-the-gate-after-you-stop-watching)
+
 ## Data Model
 
 ### Dataset
