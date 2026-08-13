@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.21.0](https://github.com/ttoss/soat/compare/v0.20.5...v0.21.0) (2026-08-13)
+
+* feat(discussions)!: remove the discussions module (#973) ([c2d9b02](https://github.com/ttoss/soat/commit/c2d9b02c9c9b9476359340ccb7423f4374bf7db4)), closes [#973](https://github.com/ttoss/soat/issues/973)
+* refactor(evaluations,discussions)!: qualify the run path parameter (#970) ([5c8c00e](https://github.com/ttoss/soat/commit/5c8c00e9c87f7d7166dec2b2f9c837454d3bb368)), closes [#970](https://github.com/ttoss/soat/issues/970) [#969](https://github.com/ttoss/soat/issues/969) [#969](https://github.com/ttoss/soat/issues/969)
+* feat(api)!: unify the sync/async execution toggle as `wait` across all endpoints (#965) ([d10c1e5](https://github.com/ttoss/soat/commit/d10c1e57e5a95d3bce1c40464589f986ae81d918)), closes [#965](https://github.com/ttoss/soat/issues/965) [#async-generation](https://github.com/ttoss/soat/issues/async-generation)
+
+### Features
+
+* **agents:** gate canary promotion on a passing eval run (Phase 3) ([#968](https://github.com/ttoss/soat/issues/968)) ([30df86f](https://github.com/ttoss/soat/commit/30df86f97e9b030d9fee2cef71f2e530defb28ba))
+* **evaluations:** datasets, evals, and synchronous scored runs (Phase 1) ([#964](https://github.com/ttoss/soat/issues/964)) ([0c25434](https://github.com/ttoss/soat/commit/0c25434b61464c1ad6b734a60f1b9f5d66fde6d3))
+* **evaluations:** LLM judge, queued runs, baseline deltas, and lifecycle webhooks (Phase 2) ([#966](https://github.com/ttoss/soat/issues/966)) ([7b5c06b](https://github.com/ttoss/soat/commit/7b5c06b75ecf4555705f290435a54a946d9edee6))
+* **evaluations:** scheduled eval runs and evaluation formation resources (Phase 3) ([#969](https://github.com/ttoss/soat/issues/969)) ([3a2a18e](https://github.com/ttoss/soat/commit/3a2a18e3cc8f5202ebf2c0958f8faa1f3819a620))
+
+### BREAKING CHANGES
+
+* POST /agents/{agent_id}/generate and
+  POST /conversations/{conversation_id}/generate now run in the background
+  and return 202 by default. Callers that need the result inline — which
+  includes every client-tool (requires_action) flow — must pass ?wait=true.
+* the ?async= query parameter is removed from
+  POST /documents/ingest, POST /documents/{document_id}/ingest, and
+  POST /sessions/{session_id}/generate; use wait=true to block.
+  POST /sessions/{session_id}/generate now returns 202 and runs in the
+  background by default; callers that need the reply in the response must
+  pass ?wait=true. An unrecognized ?async= parameter is silently ignored.
+* the /api/v1/discussions endpoints, their MCP tools and
+  SDK/CLI operations, the `discussion` formation resource type, and the
+  `discussions:*` permissions are removed. The 409 AI_PROVIDER_HAS_DEPENDENTS
+  meta no longer carries discussionCount, discussionIds, or
+  discussionParticipantCount. search-knowledge no longer excludes documents
+  under /discussions/ by default, so legacy transcripts in an existing
+  install become ordinary, searchable project documents within their own
+  project until deleted.
+* the `run_id` parameter of `get-eval-run`,
+  `list-eval-results`, `cancel-eval-run` and `get-discussion-run` is renamed
+  to `eval_run_id` / `discussion_run_id`. Callers pass `--eval-run-id` /
+  `--discussion-run-id` on the CLI, and the matching key in the SDK and MCP
+  tool arguments. Request URLs are unaffected.
+
 ## [0.20.5](https://github.com/ttoss/soat/compare/v0.20.4...v0.20.5) (2026-08-12)
 
 ### Features
