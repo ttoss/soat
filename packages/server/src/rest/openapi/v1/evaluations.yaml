@@ -1301,6 +1301,14 @@ components:
           type: string
           nullable: true
           example: evrun_V1StGXR8Z5jdHi6B
+        trigger_id:
+          type: string
+          nullable: true
+          description: >-
+            The trigger that started this run — set when a schedule (or a manual
+            trigger fire) started it, null for a run started through this API.
+            Kept even if the trigger is later deleted.
+          example: trg_V1StGXR8Z5jdHi6B
         aggregate_scores:
           $ref: '#/components/schemas/AggregateScores'
         passed:

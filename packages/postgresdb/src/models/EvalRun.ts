@@ -105,6 +105,17 @@ export class EvalRun extends Model {
   @Column({ type: DataType.INTEGER, allowNull: false, defaultValue: 0 })
   declare erroredCount: number;
 
+  /**
+   * Public id of the trigger that started this run, when a trigger did
+   * (docs/prd-evaluations.md, Phase 3 — a nightly schedule pointed at an Eval).
+   * Denormalized rather than an FK, exactly like `OrchestrationRun.triggerId`,
+   * so the origin survives the trigger being deleted: a run is a historical
+   * measurement and its provenance must not be rewritten by a later edit. Null
+   * for runs started directly through the API.
+   */
+  @Column({ type: DataType.STRING(32), allowNull: true })
+  declare triggerId: string | null;
+
   @Column({ type: DataType.DATE, allowNull: true })
   declare startedAt: Date | null;
 

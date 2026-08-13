@@ -304,6 +304,12 @@ export const startEvalRun = async (args: {
   wait: unknown;
   agentVersion?: unknown;
   baselineRunId?: unknown;
+  /**
+   * Public id of the trigger firing this run, when a trigger started it. Set
+   * only by `triggerDispatch`; a run started through the REST route has no
+   * schedule origin to record.
+   */
+  triggerId?: string;
 }): Promise<ReturnType<typeof mapEvalRun>> => {
   const wait = parseWait(args.wait);
   log('startEvalRun: evalId=%s wait=%s', args.evalId, wait);
@@ -317,6 +323,7 @@ export const startEvalRun = async (args: {
     // worker that picks up one of its items.
     status: wait ? 'running' : 'queued',
     baselineRunId: plan.baselineRunDbId,
+    triggerId: args.triggerId ?? null,
     itemCount: plan.items.length,
     startedAt: wait ? new Date() : null,
   });

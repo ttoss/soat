@@ -60,7 +60,7 @@ route, and the `model_route` formation resource).
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
 | Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ✅ Phases 1–3 shipped | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | 🟡 Phases 1–2 shipped (P2 minus `from-generation` curation, deferred); P3 remains | ~~gates agent-versions P3~~ (satisfied) |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ✅ Phases 1–3 shipped (minus `from-generation` curation, deferred) | ~~gates agent-versions P3~~ (satisfied) |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -174,16 +174,17 @@ _Fully shipped (`agentVersions.ts`, `releaseAssignment.ts`,
 
 ### Evaluations
 
-_Phases 1–2 shipped (`evaluations.ts`, `evaluationDatasets.ts`,
+_Phases 1–3 shipped (`evaluations.ts`, `evaluationDatasets.ts`,
 `evaluationRuns.ts`, `evaluationRunExecution.ts`, `evaluationScorers.ts`,
 `evaluationJudge.ts`, `evaluationDeltas.ts`, `evaluationQueue.ts`,
-`evaluationWorker.ts`, `evaluationEvents.ts`); live behavior is documented in the
+`evaluationWorker.ts`, `evaluationEvents.ts`, the `eval` trigger target, and the
+`dataset` / `dataset_item` / `eval` formation modules); live behavior is documented in the
 [evaluations module doc](../packages/website/docs/modules/evaluations.md)._
 
 - [x] ~~**Phase 1** Datasets + evals + sync deterministic runs~~ — **shipped**: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`, 25-item cap); run-level version pinning; frozen per-result item snapshots; generation-purge cascade to `EvalResult.output`
 - [x] ~~**Phase 2** `llm_judge` scorer; async execution; baseline **deltas**; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight~~ — **shipped**, plus `eval_run.completed`/`.failed` webhooks, `cancel`, and an atomic finalize claim so the completion event fires exactly once. Async runs use a dedicated `EvalRunTask` queue on the shared `createSweep`/`createScheduler` seam rather than `orchestration_run_tasks` — that table's claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold (deviation recorded in the PRD)
 - [ ] ⏭️ **Deferred** — curate dataset items from traces/generations (`from-generation`). Neither a generation's input messages nor its output text is persisted in a platform-owned shape; both live only in the AI SDK `steps` blob on the trace's file. Building it needs either a reader of that provider-shaped blob (empty for zero-retention/purged generations) or a new content column holding end-user prompts — a privacy-class call the open-questions gate forwards
-- [ ] **Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type
+- [x] ~~**Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type~~ — **shipped**: `eval` is a trigger target (gated on `evaluations:RunEval`, always starting a **queued** run so a cron tick never blocks on a whole dataset) and the run records its origin in `EvalRun.trigger_id`; `dataset`, `dataset_item`, and `eval` are formation resource types. The item type is an addition to the sketch — a dataset with no items cannot run, and declaring items *inside* the dataset would make an apply delete API-curated fixtures (deviation recorded in the PRD)
 - [x] ~~Webhook events (`eval_run.completed` / `.failed`)~~ — **shipped** with Phase 2, carrying `{eval_id, eval_run_id, passed, aggregate_scores}` inline: the promotion-gate event agent-versions P3 consumes
 
 ### Model routing

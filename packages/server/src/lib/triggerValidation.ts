@@ -4,7 +4,12 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 
 export const TRIGGER_TYPES = ['manual', 'webhook', 'schedule'] as const;
-export const TRIGGER_TARGET_TYPES = ['orchestration', 'agent', 'tool'] as const;
+export const TRIGGER_TARGET_TYPES = [
+  'orchestration',
+  'agent',
+  'tool',
+  'eval',
+] as const;
 
 export type TriggerType = (typeof TRIGGER_TYPES)[number];
 export type TriggerTargetType = (typeof TRIGGER_TARGET_TYPES)[number];
@@ -23,6 +28,8 @@ export const targetStartAction = (targetType: string): string => {
       return 'agents:CreateAgentGeneration';
     case 'tool':
       return 'tools:CallTool';
+    case 'eval':
+      return 'evaluations:RunEval';
     default:
       throw new DomainError(
         'VALIDATION_FAILED',
@@ -149,6 +156,16 @@ export const resolveAndValidateTarget = async (args: {
       found: Boolean(agent),
       targetId: args.targetId,
       label: 'Agent',
+    });
+    return;
+  }
+
+  if (args.targetType === 'eval') {
+    const evaluation = await db.Eval.findOne({ where });
+    await assertTargetExists({
+      found: Boolean(evaluation),
+      targetId: args.targetId,
+      label: 'Eval',
     });
     return;
   }

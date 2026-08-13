@@ -3,6 +3,7 @@ import { db } from 'src/db';
 
 import { DomainError } from '../errors';
 import { createGeneration } from './agentGeneration';
+import { startEvalRun } from './evaluationRuns';
 import type { GenerationInputMessage } from './generationInputMessages';
 import { buildSrn } from './iam';
 import { startOrchestrationRun } from './orchestrationEngine';
@@ -175,6 +176,27 @@ const dispatchToTarget = async (args: {
       result_id: result.id,
       status: result.status,
       output: truncateOutput(result.output?.content),
+    };
+  }
+
+  if (args.targetType === 'eval') {
+    // Always background. An eval is one real agent generation per dataset item
+    // with no cap on the item count, so blocking a scheduler tick (or a manual
+    // fire's HTTP request) on it is exactly the case `.claude/rules/sync-async.md`
+    // rules out; the firing records the run id, which is the handle to poll.
+    const run = await startEvalRun({
+      evalId: args.targetId,
+      projectIds: [args.projectId],
+      wait: false,
+      agentVersion: args.input.agent_version,
+      baselineRunId: args.input.baseline_run_id,
+      triggerId: args.triggerId,
+    });
+    return {
+      target_type: 'eval',
+      result_id: run.id,
+      status: run.status,
+      output: null,
     };
   }
 

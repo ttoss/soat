@@ -90,6 +90,7 @@ naming the field — the resource may well exist, it is the request that is wron
 | `agent_version` | integer | The one agent version every item ran against; see [Version pinning](#version-pinning) |
 | `status` | string | `queued` \| `running` \| `completed` \| `failed` \| `canceled` |
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
+| `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
 | `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold` |
 | `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored |
@@ -314,6 +315,91 @@ is deliberately left `null`, for the same reason the synchronous cap exists — 
 roll-up in the field a completed run uses would read as a whole-dataset verdict. A canceled
 run fires no lifecycle event: it produced no verdict.
 
+### Scheduled runs
+
+A [trigger](./triggers.md) with `target_type: "eval"` runs a suite on a cadence — the
+nightly regression an author never has to remember to start. Every starter works (manual,
+webhook, and cron `schedule`), and the firing always starts a **queued** run: a suite is one
+real agent generation per dataset item, so blocking a scheduler tick on it is exactly the
+case [sync vs async](../advanced/sync-and-async.md) rules out. The firing's
+`result.result_id` is the `evrun_…` to poll.
+
+The run records its origin in `trigger_id`, and keeps it if that trigger is later deleted —
+a run is a historical measurement, so nothing after the fact rewrites where it came from.
+Filter a run list by it to separate scheduled regressions from ad-hoc runs.
+
+The trigger's `input` may carry `agent_version` and `baseline_run_id`, which are passed to
+each run it starts; both are validated at fire time, so a nightly schedule naming a version
+that no longer exists fails the **firing** (with the reason on the firing record) instead of
+creating a run that could never execute.
+
+Creating an eval-target trigger requires `evaluations:RunEval` on top of
+`triggers:CreateTrigger`: a trigger can only start what its creator could start directly.
+
+```bash
+soat create-trigger \
+  --project-id "$PROJECT_ID" \
+  --name nightly-regression \
+  --type schedule \
+  --target-type eval \
+  --target-id "$EVAL_ID" \
+  --cron "0 3 * * *"
+```
+
+### Formation support
+
+Datasets, their items, and evals are declarable in a [Formation](./formations.md) template,
+so a suite ships with the agent it verifies:
+
+| Resource type | Properties |
+| --- | --- |
+| `dataset` | `name`, `description` |
+| `dataset_item` | `dataset_id`, `input`, `expected_output`, `metadata` |
+| `eval` | `name`, `agent_id`, `dataset_id`, `scorers`, `pass_threshold` |
+
+Test cases are their own resource rather than a list inside the dataset — the
+[memory / memory entry](./memories.md) shape — so an item curated through the API is never
+collateral of a formation apply, and each declared case has its own physical id.
+
+```yaml
+resources:
+  Suite:
+    type: dataset
+    properties:
+      name: billing-questions
+  RefundCase:
+    type: dataset_item
+    properties:
+      dataset_id: { ref: Suite }
+      input:
+        - role: user
+          content: How do I get a refund?
+      expected_output: Open a refund request from the order page.
+  Regression:
+    type: eval
+    properties:
+      name: billing-regression
+      agent_id: { ref: SupportAgent }
+      dataset_id: { ref: Suite }
+      scorers:
+        - type: contains
+          value: refund
+      pass_threshold: 0.8
+  Nightly:
+    type: trigger
+    properties:
+      name: nightly-billing-regression
+      type: schedule
+      target_type: eval
+      target_id: { ref: Regression }
+      cron: 0 3 * * *
+```
+
+Changing `pass_threshold` (or the scorers, agent, or dataset) updates the eval in place;
+removing the resource from the template deletes it. `dataset_id` is immutable on a
+`dataset_item` — a template that moves an item to another dataset is rejected rather than
+silently applying the rest.
+
 ### Baseline deltas
 
 Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another eval is a
@@ -465,7 +551,6 @@ soat promote-agent-release --agent-id "$AGENT_ID"
   today (they exist only inside the provider-shaped step blob on the
   [trace](./traces.md)'s file), so the route is deferred rather than built on a reader of
   that blob.
-- **Scheduled evals and `eval` / `dataset` formation resources** — Phase 3.
 
 Sequencing lives in
 [`docs/roadmap.md`](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).

@@ -23,6 +23,7 @@ describe('Triggers', () => {
   let httpToolId: string;
   let mcpToolId: string;
   let clientToolId: string;
+  let evalId: string;
 
   beforeAll(async () => {
     const setup = await setupProjectWithUsers({
@@ -45,6 +46,8 @@ describe('Triggers', () => {
         'tools:CreateTool',
         'tools:CallTool',
         'ai-providers:CreateAiProvider',
+        'evaluations:RunEval',
+        'evaluations:GetEval',
       ],
       createOtherProject: true,
       createNoPermUser: true,
@@ -137,6 +140,26 @@ describe('Triggers', () => {
         name: 'triggers-client-tool',
         type: 'client',
       })
+    ).body.id;
+
+    const datasetId = (
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/datasets')
+        .send({ project_id: projectId, name: 'triggers-dataset' })
+    ).body.id;
+    await authenticatedTestClient(adminToken)
+      .post(`/api/v1/datasets/${datasetId}/items`)
+      .send({ input: [{ role: 'user', content: 'capital of France?' }] });
+    evalId = (
+      await authenticatedTestClient(adminToken)
+        .post('/api/v1/evals')
+        .send({
+          project_id: projectId,
+          name: 'triggers-eval',
+          agent_id: agentId,
+          dataset_id: datasetId,
+          scorers: [{ type: 'exact_match' }],
+        })
     ).body.id;
   });
 
@@ -1537,6 +1560,139 @@ describe('Triggers', () => {
 
   // A project-scoped credential (project key / OAuth token) carries a policy
   // whose resources are SRN-scoped to the project, not the wildcard `*`. The
+  // ── Eval targets (docs/prd-evaluations.md, Phase 3) ──────────────────────
+  //
+  // A schedule trigger pointed at an Eval is how a suite runs on a cadence
+  // (nightly regression) rather than only when someone remembers to start it.
+  // The dispatch starts a **queued** run: an eval is unbounded work — one real
+  // agent generation per dataset item — so blocking the scheduler tick on it
+  // would be the "operation that outlasts its request" case
+  // `.claude/rules/sync-async.md` exists to prevent.
+  describe('eval targets', () => {
+    let evalTriggerId: string;
+    const workerWasDisabled = process.env.EVAL_WORKER_DISABLED;
+
+    beforeAll(async () => {
+      // The firing kicks the eval worker; without this it would drain the run's
+      // items in the background against a `mockCreateGeneration` with nothing
+      // queued, racing these assertions. Restored in `afterAll`.
+      process.env.EVAL_WORKER_DISABLED = 'true';
+
+      evalTriggerId = (
+        await authenticatedTestClient(userToken).post('/api/v1/triggers').send({
+          project_id: projectId,
+          name: 'nightly-eval',
+          type: 'schedule',
+          target_type: 'eval',
+          target_id: evalId,
+          cron: '0 3 * * *',
+        })
+      ).body.id;
+    });
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    afterAll(() => {
+      if (workerWasDisabled === undefined) {
+        delete process.env.EVAL_WORKER_DISABLED;
+      } else {
+        process.env.EVAL_WORKER_DISABLED = workerWasDisabled;
+      }
+    });
+
+    test('creates a schedule trigger targeting an eval', async () => {
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/triggers/${evalTriggerId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.target_type).toBe('eval');
+      expect(res.body.target_id).toBe(evalId);
+      expect(res.body.next_fire_at).toBeTruthy();
+    });
+
+    test('an eval outside the project is rejected', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'unknown-eval-trigger',
+          type: 'manual',
+          target_type: 'eval',
+          target_id: 'eval_missing',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TRIGGER_TARGET_NOT_FOUND');
+    });
+
+    test('an action is rejected on an eval target', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'eval-with-action',
+          type: 'manual',
+          target_type: 'eval',
+          target_id: evalId,
+          action: 'run',
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('TRIGGER_ACTION_NOT_ALLOWED');
+    });
+
+    test('creating an eval trigger without evaluations:RunEval returns 403', async () => {
+      const res = await authenticatedTestClient(limitedToken)
+        .post('/api/v1/triggers')
+        .send({
+          project_id: projectId,
+          name: 'escalating-eval-trigger',
+          type: 'manual',
+          target_type: 'eval',
+          target_id: evalId,
+        });
+
+      expect(res.status).toBe(403);
+    });
+
+    test('firing an eval trigger queues a run that records its trigger origin', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${evalTriggerId}/fire`)
+        .send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('succeeded');
+      expect(res.body.result.target_type).toBe('eval');
+      expect(res.body.result.status).toBe('queued');
+      const runId = res.body.result.result_id as string;
+      expect(runId).toMatch(/^evrun_/);
+      // Not a single generation yet: the firing hands the work to the queue
+      // instead of running the dataset inline on the scheduler's tick.
+      expect(mockCreateGeneration).not.toHaveBeenCalled();
+
+      const run = await authenticatedTestClient(userToken).get(
+        `/api/v1/evals/${evalId}/runs/${runId}`
+      );
+      expect(run.status).toBe(200);
+      expect(run.body.status).toBe('queued');
+      expect(run.body.trigger_id).toBe(evalTriggerId);
+    });
+
+    test('a fire-time agent_version that names no archived config is rejected', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post(`/api/v1/triggers/${evalTriggerId}/fire`)
+        .send({ input: { agent_version: 99 } });
+
+      // The firing record exists and carries the rejection — a run is never
+      // created for a request that could not be planned.
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('failed');
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
+    });
+  });
+
   // by-id handlers must authorize against a project SRN — not the implicit `*`
   // default — or such a principal can list but never get/update/delete.
   describe('SRN-scoped principal (project-scoped credential)', () => {
