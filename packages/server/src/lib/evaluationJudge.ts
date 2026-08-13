@@ -1,5 +1,5 @@
 /**
- * The `llm_judge` scorer's provider call (docs/prd-evaluations.md, Phase 2).
+ * The `llm_judge` scorer's provider call (the evaluations module doc).
  *
  * A judge is just a completion: it resolves its model through the ordinary
  * ai-providers path, so it meters and traces like any other call — no dedicated

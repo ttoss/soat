@@ -84,8 +84,8 @@ export class AgentVersion extends Model {
 
   /**
    * The eval run that validated this version, set when an eval-gated promotion
-   * made it live (docs/prd-agent-versions.md, Phase 3). Null for every version
-   * that was not promoted through a gate — which is most of them.
+   * made it live (agents module doc — Eval-Gated Promotion). Null for every
+   * version that was not promoted through a gate — which is most of them.
    *
    * `SET NULL` rather than `CASCADE`: the run is provenance for a config that
    * is live in production, so deleting the run must not delete the config it

@@ -3,7 +3,7 @@ import { buildGenerationContext } from 'src/lib/agentGenerationContext';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
 /**
- * The version pin an eval run relies on (docs/prd-evaluations.md — Version
+ * The version pin an eval run relies on (the evaluations module doc — Version
  * pinning).
  *
  * Asserted here rather than through `POST /evals/{id}/runs`, because the REST

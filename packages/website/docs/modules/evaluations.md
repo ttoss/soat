@@ -26,13 +26,12 @@ changes, described in
 The loop asks whether a single run succeeded; an evaluation asks whether a *change* to the
 agent improved the distribution of runs, which no single run can answer.
 
-:::info[Phase 2]
+:::info[Fully shipped]
 
 Datasets, evals, all five scorers (including `llm_judge`), synchronous **and** queued runs,
-baseline deltas, lifecycle webhooks, and cancellation are shipped. Two things remain
-specified and not built: curating a dataset item **from a generation**, and scheduled evals
-with `eval` / `dataset` formation resources. See
-[`docs/prd-evaluations.md`](https://github.com/ttoss/soat/blob/main/docs/prd-evaluations.md).
+baseline deltas, lifecycle webhooks, cancellation, scheduled runs via
+[triggers](./triggers.md), and the `dataset` / `dataset_item` / `eval`
+[formation](./formations.md) resource types are all shipped.
 
 :::
 
@@ -62,7 +61,7 @@ is gone has nothing to run.
 | `input` | array | `{ role, content }` messages, replayed verbatim as the generation's input |
 | `expected_output` | string | Reference answer for `exact_match` and `llm_judge`; may be `null` |
 | `metadata` | object | Free-form tags (e.g. `{"topic": "billing"}`), opaque to the platform and readable from `json_logic` scorers |
-| `source_generation_id` | string | The generation the item was curated from; `null` for a hand-written item. Curating from a generation is [not yet available](#what-is-not-here-yet) |
+| `source_generation_id` | string | Reserved for server-side curation from a generation, which was [dropped](#what-is-not-here-yet); always `null` today. Record provenance for client-curated items in `metadata` |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 ### Eval
@@ -546,11 +545,14 @@ soat promote-agent-release --agent-id "$AGENT_ID"
 
 ## What is not here yet
 
-- **`from-generation` curation** — building a dataset item from a past generation. The
-  generation's input messages and output text are not persisted in any platform-owned shape
-  today (they exist only inside the provider-shaped step blob on the
-  [trace](./traces.md)'s file), so the route is deferred rather than built on a reader of
-  that blob.
+- **`from-generation` curation** — a server-side route that builds a dataset item from a
+  past generation. This was considered and **dropped**: the generation's input messages and
+  output text are not persisted in any platform-owned shape (they exist only inside the
+  provider-shaped step blob on the [trace](./traces.md)'s file), and persisting a second
+  copy of end-user prompts is a privacy cost the feature has not yet earned. To build a
+  dataset from real traffic, curate client-side — fetch the content at your own boundary
+  and `POST` it through the ordinary item-create route, optionally recording provenance in
+  the item's `metadata`.
 
 Sequencing lives in
 [`docs/roadmap.md`](https://github.com/ttoss/soat/blob/main/docs/roadmap.md).

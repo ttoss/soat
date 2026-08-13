@@ -6,7 +6,7 @@ import { DomainError } from '../errors';
 const log = createDebug('soat:agents');
 
 /**
- * The eval gate on a staged rollout (docs/prd-agent-versions.md, Phase 3).
+ * The eval gate on a staged rollout (the agents module doc — Versioning and Staged Rollout).
  *
  * A release may name an eval that has to be green *against the canary version*
  * before the canary can be promoted. This module owns both halves of that rule

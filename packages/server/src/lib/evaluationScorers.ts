@@ -1,5 +1,5 @@
 /**
- * Scorers: the pure half of the evaluations module (docs/prd-evaluations.md).
+ * Scorers: the pure half of the evaluations module (the evaluations module doc).
  *
  * Everything here is a function of its arguments — no DB, no I/O — which is
  * what lets `tests/unit/tests/lib/evaluationScorers.test.ts` drive the whole
@@ -89,7 +89,7 @@ type ScorerCheck = (args: {
  * `llm_judge.pass_threshold` is required with no default: a judge emits a
  * continuous score, so nothing about the score itself says where "good enough"
  * is — and a defaulted cutoff would silently decide the gate every run-level
- * `passed` is computed from (docs/prd-evaluations.md — Pass semantics).
+ * `passed` is computed from (the evaluations module doc — Pass semantics).
  */
 const isUnitInterval = (value: unknown): boolean => {
   return (
@@ -553,7 +553,7 @@ export const aggregateScores = (args: {
  * Gates on the **pass rate**, never on a pooled mean: pooling 0/1 binaries with
  * 0–1 judge fractions produces a unit-less number whose meaning shifts whenever
  * a scorer is added — a gate value nobody can reason about
- * (docs/prd-evaluations.md — Pass semantics).
+ * (the evaluations module doc — Pass semantics).
  *
  * `null` when the Eval declares no threshold (it reports without gating), and
  * `false` when a threshold exists but nothing was scorable — a run that

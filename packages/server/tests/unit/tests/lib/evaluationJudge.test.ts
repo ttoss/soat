@@ -1,7 +1,7 @@
 import { parseJudgeVerdict, renderJudgePrompt } from 'src/lib/evaluationJudge';
 
 /**
- * The two pure halves of `llm_judge` (docs/prd-evaluations.md, Phase 2).
+ * The two pure halves of `llm_judge` (the evaluations module doc).
  *
  * These live in `lib/` under the keep-list rule: prompt rendering and verdict
  * parsing are pure algorithms with a large input space (every envelope a model

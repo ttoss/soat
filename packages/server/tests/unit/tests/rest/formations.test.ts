@@ -4400,7 +4400,7 @@ resources:
       );
     });
   });
-  // ── Evaluations resources (docs/prd-evaluations.md, Phase 3) ──────────────
+  // ── Evaluations resources (the evaluations module doc) ──────────────
 
   describe('evaluation formation resources', () => {
     let evalAgentId: string;

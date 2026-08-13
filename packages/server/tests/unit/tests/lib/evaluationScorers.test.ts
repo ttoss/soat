@@ -9,7 +9,7 @@ import {
 } from 'src/lib/evaluationScorers';
 
 /**
- * Direct tests for the scorer kernel (docs/prd-evaluations.md).
+ * Direct tests for the scorer kernel (the evaluations module doc).
  *
  * These live in `lib/` under the keep-list rule: the scorers are pure
  * algorithms with a large input space, and reaching a single branch through

@@ -228,12 +228,12 @@ export type CreateGenerationArgs = {
   guardrailContext?: Record<string, unknown> | null;
   // Forces one archived agent version instead of letting release assignment
   // pick per generation. Set by eval runs, which must measure every item
-  // against the same config (docs/prd-evaluations.md — Version pinning).
+  // against the same config (the evaluations module doc — Version pinning).
   pinnedAgentVersion?: number | null;
   // Labels the workload behind this generation when it is not production
   // traffic — `eval` for an eval run's items. Copied onto the usage event at
   // the metering choke point so verification spend is separable from
-  // production spend (docs/prd-evaluations.md, Phase 2).
+  // production spend (the evaluations module doc).
   source?: string | null;
 };
 

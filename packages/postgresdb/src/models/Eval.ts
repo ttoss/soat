@@ -14,7 +14,7 @@ import { Project } from './Project';
 
 /**
  * A repeatable test suite: an agent under test, the dataset to run it against,
- * and the scorers its outputs are judged by (docs/prd-evaluations.md).
+ * and the scorers its outputs are judged by (the evaluations module doc).
  *
  * Scorer configuration is frozen here rather than read from the agent at run
  * time — an `output_schema` scorer carries its own `schema` — so two runs of

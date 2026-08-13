@@ -1560,7 +1560,7 @@ describe('Triggers', () => {
 
   // A project-scoped credential (project key / OAuth token) carries a policy
   // whose resources are SRN-scoped to the project, not the wildcard `*`. The
-  // ── Eval targets (docs/prd-evaluations.md, Phase 3) ──────────────────────
+  // ── Eval targets (the evaluations module doc) ──────────────────────
   //
   // A schedule trigger pointed at an Eval is how a suite runs on a cadence
   // (nightly regression) rather than only when someone remembers to start it.

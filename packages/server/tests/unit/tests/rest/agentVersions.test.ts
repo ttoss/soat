@@ -6,7 +6,7 @@ import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Agent versioning and staged rollout (docs/prd-agent-versions.md, Phases 1–3).
+ * Agent versioning and staged rollout (the agents module doc — Versioning and Staged Rollout).
  *
  * Every assertion drives the REST entry point: version snapshots are written by
  * the shared lib choke point, so a `PUT`, a `PATCH`, and a formation apply are
@@ -1090,7 +1090,7 @@ describe('Agent versions', () => {
       expect(res.body.instructions).toBe('canary prompt');
 
       // The version now live records what validated it — the headline
-      // integration with docs/prd-evaluations.md.
+      // integration with the evaluations module doc.
       expect((await liveVersionRow(agentId)).eval_run_id).toBe(run.id);
     });
 

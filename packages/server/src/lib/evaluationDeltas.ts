@@ -1,5 +1,5 @@
 /**
- * Baseline comparison for eval runs (docs/prd-evaluations.md, Phase 2).
+ * Baseline comparison for eval runs (the evaluations module doc).
  *
  * A delta only means something when both sides answered the *same* question, so
  * every number here is computed over the **item intersection**: the dataset

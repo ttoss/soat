@@ -14,7 +14,7 @@ import { Project } from './Project';
 
 /**
  * A project-scoped, named collection of test cases an Eval runs an agent
- * against (docs/prd-evaluations.md, Phase 1).
+ * against (the evaluations module doc).
  *
  * Datasets are operator-owned **fixtures**: nothing in the platform's content
  * purge touches them, because a test suite must not silently stop being

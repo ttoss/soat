@@ -19,7 +19,7 @@ import { mockCreateGeneration } from '../../setupTestsAfterEnv';
 import { authenticatedTestClient, testClient } from '../../testClient';
 
 /**
- * Evaluations — datasets, evals, and runs (docs/prd-evaluations.md, Phases 1–2).
+ * Evaluations — datasets, evals, and runs (the evaluations module doc).
  *
  * Every assertion drives the REST entry point. The scorer algebra itself is
  * covered directly in `lib/evaluationScorers.test.ts` (keep-list rule 1), and

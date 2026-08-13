@@ -34,7 +34,7 @@ const log = createDebug('soat:agents');
 
 /**
  * Agent version history and staged rollout operations
- * (docs/prd-agent-versions.md, Phases 1–2).
+ * (the agents module doc — Versioning and Staged Rollout).
  *
  * The archive mechanics live in `resourceVersions.ts` and are shared with
  * guardrails; this module supplies the agent-specific adapters and owns the one

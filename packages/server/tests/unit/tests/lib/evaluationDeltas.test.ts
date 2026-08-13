@@ -4,7 +4,7 @@ import {
 } from 'src/lib/evaluationDeltas';
 
 /**
- * Baseline deltas (docs/prd-evaluations.md, Phase 2 — Item snapshot).
+ * Baseline deltas (the evaluations module doc — Item snapshot).
  *
  * In `lib/` under the keep-list rule: the computation is a pure set-difference
  * algorithm whose input space is every way two runs' item sets can diverge, and

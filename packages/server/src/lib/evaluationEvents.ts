@@ -1,8 +1,8 @@
 /**
- * Eval run lifecycle webhooks (docs/prd-evaluations.md, Phase 2).
+ * Eval run lifecycle webhooks (the evaluations module doc).
  *
  * This event plus the verdict it carries **is** the promotion gate consumed by
- * docs/prd-agent-versions.md Phase 3: a deploy pipeline subscribes, reads
+ * the agents module's eval-gated promotion: a deploy pipeline subscribes, reads
  * `passed`, and promotes or aborts. That is why the payload carries the verdict
  * and the aggregates inline rather than only an id to fetch — a gate that has to
  * make a second call to learn its answer is a gate that can fail open when the
