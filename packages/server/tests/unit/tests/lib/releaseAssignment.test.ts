@@ -19,6 +19,7 @@ describe('releaseAssignment', () => {
     stable_version: 3,
     canary_version: 4,
     canary_percent: 20,
+    promotion_gate: null,
   };
 
   describe('bucketForKey', () => {
@@ -122,7 +123,34 @@ describe('releaseAssignment', () => {
         stable_version: 3,
         canary_version: 4,
         canary_percent: 20,
+        promotion_gate: null,
       });
+    });
+
+    test('reads a gated release, and a pre-Phase-3 row as ungated', () => {
+      expect(
+        parseActiveRelease({ ...release, promotion_gate: 'eval_abc' })
+          ?.promotion_gate
+      ).toBe('eval_abc');
+
+      // Every release stored before the gate existed lacks the key entirely.
+      // Reading that as "no gate" is what keeps a running rollout parseable —
+      // returning null here would drop its traffic back to the live config.
+      const { promotion_gate: _gate, ...ungated } = release;
+      expect(parseActiveRelease(ungated)).toEqual({
+        stable_version: 3,
+        canary_version: 4,
+        canary_percent: 20,
+        promotion_gate: null,
+      });
+    });
+
+    test('a malformed gate makes the whole release unreadable', () => {
+      // Fails closed. A gate that cannot be read was still *meant* to gate, so
+      // the release degrades to "none" — promotion then answers
+      // NO_ACTIVE_RELEASE instead of promoting a canary nothing validated.
+      expect(parseActiveRelease({ ...release, promotion_gate: 42 })).toBeNull();
+      expect(parseActiveRelease({ ...release, promotion_gate: '' })).toBeNull();
     });
 
     test('returns null for an absent release', () => {

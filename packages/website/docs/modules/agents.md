@@ -73,6 +73,7 @@ An immutable archive of an agent's configuration at one version. Written on crea
 | `version`    | number      | The archived version number                                                            |
 | `config`     | object      | The agent's mutable surface as it stood at this version — see [What a version captures](#what-a-version-captures) |
 | `label`      | string/null | Optional human tag, e.g. `pre-tone-change`                                             |
+| `eval_run_id`| string/null | [Eval run](./evaluations.md) that cleared the release's `promotion_gate` when this version was promoted — see [Eval-gated promotion](#eval-gated-promotion) |
 | `created_by` | string/null | User whose action produced this version                                                |
 | `created_at` | string      | ISO 8601 creation timestamp                                                            |
 
@@ -85,6 +86,7 @@ The `active_release` object on an agent. Not a standalone resource — it is set
 | `stable_version` | number | Version served to traffic not assigned to the canary                   |
 | `canary_version` | number | Version under trial. Must differ from `stable_version`                 |
 | `canary_percent` | number | Percentage of traffic (`0`–`100`) assigned to `canary_version`         |
+| `promotion_gate` | string/null | [Eval](./evaluations.md) that must be green against `canary_version` before `promote` is allowed, or `null` for an ungated rollout — see [Eval-gated promotion](#eval-gated-promotion) |
 
 ### Generation
 
@@ -653,6 +655,40 @@ soat abort-agent-release   --agent-id agent_V1StGXR8Z5jdHi6B   # back to stable
 ```
 
 Both write the winning version's config to the agent and clear the release. Each pins its version explicitly, so an edit that landed mid-rollout is neither promoted by accident nor left serving traffic after an abort — it stays an unreleased draft in the version history. Calling either without an active release returns `409 Conflict` with error code `NO_ACTIVE_RELEASE`.
+
+#### Eval-gated promotion
+
+A release can require evidence before its canary goes live. Set `promotion_gate` to an [eval](./evaluations.md), and `promote` only succeeds once that eval has a run that **finished `completed`, reported `passed: true`, and was pinned to the canary version**.
+
+```bash
+soat set-agent-release --agent-id agent_V1StGXR8Z5jdHi6B \
+  --stable-version 1 --canary-version 2 --canary-percent 20 \
+  --promotion-gate eval_V1StGXR8Z5jdHi6B
+```
+
+The eval must belong to the same project and evaluate this agent; anything else is rejected with `400 VALIDATION_FAILED` when the release is set, rather than stored as a gate that could never be satisfied.
+
+Produce the evidence by running the eval with `agent_version` pinned to the canary — the same version number the release names:
+
+```bash
+soat start-eval-run --eval-id eval_V1StGXR8Z5jdHi6B --agent_version 2 --wait true
+soat promote-agent-release --agent-id agent_V1StGXR8Z5jdHi6B
+```
+
+Until such a run exists, `promote` returns `409 Conflict` with error code `PROMOTION_GATE_UNMET` and leaves the rollout running untouched. The gate fails closed: a green run against a *different* version, a run that did not pass, and a gate whose eval has since been deleted all block promotion equally.
+
+Two things the gate deliberately does not do:
+
+- **It never blocks `abort`.** A gate exists to stop a bad canary going live, not to trap an operator inside a rollout they want to end.
+- **It does not run the eval for you.** Promotion checks for evidence; producing it is an explicit call, so nothing starts spending provider budget on your behalf.
+
+When the gate is met, the run that cleared it is recorded as `eval_run_id` on the version that goes live — the durable link from a production config back to the measurement that justified it.
+
+```bash
+soat get-agent-version --agent-id agent_V1StGXR8Z5jdHi6B --version 2
+```
+
+Re-setting the release without `promotion_gate` drops the gate; an ungated rollout promotes at will.
 
 #### Which version served a generation
 

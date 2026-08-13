@@ -59,8 +59,8 @@ route, and the `model_route` formation resource).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
-| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | 🟡 Phases 1–2 shipped; P3 (eval-gated promotion) remains | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ✅ Phases 1–3 shipped (minus `from-generation` curation, deferred) | gates agent-versions P3 |
+| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ✅ Phases 1–3 shipped | umbrella (no G#) |
+| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ✅ Phases 1–3 shipped (minus `from-generation` curation, deferred) | ~~gates agent-versions P3~~ (satisfied) |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -82,7 +82,7 @@ cross-initiative ─────────────────────
 feedback + governance loops ────────────────────────────────────────────────
   approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
   learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
-  agent-versions P3 (eval-gated promotion) ◄── evaluations P1 ✔
+  agent-versions P3 (eval-gated promotion) ✔ ◄── evaluations P1 ✔
   approvals P4 (activity feed) ✔ ◄── audit-log (substrate) + guardrails (A/B labels)
 ```
 
@@ -94,7 +94,7 @@ feedback + governance loops ─────────────────�
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
-| evaluations P1 ✔ | agent-versions P3 | eval verdict is the promotion gate |
+| evaluations P1 ✔ | agent-versions P3 ✔ | eval verdict is the promotion gate |
 | audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
 
 ## Recommended build order
@@ -112,10 +112,12 @@ feedback + governance loops ─────────────────�
    promotion gate's substrate and its event are both in place. Only
    **`from-generation` trace curation** is left in P2, deferred on an
    unverifiable premise (see the PRD).
-3. ~~**Agent-versions**~~ — **Phases 1–2 shipped**: append-only config history
-   with restore, and the deterministic stable/canary split with the served
-   version stamped on every generation. **P3 (eval-gated promotion)** remains;
-   its blocker (evaluations P1) is now shipped, so it is unblocked.
+3. ~~**Agent-versions**~~ — **fully shipped**: append-only config history with
+   restore, the deterministic stable/canary split with the served version
+   stamped on every generation, and **P3 (eval-gated promotion)** — a release's
+   `promotion_gate` names an eval, `promote` answers `409 PROMOTION_GATE_UNMET`
+   until that eval has a passing run pinned to the canary version, and the run
+   that cleared it is recorded on the promoted version.
 4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
    surface whose usage is the demand gate for the deferred learned-rules module.
    ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
@@ -163,13 +165,12 @@ evaluations P1 exists to measure rule efficacy — both gates in
 
 ### Agent versions
 
-_Phases 1–2 shipped (`agentVersions.ts`, `releaseAssignment.ts`,
-`agentServedVersion.ts`); this section previously said "not started" while the
-initiatives table above already said 🟡 — the table was right._
+_Fully shipped (`agentVersions.ts`, `releaseAssignment.ts`,
+`agentServedVersion.ts`, `agentPromotionGate.ts`)._
 
 - [x] ~~**Phase 1** Version snapshots + list/get/restore~~ — **shipped**: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
 - [x] ~~**Phase 2** Releases + deterministic canary~~ — **shipped**: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
-- [ ] **Phase 3** Eval-gated promotion (`promotion_gate`) — needs **Evaluations Phase 1+**
+- [x] ~~**Phase 3** Eval-gated promotion (`promotion_gate`)~~ — **shipped**: gate on the release, `409 PROMOTION_GATE_UNMET` until a `passed` run pinned to the canary version exists, `eval_run_id` recorded on the promoted version
 
 ### Evaluations
 

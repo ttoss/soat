@@ -40,10 +40,10 @@ SOAT organizes that surface around the [four layers of an agent system](https://
 
 An agent platform that only records what agents _did_ cannot tell you whether the next change makes them _better_. SOAT's direction is the **ratchet** — the layer that governs change itself: produce a verdict from evidence, gate the change on the verdict, keep history append-only so nothing slides backward silently. The framing lives in [The Layers of an Agent System](https://soat.ttoss.dev/docs/getting-started/agent-system-layers).
 
-Shipped today: append-only agent versions with staged canary rollout, served-version stamping on every generation, and the approvals recurrence view that surfaces repeated human corrections. In design and coming next (see [`docs/roadmap.md`](./docs/roadmap.md)):
+Shipped today (see [`docs/roadmap.md`](./docs/roadmap.md) for what comes next): append-only agent versions with staged canary rollout, served-version stamping on every generation, the approvals recurrence view that surfaces repeated human corrections, and —
 
 - **[Evaluations](https://soat.ttoss.dev/docs/modules/evaluations)** — datasets, deterministic and LLM-judge scorers, and scored runs of the real agent, comparable against a baseline: "did this change make the agent worse?" as a pass/fail verdict.
-- **Eval-gated promotion** — a canary that promotes on a passing eval run instead of a hunch.
+- **[Eval-gated promotion](https://soat.ttoss.dev/docs/modules/agents#eval-gated-promotion)** — a canary that promotes on a passing eval run against that canary instead of a hunch.
 
 The stance behind all of it: the platform owns the queue, the recurrence signal, and the verdict; a human owns the judgment. Promotion is never automatic.
 

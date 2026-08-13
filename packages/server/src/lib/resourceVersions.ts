@@ -6,6 +6,7 @@ import createDebug from 'debug';
 import { db } from '../db';
 import { DomainError } from '../errors';
 import type { Transaction } from './dbTransaction';
+import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 
 const log = createDebug('soat:versions');
@@ -199,9 +200,19 @@ export const mapArchivedVersionFields = (row: {
 
 // ── The store: writing and reading raw archive rows ───────────────────────
 
-/** Loaded with `createdBy` so a version response can name its author. */
-const VERSION_INCLUDE = () => {
-  return [{ model: db.User, as: 'createdBy' }];
+/**
+ * Loaded with `createdBy` so a version response can name its author, plus
+ * whatever associations the resource's own version table adds.
+ */
+const versionInclude = (extra?: () => ResourceIncludes): ResourceIncludes => {
+  const base = [{ model: db.User, as: 'createdBy' }];
+
+  // `ResourceIncludes` admits a single includeable as well as a list, so the
+  // extras are normalized rather than spread blindly.
+  const additional = extra?.();
+  if (additional === undefined) return base;
+
+  return [...base, ...(Array.isArray(additional) ? additional : [additional])];
 };
 
 type FindVersionRowArgs = {
@@ -248,6 +259,7 @@ export type VersionStore = {
   findVersionRow: (args: FindVersionRowArgs) => Promise<ArchivedVersionRow>;
   foreignKey: string;
   readArchivedConfig: (row: ArchivedVersionRow) => ConfigSnapshot;
+  versionInclude: () => ResourceIncludes;
   versionModel: () => ModelCtor<ArchivedVersionRow>;
   writeVersion: (args: WriteVersionArgs) => Promise<void>;
 };
@@ -263,11 +275,22 @@ type VersionTable = {
   versionModel: () => ModelCtor<ArchivedVersionRow>;
   /** Column on the version table pointing at the parent, e.g. `agentId`. */
   foreignKey: string;
+  /**
+   * Associations this resource's version rows carry beyond `createdBy` — the
+   * engine loads them but never reads them, so the resource's own mapper is
+   * free to expose a field the archive itself has no concept of (an agent
+   * version's `eval_run_id`, say). A thunk for the same reason
+   * {@link VersionTable.versionModel} is one.
+   */
+  extraIncludes?: () => ResourceIncludes;
 };
 
 /** Row-level access to one version table: no policy, just queries. */
 const makeVersionRows = (args: VersionTable) => {
   const { resourceLabel, versionModel, foreignKey } = args;
+  const include = (): ResourceIncludes => {
+    return versionInclude(args.extraIncludes);
+  };
 
   /**
    * Narrows a stored `config` column to a snapshot. The column is NOT NULL and
@@ -295,7 +318,7 @@ const makeVersionRows = (args: VersionTable) => {
   ): Promise<ArchivedVersionRow> => {
     const row = await versionModel().findOne({
       where: { [foreignKey]: a.resource.dbId, version: a.version },
-      include: VERSION_INCLUDE(),
+      include: include(),
     });
 
     if (!row) {
@@ -355,6 +378,7 @@ const makeVersionRows = (args: VersionTable) => {
     deleteVersions,
     findVersionRow,
     readArchivedConfig,
+    versionInclude: include,
   };
 };
 
@@ -496,7 +520,7 @@ const makeVersionReads = <TMappedVersion, TMappedResource>(
       query: ({ limit, offset }) => {
         return store.versionModel().findAndCountAll({
           where: { [store.foreignKey]: resource.dbId },
-          include: VERSION_INCLUDE(),
+          include: store.versionInclude(),
           // Newest first, ordered by the version counter rather than a
           // timestamp: two versions can share a `createdAt` at timestamp
           // resolution, and a non-deterministic page boundary in history is
