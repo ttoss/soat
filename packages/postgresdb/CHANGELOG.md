@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.22.0](https://github.com/ttoss/soat/compare/v0.21.0...v0.22.0) (2026-08-13)
+
+**Note:** Version bump only for package @soat/postgresdb
+
 # [0.21.0](https://github.com/ttoss/soat/compare/v0.20.5...v0.21.0) (2026-08-13)
 
 * feat(discussions)!: remove the discussions module (#973) ([c2d9b02](https://github.com/ttoss/soat/commit/c2d9b02c9c9b9476359340ccb7423f4374bf7db4)), closes [#973](https://github.com/ttoss/soat/issues/973)
