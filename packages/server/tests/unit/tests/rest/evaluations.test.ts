@@ -1309,7 +1309,7 @@ describe('Evaluations', () => {
 
   // ── Canceling a run (Phase 2) ────────────────────────────────────────────
 
-  describe('POST /api/v1/evals/{eval_id}/runs/{run_id}/cancel', () => {
+  describe('POST /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel', () => {
     let evalId: string;
 
     beforeAll(async () => {

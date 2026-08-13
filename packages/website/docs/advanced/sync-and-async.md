@@ -37,8 +37,8 @@ soat create-agent-generation --agent-id agent_01 --wait true \
 | [`POST /sessions/{session_id}/generate`](../modules/sessions.md#background-generation) | `session_id` | `GET /conversations/{conversation_id}/messages` |
 | [`POST /conversations/{conversation_id}/generate`](../modules/conversations.md#generating-the-next-message) | `conversation_id` | `GET /conversations/{conversation_id}/messages` |
 | [`POST /documents/ingest`](../modules/documents.md#async-file-ingestion) and `POST /documents/{document_id}/ingest` | the document, in `status: pending` | `GET /documents/{document_id}/status` |
-| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | `GET /orchestration-runs/{run_id}` |
-| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | `GET /evals/{eval_id}/runs/{run_id}` |
+| [`POST /orchestration-runs`](../modules/orchestrations.md#durable-background-execution) | the run, in `status: queued` | `GET /orchestration-runs/{orchestration_run_id}` |
+| [`POST /evals/{eval_id}/runs`](../modules/evaluations.md#synchronous-and-queued-runs) | the run, in `status: queued` | `GET /evals/{eval_id}/runs/{eval_run_id}` |
 
 ## What the default does **not** change
 

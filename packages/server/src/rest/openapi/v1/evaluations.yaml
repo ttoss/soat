@@ -743,7 +743,7 @@ paths:
 
         `wait: false` (the default) enqueues one task per item and returns
         immediately with `status: "queued"`. A worker executes the items and the
-        run settles itself; poll `GET /evals/{eval_id}/runs/{run_id}` for the
+        run settles itself; poll `GET /evals/{eval_id}/runs/{eval_run_id}` for the
         terminal status, or subscribe to the `eval_run.completed` webhook. There
         is no item cap on a queued run.
 
@@ -823,7 +823,7 @@ paths:
           description: Eval not found
         '500':
           description: Internal server error
-  /api/v1/evals/{eval_id}/runs/{run_id}:
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}:
     get:
       tags:
         - Evaluations
@@ -838,7 +838,7 @@ paths:
           schema:
             type: string
             example: eval_V1StGXR8Z5jdHi6B
-        - name: run_id
+        - name: eval_run_id
           in: path
           required: true
           description: Eval run ID
@@ -858,7 +858,7 @@ paths:
           description: Forbidden
         '404':
           description: Eval or run not found
-  /api/v1/evals/{eval_id}/runs/{run_id}/results:
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/results:
     get:
       tags:
         - Evaluations
@@ -873,7 +873,7 @@ paths:
           schema:
             type: string
             example: eval_V1StGXR8Z5jdHi6B
-        - name: run_id
+        - name: eval_run_id
           in: path
           required: true
           description: Eval run ID
@@ -923,7 +923,7 @@ paths:
           description: Forbidden
         '404':
           description: Eval or run not found
-  /api/v1/evals/{eval_id}/runs/{run_id}/cancel:
+  /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel:
     post:
       tags:
         - Evaluations
@@ -950,7 +950,7 @@ paths:
           schema:
             type: string
             example: eval_V1StGXR8Z5jdHi6B
-        - name: run_id
+        - name: eval_run_id
           in: path
           required: true
           description: Eval run ID

@@ -196,26 +196,29 @@ discussionsRouter.post('/discussions', async (ctx: Context) => {
 
 // Registered before `/discussions/:discussion_id` — distinct segment count, but
 // keep run-scoped reads grouped here.
-discussionsRouter.get('/discussions/runs/:run_id', async (ctx: Context) => {
-  requireAuth(ctx);
+discussionsRouter.get(
+  '/discussions/runs/:discussion_run_id',
+  async (ctx: Context) => {
+    requireAuth(ctx);
 
-  const run = await getDiscussionRun({ id: ctx.params.run_id });
-  const allowed = await ctx.authUser.isAllowed({
-    projectPublicId: run.project_id!,
-    action: 'discussions:GetDiscussionRun',
-    resource: buildSrn({
+    const run = await getDiscussionRun({ id: ctx.params.discussion_run_id });
+    const allowed = await ctx.authUser.isAllowed({
       projectPublicId: run.project_id!,
-      resourceType: 'discussion',
-      resourceId: run.id,
-    }),
-    context: discussionContext(),
-  });
-  if (!allowed) {
-    throw new DomainError('FORBIDDEN', 'Forbidden');
-  }
+      action: 'discussions:GetDiscussionRun',
+      resource: buildSrn({
+        projectPublicId: run.project_id!,
+        resourceType: 'discussion',
+        resourceId: run.id,
+      }),
+      context: discussionContext(),
+    });
+    if (!allowed) {
+      throw new DomainError('FORBIDDEN', 'Forbidden');
+    }
 
-  ctx.body = run;
-});
+    ctx.body = run;
+  }
+);
 
 discussionsRouter.get('/discussions/:discussion_id', async (ctx: Context) => {
   requireAuth(ctx);

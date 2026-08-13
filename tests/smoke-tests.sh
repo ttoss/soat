@@ -2651,7 +2651,7 @@ if [ -z "$RUN_ID" ]; then
   echo "$RUN_RESP" >&2
   exit 1
 fi
-RUN_GET_RESP=$($SOAT_CLI get-discussion-run --run-id "$RUN_ID")
+RUN_GET_RESP=$($SOAT_CLI get-discussion-run --discussion-run-id "$RUN_ID")
 $SOAT_CLI list-discussion-runs --discussion-id "$DISCUSSION_ID" >/dev/null
 
 # Attribution is server-derived from the caller's credentials, so it is
@@ -5723,7 +5723,7 @@ echo "Queued eval run id: $EVAL_ASYNC_RUN_ID"
 EVAL_ASYNC_STATUS=""
 i=0
 while [ "$i" -lt 60 ]; do
-  EVAL_ASYNC_GET=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID")
+  EVAL_ASYNC_GET=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
   EVAL_ASYNC_STATUS=$(printf '%s\n' "$EVAL_ASYNC_GET" | jq -r '.status')
   case "$EVAL_ASYNC_STATUS" in
     completed|failed|canceled) break ;;
@@ -5745,7 +5745,7 @@ if ! printf '%s\n' "$EVAL_ASYNC_GET" | jq -e \
   printf '%s\n' "$EVAL_ASYNC_GET" >&2
   exit 1
 fi
-EVAL_ASYNC_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID")
+EVAL_ASYNC_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID")
 if ! printf '%s\n' "$EVAL_ASYNC_RESULTS" | jq -e '.total == 1' >/dev/null 2>&1; then
   echo "ERROR: expected exactly one result row for the queued run" >&2
   printf '%s\n' "$EVAL_ASYNC_RESULTS" >&2
@@ -5754,7 +5754,7 @@ fi
 
 echo "--- Cancelling an already-finished run is rejected ---"
 set +e
-EVAL_CANCEL_LATE=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_ASYNC_RUN_ID" 2>&1)
+EVAL_CANCEL_LATE=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_ASYNC_RUN_ID" 2>&1)
 EVAL_CANCEL_LATE_EXIT=$?
 set -e
 if [ "$EVAL_CANCEL_LATE_EXIT" -eq 0 ]; then
@@ -5772,7 +5772,7 @@ fi
 echo "--- Cancelling a queued run stops it ---"
 EVAL_CANCEL_RUN=$($SOAT_CLI start-eval-run --eval_id "$EVAL_ID" --wait false)
 EVAL_CANCEL_RUN_ID=$(printf '%s\n' "$EVAL_CANCEL_RUN" | jq -r '.id')
-EVAL_CANCELLED=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_CANCEL_RUN_ID")
+EVAL_CANCELLED=$($SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_CANCEL_RUN_ID")
 # The worker may legitimately have finished the single item before the cancel
 # landed, so accept either terminal state — what must hold is that the run is
 # terminal and, when cancelled, publishes no partial aggregate.
@@ -5809,7 +5809,7 @@ fi
 echo "Eval run id: $EVAL_RUN_ID"
 
 echo "--- Reading eval run results ---"
-EVAL_RESULTS_RESP=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+EVAL_RESULTS_RESP=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_RUN_ID")
 if ! printf '%s\n' "$EVAL_RESULTS_RESP" | jq -e --arg item "$DATASET_ITEM_ID" \
   '.total == 1 and .data[0].dataset_item_id == $item and (.data[0].input | length) == 1' \
   >/dev/null 2>&1; then
@@ -5877,7 +5877,7 @@ fi
 # item may be scored or errored — both are valid outcomes of a real judge call.
 # What must hold is that exactly one of the two happened, and that a judge that
 # failed to answer errored the item instead of scoring it 0.
-EVAL_JUDGE_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_JUDGE_ID" --run_id "$EVAL_JUDGE_RUN_ID")
+EVAL_JUDGE_RESULTS=$($SOAT_CLI list-eval-results --eval_id "$EVAL_JUDGE_ID" --eval_run_id "$EVAL_JUDGE_RUN_ID")
 if ! printf '%s\n' "$EVAL_JUDGE_RESULTS" | jq -e \
   '.total == 1
    and (.data[0]
@@ -5914,7 +5914,7 @@ if ! printf '%s\n' "$EVAL_RUNS_RESP" | jq -e '.total >= 1' >/dev/null 2>&1; then
   printf '%s\n' "$EVAL_RUNS_RESP" >&2
   exit 1
 fi
-EVAL_RUN_GET_RESP=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+EVAL_RUN_GET_RESP=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_RUN_ID")
 if ! printf '%s\n' "$EVAL_RUN_GET_RESP" | jq -e --arg id "$EVAL_RUN_ID" '.id == $id' >/dev/null 2>&1; then
   echo "ERROR: GET eval run returned unexpected payload" >&2
   printf '%s\n' "$EVAL_RUN_GET_RESP" >&2
@@ -6008,7 +6008,7 @@ echo "Eval-gated promotion: OK"
 
 echo "--- Deleting the dataset item leaves the run results readable ---"
 $SOAT_CLI delete-dataset-item --dataset_id "$DATASET_ID" --item_id "$DATASET_ITEM_ID"
-EVAL_RESULTS_AFTER=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --run_id "$EVAL_RUN_ID")
+EVAL_RESULTS_AFTER=$($SOAT_CLI list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$EVAL_RUN_ID")
 if ! printf '%s\n' "$EVAL_RESULTS_AFTER" | jq -e \
   '.total == 1 and .data[0].dataset_item_id == null and (.data[0].input | length) == 1' \
   >/dev/null 2>&1; then
