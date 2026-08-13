@@ -4573,6 +4573,41 @@ $SOAT_CLI delete-formation --formation_id "$QUOTA_FORMATION_ID"
 expect_cli_error_status 404 get-quota --quota-id "$QUOTA_PHYS_ID"
 echo "Formation quota resource verified."
 
+# Evaluation resources (Evaluations Phase 3) — a formation declares a dataset,
+# a test case inside it, and the eval binding both to the agent under test; the
+# refs must resolve to the created dataset and every row must go on teardown.
+echo "--- Creating formation with dataset / dataset_item / eval resources ---"
+EVAL_FORMATION_RESP=$($SOAT_CLI create-formation \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-eval-formation" \
+  --template '{"resources":{"suite":{"type":"dataset","properties":{"name":"smoke-formation-suite"}},"case":{"type":"dataset_item","properties":{"dataset_id":{"ref":"suite"},"input":[{"role":"user","content":"Say hello."}],"expected_output":"hello"}},"regression":{"type":"eval","properties":{"name":"smoke-formation-eval","agent_id":"'"$AGENT_ID"'","dataset_id":{"ref":"suite"},"scorers":[{"type":"contains","value":"hello"}],"pass_threshold":0.5}}}}')
+EVAL_FORMATION_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.id')
+EVAL_FORM_DATASET_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "suite") | .physical_resource_id')
+EVAL_FORM_EVAL_ID=$(printf '%s\n' "$EVAL_FORMATION_RESP" | jq -r '.resources[] | select(.logical_id == "regression") | .physical_resource_id')
+if ! printf '%s\n' "$EVAL_FORM_DATASET_ID" | grep -q '^dset_'; then
+  echo "ERROR: create-formation did not create a dataset row" >&2
+  echo "$EVAL_FORMATION_RESP" >&2
+  exit 1
+fi
+if ! printf '%s\n' "$EVAL_FORM_EVAL_ID" | grep -q '^eval_'; then
+  echo "ERROR: create-formation did not create an eval row" >&2
+  echo "$EVAL_FORMATION_RESP" >&2
+  exit 1
+fi
+if ! $SOAT_CLI get-eval --eval_id "$EVAL_FORM_EVAL_ID" | jq -e --arg ds "$EVAL_FORM_DATASET_ID" \
+  '.dataset_id == $ds and .pass_threshold == 0.5' >/dev/null 2>&1; then
+  echo "ERROR: the formation eval did not resolve its dataset ref" >&2
+  exit 1
+fi
+if ! $SOAT_CLI list-dataset-items --dataset_id "$EVAL_FORM_DATASET_ID" | jq -e '.total == 1' >/dev/null 2>&1; then
+  echo "ERROR: the formation dataset_item was not created in its parent dataset" >&2
+  exit 1
+fi
+$SOAT_CLI delete-formation --formation_id "$EVAL_FORMATION_ID"
+expect_cli_error_status 404 get-eval --eval_id "$EVAL_FORM_EVAL_ID"
+expect_cli_error_status 404 get-dataset --dataset_id "$EVAL_FORM_DATASET_ID"
+echo "Formation evaluation resources verified."
+
 # Guardrail resource — a formation declares an action-class guardrail (F-17),
 # which must be queryable via get-guardrail and removed when the formation is
 # torn down.
@@ -5920,6 +5955,53 @@ if ! printf '%s\n' "$EVAL_RUN_GET_RESP" | jq -e --arg id "$EVAL_RUN_ID" '.id == 
   printf '%s\n' "$EVAL_RUN_GET_RESP" >&2
   exit 1
 fi
+
+# Scheduled evals (Evaluations Phase 3) — a trigger targeting an eval starts a
+# queued run per firing, and the run records which trigger started it.
+echo "--- Firing a schedule trigger that targets the eval ---"
+EVAL_TRIGGER_RESP=$($SOAT_CLI create-trigger \
+  --project-id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-nightly-eval" \
+  --type schedule \
+  --target-type eval \
+  --target-id "$EVAL_ID" \
+  --cron "0 3 * * *")
+EVAL_TRIGGER_ID=$(printf '%s\n' "$EVAL_TRIGGER_RESP" | jq -r '.id')
+if ! printf '%s\n' "$EVAL_TRIGGER_RESP" | jq -e \
+  '.target_type == "eval" and .next_fire_at != null' >/dev/null 2>&1; then
+  echo "ERROR: eval-target schedule trigger was not created" >&2
+  printf '%s\n' "$EVAL_TRIGGER_RESP" >&2
+  exit 1
+fi
+
+EVAL_FIRING_RESP=$($SOAT_CLI fire-trigger --trigger-id "$EVAL_TRIGGER_ID")
+if ! printf '%s\n' "$EVAL_FIRING_RESP" | jq -e \
+  '.status == "succeeded" and .result.target_type == "eval" and .result.status == "queued"' \
+  >/dev/null 2>&1; then
+  echo "ERROR: firing the eval trigger did not queue a run" >&2
+  printf '%s\n' "$EVAL_FIRING_RESP" >&2
+  exit 1
+fi
+EVAL_TRIGGERED_RUN_ID=$(printf '%s\n' "$EVAL_FIRING_RESP" | jq -r '.result.result_id')
+if ! printf '%s\n' "$EVAL_TRIGGERED_RUN_ID" | grep -q '^evrun_'; then
+  echo "ERROR: the firing did not name an eval run to poll" >&2
+  printf '%s\n' "$EVAL_FIRING_RESP" >&2
+  exit 1
+fi
+EVAL_TRIGGERED_RUN=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_TRIGGERED_RUN_ID")
+if ! printf '%s\n' "$EVAL_TRIGGERED_RUN" | jq -e --arg trg "$EVAL_TRIGGER_ID" \
+  '.trigger_id == $trg' >/dev/null 2>&1; then
+  echo "ERROR: the triggered run did not record its schedule origin" >&2
+  printf '%s\n' "$EVAL_TRIGGERED_RUN" >&2
+  exit 1
+fi
+# Stop the background run rather than leaving it mid-flight through the cleanup
+# below; it may already have finished, which cancel rejects.
+set +e
+$SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_TRIGGERED_RUN_ID" >/dev/null 2>&1
+set -e
+$SOAT_CLI delete-trigger --trigger-id "$EVAL_TRIGGER_ID"
+echo "Scheduled eval trigger: OK"
 
 echo "--- Deleting the dataset item leaves the run results readable ---"
 $SOAT_CLI delete-dataset-item --dataset_id "$DATASET_ID" --item_id "$DATASET_ITEM_ID"

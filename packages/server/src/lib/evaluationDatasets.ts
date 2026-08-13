@@ -225,6 +225,26 @@ const findItem = async (args: {
   return item;
 };
 
+/**
+ * Loads an item by its **own** public id, with no parent-dataset scope.
+ *
+ * The item routes all address an item through its dataset, which is what
+ * authorizes them. A formation module has no such path: apply hands it a
+ * physical resource id and nothing else, and the template's project already
+ * authorized the deploy. Returns `null` when the item is gone, which is how the
+ * formation reader reports drift.
+ */
+export const findDatasetItemById = async (args: {
+  itemId: string;
+}): Promise<ReturnType<typeof mapDatasetItem> | null> => {
+  log('findDatasetItemById: itemId=%s', args.itemId);
+  const item = (await db.DatasetItem.findOne({
+    where: { publicId: args.itemId },
+    include: datasetItemIncludes(),
+  })) as DatasetItemRow | null;
+  return item ? mapDatasetItem(item) : null;
+};
+
 export const createDatasetItem = async (args: {
   projectIds?: number[];
   datasetId: string;

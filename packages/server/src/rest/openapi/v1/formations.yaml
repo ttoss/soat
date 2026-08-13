@@ -940,6 +940,97 @@ components:
             type: string
           description: Guardrails attached at the tool scope.
 
+    DatasetResourceProperties:
+      description: >-
+        Declares an evaluation dataset — the named fixture suite an eval runs an
+        agent against. Its test cases are declared separately as `dataset_item`
+        resources, so an item curated through the API is never collateral of a
+        formation apply. Deleting the dataset deletes its items and the evals
+        bound to it.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Dataset name, unique within the project
+        description:
+          type: string
+          nullable: true
+          description: Optional description
+
+    DatasetItemResourceProperties:
+      description: >-
+        One test case in a dataset: the messages sent to the agent under test
+        and, optionally, the reference answer scorers compare against. Editing
+        or removing an item never rewrites a run that already scored it — each
+        result froze its own copy.
+      type: object
+      additionalProperties: false
+      required:
+        - dataset_id
+        - input
+      properties:
+        dataset_id:
+          x-soat-ref: datasets
+          type: string
+          description: Public ID of the parent dataset (or ref expression)
+        input:
+          type: array
+          items:
+            type: object
+          description: The messages sent to the agent, as `{role, content}` objects
+        expected_output:
+          type: string
+          nullable: true
+          description: Reference answer for exact_match / contains / llm_judge scorers
+        metadata:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >-
+            Free-form tags on the case, e.g. `{"topic": "billing"}`
+
+    EvalResourceProperties:
+      description: >-
+        Binds an agent under test to a dataset and the scorers its outputs are
+        judged by. `pass_threshold` is the pass rate a run must reach for its
+        `passed` verdict — the gate an agent-version promotion consumes.
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - agent_id
+        - dataset_id
+        - scorers
+      properties:
+        name:
+          type: string
+          description: Eval name, unique within the project
+        agent_id:
+          x-soat-ref: agents
+          type: string
+          description: Public ID of the agent under test (or ref expression)
+        dataset_id:
+          x-soat-ref: datasets
+          type: string
+          description: Public ID of the dataset to run against (or ref expression)
+        scorers:
+          type: array
+          items:
+            type: object
+          description: >-
+            Scorer configs — `exact_match`, `contains`, `json_logic`,
+            `output_schema`, or `llm_judge`. Same shape as the evals REST
+            contract.
+        pass_threshold:
+          type: number
+          nullable: true
+          description: >-
+            0–1. A run passes when its pass rate over non-errored items reaches
+            this. Omit for a run that reports scores without a verdict.
+
     DocumentResourceProperties:
       description: >-
         Stores a text document in a project, optionally indexing it for
@@ -1114,7 +1205,7 @@ components:
     TriggerResourceProperties:
       description: >-
         Binds a starter (manual, webhook, or schedule) to an executable target
-        (orchestration, agent, or tool). Firings run under the project owner's
+        (orchestration, agent, tool, or eval). Firings run under the project owner's
         confined run-as identity.
       type: object
       additionalProperties: false
@@ -1144,12 +1235,14 @@ components:
             - orchestration
             - agent
             - tool
+            - eval
           description: The kind of resource this trigger activates
         target_id:
           type: string
           description: >-
             Public ID of the target resource. Use { "ref": "LogicalId" } to
-            reference an orchestration, agent, or tool defined in the template.
+            reference an orchestration, agent, tool, or eval defined in the
+            template.
         action:
           type: string
           nullable: true
@@ -1700,6 +1793,8 @@ components:
             - api_key
             - chat
             - conversation
+            - dataset
+            - dataset_item
             - document
             - file
             - guardrail
@@ -1708,6 +1803,7 @@ components:
             - memory_entry
             - model_route
             - discussion
+            - eval
             - orchestration
             - policy
             - project_price
@@ -1726,6 +1822,9 @@ components:
             - $ref: '#/components/schemas/ToolResourceProperties'
             - $ref: '#/components/schemas/ApiKeyResourceProperties'
             - $ref: '#/components/schemas/ChatResourceProperties'
+            - $ref: '#/components/schemas/DatasetResourceProperties'
+            - $ref: '#/components/schemas/DatasetItemResourceProperties'
+            - $ref: '#/components/schemas/EvalResourceProperties'
             - $ref: '#/components/schemas/ConversationResourceProperties'
             - $ref: '#/components/schemas/DiscussionResourceProperties'
             - $ref: '#/components/schemas/DocumentResourceProperties'

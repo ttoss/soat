@@ -160,6 +160,9 @@ const NON_OBJECT: Array<[string, string]> = [
   ['workflow', 'Workflow `properties` must be an object'],
   ['guardrail', 'Guardrail `properties` must be an object'],
   ['model_route', 'Model route `properties` must be an object'],
+  ['dataset', 'Dataset `properties` must be an object'],
+  ['dataset_item', 'DatasetItem `properties` must be an object'],
+  ['eval', 'Eval `properties` must be an object'],
 ];
 
 // Every module — including `document` since it now re-chunks on update —
@@ -2358,5 +2361,194 @@ describe('orchestrationsFormationModule', () => {
         resolvedProperties: { name: 'X' },
       })
     ).rejects.toThrow(/`nodes` is required/);
+  });
+});
+
+// ── dataset / dataset_item / eval (Evaluations Phase 3) ─────────────────────
+//
+// A dataset and its items are the fixtures an eval runs against, so the three
+// types are exercised as one lifecycle: a template declares the dataset, its
+// items (each its own resource, the memory/memory_entry shape — so an item
+// curated through the API is never collateral of a formation apply), and the
+// eval that binds them to the agent under test.
+
+describe('evaluations formation modules', () => {
+  test('dataset → dataset_item → eval create/read/update/delete lifecycle', async () => {
+    const datasetId = await applyCreateResource({
+      resourceType: 'dataset',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'Formation Suite',
+        description: 'billing questions',
+      },
+    });
+    expect(datasetId).toMatch(/^dset_/);
+    expect(
+      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+    ).toMatchObject({
+      name: 'Formation Suite',
+      description: 'billing questions',
+    });
+
+    const itemId = await applyCreateResource({
+      resourceType: 'dataset_item',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'capital of France?' }],
+        expected_output: 'Paris',
+        metadata: { topic: 'geography' },
+      },
+    });
+    expect(itemId).toMatch(/^dsit_/);
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toMatchObject({
+      dataset_id: datasetId,
+      input: [{ role: 'user', content: 'capital of France?' }],
+      expected_output: 'Paris',
+      metadata: { topic: 'geography' },
+    });
+
+    const evalId = await applyCreateResource({
+      resourceType: 'eval',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'Formation Eval',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+        pass_threshold: 0.8,
+      },
+    });
+    expect(evalId).toMatch(/^eval_/);
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: evalId })
+    ).toMatchObject({
+      name: 'Formation Eval',
+      agent_id: agentId,
+      dataset_id: datasetId,
+      scorers: [{ type: 'exact_match' }],
+      pass_threshold: 0.8,
+    });
+
+    // The PRD's round-trip criterion: changing `pass_threshold` updates the
+    // eval in place rather than replacing it.
+    await applyUpdateResource({
+      resourceType: 'eval',
+      physicalResourceId: evalId,
+      resolvedProperties: {
+        name: 'Formation Eval',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'contains', value: 'Paris' }],
+        pass_threshold: 0.5,
+      },
+    });
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: evalId })
+    ).toMatchObject({
+      pass_threshold: 0.5,
+      scorers: [{ type: 'contains', value: 'Paris' }],
+    });
+
+    await applyUpdateResource({
+      resourceType: 'dataset_item',
+      physicalResourceId: itemId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'capital of Italy?' }],
+        expected_output: 'Rome',
+      },
+    });
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toMatchObject({
+      input: [{ role: 'user', content: 'capital of Italy?' }],
+      expected_output: 'Rome',
+    });
+
+    await applyUpdateResource({
+      resourceType: 'dataset',
+      physicalResourceId: datasetId,
+      resolvedProperties: { name: 'Formation Suite v2', description: null },
+    });
+    expect(
+      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+    ).toMatchObject({ name: 'Formation Suite v2', description: null });
+
+    await applyDeleteResource({
+      resourceType: 'eval',
+      physicalResourceId: evalId,
+    });
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: evalId })
+    ).toBeNull();
+
+    await applyDeleteResource({
+      resourceType: 'dataset_item',
+      physicalResourceId: itemId,
+    });
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toBeNull();
+
+    await applyDeleteResource({
+      resourceType: 'dataset',
+      physicalResourceId: datasetId,
+    });
+    expect(
+      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+    ).toBeNull();
+  });
+
+  test('an eval rejects an unknown field and a missing required field', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'eval',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          name: 'Bad Eval',
+          agent_id: agentId,
+          dataset_id: 'dset_whatever',
+          scorers: [],
+          bogus_field: true,
+        },
+      })
+    ).rejects.toThrow(/bogus_field/);
+
+    await expect(
+      applyCreateResource({
+        resourceType: 'eval',
+        projectId: internalProjectId,
+        resolvedProperties: { name: 'Incomplete Eval', agent_id: agentId },
+      })
+    ).rejects.toThrow(/`dataset_id` is required/);
+  });
+
+  test('a dataset_item requires its parent dataset', async () => {
+    await expect(
+      applyCreateResource({
+        resourceType: 'dataset_item',
+        projectId: internalProjectId,
+        resolvedProperties: {
+          input: [{ role: 'user', content: 'orphan' }],
+        },
+      })
+    ).rejects.toThrow(/`dataset_id` is required/);
+  });
+
+  test('read returns null for resources that no longer exist', async () => {
+    expect(
+      await readModule('dataset').read?.({ physicalResourceId: 'dset_missing' })
+    ).toBeNull();
+    expect(
+      await readModule('dataset_item').read?.({
+        physicalResourceId: 'dsit_missing',
+      })
+    ).toBeNull();
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: 'eval_missing' })
+    ).toBeNull();
   });
 });

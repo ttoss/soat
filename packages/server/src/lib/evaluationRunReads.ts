@@ -50,6 +50,7 @@ export const mapEvalRun = (run: EvalRunRow) => {
     agent_version: run.agentVersion,
     status: run.status,
     baseline_run_id: run.baselineRun?.publicId ?? null,
+    trigger_id: run.triggerId ?? null,
     aggregate_scores: run.aggregateScores,
     passed: run.passed,
     item_count: run.itemCount,
