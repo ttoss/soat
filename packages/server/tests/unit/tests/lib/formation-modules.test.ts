@@ -2538,6 +2538,176 @@ describe('evaluations formation modules', () => {
     ).rejects.toThrow(/`dataset_id` is required/);
   });
 
+  // A template update is a patch: a field the template does not mention is left
+  // alone rather than cleared. Without this, restating only `input` on an item
+  // would silently drop the reference answer scorers compare against.
+  test('an omitted nullable field is left alone, not cleared', async () => {
+    const datasetId = await applyCreateResource({
+      resourceType: 'dataset',
+      projectId: internalProjectId,
+      resolvedProperties: { name: 'Declared-Only Suite', description: 'keep me' },
+    });
+    const itemId = await applyCreateResource({
+      resourceType: 'dataset_item',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'first' }],
+        expected_output: 'Paris',
+        metadata: { topic: 'geography' },
+      },
+    });
+    const evalId = await applyCreateResource({
+      resourceType: 'eval',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        name: 'Declared-Only Eval',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+        pass_threshold: 0.9,
+      },
+    });
+
+    await applyUpdateResource({
+      resourceType: 'dataset',
+      physicalResourceId: datasetId,
+      resolvedProperties: { name: 'Declared-Only Suite v2' },
+    });
+    expect(
+      await readModule('dataset').read?.({ physicalResourceId: datasetId })
+    ).toMatchObject({ name: 'Declared-Only Suite v2', description: 'keep me' });
+
+    await applyUpdateResource({
+      resourceType: 'dataset_item',
+      physicalResourceId: itemId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'second' }],
+      },
+    });
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toMatchObject({
+      input: [{ role: 'user', content: 'second' }],
+      expected_output: 'Paris',
+      metadata: { topic: 'geography' },
+    });
+
+    await applyUpdateResource({
+      resourceType: 'eval',
+      physicalResourceId: evalId,
+      resolvedProperties: {
+        name: 'Declared-Only Eval v2',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+      },
+    });
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: evalId })
+    ).toMatchObject({ name: 'Declared-Only Eval v2', pass_threshold: 0.9 });
+
+    // An explicit null does clear a declared field — the other half of the pair.
+    await applyUpdateResource({
+      resourceType: 'dataset_item',
+      physicalResourceId: itemId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'second' }],
+        metadata: null,
+      },
+    });
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toMatchObject({ metadata: null, expected_output: 'Paris' });
+
+    await applyUpdateResource({
+      resourceType: 'eval',
+      physicalResourceId: evalId,
+      resolvedProperties: {
+        name: 'Declared-Only Eval v2',
+        agent_id: agentId,
+        dataset_id: datasetId,
+        scorers: [{ type: 'exact_match' }],
+        pass_threshold: null,
+      },
+    });
+    expect(
+      await readModule('eval').read?.({ physicalResourceId: evalId })
+    ).toMatchObject({ pass_threshold: null });
+
+    await applyDeleteResource({
+      resourceType: 'dataset',
+      physicalResourceId: datasetId,
+    });
+  });
+
+  test('moving a dataset_item to another dataset is rejected', async () => {
+    const datasetId = await applyCreateResource({
+      resourceType: 'dataset',
+      projectId: internalProjectId,
+      resolvedProperties: { name: 'Immutable Parent Suite' },
+    });
+    const otherDatasetId = await applyCreateResource({
+      resourceType: 'dataset',
+      projectId: internalProjectId,
+      resolvedProperties: { name: 'Immutable Other Suite' },
+    });
+    const itemId = await applyCreateResource({
+      resourceType: 'dataset_item',
+      projectId: internalProjectId,
+      resolvedProperties: {
+        dataset_id: datasetId,
+        input: [{ role: 'user', content: 'stays put' }],
+      },
+    });
+
+    // Silently applying the rest would report success for an apply that left
+    // the item in the dataset the template no longer names.
+    await expect(
+      applyUpdateResource({
+        resourceType: 'dataset_item',
+        physicalResourceId: itemId,
+        resolvedProperties: {
+          dataset_id: otherDatasetId,
+          input: [{ role: 'user', content: 'moved' }],
+        },
+      })
+    ).rejects.toThrow(/dataset_id is immutable/);
+    expect(
+      await readModule('dataset_item').read?.({ physicalResourceId: itemId })
+    ).toMatchObject({
+      dataset_id: datasetId,
+      input: [{ role: 'user', content: 'stays put' }],
+    });
+
+    // Deleting the parent cascades to the item, so tearing the stack down must
+    // still work when the item resource is deleted after its dataset.
+    await applyDeleteResource({
+      resourceType: 'dataset',
+      physicalResourceId: datasetId,
+    });
+    await applyDeleteResource({
+      resourceType: 'dataset_item',
+      physicalResourceId: itemId,
+    });
+    await expect(
+      applyUpdateResource({
+        resourceType: 'dataset_item',
+        physicalResourceId: itemId,
+        resolvedProperties: {
+          dataset_id: datasetId,
+          input: [{ role: 'user', content: 'gone' }],
+        },
+      })
+    ).rejects.toThrow(/not found/);
+    await applyDeleteResource({
+      resourceType: 'dataset',
+      physicalResourceId: otherDatasetId,
+    });
+  });
+
   test('read returns null for resources that no longer exist', async () => {
     expect(
       await readModule('dataset').read?.({ physicalResourceId: 'dset_missing' })
