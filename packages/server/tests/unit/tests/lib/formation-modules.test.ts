@@ -2545,7 +2545,10 @@ describe('evaluations formation modules', () => {
     const datasetId = await applyCreateResource({
       resourceType: 'dataset',
       projectId: internalProjectId,
-      resolvedProperties: { name: 'Declared-Only Suite', description: 'keep me' },
+      resolvedProperties: {
+        name: 'Declared-Only Suite',
+        description: 'keep me',
+      },
     });
     const itemId = await applyCreateResource({
       resourceType: 'dataset_item',
