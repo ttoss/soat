@@ -1995,7 +1995,7 @@ describe('Agents', () => {
     });
   });
 
-  describe('reasoning removed (moved to Discussions)', () => {
+  describe('reasoning config removed', () => {
     // The `reasoning` field no longer exists in the agent OpenAPI schema, so the
     // strict-fields middleware rejects it as an unknown field before the handler.
     test('rejects reasoning on agent create', async () => {

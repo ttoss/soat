@@ -2462,8 +2462,8 @@ fi
 $SOAT_CLI update-agent --agent-id "$AGENT_ID" --knowledge_config '{}' >/dev/null
 echo "knowledge_config extraction round-trip: OK"
 
-# 22b3. Deep thinking moved to Discussions — reasoning is no longer a valid
-# agent field, so it is rejected (as an unknown field) with a 400.
+# 22b3. `reasoning` is not an agent field — it is rejected (as an unknown
+# field) with a 400.
 echo "--- Asserting reasoning is rejected on agents ---"
 RC_REMOVED_RESP=$($SOAT_CLI update-agent --agent-id "$AGENT_ID" \
   --reasoning '{"effort":"low"}' 2>&1 || true)
@@ -2618,104 +2618,6 @@ echo "promote without a release rejected with 409: OK"
 
 $SOAT_CLI delete-agent --agent-id "$VER_AGENT_ID" --force true >/dev/null
 echo "Agent versioning lifecycle OK"
-
-# 22b4. Discussions — create a deliberation config, run it, inspect the run.
-echo "--- Creating a discussion ---"
-DISCUSSION_RESP=$($SOAT_CLI create-discussion \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name "Smoke panel" \
-  --ai_provider_id "$AI_PROVIDER_ID" \
-  --max_rounds 1 \
-  --participants '[{"name":"Advocate","prompt":"Argue for."},{"name":"Skeptic","prompt":"Argue against."}]')
-DISCUSSION_ID=$(printf '%s\n' "$DISCUSSION_RESP" | jq -r '.id')
-if [ -z "$DISCUSSION_ID" ] || [ "$DISCUSSION_ID" = "null" ]; then
-  echo "ERROR: create-discussion did not return an id" >&2
-  echo "$DISCUSSION_RESP" >&2
-  exit 1
-fi
-echo "Discussion id: $DISCUSSION_ID"
-
-$SOAT_CLI get-discussion --discussion-id "$DISCUSSION_ID" >/dev/null
-$SOAT_CLI list-discussions --project_id "$PROJECT_PUBLIC_ID" >/dev/null
-
-# Run the discussion. The run is LLM-dependent and its `outcome` echoes the
-# model's free-form text (which can contain characters that break `jq`), so
-# extract the run id with a regex rather than parsing the whole response, and
-# do not assert on the outcome content.
-echo "--- Running the discussion ---"
-RUN_RESP=$($SOAT_CLI create-discussion-run --discussion-id "$DISCUSSION_ID" \
-  --topic "Should we ship on Friday?" 2>&1 || true)
-RUN_ID=$(printf '%s' "$RUN_RESP" | grep -oE 'drn_[A-Za-z0-9]{16}' | head -1 || true)
-if [ -z "$RUN_ID" ]; then
-  echo "ERROR: create-discussion-run did not return a run id" >&2
-  echo "$RUN_RESP" >&2
-  exit 1
-fi
-RUN_GET_RESP=$($SOAT_CLI get-discussion-run --discussion-run-id "$RUN_ID")
-$SOAT_CLI list-discussion-runs --discussion-id "$DISCUSSION_ID" >/dev/null
-
-# Attribution is server-derived from the caller's credentials, so it is
-# deterministic even though the outcome text is not. These calls run under
-# $SOAT_TOKEN (a login JWT), so the principal is the user, not a key. Matched
-# with grep rather than jq for the same reason the run id is: the response
-# inlines the model's free-form outcome.
-if ! printf '%s' "$RUN_GET_RESP" | grep -q '"started_by_principal_type": *"user"'; then
-  echo "ERROR: discussion run did not record the user as the starting principal" >&2
-  exit 1
-fi
-if ! printf '%s' "$RUN_GET_RESP" | grep -qE '"started_by_principal_id": *"user_'; then
-  echo "ERROR: discussion run did not record a user_ principal id" >&2
-  exit 1
-fi
-echo "discussion run: OK (attribution recorded)"
-
-# An agent invokes a discussion through a soat tool bound to
-# create-discussion-run, with the discussion pinned in preset_parameters.
-DISCUSSION_TOOL_RESP=$($SOAT_CLI create-tool \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name ask-the-panel \
-  --type soat \
-  --actions '["create-discussion-run"]' \
-  --preset_parameters "{\"discussion_id\": \"$DISCUSSION_ID\"}")
-if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -e '.type == "soat"' >/dev/null 2>&1; then
-  echo "ERROR: create-tool did not create the discussion soat tool" >&2
-  echo "$DISCUSSION_TOOL_RESP" >&2
-  exit 1
-fi
-if ! printf '%s\n' "$DISCUSSION_TOOL_RESP" \
-  | jq -e '.preset_parameters.discussion_id != null' >/dev/null 2>&1; then
-  echo "ERROR: discussion soat tool did not pin discussion_id" >&2
-  echo "$DISCUSSION_TOOL_RESP" >&2
-  exit 1
-fi
-echo "discussion tool: OK"
-
-# The removed discussion tool type must be rejected, not silently accepted.
-if $SOAT_CLI create-tool \
-  --project_id "$PROJECT_PUBLIC_ID" \
-  --name legacy-discussion-tool \
-  --type discussion >/dev/null 2>&1; then
-  echo "ERROR: create-tool accepted the removed discussion type" >&2
-  exit 1
-fi
-echo "discussion tool type rejected: OK"
-
-# Call the tool for real: this is the documented replacement for the removed
-# discussion tool type, so prove the whole chain works — preset_parameters
-# supplying the `discussion_id` *path* parameter, `topic` coming from the
-# caller, and a real DiscussionRun coming back.
-DISCUSSION_TOOL_ID=$(printf '%s\n' "$DISCUSSION_TOOL_RESP" | jq -r '.id')
-DISCUSSION_TOOL_CALL_RESP=$($SOAT_CLI call-tool \
-  --tool-id "$DISCUSSION_TOOL_ID" \
-  --action create-discussion-run \
-  --input '{"topic": "Should the smoke suite assert on LLM wording?"}')
-if ! printf '%s\n' "$DISCUSSION_TOOL_CALL_RESP" \
-  | jq -e '.id | startswith("drn_")' >/dev/null 2>&1; then
-  echo "ERROR: calling the discussion soat tool did not return a discussion run" >&2
-  echo "$DISCUSSION_TOOL_CALL_RESP" >&2
-  exit 1
-fi
-echo "discussion tool call: OK"
 
 # 22c. Create a deterministic HTTP tool for tool_output message content
 echo "--- Creating project-detail tool ---"
@@ -3917,6 +3819,29 @@ if ! printf '%s\n' "$SOAT_PRESET_CALL_RESP" | jq -e '.limit == 1 and (.data | le
   exit 1
 fi
 echo "Preset query parameter: OK"
+
+# 37c. `preset_parameters` must also satisfy a *path* parameter, not just a
+# query one: the action's URL is built from them, so a pinned `agent_id` makes
+# an item-scoped action callable with an empty input.
+SOAT_PATH_PRESET_TOOL_RESP=$($SOAT_CLI create-tool \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name soat-agent-getter-preset \
+  --type soat \
+  --actions '["get-agent"]' \
+  --preset_parameters "{\"agent_id\": \"$AGENT_ID\"}")
+SOAT_PATH_PRESET_TOOL_ID=$(printf '%s\n' "$SOAT_PATH_PRESET_TOOL_RESP" | jq -r '.id')
+
+SOAT_PATH_PRESET_CALL_RESP=$($SOAT_CLI call-tool \
+  --tool-id "$SOAT_PATH_PRESET_TOOL_ID" \
+  --action get-agent \
+  --input '{}')
+if ! printf '%s\n' "$SOAT_PATH_PRESET_CALL_RESP" \
+  | jq -e --arg id "$AGENT_ID" '.id == $id' >/dev/null 2>&1; then
+  echo "ERROR: soat get-agent ignored a preset_parameters path parameter" >&2
+  echo "$SOAT_PATH_PRESET_CALL_RESP" >&2
+  exit 1
+fi
+echo "Preset path parameter: OK"
 
 # 38. Create an agent that uses the SOAT tool
 echo "--- Creating SOAT agent ---"

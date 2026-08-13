@@ -5,7 +5,7 @@ import { load as parseYaml } from 'js-yaml';
 
 /**
  * A parameter that names a *run* is qualified by the resource the run belongs
- * to — `eval_run_id`, `discussion_run_id`, `orchestration_run_id` — never a
+ * to — `eval_run_id`, `orchestration_run_id` — never a
  * bare `run_id`.
  *
  * SOAT has three unrelated run concepts, and a parameter name is not a local
@@ -132,11 +132,7 @@ describe('run parameter naming contract', () => {
   });
 
   test('every run parameter is qualified by its own resource', () => {
-    const QUALIFIED = new Set([
-      'eval_run_id',
-      'discussion_run_id',
-      'orchestration_run_id',
-    ]);
+    const QUALIFIED = new Set(['eval_run_id', 'orchestration_run_id']);
 
     const offenders = allParameters()
       .filter(({ name }) => {

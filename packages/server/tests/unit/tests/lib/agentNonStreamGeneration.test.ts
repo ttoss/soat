@@ -637,7 +637,7 @@ describe('agentNonStreamGeneration', () => {
 // buildCompletedGenerationResult -> saveTrace. No `ai` mock and no
 // resetModules here (both would sever the real DB), so this uses the
 // statically-imported runNonStreamGeneration. This is the same local-fake-
-// server pattern discussionCompletion.test.ts uses.
+// server pattern memoryExtractionCompletion.test.ts uses.
 describe('runNonStreamGeneration tool-failure fallback (stub server)', () => {
   let stubServer: Server;
   let stubBaseUrl: string;

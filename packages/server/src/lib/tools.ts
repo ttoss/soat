@@ -173,8 +173,7 @@ const buildToolCreateAttributes = (args: CreateToolArgs) => {
  * The complete set of tool types the server can resolve and execute. An
  * unlisted type has no resolver branch, so it would silently vanish from an
  * agent's toolset and fail at call time with a misleading error — reject it at
- * write time instead. To invoke a discussion from an agent, bind a `soat` tool
- * to `create-discussion-run`, which enforces IAM on the run.
+ * write time instead.
  */
 const TOOL_TYPES = ['http', 'client', 'mcp', 'soat', 'pipeline'] as const;
 

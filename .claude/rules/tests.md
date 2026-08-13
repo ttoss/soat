@@ -130,7 +130,7 @@ The dividing line is ownership, not convenience:
   mocking something you own.
 - **Only mock external I/O you don't own and can't run in CI** — LLM/AI model calls
   (`createGeneration`), embeddings, outbound HTTP, email. Even here, **prefer a local fake
-  server over a mock** where practical: `discussionCompletion.test.ts` and
+  server over a mock** where practical: `memoryConsolidationCompletion.test.ts` and
   `memoryExtractionCompletion.test.ts` run the real `generateText` against a local
   `createServer` OpenAI-compatible stub and assert the outgoing request body — that
   exercises real serialization, which a mock skips.

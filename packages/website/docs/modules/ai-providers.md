@@ -175,10 +175,10 @@ Both are authorized by the caller's access to the provider's own project (`ai-pr
 
 | Dependent | Kind | Behavior |
 |---|---|---|
-| Chats, agents, discussions | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
+| Chats, agents | **Live reference** | Always block with `409`. `force` does **not** override them — delete or repoint each resource first. |
 | [Model routes](./model-routes.md) whose targets name the provider | **Live reference** | Always block with `409`. A target references its provider by id inside the route's `targets`, so no foreign key protects it — the guard is explicit. Repoint or delete the route first. |
 | Price overrides | **Soft dependent** | Block with `409` unless `force=true`, which **deletes** the overrides (meaningless without the provider). |
-| Usage/generation records, discussion participants | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them (nulls the provider FK), preserving the row and its as-billed receipt. |
+| Usage/generation records | **Soft dependent** | Block with `409` unless `force=true`, which **unlinks** them (nulls the provider FK), preserving the row and its as-billed receipt. |
 
 A delete with no dependents (or `force=true` and only soft dependents) returns `204`. On a `409` the response carries `error.code = "AI_PROVIDER_HAS_DEPENDENTS"` and an `error.meta` describing what blocked it:
 
@@ -190,9 +190,8 @@ A delete with no dependents (or `force=true` and only soft dependents) returns `
     "meta": {
       "chatCount": 2, "chatIds": ["chat_01", "chat_02"],
       "agentCount": 1, "agentIds": ["agent_01"],
-      "discussionCount": 0, "discussionIds": [],
       "modelRouteCount": 0, "modelRouteIds": [],
-      "priceOverrideCount": 0, "usageEventCount": 0, "discussionParticipantCount": 0,
+      "priceOverrideCount": 0, "usageEventCount": 0,
       "forcible": false
     }
   }

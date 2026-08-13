@@ -462,13 +462,9 @@ Customer prefers email over phone calls.
 </knowledge>
 ```
 
-### Deep Thinking (via Discussions)
+### Orchestrated thinking
 
-Orchestrated thinking lives in the [Discussions](./discussions.md) module, not on the agent record. `reasoning` is not a recognized agent field: creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with a `400`.
-
-An agent that needs to think before acting attaches a **[`soat` tool](./tools.md#soat)** bound to `create-discussion-run`, with the discussion pinned in `preset_parameters`, and calls it mid-loop with a `topic`; the synthesized outcome is returned as the tool result. Provider-native reasoning effort is configured there, as a per-participant/synthesis `effort` knob.
-
-See the [Discussions module](./discussions.md) for the data model. **Migration note:** if you previously used the agent `reasoning` config, the [migration guide](./discussions.md#migrating-from-agent-reasoning) maps each former reasoning recipe (reflect / debate / best-of-N) to a discussion.
+`reasoning` is not a recognized agent field: creating or updating an agent with a `reasoning` field, or passing it as a per-generation override, is rejected with a `400`. Multi-step thinking is composed by the calling application — chain generations, or model the steps as an [orchestration](./orchestrations.md) or [workflow](./workflows.md) — rather than configured on the agent record.
 
 ### Structured Output
 

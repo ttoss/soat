@@ -18,7 +18,7 @@ const platformPillars = [
   {
     title: 'Orchestrate',
     description:
-      'Agents call tools and other agents. DAG orchestrations and multi-agent discussions turn them into deterministic, multi-step workflows.',
+      'Agents call tools and other agents. DAG orchestrations and workflow state machines turn them into deterministic, multi-step workflows.',
   },
   {
     title: 'Remember',

@@ -12,7 +12,7 @@ An agent normally pins one [AI provider](./ai-providers.md) and one model. A sin
 
 A model route replaces that pin with an ordered list of targets. The first target is tried first; a **retryable** failure is retried up to that target's `max_retries` and then falls through to the next target. A **deterministic** failure (400-class, auth, content policy) fails immediately — it would fail identically on every target.
 
-Routing is opt-in and byte-identical for anything that does not use it: a consumer that pins an `ai_provider_id` resolves exactly as before. A consumer that names **neither** a route nor a provider inherits its project's [`default_model_route_id`](#project-default-route), which is how chats, discussions, and memory completions get failover without a per-consumer field.
+Routing is opt-in and byte-identical for anything that does not use it: a consumer that pins an `ai_provider_id` resolves exactly as before. A consumer that names **neither** a route nor a provider inherits its project's [`default_model_route_id`](#project-default-route), which is how chats and memory completions get failover without a per-consumer field.
 
 > This is not a replacement for an external gateway. The `gateway` provider slug still lets you front providers with LiteLLM/OpenRouter. A model route is the SOAT-native alternative: the credentials stay in the [secrets](./secrets.md) module, the config lives inside SOAT's IAM and [formations](./formations.md), and the [generation](./generations.md) records which target actually answered.
 
@@ -160,7 +160,7 @@ Every routed call writes a `routing` object onto the generation, so a trace expl
 
 `target_index` is the target that served the call, `fallbacks` is how many targets were exhausted before it, and each entry in `attempts` carries the [`error_class`](#error-classification) it failed with — absent on the attempt that succeeded. `routing` is a server-owned field on the generation, not a `metadata` key, so a caller cannot forge it.
 
-Internal completions (chats, discussions, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing record once the call returns, so a routed chat or discussion turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
+Internal completions (chats, memory extraction/consolidation) resolve their metering attribution *before* the call, which a composite cannot satisfy — it does not know which target will serve. Those paths therefore read the served target back from the routing record once the call returns, so a routed chat turn is still metered on `(ai_provider_id, model)` of the target that answered and never on the route.
 
 **Known gap:** a *failed* attempt that burned tokens before erroring is not metered. Providers typically return no usage alongside an error, so the data to price it does not exist; the attempt is still visible rather than silent.
 
@@ -175,12 +175,9 @@ Internal completions (chats, discussions, memory extraction/consolidation) resol
 | Agents (generations, and client-tool resumption)    | its own `model_route_id`, else its pin, else the project default |
 | Memory extraction / consolidation                   | the completion config's `ai_provider_id` override, else the agent's pin, else the agent's `model_route_id`, else the project default |
 | Chats (chat-scoped completions)                     | the chat's pin, else the project default |
-| Discussions (runs)                                  | the discussion's pin, else the project default |
 | Stateless `POST /chat/completions`                  | its per-request `ai_provider_id` only — it belongs to no project of its own, so there is no default to inherit |
 
-Chats and discussions deliberately have **no** `model_route_id` column: a project default plus explicit pins already covers "most consumers routed, some pinned". A per-consumer column is only needed for *two different routes in one project*, and is worth adding when that is actually requested.
-
-A discussion turn's `effort` is provider-native, and a route's targets may span providers that disagree about it — so a routed turn treats `effort` as the no-op it already is for a provider without a mapping, rather than sending one provider's options to whichever target serves.
+Chats deliberately have **no** `model_route_id` column: a project default plus explicit pins already covers "most consumers routed, some pinned". A per-consumer column is only needed for *two different routes in one project*, and is worth adding when that is actually requested.
 
 ## Behavioral drift
 

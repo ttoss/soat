@@ -428,19 +428,6 @@ describe('Tools', () => {
   });
 
   describe('Tool type allowlist', () => {
-    test('rejects the removed "discussion" tool type', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/tools')
-        .send({
-          project_id: projectId,
-          name: 'review-panel-tool',
-          type: 'discussion',
-        });
-      expect(response.status).toBe(400);
-      expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/unsupported tool type/i);
-    });
-
     test('rejects an unknown tool type instead of silently accepting it', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
@@ -454,39 +441,26 @@ describe('Tools', () => {
       expect(response.body.error.message).toMatch(/unsupported tool type/i);
     });
 
-    test('rejects the removed discussion_id field', async () => {
+    test('rejects an unknown field on create', async () => {
       const response = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')
         .send({
           project_id: projectId,
-          name: 'discussion-id-tool',
+          name: 'unknown-field-tool',
           type: 'http',
-          discussion_id: 'disc_V1StGXR8Z5jdHi6B',
+          not_a_tool_field: 'nope',
         });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('rejects updating a tool to the removed "discussion" type', async () => {
+    test('rejects updating a tool to an unknown type', async () => {
       const response = await authenticatedTestClient(adminToken)
         .patch(`/api/v1/tools/${clientToolId}`)
-        .send({ type: 'discussion' });
+        .send({ type: 'htpp' });
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
       expect(response.body.error.message).toMatch(/unsupported tool type/i);
-    });
-
-    test('a created tool never reports a discussion_id field', async () => {
-      const response = await authenticatedTestClient(adminToken)
-        .post('/api/v1/tools')
-        .send({
-          project_id: projectId,
-          name: 'no-discussion-field-tool',
-          type: 'client',
-          parameters: { type: 'object', properties: {} },
-        });
-      expect(response.status).toBe(201);
-      expect(response.body).not.toHaveProperty('discussion_id');
     });
   });
 
