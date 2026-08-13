@@ -11,7 +11,7 @@ const log = createDebug('soat:evaluations');
  * `EvalResult.output` is a **copy** of the generation's final text on another
  * table, so a content purge that stopped at the generation row would not be a
  * purge at all — the same "erased but still readable" gap the trace cascade
- * exists to close (docs/prd-evaluations.md — Retention & erasure).
+ * exists to close (the evaluations module doc — Retention and erasure).
  *
  * Only `output` is cleared. Scores, `passed`, and the frozen
  * `input`/`expected_output` are the run's own record rather than the

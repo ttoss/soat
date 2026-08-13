@@ -52,8 +52,10 @@ Deferred — not killed — on three grounds:
   recurrence groups (guardrail rules created from them) **and** hit the
   exact-match ceiling — paraphrased corrections the `dedup_key` rollup cannot
   cluster.
-- [Evaluations](./prd-evaluations.md) Phase 1 exists, so promoted-rule
-  efficacy can be measured (inject vs. not, compare) instead of assumed.
+- The [evaluations module](../packages/website/docs/modules/evaluations.md)
+  exists (it shipped), so promoted-rule efficacy can be measured (inject vs.
+  not, compare) instead of assumed. This gate is satisfied; the recurrence-view
+  demand gate above is the one still open.
 
 The phases below are retained as design reference for that revisit.
 
@@ -217,7 +219,8 @@ does.
 Phase 4's acceptance test proves *plumbing* (the rule appears in the next
 run's assembled context), not *behavior change*. Because rules are soft,
 whether injection actually corrects behavior is an empirical question — and
-it is exactly what the [evaluations module](./prd-evaluations.md) measures:
+it is exactly what the
+[evaluations module](../packages/website/docs/modules/evaluations.md) measures:
 run a regression set with and without the rule injected and compare. The
 roadmap already sequences learned-rules after evaluations Phase 1; once both
 exist, rule-efficacy evals should back the promotion/graduation judgment

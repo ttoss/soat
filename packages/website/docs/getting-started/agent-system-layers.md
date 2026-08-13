@@ -203,8 +203,8 @@ chat for the fourth time. Each of those is a production change with no verdict a
 
 The ratchet is the mechanism that gives change a direction. Its shape is the same
 everywhere: **produce a verdict from evidence, gate the change on the verdict, keep the
-history append-only** so a bad change is recoverable rather than archaeological. Parts of
-this layer are shipped today and parts are the platform's active build front — see
+history append-only** so a bad change is recoverable rather than archaeological. The core
+loop — versions, evaluations, eval-gated promotion, the recurrence view — is shipped; see
 [Status](#status) below for the current state of each piece.
 
 ### It is not simply "after the graph"
@@ -298,9 +298,10 @@ is not a layer SOAT automates.
 
 ### Status
 
-The ratchet is the platform's active build front, so parts of it are shipped and parts are
-planned. Where a page below is marked coming soon, the concept is designed and the surface
-is not built yet.
+The ratchet's core loop is shipped end to end: archive every change, measure it against a
+baseline, gate its promotion on the verdict, and surface the corrections humans keep
+repeating. Where a piece below is marked coming soon, the concept is designed and the
+surface is not built yet.
 
 | Piece                                                                  | State                                                                                          |
 | ---------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |

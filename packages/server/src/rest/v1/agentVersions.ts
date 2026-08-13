@@ -13,7 +13,7 @@ import {
 import { parsePagination, resolveReadProjectIds } from './helpers';
 
 /**
- * Agent version history and staged rollout (docs/prd-agent-versions.md).
+ * Agent version history and staged rollout (the agents module doc — Versioning and Staged Rollout).
  *
  * Versions are never written through this router: they are archived by the
  * shared agent write path, so this surface is read-only apart from `restore`,

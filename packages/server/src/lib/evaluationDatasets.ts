@@ -1,6 +1,6 @@
 /**
  * Datasets and their items — the fixtures an eval runs an agent against
- * (docs/prd-evaluations.md, Phase 1).
+ * (the evaluations module doc).
  *
  * Items keep full CRUD on purpose. A run does not depend on them staying put:
  * each `EvalResult` freezes its own copy of the item's `input` and

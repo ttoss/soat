@@ -225,7 +225,7 @@ export class UsageEvent extends Model {
   // completion it names the path — `chat`, `discussion`, `memory_extraction`,
   // `memory_consolidation`, `eval_judge` — the same label its idempotency key
   // carries. Verification spend is therefore `source IN ('eval','eval_judge')`
-  // (docs/prd-evaluations.md, Phase 2).
+  // (the evaluations module doc).
   @Column({ type: DataType.STRING, allowNull: true })
   declare source: string | null;
 

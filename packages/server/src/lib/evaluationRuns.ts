@@ -1,5 +1,5 @@
 /**
- * Starting, and stopping, eval runs (docs/prd-evaluations.md).
+ * Starting, and stopping, eval runs (the evaluations module doc).
  *
  * A run creates **one real agent generation per dataset item** through the
  * ordinary `createGeneration` machinery, so it exercises the agent's true
@@ -57,8 +57,8 @@ type AgentRow = InstanceType<(typeof db)['Agent']>;
 /**
  * Picks the single agent version the whole run executes against.
  *
- * - An explicit `agentVersion` names an archived version (how the promotion
- *   gate in docs/prd-agent-versions.md evaluates a canary before promoting it);
+ * - An explicit `agentVersion` names an archived version (how the eval-gated
+ *   promotion in the agents module evaluates a canary before promoting it);
  *   an unknown one is a `400`.
  * - Otherwise the run follows the agent's **stable** side when a release is in
  *   effect, and the live draft version when none is — never the canary, and
@@ -147,7 +147,7 @@ const resolveBaselineRun = async (args: {
  * not in Phase 1: a caller who omits `wait` gets a `queued` run, which is what
  * omitting it will always mean from here on. Phase 1 required the field
  * precisely so this default could be introduced without any existing caller's
- * behavior changing (docs/prd-evaluations.md — Phase 2 acceptance criteria).
+ * behavior changing (the evaluations module doc).
  */
 const parseWait = (wait: unknown): boolean => {
   if (wait === undefined || wait === null) return false;

@@ -1,5 +1,5 @@
 /**
- * Executing and finalizing an eval run's items (docs/prd-evaluations.md).
+ * Executing and finalizing an eval run's items (the evaluations module doc).
  *
  * Both run modes funnel through here: a synchronous run loops over the items
  * in-process, and a queued run has one worker task per item. That is deliberate —

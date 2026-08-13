@@ -5,7 +5,7 @@ import {
 } from 'src/lib/releaseAssignment';
 
 /**
- * Deterministic canary assignment (docs/prd-agent-versions.md, Phase 2).
+ * Deterministic canary assignment (the agents module doc — Versioning and Staged Rollout).
  *
  * Tested directly rather than through the generate endpoint: this is a pure
  * hash over a large key space, and the property that matters — a stable

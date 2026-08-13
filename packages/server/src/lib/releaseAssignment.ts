@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 /**
  * Deterministic canary assignment for staged rollouts of a versioned resource
- * (docs/prd-agent-versions.md, Phase 2).
+ * (the agents module doc — Versioning and Staged Rollout).
  *
  * Pure by design — no DB, no clock, and nothing agent-specific: the mechanism is
  * "split traffic between two version numbers on a stable identity key", which is
@@ -28,7 +28,7 @@ export type ActiveRelease = {
   /**
    * Public ID of an eval that must have a passing run against the canary
    * version before `promote` is allowed, or null when the rollout is promoted
-   * on judgement alone (docs/prd-agent-versions.md, Phase 3).
+   * on judgement alone (the agents module doc — Versioning and Staged Rollout).
    *
    * Assignment ignores it entirely — a gate constrains how a rollout *ends*,
    * never which version a request is served.

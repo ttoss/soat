@@ -33,7 +33,7 @@ const platformPillars = [
   {
     title: 'Observe & Improve',
     description:
-      'Traces capture every tool call and model response. Append-only agent versions and canary rollouts make every change attributable and reversible.',
+      'Traces capture every tool call and model response. Append-only agent versions, canary rollouts, and eval-gated promotion make every change attributable, reversible, and measured before it ships.',
   },
 ];
 

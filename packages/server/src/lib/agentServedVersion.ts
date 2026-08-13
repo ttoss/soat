@@ -23,7 +23,7 @@ const log = createDebug('soat:generation');
 
 /**
  * Resolves which agent configuration a generation runs against
- * (docs/prd-agent-versions.md, Phase 2).
+ * (the agents module doc — Versioning and Staged Rollout).
  *
  * While an agent carries an `active_release`, the served config is always read
  * from an archived `AgentVersion` — never from the live row. That makes the live
@@ -156,7 +156,7 @@ export const resolveServedAgentVersion = async (args: {
    * Forces one archived version, bypassing release assignment entirely.
    *
    * An eval run sets this so every item is measured against the same config
-   * (docs/prd-evaluations.md — Version pinning): an eval generation has no
+   * (the evaluations module doc — Version pinning): an eval generation has no
    * session, so its assignment key would be null and `assignReleaseVersion`
    * would bucket each item *randomly*, blending two versions into one score.
    * The caller validates the version exists before pinning; a missing archive

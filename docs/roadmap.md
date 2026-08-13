@@ -59,8 +59,8 @@ route, and the `model_route` formation resource).
 
 | Initiative | PRD | Remaining | Tie |
 |-----------|-----|-----------|-----|
-| Agent versions & staged rollout | [prd-agent-versions.md](./prd-agent-versions.md) | ✅ Phases 1–3 shipped | umbrella (no G#) |
-| Evaluations | [prd-evaluations.md](./prd-evaluations.md) | ✅ Phases 1–3 shipped (minus `from-generation` curation, deferred) | ~~gates agent-versions P3~~ (satisfied) |
+| Agent versions & staged rollout | PRD retired — see the [agents module doc](../packages/website/docs/modules/agents.md#versioning-and-staged-rollout) | ✅ Phases 1–3 shipped | umbrella (no G#) |
+| Evaluations | PRD retired — see the [evaluations module doc](../packages/website/docs/modules/evaluations.md) | ✅ Phases 1–3 shipped (`from-generation` curation dropped — see below) | ~~gates agent-versions P3~~ (satisfied) |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
 | Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
@@ -90,7 +90,7 @@ feedback + governance loops ─────────────────�
 
 | Depends on | … to unblock | Why |
 |-----------|--------------|-----|
-| createSweep / createScheduler ✔ | evaluations P2 ✔ | async eval runs claim their own `EvalRunTask` queue on the shared poller seam — not `orchestration_run_tasks`, whose claim joins through `orchestration_runs` (see the PRD's Phase 2 deviation note) |
+| createSweep / createScheduler ✔ | evaluations P2 ✔ | async eval runs claim their own `EvalRunTask` queue on the shared poller seam — not `orchestration_run_tasks`, whose claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold |
 | knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
 | approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
 | recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
@@ -109,9 +109,12 @@ feedback + governance loops ─────────────────�
    queued runs, all five scorers including `llm_judge`, baseline deltas over the
    item intersection, `eval_run.completed`/`.failed` webhooks, cancellation, a
    lease reaper, and `source: eval` / `eval_judge` spend attribution — so the
-   promotion gate's substrate and its event are both in place. Only
-   **`from-generation` trace curation** is left in P2, deferred on an
-   unverifiable premise (see the PRD).
+   promotion gate's substrate and its event are both in place.
+   **`from-generation` trace curation** was dropped (2026-08 decision, option C
+   of the forwarded question): operators curate client-side via the ordinary
+   item-create route. Persisting generation content to power a server-side
+   route is a privacy-class call, revisited only if operators are observed
+   hand-rolling trace-scraping scripts to build datasets.
 3. ~~**Agent-versions**~~ — **fully shipped**: append-only config history with
    restore, the deterministic stable/canary split with the served version
    stamped on every generation, and **P3 (eval-gated promotion)** — a release's
@@ -166,7 +169,9 @@ evaluations P1 exists to measure rule efficacy — both gates in
 ### Agent versions
 
 _Fully shipped (`agentVersions.ts`, `releaseAssignment.ts`,
-`agentServedVersion.ts`, `agentPromotionGate.ts`)._
+`agentServedVersion.ts`, `agentPromotionGate.ts`) and the PRD retired; live
+behavior is documented in the
+[agents module doc](../packages/website/docs/modules/agents.md#versioning-and-staged-rollout)._
 
 - [x] ~~**Phase 1** Version snapshots + list/get/restore~~ — **shipped**: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
 - [x] ~~**Phase 2** Releases + deterministic canary~~ — **shipped**: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
@@ -174,7 +179,7 @@ _Fully shipped (`agentVersions.ts`, `releaseAssignment.ts`,
 
 ### Evaluations
 
-_Phases 1–3 shipped (`evaluations.ts`, `evaluationDatasets.ts`,
+_Phases 1–3 shipped and the PRD retired (`evaluations.ts`, `evaluationDatasets.ts`,
 `evaluationRuns.ts`, `evaluationRunExecution.ts`, `evaluationScorers.ts`,
 `evaluationJudge.ts`, `evaluationDeltas.ts`, `evaluationQueue.ts`,
 `evaluationWorker.ts`, `evaluationEvents.ts`, the `eval` trigger target, and the
@@ -182,9 +187,9 @@ _Phases 1–3 shipped (`evaluations.ts`, `evaluationDatasets.ts`,
 [evaluations module doc](../packages/website/docs/modules/evaluations.md)._
 
 - [x] ~~**Phase 1** Datasets + evals + sync deterministic runs~~ — **shipped**: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`, 25-item cap); run-level version pinning; frozen per-result item snapshots; generation-purge cascade to `EvalResult.output`
-- [x] ~~**Phase 2** `llm_judge` scorer; async execution; baseline **deltas**; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight~~ — **shipped**, plus `eval_run.completed`/`.failed` webhooks, `cancel`, and an atomic finalize claim so the completion event fires exactly once. Async runs use a dedicated `EvalRunTask` queue on the shared `createSweep`/`createScheduler` seam rather than `orchestration_run_tasks` — that table's claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold (deviation recorded in the PRD)
-- [ ] ⏭️ **Deferred** — curate dataset items from traces/generations (`from-generation`). Neither a generation's input messages nor its output text is persisted in a platform-owned shape; both live only in the AI SDK `steps` blob on the trace's file. Building it needs either a reader of that provider-shaped blob (empty for zero-retention/purged generations) or a new content column holding end-user prompts — a privacy-class call the open-questions gate forwards
-- [x] ~~**Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type~~ — **shipped**: `eval` is a trigger target (gated on `evaluations:RunEval`, always starting a **queued** run so a cron tick never blocks on a whole dataset) and the run records its origin in `EvalRun.trigger_id`; `dataset`, `dataset_item`, and `eval` are formation resource types. The item type is an addition to the sketch — a dataset with no items cannot run, and declaring items *inside* the dataset would make an apply delete API-curated fixtures (deviation recorded in the PRD)
+- [x] ~~**Phase 2** `llm_judge` scorer; async execution; baseline **deltas**; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight~~ — **shipped**, plus `eval_run.completed`/`.failed` webhooks, `cancel`, and an atomic finalize claim so the completion event fires exactly once. Async runs use a dedicated `EvalRunTask` queue on the shared `createSweep`/`createScheduler` seam rather than `orchestration_run_tasks` — that table's claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold
+- [x] ~~Curate dataset items from traces/generations (`from-generation`)~~ — **dropped** (2026-08 owner decision): operators curate client-side and `POST` the copy through the ordinary item-create route; `source_generation_id` provenance is caller-asserted. Neither a generation's input messages nor its output text is persisted in a platform-owned shape (both live only in the AI SDK `steps` blob on the trace's file), so a server-side route would need either a reader of that provider-shaped blob (empty for zero-retention/purged generations) or a new content column holding end-user prompts. Revisit — as an opt-in, per-project retention flag — only if operators are observed hand-rolling trace-scraping scripts to build datasets
+- [x] ~~**Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type~~ — **shipped**: `eval` is a trigger target (gated on `evaluations:RunEval`, always starting a **queued** run so a cron tick never blocks on a whole dataset) and the run records its origin in `EvalRun.trigger_id`; `dataset`, `dataset_item`, and `eval` are formation resource types. The item type is an addition to the sketch — a dataset with no items cannot run, and declaring items *inside* the dataset would make an apply delete API-curated fixtures
 - [x] ~~Webhook events (`eval_run.completed` / `.failed`)~~ — **shipped** with Phase 2, carrying `{eval_id, eval_run_id, passed, aggregate_scores}` inline: the promotion-gate event agent-versions P3 consumes
 
 ### Model routing
@@ -256,9 +261,8 @@ stays the source of truth:
   shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
   End State YAML — update the example.
 - **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in
-  [prd-learned-rules.md](./prd-learned-rules.md) and
-  [prd-agent-versions.md](./prd-agent-versions.md)~~ — fixed (both now cite
-  `GuardrailVersion`).
+  [prd-learned-rules.md](./prd-learned-rules.md) and the agent-versions PRD
+  (since retired)~~ — fixed (both now cite `GuardrailVersion`).
 
 ### Boundary: context composition
 

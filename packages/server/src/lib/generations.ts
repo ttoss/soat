@@ -49,7 +49,7 @@ type GenerationAttribution = {
   agentVersion?: number | null;
   // The workload behind the generation when it is not production traffic
   // (`eval`). Read back at metering time onto the usage event's own `source`
-  // column (docs/prd-evaluations.md, Phase 2).
+  // column (the evaluations module doc).
   source?: string | null;
 };
 

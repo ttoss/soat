@@ -17,7 +17,7 @@ import { Eval } from './Eval';
  * against it. Without that pin, release assignment would bucket each item
  * independently (an eval generation has no session, so its assignment key is
  * null and each generation lands randomly), blending two configs into one score
- * — see docs/prd-evaluations.md, Version pinning.
+ * — see the evaluations module doc, Version pinning.
  *
  * Never mutated after it reaches a terminal status, so there is no `updatedAt`;
  * `startedAt` / `finishedAt` carry the timeline.
@@ -107,7 +107,7 @@ export class EvalRun extends Model {
 
   /**
    * Public id of the trigger that started this run, when a trigger did
-   * (docs/prd-evaluations.md, Phase 3 — a nightly schedule pointed at an Eval).
+   * (the evaluations module doc — a nightly schedule pointed at an Eval).
    * Denormalized rather than an FK, exactly like `OrchestrationRun.triggerId`,
    * so the origin survives the trigger being deleted: a run is a historical
    * measurement and its provenance must not be rewritten by a later edit. Null

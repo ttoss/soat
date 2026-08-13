@@ -1,5 +1,5 @@
 /**
- * The eval worker (docs/prd-evaluations.md, Phase 2).
+ * The eval worker (the evaluations module doc).
  *
  * Two sweeps on one timer, mirroring `orchestrationWorker.ts`:
  *

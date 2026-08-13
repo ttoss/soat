@@ -19,7 +19,7 @@ import { Generation } from './Generation';
  * Items keep full CRUD. A run does not depend on them staying put — each
  * `EvalResult` freezes its own copy of `input` / `expectedOutput` — so editing
  * or deleting an item never rewrites the history of a run that already scored
- * it (docs/prd-evaluations.md — Item snapshot).
+ * it (the evaluations module doc — Frozen inputs).
  */
 @Table({
   tableName: 'dataset_items',

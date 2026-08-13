@@ -1,6 +1,6 @@
 /**
  * Evals — an agent under test, the dataset to run it against, and the scorers
- * its outputs are judged by (docs/prd-evaluations.md, Phase 1).
+ * its outputs are judged by (the evaluations module doc).
  *
  * Datasets and their items live in `evaluationDatasets.ts`, run execution in
  * `evaluationRuns.ts`, and the pure scorer rules in `evaluationScorers.ts`.

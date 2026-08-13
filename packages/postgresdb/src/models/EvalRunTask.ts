@@ -13,7 +13,7 @@ import { EvalRun } from './EvalRun';
 
 /**
  * One unit of work in the eval queue: run **this dataset item** of **this eval
- * run** (docs/prd-evaluations.md, Phase 2). An async run enqueues one task per
+ * run** (the evaluations module doc). An async run enqueues one task per
  * item at start; the eval worker claims them in batches, executes the item's
  * generation, writes its `EvalResult`, and acks by deleting the row. The run
  * finalizes when its last task is acked.

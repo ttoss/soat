@@ -1,5 +1,5 @@
 /**
- * The eval item queue (docs/prd-evaluations.md, Phase 2).
+ * The eval item queue (the evaluations module doc).
  *
  * An async run enqueues one `EvalRunTask` per dataset item; the eval worker
  * claims them in batches with `SELECT … FOR UPDATE SKIP LOCKED`, executes each
