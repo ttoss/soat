@@ -1258,7 +1258,11 @@ components:
             record per attempt (failed attempts followed by a final record).
         status:
           type: string
-          enum: [completed, failed, requires_action, skipped]
+          enum: [running, completed, failed, requires_action, skipped]
+          description: >-
+            Node execution status. `running` marks an execution record whose
+            node is still in flight. Open set — new statuses may be added in
+            minor releases; clients must tolerate unknown values.
         input:
           type: object
           nullable: true

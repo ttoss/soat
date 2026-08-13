@@ -1,5 +1,33 @@
 # OpenAPI Spec Drift Audit
 
+> **Status: burned down (2026-08-13).** All ten groups below are fixed on this
+> branch and the contract validator now enforces the **full documented
+> surface** on every REST-suite response (`tests/unit/openapiContract.ts`),
+> so drift of this class fails the suite with the field named instead of
+> re-accumulating. Corrections to the original diagnosis made while fixing:
+>
+> - **Group 4 (`File.size`)** — the column is `INTEGER`, not `BIGINT`; the
+>   drift was a nullable `size` typed non-nullable, so the fix is spec-side
+>   `nullable: true` and no mapper change or product decision was needed.
+> - **Group 5 (`File.metadata`)** — the column is `TEXT` (a JSON string); the
+>   drift was nullability again, not a string-vs-object mismatch.
+> - **Group 6 (formations)** — the leaf `required`/undeclared-property errors
+>   were Ajv cascade noise from non-matching `oneOf` branches, not real gaps
+>   in the per-type schemas (templates had all passed the runtime loader at
+>   create time). The `oneOf` itself was the defect: `ResourceDeclaration`'s
+>   `type` discriminator sits outside `properties`, and property values may be
+>   `ref`/`param`/`sub` substitution expressions, so no branch reliably
+>   matches. `properties` is now free-form on the wire while the
+>   `*ResourceProperties` schemas remain the runtime validation allowlist.
+> - **Group 8** — decision: enums are **open** (documented as such); the node
+>   `type` response enum was removed entirely because create accepts unknown
+>   types by design (failure is deferred to run time, pinned by a test), and
+>   `node_executions[].status` was missing `running`.
+> - **Group 2** — decision: the PUT/PATCH tag handlers now **return the tag
+>   map**, matching the documented contract (the spec side was kept).
+>
+> The sections below are preserved as the audit record.
+
 Complete enumeration of the pre-existing drift between the OpenAPI specs
 (`packages/server/src/rest/openapi/v1/*.yaml`) and the responses the server
 actually returns — the burn-down noted in
