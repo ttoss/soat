@@ -12,7 +12,6 @@ import {
   AuditLog as AuditLogSdk,
   Chats as ChatsSdk,
   Conversations as ConversationsSdk,
-  Discussions as DiscussionsSdk,
   Documents as DocumentsSdk,
   Embeddings as EmbeddingsSdk,
   Evaluations as EvaluationsSdk,
@@ -124,7 +123,6 @@ export class SoatClient {
   readonly auditLog: typeof AuditLogSdk;
   readonly chats: typeof ChatsSdk;
   readonly conversations: typeof ConversationsSdk;
-  readonly discussions: typeof DiscussionsSdk;
   readonly documents: typeof DocumentsSdk;
   readonly embeddings: typeof EmbeddingsSdk;
   readonly evaluations: typeof EvaluationsSdk;
@@ -175,7 +173,6 @@ export class SoatClient {
     this.auditLog = bindResource(AuditLogSdk, httpClient);
     this.chats = bindResource(ChatsSdk, httpClient);
     this.conversations = bindResource(ConversationsSdk, httpClient);
-    this.discussions = bindResource(DiscussionsSdk, httpClient);
     this.documents = bindResource(DocumentsSdk, httpClient);
     this.embeddings = bindResource(EmbeddingsSdk, httpClient);
     this.evaluations = bindResource(EvaluationsSdk, httpClient);
