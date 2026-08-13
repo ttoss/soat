@@ -1936,9 +1936,10 @@ components:
             code:
               type: string
               description: A key from the server's ERROR_CODES registry.
-              example: AI_PROVIDER_ERROR
+              example: RESOURCE_NOT_FOUND
             message:
               type: string
-              example: 'Provider returned 402: insufficient credits'
+              example: 'Resource not found'
             meta:
               type: object
+              description: Optional structured context for the error.

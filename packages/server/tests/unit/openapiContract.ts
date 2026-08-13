@@ -1,6 +1,7 @@
+import { appendFileSync } from 'node:fs';
+
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
-import { appendFileSync } from 'node:fs';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
 
 // Audit mode: validate EVERY response against its full schema and append
@@ -311,12 +312,14 @@ export const assertResponseMatchesSpec = (args: {
       method: method.toUpperCase(),
       template,
       status: args.status,
-      errors: (validator.errors ?? []).map((e) => ({
-        instancePath: e.instancePath,
-        keyword: e.keyword,
-        message: e.message,
-        params: e.params,
-      })),
+      errors: (validator.errors ?? []).map((e) => {
+        return {
+          instancePath: e.instancePath,
+          keyword: e.keyword,
+          message: e.message,
+          params: e.params,
+        };
+      }),
     };
     appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`);
     return;

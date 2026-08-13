@@ -546,9 +546,10 @@ components:
             code:
               type: string
               description: A key from the server's ERROR_CODES registry.
-              example: PROJECT_HAS_DEPENDENTS
+              example: RESOURCE_NOT_FOUND
             message:
               type: string
-              example: Project 'proj_V1StGXR8Z5jdHi6B' has dependent resources and cannot be deleted.
+              example: 'Resource not found'
             meta:
               type: object
+              description: Optional structured context for the error.

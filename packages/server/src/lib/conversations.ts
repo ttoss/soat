@@ -261,7 +261,8 @@ export const updateConversationTags = async (args: {
     data: mapped,
   });
 
-  return mapped;
+  // The tag routes' contract is the tag map itself, not the conversation.
+  return newTags;
 };
 
 export const listConversationMessages = async (args: {

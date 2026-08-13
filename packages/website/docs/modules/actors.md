@@ -188,6 +188,8 @@ Tags can be managed via the dedicated tag sub-endpoints:
 | `PUT`   | `/api/v1/actors/:id/tags` | Replace all tags (any tags not in the body are removed) |
 | `PATCH` | `/api/v1/actors/:id/tags` | Merge tags (existing tags not in the body are kept)     |
 
+All three respond with the resulting tag map itself (not the actor resource).
+
 All tag endpoints require `actors:UpdateActor` permission.
 
 ## SOAT Resource Names

@@ -689,24 +689,13 @@ components:
           description: Unique node identifier within this orchestration.
         type:
           type: string
-          enum:
-            [
-              agent,
-              tool,
-              transform,
-              knowledge,
-              memory_write,
-              condition,
-              human,
-              approval,
-              loop,
-              poll,
-              delay,
-              webhook,
-              emit_event,
-              sub_orchestration,
-            ]
-          description: Node execution type.
+          description: >-
+            Node execution type. Known types: agent, tool, transform,
+            knowledge, memory_write, condition, human, approval, loop, poll,
+            delay, webhook, emit_event, sub_orchestration. Open set — new types
+            may be added in minor releases, and an unrecognized type is
+            accepted at create time (the run fails when the node dispatches),
+            so clients must tolerate unknown values.
         agent_id:
           x-soat-ref: agents
           type: string
@@ -719,10 +708,12 @@ components:
           type: string
           description: For tool and poll nodes — specific operation/action on MCP/SOAT tools.
         expression:
-          type: object
-          description: For transform/condition nodes — JSON Logic rule (https://jsonlogic.com) evaluated against the run state.
+          description: >-
+            For transform/condition nodes — JSON Logic rule
+            (https://jsonlogic.com) evaluated against the run state. A rule may
+            be any JSON value (object, string, number, boolean, array), so no
+            type is constrained.
         exit_condition:
-          type: object
           description: >
             For poll nodes — JSON Logic stop condition, evaluated each attempt
             against the run state augmented with `response` (the latest tool
@@ -757,14 +748,11 @@ components:
           type: string
           description: For approval nodes — optional guidance shown to the approver.
         reasoning:
-          type: object
-          description: For approval nodes — JSON Logic resolved into the item's reasoning.
+          description: For approval nodes — JSON Logic (any JSON value) resolved into the item's reasoning.
         evidence:
-          type: object
-          description: For approval nodes — JSON Logic resolved into the item's evidence.
+          description: For approval nodes — JSON Logic (any JSON value) resolved into the item's evidence.
         predicted_impact:
-          type: object
-          description: For approval nodes — JSON Logic resolved into the item's predicted impact.
+          description: For approval nodes — JSON Logic (any JSON value) resolved into the item's predicted impact.
         input_mapping:
           type: object
           additionalProperties: true
@@ -1309,7 +1297,11 @@ components:
           enum:
             - human_input
             - webhook_receive
-          description: Discriminator identifying the kind of pause.
+            - approval
+          description: >-
+            Discriminator identifying the kind of pause. Open enum — new pause
+            kinds may be added in minor releases; clients must tolerate unknown
+            values.
         node_id:
           type: string
         prompt:
@@ -1321,6 +1313,20 @@ components:
           items:
             type: string
           nullable: true
+        approval_spec:
+          type: object
+          description: >-
+            Present only for `approval` pauses — the frozen tool proposal the
+            engine emits as an ApprovalItem when the run parks. Copied as a
+            value; inner keys stay exactly as authored.
+        approval_id:
+          x-soat-ref: approvals
+          type: string
+          description: Present once the approval item is emitted.
+        expires_at:
+          type: string
+          format: date-time
+          description: Present for `approval` pauses — when the item expires.
 
     HumanInputRequest:
       type: object

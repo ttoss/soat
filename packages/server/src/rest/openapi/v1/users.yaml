@@ -378,7 +378,26 @@ components:
           example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9
     ErrorResponse:
       type: object
+      required:
+        - error
       properties:
         error:
-          type: string
-          example: 'An error occurred'
+          type: object
+          description: >-
+            Structured error. Every error response uses this shape — 401, 403
+            and the 500 catch-all included — so `code` can be read without
+            first checking the type of `error`.
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              description: A key from the server's ERROR_CODES registry.
+              example: RESOURCE_NOT_FOUND
+            message:
+              type: string
+              example: 'Resource not found'
+            meta:
+              type: object
+              description: Optional structured context for the error.

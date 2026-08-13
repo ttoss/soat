@@ -209,6 +209,7 @@ paths:
                   secret_id:
                     x-soat-ref: secrets
                     type: string
+                    nullable: true
                   base_url:
                     type: string
                   config:
@@ -257,6 +258,7 @@ paths:
                 secret_id:
                   x-soat-ref: secrets
                   type: string
+                  nullable: true
                 base_url:
                   type: string
                 config:

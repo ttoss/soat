@@ -442,5 +442,6 @@ export const updateFileTags = async (args: {
     data: mapped,
   });
 
-  return mapped;
+  // The tag routes' contract is the tag map itself, not the file resource.
+  return newTags;
 };
