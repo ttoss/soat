@@ -23,11 +23,12 @@ pending backlog.
 
 ### Agent Operations on Formations (G1–G6)
 
-The umbrella — [prd-agent-operations.md](./prd-agent-operations.md) — defines
-the gap series that turns a Formation deploy into an *operating* agent team.
-Only initiatives with open work are listed. G1 (schedule triggers), G2
-(queue-backed runs), G4 (guardrails), and G5 (usage metering) are fully shipped
-and have no remaining items. The G2, G3 and G5 PRDs have been retired in favor of
+The Agent Operations gap series (G1–G6) turns a Formation deploy into an
+*operating* agent team — schedules, guardrails, approval queues, and cost
+meters, not just static agent topology. Only initiatives with open work are
+listed. G1 (schedule triggers), G2 (queue-backed runs), G4 (guardrails), and
+G5 (usage metering) are fully shipped and have no remaining items. The
+umbrella PRD and the per-gap PRDs have been retired in favor of
 the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution),
 the [approvals](../packages/website/docs/modules/approvals.md) / [exceptions](../packages/website/docs/modules/exceptions.md) / [activity](../packages/website/docs/modules/activity.md)
 module docs, and the [usage module doc](../packages/website/docs/modules/usage.md);
@@ -37,7 +38,7 @@ G3's and G5's remaining deferred items are kept in the
 | G | Initiative | PRD | Remaining |
 |---|-----------|-----|-----------|
 | G3 | Approvals · exceptions · activity | _retired_ — [approvals](../packages/website/docs/modules/approvals.md) · [exceptions](../packages/website/docs/modules/exceptions.md) · [activity](../packages/website/docs/modules/activity.md) | ✔ every deliverable shipped (`5.4` guard context and the `action_executed` agent-generation coverage closed 2026-07). Phase 5 approver targeting and in-channel approval clients remain deferred by design, no demand signal yet — see the [G3 backlog](#g3--approvals-exceptions--activity) |
-| G6 | Learned-rules feedback loop | [prd-learned-rules.md](./prd-learned-rules.md) | ⏭️ Deferred — recurrence view folded into G3 (see [Deferral: learned rules](#deferral-learned-rules)) |
+| G6 | Learned-rules feedback loop | _retired_ — see [Deferral: learned rules](#deferral-learned-rules) | ⏭️ Deferred — recurrence view folded into G3 |
 
 ### Adjacent / standalone module PRDs
 
@@ -159,8 +160,8 @@ One refinement remains open:
 _Deferred (2026-07) — see [Deferral: learned rules](#deferral-learned-rules).
 Exact-key recurrence surfacing moved to G3 (approvals recurrence view). What
 remains here builds only if the recurrence view proves demand **and**
-evaluations P1 exists to measure rule efficacy — both gates in
-[prd-learned-rules.md](./prd-learned-rules.md)._
+evaluations P1 exists to measure rule efficacy (that gate is satisfied; the
+demand gate is the one still open)._
 
 - [ ] ⏭️ Semantic (embedding) clustering of paraphrased corrections (`CandidateRule` capture + nearest-neighbor recurrence)
 - [ ] ⏭️ Promotion lifecycle + `LearnedRule` (human-curated; `candidate → promoted | dismissed`)
@@ -256,13 +257,12 @@ stays the source of truth:
   bolted agent/run provenance onto a compliance-grade audit table customers
   pipe to SIEMs. Live behavior in the
   [activity module docs](../packages/website/docs/modules/activity.md).
-- **`tool_ids` → `tool_bindings`.** The 2026-07 promotion to a canonical
-  `tool_bindings` array (approvals §5) postdates the `tool_ids: [{ ref: … }]`
-  shape still shown in [prd-agent-operations.md](./prd-agent-operations.md)'s
-  End State YAML — update the example.
-- **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in
-  [prd-learned-rules.md](./prd-learned-rules.md) and the agent-versions PRD
-  (since retired)~~ — fixed (both now cite `GuardrailVersion`).
+- ~~**`tool_ids` → `tool_bindings`.**~~ Resolved by retiring the
+  agent-operations PRD (2026-08) — the stale `tool_ids: [{ ref: … }]` End State
+  YAML example it carried is gone with it.
+- **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in the
+  learned-rules and agent-versions PRDs (since retired)~~ — fixed before
+  retirement (both cited `GuardrailVersion`).
 
 ### Boundary: context composition
 
@@ -319,9 +319,19 @@ served, stamped on every generation). The fact/correction boundary now lives in
 [memories](../packages/website/docs/modules/memories.md#what-belongs-in-a-memory)
 and the graduation choice on the
 [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view).
-This PRD stays as the design record.
+
+**Update (2026-08): the PRD itself was retired** as part of clearing the PRD
+directory for v1 — the full design record (data model, phases, decided
+thresholds) lives in git history (`docs/prd-learned-rules.md`, removed 2026-08)
+and can be recovered if the gates fire.
 
 Build gates for the full module — **both** must hold: sustained demand on the
 recurrence view (humans graduating groups into guardrails *and* hitting the
-exact-match ceiling on paraphrased corrections), and evaluations P1 shipped.
-Details in [prd-learned-rules.md](./prd-learned-rules.md).
+exact-match ceiling on paraphrased corrections the `dedup_key` rollup cannot
+cluster), and evaluations P1 shipped. The evaluations gate is satisfied; the
+demand gate is the one still open. If it fires, key recorded decisions:
+capture sources are backfillable from `ApprovalItem` history; clustering
+reuses the memories pgvector machinery (cosine ≥ 0.85 default); promotion is
+human-curated with `global`/`project` scopes and append-only versioning
+(`GuardrailVersion` pattern); SOAT only lists rules — injection stays with the
+consuming application.
