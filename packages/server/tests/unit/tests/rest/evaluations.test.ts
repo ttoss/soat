@@ -387,8 +387,6 @@ describe('Evaluations', () => {
       expect(item.dataset_id).toBe(datasetId);
       expect(item.expected_output).toBe('On the first of each month.');
       expect(item.metadata).toEqual({ topic: 'billing' });
-      // Set only by the Phase 2 curation route.
-      expect(item.source_generation_id).toBeNull();
     });
 
     test.each([

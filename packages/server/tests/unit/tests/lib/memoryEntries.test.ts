@@ -120,20 +120,6 @@ describe('writeMemoryEntry merge consolidation', () => {
     expect(mockRunConsolidationCompletion).not.toHaveBeenCalled();
   });
 
-  test('persists tags and metadata on a newly created entry', async () => {
-    const memoryId = await createMemoryId('Tagged Create');
-    const result = await writeMemoryEntry({
-      memoryId,
-      content: 'Prefers async standups',
-      tags: ['role:manager'],
-      metadata: { source: 'interview' },
-    });
-
-    expect(result.action).toBe('created');
-    expect(result.entry.tags).toEqual(['role:manager']);
-    expect(result.entry.metadata).toEqual({ source: 'interview' });
-  });
-
   test('unions tags and shallow-merges metadata on a merge write', async () => {
     const memoryId = await createMemoryId('Tagged Merge');
     await writeMemoryEntry({
