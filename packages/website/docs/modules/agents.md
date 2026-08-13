@@ -700,6 +700,21 @@ Two agent fields are read from the live agent even during a rollout, because the
 
 By default, deleting an agent that has dependent generations or traces returns `409 Conflict` with error code `AGENT_HAS_DEPENDENTS` and `meta.generationCount` / `meta.traceCount` so a caller can tell which one is nonzero. Pass `?force=true` to delete those generations and traces along with the agent. An agent's archived versions are owned by it and are removed with it. Each deleted trace's backing [file](./files.md) (the serialized steps) and its stored bytes are removed too, so no orphaned content is left behind in storage.
 
+### Webhook Events
+
+These events are dispatched to project [webhooks](./webhooks.md) as a generation moves through its lifecycle. They matter most for a **background** generation (the default — see [Synchronous vs asynchronous](../advanced/sync-and-async.md)): a caller that took its `202` and went away has no other channel to learn how the turn ended.
+
+| Event type                          | Trigger                                                    |
+| ----------------------------------- | ---------------------------------------------------------- |
+| `agents.generation.completed`       | The model loop finished and the turn is recorded            |
+| `agents.generation.failed`          | The turn ended in an error, which is recorded on the record |
+| `agents.generation.requires_action` | The turn paused on a client tool call awaiting outputs      |
+| `agents.deleted`                    | An agent was deleted                                        |
+
+Every generation event carries the generation `id` and its `trace_id`. `agents.generation.failed` also carries the same structured `error` the generation record exposes (`error.code`, `error.message`), so a subscriber can distinguish a provider outage from a bad request without a follow-up read.
+
+Subscribe to the family with the `agents.generation.*` pattern. The session equivalents are namespaced separately — see [Sessions → Webhook Events](./sessions.md#webhook-events).
+
 ## Examples
 
 ### Create an agent
