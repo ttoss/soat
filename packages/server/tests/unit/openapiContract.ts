@@ -16,8 +16,7 @@ const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
  * {@link testClient} are checked against the OpenAPI schema for their
  * `(path, method, status)` so the shapes issue #661 governs cannot drift again.
  *
- * Enforcement scope (full surface since the 2026-08 drift burn-down —
- * see docs/spec-drift-audit.md):
+ * Enforcement scope (full surface since the 2026-08 drift burn-down, #977):
  * - **Every documented `(path, method, status)` JSON schema** is enforced on
  *   every response a `rest/` test produces. The pre-existing drift (~1900 raw
  *   failures at the time of #661) was enumerated and burned down before this
