@@ -1,6 +1,12 @@
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
+import { appendFileSync } from 'node:fs';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
+
+// Audit mode: validate EVERY response against its full schema and append
+// violations to the given JSONL file instead of throwing. Used to enumerate
+// the pre-existing spec drift; never set in CI.
+const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
 
 /**
  * OpenAPI ↔ server response contract validator.
@@ -215,7 +221,19 @@ const getResponseValidator = (args: {
   const schema = getRawResponseSchema(args);
   let validator: ValidateFunction | null = null;
 
-  if (schema && isEnvelopeSchema(schema)) {
+  if (AUDIT_FILE && schema) {
+    const pointer = [
+      'paths',
+      escapePointerToken(args.template),
+      args.method,
+      'responses',
+      escapePointerToken(String(args.status)),
+      'content',
+      escapePointerToken('application/json'),
+      'schema',
+    ].join('/');
+    validator = getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` });
+  } else if (schema && isEnvelopeSchema(schema)) {
     validator = getEnvelopeValidator();
   } else if (schema && isAgentGenerationSchema(schema)) {
     // Reference the schema inside the registered spec so its nested
@@ -288,6 +306,21 @@ export const assertResponseMatchesSpec = (args: {
   if (!validator) return;
 
   const valid = validator(args.body);
+  if (!valid && AUDIT_FILE) {
+    const record = {
+      method: method.toUpperCase(),
+      template,
+      status: args.status,
+      errors: (validator.errors ?? []).map((e) => ({
+        instancePath: e.instancePath,
+        keyword: e.keyword,
+        message: e.message,
+        params: e.params,
+      })),
+    };
+    appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`);
+    return;
+  }
   if (!valid) {
     throw new Error(
       `OpenAPI contract violation: ${method.toUpperCase()} ${template} → ${
