@@ -140,7 +140,7 @@ const recordServedCompletion = async (
 /**
  * Meters one completion against the provider instance that actually served it —
  * the single metering entry point for every path whose model may be a route
- * composite (chats, discussions, memory extraction and consolidation).
+ * composite (chats, memory extraction and consolidation).
  *
  * Fire-and-forget by construction: resolving a routed call's served target is a
  * database read, and metering must never delay or fail the completion it

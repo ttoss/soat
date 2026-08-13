@@ -187,8 +187,8 @@ describe('Traces REST API', () => {
       lastActivityAt: new Date(Date.now() - 200),
       stopReason: 'stop',
       metadata: {
-        discussion: {
-          participant: 'Advocate',
+        caller: {
+          label: 'Advocate',
           round: 0,
           output: 'advocate text',
         },

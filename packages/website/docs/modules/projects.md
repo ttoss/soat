@@ -85,7 +85,7 @@ To grant a user access to a single project, attach a [Policy](./policies.md) sco
 
 ### Default Model Route
 
-`default_model_route_id` names the [model route](./model-routes.md) every consumer in the project inherits when it binds neither `model_route_id` nor `ai_provider_id` — a single project-scoped switch that gives agents, chats, discussions, and memory completions provider failover without editing each one.
+`default_model_route_id` names the [model route](./model-routes.md) every consumer in the project inherits when it binds neither `model_route_id` nor `ai_provider_id` — a single project-scoped switch that gives agents, chats, and memory completions provider failover without editing each one.
 
 ```bash
 soat update-project --project-id proj_… --default_model_route_id route_…

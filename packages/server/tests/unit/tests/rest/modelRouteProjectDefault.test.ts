@@ -25,6 +25,7 @@ const ACTIONS = [
   'model-routes:DeleteModelRoute',
   'ai-providers:CreateAiProvider',
   'agents:CreateAgent',
+  'agents:UpdateAgent',
   'agents:CreateAgentGeneration',
   'generations:GetGeneration',
   'agents:DeleteAgent',
@@ -32,11 +33,6 @@ const ACTIONS = [
   'chats:GetChat',
   'chats:DeleteChat',
   'chats:CreateChatCompletionForChat',
-  'discussions:CreateDiscussion',
-  'discussions:GetDiscussion',
-  'discussions:UpdateDiscussion',
-  'discussions:DeleteDiscussion',
-  'discussions:CreateDiscussionRun',
 ];
 
 type LlmStub = {
@@ -224,7 +220,7 @@ describe('Project default model route', () => {
     while (inheritors.length > 0) {
       const { path, id } = inheritors.pop()!;
       // An agent needs `force` to clear the generations it accumulated during
-      // the test; chats and discussions take no such flag.
+      // the test; chats take no such flag.
       const query = path === 'agents' ? '?force=true' : '';
       const res = await authenticatedTestClient(userToken).delete(
         `/api/v1/${path}/${id}${query}`
@@ -444,27 +440,6 @@ describe('Project default model route', () => {
       await clearDefault();
     });
 
-    test('discussion create returns 400 without a default and 201 with one', async () => {
-      await setDefault(null);
-
-      const rejected = await authenticatedTestClient(userToken)
-        .post('/api/v1/discussions')
-        .send({ project_id: projectId, name: 'Unbound Discussion' });
-      expect(rejected.status).toBe(400);
-      expect(rejected.body.error.message).toMatch(/binds neither/);
-
-      await setDefault(defaultRouteId);
-
-      const accepted = await authenticatedTestClient(userToken)
-        .post('/api/v1/discussions')
-        .send({ project_id: projectId, name: 'Inheriting Discussion' });
-      expect(accepted.status).toBe(201);
-      expect(accepted.body.ai_provider_id).toBeNull();
-      trackInheritor('discussions', accepted.body.id);
-
-      await clearDefault();
-    });
-
     test('a chat declaring model without a provider returns 400', async () => {
       await setDefault(defaultRouteId);
 
@@ -620,42 +595,6 @@ describe('Project default model route', () => {
       await clearDefault();
     });
 
-    test('an inheriting discussion run completes via the second target and meters it', async () => {
-      await setDefault(defaultRouteId);
-
-      const discussion = await authenticatedTestClient(userToken)
-        .post('/api/v1/discussions')
-        .send({
-          project_id: projectId,
-          name: 'Routed Discussion',
-          participants: [{ name: 'Alpha', prompt: 'Argue for.' }],
-        });
-      expect(discussion.status).toBe(201);
-      expect(discussion.body.ai_provider_id).toBeNull();
-      trackInheritor('discussions', discussion.body.id);
-
-      const eventsBefore = await countUsageEvents({
-        model: 'default-healthy-model',
-        aiProviderDbId: healthyProviderDbId,
-      });
-
-      const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/discussions/${discussion.body.id}/runs`)
-        .send({ topic: 'Should we ship on Friday?' });
-      expect(res.status).toBe(201);
-      expect(res.body.status).toBe('completed');
-
-      const event = await awaitUsageEvent({
-        model: 'default-healthy-model',
-        aiProviderDbId: healthyProviderDbId,
-        after: eventsBefore,
-      });
-      expect(event).toBeDefined();
-      expect(event?.aiProviderId).toBe(healthyProviderDbId);
-
-      await clearDefault();
-    });
-
     test('a consumer with an explicit pin ignores the default entirely', async () => {
       const pinnedStub = track(
         await startLlmStub(() => {
@@ -735,24 +674,24 @@ describe('Project default model route', () => {
   // ── Unpinning an existing consumer ────────────────────────────────────
 
   describe('unpinning a consumer onto the default', () => {
-    test('a discussion PATCH with ai_provider_id null inherits, and 400s without a default', async () => {
+    test('an agent PATCH with ai_provider_id null inherits, and 400s without a default', async () => {
       const pinnedProviderId = await createProvider({
         name: 'mrdefault-unpin-source',
         baseUrl: healthy.baseUrl,
         defaultModel: 'default-healthy-model',
       });
 
-      const discussion = await authenticatedTestClient(userToken)
-        .post('/api/v1/discussions')
+      const agent = await authenticatedTestClient(userToken)
+        .post('/api/v1/agents')
         .send({
           project_id: projectId,
-          name: 'Unpinnable Discussion',
+          name: 'Unpinnable Agent',
           ai_provider_id: pinnedProviderId,
         });
-      expect(discussion.status).toBe(201);
+      expect(agent.status).toBe(201);
 
       const withoutDefault = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/discussions/${discussion.body.id}`)
+        .patch(`/api/v1/agents/${agent.body.id}`)
         .send({ ai_provider_id: null });
       expect(withoutDefault.status).toBe(400);
       expect(withoutDefault.body.error.message).toMatch(/binds neither/);
@@ -760,12 +699,12 @@ describe('Project default model route', () => {
       await setDefault(defaultRouteId);
 
       const withDefault = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/discussions/${discussion.body.id}`)
+        .patch(`/api/v1/agents/${agent.body.id}`)
         .send({ ai_provider_id: null });
       expect(withDefault.status).toBe(200);
       expect(withDefault.body.ai_provider_id).toBeNull();
 
-      trackInheritor('discussions', discussion.body.id);
+      trackInheritor('agents', agent.body.id);
       await clearDefault();
     });
   });

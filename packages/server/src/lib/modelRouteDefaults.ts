@@ -88,7 +88,7 @@ const MAX_INHERITOR_SAMPLE = 5;
 
 /**
  * Consumers in the project that resolve their model through the project default
- * — i.e. that bind neither a provider nor a route. Chats and discussions have no
+ * — i.e. that bind neither a provider nor a route. Chats have no
  * `model_route_id` column (the amendment routes them through the default
  * instead), so for them "binds nothing" is simply a null `aiProviderId`.
  */
@@ -97,7 +97,7 @@ export const findProjectDefaultInheritors = async (args: {
 }): Promise<{ total: number; sample: string[] }> => {
   const { projectId } = args;
 
-  const [agents, chats, discussions] = await Promise.all([
+  const [agents, chats] = await Promise.all([
     db.Agent.findAll({
       where: { projectId, aiProviderId: null, modelRouteId: null },
       attributes: ['publicId'],
@@ -106,13 +106,9 @@ export const findProjectDefaultInheritors = async (args: {
       where: { projectId, aiProviderId: null },
       attributes: ['publicId'],
     }),
-    db.Discussion.findAll({
-      where: { projectId, aiProviderId: null },
-      attributes: ['publicId'],
-    }),
   ]);
 
-  const publicIds = [...agents, ...chats, ...discussions].map((row) => {
+  const publicIds = [...agents, ...chats].map((row) => {
     return row.publicId;
   });
 

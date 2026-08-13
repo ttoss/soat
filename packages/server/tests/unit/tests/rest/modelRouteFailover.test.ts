@@ -10,7 +10,7 @@ import { authenticatedTestClient } from '../../testClient';
 /**
  * End-to-end failover through the real agent generation entry point: the AI SDK
  * runs for real against local OpenAI-compatible stub servers (the
- * `discussionCompletion.test.ts` pattern), so the composite model, the retry
+ * `memoryExtractionCompletion.test.ts` pattern), so the composite model, the retry
  * budget, the tool loop, and the client-tool resumption path all execute exactly
  * as they would against a live provider. Nothing owned is mocked.
  */

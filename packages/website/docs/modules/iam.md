@@ -231,7 +231,7 @@ A statement matches a request when **all** of the following are true:
 
 ## Tags
 
-Tags are key-value pairs attached to resources. They enable attribute-based access control (ABAC) via conditions. Taggable resources include documents, files, actors, conversations, and discussions.
+Tags are key-value pairs attached to resources. They enable attribute-based access control (ABAC) via conditions. Taggable resources include documents, files, actors, and conversations.
 
 ```json
 {

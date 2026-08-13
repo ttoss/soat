@@ -121,7 +121,7 @@ export const priceTokenComponents = (args: {
 
 // Attribution columns an `llm_tokens` event carries. Every one is nullable
 // except the project: an agent generation fills them all, while a chat,
-// discussion, or memory completion — which has no Generation row behind it —
+// or memory completion — which has no Generation row behind it —
 // leaves `generationId`/`traceId` null and still meters identically.
 // `actorId`/`sessionId` are the end-user dimensions: set only where an end user
 // is behind the call, and frozen here at write time like `cost_usd`.

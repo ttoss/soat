@@ -418,7 +418,7 @@ describe('Agent Generation Routes', () => {
     // runToolOutputsGeneration, resolveToolOutputsResult) without mocking
     // db/eventBus/generations or the `ai` package. A local HTTP server
     // stands in for the AI provider — the same pattern used by
-    // discussionCompletion.test.ts — so the real `ai.generateText` call
+    // memoryExtractionCompletion.test.ts — so the real `ai.generateText` call
     // goes over real HTTP to a server we control instead of a live LLM.
     let stubServer: Server;
     let stubBaseUrl: string;

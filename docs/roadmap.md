@@ -64,14 +64,13 @@ route, and the `model_route` formation resource).
 | Evaluations | PRD retired — see the [evaluations module doc](../packages/website/docs/modules/evaluations.md) | ✅ Phases 1–3 shipped (`from-generation` curation dropped — see below) | ~~gates agent-versions P3~~ (satisfied) |
 | Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
 | Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
-| Discussions / reasoning engine | [prd-discussions.md](./prd-discussions.md) | 🟡 Phase 3 remainder + deferred seams | standalone |
 
 ## Implementation dependency graph
 
 Arrow = "needs before it can ship". Only pending nodes are shown; the shipped
 foundations they build on (orchestration runtime, the queue-backed durable
 runtime, usage metering, guardrails, knowledge P1/2/4, memories P1–4, approvals
-P1/P3, discussions core, quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
+P1/P3, quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
 satisfied by shipped work.
 
 ```
@@ -200,7 +199,7 @@ is documented in the
 [model-routes module doc](../packages/website/docs/modules/model-routes.md).
 Two items carry forward:
 
-- [ ] ⏭️ **Deferred — per-consumer `model_route_id` on Chat / Discussion.** The
+- [ ] ⏭️ **Deferred — per-consumer `model_route_id` on Chat.** The
       project default plus explicit pins covers "most consumers routed, some
       pinned"; the column is only needed to run *two different routes in one
       project*. Worth adding when that is actually requested, not before
@@ -228,11 +227,6 @@ Two items carry forward:
   - [ ] Provenance detail in the source tags — `[Memory: …]` should carry the entry ID and `[Document: …]` the page; today only the memory name and document path/filename are emitted
   - [ ] Threat model in the module docs — that extraction runs tool-less, and that retrieved memory content is untrusted input for downstream tool authorization (today only a code comment in `agentKnowledge.ts`)
 - [ ] **Phase 7** Evaluation harness & observability: golden query set, recall@k / MRR, memory benchmarks, injected-context tracing. Baselines are measured against the shipped non-system injection format, which subsumes Phase 6's dropped "no quality regression" criterion
-
-### Discussions / reasoning engine
-
-- [ ] 🟡 **Phase 3** remainder: background pipeline generate (omit `wait` + poll) — depends on the session async mechanism; optional `reasoning.budget` guard (cap total completions per run; today a fixed `MAX_TOTAL_COMPLETIONS=24` engine cap applies)
-- [ ] Deferred Discussion-resource seams: background run, human-in-the-loop participants, `organizer_selects` turn policy, real-Agent participants, orchestration `discussion` node type, webhooks, cancellation/pause states
 
 ## Cross-cutting reconciliations
 
@@ -263,6 +257,51 @@ stays the source of truth:
 - **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in the
   learned-rules and agent-versions PRDs (since retired)~~ — fixed before
   retirement (both cited `GuardrailVersion`).
+
+### Removal: discussions (2026-08)
+
+**Decision: the discussions module is removed at v0 — module surface, models,
+formation resource type, docs, and PRD — rather than carried into v1.**
+
+Deliberation is *how to think*, which the
+[context-composition boundary](#boundary-context-composition) already assigns to
+the consuming application. The module was the one shipped surface on the wrong
+side of that line, and keeping it in v1 would have frozen it into the public
+contract along with its whole deferred trajectory (background runs, budget
+guard, human participants, `organizer_selects`, real-agent participants, an
+orchestration node type, webhooks, cancellation states).
+
+What made removal cheap rather than lossy:
+
+- **The primitives it composed all stay.** An application still builds the same
+  flow from agents, actors, conversations, and documents, and keeps traces,
+  metering, tenancy, and provenance for free — those are platform properties,
+  not module features. The `discussion` *tool type* was already retired earlier
+  in favor of a `soat` tool binding, so agent-side invocation needed no
+  replacement seam.
+- **v0 is the moment it is free.** The test was "would this go into v1 if it did
+  not exist yet?", not "is removal worth the breakage?" — a question that stops
+  being free the day v1 ships.
+
+One shared seam was kept: project-scoped model resolution (a provider pinned on
+the resource, else the project default route) is used by the `llm_judge` scorer
+and now lives in `projectScopedModel.ts` as `resolveProjectScopedModel`.
+
+Two behavior changes fall out, neither security-affecting:
+
+- `search-knowledge` no longer excludes documents under `/discussions/` by
+  default. Nothing writes that path anymore; legacy transcripts in an existing
+  install become ordinary project documents and are searchable within their own
+  project until deleted.
+- The `409 AI_PROVIDER_HAS_DEPENDENTS` meta drops `discussionCount`,
+  `discussionIds`, and `discussionParticipantCount`.
+
+Revisit only as a new, narrowly-scoped initiative if SOAT is asked to own
+deliberation as a *governed* artifact (an auditable, replayable panel record
+that an app provably cannot forge) — the one requirement the app cannot satisfy
+on its own. Do not resurrect the engine on spec; the removed implementation is
+recoverable from git history (`packages/server/src/lib/discussion*.ts` and
+`docs/prd-discussions.md`, removed 2026-08).
 
 ### Boundary: context composition
 
