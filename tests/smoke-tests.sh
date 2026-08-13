@@ -5988,7 +5988,7 @@ if ! printf '%s\n' "$EVAL_TRIGGERED_RUN_ID" | grep -q '^evrun_'; then
   printf '%s\n' "$EVAL_FIRING_RESP" >&2
   exit 1
 fi
-EVAL_TRIGGERED_RUN=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_TRIGGERED_RUN_ID")
+EVAL_TRIGGERED_RUN=$($SOAT_CLI get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_TRIGGERED_RUN_ID")
 if ! printf '%s\n' "$EVAL_TRIGGERED_RUN" | jq -e --arg trg "$EVAL_TRIGGER_ID" \
   '.trigger_id == $trg' >/dev/null 2>&1; then
   echo "ERROR: the triggered run did not record its schedule origin" >&2
@@ -5998,7 +5998,7 @@ fi
 # Stop the background run rather than leaving it mid-flight through the cleanup
 # below; it may already have finished, which cancel rejects.
 set +e
-$SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --run_id "$EVAL_TRIGGERED_RUN_ID" >/dev/null 2>&1
+$SOAT_CLI cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$EVAL_TRIGGERED_RUN_ID" >/dev/null 2>&1
 set -e
 $SOAT_CLI delete-trigger --trigger-id "$EVAL_TRIGGER_ID"
 echo "Scheduled eval trigger: OK"
