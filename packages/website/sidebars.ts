@@ -204,6 +204,15 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Evaluation & Quality',
+      items: [
+        'tutorials/evaluate-an-agent',
+        'tutorials/judge-open-ended-answers',
+        'tutorials/gate-a-canary-promotion-on-an-eval',
+      ],
+    },
+    {
+      type: 'category',
       label: 'Governance & Safety',
       items: [
         'tutorials/gate-a-tool-with-guardrails',
