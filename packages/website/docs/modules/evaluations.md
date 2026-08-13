@@ -278,7 +278,7 @@ only; that is what `wait: false` is for.
 
 Each item becomes one queued task. A worker claims tasks in batches, executes each item, and
 writes its result; the worker that drains the run's **last** task settles the run and fires
-[`eval_run.completed`](#lifecycle-webhooks). Poll `GET /evals/{eval_id}/runs/{run_id}`, or
+[`eval_run.completed`](#lifecycle-webhooks). Poll `GET /evals/{eval_id}/runs/{eval_run_id}`, or
 subscribe to the webhook, to learn the verdict.
 
 Delivery is **at-least-once**, and that is safe without extra bookkeeping: a result row is
@@ -304,7 +304,7 @@ A run that still has queued tasks is left alone; the worker owns it.
 
 ### Canceling a run
 
-`POST /evals/{eval_id}/runs/{run_id}/cancel` drops a queued or running run's outstanding
+`POST /evals/{eval_id}/runs/{eval_run_id}/cancel` drops a queued or running run's outstanding
 tasks — so it stops consuming provider budget on the next tick — and settles it `canceled`.
 A run that has already finished is rejected with `400`.
 
@@ -500,15 +500,15 @@ Run it synchronously and read the per-item results:
 
 ```bash
 soat start-eval-run --eval_id "$EVAL_ID" --wait true
-soat list-eval-results --eval_id "$EVAL_ID" --run_id "$RUN_ID"
+soat list-eval-results --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
 ```
 
 Queue a larger run and poll for the verdict:
 
 ```bash
 soat start-eval-run --eval_id "$EVAL_ID" --wait false   # → status: queued
-soat get-eval-run --eval_id "$EVAL_ID" --run_id "$RUN_ID"
-soat cancel-eval-run --eval_id "$EVAL_ID" --run_id "$RUN_ID"
+soat get-eval-run --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
+soat cancel-eval-run --eval_id "$EVAL_ID" --eval_run_id "$RUN_ID"
 ```
 
 Add an LLM judge alongside a deterministic scorer:

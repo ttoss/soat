@@ -2111,7 +2111,9 @@ describe('MCP tools - happy path', () => {
       spy.mockRestore();
       const runId = parseResult(createRes).id;
 
-      const res = await mcpCall('get-discussion-run', { run_id: runId });
+      const res = await mcpCall('get-discussion-run', {
+        discussion_run_id: runId,
+      });
       expect(res.status).toBe(200);
       const result = parseResult(res);
       expect(result.id).toBe(runId);
@@ -2376,7 +2378,7 @@ describe('MCP tools - happy path', () => {
 
       const res = await mcpCall('cancel-eval-run', {
         eval_id: evalId,
-        run_id: runId,
+        eval_run_id: runId,
       });
 
       expect(res.status).toBe(200);

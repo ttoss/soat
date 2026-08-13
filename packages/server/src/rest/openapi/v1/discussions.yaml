@@ -164,7 +164,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/v1/discussions/runs/{run_id}:
+  /api/v1/discussions/runs/{discussion_run_id}:
     get:
       tags:
         - Discussions
@@ -172,7 +172,7 @@ paths:
       description: Returns a single discussion run, including its outcome, transcript conversation, and outcome document.
       operationId: getDiscussionRun
       parameters:
-        - name: run_id
+        - name: discussion_run_id
           in: path
           required: true
           description: Discussion run ID

@@ -410,32 +410,35 @@ evaluationsRouter.get('/evals/:eval_id/runs', async (ctx: Context) => {
 
 /**
  * @openapi
- * /api/v1/evals/{eval_id}/runs/{run_id}:
+ * /api/v1/evals/{eval_id}/runs/{eval_run_id}:
  *   get:
- *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{run_id}/get'
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{eval_run_id}/get'
  */
-evaluationsRouter.get('/evals/:eval_id/runs/:run_id', async (ctx: Context) => {
-  const projectIds = await requireProjectAccess({
-    ctx,
-    action: 'evaluations:GetEval',
-    resourceType: 'eval',
-  });
+evaluationsRouter.get(
+  '/evals/:eval_id/runs/:eval_run_id',
+  async (ctx: Context) => {
+    const projectIds = await requireProjectAccess({
+      ctx,
+      action: 'evaluations:GetEval',
+      resourceType: 'eval',
+    });
 
-  ctx.body = await getEvalRun({
-    projectIds,
-    evalId: ctx.params.eval_id,
-    runId: ctx.params.run_id,
-  });
-});
+    ctx.body = await getEvalRun({
+      projectIds,
+      evalId: ctx.params.eval_id,
+      runId: ctx.params.eval_run_id,
+    });
+  }
+);
 
 /**
  * @openapi
- * /api/v1/evals/{eval_id}/runs/{run_id}/results:
+ * /api/v1/evals/{eval_id}/runs/{eval_run_id}/results:
  *   get:
- *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{run_id}~1results/get'
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{eval_run_id}~1results/get'
  */
 evaluationsRouter.get(
-  '/evals/:eval_id/runs/:run_id/results',
+  '/evals/:eval_id/runs/:eval_run_id/results',
   async (ctx: Context) => {
     const projectIds = await requireProjectAccess({
       ctx,
@@ -446,7 +449,7 @@ evaluationsRouter.get(
     ctx.body = await listEvalResults({
       projectIds,
       evalId: ctx.params.eval_id,
-      runId: ctx.params.run_id,
+      runId: ctx.params.eval_run_id,
       ...parsePagination(ctx),
     });
   }
@@ -454,12 +457,12 @@ evaluationsRouter.get(
 
 /**
  * @openapi
- * /api/v1/evals/{eval_id}/runs/{run_id}/cancel:
+ * /api/v1/evals/{eval_id}/runs/{eval_run_id}/cancel:
  *   post:
- *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{run_id}~1cancel/post'
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1evals~1{eval_id}~1runs~1{eval_run_id}~1cancel/post'
  */
 evaluationsRouter.post(
-  '/evals/:eval_id/runs/:run_id/cancel',
+  '/evals/:eval_id/runs/:eval_run_id/cancel',
   async (ctx: Context) => {
     const projectIds = await requireProjectAccess({
       ctx,
@@ -470,7 +473,7 @@ evaluationsRouter.post(
     ctx.body = await cancelEvalRun({
       projectIds,
       evalId: ctx.params.eval_id,
-      runId: ctx.params.run_id,
+      runId: ctx.params.eval_run_id,
     });
   }
 );
