@@ -238,6 +238,11 @@ OPENAPI_DRIFT_AUDIT_FILE=/tmp/drift.jsonl pnpm --filter @soat/server test
 # then aggregate /tmp/drift.jsonl (JSONL: {method, template, status, errors[]})
 ```
 
-Known environmental caveat: `rest/files.test.ts` ("user with permission
-receives a token, url and expiry") fails when `SOAT_BASE_URL` is set in the
-environment — unrelated to drift; unset the variable when running locally.
+Known environmental caveat: `SOAT_BASE_URL` must be truly **unset** when
+running the suite locally. Set, it makes the presigned-url assertion in
+`rest/files.test.ts` fail (absolute vs relative `upload_url`); set to an
+empty string (`SOAT_BASE_URL= pnpm …`), it breaks the OAuth issuer
+derivation (`src/oauth/server.ts` uses `?? localhost`, and `''` is defined)
+and the RFC 9728 discovery test in `rest/mcp.test.ts` 404s. Use
+`env -u SOAT_BASE_URL pnpm --filter @soat/server test`. Both are
+environmental, not drift.
