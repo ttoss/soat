@@ -504,7 +504,8 @@ describe('Documents', () => {
         .put(`/api/v1/documents/${tagDocId}/tags`)
         .send({ region: 'us' });
       expect(response.status).toBe(200);
-      expect(response.body.tags).toMatchObject({ region: 'us' });
+      // The response is the tag map itself, not the document resource.
+      expect(response.body).toEqual({ region: 'us' });
     });
 
     test('PATCH tags merges into existing tags', async () => {
@@ -516,6 +517,9 @@ describe('Documents', () => {
         .patch(`/api/v1/documents/${tagDocId}/tags`)
         .send({ version: '2' });
       expect(response.status).toBe(200);
+      // The response is the merged tag map itself, not the document resource.
+      expect(response.body).toMatchObject({ version: '2' });
+      expect(response.body.id).toBeUndefined();
     });
 
     test('unauthenticated GET tags returns 401', async () => {

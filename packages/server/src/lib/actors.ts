@@ -405,5 +405,6 @@ export const updateActorTags = async (args: {
   });
   await actor.update({ tags: newTags });
 
-  return mapActor(await actors.reload(actor));
+  // The tag routes' contract is the tag map itself, not the actor resource.
+  return newTags;
 };

@@ -1087,6 +1087,8 @@ describe('Conversations', () => {
         .put(`/api/v1/conversations/${conversationId}/tags`)
         .send({ env: 'prod' });
       expect(response.status).toBe(200);
+      // The response is the tag map itself, not the conversation resource.
+      expect(response.body).toEqual({ env: 'prod' });
     });
 
     test('returns 401 for unauthenticated request', async () => {
@@ -1129,6 +1131,10 @@ describe('Conversations', () => {
         .patch(`/api/v1/conversations/${conversationId}/tags`)
         .send({ source: 'api' });
       expect(response.status).toBe(200);
+      // The response is the merged tag map itself, not the conversation resource.
+      expect(response.body).toMatchObject({ source: 'api' });
+      expect(response.body.env).toBeDefined(); // pre-existing tag preserved
+      expect(response.body.id).toBeUndefined();
     });
 
     test('returns 401 for unauthenticated request', async () => {

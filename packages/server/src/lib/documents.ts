@@ -483,5 +483,6 @@ export const updateDocumentTags = async (args: {
     data: tagsMapped,
   });
 
-  return tagsMapped;
+  // The tag routes' contract is the tag map itself, not the document.
+  return newTags;
 };

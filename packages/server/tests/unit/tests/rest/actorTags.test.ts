@@ -111,6 +111,11 @@ describe('ActorTags', () => {
         .send({ environment: 'production', tier: 'premium' });
 
       expect(response.status).toBe(200);
+      // The response is the tag map itself, not the actor resource.
+      expect(response.body).toEqual({
+        environment: 'production',
+        tier: 'premium',
+      });
     });
 
     test('PUT replaces all existing tags', async () => {
@@ -166,6 +171,8 @@ describe('ActorTags', () => {
         .send({ newkey: 'newvalue' });
 
       expect(response.status).toBe(200);
+      // The response is the merged tag map itself, not the actor resource.
+      expect(response.body).toEqual({ existing: 'value', newkey: 'newvalue' });
     });
 
     test('PATCH preserves existing tags when merging', async () => {

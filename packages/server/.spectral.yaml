@@ -1,1 +1,12 @@
 extends: ["spectral:oas", "spectral:asyncapi", "spectral:arazzo"]
+overrides:
+  # The `*ResourceProperties` schemas in formations.yaml are not referenced by
+  # any path: they are loaded by name at runtime (formationSpecLoader.ts) as
+  # the allowlist for formation-template validation, derived from each
+  # resource type (`model_route` → `ModelRouteResourceProperties`). The wire
+  # schema deliberately declares `ResourceDeclaration.properties` free-form
+  # (templates carry ref/param/sub substitution expressions), so these
+  # schemas are "unused" only from the spec-graph point of view.
+  - files: ["src/rest/openapi/v1/formations.yaml"]
+    rules:
+      oas3-unused-component: "off"

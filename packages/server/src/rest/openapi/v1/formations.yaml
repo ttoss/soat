@@ -1774,39 +1774,21 @@ components:
             - workflow
           description: Resource type
         properties:
-          oneOf:
-            - $ref: '#/components/schemas/AgentResourceProperties'
-            - $ref: '#/components/schemas/ActorResourceProperties'
-            - $ref: '#/components/schemas/AiProviderResourceProperties'
-            - $ref: '#/components/schemas/ToolResourceProperties'
-            - $ref: '#/components/schemas/ApiKeyResourceProperties'
-            - $ref: '#/components/schemas/ChatResourceProperties'
-            - $ref: '#/components/schemas/DatasetResourceProperties'
-            - $ref: '#/components/schemas/DatasetItemResourceProperties'
-            - $ref: '#/components/schemas/EvalResourceProperties'
-            - $ref: '#/components/schemas/ConversationResourceProperties'
-            - $ref: '#/components/schemas/DocumentResourceProperties'
-            - $ref: '#/components/schemas/FileResourceProperties'
-            - $ref: '#/components/schemas/GuardrailResourceProperties'
-            - $ref: '#/components/schemas/IngestionRuleResourceProperties'
-            - $ref: '#/components/schemas/MemoryResourceProperties'
-            - $ref: '#/components/schemas/MemoryEntryResourceProperties'
-            - $ref: '#/components/schemas/ModelRouteResourceProperties'
-            - $ref: '#/components/schemas/OrchestrationResourceProperties'
-            - $ref: '#/components/schemas/PolicyResourceProperties'
-            - $ref: '#/components/schemas/ProjectPriceResourceProperties'
-            - $ref: '#/components/schemas/QuotaResourceProperties'
-            - $ref: '#/components/schemas/SecretResourceProperties'
-            - $ref: '#/components/schemas/SessionResourceProperties'
-            - $ref: '#/components/schemas/WebhookResourceProperties'
-            - $ref: '#/components/schemas/TriggerResourceProperties'
-            - $ref: '#/components/schemas/WorkflowResourceProperties'
+          type: object
+          additionalProperties: true
           description: >
-            Resource properties. Values may use `{ "ref": "logicalId" }` to
-            reference physical IDs of other resources in the template,
-            `{ "param": "ParamName" }` to substitute a parameter value, or
-            `{ "sub": "text ${ParamName}" }` to interpolate parameter values
-            into a string.
+            Resource properties, as authored in the template and echoed back
+            verbatim. The allowed fields, required fields, and field types for
+            each resource `type` are defined by the corresponding
+            `<Type>ResourceProperties` schema in this document (e.g.
+            `model_route` → `ModelRouteResourceProperties`), which the server
+            enforces at validate/deploy time. The declaration itself is
+            free-form here because property values may be substitution
+            expressions rather than final values: `{ "ref": "logicalId" }`
+            references another resource's physical ID,
+            `{ "param": "ParamName" }` substitutes a parameter value, and
+            `{ "sub": "text ${ParamName}" }` interpolates parameters into a
+            string.
         depends_on:
           type: array
           items:

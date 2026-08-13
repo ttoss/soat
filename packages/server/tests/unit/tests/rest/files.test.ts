@@ -1113,7 +1113,8 @@ describe('Files', () => {
         .put(`/api/v1/files/${taggedFileId}/tags`)
         .send({ env: 'prod', version: '1' });
       expect(response.status).toBe(200);
-      expect(response.body.tags).toEqual({ env: 'prod', version: '1' });
+      // The response is the tag map itself, not the file resource.
+      expect(response.body).toEqual({ env: 'prod', version: '1' });
     });
 
     test('returns 401 for unauthenticated request', async () => {
@@ -1160,7 +1161,8 @@ describe('Files', () => {
         .patch(`/api/v1/files/${taggedFileId}/tags`)
         .send({ version: '2' });
       expect(response.status).toBe(200);
-      expect(response.body.tags).toEqual({ env: 'test', version: '2' });
+      // The response is the merged tag map itself, not the file resource.
+      expect(response.body).toEqual({ env: 'test', version: '2' });
     });
 
     test('returns 401 for unauthenticated request', async () => {

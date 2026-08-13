@@ -1,6 +1,13 @@
+import { appendFileSync } from 'node:fs';
+
 import { Ajv, type ErrorObject, type ValidateFunction } from 'ajv';
 import addFormats from 'ajv-formats';
 import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
+
+// Audit mode: validate EVERY response against its full schema and append
+// violations to the given JSONL file instead of throwing. Used to enumerate
+// the pre-existing spec drift; never set in CI.
+const AUDIT_FILE = process.env.OPENAPI_DRIFT_AUDIT_FILE;
 
 /**
  * OpenAPI ↔ server response contract validator.
@@ -9,20 +16,21 @@ import { getMergedOpenApiSpec, matchOpenApiPath } from 'src/lib/openapiSpec';
  * {@link testClient} are checked against the OpenAPI schema for their
  * `(path, method, status)` so the shapes issue #661 governs cannot drift again.
  *
- * Enforcement scope (deliberately narrow):
- * - **List endpoints** — validated against the shared envelope contract
- *   `{ data: [], total, limit, offset }` (top level only; item shapes are left to
- *   each endpoint's own assertions).
- * - **`AgentGenerationResponse`** — the two agent generation routes are validated
- *   against the full (now-corrected) schema (Bug 2).
- * - **Everything else is skipped.** A first attempt validated *every* response
- *   against its full schema and surfaced ~1900 failures rooted in pervasive
- *   PRE-EXISTING spec drift across the whole API (e.g. nullable-in-practice
- *   fields typed as non-nullable `string`), cascading through shared fixtures.
- *   That burn-down is real but out of scope for #661; tightening this validator
- *   to the full surface (and `additionalProperties: false`) is a follow-up.
+ * Enforcement scope (full surface since the 2026-08 drift burn-down —
+ * see docs/spec-drift-audit.md):
+ * - **Every documented `(path, method, status)` JSON schema** is enforced on
+ *   every response a `rest/` test produces. The pre-existing drift (~1900 raw
+ *   failures at the time of #661) was enumerated and burned down before this
+ *   was switched on; a mapper or spec change that reintroduces drift now
+ *   fails the suite with the field named. `additionalProperties: false`
+ *   (rejecting undeclared response keys) remains a follow-up.
+ * - **List endpoints** are additionally validated against the synthesized
+ *   envelope contract `{ data: [], total, limit, offset }`, which asserts
+ *   `required` — the list schemas themselves do not.
  * - Only `application/json` responses under `/api/v1` are considered;
  *   `/openapi.json` and `/mcp` (which bypass caseTransform) are excluded.
+ * - With `OPENAPI_DRIFT_AUDIT_FILE` set, violations are appended as JSONL
+ *   instead of thrown — the enumeration mode used for the burn-down.
  */
 
 const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete']);
@@ -98,7 +106,7 @@ const sanitizeSchema = (node: unknown): unknown => {
 };
 
 let ajv: Ajv | null = null;
-const validatorCache = new Map<string, ValidateFunction | null>();
+const validatorCache = new Map<string, ValidateFunction[]>();
 
 // The whole merged spec is registered under this base id so a response schema's
 // internal `$ref: '#/components/schemas/X'` resolves against the spec root.
@@ -180,14 +188,6 @@ const isEnvelopeSchema = (schema: Record<string, unknown>): boolean => {
   );
 };
 
-/** The `AgentGenerationResponse` schema (issue #661 Bug 2). */
-const isAgentGenerationSchema = (schema: Record<string, unknown>): boolean => {
-  return (
-    typeof schema.$ref === 'string' &&
-    schema.$ref.endsWith('/AgentGenerationResponse')
-  );
-};
-
 let envelopeValidator: ValidateFunction | null = null;
 const getEnvelopeValidator = (): ValidateFunction => {
   if (!envelopeValidator) {
@@ -197,27 +197,27 @@ const getEnvelopeValidator = (): ValidateFunction => {
 };
 
 /**
- * Returns a validator ONLY for the operations this PR governs — every list
- * endpoint (validated against the envelope contract) and the two agent
- * generation routes (`AgentGenerationResponse`). Every other `(path, method,
- * status)` returns `null` (skipped), deliberately leaving the wider API's
- * pre-existing spec drift for a separate burn-down.
+ * Returns the validators for a `(path, method, status)`: the full documented
+ * response schema (full-surface enforcement — every documented JSON response
+ * is validated since the 2026-08 drift burn-down), plus, for list endpoints,
+ * the synthesized envelope contract. The envelope check is kept alongside the
+ * full schema because it asserts `required` on data/total/limit/offset, which
+ * the list schemas themselves do not declare — dropping it would weaken the
+ * #661 guarantee.
  */
-const getResponseValidator = (args: {
+const getResponseValidators = (args: {
   template: string;
   method: string;
   status: number;
-}): ValidateFunction | null => {
+}): ValidateFunction[] => {
   const cacheKey = `${args.method} ${args.template} ${args.status}`;
   const cached = validatorCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
   const schema = getRawResponseSchema(args);
-  let validator: ValidateFunction | null = null;
+  const validators: ValidateFunction[] = [];
 
-  if (schema && isEnvelopeSchema(schema)) {
-    validator = getEnvelopeValidator();
-  } else if (schema && isAgentGenerationSchema(schema)) {
+  if (schema) {
     // Reference the schema inside the registered spec so its nested
     // `#/components/...` refs resolve against the same document.
     const pointer = [
@@ -230,11 +230,15 @@ const getResponseValidator = (args: {
       escapePointerToken('application/json'),
       'schema',
     ].join('/');
-    validator = getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` });
+    validators.push(getAjv().compile({ $ref: `${SPEC_ID}#/${pointer}` }));
+
+    if (isEnvelopeSchema(schema)) {
+      validators.push(getEnvelopeValidator());
+    }
   }
 
-  validatorCache.set(cacheKey, validator);
-  return validator;
+  validatorCache.set(cacheKey, validators);
+  return validators;
 };
 
 const formatErrors = (errors: ErrorObject[] | null | undefined): string => {
@@ -280,15 +284,33 @@ export const assertResponseMatchesSpec = (args: {
   const template = matchOpenApiPath({ path: args.path.split('?')[0] });
   if (!template) return;
 
-  const validator = getResponseValidator({
+  const validators = getResponseValidators({
     template,
     method,
     status: args.status,
   });
-  if (!validator) return;
 
-  const valid = validator(args.body);
-  if (!valid) {
+  for (const validator of validators) {
+    if (validator(args.body)) continue;
+
+    if (AUDIT_FILE) {
+      const record = {
+        method: method.toUpperCase(),
+        template,
+        status: args.status,
+        errors: (validator.errors ?? []).map((e) => {
+          return {
+            instancePath: e.instancePath,
+            keyword: e.keyword,
+            message: e.message,
+            params: e.params,
+          };
+        }),
+      };
+      appendFileSync(AUDIT_FILE, `${JSON.stringify(record)}\n`);
+      continue;
+    }
+
     throw new Error(
       `OpenAPI contract violation: ${method.toUpperCase()} ${template} → ${
         args.status
