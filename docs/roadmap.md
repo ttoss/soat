@@ -1,376 +1,228 @@
-# SOAT Delivery Roadmap — Pending Backlog
+# SOAT v1 Roadmap
 
-The **single** roadmap for the platform's *remaining* work: what is still
-pending and what depends on what across every PRD in this directory. Shipped
-functionality has been removed from this page and from the PRDs — the live
-behavior is documented in the website module docs
-(`packages/website/docs/modules/`). This page owns sequencing and the complete
-pending backlog.
+The single roadmap for shipping **SOAT v1**. It defines what must land before
+the v1 release candidate (RC), what ships in v1 point releases after the RC,
+and what is explicitly post-v1. Shipped functionality is not tracked here —
+live behavior is documented in the website module docs
+(`packages/website/docs/modules/`).
 
-> **This is the only roadmap.** Sequencing lives here, not in the PRDs. The
-> [pending backlog](#pending-backlog) below is the authoritative list of every
-> open item.
+> **This is the only roadmap.** Sequencing lives here, not in the PRDs
+> ([prd-memories.md](./prd-memories.md), [prd-knowledge.md](./prd-knowledge.md)).
+
+## The v1 test
+
+v1 freezes the public contract: REST bodies and fields, the OpenAPI specs (and
+with them the SDK, CLI, and MCP tool surfaces), and the durability of stored
+data. The gate for RC-blocking work is therefore not "is it valuable?" but:
+
+> **Can this be added after v1 without breaking the frozen contract or losing
+> data that cannot be backfilled?**
+
+Only items that fail that test block the RC. Everything additive — new
+endpoints, new optional parameters, internal ranking or pipeline changes —
+ships after.
 
 ## Legend
 
 | Marker | Meaning |
 |--------|---------|
-| ❌ | Not started |
-| 🟡 | Partially shipped (core landed; phases remaining) |
-| ⏭️ | Deferred (blocked on an unbuilt dependency) |
+| 🔴 | RC blocker — must land before the v1 RC is cut |
+| 🟠 | v1.x — ships in a point release after the RC |
+| ⏭️ | Post-v1 / deferred — gated on demand or on another initiative |
 
-## Initiatives at a glance
+---
 
-### Agent Operations on Formations (G1–G6)
+## 🔴 RC blockers
 
-The Agent Operations gap series (G1–G6) turns a Formation deploy into an
-*operating* agent team — schedules, guardrails, approval queues, and cost
-meters, not just static agent topology. Only initiatives with open work are
-listed. G1 (schedule triggers), G2 (queue-backed runs), G4 (guardrails), and
-G5 (usage metering) are fully shipped and have no remaining items. The
-umbrella PRD and the per-gap PRDs have been retired in favor of
-the [orchestrations module doc](../packages/website/docs/modules/orchestrations.md#durable-background-execution),
-the [approvals](../packages/website/docs/modules/approvals.md) / [exceptions](../packages/website/docs/modules/exceptions.md) / [activity](../packages/website/docs/modules/activity.md)
-module docs, and the [usage module doc](../packages/website/docs/modules/usage.md);
-G3's and G5's remaining deferred items are kept in the
-[backlog](#g3--approvals-exceptions--activity) below.
+### RC-1 — Memory entry provenance (Memories Phase 5c)
 
-| G | Initiative | PRD | Remaining |
-|---|-----------|-----|-----------|
-| G3 | Approvals · exceptions · activity | _retired_ — [approvals](../packages/website/docs/modules/approvals.md) · [exceptions](../packages/website/docs/modules/exceptions.md) · [activity](../packages/website/docs/modules/activity.md) | ✔ every deliverable shipped (`5.4` guard context and the `action_executed` agent-generation coverage closed 2026-07). Phase 5 approver targeting and in-channel approval clients remain deferred by design, no demand signal yet — see the [G3 backlog](#g3--approvals-exceptions--activity) |
-| G6 | Learned-rules feedback loop | _retired_ — see [Deferral: learned rules](#deferral-learned-rules) | ⏭️ Deferred — recurrence view folded into G3 |
+`sourceGenerationId` / `sourceConversationId` on `MemoryEntry`, populated by
+the `write_memory` tool and the extraction write path, exposed as
+`source_generation_id` / `source_conversation_id`.
 
-### Adjacent / standalone module PRDs
+**Why it blocks:** provenance cannot be backfilled — every entry created by a
+v1 user before this lands is permanently unauditable
+([prd-memories.md 5c](./prd-memories.md#5c--provenance): "ships early on
+purpose"). Small change: two nullable FK columns plus mapper/spec/docs updates.
 
-Only PRDs with open work are listed. Four initiatives are fully shipped and
-their PRDs have been retired — the live behavior lives in the module docs:
-[quotas](../packages/website/docs/modules/quotas.md) (request/token/cost
-quotas, the `QUOTA_EXCEEDED` / `429` contract, monitor mode with its
-[breach audit entry](../packages/website/docs/modules/quotas.md#monitor-mode),
-the `quota.exceeded` webhook, and the `quota` formation resource),
-[audit-log](../packages/website/docs/modules/audit-log.md) (the read-auditing
-flag, the `audit.entry_created` webhook, and the per-project NDJSON export),
-[usage](../packages/website/docs/modules/usage.md) (the event + component model,
-price book, receipts, aggregation, thresholds, every LLM path metered, the
-compute/storage/request dimensions, and the `soat.usage.*` spend guards), and
-[model-routes](../packages/website/docs/modules/model-routes.md) (ordered
-provider failover through a composite model, error classification, the
-in-process circuit breaker, `routing` generation metadata, the project default
-route, and the `model_route` formation resource).
+### RC-2 — Temporal invalidation schema + API shape (Memories Phase 5b)
 
-| Initiative | PRD | Remaining | Tie |
-|-----------|-----|-----------|-----|
-| Agent versions & staged rollout | PRD retired — see the [agents module doc](../packages/website/docs/modules/agents.md#versioning-and-staged-rollout) | ✅ Phases 1–3 shipped | umbrella (no G#) |
-| Evaluations | PRD retired — see the [evaluations module doc](../packages/website/docs/modules/evaluations.md) | ✅ Phases 1–3 shipped (`from-generation` curation dropped — see below) | ~~gates agent-versions P3~~ (satisfied) |
-| Memories | [prd-memories.md](./prd-memories.md) | 🟡 Phase 5 partial; 6–9 remain | data plane |
-| Knowledge (retrieval surface) | [prd-knowledge.md](./prd-knowledge.md) | 🟡 Phases 3,5,7 remain (P6 injection hardening shipped) | data plane |
+`invalidatedAt` + `supersededByEntryId` columns on `MemoryEntry`; the
+`superseded` value in the write endpoint's `action` enum; the
+`include_invalidated` query parameter on entry listing; invalidated entries
+excluded from knowledge search, extraction dedup, and default listing.
 
-## Implementation dependency graph
+**Why it blocks:** the columns share RC-1's backfill problem (supersede history
+for the pre-v1 period is unrecoverable), and the API shape (`action` values,
+`include_invalidated`) belongs in the frozen v1 contract rather than being
+bolted on later. The **LLM arbitration that populates it (5a) does not block**
+— it is internal write behavior and ships as v1.x (see below).
 
-Arrow = "needs before it can ship". Only pending nodes are shown; the shipped
-foundations they build on (orchestration runtime, the queue-backed durable
-runtime, usage metering, guardrails, knowledge P1/2/4, memories P1–4, approvals
-P1/P3, quotas, audit-log P1) are omitted. A `✔` marks a dependency that is already
-satisfied by shipped work.
+### RC-3 — Pin knowledge search `score` semantics as implementation-defined
 
-```
-cross-initiative ──────────────────────────────────────────────────────────
-  evaluations P2 (async) ✔ ◄── evaluations P1 ✔ + createSweep/createScheduler ✔
-  memories P6 (entity graph) ◄──► knowledge P3 (entity queries)
-  knowledge P5/P7 (ranking, evals)          [P6 injection hardening ✔ shipped]
+A docs/spec-only change. Knowledge Phase 5 will replace the raw-cosine `score`
+with an RRF-fused value and recalibrate `min_score` defaults; if v1 documents
+`score` as cosine similarity, that later change is a semantic break of a frozen
+field.
 
-feedback + governance loops ────────────────────────────────────────────────
-  approvals recurrence view (G3) ✔ ◄── approvals ✔ (dedup_key + previous_item_id chains)
-  learned-rules ⏭️ deferred ◄── recurrence-view demand + evaluations P1 (efficacy gate)
-  agent-versions P3 (eval-gated promotion) ✔ ◄── evaluations P1 ✔
-  approvals P4 (activity feed) ✔ ◄── audit-log (substrate) + guardrails (A/B labels)
-```
+**Deliverable:** the OpenAPI spec and the knowledge module doc describe `score`
+as an implementation-defined relevance ranking (higher is better, ordering is
+the contract, absolute values are not), with `similarity` reserved for raw
+cosine. `min_score` documented against `score` under the same caveat. No code.
 
-### Edge reference
+### RC-4 — Knowledge injection threat model in the module docs
 
-| Depends on | … to unblock | Why |
-|-----------|--------------|-----|
-| createSweep / createScheduler ✔ | evaluations P2 ✔ | async eval runs claim their own `EvalRunTask` queue on the shared poller seam — not `orchestration_run_tasks`, whose claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold |
-| knowledge P3 ◄──► memories P6 | each other | knowledge owns entity *queries*; memories owns entity *data* + extraction |
-| approvals ✔ | approvals recurrence view (G3) ✔ | rolls up `dedup_key` chains + rejection reasons already persisted on `ApprovalItem` |
-| recurrence-view demand + evaluations P1 | learned-rules ⏭️ | semantic clustering + soft rules build only if the exact-key view proves demand and evals can measure rule efficacy |
-| evaluations P1 ✔ | agent-versions P3 ✔ | eval verdict is the promotion gate |
-| audit-log + guardrails ✔ | approvals P4 (activity feed) ✔ | feed labels autonomous class-A/B actions on the audit substrate |
+Move the security rationale out of the code comment in `agentKnowledge.ts` and
+into the module docs: extraction runs tool-less, and retrieved memory content
+is untrusted input for downstream tool authorization. A v1 user must be able to
+read the platform's injection posture without reading source. (Second tail of
+Knowledge Phase 6; the enforcement itself shipped.)
 
-## Recommended build order
+### RC-5 — Provenance detail in injected source tags
 
-1. ~~**Usage metering (G5)**~~ — **fully shipped**: every LLM path metered, the
-   compute/storage/request dimensions, and the `soat.usage.*` spend guards
-   (project windows and per-run ceilings).
-2. ~~**Audit log**~~ — **fully shipped** (P2 selective-write of
-   decision-changing guardrail evaluations, P3 read-auditing flag +
-   `audit.entry_created` webhook, and the per-project NDJSON export).
-   **Evaluations P1 and P2** are now shipped — datasets, evals, synchronous and
-   queued runs, all five scorers including `llm_judge`, baseline deltas over the
-   item intersection, `eval_run.completed`/`.failed` webhooks, cancellation, a
-   lease reaper, and `source: eval` / `eval_judge` spend attribution — so the
-   promotion gate's substrate and its event are both in place.
-   **`from-generation` trace curation** was dropped (2026-08 decision, option C
-   of the forwarded question): operators curate client-side via the ordinary
-   item-create route. Persisting generation content to power a server-side
-   route is a privacy-class call, revisited only if operators are observed
-   hand-rolling trace-scraping scripts to build datasets.
-3. ~~**Agent-versions**~~ — **fully shipped**: append-only config history with
-   restore, the deterministic stable/canary split with the served version
-   stamped on every generation, and **P3 (eval-gated promotion)** — a release's
-   `promotion_gate` names an eval, `promote` answers `409 PROMOTION_GATE_UNMET`
-   until that eval has a passing run pinned to the canary version, and the run
-   that cleared it is recorded on the promoted version.
-4. ~~**Approvals recurrence view (G3)**~~ — **shipped**: the read-only feedback
-   surface whose usage is the demand gate for the deferred learned-rules module.
-   ~~**Approvals P3/P4 (exceptions + activity feed)**~~ — **shipped**.
-5. ~~**Model-routing** as hardening~~ — **fully shipped** (CRUD + composite
-   fallback executor, circuit breaker + streaming + `routing` metadata, and the
-   project default route with every consumer routed).
+`[Memory: …]` tags carry the entry ID and `[Document: …]` tags carry the page,
+not just the memory name and document path/filename. Grouped with the RC
+because the rendered `<knowledge>` block format is documented verbatim in the
+agents module doc — a v1 consumer may reasonably parse it, so changing the tag
+format later is friction that is trivial to avoid now. (First tail of Knowledge
+Phase 6.)
 
-## Pending backlog
+### RC checklist
 
-Every open item across all PRDs. Grouped by initiative; task IDs (e.g. `4.1`)
-are preserved from the former topic roadmaps. Blockers are noted inline.
+- [ ] RC-1 Memory entry provenance (5c)
+- [ ] RC-2 Temporal invalidation schema + `superseded` / `include_invalidated` API shape (5b)
+- [ ] RC-3 `score` documented as implementation-defined
+- [ ] RC-4 Threat model in module docs
+- [ ] RC-5 Entry-ID / page provenance in source tags
 
-### G3 — Approvals (exceptions · activity)
+Suggested order: RC-1 and RC-2 together (one migration, one spec/docs pass over
+the memories module), then RC-5, then RC-3 and RC-4 (docs-only) in one PR.
 
-✅ **Shipped**, PRD retired; live behavior is documented in the
-[approvals](../packages/website/docs/modules/approvals.md) /
-[exceptions](../packages/website/docs/modules/exceptions.md) /
-[activity](../packages/website/docs/modules/activity.md) module docs. Two items
-remain deferred by design, with no demand signal yet:
+---
 
-- [ ] **Phase 5** Approver targeting & assignment — optional `approver_policy` / `assignees` on the approval node or tool binding, routing specific items to specific humans. Deferred until real demand; nothing in the shipped queue blocks it
-- [ ] In-channel approval clients (WhatsApp/Slack) over the queue — surface items, and let humans resolve them, inside conversational channels rather than only through the queue UI/API. The substrate they build on is settled: continuation is platform-automatic (the decision is persisted and its lifecycle webhook emitted first, then the continuation fires fire-and-forget), so a channel client observes through the webhook and gets a notification, not a control point. If a client ever needs client-controlled continuation timing (defer/batch), that extension is scoped **here**, not in the core loop. Live behavior in the [approvals module docs](../packages/website/docs/modules/approvals.md)
+## 🟠 v1.x — after the RC, inside the v1 line
 
-### G5 — Usage metering
-
-✅ **Shipped.** The initiative is complete and its PRD retired; live behavior is
-documented in the [usage module doc](../packages/website/docs/modules/usage.md).
-One refinement remains open:
-
-- [ ] **Event-driven storage byte accounting** — replace the daily storage
-      snapshot with incremental byte deltas on file/document mutation,
-      eliminating the intra-day sampling drift the snapshot accepts
-
-### G6 — Learned rules — ⏭️ Deferred
-
-_Deferred (2026-07) — see [Deferral: learned rules](#deferral-learned-rules).
-Exact-key recurrence surfacing moved to G3 (approvals recurrence view). What
-remains here builds only if the recurrence view proves demand **and**
-evaluations P1 exists to measure rule efficacy (that gate is satisfied; the
-demand gate is the one still open)._
-
-- [ ] ⏭️ Semantic (embedding) clustering of paraphrased corrections (`CandidateRule` capture + nearest-neighbor recurrence)
-- [ ] ⏭️ Promotion lifecycle + `LearnedRule` (human-curated; `candidate → promoted | dismissed`)
-- [ ] ⏭️ Scoped rule listing API (`global` / `project`) so the consuming app can fetch active rules to inject
-
-### Agent versions
-
-_Fully shipped (`agentVersions.ts`, `releaseAssignment.ts`,
-`agentServedVersion.ts`, `agentPromotionGate.ts`) and the PRD retired; live
-behavior is documented in the
-[agents module doc](../packages/website/docs/modules/agents.md#versioning-and-staged-rollout)._
-
-- [x] ~~**Phase 1** Version snapshots + list/get/restore~~ — **shipped**: `AgentVersion` model + snapshot-on-write hook; `version` column on Agent; restore is append-only
-- [x] ~~**Phase 2** Releases + deterministic canary~~ — **shipped**: `active_release` (stable/canary split, per-actor deterministic assignment); served-version stamping (`agent_version` in generation metadata); promote / abort endpoints
-- [x] ~~**Phase 3** Eval-gated promotion (`promotion_gate`)~~ — **shipped**: gate on the release, `409 PROMOTION_GATE_UNMET` until a `passed` run pinned to the canary version exists, `eval_run_id` recorded on the promoted version
-
-### Evaluations
-
-_Phases 1–3 shipped and the PRD retired (`evaluations.ts`, `evaluationDatasets.ts`,
-`evaluationRuns.ts`, `evaluationRunExecution.ts`, `evaluationScorers.ts`,
-`evaluationJudge.ts`, `evaluationDeltas.ts`, `evaluationQueue.ts`,
-`evaluationWorker.ts`, `evaluationEvents.ts`, the `eval` trigger target, and the
-`dataset` / `dataset_item` / `eval` formation modules); live behavior is documented in the
-[evaluations module doc](../packages/website/docs/modules/evaluations.md)._
-
-- [x] ~~**Phase 1** Datasets + evals + sync deterministic runs~~ — **shipped**: `Dataset`/`DatasetItem`, `Eval` config, `EvalRun`/`EvalResult`; deterministic scorers (`exact_match`, `contains`, `json_logic`, `output_schema`); sync capped-item execution (`wait: true`, 25-item cap); run-level version pinning; frozen per-result item snapshots; generation-purge cascade to `EvalResult.output`
-- [x] ~~**Phase 2** `llm_judge` scorer; async execution; baseline **deltas**; `source: eval` usage attribution; a lease reaper for runs abandoned mid-flight~~ — **shipped**, plus `eval_run.completed`/`.failed` webhooks, `cancel`, and an atomic finalize claim so the completion event fires exactly once. Async runs use a dedicated `EvalRunTask` queue on the shared `createSweep`/`createScheduler` seam rather than `orchestration_run_tasks` — that table's claim joins through `orchestration_runs`, so the "leases and limits come for free" premise did not hold
-- [x] ~~Curate dataset items from traces/generations (`from-generation`)~~ — **dropped** (2026-08 owner decision): operators curate client-side and `POST` the copy through the ordinary item-create route; `source_generation_id` provenance is caller-asserted. Neither a generation's input messages nor its output text is persisted in a platform-owned shape (both live only in the AI SDK `steps` blob on the trace's file), so a server-side route would need either a reader of that provider-shaped blob (empty for zero-retention/purged generations) or a new content column holding end-user prompts. Revisit — as an opt-in, per-project retention flag — only if operators are observed hand-rolling trace-scraping scripts to build datasets
-- [x] ~~**Phase 3** Scheduled evals (cron triggers) + `eval` formation resource type~~ — **shipped**: `eval` is a trigger target (gated on `evaluations:RunEval`, always starting a **queued** run so a cron tick never blocks on a whole dataset) and the run records its origin in `EvalRun.trigger_id`; `dataset`, `dataset_item`, and `eval` are formation resource types. The item type is an addition to the sketch — a dataset with no items cannot run, and declaring items *inside* the dataset would make an apply delete API-curated fixtures
-- [x] ~~Webhook events (`eval_run.completed` / `.failed`)~~ — **shipped** with Phase 2, carrying `{eval_id, eval_run_id, passed, aggregate_scores}` inline: the promotion-gate event agent-versions P3 consumes
-
-### Model routing
-
-✅ **Shipped.** All three phases are complete and the PRD retired; live behavior
-is documented in the
-[model-routes module doc](../packages/website/docs/modules/model-routes.md).
-Two items carry forward:
-
-- [ ] ⏭️ **Deferred — per-consumer `model_route_id` on Chat.** The
-      project default plus explicit pins covers "most consumers routed, some
-      pinned"; the column is only needed to run *two different routes in one
-      project*. Worth adding when that is actually requested, not before
-- [ ] **Accepted gap — a failed attempt that burned tokens is not metered.**
-      Visible rather than silent (`routing.attempts` names every failed attempt
-      on the generation); closing it needs usage data provider error responses
-      do not carry. Revisit only if a provider starts returning usage on error
+All additive; none changes a frozen field or loses data by waiting.
 
 ### Memories
 
-- [ ] 🟡 **Phase 5** Write algorithm v2 (LLM-arbitrated, temporal) — LLM merge-consolidation shipped; manual REST writes still concatenate:
-  - [ ] `5a` top-K shortlist + LLM decision (add / update / supersede / skip)
-  - [ ] `5b` temporal invalidation (`invalidatedAt` + `supersededByEntryId`; contradictions retire old facts)
-  - [ ] `5c` entry provenance (`sourceGenerationId` / `sourceConversationId`)
-- [ ] **Phase 6** Entity graph layer: `MemoryEntity` (`mey_`) + `MemoryEntityEdge`; async entity extraction on write; `resolveEntitySearch()` (query surface ↔ **Knowledge Phase 3**)
-- [ ] **Phase 7** Extraction coverage for streaming and `requires_action` completions
-- [ ] **Phase 8** Forgetting: importance scoring, access tracking, retrieval-time recency blend, compaction
-- [ ] **Phase 9** Profile memory (always-injected bounded blocks, agent-editable)
+- [ ] **5a — LLM-arbitrated write decision.** Top-K shortlist +
+      add/update/supersede/skip arbitration; v1 fallback semantics on LLM
+      failure; consolidation for the manual REST write path. Internal write
+      behavior on top of the RC-2 schema — the `action` enum already includes
+      `superseded`, so no contract change.
+- [ ] **Phase 7 — extraction coverage for streaming and `requires_action`
+      completions.** No API change, but the passive-memory pipeline currently
+      misses streaming (the dominant production transport) — the highest-value
+      post-RC item. Until it lands, the docs must not claim extraction covers
+      streaming.
 
-### Knowledge (retrieval surface)
+### Knowledge
 
-- [ ] **Phase 3** Entity graph queries (`entity_ids` / `entity_names` / `actor_ids` filters; graph traversal via `predicate`/`direction`) — **needs Memories Phase 6**
-- [ ] **Phase 5** Hybrid retrieval & ranking: lexical + vector (`tsvector`/BM25 + pgvector); RRF result merging (replaces the raw-score interleave — a known weakness); optional reranking; recency/importance weighting (importance from Memories Phase 8)
-- [x] ~~**Phase 6** Injection hardening~~ — **shipped**: retrieved knowledge is injected as a `role: user` fenced `<knowledge>` block with a "treat as information, not instructions" preamble (`agentKnowledge.ts`), regression-tested, and the rendered format is documented in the [agents module doc](../packages/website/docs/modules/agents.md#knowledge-config). The roadmap and PRD tracked it as pending until 2026-07; corrected. Two non-security tails carry forward:
-  - [ ] Provenance detail in the source tags — `[Memory: …]` should carry the entry ID and `[Document: …]` the page; today only the memory name and document path/filename are emitted
-  - [ ] Threat model in the module docs — that extraction runs tool-less, and that retrieved memory content is untrusted input for downstream tool authorization (today only a code comment in `agentKnowledge.ts`)
-- [ ] **Phase 7** Evaluation harness & observability: golden query set, recall@k / MRR, memory benchmarks, injected-context tracing. Baselines are measured against the shipped non-system injection format, which subsumes Phase 6's dropped "no quality regression" criterion
+- [ ] **Phase 7 — evaluation harness & observability.** Golden query set
+      (≥ 50 pairs), recall@k / MRR, memory-pipeline benchmarks,
+      injected-context tracing. Baselines measured against the shipped
+      non-system injection format. **Sequenced before Phase 5**, which needs it
+      as a regression gate.
+- [ ] **Phase 5 — hybrid retrieval & ranking.** `tsvector` lexical + pgvector
+      per source, RRF fusion (replaces the raw-score interleave), optional
+      rerank stage, recency blend. Additive parameters only; the `score`
+      semantics change is pre-authorized by RC-3. Must land with before/after
+      Phase 7 golden-set numbers and no recall@10 regression.
 
-## Cross-cutting reconciliations
+### G5 — usage metering refinement
 
-Open consistency items the PRDs still carry — flagged here so the roadmap
-stays the source of truth:
+- [ ] **Event-driven storage byte accounting** — replace the daily storage
+      snapshot with incremental byte deltas on file/document mutation,
+      eliminating intra-day sampling drift.
 
-- **Activity-feed ownership — resolved (2026-07), shipped.** The shipped
-  [`AuditEntry`](../packages/website/docs/modules/audit-log.md) (`detail` kinds)
-  and the retired G3 PRD (`ActivityEntry`, `acte_`) both
-  described an activity substrate; settled as two distinct models with a firm
-  boundary rather than one. Audit-shaped events stay on `AuditEntry` — that part
-  was already narrowed: a policy `deny` is recorded as an ordinary entry with
-  `status = 403` (there is no `detail.kind = 'action_denied'` marker, despite an
-  earlier revision of this line claiming one), and a decision-changing guardrail
-  evaluation is mirrored there as `detail->>'kind' = 'guardrail_evaluation'`. The remaining product-feed question (which model owns
-  agent/run-centric autonomous-execution telemetry) is resolved: a dedicated
-  `ActivityEntry` model —
-  `AuditEntry`'s `action` column is documented as the permission-action string
-  that authorized a request, and none of `ActivityEntry`'s four kinds
-  (`action_executed`, `approval_resolved`, `exception_created`,
-  `schedule_fired`) is an authorization event, so folding them in would have
-  bolted agent/run provenance onto a compliance-grade audit table customers
-  pipe to SIEMs. Live behavior in the
-  [activity module docs](../packages/website/docs/modules/activity.md).
-- ~~**`tool_ids` → `tool_bindings`.**~~ Resolved by retiring the
-  agent-operations PRD (2026-08) — the stale `tool_ids: [{ ref: … }]` End State
-  YAML example it carried is gone with it.
-- **`PolicyVersion` reference.** ~~Stale `PolicyVersion` citations in the
-  learned-rules and agent-versions PRDs (since retired)~~ — fixed before
-  retirement (both cited `GuardrailVersion`).
+---
 
-### Removal: discussions (2026-08)
+## ⏭️ Post-v1 / deferred
 
-**Decision: the discussions module is removed at v0 — module surface, models,
-formation resource type, docs, and PRD — rather than carried into v1.**
+### Entity graph (Memories Phase 6 ↔ Knowledge Phase 3)
 
-Deliberation is *how to think*, which the
-[context-composition boundary](#boundary-context-composition) already assigns to
-the consuming application. The module was the one shipped surface on the wrong
-side of that line, and keeping it in v1 would have frozen it into the public
-contract along with its whole deferred trajectory (background runs, budget
-guard, human participants, `organizer_selects`, real-agent participants, an
-orchestration node type, webhooks, cancellation states).
+The largest pending initiative: `MemoryEntity` (`mey_`) + `MemoryEntityEdge`
+models, async triple extraction on write, entity CRUD endpoints, and the
+entity/actor/predicate search parameters on `POST /knowledge/search`. Memories
+owns the data layer ([prd-memories.md Phase 6](./prd-memories.md#phase-6--entity-graph-layer--not-started));
+knowledge owns the query surface
+([prd-knowledge.md Phase 3](./prd-knowledge.md#phase-3--entity-graph-queries--future));
+they ship together. Entirely additive — new models, new endpoints, new optional
+parameters — so it gains nothing from being inside v1 and would delay the RC by
+the most.
 
-What made removal cheap rather than lossy:
+Depends on: RC-2/5a (supersede must invalidate edges) and benefits from
+Knowledge Phase 7 (retrieval metrics) landing first.
 
-- **The primitives it composed all stay.** An application still builds the same
-  flow from agents, actors, conversations, and documents, and keeps traces,
-  metering, tenancy, and provenance for free — those are platform properties,
-  not module features. The `discussion` *tool type* was already retired earlier
-  in favor of a `soat` tool binding, so agent-side invocation needed no
-  replacement seam.
-- **v0 is the moment it is free.** The test was "would this go into v1 if it did
-  not exist yet?", not "is removal worth the breakage?" — a question that stops
-  being free the day v1 ships.
+### Memories Phase 8 — forgetting
 
-One shared seam was kept: project-scoped model resolution (a provider pinned on
-the resource, else the project default route) is used by the `llm_judge` scorer
-and now lives in `projectScopedModel.ts` as `resolveProjectScopedModel`.
+Importance scoring, access tracking, retrieval-time recency blend (delivered
+through Knowledge Phase 5's ranking layer), retention policies with the
+deterministic eviction order, and compaction. Additive columns and endpoints.
 
-Two behavior changes fall out, neither security-affecting:
+### Memories Phase 9 — profile memory
 
-- `search-knowledge` no longer excludes documents under `/discussions/` by
-  default. Nothing writes that path anymore; legacy transcripts in an existing
-  install become ordinary project documents and are searchable within their own
-  project until deleted.
-- The `409 AI_PROVIDER_HAS_DEPENDENTS` meta drops `discussionCount`,
-  `discussionIds`, and `discussionParticipantCount`.
+Always-injected bounded profile blocks, agent-editable. Still an explicit
+sketch — requirements to be written before implementation.
 
-Revisit only as a new, narrowly-scoped initiative if SOAT is asked to own
-deliberation as a *governed* artifact (an auditable, replayable panel record
-that an app provably cannot forge) — the one requirement the app cannot satisfy
-on its own. Do not resurrect the engine on spec; the removed implementation is
-recoverable from git history (`packages/server/src/lib/discussion*.ts` and
-`docs/prd-discussions.md`, removed 2026-08).
+### Deferred by design (demand-gated) — carried over unchanged
 
-### Boundary: context composition
+- [ ] ⏭️ **G3 Phase 5** — approver targeting & assignment (`approver_policy` /
+      `assignees`); no demand signal yet
+- [ ] ⏭️ **G3** — in-channel approval clients (WhatsApp/Slack) over the queue;
+      the substrate (persist-then-webhook, platform-automatic continuation) is
+      settled and any client-controlled continuation timing is scoped here
+- [ ] ⏭️ **G6 learned rules** — semantic clustering, promotion lifecycle,
+      scoped rule listing. Gates: sustained demand on the approvals recurrence
+      view (open) **and** evaluations P1 (satisfied). Design record recoverable
+      from git history (`docs/prd-learned-rules.md`, removed 2026-08)
+- [ ] ⏭️ **Model routing** — per-consumer `model_route_id` on Chat (build only
+      when two routes in one project is actually requested)
+- [ ] **Model routing (accepted gap)** — failed attempts that burned tokens are
+      not metered; visible via `routing.attempts`. Revisit only if a provider
+      returns usage on error
 
-**Decision (2026-07): knowledge packages are removed; prompt/context
-composition is the consuming application's responsibility, not SOAT's.**
+---
 
-SOAT owns identity, memory, retrieval, execution, orchestration, governance,
-and provenance. Deciding *what doctrine/rules to inject into an agent's context
-and in what order* is application logic — the app owns its doctrine source, its
-versioning, and its CI, and it injects assembled context at call time through
-the existing seams (the agent `instructions` field and per-generation input
-messages). The former G7 "knowledge packages · layered context assembler"
-initiative (versioned immutable packages, encrypted-at-rest content, a
-budgeted layered assembler) is therefore dropped rather than deferred.
+## Dependency graph (pending nodes only)
 
-Consequences captured elsewhere on this page:
+```
+RC ─────────────────────────────────────────────────────────────
+  RC-1 provenance ┐
+  RC-2 invalidation schema ┴─► one memories migration/spec pass
+  RC-3 score semantics (docs)      RC-4 threat model (docs)
+  RC-5 source-tag provenance
 
-- G6 learned rules no longer "ride an assembler": SOAT exposes active rules
-  through a scoped listing API and the app injects them. (Since narrowed
-  further — see [Deferral: learned rules](#deferral-learned-rules).)
-- If a future need appears for SOAT to *hold and protect confidential doctrine*
-  (the one requirement the app cannot satisfy on its own), revisit as a new,
-  narrowly-scoped initiative — do not resurrect the full package concept on
-  spec.
+v1.x ───────────────────────────────────────────────────────────
+  memories 5a (arbitration)  ◄── RC-2 (schema it populates)
+  memories P7 (streaming extraction)
+  knowledge P7 (eval harness) ──► knowledge P5 (ranking; needs the gate)
 
-### Deferral: learned rules
+post-v1 ────────────────────────────────────────────────────────
+  memories P6 (entity data) ◄──► knowledge P3 (entity queries)
+      ▲ needs 5a/RC-2 (supersede invalidates edges)
+  memories P8 (forgetting) ──► knowledge P5 recency/importance blend
+  memories P9 (profile) — sketch
+  learned rules ⏭️ ◄── recurrence-view demand (open) + evals P1 ✔
+```
 
-**Decision (2026-07): the learned-rules module is deferred; recurrence
-surfacing folds into approvals as a read-only view.**
+## Decision record (carried from the pre-v1 roadmap)
 
-The module's platform-unique asset is the recurrence signal over human
-corrections — and its raw material already persists on `ApprovalItem`
-(`resolution_reason`, `edited_arguments`, `dedup_key`, `previous_item_id`).
-Consequences:
+Resolved decisions that shape v1's surface; full rationale in git history of
+this file:
 
-- **Exact-key recurrence ships as the approvals
-  [recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view) (G3)** —
-  zero new models, zero AI-provider coupling in a deliberately deterministic
-  module, and its output is a guardrail graduation prompt ("rejected 4×,
-  encode a `deny`"): a hard, enforceable, platform-owned outcome.
-- **Candidate capture is backfillable.** Rejection/edit candidates can be
-  rebuilt from approval history at any time, so deferring loses no data (only
-  explicit manual corrections are non-retrofittable).
-- **Soft-rule promotion/injection is eval-gated.** Rules are soft context; the
-  efficacy question ("does injection change behavior?") is unanswerable until
-  evaluations P1 exists.
-
-**Update (2026-08): the public module page was removed too.** The remaining
-scope neither enforces (guardrails do) nor injects (the app does), so what it
-would own is a text table plus a clustering job whose outcome is not observable
-inside SOAT — while a promoted correction already has two better homes: a
-guardrail `deny` (deterministic) or the agent's `instructions` (versioned,
-served, stamped on every generation). The fact/correction boundary now lives in
-[memories](../packages/website/docs/modules/memories.md#what-belongs-in-a-memory)
-and the graduation choice on the
-[recurrence view](../packages/website/docs/modules/approvals.md#recurrence-view).
-
-**Update (2026-08): the PRD itself was retired** as part of clearing the PRD
-directory for v1 — the full design record (data model, phases, decided
-thresholds) lives in git history (`docs/prd-learned-rules.md`, removed 2026-08)
-and can be recovered if the gates fire.
-
-Build gates for the full module — **both** must hold: sustained demand on the
-recurrence view (humans graduating groups into guardrails *and* hitting the
-exact-match ceiling on paraphrased corrections the `dedup_key` rollup cannot
-cluster), and evaluations P1 shipped. The evaluations gate is satisfied; the
-demand gate is the one still open. If it fires, key recorded decisions:
-capture sources are backfillable from `ApprovalItem` history; clustering
-reuses the memories pgvector machinery (cosine ≥ 0.85 default); promotion is
-human-curated with `global`/`project` scopes and append-only versioning
-(`GuardrailVersion` pattern); SOAT only lists rules — injection stays with the
-consuming application.
+- **Discussions removed at v0 (2026-08)** — deliberation is application-side
+  context composition; primitives (agents, actors, conversations, documents)
+  stay. Recoverable from git history if SOAT is ever asked to own deliberation
+  as a governed artifact.
+- **Context composition is the application's job (2026-07)** — knowledge
+  packages / layered assembler dropped; SOAT injects via `instructions` and
+  per-generation input messages.
+- **Learned rules deferred (2026-07/08)** — exact-key recurrence shipped as the
+  approvals recurrence view; module builds only if both gates fire.
+- **`from-generation` dataset curation dropped (2026-08)** — operators curate
+  client-side through the ordinary item-create route; revisit as an opt-in
+  retention flag only on observed demand.
+- **Activity vs audit split (2026-07)** — `ActivityEntry` owns agent/run
+  telemetry; `AuditEntry` stays compliance-grade authorization events.
