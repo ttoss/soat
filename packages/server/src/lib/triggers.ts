@@ -5,7 +5,7 @@ import { makeResourceAccessor } from 'src/lib/resourceAccessor';
 
 import { DomainError } from '../errors';
 import {
-  decryptMaybeLegacySecret,
+  decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
@@ -28,7 +28,7 @@ const log = createDebug('soat:triggers');
 const generateSecret = generateSecretValue;
 
 const decryptTriggerSecret = (stored: string): string => {
-  return decryptMaybeLegacySecret({ stored, label: 'decryptTriggerSecret' });
+  return decryptStoredSecret({ stored, label: 'decryptTriggerSecret' });
 };
 
 type TriggerInstance = InstanceType<(typeof db)['Trigger']> & {

@@ -65,11 +65,6 @@ const deliverWebhook = async (args: {
     timestamp: args.event.timestamp,
   });
 
-  const signature = signPayload({
-    payload,
-    secret: decryptWebhookSecret(args.webhook.secret),
-  });
-
   const delivery = await db.WebhookDelivery.create({
     webhookId: args.webhook.id,
     eventType: args.event.type,
@@ -77,6 +72,28 @@ const deliverWebhook = async (args: {
     status: 'pending',
     attempts: 0,
   });
+
+  // Signing happens after the delivery row exists so that a secret which cannot
+  // be decrypted — a row written before secret-at-rest encryption, or a changed
+  // `SECRETS_ENCRYPTION_KEY` — is *recorded* rather than thrown past the
+  // fire-and-forget `.catch()` in `handleEvent`, which would leave the webhook
+  // silently undelivered with nothing in the log to say why. `attempts: 0` and a
+  // null `statusCode` mark it as never attempted, so it reads differently from
+  // an endpoint that rejected the call.
+  let signature: string;
+  try {
+    signature = signPayload({
+      payload,
+      secret: decryptWebhookSecret(args.webhook.secret),
+    });
+  } catch (error) {
+    await delivery.update({
+      status: 'failed',
+      lastAttemptAt: new Date(),
+      responseBody: error instanceof Error ? error.message : String(error),
+    });
+    return;
+  }
 
   let lastStatusCode: number | null = null;
   let lastResponseBody: string | null = null;

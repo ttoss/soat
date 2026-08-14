@@ -263,7 +263,9 @@ describe('Webhooks', () => {
       expect(row!.secret).not.toBe(plaintextSecret);
     });
 
-    test('a legacy plaintext row (pre-encryption) is still readable', async () => {
+    // See the matching trigger case: the pre-encryption plaintext fallback is
+    // gone, so a legacy row is refused with a named, actionable error.
+    test('a legacy plaintext row (pre-encryption) is refused, naming the remedy', async () => {
       const row = await db.Webhook.findOne({
         where: { publicId: webhookId },
       });
@@ -274,8 +276,12 @@ describe('Webhooks', () => {
         `/api/v1/webhooks/${webhookId}/secret`
       );
 
-      expect(response.status).toBe(200);
-      expect(response.body.secret).toBe(legacyPlaintextSecret);
+      expect(response.status).toBe(500);
+      expect(response.body.error.code).toBe('SECRET_NOT_DECRYPTABLE');
+      expect(response.body.error.message).toMatch(/rotate/i);
+      expect(JSON.stringify(response.body)).not.toContain(
+        legacyPlaintextSecret
+      );
     });
   });
 

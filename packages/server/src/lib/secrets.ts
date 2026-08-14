@@ -63,22 +63,33 @@ export const generateSecretValue = (): string => {
 };
 
 /**
- * Rows created before secret-at-rest encryption store the raw secret.
- * `decryptValue` throws on that input (it isn't valid AES-256-GCM ciphertext),
- * so fall back to treating it as plaintext. Rotating or recreating the
- * secret re-encrypts it going forward.
+ * Decrypts a stored trigger / webhook secret, refusing a value that is not
+ * valid ciphertext.
  *
- * Delete this fallback — in one place — once the backfill lands.
+ * This used to fall back to treating an undecryptable value as plaintext, for
+ * rows written before secret-at-rest encryption. That fallback is gone: a
+ * secret is either encrypted or it is refused.
+ *
+ * The refusal is a named error rather than the raw
+ * `unable to authenticate data` a bare `decryptValue` surfaces, because the two
+ * causes an operator needs to tell apart both land here — a row that predates
+ * encryption (rotate it) and a `SECRETS_ENCRYPTION_KEY` that has changed since
+ * the value was written (restore the key; rotating would work but discards
+ * every other secret encrypted under the old one). The stored value is never
+ * included in the message: it may *be* the plaintext secret.
  */
-export const decryptMaybeLegacySecret = (args: {
+export const decryptStoredSecret = (args: {
   stored: string;
   label: string;
 }): string => {
   try {
     return decryptValue(args.stored);
   } catch {
-    log('%s: value is not encrypted (legacy row)', args.label);
-    return args.stored;
+    log('%s: stored value could not be decrypted', args.label);
+    throw new DomainError(
+      'SECRET_NOT_DECRYPTABLE',
+      'The stored secret could not be decrypted. It was either written before secret-at-rest encryption or encrypted under a different SECRETS_ENCRYPTION_KEY. Rotate the secret to replace it, or restore the original key.'
+    );
   }
 };
 
