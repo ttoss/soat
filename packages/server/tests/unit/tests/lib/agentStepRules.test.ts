@@ -40,8 +40,8 @@ describe('normalizeToolChoice', () => {
   });
 
   // The camelCase spellings were tolerated for rows written before the wire
-  // shape worked. `backfillAgentStepRules` rewrote those rows, so a stored
-  // camelCase key can no longer reach here and is no longer read.
+  // shape worked. Only the wire spelling is read now; a rule still stored in the
+  // camelCase shape is ignored rather than honored.
   test('ignores the retired camelCase object ({ toolName })', () => {
     expect(
       normalizeToolChoice({ type: 'tool', toolName: 'get_weather' })

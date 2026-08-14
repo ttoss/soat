@@ -85,9 +85,8 @@ export class Agent extends Model {
   declare model: string | null;
 
   // The agent↔tool attachment: array of binding objects `{ toolId | tool }`.
-  // The pre-`toolBindings` `toolIds`/`tools` columns are gone; rows that held
-  // only those were normalized into this one by `backfillAgentToolBindings`
-  // before the boot-time sync dropped them.
+  // The pre-`toolBindings` `toolIds`/`tools` columns are gone; a row that held
+  // only those reads as having no tools.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare toolBindings: object[] | null;
 

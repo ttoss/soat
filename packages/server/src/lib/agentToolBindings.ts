@@ -35,8 +35,8 @@ type AgentToolColumns = {
  * Reads an agent row's tool bindings.
  *
  * This used to normalize the pre-`toolBindings` `toolIds` / `tools` columns on
- * every read. Those columns are gone — `backfillAgentToolBindings` folded them
- * into this one — so there is a single place bindings come from.
+ * every read. Those columns are gone, so there is a single place bindings come
+ * from.
  */
 export const readAgentToolBindings = (
   row: AgentToolColumns

@@ -918,9 +918,8 @@ describe('resolveAgentTools', () => {
   });
 
   // An `execute` persisted as a JSON string was tolerated for rows written
-  // before single-casing; `backfillToolExecute` parsed those back into objects,
-  // so a string can no longer be a valid config and is reported as one that is
-  // not, rather than silently parsed.
+  // before single-casing. A string is no longer a valid config: it is reported
+  // as invalid rather than silently parsed.
   test('http tool execute stored as a JSON string is rejected as invalid', async () => {
     const stringExecuteRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')

@@ -4,8 +4,6 @@ import type { Sequelize } from '@ttoss/postgresdb';
 import { initialize, syncWithAdvisoryLock } from '@ttoss/postgresdb';
 import createDebug from 'debug';
 
-import { runDataBackfills } from './lib/dataBackfills';
-
 const log = createDebug('soat:db');
 
 export { models };
@@ -60,13 +58,6 @@ export const getSchemaSyncLockTimeoutMs = (): number => {
  * silent multi-minute hang. See `getSchemaSyncLockTimeoutMs` for why the bound
  * must exceed a real migration's duration.
  */
-/**
- * Hook name for the pre-sync data backfills. Named so it can be removed again —
- * an anonymous hook would accumulate on the shared `sequelize` instance across
- * every call.
- */
-const BACKFILL_HOOK = 'soatDataBackfills';
-
 export const syncSchemaWithAdvisoryLock = async (args: {
   sequelize: Sequelize;
 }) => {
@@ -76,34 +67,12 @@ export const syncSchemaWithAdvisoryLock = async (args: {
     SCHEMA_SYNC_LOCK_KEY,
     lockTimeoutMs
   );
-
-  /**
-   * The data backfills run from `beforeBulkSync` rather than from a line above
-   * this call, and that placement is the whole correctness argument.
-   *
-   * `sync({ alter: true })` **drops** a column the models stopped declaring,
-   * taking its contents with it, and `backfillAgentToolBindings` has to read one
-   * of those columns before that happens. Running it before this call instead
-   * would put it outside the advisory lock: a peer booting concurrently could
-   * take the lock and sync — dropping the columns — while this task was still
-   * backfilling, and the rows it had not reached yet would be gone. A
-   * `beforeBulkSync` hook fires inside `sequelize.sync()`, which is inside the
-   * lock, so backfill-then-DDL is one critical section that peers serialize on.
-   */
-  args.sequelize.addHook('beforeBulkSync', BACKFILL_HOOK, async () => {
-    await runDataBackfills({ sequelize: args.sequelize });
+  await syncWithAdvisoryLock({
+    sequelize: args.sequelize,
+    key: SCHEMA_SYNC_LOCK_KEY,
+    sync: { alter: true },
+    lockTimeoutMs,
   });
-
-  try {
-    await syncWithAdvisoryLock({
-      sequelize: args.sequelize,
-      key: SCHEMA_SYNC_LOCK_KEY,
-      sync: { alter: true },
-      lockTimeoutMs,
-    });
-  } finally {
-    args.sequelize.removeHook('beforeBulkSync', BACKFILL_HOOK);
-  }
 };
 
 /**
