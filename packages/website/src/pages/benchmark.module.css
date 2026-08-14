@@ -1,0 +1,304 @@
+.header {
+  padding: 4rem 0 2.5rem;
+}
+
+.eyebrow {
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+  margin-bottom: 0.75rem;
+}
+
+.lead {
+  max-width: 46rem;
+  font-size: 1.05rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-bottom: 1.5rem;
+}
+
+.search {
+  flex: 1 1 16rem;
+  max-width: 24rem;
+  padding: 0.55rem 0.9rem;
+  font: inherit;
+  color: var(--ifm-font-color-base);
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+}
+
+.search:focus {
+  outline: none;
+  border-color: var(--ifm-color-primary);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chip {
+  padding: 0.35rem 0.85rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--ifm-font-color-base);
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.chip:hover {
+  border-color: var(--ifm-color-primary);
+  color: var(--ifm-color-primary);
+}
+
+.chipActive {
+  color: var(--ifm-color-primary);
+  border-color: var(--ifm-color-primary);
+  background: color-mix(in srgb, var(--ifm-color-primary) 10%, transparent);
+}
+
+.clusterSelect {
+  padding: 0.45rem 0.75rem;
+  font: inherit;
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-base);
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-300);
+  border-radius: 8px;
+}
+
+.resultCount {
+  margin: 0 0 1rem;
+  font-size: 0.85rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(19rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 3rem;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1.25rem;
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 16px;
+  transition:
+    transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.cardTitle {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.archetypeBadge {
+  flex-shrink: 0;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary);
+  border: 1px solid
+    color-mix(in srgb, var(--ifm-color-primary) 40%, transparent);
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.cardMeta {
+  font-family: var(--ifm-font-family-monospace);
+  font-size: 0.72rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.cardSummary {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: var(--ifm-font-color-secondary);
+  flex-grow: 1;
+}
+
+.dotRow {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.dot {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 50%;
+}
+
+.cardActions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.compareButton {
+  padding: 0.35rem 0.9rem;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--ifm-color-primary);
+  background: transparent;
+  border: 1px solid var(--ifm-color-primary);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.compareButtonActive {
+  color: var(--ifm-background-color);
+  background: var(--ifm-color-primary);
+}
+
+.compareButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pinnedNote {
+  font-size: 0.78rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.cardLink {
+  font-size: 0.82rem;
+}
+
+.comparator {
+  margin-bottom: 3rem;
+}
+
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 12px;
+}
+
+.matrix {
+  width: 100%;
+  margin: 0;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.matrix th,
+.matrix td {
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+  min-width: 11rem;
+}
+
+.matrix thead th {
+  font-family: var(--ifm-heading-font-family);
+  background: var(--ifm-background-surface-color);
+}
+
+.matrix tbody tr:last-child th,
+.matrix tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.clusterCell {
+  min-width: 12rem;
+}
+
+.clusterName {
+  display: block;
+  font-weight: 600;
+}
+
+.clusterDescription {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ifm-font-color-secondary);
+}
+
+.ratingBadge {
+  display: inline-block;
+  padding: 0.12rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.cellNote {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.evidenceLink {
+  display: inline-block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: var(--ifm-font-color-secondary);
+}
+
+.legendItem {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.methodology {
+  padding: 2rem 0 4rem;
+  max-width: 46rem;
+  font-size: 0.9rem;
+  color: var(--ifm-font-color-secondary);
+}

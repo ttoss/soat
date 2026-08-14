@@ -1,0 +1,50 @@
+{
+  "name": "DeepSeek Harness",
+  "slug": "deepseek-harness",
+  "archetype": "framework",
+  "summary": "Plugin-based open-source agent framework from DeepSeek AI (\"everything is a plugin\") built on the Cordis composable plugin system, with a web UI and CLI for building and running custom agents.",
+  "website": "https://github.com/deepseek-ai/deepseek-harness",
+  "repository": "https://github.com/deepseek-ai/deepseek-harness",
+  "license": "MIT",
+  "deployment": ["self-hosted"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Core agent loop and web UI for agent interaction.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "orchestration": {
+      "rating": "plugin",
+      "note": "No built-in DAG/workflow engine; composition is expressed through the plugin architecture.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "knowledge-memory": {
+      "rating": "plugin",
+      "note": "No built-in document store, embeddings, or memory — provided by plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "The plugin system is the tool/extension surface; capabilities are added as Cordis plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "identity-governance": {
+      "rating": "absent",
+      "note": "No multi-tenant IAM, policies, quotas, approvals, or audit log."
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "Run visibility through the web UI; no structured trace/usage/audit model.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store."
+    },
+    "evaluation": {
+      "rating": "absent",
+      "note": "No built-in datasets, scorers, or eval runs."
+    }
+  }
+}

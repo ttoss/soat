@@ -1,0 +1,53 @@
+{
+  "name": "SOAT",
+  "slug": "soat",
+  "archetype": "infrastructure",
+  "summary": "Self-hosted infrastructure layer for production-ready AI agents: IAM, storage, knowledge, memory, orchestration, guardrails, and traces from one Node.js server backed by PostgreSQL.",
+  "website": "https://soat.ttoss.dev",
+  "repository": "https://github.com/ttoss/soat",
+  "license": "MIT",
+  "deployment": ["self-hosted"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agents, sessions, chats, and generations with full lifecycle tracking.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/agents"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "DAG orchestrations, workflow state machines, durable tasks, and triggers (manual, webhook, schedule).",
+      "evidence": "https://soat.ttoss.dev/docs/modules/orchestrations"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Documents with per-chunk embeddings, named memories, unified semantic search, and ingestion rules for PDFs, images, and audio.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/knowledge"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "HTTP, MCP, client, and agent-to-agent tools; model routes with failover; webhooks; any LLM provider.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/tools"
+    },
+    "identity-governance": {
+      "rating": "native",
+      "note": "AWS-inspired IAM, actors, scoped API keys, guardrails, human approvals, quotas, and an append-only audit log.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/iam"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Traces of every tool call and model response, activity feed, usage/cost tracking, and an exceptions queue.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/traces"
+    },
+    "data-secrets": {
+      "rating": "native",
+      "note": "File storage over local/S3/GCS backends and encrypted secrets storage.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/files"
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "Datasets, scorers, and scored runs; eval-gated promotion of agent versions.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/evaluations"
+    }
+  }
+}

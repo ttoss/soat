@@ -1,0 +1,53 @@
+{
+  "name": "Vertex AI Agent Builder",
+  "slug": "vertex-ai-agent-builder",
+  "archetype": "managed-platform",
+  "summary": "Google Cloud's managed platform for building and deploying agents: Agent Development Kit, managed Agent Engine runtime, RAG Engine, and Google Cloud IAM, billing, and observability.",
+  "website": "https://cloud.google.com/products/agent-builder",
+  "repository": "https://github.com/google/adk-python",
+  "license": "Proprietary (ADK is Apache-2.0)",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agent Development Kit plus the managed Agent Engine runtime with sessions.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Multi-agent composition in ADK (sequential, parallel, loop agents); broader pipelines lean on other Google Cloud services.",
+      "evidence": "https://google.github.io/adk-docs/agents/multi-agents/"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "RAG Engine and Vertex AI Search for grounding; Memory Bank for session memory.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/rag-overview"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Function tools, MCP support, and prebuilt connectors to Google and third-party systems.",
+      "evidence": "https://google.github.io/adk-docs/tools/"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Google Cloud IAM, quotas, and audit logging — cloud-level, not agent-action-level; no built-in guardrail/approval queue for tool calls.",
+      "evidence": "https://cloud.google.com/vertex-ai/docs/general/access-control"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Cloud Trace/Logging integration and Agent Engine tracing of agent runs.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/manage/tracing"
+    },
+    "data-secrets": {
+      "rating": "partial",
+      "note": "Via adjacent Google Cloud services (Cloud Storage, Secret Manager) rather than the agent platform itself.",
+      "evidence": "https://cloud.google.com/secret-manager/docs/overview"
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "Vertex AI evaluation service with agent-specific evaluation flows.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/models/evaluation-overview"
+    }
+  }
+}
