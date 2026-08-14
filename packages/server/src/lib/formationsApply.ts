@@ -6,6 +6,8 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
+  isResourceAlreadyGone,
+  rollbackCreatedResources,
 } from './formationsApplyHelpers';
 import {
   buildAuditableParameters,
@@ -27,10 +29,6 @@ import type {
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
-
-const isResourceAlreadyGone = (error: unknown): boolean => {
-  return error instanceof DomainError && error.code === 'RESOURCE_NOT_FOUND';
-};
 
 const markResourceDeleted = async (args: {
   resource: InstanceType<(typeof db)['FormationResource']>;
@@ -109,7 +107,7 @@ export const processResourceChange = async (args: {
   events: FormationEvent[];
   projectId: number;
   formationId: number;
-}): Promise<void> => {
+}): Promise<ResourceRow> => {
   const {
     logicalId,
     decl,
@@ -185,11 +183,14 @@ export const processResourceChange = async (args: {
     });
     throw error;
   }
+
+  return resourceRow;
 };
 
 // Applies each resource change in dependency order. Returns true on success;
-// on the first failure it records the failed operation and returns false so the
-// caller stops before finalizing.
+// on the first failure it unwinds the resources it created in this operation,
+// records the failed operation and returns false so the caller stops before
+// finalizing.
 const runResourceChanges = async (args: {
   sortedOrder: string[];
   workingTemplate: FormationTemplate;
@@ -202,11 +203,13 @@ const runResourceChanges = async (args: {
   operation: InstanceType<(typeof db)['FormationOperation']>;
 }): Promise<boolean> => {
   const { sortedOrder, workingTemplate, existingMap, events } = args;
+  const created: ResourceRow[] = [];
   for (const logicalId of sortedOrder) {
     const decl = workingTemplate.resources[logicalId];
     const existing = existingMap.get(logicalId);
+    const isCreate = isCreateChange(existing);
     try {
-      await processResourceChange({
+      const resourceRow = await processResourceChange({
         logicalId,
         decl,
         existing,
@@ -215,6 +218,7 @@ const runResourceChanges = async (args: {
         projectId: args.projectId,
         formationId: args.formationId,
       });
+      if (isCreate) created.push(resourceRow);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       log(
@@ -222,6 +226,7 @@ const runResourceChanges = async (args: {
         logicalId,
         errorMsg
       );
+      const rollbackEvents = await rollbackCreatedResources({ created });
       await failFormationOperation({
         operation: args.operation,
         formation: args.formation,
@@ -230,6 +235,7 @@ const runResourceChanges = async (args: {
         resourceType: decl.type,
         action: existing ? 'update' : 'create',
         errorMessage: errorMsg,
+        rollbackEvents,
       });
       return false;
     }

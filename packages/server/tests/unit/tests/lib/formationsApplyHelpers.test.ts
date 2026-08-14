@@ -3,6 +3,7 @@ import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
+  rollbackCreatedResources,
 } from 'src/lib/formationsApplyHelpers';
 import { planResourceChange } from 'src/lib/formationsPlanHelpers';
 import type { FormationEvent } from 'src/lib/formationsTypes';
@@ -288,6 +289,89 @@ describe('formationsApplyHelpers', () => {
       description: 'kept-desc',
     });
     expect(events[0]).toMatchObject({ action: 'update' });
+  });
+
+  // The rollback branches below have no entry point of their own: a template
+  // that reaches apply has already been validated, so no resource it created
+  // can be of an unsupported type, and a physical resource cannot vanish
+  // mid-apply. Both are driven here directly against the real handlers.
+  test('rollbackCreatedResources reports an unwind failure instead of throwing over the original error', async () => {
+    const memory = await createMemory({
+      projectId,
+      name: uniqueName('rollback-mem'),
+    });
+    const deletable = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('rollback-deletable'),
+      resourceType: 'memory',
+      status: 'created',
+      physicalResourceId: memory.id,
+      deletionPolicy: 'delete',
+    });
+    const blocked = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('rollback-blocked'),
+      resourceType: 'unsupported_type',
+      status: 'created',
+      physicalResourceId: 'phys_unsupported',
+      deletionPolicy: 'delete',
+    });
+
+    const events = await rollbackCreatedResources({
+      created: [deletable, blocked],
+    });
+
+    // Reverse order: the blocked resource was created last, so it is unwound
+    // first — and its failure does not stop the rest of the unwind.
+    expect(
+      events.map((event) => {
+        return [event.logicalId, event.action, event.status];
+      })
+    ).toEqual([
+      [blocked.logicalId, 'rollback', 'failed'],
+      [deletable.logicalId, 'rollback', 'succeeded'],
+    ]);
+    expect(events[0].error).toMatch(/unsupported_type/i);
+    expect(await memoryExists(memory.id)).toBe(false);
+    await deletable.reload();
+    expect(deletable.status).toBe('deleted');
+    await blocked.reload();
+    // The row still points at the resource that could not be removed, so the
+    // operator can find it.
+    expect(blocked.status).toBe('created');
+  });
+
+  test('rollbackCreatedResources treats an already-gone resource as unwound', async () => {
+    // `deleteAgent` throws RESOURCE_NOT_FOUND for a nonexistent agent id.
+    const alreadyGone = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('rollback-gone'),
+      resourceType: 'agent',
+      status: 'created',
+      physicalResourceId: 'agt_does_not_exist',
+      deletionPolicy: 'delete',
+    });
+    const noPhysicalId = await db.FormationResource.create({
+      formationId,
+      logicalId: uniqueName('rollback-no-id'),
+      resourceType: 'memory',
+      status: 'failed',
+      physicalResourceId: null,
+      deletionPolicy: 'delete',
+    });
+
+    const events = await rollbackCreatedResources({
+      created: [alreadyGone, noPhysicalId],
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      logicalId: alreadyGone.logicalId,
+      action: 'rollback',
+      status: 'succeeded',
+    });
+    await alreadyGone.reload();
+    expect(alreadyGone.status).toBe('deleted');
   });
 
   test('failFormationOperation records the event and marks operation/formation as failed', async () => {
