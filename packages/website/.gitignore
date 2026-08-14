@@ -10,6 +10,7 @@
 /static/openapi
 /docs/openapi-specs.md
 /docs/permissions.md
+/docs/webhook-events.md
 
 # Misc
 .DS_Store

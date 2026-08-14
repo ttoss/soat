@@ -3,14 +3,37 @@ import { EventEmitter } from 'node:events';
 import createDebug from 'debug';
 
 import { db } from '../db';
+import type {
+  SoatEventName,
+  SoatEventType,
+  SoatEventTypeFor,
+  SoatResourceType,
+} from './soatEvents';
+import { asCustomEventName } from './soatEvents';
+
+/**
+ * The envelope's own vocabulary, re-exported so an emit site imports the names
+ * it may use from the same module it emits through.
+ */
+export type {
+  CustomEventName,
+  SoatEventName,
+  SoatEventType,
+  SoatEventTypeFor,
+  SoatResourceType,
+} from './soatEvents';
 
 const log = createDebug('soat:eventBus');
 
 export interface SoatEvent {
-  type: string;
+  /**
+   * A registered platform event name, or — for an orchestration `emit_event`
+   * node — the name the template author wrote. See `soatEvents.ts`.
+   */
+  type: SoatEventName;
   projectId: number;
   projectPublicId: string;
-  resourceType: string;
+  resourceType: SoatResourceType;
   resourceId: string;
   /**
    * The resource payload, carried as an opaque value: the bus never reads a key
@@ -41,12 +64,38 @@ export const emitEvent = (event: SoatEvent) => {
   eventBus.emit('soat:event', event);
 };
 
-export const onEvent = (handler: (event: SoatEvent) => void) => {
-  eventBus.on('soat:event', handler);
+/**
+ * Subscribes to the bus. Pass `types` to declare which events the subscriber
+ * cares about; omit it to receive every event.
+ *
+ * The filter is here rather than in each subscriber because the names it takes
+ * are checked against the registry: a renamed event breaks the subscription at
+ * compile time, where a hand-rolled `if (event.type === '…')` just stopped
+ * matching. A subscriber that genuinely needs everything — the webhook
+ * dispatcher, which forwards user-authored orchestration events too — omits
+ * `types` and says so.
+ */
+export const onEvent = (args: {
+  types?: readonly SoatEventType[];
+  handler: (event: SoatEvent) => void;
+}) => {
+  const { types, handler } = args;
+
+  if (!types) {
+    eventBus.on('soat:event', handler);
+    return;
+  }
+
+  const wanted = new Set<string>(types);
+
+  eventBus.on('soat:event', (event: SoatEvent) => {
+    if (wanted.has(event.type)) handler(event);
+  });
 };
 
 /**
- * Emits a resource lifecycle event, owning the three parts of the envelope that
+ * The shared dispatch behind {@link emitResourceEvent} and
+ * {@link emitCustomEvent}: it owns the three parts of the envelope that
  * every emit site used to re-derive: the `timestamp`, the project public-id
  * lookup when the caller does not already hold one, and — the part that
  * mattered — the `.catch()` on that lookup.
@@ -61,12 +110,11 @@ export const onEvent = (handler: (event: SoatEvent) => void) => {
  * `data` is taken and forwarded as an opaque value; nothing here inspects a key
  * of it, so this introduces no key-walking surface (`case-convention.md`).
  */
-export const emitResourceEvent = (args: {
-  type: string;
+const emitEnvelope = (args: {
+  type: SoatEventName;
   projectId: number;
-  /** Pass when already loaded, to skip the lookup. */
   projectPublicId?: string;
-  resourceType: string;
+  resourceType: SoatResourceType;
   resourceId: string;
   data: object;
 }): void => {
@@ -96,12 +144,54 @@ export const emitResourceEvent = (args: {
     .then(emit)
     .catch((error: unknown) => {
       log(
-        'emitResourceEvent: dropping %s for %s — project lookup failed: %o',
+        'emitEnvelope: dropping %s for %s — project lookup failed: %o',
         args.type,
         args.resourceId,
         error
       );
     });
+};
+
+/**
+ * Emits a registered platform event.
+ *
+ * `type` is drawn from the registry entry for the `resourceType` given, so an
+ * event name that does not belong to that resource — a typo, a rename that
+ * missed a site, an event attached to the wrong resource — is a type error here
+ * rather than a subscription that silently never matches again.
+ */
+export const emitResourceEvent = <R extends SoatResourceType>(args: {
+  type: SoatEventTypeFor<R>;
+  projectId: number;
+  /** Pass when already loaded, to skip the lookup. */
+  projectPublicId?: string;
+  resourceType: R;
+  resourceId: string;
+  data: object;
+}): void => {
+  emitEnvelope(args);
+};
+
+/**
+ * Emits an event whose name SOAT does not own: an orchestration `emit_event`
+ * node emits whatever the template author wrote, and a webhook subscribed to
+ * that name delivers it. That name cannot be a registered literal, so this is
+ * the deliberate escape hatch from {@link emitResourceEvent}'s union.
+ *
+ * It is deliberately the *only* one. A platform emit site that reached for this
+ * would put an unregistered event on the bus with no compiler complaint and no
+ * row in the generated webhook reference, so
+ * `tests/unit/tests/lib/eventTypeContract.test.ts` pins the single call site.
+ */
+export const emitCustomEvent = (args: {
+  type: string;
+  projectId: number;
+  projectPublicId?: string;
+  resourceType: SoatResourceType;
+  resourceId: string;
+  data: object;
+}): void => {
+  emitEnvelope({ ...args, type: asCustomEventName({ name: args.type }) });
 };
 
 export { eventBus };

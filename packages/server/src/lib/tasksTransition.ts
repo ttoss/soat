@@ -4,11 +4,11 @@ import { db } from 'src/db';
 import { DomainError } from '../errors';
 import { evaluateLogic } from './jsonLogicMapping';
 import type { RequestPrincipal } from './principals';
+import { emitTaskEvent } from './taskEvents';
 import {
   type ActiveDispatch,
   computeStallDeadline,
   dispatchOnEnter,
-  emitTaskEvent,
   findTaskInstance,
   mapTask,
   sanitizeTaskToolContext,

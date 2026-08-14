@@ -11,6 +11,7 @@ import {
   type PaginatedResult,
   resolvePagination,
 } from './pagination';
+import type { SoatEventTypeFor } from './soatEvents';
 import { isUniqueViolation } from './uniqueViolation';
 
 const log = createDebug('soat:approvals');
@@ -175,7 +176,7 @@ const notifyResume = async (
 };
 
 const emitApprovalEvent = async (args: {
-  type: string;
+  type: SoatEventTypeFor<'approval'>;
   item: MappedApproval;
   projectId: number;
 }): Promise<void> => {
@@ -666,7 +667,7 @@ const assertValidEditedArgs = (editedArguments?: object | null): void => {
 const finalizeResolution = async (args: {
   id: string;
   projectId: number;
-  eventType: string;
+  eventType: SoatEventTypeFor<'approval'>;
 }): Promise<{ item: MappedApproval; decision: DecisionOutput }> => {
   const refreshed = await findApprovalOrThrow(args.id);
   const mapped = mapApproval(refreshed);

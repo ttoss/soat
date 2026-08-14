@@ -1,5 +1,6 @@
 import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
+import { asCustomEventName } from 'src/lib/soatEvents';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -728,7 +729,9 @@ describe('webhookDispatcher', () => {
     // the webhook above (`files.created.*`) match this event, so both
     // delivery-record inserts fail; their rejections must be swallowed by
     // `handleEvent`'s `.catch()`.
-    const overLongType = `files.created.${'x'.repeat(300)}`;
+    const overLongType = asCustomEventName({
+      name: `files.created.${'x'.repeat(300)}`,
+    });
     emitEvent({
       type: overLongType,
       projectId: projectInternalId ?? 1,

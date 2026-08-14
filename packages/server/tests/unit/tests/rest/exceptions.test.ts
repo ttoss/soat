@@ -1,6 +1,11 @@
 import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 import { fileException } from 'src/lib/exceptions';
+import {
+  asCustomEventName,
+  type SoatEventName,
+  type SoatResourceType,
+} from 'src/lib/soatEvents';
 
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -393,7 +398,8 @@ describe('Exceptions', () => {
     };
 
     const emit = (
-      type: string,
+      type: SoatEventName,
+      resourceType: SoatResourceType,
       resourceId: string,
       data: Record<string, unknown>
     ) => {
@@ -401,7 +407,7 @@ describe('Exceptions', () => {
         type,
         projectId: projectInternalId,
         projectPublicId: projectId,
-        resourceType: 'test',
+        resourceType,
         resourceId,
         data,
         timestamp: new Date().toISOString(),
@@ -409,7 +415,7 @@ describe('Exceptions', () => {
     };
 
     test('approvals.expired with full data files an approval_expired exception', async () => {
-      emit('approvals.expired', 'apr_full_1', {
+      emit('approvals.expired', 'approval', 'apr_full_1', {
         approval: {
           id: 'apr_full_1',
           proposed_action: { tool_id: 'tool_x' },
@@ -429,7 +435,7 @@ describe('Exceptions', () => {
     });
 
     test('approvals.expired with an empty approval falls back to (unknown) with no dedup key', async () => {
-      emit('approvals.expired', 'apr_empty_1', { approval: {} });
+      emit('approvals.expired', 'approval', 'apr_empty_1', { approval: {} });
       const match = await pollException((e) => {
         return (
           e.kind === 'approval_expired' &&
@@ -443,7 +449,7 @@ describe('Exceptions', () => {
     });
 
     test('orchestration_runs.failed with no error detail files a run_failed exception', async () => {
-      emit('orchestration_runs.failed', 'run_noerr_1', {});
+      emit('orchestration_runs.failed', 'orchestration_run', 'run_noerr_1', {});
       const match = await pollException((e) => {
         return (
           e.kind === 'run_failed' && e.orchestration_run_id === 'run_noerr_1'
@@ -454,7 +460,7 @@ describe('Exceptions', () => {
     });
 
     test('guardrail.tripwire with a generation (no run) falls back to the resource id for the tool name', async () => {
-      emit('guardrail.tripwire', 'tool_gen_1', {
+      emit('guardrail.tripwire', 'guardrail', 'tool_gen_1', {
         generationId: 'gen_trip_1',
         agentId: 'agent_trip_1',
       });
@@ -473,7 +479,7 @@ describe('Exceptions', () => {
     });
 
     test('guardrail.tripwire with no run folds repeated trips of the same agent/tool call site into one item, ignoring the (always-fresh) generation id', async () => {
-      emit('guardrail.tripwire', 'tool_loop_1', {
+      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
         generationId: 'gen_loop_1',
         agentId: 'agent_loop_1',
       });
@@ -490,7 +496,7 @@ describe('Exceptions', () => {
 
       // Same agent/tool call site, but a brand-new generationId (as every real
       // agent generation gets) — must fold into the same open item.
-      emit('guardrail.tripwire', 'tool_loop_1', {
+      emit('guardrail.tripwire', 'guardrail', 'tool_loop_1', {
         generationId: 'gen_loop_2',
         agentId: 'agent_loop_1',
       });
@@ -514,7 +520,12 @@ describe('Exceptions', () => {
     });
 
     test('an unmatched event type files no exception (handleEvent early return)', async () => {
-      emit('noop.unmatched', 'noop_1', { whatever: true });
+      emit(
+        asCustomEventName({ name: 'noop.unmatched' }),
+        'orchestration_run',
+        'noop_1',
+        { whatever: true }
+      );
       // handleEvent runs synchronously on emit; give any (non-existent) filer a
       // tick, then confirm nothing referencing this event was filed.
       await new Promise((resolve) => {
@@ -542,7 +553,7 @@ describe('Exceptions', () => {
           type: 'orchestration_runs.failed',
           projectId: 999999999,
           projectPublicId: 'proj_does_not_exist',
-          resourceType: 'test',
+          resourceType: 'orchestration_run',
           resourceId: 'run_fk_reject_1',
           data: {},
           timestamp: new Date().toISOString(),
