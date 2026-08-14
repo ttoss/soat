@@ -1317,63 +1317,57 @@ curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID/events" \
 
 ## Step 12 — Delete the formation
 
-Deleting a formation tries to remove managed resources in reverse dependency order. Depending on runtime artifacts created by the formation flow (for example, traces or generations that keep references alive), the delete operation may return `success: false` and keep the formation in `delete_failed` status for inspection. See [Formations](/docs/modules/formations#key-concepts).
+Deleting a formation removes managed resources in reverse dependency order — but it will not delete resources the platform guards on their own. This stack has four agents, and running the sonnet above gave each of them generation history, so teardown stops there rather than destroying that history implicitly. The delete fails with `409 FORMATION_DELETE_FAILED`, naming every blocking resource in `error.meta.failures`, and leaves the formation in `delete_failed`. See [Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-DELETE_RESULT=$(soat delete-formation --formation_id "$FORMATION_ID")
-printf '%s\n' "$DELETE_RESULT" | jq '.'
+# → expect-fail
+soat delete-formation --formation_id "$FORMATION_ID"
 
-# Always inspect the current formation state after delete. When deletion
-# succeeds this prints an error payload; when it fails it prints id/status.
-soat get-formation --formation_id "$FORMATION_ID" | jq '{id, status, error}'
+# The stack is left in delete_failed, with everything up to the agents removed.
+soat get-formation --formation_id "$FORMATION_ID" | jq '{id, status}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: deletion } = await authClient.formations.deleteFormation({
-  path: { formation_id: FORMATION_ID },
-});
-console.log('delete success:', deletion?.success);
-
-if (deletion?.success) {
-  // Confirm it's gone (should throw 404)
-  try {
-    await authClient.formations.getFormation({
-      path: { formation_id: FORMATION_ID },
-    });
-  } catch {
-    console.log('Formation deleted — 404 as expected');
-  }
-} else {
-  // Keep it for inspection when delete_failed happens.
-  const { data: remaining } = await authClient.formations.getFormation({
+try {
+  await authClient.formations.deleteFormation({
     path: { formation_id: FORMATION_ID },
   });
-  console.log('Formation delete failed, current status:', remaining?.status);
+} catch (error) {
+  // 409 FORMATION_DELETE_FAILED — every blocker is named in meta.failures.
+  console.log('blocked by:', error);
 }
+
+const { data: remaining } = await authClient.formations.getFormation({
+  path: { formation_id: FORMATION_ID },
+});
+console.log('Formation status:', remaining?.status); // 'delete_failed'
 ```
 
 </TabItem>
 <TabItem value="curl" label="curl">
 
 ```bash
-DELETE_RESPONSE=$(curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN")
-printf '%s\n' "$DELETE_RESPONSE" | jq '.'
+curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.error.meta.failures'
 
-# Always inspect the current formation state after delete. When deletion
-# succeeds this prints an error payload; when it fails it prints id/status.
 curl -s "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status, error}'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '{id, status}'
 ```
 
 </TabItem>
 </Tabs>
+
+To finish the teardown, resolve the blockers and delete the formation again. For an
+agent that means deciding explicitly to discard its history —
+`soat delete-agent --agent-id "$AGENT_ID" --force true` — which is why teardown does
+not do it for you. Declare an agent with `deletion_policy: retain` if the stack should
+leave it standing instead.
 
 ---
 
