@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "Open-source personal AI assistant framework: a local gateway control plane connecting AI models to WhatsApp, Telegram, Slack, Discord, Signal, and iMessage, with tools, skills, MCP, scheduling, and optional sandboxed execution — built for a single operator who owns their data.",
   "website": "https://openclaw.ai",
-  "repository": "https://github.com/openclaw/openclaw",
   "license": "MIT",
   "deployment": ["self-hosted"],
   "last_verified": "2026-08-14",

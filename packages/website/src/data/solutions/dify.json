@@ -4,7 +4,6 @@
   "archetype": "infrastructure",
   "summary": "Open-source LLM application platform providing a visual workflow canvas, RAG knowledge bases, agent nodes, and a plugin marketplace, served by a self-hostable Docker Compose stack with PostgreSQL, Redis, Celery workers, a pluggable vector database, and a sandbox service. Applications publish as web apps, REST APIs, MCP servers, or reusable tools.",
   "website": "https://dify.ai",
-  "repository": "https://github.com/langgenius/dify",
   "license": "Dify Open Source License (Apache-2.0 with added conditions)",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",

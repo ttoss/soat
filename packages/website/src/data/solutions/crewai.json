@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "Python framework for orchestrating role-based autonomous agents, combining Crews (agent teams with task delegation) and Flows (event-driven, state-managed workflows). A separate commercial product, CrewAI AMP, adds managed deployment, a trace dashboard, and webhook automations.",
   "website": "https://crewai.com",
-  "repository": "https://github.com/crewAIInc/crewAI",
   "license": "MIT",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",

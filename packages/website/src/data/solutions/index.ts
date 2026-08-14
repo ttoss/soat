@@ -40,7 +40,6 @@ export interface Solution {
   archetype: Archetype;
   summary: string;
   website: string;
-  repository?: string;
   license: string;
   deployment: Deployment[];
   last_verified: string;

@@ -4,7 +4,6 @@
   "archetype": "managed-platform",
   "summary": "OpenAI's agent stack: the MIT-licensed Agents SDK (agent loop, sessions, handoffs, guardrails, tracing) plus the Responses API, OpenAI-hosted tools (web search, file search, code interpreter, hosted MCP), and a managed Traces dashboard. Execution and hosted tools depend on OpenAI's API; there is no self-hosted control plane.",
   "website": "https://developers.openai.com/",
-  "repository": "https://github.com/openai/openai-agents-python",
   "license": "MIT (Agents SDK); platform services are proprietary",
   "deployment": ["managed"],
   "last_verified": "2026-08-14",

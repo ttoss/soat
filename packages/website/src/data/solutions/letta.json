@@ -4,7 +4,6 @@
   "archetype": "infrastructure",
   "summary": "Open-source server for stateful LLM agents (formerly MemGPT) that persists agent state, memory blocks, and archival passages in PostgreSQL with pgvector, exposed over a REST API and SDKs. Deployable via Docker or usable as a hosted service, with agent state surviving context-window eviction.",
   "website": "https://docs.letta.com/",
-  "repository": "https://github.com/letta-ai/letta",
   "license": "Apache-2.0",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",

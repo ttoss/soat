@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "Plugin-based open-source agent framework from DeepSeek AI (\"everything is a plugin\") built on the Cordis composable plugin system, with a web UI and CLI for building and running custom agents.",
   "website": "https://github.com/deepseek-ai/deepseek-harness",
-  "repository": "https://github.com/deepseek-ai/deepseek-harness",
   "license": "MIT",
   "deployment": ["self-hosted"],
   "last_verified": "2026-08-14",

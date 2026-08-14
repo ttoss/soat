@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "Open-source agent runtime from Nous Research with a built-in learning loop (skills from experience), agent-curated memory, 40+ tools plus MCP, and a multi-platform gateway (Telegram, Discord, Slack, WhatsApp, Signal, CLI).",
   "website": "https://github.com/nousresearch/hermes-agent",
-  "repository": "https://github.com/nousresearch/hermes-agent",
   "license": "MIT",
   "deployment": ["self-hosted"],
   "last_verified": "2026-08-14",

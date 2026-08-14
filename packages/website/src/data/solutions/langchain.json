@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "The most widely adopted open-source framework for LLM applications: standardized model interfaces, a huge integration library, LangGraph for controllable agent orchestration, and the commercial LangSmith platform for observability and evals.",
   "website": "https://www.langchain.com",
-  "repository": "https://github.com/langchain-ai/langchain",
   "license": "MIT (LangSmith is commercial)",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",

@@ -4,7 +4,6 @@
   "archetype": "framework",
   "summary": "Low-level orchestration framework and runtime for long-running stateful agents: durable execution via checkpointers, thread-scoped and cross-thread state, interrupt-based human-in-the-loop, and streaming. Its Agent Server adds an assistants/threads/runs/cron API, self-hosted or on LangSmith Cloud.",
   "website": "https://docs.langchain.com/oss/python/langgraph/overview",
-  "repository": "https://github.com/langchain-ai/langgraph",
   "license": "MIT (library); LangGraph Platform is commercial",
   "deployment": ["self-hosted", "managed"],
   "last_verified": "2026-08-14",

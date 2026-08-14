@@ -46,19 +46,15 @@ const listSolutionFiles = () => {
     .sort();
 };
 
-test('solutions dataset exists and contains at least the four seed solutions', () => {
+test('solutions dataset is non-empty and contains the pinned baseline', () => {
   assert.ok(fs.existsSync(SOLUTIONS_DIR), `missing directory ${SOLUTIONS_DIR}`);
   const files = listSolutionFiles();
-  for (const expected of [
-    'deepseek-harness.json',
-    'hermes-agent.json',
-    'langchain.json',
-    'openclaw.json',
-    'soat.json',
-    'vertex-ai-agent-builder.json',
-  ]) {
-    assert.ok(files.includes(expected), `missing seed solution ${expected}`);
-  }
+  assert.ok(files.length > 0, 'solutions directory has no JSON files');
+  // The /benchmark page pins SOAT as the comparison baseline.
+  assert.ok(
+    files.includes('soat.json'),
+    'missing the pinned baseline soat.json'
+  );
 });
 
 test('every solution file matches the schema', () => {

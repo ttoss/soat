@@ -4,7 +4,6 @@
   "archetype": "managed-platform",
   "summary": "Google Cloud's managed platform for building and deploying agents: Agent Development Kit, managed Agent Engine runtime, RAG Engine, and Google Cloud IAM, billing, and observability.",
   "website": "https://cloud.google.com/products/agent-builder",
-  "repository": "https://github.com/google/adk-python",
   "license": "Proprietary (ADK is Apache-2.0)",
   "deployment": ["managed"],
   "last_verified": "2026-08-14",
