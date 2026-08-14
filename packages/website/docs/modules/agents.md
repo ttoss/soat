@@ -179,7 +179,7 @@ The `instructions` field sets the agent's system prompt, and it is the only thin
 
 `messages` is caller-supplied, so accepting system content there would let a request replace the prompt an operator configured — the same reason [retrieved knowledge is never injected with the `system` role](#knowledge-config), and the reason the underlying AI SDK defaults `allowSystemInMessages` to `false`. The agent's own instructions travel to the provider as its `instructions` argument, never as a message.
 
-To vary the system prompt per call, edit the agent (`update-agent --instructions`, which archives a new [version](#agent-version)) or create a separate agent. [Chats](./chats.md#system-instructions) are the surface that does take per-call system content — through their `system_message` field, never through `messages` — since there the caller is the operator rather than an end user.
+To vary the system prompt per call, edit the agent (`update-agent --instructions`, which archives a new [version](#agent-version)) or create a separate agent. [Chats](./chats.md#system-instructions) are the surface that does take per-call system content — through their `instructions` field, never through `messages` — since there the caller is the operator rather than an end user.
 
 > **Changed:** this previously depended on configuration rather than being a rule. `instructions` was taken from the *first* system message of the combined history, so a caller's system message won on an agent whose `instructions` was empty and was silently dropped on one where it was set — and neither outcome was reported.
 

@@ -133,13 +133,13 @@ describe('Chats', () => {
           ai_provider_id: aiProviderId,
           project_id: projectId,
           name: 'My Chat',
-          system_message: 'You are a helpful assistant',
+          instructions: 'You are a helpful assistant',
           model: 'llama3.2',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('My Chat');
-      expect(response.body.system_message).toBe('You are a helpful assistant');
+      expect(response.body.instructions).toBe('You are a helpful assistant');
       expect(response.body.model).toBe('llama3.2');
     });
   });
@@ -328,7 +328,7 @@ describe('Chats', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
       const chatId = res.body.id;
 
@@ -479,7 +479,7 @@ describe('Chats', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
       chatWithSystemId = res2.body.id;
     });
@@ -538,7 +538,7 @@ describe('Chats', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
-      expect(response.body.error.message).toMatch(/system_message/);
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 
@@ -591,7 +591,7 @@ describe('Chats', () => {
         .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: aiProviderId,
-          system_message: 'Be concise.',
+          instructions: 'Be concise.',
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
@@ -599,7 +599,7 @@ describe('Chats', () => {
     });
 
     test('a system message in messages is refused with 400', async () => {
-      // System content travels only in the `system_message` field — one rule on
+      // System content travels only in the `instructions` field — one rule on
       // every surface, mirroring the AI SDK's allowSystemInMessages: false.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
@@ -613,7 +613,7 @@ describe('Chats', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
-      expect(response.body.error.message).toMatch(/system_message/);
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 

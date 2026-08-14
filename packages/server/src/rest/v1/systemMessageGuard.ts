@@ -5,13 +5,13 @@ import { hasSystemMessage } from 'src/lib/modelMessages';
  * The single rule for system content on the wire: it never travels as a
  * message. Every REST surface that accepts a caller-supplied `messages` array
  * refuses a `role: "system"` entry with the same 400 and points at that
- * surface's dedicated channel (`system_message` on completions, the agent's
+ * surface's dedicated channel (`instructions` on completions, the agent's
  * `instructions` field on generations).
  *
  * This mirrors the AI SDK, whose `allowSystemInMessages` defaults to false and
  * throws rather than lifting or stripping — a system entry inside a
  * caller-supplied array is a prompt-injection vector, and honoring it lets
- * request data rewrite configured prompts (a chat's stored `system_message`,
+ * request data rewrite configured prompts (a chat's stored `instructions`,
  * an agent's `instructions`).
  *
  * REST boundary only: internal callers below this line legitimately assemble

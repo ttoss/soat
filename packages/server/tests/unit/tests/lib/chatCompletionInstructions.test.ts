@@ -103,12 +103,12 @@ describe('chat completion system instructions', () => {
   });
 
   describe('POST /api/v1/chat/completions', () => {
-    test('a system_message field reaches the provider', async () => {
+    test('a instructions field reaches the provider', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
           ai_provider_id: aiProviderId,
-          system_message: 'Answer only in French.',
+          instructions: 'Answer only in French.',
           messages: [{ role: 'user', content: 'Capital of Italy?' }],
         });
 
@@ -116,7 +116,7 @@ describe('chat completion system instructions', () => {
       expect(sentSystemContent()).toEqual(['Answer only in French.']);
     });
 
-    /* System content travels only in the `system_message` field — the single
+    /* System content travels only in the `instructions` field — the single
      * rule on every SOAT surface, mirroring the AI SDK, whose
      * `allowSystemInMessages` defaults to false because a system entry in a
      * caller-supplied array is a prompt-injection vector. The provider is never
@@ -159,12 +159,12 @@ describe('chat completion system instructions', () => {
         .send({
           project_id: projectId,
           ai_provider_id: aiProviderId,
-          ...(systemMessage ? { system_message: systemMessage } : {}),
+          ...(systemMessage ? { instructions: systemMessage } : {}),
         });
       return res.body.id as string;
     };
 
-    test("the chat's stored system_message is used when the request supplies none", async () => {
+    test("the chat's stored instructions is used when the request supplies none", async () => {
       const chatId = await createChat('You are the stored prompt.');
 
       const response = await authenticatedTestClient(userToken)
@@ -193,13 +193,13 @@ describe('chat completion system instructions', () => {
       expect(lastRequestBody).toEqual({});
     });
 
-    test('a request system_message overrides the stored one for that call', async () => {
+    test('a request instructions overrides the stored one for that call', async () => {
       const chatId = await createChat('You are the stored prompt.');
 
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/chats/${chatId}/completions`)
         .send({
-          system_message: 'Just this once, be terse.',
+          instructions: 'Just this once, be terse.',
           messages: [{ role: 'user', content: 'Hello' }],
         });
 

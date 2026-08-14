@@ -35,7 +35,7 @@ Both endpoints support SSE streaming via `stream: true`. To see a completion dri
 | `project_id`     | string   | Public ID of the owning project                                  |
 | `ai_provider_id` | string \| null | Public ID of the pinned AI provider, or `null` when the chat pins none and inherits its project's [`default_model_route_id`](./model-routes.md#project-default-route) |
 | `name`           | string   | Optional human-readable name                                     |
-| `system_message` | string   | Optional default system prompt applied to all completions        |
+| `instructions` | string   | Optional default system prompt applied to all completions — the same name an [Agent](./agents.md#instructions) uses |
 | `model`          | string   | Optional model override (falls back to provider's `default_model`) |
 | `created_at`     | string   | ISO 8601 creation timestamp                                      |
 | `updated_at`     | string   | ISO 8601 last-updated timestamp                                  |
@@ -54,15 +54,15 @@ Each message in the `messages` array sent to the completions endpoint:
 
 ### System Instructions
 
-System content never travels as a message — one rule, on every SOAT surface. On a completion it goes in the `system_message` request field, and a `role: "system"` entry in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+System content never travels as a message — one rule, on every SOAT surface. On a completion it goes in the `instructions` request field — the same name everywhere: a completion request, a Chat, an Agent — and a `role: "system"` entry in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
 
-The server sends `system_message` to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there and throws, because a system message inside a caller-supplied array is a prompt-injection vector. SOAT's wire contract is the same contract.
+The server sends the field to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there and throws, because a system message inside a caller-supplied array is a prompt-injection vector. SOAT's wire contract is the same contract.
 
 The same rule everywhere else: an agent's system prompt is its `instructions` field ([Agents](./agents.md#instructions)), and a conversation's stored history carries only `user` and `assistant` turns ([Conversations](./conversations.md)) — all three refuse a system entry with the same 400.
 
 #### Per-chat override
 
-A Chat stores a `system_message` applied to every completion on it. A single call replaces it by supplying its own `system_message`. The Chat record is not modified.
+A Chat stores `instructions` applied to every completion on it. A single call replaces them by supplying its own `instructions`. The Chat record is not modified.
 
 The stored prompt applies only when the request carries none. The two are never merged: combining them would produce a prompt neither the chat nor the caller wrote.
 
@@ -94,7 +94,7 @@ soat create-chat \
   --project-id proj_ABC \
   --ai-provider-id aip_abc123 \
   --name "Support Assistant" \
-  --system-message "You are a helpful support assistant."
+  --instructions "You are a helpful support assistant."
 ```
 
 </TabItem>
@@ -109,7 +109,7 @@ const { data, error } = await soat.chats.createChat({
     project_id: 'proj_ABC',
     ai_provider_id: 'aip_abc123',
     name: 'Support Assistant',
-    system_message: 'You are a helpful support assistant.',
+    instructions: 'You are a helpful support assistant.',
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -126,7 +126,7 @@ curl -X POST https://api.example.com/api/v1/chats \
     "project_id": "proj_ABC",
     "ai_provider_id": "aip_abc123",
     "name": "Support Assistant",
-    "system_message": "You are a helpful support assistant."
+    "instructions": "You are a helpful support assistant."
   }'
 ```
 
@@ -182,7 +182,7 @@ curl -X POST https://api.example.com/api/v1/chats/chat_01/completions \
 ```bash
 soat create-chat-completion \
   --ai-provider-id aip_abc123 \
-  --system-message "You are a helpful assistant." \
+  --instructions "You are a helpful assistant." \
   --messages '[{"role":"user","content":"Hello!"}]'
 ```
 
@@ -193,7 +193,7 @@ soat create-chat-completion \
 const { data, error } = await soat.chats.createChatCompletion({
   body: {
     ai_provider_id: 'aip_abc123',
-    system_message: 'You are a helpful assistant.',
+    instructions: 'You are a helpful assistant.',
     messages: [{ role: 'user', content: 'Hello!' }],
   },
 });
@@ -209,7 +209,7 @@ curl -X POST https://api.example.com/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "ai_provider_id": "aip_abc123",
-    "system_message": "You are a helpful assistant.",
+    "instructions": "You are a helpful assistant.",
     "messages": [{ "role": "user", "content": "Hello!" }]
   }'
 ```
