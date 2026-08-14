@@ -152,7 +152,7 @@ describe('chat completion system instructions', () => {
     });
   });
 
-  describe('POST /api/v1/chats/:chat_id/completions', () => {
+  describe('POST /api/v1/chat/completions — chat_id target', () => {
     const createChat = async (systemMessage?: string) => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
@@ -168,8 +168,11 @@ describe('chat completion system instructions', () => {
       const chatId = await createChat('You are the stored prompt.');
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chatId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(response.status).toBe(200);
       expect(sentSystemContent()).toEqual(['You are the stored prompt.']);
@@ -180,8 +183,9 @@ describe('chat completion system instructions', () => {
       lastRequestBody = {};
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
+        .post('/api/v1/chat/completions')
         .send({
+          chat_id: chatId,
           messages: [
             { role: 'system', content: 'Replace the stored prompt.' },
             { role: 'user', content: 'Hello' },
@@ -197,8 +201,9 @@ describe('chat completion system instructions', () => {
       const chatId = await createChat('You are the stored prompt.');
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
+        .post('/api/v1/chat/completions')
         .send({
+          chat_id: chatId,
           instructions: 'Just this once, be terse.',
           messages: [{ role: 'user', content: 'Hello' }],
         });

@@ -1953,10 +1953,10 @@ echo "--- Chat completion: 400 without messages ---"
 expect_cli_error_status 400 create-chat-completion
 echo "400 without messages: OK"
 
-# 15b. Chat completion — 400 without ai_provider_id
-echo "--- Chat completion: 400 without ai_provider_id ---"
+# 15b. Chat completion — 400 without a target (neither ai_provider_id nor chat_id)
+echo "--- Chat completion: 400 without a completion target ---"
 expect_cli_error_status 400 create-chat-completion --messages '[{"role":"user","content":"hello"}]'
-echo "400 without ai_provider_id: OK"
+echo "400 without a completion target: OK"
 
 # 16. Create AI provider (Ollama with qwen2.5:0.5b available in test env)
 echo "--- Creating AI provider ---"
@@ -2090,7 +2090,7 @@ if [ "$(printf '%s\n' "$INHERITING_CHAT_RESP" | jq -r '.ai_provider_id')" != "nu
   echo "$INHERITING_CHAT_RESP" >&2
   exit 1
 fi
-INHERITED_CHAT_RESP=$($SOAT_CLI create-chat-completion-for-chat --chat-id "$INHERITING_CHAT_ID" \
+INHERITED_CHAT_RESP=$($SOAT_CLI create-chat-completion --chat_id "$INHERITING_CHAT_ID" \
   --messages '[{"role":"user","content":"say hello"}]')
 if [ "$(printf '%s\n' "$INHERITED_CHAT_RESP" | jq -r '.object')" != "chat.completion" ]; then
   echo "ERROR: inheriting chat completion did not resolve through the project default" >&2
@@ -2133,6 +2133,25 @@ if ! printf '%s\n' "$CHAT_SSE_RESP" | grep -q "data: \[DONE\]"; then
   echo "$CHAT_SSE_RESP" >&2
   exit 1
 fi
+
+# 18b. Chat completion — a stored chat as the target, and the two targets are
+# mutually exclusive.
+echo "--- Chat completion: chat_id target ---"
+SMOKE_CHAT_RESP=$($SOAT_CLI create-chat --project_id "$PROJECT_PUBLIC_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" --name smoke-completion-chat \
+  --instructions "You are a terse assistant.")
+SMOKE_CHAT_ID=$(printf '%s\n' "$SMOKE_CHAT_RESP" | jq -r '.id')
+SMOKE_CHAT_COMPLETION=$($SOAT_CLI create-chat-completion --chat_id "$SMOKE_CHAT_ID" \
+  --messages '[{"role":"user","content":"say hello"}]')
+if [ "$(printf '%s\n' "$SMOKE_CHAT_COMPLETION" | jq -r '.object')" != "chat.completion" ]; then
+  echo "ERROR: chat_id completion did not return a chat.completion" >&2
+  echo "$SMOKE_CHAT_COMPLETION" >&2
+  exit 1
+fi
+expect_cli_error_status 400 create-chat-completion --chat_id "$SMOKE_CHAT_ID" \
+  --ai_provider_id "$AI_PROVIDER_ID" --messages '[{"role":"user","content":"hello"}]'
+$SOAT_CLI delete-chat --chat-id "$SMOKE_CHAT_ID"
+echo "Chat completion with chat_id: OK"
 echo "Chat SSE stream OK."
 echo "--- Chat SSE stream output ---"
 echo "$CHAT_SSE_RESP"

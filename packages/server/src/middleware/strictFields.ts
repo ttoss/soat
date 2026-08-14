@@ -25,7 +25,6 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH']);
 export const STRICT_FIELDS_OPT_OUT: ReadonlySet<string> = new Set([
   // LLM completion passthrough — accept temperature, top_p, … beyond the spec.
   'POST /api/v1/chat/completions',
-  'POST /api/v1/chats/{chat_id}/completions',
   // Open / passthrough input.
   'POST /api/v1/embeddings',
   'POST /api/v1/tools/{tool_id}/call',

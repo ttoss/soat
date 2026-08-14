@@ -20,7 +20,6 @@ describe('Chats', () => {
         'chats:GetChat',
         'chats:DeleteChat',
         'chats:CreateChatCompletion',
-        'chats:CreateChatCompletionForChat',
       ],
       createOtherProject: true,
     });
@@ -261,11 +260,12 @@ describe('Chats', () => {
     });
   });
 
-  describe('POST /api/v1/chats/:chatId/completions', () => {
+  describe('POST /api/v1/chat/completions - chat_id target', () => {
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post('/api/v1/chats/cht_someid/completions')
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+      const response = await testClient.post('/api/v1/chat/completions').send({
+        chat_id: 'cht_someid',
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
 
       expect(response.status).toBe(401);
     });
@@ -274,55 +274,102 @@ describe('Chats', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({});
+        .post('/api/v1/chat/completions')
+        .send({ chat_id: res.body.id });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
     test('empty messages array returns 400', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [] });
+        .post('/api/v1/chat/completions')
+        .send({ chat_id: res.body.id, messages: [] });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('unknown chatId returns 400', async () => {
+    test('unknown chat_id returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/cht_doesnotexist0000/completions')
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: 'cht_doesnotexist0000',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toBeDefined();
+      expect(response.body.error.code).toBe('CHAT_NOT_FOUND');
     });
 
-    test('user without permission returns 403', async () => {
+    test('user without permission on the chat returns 403', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(noPermToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: res.body.id,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(response.status).toBe(403);
     });
-  });
 
-  describe('POST /api/v1/chats/:chatId/completions - non-streaming (real lib)', () => {
-    test('exercises the system-message branch for a chat with a system message', async () => {
+    test('ai_provider_id and chat_id together return 400', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          chat_id: res.body.id,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+      expect(response.body.error.message).toMatch(/mutually exclusive/i);
+    });
+
+    test('neither ai_provider_id nor chat_id returns 400', async () => {
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('VALIDATION_FAILED');
+    });
+
+    test('a system message in messages is refused for a chat target', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: res.body.id,
+          messages: [
+            { role: 'system', content: 'Be concise.' },
+            { role: 'user', content: 'Hello' },
+          ],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+    });
+
+    test("a chat-scoped completion applies the chat's stored instructions", async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({
@@ -330,15 +377,17 @@ describe('Chats', () => {
           project_id: projectId,
           instructions: 'You are a helpful assistant.',
         });
-      const chatId = res.body.id;
 
       // Ollama isn't running in unit CI, so the connection error is a plain
       // (non-DomainError) Error and errorLogger's default status is 500 —
-      // this still exercises buildChatFinalMessages' system-message branch,
-      // which runs before the provider call.
+      // this still exercises the stored-instructions branch, which runs
+      // before the provider call.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: res.body.id,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(response.status).toBe(500);
     });
@@ -405,7 +454,7 @@ describe('Chats', () => {
     });
   });
 
-  describe('POST /api/v1/chats/:chatId/completions - with mocked AI', () => {
+  describe('POST /api/v1/chat/completions - chat_id with mocked AI', () => {
     let chatId: string;
 
     beforeAll(async () => {
@@ -419,21 +468,24 @@ describe('Chats', () => {
       jest.restoreAllMocks();
     });
 
-    test('returns 200 with completion result when createChatCompletionForChat succeeds', async () => {
-      jest
-        .spyOn(chatsLib, 'createChatCompletionForChat')
-        .mockResolvedValueOnce({
-          model: 'mock-model',
-          content: 'Mock AI response',
-          finishReason: 'stop',
-        });
+    test('returns 200 with completion result for a chat target', async () => {
+      jest.spyOn(chatsLib, 'createChatCompletion').mockResolvedValueOnce({
+        model: 'mock-model',
+        content: 'Mock AI response',
+        finishReason: 'stop',
+      });
 
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chatId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(response.status).toBe(200);
       expect(response.body.object).toBe('chat.completion');
+      expect(response.body.model).toBe('mock-model');
+      expect(response.body.choices[0].message.content).toBe('Mock AI response');
     });
   });
 
@@ -461,9 +513,9 @@ describe('Chats', () => {
     });
   });
 
-  // ── Streaming /chats/:chatId/completions ────────────────────────────────
+  // ── Streaming /chat/completions against a chat ──────────────────────────
 
-  describe('POST /api/v1/chats/:chatId/completions - streaming (real lib)', () => {
+  describe('POST /api/v1/chat/completions - chat_id streaming (real lib)', () => {
     let chatId: string;
     let chatWithSystemId: string;
 
@@ -473,7 +525,7 @@ describe('Chats', () => {
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
       chatId = res.body.id;
 
-      // Chat with a pre-configured system message to exercise buildChatFinalMessages
+      // Chat with stored instructions, to exercise that branch.
       const res2 = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({
@@ -485,9 +537,11 @@ describe('Chats', () => {
     });
 
     test('unauthenticated request returns 401', async () => {
-      const response = await testClient
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+      const response = await testClient.post('/api/v1/chat/completions').send({
+        chat_id: chatId,
+        messages: [{ role: 'user', content: 'Hello' }],
+        stream: true,
+      });
 
       expect(response.status).toBe(401);
     });
@@ -496,28 +550,39 @@ describe('Chats', () => {
       // Ollama is not running in tests; the stream will fail during iteration,
       // but the SSE response headers are set and the function body is fully exercised.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chatId,
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
 
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toMatch(/text\/event-stream/);
       expect(response.text).toContain('data:');
     });
 
-    test('sends error via SSE for unknown chatId', async () => {
+    test('sends error via SSE for unknown chat_id', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post('/api/v1/chats/cht_doesnotexist0000/completions')
-        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: 'cht_doesnotexist0000',
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
 
       expect(response.status).toBe(200);
       expect(response.text).toContain('not found');
     });
 
-    test('streams SSE response when chat has a system message', async () => {
-      // Exercises the system-message branch inside streamChatCompletionForChat
+    test('streams SSE response when the chat has stored instructions', async () => {
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatWithSystemId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }], stream: true });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chatWithSystemId,
+          messages: [{ role: 'user', content: 'Hello' }],
+          stream: true,
+        });
 
       expect(response.status).toBe(200);
       expect(response.headers['content-type']).toMatch(/text\/event-stream/);
@@ -527,8 +592,9 @@ describe('Chats', () => {
       // The guard runs before the SSE headers are written, so the caller gets
       // a proper JSON error instead of an error frame inside a 200 stream.
       const response = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chatId}/completions`)
+        .post('/api/v1/chat/completions')
         .send({
+          chat_id: chatId,
           messages: [
             { role: 'system', content: 'Be concise.' },
             { role: 'user', content: 'Hello' },
@@ -617,9 +683,9 @@ describe('Chats', () => {
     });
   });
 
-  // ── Real createChatCompletionForChat execution (admin) ──────────────────
+  // ── Real createChatCompletion execution (admin) ─────────────────────────
 
-  describe('POST /api/v1/chats/:chatId/completions - real lib paths (admin)', () => {
+  describe('POST /api/v1/chat/completions - real lib paths (admin)', () => {
     let realChatId: string;
     let openAiProviderId: string;
 
@@ -645,14 +711,16 @@ describe('Chats', () => {
       jest.restoreAllMocks();
     });
 
-    test('non-streaming completions with ollama provider (reaches generateText, propagates AI error status)', async () => {
-      // createChatCompletionForChat runs getChatSystemMessage +
-      // buildChatFinalMessages before calling generateText, which throws
-      // because this suite has no live Ollama server — same reasoning as
-      // the chat/completions test above.
+    test('non-streaming chat-scoped completion with ollama provider (reaches generateText, propagates AI error status)', async () => {
+      // createChatCompletion resolves the chat's instructions and model before
+      // calling generateText, which throws because this suite has no live
+      // Ollama server — same reasoning as the stateless test above.
       const res = await authenticatedTestClient(adminToken)
-        .post(`/api/v1/chats/${realChatId}/completions`)
-        .send({ messages: [{ role: 'user', content: 'Hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: realChatId,
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
 
       expect(res.status).toBe(500);
     });

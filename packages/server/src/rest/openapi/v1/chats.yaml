@@ -204,94 +204,34 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
-  /api/v1/chats/{chat_id}/completions:
-    post:
-      tags:
-        - Chats
-      summary: Create a chat completion for a stored chat
-      description: >
-        Runs a completion using the AI provider and settings stored in the chat.
-        Pass `stream: true` for SSE streaming. System content travels only in
-        the `instructions` field — a `role: "system"` entry in `messages` is
-        refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. A request
-        `instructions` replaces the chat's stored one for this call only; the
-        stored value applies when the request carries none. It is sent to the
-        provider as its `instructions` argument, never as a message. Messages
-        may use `document_id` instead of `content`.
-      operationId: createChatCompletionForChat
-      parameters:
-        - name: chat_id
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ChatCompletionForChatRequest'
-            examples:
-              basic:
-                summary: Simple user message
-                value:
-                  messages:
-                    - role: user
-                      content: What can you help me with?
-              with_document:
-                summary: Message referencing a document
-                value:
-                  messages:
-                    - role: user
-                      document_id: doc_V1StGXR8Z5jdHi6B
-              with_system_override:
-                summary: Override system message
-                value:
-                  instructions: Answer in French only.
-                  messages:
-                    - role: user
-                      content: Hello
-      responses:
-        '200':
-          description: Chat completion result (JSON or SSE stream)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ChatCompletionResponse'
-            text/event-stream:
-              schema:
-                type: string
-                description: 'SSE stream of delta chunks ending with `data: [DONE]`.'
-        '400':
-          description: Bad Request
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          description: Unauthorized
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Chat or AI provider not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /api/v1/chat/completions:
     post:
       tags:
         - Chats
-      summary: Create a chat completion (stateless)
+      summary: Create a chat completion
       description: >
         OpenAI Chat Completions-compatible endpoint. Mirrors OpenAI's
         `POST /v1/chat/completions` path so an OpenAI SDK can target it by base
-        URL alone. Resolves the AI provider from `ai_provider_id`, decrypts its
-        secret, and calls the appropriate Vercel AI SDK provider. `ai_provider_id`
-        is required — there is no server-side model fallback.
+        URL alone.
+
+
+        Names exactly one target. With `ai_provider_id` the completion is
+        stateless: the provider's secret is decrypted and the appropriate Vercel
+        AI SDK provider is called, with no server-side model fallback. With
+        `chat_id` the stored chat supplies the provider (or the project's
+        `default_model_route_id`), model and instructions.
+
+
+        System content travels only in `instructions` — a `role: "system"` entry
+        in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. With
+        `chat_id`, a request `instructions` replaces the chat's stored one for
+        this call only; the stored value applies when the request carries none,
+        and the two are never merged.
+
+
+        Messages may use `document_id` instead of `content` with either target.
+        Chats hold no message history — send the full `messages` array every
+        time.
       operationId: createChatCompletion
       requestBody:
         required: true
@@ -307,6 +247,20 @@ paths:
                   messages:
                     - role: user
                       content: Hello, how are you?
+              with_chat:
+                summary: Against a stored chat
+                value:
+                  chat_id: chat_V1StGXR8Z5jdHi6B
+                  messages:
+                    - role: user
+                      content: What can you help me with?
+              with_document:
+                summary: Message referencing a document
+                value:
+                  chat_id: chat_V1StGXR8Z5jdHi6B
+                  messages:
+                    - role: user
+                      document_id: doc_V1StGXR8Z5jdHi6B
               with_provider:
                 summary: With explicit AI provider and streaming
                 value:
@@ -331,13 +285,23 @@ paths:
                   SSE stream of JSON objects, one per line, prefixed with
                   `data: `. The stream ends with `data: [DONE]`.
         '400':
-          description: 'Bad Request — `messages` is missing or empty, or `ai_provider_id` is missing'
+          description: >-
+            Bad Request — `messages` is missing or empty; a `role: "system"`
+            entry appears in `messages`; neither `ai_provider_id` nor `chat_id`
+            was given, or both were; or `chat_id` names a chat that does not
+            exist.
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized — missing or invalid bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden — no permission on the chat named by `chat_id`
           content:
             application/json:
               schema:
@@ -454,72 +418,32 @@ components:
             (mutually exclusive with content). Only valid for user/assistant roles.
           example: doc_V1StGXR8Z5jdHi6B
 
-    ChatCompletionForChatRequest:
-      type: object
-      required:
-        - messages
-      properties:
-        messages:
-          type: array
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/ChatMessageInput'
-        model:
-          type: string
-          description: Override the chat's default model for this call
-          example: gpt-4o-mini
-        instructions:
-          type: string
-          description: >
-            System instructions for this call only, replacing the chat's stored
-            `instructions`. Sent as the provider's `instructions` argument —
-            the only channel for system content; a `role: "system"` entry in
-            `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. The
-            chat's stored value applies only when the request carries none; the
-            two are never merged, which would produce a prompt neither the chat
-            nor the caller wrote.
-          example: Just this once, answer in one sentence.
-        stream:
-          type: boolean
-          default: false
-          description: When `true` the response is an SSE stream.
-
-    ChatMessage:
-      type: object
-      required:
-        - role
-        - content
-      properties:
-        role:
-          type: string
-          # No `system`: system content travels only in `instructions`; a
-          # system entry here is refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED.
-          enum:
-            - user
-            - assistant
-          description: Role of the message author
-          example: user
-        content:
-          type: string
-          description: Text content of the message
-          example: Hello, how are you?
-
     ChatCompletionRequest:
       type: object
       required:
-        - ai_provider_id
         - messages
       properties:
         ai_provider_id:
           x-soat-ref: ai-providers
           type: string
-          description: Public ID of the AI provider to use.
+          description: >
+            Public ID of the AI provider to run the completion against.
+            Mutually exclusive with `chat_id`; exactly one of the two is
+            required.
           example: aip_V1StGXR8Z5jdHi6B
+        chat_id:
+          x-soat-ref: chats
+          type: string
+          description: >
+            Public ID of a stored chat supplying the provider, model and
+            instructions. Mutually exclusive with `ai_provider_id`; exactly one
+            of the two is required.
+          example: chat_V1StGXR8Z5jdHi6B
         model:
           type: string
           description: >
-            Model identifier. Overrides the provider's `default_model` when
-            specified.
+            Model identifier. Overrides the provider's `default_model`, or the
+            chat's `model`, when specified.
           example: gpt-4o
         instructions:
           type: string
@@ -529,14 +453,16 @@ components:
             place the AI SDK accepts system content (`allowSystemInMessages`
             defaults to false). This field is the only channel — a
             `role: "system"` entry in `messages` is refused with
-            `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+            `400 SYSTEM_MESSAGE_NOT_ALLOWED`. With `chat_id`, this replaces the
+            chat's stored `instructions` for this call only; the stored value
+            applies when the request carries none, and the two are never merged.
           example: You are a helpful assistant.
         messages:
           type: array
           minItems: 1
           description: Ordered list of chat messages
           items:
-            $ref: '#/components/schemas/ChatMessage'
+            $ref: '#/components/schemas/ChatMessageInput'
         stream:
           type: boolean
           default: false

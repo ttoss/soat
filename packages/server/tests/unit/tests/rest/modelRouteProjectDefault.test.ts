@@ -32,7 +32,7 @@ const ACTIONS = [
   'chats:CreateChat',
   'chats:GetChat',
   'chats:DeleteChat',
-  'chats:CreateChatCompletionForChat',
+  'chats:CreateChatCompletion',
 ];
 
 type LlmStub = {
@@ -569,8 +569,11 @@ describe('Project default model route', () => {
       });
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chat.body.id}/completions`)
-        .send({ messages: [{ role: 'user', content: 'hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chat.body.id,
+          messages: [{ role: 'user', content: 'hello' }],
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.choices[0].message.content).toBe(
@@ -626,8 +629,11 @@ describe('Project default model route', () => {
       const healthyBefore = healthy.requests();
 
       const res = await authenticatedTestClient(userToken)
-        .post(`/api/v1/chats/${chat.body.id}/completions`)
-        .send({ messages: [{ role: 'user', content: 'hello' }] });
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: chat.body.id,
+          messages: [{ role: 'user', content: 'hello' }],
+        });
 
       expect(res.status).toBe(200);
       expect(res.body.choices[0].message.content).toBe('served by the pin');

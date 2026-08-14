@@ -126,11 +126,14 @@ const { data: chat, error: chatError } = await soat.chats.createChat({
 
 if (chatError) throw new Error(JSON.stringify(chatError));
 
-const { data: reply, error: replyError } =
-  await soat.chats.createChatCompletionForChat({
-    path: { chat_id: chat.id },
-    body: { content: 'Hello!' },
-  });
+const { data: reply, error: replyError } = await soat.chats.createChatCompletion(
+  {
+    body: {
+      chat_id: chat.id,
+      messages: [{ role: 'user', content: 'Hello!' }],
+    },
+  }
+);
 
 if (replyError) throw new Error(JSON.stringify(replyError));
 ```

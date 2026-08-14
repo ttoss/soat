@@ -22,14 +22,9 @@
       "description": "Delete a chat"
     },
     {
-      "operationId": "createChatCompletionForChat",
-      "action": "chats:CreateChatCompletionForChat",
-      "description": "Generate a chat completion within a stored chat"
-    },
-    {
       "operationId": "createChatCompletion",
       "action": "chats:CreateChatCompletion",
-      "description": "Generate a stateless chat completion"
+      "description": "Generate a chat completion, stateless or against a stored chat"
     }
   ]
 }
