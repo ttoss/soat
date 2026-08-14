@@ -12,8 +12,9 @@
  *   pre-upgrade schema with raw DDL the way a long-lived deployment would carry
  *   it.
  */
+import { Sequelize } from '@ttoss/postgresdb';
+
 import { db } from '../../../../src/db';
-import { isPlainObject } from '../../../../src/lib/plainObject';
 import {
   backfillAgentStepRules,
   backfillAgentToolBindings,
@@ -21,7 +22,9 @@ import {
   normalizeStoredExecute,
   normalizeStoredStepRules,
   normalizeStoredToolChoice,
+  runDataBackfills,
 } from '../../../../src/lib/dataBackfills';
+import { isPlainObject } from '../../../../src/lib/plainObject';
 import { setupProjectWithUsers } from '../../fixtures/bootstrap';
 
 describe('normalizeStoredToolChoice', () => {
@@ -215,6 +218,41 @@ describe('normalizeStoredExecute', () => {
 
 // ── Runners, against the real database ────────────────────────────────────
 
+describe('runDataBackfills on a first boot', () => {
+  // Regression guard for a boot-breaking bug this file could not otherwise
+  // catch: `beforeBulkSync` fires before `sync()` creates anything, so on a
+  // genuinely empty database the backfills run when **no table exists yet**.
+  // Every other test here runs against the cloned template schema, where the
+  // tables are always present — the tutorials/smoke stacks boot against an empty
+  // one, and a raw `SELECT ... FROM agents` there aborts the server's boot.
+  test('is a no-op against an empty schema instead of failing the boot', async () => {
+    const name = 'soat_backfill_first_boot';
+    await db.sequelize.query(`DROP DATABASE IF EXISTS ${name}`);
+    await db.sequelize.query(`CREATE DATABASE ${name}`);
+
+    // Connection details come from the live instance rather than from env, so
+    // this follows the harness whether it started a container or reused a
+    // server via TEST_DB_HOST.
+    const { host, port, username, password } = db.sequelize.config;
+    const credentials = `${encodeURIComponent(username)}:${encodeURIComponent(
+      password ?? ''
+    )}`;
+    const empty = new Sequelize(
+      `postgres://${credentials}@${host}:${port}/${name}`,
+      { logging: false }
+    );
+
+    try {
+      await expect(
+        runDataBackfills({ sequelize: empty })
+      ).resolves.toBeUndefined();
+    } finally {
+      await empty.close();
+      await db.sequelize.query(`DROP DATABASE IF EXISTS ${name}`);
+    }
+  });
+});
+
 describe('backfill runners (real DB)', () => {
   let projectDbId: number;
   let aiProviderDbId: number;
@@ -271,7 +309,8 @@ describe('backfill runners (real DB)', () => {
         {
           replacements: {
             id: agent.id,
-            toolIds: args.toolIds === null ? null : JSON.stringify(args.toolIds),
+            toolIds:
+              args.toolIds === null ? null : JSON.stringify(args.toolIds),
             tools: args.tools === null ? null : JSON.stringify(args.tools),
             bindings:
               args.toolBindings === undefined

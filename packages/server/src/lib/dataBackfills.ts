@@ -177,6 +177,28 @@ const columnExists = async (args: {
 };
 
 /**
+ * Whether the table is there at all.
+ *
+ * Required, not defensive: `beforeBulkSync` fires before `sync()` has created
+ * anything, so on a **first** boot against an empty database every table these
+ * runners name is still missing. A raw `SELECT ... FROM agents` there raises
+ * "relation does not exist" and — because a failing backfill fails the boot by
+ * design — takes the whole server down on its very first start.
+ */
+const tableExists = async (args: {
+  sequelize: Sequelize;
+  table: string;
+}): Promise<boolean> => {
+  const [rows] = await args.sequelize.query(
+    `SELECT 1 FROM information_schema.tables
+      WHERE table_schema = current_schema()
+        AND table_name = :table`,
+    { replacements: { table: args.table } }
+  );
+  return rows.length > 0;
+};
+
+/**
  * Derives `tool_bindings` for agent rows that only ever held the
  * pre-`toolBindings` `tool_ids` / `tools` columns, so the boot-time
  * `sync({ alter: true })` that drops those columns cannot take an agent's tool
@@ -193,6 +215,10 @@ const columnExists = async (args: {
 export const backfillAgentToolBindings = async (args: {
   sequelize: Sequelize;
 }): Promise<number> => {
+  if (!(await tableExists({ sequelize: args.sequelize, table: 'agents' }))) {
+    return 0;
+  }
+
   const present = await Promise.all(
     ['tool_ids', 'tools'].map((column) => {
       return columnExists({
@@ -263,6 +289,10 @@ const normalizeJsonColumns = async (args: {
   columns: Array<{ column: string; normalize: (value: unknown) => Normalized }>;
   candidateWhere: string;
 }): Promise<number> => {
+  if (!(await tableExists({ sequelize: args.sequelize, table: args.table }))) {
+    return 0;
+  }
+
   const selected = args.columns
     .map((entry) => {
       return entry.column;
