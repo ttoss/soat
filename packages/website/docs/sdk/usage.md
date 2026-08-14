@@ -121,7 +121,7 @@ if (completionError) throw new Error(JSON.stringify(completionError));
 
 // Stateful
 const { data: chat, error: chatError } = await soat.chats.createChat({
-  body: { system_message: 'You are a helpful assistant.' },
+  body: { instructions: 'You are a helpful assistant.' },
 });
 
 if (chatError) throw new Error(JSON.stringify(chatError));

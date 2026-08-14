@@ -166,7 +166,22 @@ A binding's `tool` property accepts an inline tool definition — the same shape
 
 ### Instructions
 
-The `instructions` field sets the agent's system prompt. When running a per-agent generation, a `system` message in `messages` overrides the stored instructions for that call only.
+The `instructions` field sets the agent's system prompt, and it is the only thing that does. A `role: "system"` entry in a generation's `messages` is refused:
+
+```json
+{
+  "error": {
+    "code": "SYSTEM_MESSAGE_NOT_ALLOWED",
+    "message": "A system message is not accepted in `messages`. An agent's system prompt is its `instructions` field — set it with `update-agent --instructions`, or create a separate agent."
+  }
+}
+```
+
+`messages` is caller-supplied, so accepting system content there would let a request replace the prompt an operator configured — the same reason [retrieved knowledge is never injected with the `system` role](#knowledge-config), and the reason the underlying AI SDK defaults `allowSystemInMessages` to `false`. The agent's own instructions travel to the provider as its `instructions` argument, never as a message.
+
+To vary the system prompt per call, edit the agent (`update-agent --instructions`, which archives a new [version](#agent-version)) or create a separate agent. [Chats](./chats.md#system-instructions) are the surface that does take per-call system content — through their `instructions` field, never through `messages` — since there the caller is the operator rather than an end user.
+
+> **Changed:** this previously depended on configuration rather than being a rule. `instructions` was taken from the *first* system message of the combined history, so a caller's system message won on an agent whose `instructions` was empty and was silently dropped on one where it was set — and neither outcome was reported.
 
 ### AI Provider Resolution
 

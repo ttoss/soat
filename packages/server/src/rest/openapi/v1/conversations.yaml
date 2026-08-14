@@ -373,7 +373,10 @@ paths:
                   example: 'Hello, how can I help you?'
                 role:
                   type: string
-                  enum: [user, assistant, system]
+                  # No `system`: refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED —
+                  # stored history feeds generations, so a system entry here is
+                  # the completion/generation injection one layer down.
+                  enum: [user, assistant]
                   description: Role of the message sender
                   example: 'user'
                 actor_id:
@@ -778,6 +781,8 @@ components:
           example: 'doc_V1StGXR8Z5jdHi6B'
         role:
           type: string
+          # `system` stays in the READ enum only: rows written before
+          # SYSTEM_MESSAGE_NOT_ALLOWED may carry it. New writes refuse it.
           enum: [user, assistant, system]
           description: Role of the message sender
           example: 'user'

@@ -19,6 +19,7 @@ import {
 
 import { checkConversationAccess } from './conversationHelpers';
 import { requireAuth } from './helpers';
+import { assertNotSystemRole } from './systemMessageGuard';
 
 const conversationSubResourcesRouter = new Router<Context>();
 
@@ -74,6 +75,12 @@ conversationSubResourcesRouter.post(
       position?: number;
       metadata?: Record<string, unknown>;
     };
+
+    assertNotSystemRole({
+      role: body.role,
+      remedy:
+        'Conversation history carries only `user` and `assistant` turns; system content belongs to the generating agent (its `instructions` field) or the actor persona.',
+    });
 
     const conversation = await getConversation({
       id: ctx.params.conversation_id,

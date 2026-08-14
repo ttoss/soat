@@ -43,12 +43,12 @@ paths:
                 summary: Minimal chat
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
-              with_system:
-                summary: Chat with system message
+              with_instructions:
+                summary: Chat with instructions
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   name: Support Bot
-                  system_message: You are a helpful support assistant.
+                  instructions: You are a helpful support assistant.
                   model: gpt-4o
       responses:
         '201':
@@ -219,8 +219,14 @@ paths:
         stateless: the provider's secret is decrypted and the appropriate Vercel
         AI SDK provider is called, with no server-side model fallback. With
         `chat_id` the stored chat supplies the provider (or the project's
-        `default_model_route_id`), model and system message; a `system` message
-        in `messages` overrides the chat's stored one for this call only.
+        `default_model_route_id`), model and instructions.
+
+
+        System content travels only in `instructions` — a `role: "system"` entry
+        in `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. With
+        `chat_id`, a request `instructions` replaces the chat's stored one for
+        this call only; the stored value applies when the request carries none,
+        and the two are never merged.
 
 
         Messages may use `document_id` instead of `content` with either target.
@@ -260,9 +266,8 @@ paths:
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   model: gpt-4o
+                  instructions: You are a helpful assistant.
                   messages:
-                    - role: system
-                      content: You are a helpful assistant.
                     - role: user
                       content: What files do I have?
                   stream: true
@@ -281,9 +286,10 @@ paths:
                   `data: `. The stream ends with `data: [DONE]`.
         '400':
           description: >-
-            Bad Request — `messages` is missing or empty; neither
-            `ai_provider_id` nor `chat_id` was given, or both were; or `chat_id`
-            names a chat that does not exist.
+            Bad Request — `messages` is missing or empty; a `role: "system"`
+            entry appears in `messages`; neither `ai_provider_id` nor `chat_id`
+            was given, or both were; or `chat_id` names a chat that does not
+            exist.
           content:
             application/json:
               schema:
@@ -338,7 +344,7 @@ components:
           nullable: true
           description: Optional human-readable name
           example: Support Bot
-        system_message:
+        instructions:
           type: string
           nullable: true
           description: Optional system message sent with every completion
@@ -378,7 +384,7 @@ components:
           type: string
           description: Optional human-readable name
           example: Support Bot
-        system_message:
+        instructions:
           type: string
           description: Optional system message applied to all completions on this chat
           example: You are a helpful support assistant.
@@ -394,8 +400,9 @@ components:
       properties:
         role:
           type: string
+          # No `system`: system content travels only in `instructions`; a
+          # system entry here is refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED.
           enum:
-            - system
             - user
             - assistant
           example: user
@@ -428,9 +435,9 @@ components:
           x-soat-ref: chats
           type: string
           description: >
-            Public ID of a stored chat supplying the provider, model and system
-            message. Mutually exclusive with `ai_provider_id`; exactly one of
-            the two is required.
+            Public ID of a stored chat supplying the provider, model and
+            instructions. Mutually exclusive with `ai_provider_id`; exactly one
+            of the two is required.
           example: chat_V1StGXR8Z5jdHi6B
         model:
           type: string
@@ -438,6 +445,18 @@ components:
             Model identifier. Overrides the provider's `default_model`, or the
             chat's `model`, when specified.
           example: gpt-4o
+        instructions:
+          type: string
+          description: >
+            System instructions for this call. Sent to the provider as its
+            `instructions` argument rather than as a message, which is the only
+            place the AI SDK accepts system content (`allowSystemInMessages`
+            defaults to false). This field is the only channel — a
+            `role: "system"` entry in `messages` is refused with
+            `400 SYSTEM_MESSAGE_NOT_ALLOWED`. With `chat_id`, this replaces the
+            chat's stored `instructions` for this call only; the stored value
+            applies when the request carries none, and the two are never merged.
+          example: You are a helpful assistant.
         messages:
           type: array
           minItems: 1

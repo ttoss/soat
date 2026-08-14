@@ -1320,7 +1320,7 @@ components:
           type: string
           nullable: true
           description: Human-readable label for the chat
-        system_message:
+        instructions:
           type: string
           nullable: true
           description: System message to set the assistant behaviour

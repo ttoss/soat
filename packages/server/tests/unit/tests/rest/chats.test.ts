@@ -132,13 +132,13 @@ describe('Chats', () => {
           ai_provider_id: aiProviderId,
           project_id: projectId,
           name: 'My Chat',
-          system_message: 'You are a helpful assistant',
+          instructions: 'You are a helpful assistant',
           model: 'llama3.2',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('My Chat');
-      expect(response.body.system_message).toBe('You are a helpful assistant');
+      expect(response.body.instructions).toBe('You are a helpful assistant');
       expect(response.body.model).toBe('llama3.2');
     });
   });
@@ -274,11 +274,10 @@ describe('Chats', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
-        .send({ chat_id: chatId });
+        .send({ chat_id: res.body.id });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -288,11 +287,10 @@ describe('Chats', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
-        .send({ chat_id: chatId, messages: [] });
+        .send({ chat_id: res.body.id, messages: [] });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -314,12 +312,11 @@ describe('Chats', () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
-      const chatId = res.body.id;
 
       const response = await authenticatedTestClient(noPermToken)
         .post('/api/v1/chat/completions')
         .send({
-          chat_id: chatId,
+          chat_id: res.body.id,
           messages: [{ role: 'user', content: 'Hello' }],
         });
 
@@ -353,18 +350,37 @@ describe('Chats', () => {
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('a chat-scoped completion applies the chat system message', async () => {
+    test('a system message in messages is refused for a chat target', async () => {
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/chats')
+        .send({ ai_provider_id: aiProviderId, project_id: projectId });
+
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          chat_id: res.body.id,
+          messages: [
+            { role: 'system', content: 'Be concise.' },
+            { role: 'user', content: 'Hello' },
+          ],
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+    });
+
+    test("a chat-scoped completion applies the chat's stored instructions", async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
 
       // Ollama isn't running in unit CI, so the connection error is a plain
       // (non-DomainError) Error and errorLogger's default status is 500 —
-      // this still exercises the chat system-message branch, which runs
+      // this still exercises the stored-instructions branch, which runs
       // before the provider call.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
@@ -509,13 +525,13 @@ describe('Chats', () => {
         .send({ ai_provider_id: aiProviderId, project_id: projectId });
       chatId = res.body.id;
 
-      // Chat with a pre-configured system message to exercise buildChatFinalMessages
+      // Chat with stored instructions, to exercise that branch.
       const res2 = await authenticatedTestClient(userToken)
         .post('/api/v1/chats')
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
       chatWithSystemId = res2.body.id;
     });
@@ -559,7 +575,7 @@ describe('Chats', () => {
       expect(response.text).toContain('not found');
     });
 
-    test('streams SSE response when chat has a system message', async () => {
+    test('streams SSE response when the chat has stored instructions', async () => {
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -572,8 +588,9 @@ describe('Chats', () => {
       expect(response.headers['content-type']).toMatch(/text\/event-stream/);
     });
 
-    test('streams SSE response when messages include a system message', async () => {
-      // Exercises the request-supplied system-message override branch.
+    test('a system message in messages is refused with 400, even when streaming', async () => {
+      // The guard runs before the SSE headers are written, so the caller gets
+      // a proper JSON error instead of an error frame inside a 200 stream.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -585,8 +602,9 @@ describe('Chats', () => {
           stream: true,
         });
 
-      expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 
@@ -632,10 +650,23 @@ describe('Chats', () => {
     });
 
     test('non-streaming request reaches createChatCompletion (propagates AI error status)', async () => {
-      // createChatCompletion runs its system/non-system message split before
-      // calling generateText, which throws because this suite has no live
-      // Ollama server (only the smoke/tutorials CI jobs set one up) — the
-      // connection failure surfaces as an unhandled error, i.e. 500.
+      // createChatCompletion reaches generateText, which throws because this
+      // suite has no live Ollama server (only the smoke/tutorials CI jobs set
+      // one up) — the connection failure surfaces as an unhandled error, i.e. 500.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          instructions: 'Be concise.',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(500);
+    });
+
+    test('a system message in messages is refused with 400', async () => {
+      // System content travels only in the `instructions` field — one rule on
+      // every surface, mirroring the AI SDK's allowSystemInMessages: false.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -646,7 +677,9 @@ describe('Chats', () => {
           ],
         });
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 
@@ -679,9 +712,9 @@ describe('Chats', () => {
     });
 
     test('non-streaming chat-scoped completion with ollama provider (reaches generateText, propagates AI error status)', async () => {
-      // createChatCompletion resolves the chat's system message and model
-      // before calling generateText, which throws because this suite has no
-      // live Ollama server — same reasoning as the stateless test above.
+      // createChatCompletion resolves the chat's instructions and model before
+      // calling generateText, which throws because this suite has no live
+      // Ollama server — same reasoning as the stateless test above.
       const res = await authenticatedTestClient(adminToken)
         .post('/api/v1/chat/completions')
         .send({

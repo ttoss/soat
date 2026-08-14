@@ -20,8 +20,13 @@ import {
   resolveReadProjectIds,
   resolveWriteProjectId,
 } from './helpers';
+import { assertNoSystemMessage } from './systemMessageGuard';
 
 export const chatsRouter = new Router<Context>();
+
+/** See `systemMessageGuard.ts` — system content travels only in `instructions`. */
+const CHAT_SYSTEM_MESSAGE_REMEDY =
+  'Send system content in the `instructions` field instead.';
 
 /**
  * Checks whether the caller can perform `action` on `chat`.
@@ -57,7 +62,7 @@ const validateCreateChatBody = (
   | {
       aiProviderId?: string;
       name?: string;
-      systemMessage?: string;
+      instructions?: string;
       model?: string;
       projectId?: string;
       error?: undefined;
@@ -66,7 +71,7 @@ const validateCreateChatBody = (
   const {
     ai_provider_id: aiProviderId,
     name,
-    system_message: systemMessage,
+    instructions,
     model,
     project_id: projectId,
   } = body as Record<string, unknown>;
@@ -81,8 +86,7 @@ const validateCreateChatBody = (
   return {
     aiProviderId,
     name: typeof name === 'string' ? name : undefined,
-    systemMessage:
-      typeof systemMessage === 'string' ? systemMessage : undefined,
+    instructions: typeof instructions === 'string' ? instructions : undefined,
     model: typeof model === 'string' ? model : undefined,
     projectId: typeof projectId === 'string' ? projectId : undefined,
   };
@@ -105,7 +109,7 @@ chatsRouter.post('/chats', async (ctx: Context) => {
     projectId: Number(targetProjectId),
     aiProviderId: validated.aiProviderId,
     name: validated.name,
-    systemMessage: validated.systemMessage,
+    instructions: validated.instructions,
     model: validated.model,
   });
 
@@ -167,6 +171,7 @@ const parseChatMessages = (messages: unknown): ChatMessageInput[] => {
       'messages is required and must be a non-empty array'
     );
   }
+  assertNoSystemMessage({ messages, remedy: CHAT_SYSTEM_MESSAGE_REMEDY });
 
   return (messages as Record<string, unknown>[]).map(
     (message): ChatMessageInput => {
@@ -177,7 +182,7 @@ const parseChatMessages = (messages: unknown): ChatMessageInput[] => {
         };
       }
       return {
-        role: message.role as 'user' | 'assistant' | 'system',
+        role: message.role as 'user' | 'assistant',
         content: message.content as string,
       };
     }
@@ -193,6 +198,7 @@ const handleStreamingCompletion = async (args: {
   chatId?: string;
   messages: ChatMessageInput[];
   model?: string;
+  instructions?: string;
 }): Promise<void> => {
   args.ctx.respond = false;
   args.ctx.res.writeHead(200, {
@@ -207,6 +213,7 @@ const handleStreamingCompletion = async (args: {
       chatId: args.chatId,
       messages: args.messages,
       model: args.model,
+      instructions: args.instructions,
       authUser: args.ctx.authUser!,
     });
 
@@ -234,12 +241,14 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     model,
     messages,
     stream,
+    instructions,
   } = ctx.request.body as {
     ai_provider_id?: string;
     chat_id?: string;
     model?: string;
     messages?: unknown;
     stream?: boolean;
+    instructions?: string;
   };
 
   const chatMessages = parseChatMessages(messages);
@@ -269,6 +278,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       chatId,
       messages: chatMessages,
       model,
+      instructions,
     });
     return;
   }
@@ -279,6 +289,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       chatId,
       messages: chatMessages,
       model,
+      instructions,
       authUser: ctx.authUser!,
     });
 

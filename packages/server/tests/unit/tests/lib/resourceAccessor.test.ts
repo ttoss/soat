@@ -46,7 +46,11 @@ describe('scopedWhere (standalone)', () => {
   test('is the same function the accessor exposes', () => {
     const widgets = makeResourceAccessor<{ id?: unknown }>({
       model: () => {
-        return { findOne: () => Promise.resolve(null) };
+        return {
+          findOne: () => {
+            return Promise.resolve(null);
+          },
+        };
       },
       label: 'Widget',
     });

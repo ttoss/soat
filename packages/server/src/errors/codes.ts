@@ -169,6 +169,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The request body failed validation.',
   },
+  SYSTEM_MESSAGE_NOT_ALLOWED: {
+    httpStatus: 400,
+    description:
+      'A `role: "system"` entry was supplied in `messages`. System content never travels as a message on any SOAT surface — it goes in the `instructions` field instead — the same name on every surface (a completion request, a Chat, an Agent). Mirrors the AI SDK, whose `allowSystemInMessages` defaults to false because a system entry in a caller-supplied array is a prompt-injection vector.',
+  },
   TOOL_CALL_NOT_SUPPORTED: {
     httpStatus: 422,
     description:

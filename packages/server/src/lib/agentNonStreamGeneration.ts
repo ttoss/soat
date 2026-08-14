@@ -33,7 +33,11 @@ import {
   recordGenerationFailure,
 } from './generationLifecycle';
 import { applyToolOutputMapping } from './jsonLogicMapping';
-import { findSystemInstructions, withoutSystemMessages } from './modelMessages';
+import {
+  collectSystemInstructions,
+  type Instructions,
+  withoutSystemMessages,
+} from './modelMessages';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { buildStructuredOutput } from './outputSchema';
 import { toProviderDomainError } from './providerError';
@@ -113,7 +117,7 @@ export { buildSyntheticToolResultMessages };
 const callGenerateText = async (args: {
   agentId: string;
   model: LanguageModel;
-  system: string | undefined;
+  system: Instructions | undefined;
   nonSystemMessages: Array<{ role: string; content: unknown }>;
   resolvedTools: Record<string, Tool>;
   typedAgent: TypedAgent;
@@ -327,7 +331,7 @@ export const runNonStreamGeneration = async (args: {
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
 }): Promise<GenerationResult> => {
-  const system = findSystemInstructions(args.allMessages);
+  const system = collectSystemInstructions(args.allMessages);
   const nonSystemMessages = withoutSystemMessages(args.allMessages);
   const prepareStep = buildPrepareStep({
     stepRules: args.typedAgent.stepRules,
@@ -389,7 +393,7 @@ export const runNonStreamGeneration = async (args: {
 export const runToolOutputsGeneration = async (args: {
   generationId: string;
   pending: PendingGeneration;
-  system: string | undefined;
+  system: Instructions | undefined;
   nonSystemMessages: unknown[];
 }): Promise<AgentRunResult> => {
   const toolIdToName = await resolveStepRuleToolIdToName({
@@ -565,7 +569,7 @@ const resumeWithSyntheticResults = async (args: {
     args.synthesizedResults
   );
   const allMessages = [...args.pending.messages, ...synthMessages];
-  const system = findSystemInstructions(args.pending.messages);
+  const system = collectSystemInstructions(args.pending.messages);
   const nonSystemMessages = withoutSystemMessages(allMessages);
 
   const result = await runToolOutputsGeneration({

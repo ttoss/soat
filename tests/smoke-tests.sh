@@ -2139,7 +2139,7 @@ fi
 echo "--- Chat completion: chat_id target ---"
 SMOKE_CHAT_RESP=$($SOAT_CLI create-chat --project_id "$PROJECT_PUBLIC_ID" \
   --ai_provider_id "$AI_PROVIDER_ID" --name smoke-completion-chat \
-  --system_message "You are a terse assistant.")
+  --instructions "You are a terse assistant.")
 SMOKE_CHAT_ID=$(printf '%s\n' "$SMOKE_CHAT_RESP" | jq -r '.id')
 SMOKE_CHAT_COMPLETION=$($SOAT_CLI create-chat-completion --chat_id "$SMOKE_CHAT_ID" \
   --messages '[{"role":"user","content":"say hello"}]')

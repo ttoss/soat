@@ -1628,8 +1628,10 @@ components:
             properties:
               role:
                 type: string
+                # No `system`: an agent's system prompt is its `instructions`
+                # field; a system entry here is refused with
+                # 400 SYSTEM_MESSAGE_NOT_ALLOWED.
                 enum:
-                  - system
                   - user
                   - assistant
               content:
