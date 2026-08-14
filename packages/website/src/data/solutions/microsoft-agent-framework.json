@@ -1,0 +1,62 @@
+{
+  "name": "Microsoft Agent Framework",
+  "slug": "microsoft-agent-framework",
+  "archetype": "framework",
+  "summary": "Multi-language (.NET, Python, Go) library for building agents and graph-based multi-agent workflows, positioned as the successor to AutoGen and Semantic Kernel. Provides agents, sessions, context providers, middleware, MCP clients, OpenTelemetry instrumentation, and an evaluation framework, with optional Microsoft Foundry hosting.",
+  "website": "https://learn.microsoft.com/en-us/agent-framework/",
+  "repository": "https://github.com/microsoft/agent-framework",
+  "license": "MIT",
+  "deployment": ["self-hosted", "managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agent abstraction with streaming and non-streaming runs, AgentSession state management, history providers, and middleware for intercepting agent actions.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/overview/agent-framework-overview"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Graph-based and functional workflows with sequential, concurrent, handoff, and group-chat patterns plus checkpointed long-running runs.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/overview/agent-framework-overview"
+    },
+    "knowledge-memory": {
+      "rating": "partial",
+      "note": "Sessions and context/history providers give conversational and long-term memory, but document ingestion and vector search come from external providers such as Mem0.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/get-started/memory"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Function tools plus first-class MCP clients (stdio, streamable HTTP, websocket) and hosted MCP tools across Foundry, OpenAI, Anthropic, Gemini, and Ollama.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/tools/"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Per-tool human approval with standing and auto-approval rules is built in, but there is no IAM, quota, or audit-log subsystem.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/tools/tool-approval"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Emits OpenTelemetry traces, logs, and metrics per the GenAI semantic conventions, including token usage and per-tool invocation duration.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/observability"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets service; credentials come from Azure identity or environment variables."
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "Built-in evaluation framework with evaluators and results, local checks (keyword, tool-called, custom functions), and Foundry model-as-judge evaluators.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/evaluation"
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "DevUI provides a web chat interface with an OpenAI-compatible API, but it is an explicitly non-production sample app and there are no messaging-platform gateways.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/devui/"
+    },
+    "code-execution": {
+      "rating": "partial",
+      "note": "Code Interpreter is a provider-side hosted tool whose availability depends on the model provider; no local sandbox runtime ships with the framework.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/tools/code-interpreter"
+    }
+  }
+}

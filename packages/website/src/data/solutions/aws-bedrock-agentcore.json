@@ -1,0 +1,61 @@
+{
+  "name": "Amazon Bedrock AgentCore",
+  "slug": "aws-bedrock-agentcore",
+  "archetype": "managed-platform",
+  "summary": "AWS managed agent platform composed of modular services — Runtime, Harness, Memory, Gateway, Identity, Policy, Code Interpreter, Observability, and Evaluations — consumed as AWS APIs and usable independently or together. There is no self-hosted distribution.",
+  "website": "https://aws.amazon.com/bedrock/agentcore/",
+  "license": "Proprietary (AWS commercial service)",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "AgentCore Runtime is a serverless agent runtime with session isolation; AgentCore Harness provides a managed agent loop behind a single API call.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agents-tools-runtime.html"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Harness handles orchestration, tool execution, and multi-step responses; Runtime supports multi-agent workloads including the A2A protocol.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/what-is-bedrock-agentcore.html"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "AgentCore Memory provides short-term multi-turn memory and long-term memory persisting across sessions, with stores shareable across agents.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/memory.html"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "AgentCore Gateway converts APIs and Lambda functions into MCP-compatible tools and connects to existing MCP servers behind a managed endpoint.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/gateway.html"
+    },
+    "identity-governance": {
+      "rating": "native",
+      "note": "AgentCore Identity issues workload identities with IdP integration; AgentCore Policy enforces Cedar-based authorization on every Gateway tool call with audit logging.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/policy.html"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Emits OpenTelemetry traces and CloudWatch dashboards for session count, latency, token usage, and error rates across runtime, memory, gateway, and identity.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/observability.html"
+    },
+    "data-secrets": {
+      "rating": "partial",
+      "note": "Identity manages outbound OAuth and API-key credential providers, but durable object storage relies on sibling services such as S3 rather than an AgentCore resource.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/identity-outbound-credential-provider.html"
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "AgentCore Evaluations provides built-in and custom LLM-as-a-judge evaluators with on-demand, batch, online, and dataset runs over agent traces.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/evaluations.html"
+    },
+    "channels": {
+      "rating": "absent",
+      "note": "Agents are exposed through API endpoints only; Slack and similar systems are reachable as outbound Gateway tools, not inbound messaging channels."
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "AgentCore Code Interpreter runs agent-generated Python, JavaScript, and TypeScript in an isolated managed sandbox, alongside a managed Browser runtime.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html"
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "name": "Microsoft Foundry Agent Service",
+  "slug": "azure-ai-foundry-agent-service",
+  "archetype": "managed-platform",
+  "summary": "Managed Azure service for building and scaling agents as either configuration-defined prompt agents or container-based hosted agents, with the Responses API as the single model and tool entry point. Runtime, tools, Entra identity, tracing, and evaluation live inside a Foundry project; there is no self-hosted distribution.",
+  "website": "https://azure.microsoft.com/en-us/products/ai-foundry",
+  "license": "Proprietary (Microsoft Azure commercial service)",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "The Agent Runtime hosts prompt and hosted agents, managing conversations, tool calls, and session state behind a managed autoscaled endpoint.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/overview"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Workflows provide a declarative visual builder for multi-agent sequences with branching, variables, and human-in-the-loop approval steps, plus A2A connections.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/workflow"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "The File Search tool indexes uploaded documents into managed vector stores, with an additional memory tool and Azure AI Search grounding available.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/file-search"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "The tool catalog offers built-in tools, OpenAPI tools, function calling, remote MCP servers, and Toolbox bundling curated tools behind one managed MCP endpoint.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/tool-catalog"
+    },
+    "identity-governance": {
+      "rating": "native",
+      "note": "Agents can hold a dedicated Microsoft Entra identity with Azure RBAC, integrated guardrails and content filters, per-tool approval requirements, and documented quotas.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/guardrails/guardrails-overview"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Agent tracing records every model call and tool invocation with Application Insights integration, service dashboards, and continuous production evaluation.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/observability/concepts/trace-agent-concept"
+    },
+    "data-secrets": {
+      "rating": "partial",
+      "note": "Files and vector stores are service-managed and tool credentials sit in project connections, but durable storage and secrets rely on Azure Storage and Key Vault.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/tool-catalog"
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "Evaluations run uploaded JSONL datasets against an agent using rubric, quality, safety, and custom evaluators, returning per-run and per-row scores.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/observability/how-to/evaluate-agent"
+    },
+    "channels": {
+      "rating": "native",
+      "note": "Agents publish from the Foundry portal into Microsoft Teams and Microsoft 365 Copilot via a generated Teams manifest and Azure Bot Service channel.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/publish-copilot"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "The Code Interpreter tool executes agent-written Python in a sandbox, with a custom variant allowing configured packages and Container Apps resources.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/code-interpreter"
+    }
+  }
+}

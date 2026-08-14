@@ -1,0 +1,61 @@
+{
+  "name": "Letta",
+  "slug": "letta",
+  "archetype": "infrastructure",
+  "summary": "Open-source server for stateful LLM agents (formerly MemGPT) that persists agent state, memory blocks, and archival passages in PostgreSQL with pgvector, exposed over a REST API and SDKs. Deployable via Docker or usable as a hosted service, with agent state surviving context-window eviction.",
+  "website": "https://docs.letta.com/",
+  "repository": "https://github.com/letta-ai/letta",
+  "license": "Apache-2.0",
+  "deployment": ["self-hosted", "managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "The Letta server runs the agent loop and persists all agent and message state in PostgreSQL, exposed through a REST API.",
+      "evidence": "https://docs.letta.com/v1-sdk/docker"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Multi-agent coordination via shared memory blocks and message-passing tools, plus subagents and Schedules for recurring tasks.",
+      "evidence": "https://docs.letta.com/"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Agents have editable in-context memory blocks plus archival memory with hybrid semantic and full-text search over pgvector.",
+      "evidence": "https://docs.letta.com/guides/agents/archival-search/"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Supports server tools, client-side tools, and MCP servers registered over streamable HTTP, SSE, or stdio transports.",
+      "evidence": "https://docs.letta.com/guides/agents/tool-execution-mcp/"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Self-hosted access control is a single shared server password; the open-source server documents no role-based access control, approvals, or audit log.",
+      "evidence": "https://docs.letta.com/v1-sdk/docker"
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "The Agent Development Environment surfaces agent reasoning, tool usage, and state in real time, but there is no documented cost accounting or failure queue.",
+      "evidence": "https://docs.letta.com/guides/ade/tools/"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "The document/file source system is deprecated and disabled, and no encrypted secrets store is provided; credentials are server environment variables."
+    },
+    "evaluation": {
+      "rating": "absent",
+      "note": "No datasets, scorers, or evaluation-run functionality is documented."
+    },
+    "channels": {
+      "rating": "native",
+      "note": "Built-in channel adapters connect agents to Telegram, Slack, Discord, WhatsApp, and Signal, plus a web and desktop chat UI.",
+      "evidence": "https://docs.letta.com/configuration/channels"
+    },
+    "code-execution": {
+      "rating": "partial",
+      "note": "Custom server tools execute in an E2B sandbox requiring external API credentials; there is no general-purpose code interpreter or terminal runtime built in.",
+      "evidence": "https://docs.letta.com/v1-sdk/docker"
+    }
+  }
+}

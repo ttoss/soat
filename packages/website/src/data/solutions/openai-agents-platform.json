@@ -1,0 +1,63 @@
+{
+  "name": "OpenAI Agents platform",
+  "slug": "openai-agents-platform",
+  "archetype": "managed-platform",
+  "summary": "OpenAI's agent stack: the MIT-licensed Agents SDK (agent loop, sessions, handoffs, guardrails, tracing) plus the Responses API, OpenAI-hosted tools (web search, file search, code interpreter, hosted MCP), and a managed Traces dashboard. Execution and hosted tools depend on OpenAI's API; there is no self-hosted control plane.",
+  "website": "https://developers.openai.com/",
+  "repository": "https://github.com/openai/openai-agents-python",
+  "license": "MIT (Agents SDK); platform services are proprietary",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "The SDK ships a built-in agent loop (Runner) plus Sessions as a persistent working-context memory layer across turns.",
+      "evidence": "https://openai.github.io/openai-agents-python/"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Handoffs and agents-as-tools provide multi-agent delegation; Agent Builder adds a visual multi-step workflow canvas.",
+      "evidence": "https://developers.openai.com/api/docs/guides/agent-builder"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "FileSearchTool retrieves from OpenAI-hosted vector stores with managed chunking, embeddings, and hybrid semantic plus keyword search.",
+      "evidence": "https://developers.openai.com/api/docs/guides/tools-file-search"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Function tools with automatic schema generation, hosted tools, and HostedMCPTool for remote MCP servers are built into the SDK.",
+      "evidence": "https://openai.github.io/openai-agents-python/tools/"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Input, output, and tool guardrails with tripwires plus human-in-the-loop exist, but there is no tenant IAM, per-project authorization, quota policy, or audit log.",
+      "evidence": "https://openai.github.io/openai-agents-python/guardrails/"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Tracing is on by default and records model generations, tool calls, handoffs, and guardrail evaluations to the OpenAI Traces dashboard.",
+      "evidence": "https://openai.github.io/openai-agents-python/tracing/"
+    },
+    "data-secrets": {
+      "rating": "partial",
+      "note": "The Files API and hosted vector stores provide managed file storage, but there is no encrypted secrets manager for agent credentials.",
+      "evidence": "https://developers.openai.com/api/docs/guides/tools-file-search"
+    },
+    "evaluation": {
+      "rating": "partial",
+      "note": "The Evals API supports JSONL datasets, graders, and eval runs, but it is scheduled to become read-only and then shut down.",
+      "evidence": "https://developers.openai.com/api/docs/guides/evals"
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "ChatKit provides an embeddable web chat UI, but no gateways to Slack, WhatsApp, Telegram, or Discord are documented.",
+      "evidence": "https://developers.openai.com/api/docs/guides/chatkit"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "CodeInterpreterTool is a hosted tool that executes model-written code in an OpenAI-managed sandbox.",
+      "evidence": "https://openai.github.io/openai-agents-python/tools/"
+    }
+  }
+}
