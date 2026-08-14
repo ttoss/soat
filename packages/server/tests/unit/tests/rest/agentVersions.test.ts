@@ -133,8 +133,6 @@ describe('Agent versions', () => {
           'temperature',
           'tool_bindings',
           'tool_choice',
-          'tool_ids',
-          'tools',
           // Configuration, not bookkeeping: the mode an agent ran under is part
           // of what `restore` must bring back, and a version whose config
           // omitted it would silently restore the project default instead.

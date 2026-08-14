@@ -130,7 +130,7 @@ describe('ListView', () => {
     server.use(
       http.get('*/api/v1/agents', () =>
         HttpResponse.json([
-          { id: 'agt_1', name: 'Alpha', tool_ids: ['tool_a', 'tool_b'] },
+          { id: 'agt_1', name: 'Alpha', active_tool_ids: ['tool_a', 'tool_b'] },
         ])
       )
     );

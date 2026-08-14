@@ -60,7 +60,7 @@ describe('provisionGuide', () => {
     expect(agentBody).toMatchObject({
       name: 'soat-app-guide',
       ai_provider_id: 'aip_1',
-      tool_ids: ['tool_1'],
+      tool_bindings: [{ tool_id: 'tool_1' }],
     });
   });
 
@@ -81,7 +81,7 @@ describe('provisionGuide', () => {
             id: 'agt_x',
             name: 'soat-app-guide',
             ai_provider_id: 'aip_1',
-            tool_ids: ['tool_x'],
+            tool_bindings: [{ tool_id: 'tool_x' }],
           },
         ])
       ),
@@ -110,7 +110,7 @@ describe('provisionGuide', () => {
             id: 'agt_x',
             name: 'soat-app-guide',
             ai_provider_id: 'aip_OLD',
-            tool_ids: ['tool_x'],
+            tool_bindings: [{ tool_id: 'tool_x' }],
           },
         ])
       ),
@@ -123,7 +123,11 @@ describe('provisionGuide', () => {
     const result = await provisionGuide({ ...base, providerId: 'aip_NEW', modules });
 
     expect(result).toEqual({ ok: true, agentId: 'agt_x' });
-    expect(updateBody).toMatchObject({ ai_provider_id: 'aip_NEW' });
+    expect(updateBody).toMatchObject({
+      ai_provider_id: 'aip_NEW',
+      // The already-bound render tool is preserved, not replaced.
+      tool_bindings: [{ tool_id: 'tool_x' }],
+    });
   });
 
   test('reports unavailable when the user cannot create a tool', async () => {

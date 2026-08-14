@@ -1030,14 +1030,14 @@ describe('validateFormationTemplate', () => {
     ).toBe(true);
   });
 
-  test('returns invalid when agent tool_ids is not an array', () => {
+  test('returns invalid when agent tool_bindings is not an array', () => {
     const result = validateFormationTemplate({
       resources: {
         MyAgent: {
           type: 'agent',
           properties: {
             ai_provider_id: 'aip_1',
-            tool_ids: 'tool1',
+            tool_bindings: 'tool1',
           },
         },
       },
@@ -1045,7 +1045,7 @@ describe('validateFormationTemplate', () => {
     expect(result.valid).toBe(false);
     expect(
       result.errors.some((e) => {
-        return e.path === 'resources.MyAgent.properties.tool_ids';
+        return e.path === 'resources.MyAgent.properties.tool_bindings';
       })
     ).toBe(true);
   });

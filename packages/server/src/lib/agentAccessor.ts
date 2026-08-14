@@ -11,7 +11,6 @@ import type { WireAgentToolBinding } from './agentToolBindings';
 import type { ResourceIncludes } from './modelIncludes';
 import type { ActiveRelease } from './releaseAssignment';
 import { makeResourceAccessor } from './resourceAccessor';
-import type { InlineToolDefinition } from './tools';
 
 export type MappedAgent = {
   id: string;
@@ -24,8 +23,6 @@ export type MappedAgent = {
   instructions: string | null;
   model: string | null;
   tool_bindings: WireAgentToolBinding[] | null;
-  tool_ids: string[] | null;
-  tools: InlineToolDefinition[] | null;
   max_steps: number | null;
   tool_choice: string | object | null;
   stop_conditions: object[] | null;

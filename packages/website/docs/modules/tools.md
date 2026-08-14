@@ -71,7 +71,7 @@ By default every context key reaches every `http`, `mcp` and `soat` tool; set [`
 
 ### Tool ID vs Tool Name
 
-A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool_bindings`](./agents.md#tool-bindings) (or the deprecated `tool_ids` shorthand), `active_tool_ids`, and `step_rules[].active_tool_ids`. A **tool name** is what the AI model sees at runtime. For `http` and `client` tools, one ID → one name; for `mcp` and `soat` tools, one ID exposes **many** names. `tool_choice` and `stop_conditions` on agents reference tools by **name**.
+A **tool ID** is the resource identifier (e.g., `tool_k8x2f3np`), used in [`tool_bindings`](./agents.md#tool-bindings), `active_tool_ids`, and `step_rules[].active_tool_ids`. A **tool name** is what the AI model sees at runtime. For `http` and `client` tools, one ID → one name; for `mcp` and `soat` tools, one ID exposes **many** names. `tool_choice` and `stop_conditions` on agents reference tools by **name**.
 
 ### Tool Name Resolution
 

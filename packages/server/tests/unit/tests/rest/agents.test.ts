@@ -495,25 +495,27 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tools: [
+          tool_bindings: [
             {
-              name: 'inline-weather-tool',
-              description: 'Gets the weather',
-              execute: { url: 'https://example.com/weather' },
+              tool: {
+                name: 'inline-weather-tool',
+                description: 'Gets the weather',
+                execute: { url: 'https://example.com/weather' },
+              },
             },
           ],
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.tools).toEqual([
+      expect(response.body.tool_bindings).toEqual([
         {
-          name: 'inline-weather-tool',
-          description: 'Gets the weather',
-          execute: { url: 'https://example.com/weather' },
+          tool: {
+            name: 'inline-weather-tool',
+            description: 'Gets the weather',
+            execute: { url: 'https://example.com/weather' },
+          },
         },
       ]);
-      // Ephemeral — no separate Tool resource is created, so tool_ids is untouched.
-      expect(response.body.tool_ids).toBeNull();
 
       const toolsRes = await authenticatedTestClient(userToken).get(
         `/api/v1/tools?project_id=${projectId}`
@@ -525,7 +527,7 @@ describe('Agents', () => {
       ).toBe(false);
     });
 
-    test('keeps tool_ids and tools independent', async () => {
+    test('one binding list carries reference and inline entries together', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({ name: 'preexisting-tool', project_id: projectId });
@@ -536,13 +538,17 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tool_ids: [existingToolId],
-          tools: [{ name: 'inline-tool-merge' }],
+          tool_bindings: [
+            { tool_id: existingToolId },
+            { tool: { name: 'inline-tool-merge' } },
+          ],
         });
 
       expect(response.status).toBe(201);
-      expect(response.body.tool_ids).toEqual([existingToolId]);
-      expect(response.body.tools).toEqual([{ name: 'inline-tool-merge' }]);
+      expect(response.body.tool_bindings).toEqual([
+        { tool_id: existingToolId },
+        { tool: { name: 'inline-tool-merge' } },
+      ]);
     });
 
     test('rejects an ephemeral tool definition of type pipeline', async () => {
@@ -551,7 +557,9 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tools: [{ name: 'inline-pipeline', type: 'pipeline' }],
+          tool_bindings: [
+            { tool: { name: 'inline-pipeline', type: 'pipeline' } },
+          ],
         });
 
       expect(response.status).toBe(400);
@@ -565,12 +573,11 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tools: [{ description: 'missing a name' }],
+          tool_bindings: [{ tool: { description: 'missing a name' } }],
         });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
-      expect(response.body.error.message).toMatch(/tools/i);
     });
 
     test('non-object inline tool definition returns 400', async () => {
@@ -579,7 +586,7 @@ describe('Agents', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tools: [123],
+          tool_bindings: [{ tool: 123 }],
         });
 
       expect(response.status).toBe(400);
@@ -780,7 +787,7 @@ describe('Agents', () => {
       expect(response.body.max_context_messages).toBe(5);
     });
 
-    test('can update agent with toolIds', async () => {
+    test('can update agent with a reference binding', async () => {
       const toolRes = await authenticatedTestClient(userToken)
         .post('/api/v1/tools')
         .send({ name: 'tool-for-agent', project_id: projectId });
@@ -788,16 +795,16 @@ describe('Agents', () => {
 
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${agentId}`)
-        .send({ tool_ids: [toolId] });
+        .send({ tool_bindings: [{ tool_id: toolId }] });
 
       expect(response.status).toBe(200);
-      expect(response.body.tool_ids).toEqual([toolId]);
+      expect(response.body.tool_bindings).toEqual([{ tool_id: toolId }]);
     });
 
-    test('non-array tools returns 400', async () => {
+    test('non-array tool_bindings returns 400', async () => {
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${agentId}`)
-        .send({ tools: 'not-an-array' });
+        .send({ tool_bindings: 'not-an-array' });
 
       expect(response.status).toBe(400);
       expect(response.body.error.code).toBe('VALIDATION_FAILED');
@@ -811,28 +818,30 @@ describe('Agents', () => {
 
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${freshAgentId}`)
-        .send({ tools: [{ name: 'inline-tool-on-update' }] });
+        .send({ tool_bindings: [{ tool: { name: 'inline-tool-on-update' } }] });
 
       expect(response.status).toBe(200);
-      expect(response.body.tools).toEqual([{ name: 'inline-tool-on-update' }]);
+      expect(response.body.tool_bindings).toEqual([
+        { tool: { name: 'inline-tool-on-update' } },
+      ]);
     });
 
-    test('can clear tools by setting it to null', async () => {
+    test('can clear tool_bindings by setting it to null', async () => {
       const freshAgentRes = await authenticatedTestClient(userToken)
         .post('/api/v1/agents')
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          tools: [{ name: 'to-be-cleared' }],
+          tool_bindings: [{ tool: { name: 'to-be-cleared' } }],
         });
       const freshAgentId = freshAgentRes.body.id;
 
       const response = await authenticatedTestClient(userToken)
         .put(`/api/v1/agents/${freshAgentId}`)
-        .send({ tools: null });
+        .send({ tool_bindings: null });
 
       expect(response.status).toBe(200);
-      expect(response.body.tools).toBeNull();
+      expect(response.body.tool_bindings).toBeNull();
     });
 
     test('unknown fields in PUT body return 400', async () => {
@@ -1323,7 +1332,7 @@ describe('Agents', () => {
         });
     };
 
-    test('create with tool_bindings echoes canonical bindings and derived shorthands', async () => {
+    test('create with tool_bindings echoes the canonical bindings', async () => {
       const res = await createAgentWith({
         tool_bindings: [
           { tool_id: httpToolId },
@@ -1342,10 +1351,10 @@ describe('Agents', () => {
       expect(res.body.tool_bindings).toHaveLength(2);
       expect(res.body.tool_bindings[0].tool_id).toBe(httpToolId);
       expect(res.body.tool_bindings[1].tool.name).toBe('inline-lookup');
-      // Deprecated shorthands stay echoed, derived from the bindings.
-      expect(res.body.tool_ids).toEqual([httpToolId]);
-      expect(res.body.tools).toHaveLength(1);
-      expect(res.body.tools[0].name).toBe('inline-lookup');
+      // `tool_bindings` is the only attachment field on the wire — the
+      // `tool_ids`/`tools` shorthands were removed for v1.
+      expect(res.body.tool_ids).toBeUndefined();
+      expect(res.body.tools).toBeUndefined();
     });
 
     // Regression: fromWireInlineTool/toWireInlineTool convert an inline
@@ -1424,26 +1433,6 @@ describe('Agents', () => {
       expect(updateRes.body.tool_bindings).toBeNull();
     });
 
-    test('mixing tool_bindings with tool_ids returns 400', async () => {
-      const res = await createAgentWith({
-        tool_bindings: [{ tool_id: httpToolId }],
-        tool_ids: [httpToolId],
-      });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
-    test('mixing tool_bindings with tools returns 400', async () => {
-      const res = await createAgentWith({
-        tool_bindings: [{ tool_id: httpToolId }],
-        tools: [{ name: 'x', type: 'http', execute: { url: 'https://e.co' } }],
-      });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
-    });
-
     test('binding entry with both tool_id and tool returns 400', async () => {
       const res = await createAgentWith({
         tool_bindings: [
@@ -1480,44 +1469,59 @@ describe('Agents', () => {
       expect(res.body.tool_bindings).toEqual([{ tool_id: clientToolId }]);
     });
 
-    test('deprecated tool_ids write still works and derives tool_bindings', async () => {
+    // The `tool_ids` / `tools` shorthands were removed for v1. They are no
+    // longer in the OpenAPI specs, so `strictFields` rejects them as unknown
+    // fields — one deterministic check covering REST, the SDK, the CLI and the
+    // MCP tool surface at once.
+    test('create rejects the removed `tool_ids` field', async () => {
       const res = await createAgentWith({ tool_ids: [httpToolId] });
 
-      expect(res.status).toBe(201);
-      expect(res.body.tool_ids).toEqual([httpToolId]);
-      expect(res.body.tool_bindings).toEqual([{ tool_id: httpToolId }]);
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
-    test('updating via deprecated tool_ids replaces reference bindings, keeps inline ones', async () => {
-      const createRes = await createAgentWith({
-        tool_bindings: [
-          { tool_id: httpToolId },
+    test('create rejects the removed `tools` field', async () => {
+      const res = await createAgentWith({
+        tools: [
           {
-            tool: {
-              name: 'inline-keep',
-              type: 'http',
-              execute: { url: 'https://example.com/keep' },
-              parameters: { type: 'object', properties: {} },
-            },
+            name: 'inline-removed',
+            type: 'http',
+            execute: { url: 'https://example.com/removed' },
+            parameters: { type: 'object', properties: {} },
           },
         ],
       });
-      expect(createRes.status).toBe(201);
 
-      const updateRes = await authenticatedTestClient(userToken)
-        .patch(`/api/v1/agents/${createRes.body.id}`)
-        .send({ tool_ids: [httpToolId] });
-
-      expect(updateRes.status).toBe(200);
-      const bindings = updateRes.body.tool_bindings;
-      expect(bindings).toHaveLength(2);
-      // Reference binding rewritten bare, inline kept.
-      expect(bindings[0]).toEqual({ tool_id: httpToolId });
-      expect(bindings[1].tool.name).toBe('inline-keep');
+      expect(res.status).toBe(400);
+      expect(res.body.error.code).toBe('VALIDATION_FAILED');
     });
 
+    test.each([['tool_ids'], ['tools']])(
+      'update rejects the removed `%s` field',
+      async (field) => {
+        const createRes = await createAgentWith({
+          tool_bindings: [{ tool_id: httpToolId }],
+        });
+        expect(createRes.status).toBe(201);
+
+        const updateRes = await authenticatedTestClient(userToken)
+          .patch(`/api/v1/agents/${createRes.body.id}`)
+          .send({ [field]: field === 'tool_ids' ? [httpToolId] : [] });
+
+        expect(updateRes.status).toBe(400);
+        expect(updateRes.body.error.code).toBe('VALIDATION_FAILED');
+        // The removed field must not have mutated the agent on its way out.
+        const getRes = await authenticatedTestClient(userToken).get(
+          `/api/v1/agents/${createRes.body.id}`
+        );
+        expect(getRes.body.tool_bindings).toEqual([{ tool_id: httpToolId }]);
+      }
+    );
+
     test('update with tool_bindings replaces the full list', async () => {
-      const createRes = await createAgentWith({ tool_ids: [httpToolId] });
+      const createRes = await createAgentWith({
+        tool_bindings: [{ tool_id: httpToolId }],
+      });
       expect(createRes.status).toBe(201);
 
       const updateRes = await authenticatedTestClient(userToken)
@@ -1566,7 +1570,6 @@ describe('Agents', () => {
       expect(res.body.tool_bindings).toHaveLength(2);
       expect(res.body.tool_bindings[0]).toEqual({ tool_id: httpToolId });
       expect(res.body.tool_bindings[1].tool.name).toBe('legacy-inline');
-      expect(res.body.tool_ids).toEqual([httpToolId]);
     });
   });
 

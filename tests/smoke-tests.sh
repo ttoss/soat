@@ -2328,7 +2328,7 @@ AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name project-lister \
   --instructions "You are a helpful assistant. When the user asks you to list projects, you MUST call the list-projects tool and return the results. Always use the tool, never make up data." \
-  --tool_ids "[\"$TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$TOOL_ID\"}]" \
   --max_steps 5)
 AGENT_ID=$(printf '%s\n' "$AGENT_RESP" | jq -r '.id')
 echo "Agent id: $AGENT_ID"
@@ -2638,7 +2638,7 @@ TOOL_OUTPUT_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name tool-output-agent \
   --instructions "Repeat the user's last message exactly. Do not add any extra words or punctuation." \
-  --tool_ids "[\"$PROJECT_DETAIL_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$PROJECT_DETAIL_TOOL_ID\"}]" \
   --max_steps 2)
 TOOL_OUTPUT_AGENT_ID=$(printf '%s\n' "$TOOL_OUTPUT_AGENT_RESP" | jq -r '.id')
 echo "Tool-output agent id: $TOOL_OUTPUT_AGENT_ID"
@@ -2703,7 +2703,7 @@ GATED_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name approval-gated-agent \
   --instructions "Call the gated-project-detail tool to fetch the project." \
-  --tool_ids "[\"$GATED_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$GATED_TOOL_ID\"}]" \
   --guardrail_ids "[\"$GATED_GUARDRAIL_ID\"]" \
   --tool_choice required \
   --max_steps 2)
@@ -2853,7 +2853,7 @@ ACT_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name activity-recorded-agent \
   --instructions "Call the activity-project-detail tool to fetch the project." \
-  --tool_ids "[\"$ACT_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$ACT_TOOL_ID\"}]" \
   --guardrail_ids "[\"$ACT_GUARDRAIL_ID\"]" \
   --tool_choice required \
   --max_steps 2)
@@ -2937,7 +2937,7 @@ MCP_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name mcp-agent-lister \
   --instructions "You are a helpful assistant with access to SOAT tools via MCP. When asked to list agents, call the list-agents MCP tool exactly once and return a concise summary. Always use the tool." \
-  --tool_ids "[\"$MCP_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$MCP_TOOL_ID\"}]" \
   --max_steps 2)
 MCP_AGENT_ID=$(printf '%s\n' "$MCP_AGENT_RESP" | jq -r '.id')
 echo "MCP Agent id: $MCP_AGENT_ID"
@@ -3152,7 +3152,7 @@ CLIENT_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name weather-agent \
   --instructions "You are a weather assistant. When the user asks about the weather, call the get_weather tool with the cityName argument." \
-  --tool_ids "[\"$CLIENT_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$CLIENT_TOOL_ID\"}]" \
   --tool_choice '{"type":"tool","tool_name":"get_weather"}' \
   --max_steps 3)
 CLIENT_AGENT_ID=$(printf '%s\n' "$CLIENT_AGENT_RESP" | jq -r '.id')
@@ -3850,7 +3850,7 @@ SOAT_AGENT_RESP=$($SOAT_CLI create-agent \
   --ai_provider_id "$AI_PROVIDER_ID" \
   --name soat-project-lister \
   --instructions "You are a helpful assistant. Use the SOAT list-projects action to list projects for the user." \
-  --tool_ids "[\"$SOAT_TOOL_ID\"]" \
+  --tool_bindings "[{\"tool_id\":\"$SOAT_TOOL_ID\"}]" \
   --max_steps 5)
 SOAT_AGENT_ID=$(printf '%s\n' "$SOAT_AGENT_RESP" | jq -r '.id')
 if [ -z "$SOAT_AGENT_ID" ] || [ "$SOAT_AGENT_ID" = "null" ]; then

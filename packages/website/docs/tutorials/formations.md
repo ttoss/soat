@@ -141,7 +141,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Write the formation template
 
-A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This template defines all 14 resources of the sonnet pipeline — an Ollama provider, a shared poem document, read/write tools, four stanza agents, five orchestrator tools, and the orchestrator. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order, so `tool_ids`, `ai_provider_id`, and nested `preset_parameters.agentId` are wired automatically.
+A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This template defines all 14 resources of the sonnet pipeline — an Ollama provider, a shared poem document, read/write tools, four stanza agents, five orchestrator tools, and the orchestrator. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order, so `tool_bindings[].tool_id`, `ai_provider_id`, and nested `preset_parameters.agentId` are wired automatically.
 
 This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
@@ -193,7 +193,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 1 - First Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -207,7 +207,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 2 - Second Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -221,7 +221,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 3 - Third Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -235,7 +235,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 4 - Final Couplet",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -311,12 +311,12 @@ cat > formation.json << 'EOF'
         "name": "Sonnet Orchestrator",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.",
-        "tool_ids": [
-          { "ref": "callStanza1Tool" },
-          { "ref": "callStanza2Tool" },
-          { "ref": "callStanza3Tool" },
-          { "ref": "callStanza4Tool" },
-          { "ref": "readFinalPoemTool" }
+        "tool_bindings": [
+          { "tool_id": { "ref": "callStanza1Tool" } },
+          { "tool_id": { "ref": "callStanza2Tool" } },
+          { "tool_id": { "ref": "callStanza3Tool" } },
+          { "tool_id": { "ref": "callStanza4Tool" } },
+          { "tool_id": { "ref": "readFinalPoemTool" } }
         ],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "call-stanza-1_create-agent-generation" } },
@@ -386,7 +386,7 @@ const template = {
         ai_provider_id: { ref: 'provider' },
         instructions:
           'You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.',
-        tool_ids: [{ ref: 'poemReadTool' }, { ref: 'poemWriteTool' }],
+        tool_bindings: [{ tool_id: { ref: 'poemReadTool' } }, { tool_id: { ref: 'poemWriteTool' } }],
         step_rules: [
           {
             step: 1,
@@ -410,7 +410,7 @@ const template = {
         ai_provider_id: { ref: 'provider' },
         instructions:
           'You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.',
-        tool_ids: [{ ref: 'poemReadTool' }, { ref: 'poemWriteTool' }],
+        tool_bindings: [{ tool_id: { ref: 'poemReadTool' } }, { tool_id: { ref: 'poemWriteTool' } }],
         step_rules: [
           {
             step: 1,
@@ -434,7 +434,7 @@ const template = {
         ai_provider_id: { ref: 'provider' },
         instructions:
           'You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.',
-        tool_ids: [{ ref: 'poemReadTool' }, { ref: 'poemWriteTool' }],
+        tool_bindings: [{ tool_id: { ref: 'poemReadTool' } }, { tool_id: { ref: 'poemWriteTool' } }],
         step_rules: [
           {
             step: 1,
@@ -458,7 +458,7 @@ const template = {
         ai_provider_id: { ref: 'provider' },
         instructions:
           'You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.',
-        tool_ids: [{ ref: 'poemReadTool' }, { ref: 'poemWriteTool' }],
+        tool_bindings: [{ tool_id: { ref: 'poemReadTool' } }, { tool_id: { ref: 'poemWriteTool' } }],
         step_rules: [
           {
             step: 1,
@@ -568,12 +568,12 @@ const template = {
         ai_provider_id: { ref: 'provider' },
         instructions:
           'Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.',
-        tool_ids: [
-          { ref: 'callStanza1Tool' },
-          { ref: 'callStanza2Tool' },
-          { ref: 'callStanza3Tool' },
-          { ref: 'callStanza4Tool' },
-          { ref: 'readFinalPoemTool' },
+        tool_bindings: [
+          { tool_id: { ref: 'callStanza1Tool' } },
+          { tool_id: { ref: 'callStanza2Tool' } },
+          { tool_id: { ref: 'callStanza3Tool' } },
+          { tool_id: { ref: 'callStanza4Tool' } },
+          { tool_id: { ref: 'readFinalPoemTool' } }
         ],
         step_rules: [
           {
@@ -671,7 +671,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 1 - First Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -685,7 +685,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 2 - Second Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -699,7 +699,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 3 - Third Quatrain",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -713,7 +713,7 @@ cat > formation.json << 'EOF'
         "name": "Stanza 4 - Final Couplet",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.",
-        "tool_ids": [{ "ref": "poemReadTool" }, { "ref": "poemWriteTool" }],
+        "tool_bindings": [{ "tool_id": { "ref": "poemReadTool" } }, { "tool_id": { "ref": "poemWriteTool" } }],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "poem-read_get-document" } },
           { "step": 2, "tool_choice": { "type": "tool", "tool_name": "poem-write_update-document" } }
@@ -789,12 +789,12 @@ cat > formation.json << 'EOF'
         "name": "Sonnet Orchestrator",
         "ai_provider_id": { "ref": "provider" },
         "instructions": "Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.",
-        "tool_ids": [
-          { "ref": "callStanza1Tool" },
-          { "ref": "callStanza2Tool" },
-          { "ref": "callStanza3Tool" },
-          { "ref": "callStanza4Tool" },
-          { "ref": "readFinalPoemTool" }
+        "tool_bindings": [
+          { "tool_id": { "ref": "callStanza1Tool" } },
+          { "tool_id": { "ref": "callStanza2Tool" } },
+          { "tool_id": { "ref": "callStanza3Tool" } },
+          { "tool_id": { "ref": "callStanza4Tool" } },
+          { "tool_id": { "ref": "readFinalPoemTool" } }
         ],
         "step_rules": [
           { "step": 1, "tool_choice": { "type": "tool", "tool_name": "call-stanza-1_create-agent-generation" } },

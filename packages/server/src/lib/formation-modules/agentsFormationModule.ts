@@ -6,7 +6,6 @@ import {
 } from '../agentKnowledge';
 import { createAgent, getAgent, updateAgent } from '../agents';
 import type { AgentToolBinding } from '../agentToolBindings';
-import { bindingsFromLegacyFields } from '../agentToolBindings';
 import { lookupProjectOwnerUserId } from '../formationsHelpers';
 import type { ValidationError } from '../formationsTypes';
 import { validatePolicyActions } from '../iam';
@@ -24,9 +23,7 @@ import { isObjectRecord } from './formationSpecLoader';
 
 // ── Property validation ──────────────────────────────────────────────────
 
-// `tool_bindings` is canonical; `tool_ids` is its deprecated shorthand — a
-// template must pick one form (mirrors the REST exclusivity rule). Inline
-// `tool` entries are rejected: templates declare a tool resource and
+// Inline `tool` entries are rejected: templates declare a tool resource and
 // reference it via `tool_id` instead.
 const pushToolBindingErrors = (args: {
   properties: Record<string, unknown>;
@@ -34,13 +31,6 @@ const pushToolBindingErrors = (args: {
   errors: ValidationError[];
 }): void => {
   const { properties, basePath, errors } = args;
-  if (properties.tool_bindings != null && properties.tool_ids != null) {
-    errors.push({
-      path: `${basePath}.tool_bindings`,
-      message:
-        '`tool_bindings` cannot be combined with the deprecated `tool_ids` field',
-    });
-  }
   if (!Array.isArray(properties.tool_bindings)) return;
   for (const [index, entry] of properties.tool_bindings.entries()) {
     if (isObjectRecord(entry) && entry.tool != null) {
@@ -100,20 +90,12 @@ const parseFormationToolBindings = (
   });
 };
 
-// A formation declares the agent's full desired state, so the binding list is
-// always driven through the canonical `toolBindings` replace: an explicit
-// `tool_bindings` wins, a declared `tool_ids` shorthand maps to bare bindings,
-// and neither means "no tools".
+// A formation declares the agent's full desired state, so `tool_bindings`
+// always drives a whole-list replace; an absent field means "no tools".
 const resolveFormationToolBindings = (
   properties: Record<string, unknown>
 ): AgentToolBinding[] | null => {
-  if (properties.tool_bindings != null) {
-    return parseFormationToolBindings(properties.tool_bindings);
-  }
-  return bindingsFromLegacyFields({
-    toolIds: toNullableArray<string>(properties.tool_ids),
-    tools: null,
-  });
+  return parseFormationToolBindings(properties.tool_bindings);
 };
 
 const toOptionalBoolean = (value: unknown): boolean | undefined => {
@@ -265,10 +247,7 @@ export const agentsFormationModule = defineFormationModule({
       name: agent.name,
       instructions: agent.instructions,
       model: agent.model,
-      // Both views: the diff only compares keys the template declares, so a
-      // template using either form converges against its own key.
       tool_bindings: agent.tool_bindings,
-      tool_ids: agent.tool_ids,
       max_steps: agent.max_steps,
       tool_choice: agent.tool_choice,
       stop_conditions: agent.stop_conditions,

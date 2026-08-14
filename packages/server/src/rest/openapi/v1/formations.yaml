@@ -574,22 +574,11 @@ components:
             type: object
           description: >-
             Tools to attach, one binding object per tool: `{ tool_id }`.
-            Canonical form — cannot be combined with the deprecated `tool_ids`.
             Tool-call gating is owned by guardrails (attached via `guardrail_ids`
             on the project, agent, or tool), not by the binding. Inline `tool`
             entries are not supported in templates; declare a tool resource and
             reference it via `tool_id` (a `{ "ref": … }` to a tool resource in
             the same template resolves at deploy time).
-        tool_ids:
-          x-soat-ref: tools
-          type: array
-          nullable: true
-          items:
-            type: string
-          deprecated: true
-          description: >-
-            Deprecated shorthand — each entry becomes a bare
-            `{ "tool_id": … }` binding. Use `tool_bindings` instead.
         max_steps:
           type: integer
           nullable: true
@@ -617,7 +606,7 @@ components:
           nullable: true
           items:
             type: string
-          description: Subset of tool_ids that are active
+          description: Subset of the bound tools that are active
         guardrail_ids:
           x-soat-ref: guardrails
           type: array

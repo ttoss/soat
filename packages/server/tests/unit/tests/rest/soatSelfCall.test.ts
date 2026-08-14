@@ -753,7 +753,7 @@ describe('SOAT self-call', () => {
           project_id: projectId,
           ai_provider_id: args.aiProviderId,
           name: args.name,
-          tool_ids: [toolRes.body.id],
+          tool_bindings: [{ tool_id: toolRes.body.id }],
         });
       expect(agentRes.status).toBe(201);
       return agentRes.body.id as string;
@@ -1067,7 +1067,7 @@ describe('SOAT self-call', () => {
           project_id: projectId,
           ai_provider_id: aiProviderRes.body.id,
           name: 'approval-continuation-agent',
-          tool_ids: [toolRes.body.id],
+          tool_bindings: [{ tool_id: toolRes.body.id }],
         });
       expect(agentRes.status).toBe(201);
       continuationAgentId = agentRes.body.id as string;

@@ -366,7 +366,7 @@ describe('x-soat-ref cross-references', () => {
     const schema = getResponseItemSchema(agents().listOp, testSpec);
     expect(extractRefFields(schema, testSpec)).toEqual({
       project_id: 'projects',
-      tool_ids: 'tools',
+      active_tool_ids: 'tools',
       session_id: 'sessions',
     });
   });
@@ -413,13 +413,13 @@ describe('x-soat-ref cross-references', () => {
     const modules = parseModules(testSpec);
     const refs = {
       project_id: 'projects',
-      tool_ids: 'tools',
+      active_tool_ids: 'tools',
       session_id: 'sessions', // nested, but has a detail route → kept as a candidate
       widget_id: 'widgets', // unknown resource → dropped
     };
     expect(resolvableRefFields(refs, modules)).toEqual({
       project_id: 'projects',
-      tool_ids: 'tools',
+      active_tool_ids: 'tools',
       session_id: 'sessions',
     });
   });
