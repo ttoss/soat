@@ -56,6 +56,30 @@
       "rating": "native",
       "note": "AgentCore Code Interpreter runs agent-generated Python, JavaScript, and TypeScript in an isolated managed sandbox, alongside a managed Browser runtime.",
       "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/code-interpreter-tool.html"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "An inline function tool halts the harness mid-run and returns the tool call to the caller, resuming when the client posts a matching tool result on the same session.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/harness-tools.html"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Each runtime session gets an isolated microVM sanitized on termination, but AgentCore does not enforce session-to-user mapping and offers no tenant or namespace resource.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/runtime-sessions.html"
+    },
+    "declarative-deployment": {
+      "rating": "native",
+      "note": "CloudFormation exposes first-party agent resource types for Runtime, Harness, Gateway, Memory, and Policy, so agent infrastructure is provisioned through stack dependency resolution and change sets.",
+      "evidence": "https://docs.aws.amazon.com/AWSCloudFormation/latest/TemplateReference/AWS_BedrockAgentCore.html"
+    },
+    "agent-versioning": {
+      "rating": "native",
+      "note": "Every runtime update mints an immutable version; the default endpoint tracks the latest while named endpoints are pinned per environment and moved between versions for staged promotion and rollback.",
+      "evidence": "https://docs.aws.amazon.com/bedrock-agentcore/latest/devguide/agent-runtime-versioning.html"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Skills are developer-authored bundles fetched from git, S3, or a catalog, and optimization only produces prompt rewrites a human promotes."
     }
   }
 }

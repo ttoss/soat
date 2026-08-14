@@ -104,6 +104,31 @@ export const CLUSTERS: Cluster[] = [
     label: 'Code execution',
     description: 'Sandboxed code or terminal runtimes for agents.',
   },
+  {
+    id: 'human-in-loop',
+    label: 'Human-in-the-loop',
+    description: 'Pausing a run for human approval, then resuming it.',
+  },
+  {
+    id: 'multi-tenancy',
+    label: 'Multi-tenancy',
+    description: 'Projects or workspaces scoping resources and permissions.',
+  },
+  {
+    id: 'declarative-deployment',
+    label: 'Declarative deployment',
+    description: 'Templates that provision agent resources as one stack.',
+  },
+  {
+    id: 'agent-versioning',
+    label: 'Versioning & rollout',
+    description: 'Agent versions, canary rollout, gated promotion.',
+  },
+  {
+    id: 'skill-learning',
+    label: 'Skill learning',
+    description: 'Agents authoring reusable skills from their own experience.',
+  },
 ];
 
 export const ARCHETYPE_LABELS: Record<Archetype, string> = {

@@ -57,6 +57,30 @@
       "rating": "native",
       "note": "The Code node runs Python or JavaScript in the DifySandbox service, an isolated environment with a syscall whitelist blocking file, network, and shell access.",
       "evidence": "https://docs.dify.ai/en/use-dify/nodes/code"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "The Human Input node pauses a workflow and emits an event carrying a form token, delivers a form via web app or email, routes execution by the decision taken, and follows a timeout branch.",
+      "evidence": "https://docs.dify.ai/en/use-dify/nodes/human-input"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Workspaces isolate apps, knowledge bases, members, and model configuration under four roles, but the self-hosted Community Edition gets one workspace and multiple workspaces require Enterprise.",
+      "evidence": "https://docs.dify.ai/en/self-host/use-dify/workspace/readme"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "Dify DSL exports one app's configuration to YAML and recreates it on import with a compatibility check, but there is no dependency graph, plan/apply, or multi-resource provisioning.",
+      "evidence": "https://docs.dify.ai/en/guides/management/app-management"
+    },
+    "agent-versioning": {
+      "rating": "partial",
+      "note": "A version control panel publishes drafts as named versions and restores previous ones, but offers no aliases, canary rollout, traffic splitting, or eval-gated promotion.",
+      "evidence": "https://docs.dify.ai/en/use-dify/build/version-control"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Apps, workflows, tools, and knowledge bases are authored by humans in the studio; no mechanism has the agent create or refine reusable skills from its own runs."
     }
   }
 }

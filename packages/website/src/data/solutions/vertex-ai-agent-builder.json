@@ -58,6 +58,30 @@
       "rating": "native",
       "note": "Built-in code execution tooling in ADK and the Vertex AI code interpreter extension.",
       "evidence": "https://google.github.io/adk-docs/tools/built-in-tools/"
+    },
+    "human-in-loop": {
+      "rating": "partial",
+      "note": "Agents on Agent Engine can pause through framework-level checkpoint breakpoints and resume on the same thread, but the platform provides no managed approval queue or tool-call gate.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Isolation comes from generic Google Cloud project-level and per-resource IAM bindings, with no agent-specific tenant, workspace, or namespace construct.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/access-control"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "Agent deployment is documented as suitable for generic tools such as Terraform, but there is no first-party agent template format with its own plan/apply and dependency graph.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent"
+    },
+    "agent-versioning": {
+      "rating": "native",
+      "note": "Updating versioned fields creates an immutable revision with active and deprecated states, and traffic percentages can be split across active revisions for canary rollout and rollback.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "No first-party mechanism for an agent to author or refine reusable skills from its own experience."
     }
   }
 }

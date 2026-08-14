@@ -56,6 +56,31 @@
       "rating": "partial",
       "note": "Custom server tools execute in an E2B sandbox requiring external API credentials; there is no general-purpose code interpreter or terminal runtime built in.",
       "evidence": "https://docs.letta.com/v1-sdk/docker"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Tools marked requires_approval halt the agent and emit an approval request with tool name and arguments; approving executes and resumes, denying returns an error the agent can work against.",
+      "evidence": "https://docs.letta.com/guides/agents/human-in-the-loop/"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Identity objects and agent tags associate agents with end users, but the open-source server documents no org or project permission boundary and warns against exposing it to untrusted clients.",
+      "evidence": "https://docs.letta.com/self-hosting"
+    },
+    "declarative-deployment": {
+      "rating": "plugin",
+      "note": "Declarative fleet management with version-controlled YAML comes from lettactl, a community-built CLI listed under community guides rather than a first-party feature.",
+      "evidence": "https://docs.letta.com/guides/community/lettactl/"
+    },
+    "agent-versioning": {
+      "rating": "plugin",
+      "note": "Official template versioning with migrate and rollback is labeled cloud-only and deprecated, so self-hosted rollout control comes from the community lettactl tool.",
+      "evidence": "https://docs.letta.com/api/resources/templates/"
+    },
+    "skill-learning": {
+      "rating": "native",
+      "note": "Agents have a built-in skill creator and write skills into their own git-backed memory filesystem, persisting them as part of agent identity across agent, project, and computer scopes.",
+      "evidence": "https://docs.letta.com/letta-agent/skills"
     }
   }
 }

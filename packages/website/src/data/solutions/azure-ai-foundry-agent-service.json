@@ -57,6 +57,31 @@
       "rating": "native",
       "note": "The Code Interpreter tool executes agent-written Python in a sandbox, with a custom variant allowing configured packages and Container Apps resources.",
       "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/code-interpreter"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "An MCP tool configured to always require approval emits an approval request item that suspends the tool call until the caller submits a matching approval response.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/model-context-protocol"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "A Foundry project scopes agents and Azure RBAC roles with optional per-agent role scopes, but tenancy is plain Azure RBAC on ARM resources rather than an agent-service tenant model.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/concepts/rbac-foundry"
+    },
+    "declarative-deployment": {
+      "rating": "native",
+      "note": "Agents and their deployments are first-class ARM resource types authorable in Bicep, ARM JSON, or Terraform, with parent-child dependency resolution and pinned version references.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/templates/microsoft.cognitiveservices/accounts/projects/applications/agentdeployments"
+    },
+    "agent-versioning": {
+      "rating": "native",
+      "note": "Saved agent versions are immutable and referenced by name and version, with version history, per-version diffing, request routing to a specific version, and rollback.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/development-lifecycle"
+    },
+    "skill-learning": {
+      "rating": "partial",
+      "note": "The preview agent optimizer discovers and refines reusable skills for a hosted agent using datasets generated from its own traces, but a human applies and redeploys the winning candidate.",
+      "evidence": "https://learn.microsoft.com/en-us/azure/foundry/agents/concepts/agent-optimizer-overview"
     }
   }
 }

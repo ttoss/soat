@@ -56,6 +56,30 @@
     "code-execution": {
       "rating": "absent",
       "note": "Tool types are HTTP, MCP, client, and agent-to-agent — no built-in sandboxed code or terminal runtime."
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Approvals are a first-class human-decision queue with frozen evidence, and guardrails classify each tool call so risky actions pause for a decision.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/approvals"
+    },
+    "multi-tenancy": {
+      "rating": "native",
+      "note": "Projects are multi-tenant namespaces scoping every resource, with IAM policies and quotas enforced per project.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/projects"
+    },
+    "declarative-deployment": {
+      "rating": "native",
+      "note": "Formations provision providers, memories, tools, agents, orchestrations, and webhooks from one template, resolving refs into a dependency graph with tracked operations.",
+      "evidence": "https://soat.ttoss.dev/docs/modules/formations"
+    },
+    "agent-versioning": {
+      "rating": "native",
+      "note": "Every config change is archived as an append-only agent version, with canary rollout to a slice of traffic and eval-gated promotion.",
+      "evidence": "https://soat.ttoss.dev/docs/tutorials/agent-versioning-and-canary-rollout"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Memories and knowledge store retrievable context, but agents do not author or refine reusable skills from their own experience."
     }
   }
 }

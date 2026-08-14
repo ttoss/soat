@@ -55,6 +55,28 @@
       "rating": "native",
       "note": "Optional isolated (sandboxed) execution environments for tool runs.",
       "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "The gateway broadcasts an approval-requested event that pauses the command while operator clients resolve it, with ask modes and a deny or allowlist fallback on timeout.",
+      "evidence": "https://docs.openclaw.ai/tools/exec-approvals"
+    },
+    "multi-tenancy": {
+      "rating": "absent",
+      "note": "The security model is one trusted operator per gateway; isolation means running a separate gateway process and state tree per trust domain, not tenant scoping inside one deployment."
+    },
+    "declarative-deployment": {
+      "rating": "absent",
+      "note": "Agents are declared in gateway config files and deployed with Docker Compose, but there is no dependency-graph provisioning of agent resources with plan/apply."
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "No immutable agent definition versions, aliases, canary rollout, or rollback; skills carry a version field but agents themselves are unversioned."
+    },
+    "skill-learning": {
+      "rating": "partial",
+      "note": "The Skill Workshop has the agent draft a proposal when it spots reusable work rather than writing skills directly, and a human reviews and approves before changes land.",
+      "evidence": "https://docs.openclaw.ai/tools/skills"
     }
   }
 }

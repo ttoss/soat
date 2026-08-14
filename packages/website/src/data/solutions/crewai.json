@@ -57,6 +57,29 @@
       "rating": "native",
       "note": "Setting allow_code_execution gives an agent an internal CodeInterpreterTool that runs generated Python and feeds errors back for retries.",
       "evidence": "https://docs.crewai.com/en/learn/coding-agents"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Tasks set human_input to pause a crew in a pending state; execution resumes through an endpoint taking the execution, task, feedback, and approval decision.",
+      "evidence": "https://docs.crewai.com/en/learn/human-in-the-loop"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Only the commercial AMP platform provides an organization boundary with feature-level roles and entity-level permissions; the open-source library has no tenant scoping primitive.",
+      "evidence": "https://docs-platform.crewai.com/platform/en/features/rbac.md"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "YAML agent and task config declaratively defines one project, but there is no resource dependency graph, plan/apply cycle, or infrastructure provisioning.",
+      "evidence": "https://docs.crewai.com/en/concepts/agents"
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "Updating a deployed crew rebuilds and redeploys from source with no immutable versions, aliases, staged rollout, or rollback."
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "The Memory class stores and retrieves scoped memories with recency and importance weighting, but does not synthesize reusable procedures from the agent's own trajectories."
     }
   }
 }

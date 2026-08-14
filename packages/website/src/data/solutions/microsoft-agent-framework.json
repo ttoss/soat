@@ -57,6 +57,28 @@
       "rating": "partial",
       "note": "Code Interpreter is a provider-side hosted tool whose availability depends on the model provider; no local sandbox runtime ships with the framework.",
       "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/tools/code-interpreter"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Tools marked to always require approval make a run return approval requests that resume when the response is passed back, and workflows expose the same pause with pending requests persisted in checkpoints.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/tools/tool-approval"
+    },
+    "multi-tenancy": {
+      "rating": "absent",
+      "note": "An in-process library scoping state to a session; tenant isolation of resources and permissions is left to the hosting application or a separate Azure service."
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "A declarative package loads agents and workflows from YAML or JSON, but these are runtime object factories with no plan/apply, state tracking, or resource provisioning.",
+      "evidence": "https://learn.microsoft.com/en-us/agent-framework/agents/declarative"
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "Declarative agent definitions can be checked into source control, but the framework has no immutable agent versions, aliases, canary rollout, or rollback."
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Skills are developer-authored packages of instructions, resources, and scripts; agents consume them and never generate or revise them."
     }
   }
 }

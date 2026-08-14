@@ -28,6 +28,11 @@ const CLUSTER_IDS = [
   'evaluation',
   'channels',
   'code-execution',
+  'human-in-loop',
+  'multi-tenancy',
+  'declarative-deployment',
+  'agent-versioning',
+  'skill-learning',
 ];
 
 const DEPLOYMENTS = ['self-hosted', 'managed'];

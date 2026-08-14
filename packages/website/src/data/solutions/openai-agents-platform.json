@@ -58,6 +58,29 @@
       "rating": "native",
       "note": "CodeInterpreterTool is a hosted tool that executes model-written code in an OpenAI-managed sandbox.",
       "evidence": "https://openai.github.io/openai-agents-python/tools/"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Tools marked needs_approval pause the run and surface approval items in RunResult.interruptions, resolved with approve/reject and resumed from serialized RunState.",
+      "evidence": "https://openai.github.io/openai-agents-python/human_in_the_loop/"
+    },
+    "multi-tenancy": {
+      "rating": "native",
+      "note": "Organizations contain projects that scope keys, files, and resources, with roles assignable at organization or project level.",
+      "evidence": "https://developers.openai.com/api/docs/guides/rbac"
+    },
+    "declarative-deployment": {
+      "rating": "absent",
+      "note": "No template or infrastructure-as-code format provisions agent resources; agents are created imperatively through the API or SDK."
+    },
+    "agent-versioning": {
+      "rating": "partial",
+      "note": "Agent Builder publishes a workflow as a versioned snapshot that can be pinned by ID, but there is no canary rollout or eval-gated promotion.",
+      "evidence": "https://developers.openai.com/api/docs/guides/agent-builder"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Sessions persist conversation state, but agents do not author or refine reusable skills from their own experience."
     }
   }
 }

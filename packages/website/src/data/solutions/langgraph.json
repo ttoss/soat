@@ -55,6 +55,30 @@
     "code-execution": {
       "rating": "absent",
       "note": "No sandboxed code interpreter or terminal runtime; code execution must be supplied as a user-defined tool."
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "interrupt() checkpoints graph state and pauses a node indefinitely, and Command(resume=value) re-invokes the same thread with the supplied value.",
+      "evidence": "https://docs.langchain.com/oss/python/langgraph/interrupts"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Agent Server auth handlers can attach owner metadata to threads, runs, and assistants and filter reads, but the developer writes them; there is no built-in tenant object.",
+      "evidence": "https://docs.langchain.com/langgraph-platform/resource-auth"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "langgraph.json declares graphs, dependencies, and environment for a single deployed application, with no plan/apply step or dependency graph between resources.",
+      "evidence": "https://docs.langchain.com/oss/python/langgraph/application-structure"
+    },
+    "agent-versioning": {
+      "rating": "partial",
+      "note": "Each assistant update creates a new version that can be promoted to active or rolled back, but there is no canary rollout or eval-gated promotion.",
+      "evidence": "https://docs.langchain.com/langsmith/assistants"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "The Store persists data an agent can read and write, but there is no mechanism for authoring or refining reusable skills."
     }
   }
 }
