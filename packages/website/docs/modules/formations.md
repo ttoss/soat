@@ -91,6 +91,8 @@ SOAT detects that `MyAgent` depends on `MyProvider` and `MyMemory` through the `
 
 ### FormationOperation
 
+Every deploy (create, update, delete) creates one of these records; `GET /api/v1/formations/{formation_id}/events` returns the full history.
+
 | Field            | Type   | Description                                           |
 | ---------------- | ------ | ----------------------------------------------------- |
 | `id`             | string | Public ID (`form_op_` prefix)                             |
@@ -117,15 +119,14 @@ A template has four top-level keys. For a complete worked template wiring 14 res
 
 #### Key Naming and Case
 
-The template is stored and returned **verbatim** — SOAT does not rewrite its keys. This means two different naming rules apply inside a template:
+The template is stored and returned **verbatim** — SOAT does not rewrite its keys:
 
 - **Resource `properties` keys** must be **snake_case**, matching the REST API body fields (`default_model`, `ai_provider_id`). A camelCase property key is rejected at validation time as an unknown field.
-- **Logical IDs, parameter names, and output names** are **author-chosen identifiers** and are preserved exactly as written — any case is accepted (`DefaultProvider`, `poemDoc`, `aiProviderName`). Use whatever convention you prefer, but stay consistent: a `--parameter` override must reference a parameter by the exact name declared in the template (`--parameter aiProviderName=…` matches a parameter declared as `aiProviderName`, not `ai_provider_name`).
-- The deploy request's top-level **`parameters`** field (the value bag, not `template.parameters`) is likewise stored verbatim by key. A key must match the declared parameter name exactly, including underscores (`--parameter api_token=…` matches a parameter declared as `api_token`).
+- **Logical IDs, parameter names, and output names** are **author-chosen identifiers**, preserved exactly as written — any case is accepted. A `--parameter` override (and any key in the deploy request's top-level `parameters` value bag) must match the declared parameter name exactly, including underscores (`--parameter aiProviderName=…` matches `aiProviderName`, not `ai_provider_name`).
 
 ### Parameters
 
-Parameters make a template portable across environments by allowing deploy-time values to be injected without changing the template itself. Use the `parameters` key to declare them:
+Parameters make a template portable across environments by injecting deploy-time values without changing the template:
 
 ```json
 {
@@ -178,18 +179,16 @@ Parameters make a template portable across environments by allowing deploy-time 
 | `no_echo`            | No       | When `true`, signals that the value is sensitive and should not be logged or displayed                                  |
 | `use_previous_value` | No       | When `true`, omitting the parameter **on update** reuses its previously stored value instead of failing as required     |
 
-Parameters without a `default` are **required** — they must be provided in the `parameters` field of the deploy request, unless declared with `use_previous_value: true` (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
-
 #### Parameter Expressions
 
-Use these expressions anywhere in `properties` or `outputs` to reference a parameter:
+Use these expressions anywhere in `properties` or `outputs`:
 
 | Expression                       | Description                                                              |
 | -------------------------------- | ------------------------------------------------------------------------ |
 | `{ "param": "ParamName" }`       | Replaced with the parameter's value as-is                                |
 | `{ "sub": "text ${ParamName}" }` | String interpolation — embeds the parameter value inside a larger string |
 
-A `${Name}` token inside a `sub` may also name a resource logical ID, which resolves to the resource's physical public ID at apply time — see [Sub Expressions](#sub-expressions).
+A `${Name}` token inside a `sub` may also name a resource logical ID — see [Sub Expressions](#sub-expressions).
 
 #### Providing Parameter Values
 
@@ -208,17 +207,14 @@ Pass parameter values in the `parameters` field of the validate, plan, create, o
 }
 ```
 
-- Values in `parameters` override any `default` declared in the template.
-- Parameters with a `default` are optional in the request.
-- Parameters without a `default` and not provided in the request cause a `400 Missing required parameters` error — unless declared `use_previous_value: true`, which reuses the stored value on update (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
+- Values in `parameters` override any `default`; parameters with a `default` are optional in the request.
+- Parameters without a `default` and not provided cause a `400 Missing required parameters` error — unless declared `use_previous_value: true`, which reuses the stored value on update (see [Reusing Previously Stored Values](#reusing-previously-stored-values)).
 - Parameter values are **never stored** in the database — provide them on every create/update call, except for `use_previous_value` parameters on update.
-- On `validate-formation`, passing `parameters` is optional. When omitted, validation only checks the template's structure, so a required parameter without a default does not make the template invalid. When `parameters` is provided (even as an empty object), the validation result also reports any required parameter still missing after applying those values, as an entry in `errors`.
+- On `validate-formation`, `parameters` is optional. When omitted, validation only checks the template's structure, so a required parameter without a default does not make the template invalid. When provided (even as an empty object), the result also reports any still-missing required parameter as an entry in `errors`.
 
 #### Providing Parameter Values via the CLI
 
-The CLI accepts `--parameter` (repeatable) instead of a JSON `--parameters` object. It also accepts `--env-file` to load an `.env` file so that sensitive values never need to be hardcoded in the command.
-
-**Syntax options for `--parameter`:**
+The CLI accepts `--parameter` (repeatable) instead of a JSON `--parameters` object, plus `--env-file` to load an `.env` file so sensitive values never need to be hardcoded.
 
 | Syntax | Example | When to use |
 |---|---|---|
@@ -227,22 +223,7 @@ The CLI accepts `--parameter` (repeatable) instead of a JSON `--parameters` obje
 | `Key=@VAR_NAME` | `--parameter ApiKey=@API_KEY` | Variable in `--env-file`; shell-safe (no expansion) |
 | `KEY` (no `=`) | `--parameter API_KEY` | Read env var by exact name from `--env-file` or shell env |
 
-**Why `$VAR` breaks with `--env-file`**
-
-The shell expands `$VAR` to an empty string before the CLI process starts, so `--env-file` loading always arrives too late when variables are not exported in the calling shell. Use `@VAR_NAME` or the bare-key syntax instead — neither is interpreted by the shell.
-
-**Unset `@VAR_NAME` / bare-`KEY` variables omit the parameter, not fail the command**
-
-If the referenced environment variable is not found (in `--env-file` or the shell), the CLI omits that parameter from the request instead of erroring — the server then decides: it reuses the formation's previously stored value for parameters declared `use_previous_value: true` (see [Reusing Previously Stored Values](#reusing-previously-stored-values)), or returns `400 Missing required parameters` if no previous value exists. `Key=$VAR` and `Key=${VAR}` keep failing fast in the CLI on an unset variable, since they are not tied to this fallback.
-
-**Example — deploying with secrets from an `.env` file:**
-
-Given `.env`:
-```env
-XAI_API_KEY=xai-...
-TOOLS_API_KEY=tk-...
-APP_URL=https://www.example.com
-```
+The shell expands `$VAR` before the CLI starts, so it cannot pick up `--env-file` values — use `@VAR_NAME` or the bare-key syntax for those. Lookup order: `--env-file` first, then `process.env`. When an `@VAR_NAME` / bare-`KEY` variable is not found, the CLI **omits that parameter** from the request instead of erroring — the server then reuses the stored value for `use_previous_value: true` parameters or returns `400 Missing required parameters`. `Key=$VAR` / `Key=${VAR}` keep failing fast in the CLI on an unset variable.
 
 ```bash
 soat update-formation \
@@ -250,23 +231,9 @@ soat update-formation \
   --template-file formation.yaml \
   --env-file .env \
   --parameter AppUrl=@APP_URL \
-  --parameter ToolsApiKey=@TOOLS_API_KEY \
-  --parameter XaiApiKey=@XAI_API_KEY
-```
-
-Or using the bare-key syntax (parameter name must match the env var name exactly):
-
-```bash
-soat update-formation \
-  --formation-id form_6sBFq1eBsCwB16dM \
-  --template-file formation.yaml \
-  --env-file .env \
-  --parameter APP_URL \
   --parameter TOOLS_API_KEY \
   --parameter XAI_API_KEY
 ```
-
-**Lookup order:** `--env-file` variables are checked first; if not found there, `process.env` (the calling shell's exported variables) is checked. Missing variables cause the CLI to exit with an error before the API call is made.
 
 #### Reusing Previously Stored Values
 
@@ -286,24 +253,11 @@ resources:
       value: { param: XaiApiKey }
 ```
 
-```bash
-# First deploy — supply the value (create has no previous value to reuse)
-soat create-formation --project-id proj_xxx --name my-stack \
-  --template-file formation.yaml --parameter XaiApiKey=@XAI_API_KEY
-
-# Later deploys — omit it; the stored value is reused
-soat update-formation --formation-id form_xxx --template-file formation.yaml
-
-# Rotate it — supply a value; it overrides use_previous_value
-soat update-formation --formation-id form_xxx --template-file formation.yaml \
-  --parameter XaiApiKey=@XAI_API_KEY
-```
-
 Rules:
 
 - An explicitly supplied value **always overrides** `use_previous_value`, so rotation still works by passing the parameter.
 - `use_previous_value` only satisfies the required-parameter check **on update**. On create there is no previous value, so an omitted parameter still returns `400 Missing required parameters`.
-- A parameter **without** `use_previous_value` that is neither supplied nor defaulted still returns `400 Missing required parameters` — so a missing value fails loudly rather than silently freezing an unrelated parameter.
+- A parameter **without** `use_previous_value` that is neither supplied nor defaulted still returns `400 Missing required parameters` — a missing value fails loudly rather than silently freezing an unrelated parameter.
 - The previous value is reused only where the underlying resource retains it. A `secret` resource's encrypted value is preserved untouched (its plaintext is never stored), producing a no-op for that resource. For other resources, the **last-applied** value of that field is reused; fields that were never stored are simply dropped.
 
 ### Resource Declaration
@@ -375,7 +329,7 @@ After deployment the tool's stored header is `Bearer {{secret:sec_01HXYZ}}` — 
 
 ### Metadata Substitution
 
-The template's top-level `metadata` block is a substitution site, exactly like `outputs`: `{ "ref": "logicalId" }`, `{ "param": "Name" }`, and `{ "sub": "text ${Name}" }` are resolved at deploy time. The raw expressions stay in `template.metadata` (so a re-deploy re-resolves them against new parameter values), and the resolved values are exposed on the formation's `resolved_metadata` field.
+The template's top-level `metadata` block is a substitution site, exactly like `outputs`: `{ "ref": "logicalId" }`, `{ "param": "Name" }`, and `{ "sub": "text ${Name}" }` are resolved at deploy time. The raw expressions stay in `template.metadata` (so a re-deploy re-resolves them against new parameter values), and the resolved values are exposed on the formation's `resolved_metadata` field. The parameter values used on the last deploy are recorded on `resolved_parameters`, with `no_echo: true` values masked (`***`).
 
 ```yaml
 parameters:
@@ -389,10 +343,8 @@ metadata:
 
 Deploying with `--parameter my_version=1.2.3` yields `resolved_metadata` of `{ "my_version": "1.2.3", "memory": "mem_01HXYZ" }`, while `template.metadata.my_version` remains `{ "sub": "${my_version}" }`.
 
-The parameter values used on the last deploy are also recorded on `resolved_parameters` for auditability. Parameters declared `no_echo: true` are masked (`***`) so sensitive values are never persisted in plaintext.
-
 :::warning[The template `metadata` block is the only metadata substitution site]
-The formation-level `metadata` field — the one supplied alongside `template` on `create-formation` / `update-formation` (and returned as the formation's `metadata`) — is a **static** annotation bag. It is never resolved, so a `sub`/`param`/`ref` expression placed there would be stored verbatim and silently never substituted. To catch this, create/update **reject** such expressions in the formation `metadata` field with `400 FORMATION_INVALID_METADATA`. Put deploy-time substitutions in the template's top-level `metadata` block (above), which is resolved into `resolved_metadata`.
+The formation-level `metadata` field — the one supplied alongside `template` on `create-formation` / `update-formation` — is a **static** annotation bag, never resolved. Create/update **reject** `sub`/`param`/`ref` expressions there with `400 FORMATION_INVALID_METADATA`; put deploy-time substitutions in the template's top-level `metadata` block instead.
 :::
 
 ### Topological Ordering
@@ -412,11 +364,10 @@ Each resource in a formation goes through these statuses:
 | `failed`  | Last operation failed                       |
 
 Once a resource reaches `deleted`, it is a tombstone kept for audit history —
-`get-formation` continues to list it, but it stops appearing as a live
-change: `plan-formation` and `update-formation` only report a resource once,
-at the deploy where it is actually removed from the template. A later no-op
-reconcile never re-lists it. `plan-formation` also previews that pending
-removal as a `delete` action before `update-formation` runs, so the two
+`get-formation` continues to list it, but `plan-formation` and
+`update-formation` only report it once, at the deploy where it is actually
+removed from the template; a later no-op reconcile never re-lists it.
+`plan-formation` previews the pending removal as a `delete` action, so the two
 always agree on the same set of changes.
 
 The formation stack itself has these statuses:
@@ -431,26 +382,16 @@ The formation stack itself has these statuses:
 | `deleted`       | All resources removed                                    |
 | `delete_failed` | Stack teardown encountered failures                      |
 
-Deletion is idempotent: if a managed resource was already removed outside of
-the formation (for example, deleted directly through its own REST endpoint),
-teardown treats it as already gone rather than failing the stack. Only
-unexpected errors mark the operation `failed` and leave the stack in
-`delete_failed`.
-
-A teardown that hits such an error answers `409 FORMATION_DELETE_FAILED` and
-names every blocking resource in `error.meta.failures`, each as
-`{ logical_id, resource_type, error }`. Resources removed before the blocker
-stay removed — teardown does not roll back — so the stack is left partially torn
-down in `delete_failed`; resolve the blockers and delete it again.
-
-The common blocker is a resource the platform deliberately refuses to delete on
-its own. An **agent that has generation or trace history** is the one most stacks
-meet, because anything that exercises the agent — including an
-[eval](./evaluations.md) run declared in the same template — gives it that
-history. Teardown never forces this: deleting an agent's generations and traces
-destroys observability records, so it stays an explicit operator decision via
-`DELETE /api/v1/agents/{agent_id}?force=true`. Declare the agent with
-`deletion_policy: retain` if the stack should leave it standing instead.
+Deletion is idempotent: a managed resource already removed outside the
+formation is treated as already gone. A teardown that hits an unexpected error
+answers `409 FORMATION_DELETE_FAILED` and names every blocking resource in
+`error.meta.failures`, each as `{ logical_id, resource_type, error }`.
+Resources removed before the blocker stay removed — teardown does not roll
+back — leaving the stack in `delete_failed`; resolve the blockers and delete
+again. The common blocker is an **agent with generation or trace history**,
+which the platform never force-deletes on its own — that stays an explicit
+operator decision via `DELETE /api/v1/agents/{agent_id}?force=true`. Declare
+the agent with `deletion_policy: retain` if the stack should leave it standing.
 
 ### Plan Diff
 
@@ -462,13 +403,11 @@ alongside `logical_id`, `resource_type`, `action`, and `physical_resource_id`:
 | `diff.desired`  | object        | Resolved desired-state properties, after parameter and `ref`/`sub` substitution        |
 | `diff.current`  | object \| null | Current properties being compared against — `null` when there is nothing to compare (a `create`, an unregistered resource type, or a failed read) |
 
-For a resource type whose live state can be read back (most resource types),
-`diff.current` reflects the resource as it exists today. For a write-only
-resource type (currently only `secret`, whose value is encrypted at rest and
-never read back), `diff.current` reflects the last-applied snapshot stored on
-the formation resource instead — the same source of truth `update-formation`
-diffs against, so `plan-formation` and `update-formation` agree on whether a
-secret with `use_previous_value: true` is a `no-op`.
+For a resource type whose live state can be read back (most), `diff.current`
+reflects the resource as it exists today. For a write-only resource type
+(currently only `secret`), `diff.current` reflects the last-applied snapshot
+stored on the formation resource — the same source of truth
+`update-formation` diffs against.
 
 Both commands apply the same change rule, so a plan never disagrees with the
 apply it previews:
@@ -480,17 +419,6 @@ apply it previews:
   nested value bag is not a change.
 - A property resolving to `undefined` (a kept `use_previous_value` parameter)
   reuses the previous value, or is dropped entirely when there is none.
-
-### Operations and Event Log
-
-Every deploy (create, update, delete) creates a `FormationOperation` record with:
-
-- `operation_type` — `create | update | delete`
-- `status` — `pending | running | succeeded | failed`
-- `plan` — the planned changes computed before execution
-- `events` — ordered list of per-resource events with timestamp, action, status, and error (if any)
-
-Use `GET /api/v1/formations/{formation_id}/events` to retrieve the full history.
 
 ## Examples
 

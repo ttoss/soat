@@ -9,25 +9,13 @@ import TabItem from '@theme/TabItem';
 
 DAG-based pipeline definitions for chaining agents, tools, and knowledge lookups into repeatable pipelines.
 
-## Orchestration or workflow?
-
-An **orchestration is a pipeline that _ends_** — a directed acyclic graph that starts, flows forward through its nodes, and terminates. A **[workflow](./workflows.md) is a state graph a task _lives_ in** — a long-lived entity that moves between named states over days or weeks, including backward. Use an orchestration for a deterministic, forward-only sequence of steps that runs and completes; use a workflow for statuses, transitions, guards, a kanban board, or an entity that revisits states.
-
-The two compose in both directions: a task's state _dispatches_ an orchestration to do that state's work, and a graph moves a task on with a `tool` node bound to a [`soat` tool](./tools.md#soat) for `transition-task`.
-
-> See **[Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model)** for the full comparison, the composition patterns in both directions, and the two rules that keep a composed cycle bounded.
-
 ## Overview
 
-Orchestrations let you describe a directed acyclic graph (DAG) of nodes where each node performs a discrete operation. Nodes in the same execution round run in parallel; edges with activation groups control fan-in convergence.
+Orchestrations describe a directed acyclic graph (DAG) of nodes where each node performs a discrete operation. Nodes in the same execution round run in parallel; edges with activation groups control fan-in convergence. Use an orchestration when you know the exact steps in advance and want deterministic, auditable execution — an `agent` node can still use LLM reasoning internally, but the graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
 
-Use orchestrations when you know the exact steps in advance and want deterministic, auditable execution — not when you need an LLM to decide which steps to take. An agent node inside an orchestration can still use LLM reasoning internally, but the orchestration graph itself is deterministic. See it end to end in [Orchestrate a Sonnet - Step 6 (Create the orchestration graph)](/docs/tutorials/orchestrate-a-sonnet#step-6--create-the-orchestration-graph).
+An orchestration is a pipeline that _ends_; a [workflow](./workflows.md) is a state graph a task _lives_ in. See [Choosing an Automation Model](/docs/getting-started/choosing-an-automation-model) for the comparison and composition patterns. An orchestration can also be declared as a [Formation](./formations.md) resource — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad) — and can be run automatically by binding it to a [Trigger](./triggers.md) with `target_type: orchestration`.
 
 > See the [Permissions Reference](../permissions.md#orchestrations) for the IAM action strings for this module.
-
-An orchestration can also be declared as a [Formation](./formations.md) resource, letting you deploy a team of agents together with the flow that coordinates them as a single stack — see the [Agent Squad example](#agent-squad).
-
-To run an orchestration automatically — on a cron schedule, in response to an inbound webhook, or on demand — bind it to a [Trigger](./triggers.md) with `target_type: orchestration`.
 
 ## Related Tutorials
 
@@ -84,7 +72,7 @@ To run an orchestration automatically — on a cron schedule, in response to an 
 
 ### NodeExecution
 
-Each entry in a run's `node_executions` array records a single node execution, in chronological order. Together they form the execution trace of a run — the orchestration analogue of an LLM trace.
+Each entry in a run's `node_executions` array records a single node execution, in chronological order.
 
 | Field          | Type           | Description                                              |
 | -------------- | -------------- | -------------------------------------------------------- |
@@ -116,9 +104,9 @@ Each entry in a run's `node_executions` array records a single node execution, i
 | `loop`         | Iterates a state collection, running a sub-orchestration per item. Uses `orchestration_id`, `collection`, `item_variable`, and `parallelism`. See [Loops](#loops-collection-iteration). |
 | `poll`         | Calls a tool on an interval until a JSON Logic exit condition on the response holds. Uses `tool_id`, `exit_condition`, and `interval`. See [Polling](#polling). |
 | `delay`        | Waits for a fixed `duration`, then continues. Accepts `5s`/`5m`/`2h`/`500ms` or ISO 8601 (`PT5S`).                                   |
-| `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. Any [Webhook](./webhooks.md) subscribed to that event type in the run's project delivers it — signed, retried, and tracked by the Webhooks module. The graph holds no URL or secret. Fire-and-forget: the run does not block on or fail from delivery. See [Emitting events](#emitting-events). |
+| `emit_event`   | Emits an internal event of type `event_type` carrying the `input_mapping` result as the event `data`. See [Emitting events](#emitting-events). |
 | `webhook`      | Pauses awaiting an inbound callback (`mode: "receive"`). The run enters `awaiting_input` with `required_action.type: "webhook_receive"`; resume it via `human-input`. (To send data _out_ of a graph, use `emit_event`.) |
-| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — i.e. `{ terminalNodeId: terminalArtifact }`, the same shape used for `output` on [OrchestrationRun](#orchestrationrun) and for each item in a [`loop`](#loops-collection-iteration) node's `results` array — not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly — no extra `transform` node needed. |
+| `sub_orchestration` | Runs another orchestration as a single step. Uses `orchestration_id`. The node's artifact is the **child run's `output`** — `{ terminalNodeId: terminalArtifact }`, not a flattened value. `state_mapping` values are JSON Logic, whose `var` reader descends dot-paths, so `{"var": "output.terminalNodeId.someField"}` pulls a deep field directly. |
 
 ### Node artifacts
 
@@ -126,7 +114,7 @@ Every completed node produces an **artifact** — the object that `state_mapping
 
 | Type | Artifact |
 | ---- | -------- |
-| `agent` | `{ content }`. With an `output_schema`, the artifact becomes **that object** instead (so its own fields are read directly) — see [Agent node output_schema](#agent-node-output_schema). |
+| `agent` | `{ content }`. With an `output_schema`, the artifact becomes **that object** instead — see [Agent node output_schema](#agent-node-output_schema). |
 | `tool` | **The tool's result object itself**, not a wrapper — a tool returning `{"status":"ok"}` yields `{"status":"ok"}`, read as `{"var": "output.status"}`. Only a **non-object** result (string, number) is wrapped as `{ result }`. A guardrail-blocked call yields `{ status: "blocked", reason }` instead — see [Guardrail interception](#guardrail-interception-on-tool-nodes). |
 | `transform` | `{ result }` — the evaluated `expression`. |
 | `condition` | No artifact; the node emits a branch label. Its namespace entry is `{ label }`, read as `{"var": "nodes.<id>.label"}`. |
@@ -144,23 +132,19 @@ The common trap is `tool`: because the artifact is the tool's result verbatim, `
 
 #### Agent node `output_schema`
 
-When an `agent` node declares an `output_schema`, the engine resolves the artifact in order:
+When an `agent` node declares an `output_schema`, the engine resolves the artifact in order: (1) the model provider's own structured output, when the agent's configured `output_schema` reaches it as a generation-time constraint (see [Agents](./agents.md)); (2) otherwise, the raw text response parsed as JSON, stripping a single markdown code fence first; (3) if neither produces a JSON object, the artifact falls back to `{ content }` and the node still completes — a mismatch never fails the run (a `soat:orchestrations` debug log records the parse failure).
 
-1. **The model provider's own structured output**, when the agent's own configured `output_schema` reaches it as a generation-time constraint (see [Agents](./agents.md)) and the provider honors it — already a parsed object, used as-is.
-2. Otherwise, the model's raw text response, **parsed as JSON** — stripping a single markdown code fence (` ```json ... ``` ` or plain ` ``` ... ``` `) first, since a model instructed to return bare JSON commonly wraps it in one anyway.
-3. If neither produces a JSON object (the response is genuinely non-JSON prose), the artifact falls back to `{ content }` and the node still completes — an `output_schema` mismatch never fails the run. The fallback is not silent operationally: a `soat:orchestrations` debug log records the parse failure.
-
-`output_schema` is currently a **best-effort parsing aid**, not a hard validation gate: a parsed object is accepted whether or not its fields actually satisfy the schema. It is enforced as a real generation-time constraint only when it matches the schema already configured on the node's own agent — a node-level `output_schema` that differs from its agent's is not itself forwarded to the model.
+`output_schema` is a **best-effort parsing aid**, not a hard validation gate: a parsed object is accepted whether or not its fields satisfy the schema, and a node-level `output_schema` that differs from its agent's own is not forwarded to the model.
 
 > **Tip:** a `state_mapping` that writes `null` usually means the mapping read a field the artifact does not have. Every artifact is visible under `state.nodes.<id>` in `get-orchestration-run`, so check there for the real shape.
 
 ### Guardrail interception on tool nodes
 
-A `tool` node's call is classified by [Guardrails](./guardrails.md) at dispatch, the same single gating mechanism agent tool calls use. With no agent in scope the node composes the **project + tool** scopes only; the strictest [action class](./guardrails.md#action-classes) is enacted in graph terms:
+A `tool` node's call is classified by [Guardrails](./guardrails.md) at dispatch. With no agent in scope the node composes the **project + tool** scopes only; the strictest [action class](./guardrails.md#action-classes) is enacted in graph terms:
 
 - **A / passing B** — the tool runs with the (cleaned) `input_mapping` result.
-- **C (human sign-off)** — the run parks on the node (`required_action.type: "approval"`) and files an [ApprovalItem](./approvals.md) with the frozen arguments, exactly like an [approval node](#approval-nodes). On approval the node re-dispatches the tool with the frozen (or edited) arguments and continues down its success edge; on rejection/expiry the tool never runs and only a matching `condition: "rejected"` / `"expired"` edge follows.
-- **D / tripwire** — a routable **`blocked`** outcome: the node records a `{ status, reason }` artifact and emits a `blocked` (or `tripwire`) branch label, so an edge with `condition: "blocked"` routes to a fallback. An **unlabeled** success edge does not follow a blocked node, so the happy path never runs on a blocked call.
+- **C (human sign-off)** — the run parks on the node (`required_action.type: "approval"`) and files an [ApprovalItem](./approvals.md) with the frozen arguments, exactly like an [approval node](#approval-nodes). On approval the node re-dispatches the tool and continues down its success edge; on rejection/expiry the tool never runs and only a matching `condition: "rejected"` / `"expired"` edge follows.
+- **D / tripwire** — a routable **`blocked`** outcome: the node records a `{ status, reason }` artifact and emits a `blocked` (or `tripwire`) branch label, so an edge with `condition: "blocked"` routes to a fallback. An **unlabeled** success edge does not follow a blocked node.
 
 Guardrails attach to the referenced [tool](./tools.md) (or the run's project) via `guardrail_ids`; there is no per-node guardrail field.
 
@@ -191,13 +175,7 @@ The node completes with an artifact `{ results: [...] }` — one entry per item,
 
 ### Polling
 
-A `poll` node repeatedly calls a [Tool](./tools.md) until a [JSON Logic](https://jsonlogic.com) **exit condition** on its response is satisfied. It is the condition-based counterpart to `loop` (which iterates a known collection).
-
-Each attempt:
-
-1. Calls `toolId` (resolving `inputMapping` against state, like a `tool` node).
-2. Evaluates `exitCondition` against an **augmented context** — the run state plus `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling.
-3. Otherwise the `interval` becomes a **scheduled resumption**: the run is parked and the background scheduler drives the next attempt after `interval`, bounded by `maxIterations` (default 10, ceiling 1000). There is no wall-clock ceiling — the wait no longer holds an HTTP request open, so a poll can span hours or days.
+A `poll` node repeatedly calls a [Tool](./tools.md) until a [JSON Logic](https://jsonlogic.com) **exit condition** on its response is satisfied. Each attempt calls `toolId` (resolving `inputMapping` against state, like a `tool` node), then evaluates `exitCondition` against the run state augmented with `response` (the latest tool result) and `attempt` (1-based count). A truthy result stops polling; otherwise the run is parked and the background scheduler drives the next attempt after `interval`, bounded by `maxIterations` (default 10, ceiling 1000). There is no wall-clock ceiling — the wait holds no HTTP request open, so a poll can span hours or days.
 
 The node completes with an artifact `{ result, attempts, conditionMet, timedOut }`. On exhaustion it completes with `conditionMet: false` (branch on it downstream with a `condition` node) — unless `failOnTimeout: true`, which fails the run with `ORCHESTRATION_POLL_EXHAUSTED`.
 
@@ -214,16 +192,16 @@ The node completes with an artifact `{ result, attempts, conditionMet, timedOut 
 }
 ```
 
-> **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)). They do not hold an HTTP request open, and a run parked on a wait survives a server restart.
+> **Note:** `poll` and `delay` waits are offloaded to the background scheduler (see [Durable Background Execution](#durable-background-execution)); a run parked on a wait survives a server restart.
 
 ### Emitting events
 
-To send data out of a graph, an `emit_event` node emits an **internal event** — it does not call any URL itself. Delivery is entirely the [Webhooks](./webhooks.md) module's job: any webhook subscribed to the event type (in the run's project) delivers the event, already signed (`X-Soat-Signature`), retried, tracked as a `WebhookDelivery`, and policy-gated. The graph therefore holds **no URL and no secret** — auth and endpoints are managed once, centrally, on the webhook subscription.
+An `emit_event` node emits an **internal event** — it calls no URL itself. Delivery is entirely the [Webhooks](./webhooks.md) module's job: any webhook subscribed to the event type in the run's project delivers it — signed, retried, tracked, and policy-gated — so the graph holds **no URL and no secret**.
 
 - **`event_type`** — the event type to emit, e.g. `guardrail.exception`. A subscriber listens with `create-webhook --events "guardrail.exception"` (or a pattern like `guardrail.*`).
 - **`input_mapping`** — resolved against run state to build the event `data` payload.
 
-The node is reactive and fire-and-forget, exactly like the run's own [lifecycle events](#durable-background-execution): it completes as soon as the event is emitted, and the run neither blocks on nor fails from any subscriber's delivery outcome. Its artifact is `{ emitted: true, eventType: "<type>" }`. (If a graph needs a _synchronous_ call whose failure must fail the run, use an `http` [tool](./tools.md) node instead — that is a tool call, not a notification.)
+The node is fire-and-forget: it completes as soon as the event is emitted, and the run neither blocks on nor fails from any subscriber's delivery outcome. Its artifact is `{ emitted: true, eventType: "<type>" }`. (If a graph needs a _synchronous_ call whose failure must fail the run, use an `http` [tool](./tools.md) node instead.)
 
 ```json
 {
@@ -238,11 +216,9 @@ The emitted event carries `resource_type: "orchestration_run"` and the run's id 
 
 ### Retry Policy
 
-Any node can declare a `retry` policy. When the node throws a **transient** error and attempts remain, the run parks as `sleeping` and re-executes the node after a backoff delay (offloaded to the scheduler, exactly like `poll`/`delay` — so retries survive a restart and hold no worker). Absent, or `max_attempts <= 1`, is fail-fast (today's behaviour).
+Any node can declare a `retry` policy. When the node throws a **transient** error and attempts remain, the run parks as `sleeping` and re-executes the node after a backoff delay (offloaded to the scheduler, so retries survive a restart and hold no worker). Absent, or `max_attempts <= 1`, is fail-fast.
 
-**Retriable vs terminal.** Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx` errors are **retriable**. Deliberate `4xx` business errors (validation, not found, conflict) are **terminal** and fail the run immediately without consuming attempts.
-
-**Attempt history.** Each attempt writes its own `node_executions` record with an incrementing `attempt` — failed attempts `1..N-1` followed by a final `completed` (success) or `failed` (retries exhausted, run fails).
+Unexpected/infrastructure errors (network, timeouts, provider SDK throws) and upstream `5xx` errors are **retriable**; deliberate `4xx` business errors (validation, not found, conflict) are **terminal** and fail the run immediately without consuming attempts. Each attempt writes its own `node_executions` record with an incrementing `attempt`.
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -263,144 +239,76 @@ Any node can declare a `retry` policy. When the node throws a **transient** erro
 }
 ```
 
-> **Note:** node execution of side-effecting nodes is idempotent across a retry redelivery or a reaper redrive — see [Idempotency](#idempotency-of-node-execution). A **retry** (a new attempt) is deliberately not deduped; a **redelivery** of the same attempt is.
+> **Note:** a **retry** (a new attempt) is deliberately not deduped; a **redelivery** of the same attempt is — see [Idempotency](#idempotency-of-node-execution).
 
 ### Durable Background Execution
 
 Runs execute in a **queue-backed durable worker**, detached from the HTTP request that starts them:
 
-- `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — **no node executes inside the request**. A worker claims the task and drives the run; observe progress with `get-orchestration-run` (which includes `node_executions`) or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
-- `delay` and `poll` waits park the run as **`sleeping`** — it holds no worker and no memory, pure DB state. The wake time (`wake_at`) and how to continue are persisted with the run, and the scheduler enqueues a `wake` task when the wait is due — so a run containing `delay: "2h"` survives a restart and completes on schedule.
-- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`** (also pure DB state, no worker); satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
+- `start-orchestration-run` persists the run, enqueues a `continue` task, and returns immediately with `status: "queued"` — no node executes inside the request. Observe progress with `get-orchestration-run` or via run lifecycle [webhook](./webhooks.md) events. (The single-process default runs the worker loop inside the API process, so the run starts draining right away.)
+- `delay` and `poll` waits park the run as **`sleeping`** — pure DB state, no worker, no memory. The wake time is persisted and the scheduler enqueues a `wake` task when due, so a run containing `delay: "2h"` survives a restart and completes on schedule.
+- `human` and `webhook (mode: receive)` nodes park the run as **`awaiting_input`**; satisfy the pause with `submit-human-input`, which applies the submitted payload, drives the run inline, and returns the settled result. `resume-orchestration-run` only re-drives an `awaiting_input` run from its last checkpoint — it carries no `node_id` or payload, so it cannot satisfy a pause and will simply re-park on the same node.
 
-**Run identity.** A run outlives the request that started it, so it cannot borrow that request's credential when a worker drives it minutes or days later. Each run persists the principal that started it (the user or API key), and every background drive — a queued start, a scheduler wake, a redrive after a crash, an `awaiting_input` resume — re-mints a short-lived **run-as token** from it, confined to the run's project. This is what lets a [`soat` tool](./tools.md#soat) node call the platform from a durable run at all.
+**Run identity.** A run outlives the request that started it. Each run persists the principal that started it (the user or API key), and every background drive re-mints a short-lived **run-as token** from it, confined to the run's project — this is what lets a [`soat` tool](./tools.md#soat) node call the platform from a durable run.
 
-- **Identity only, not permissions.** The token asserts who the run is; authorization is evaluated per call against policies as they stand at that moment, so revoking access takes effect on a run already in flight.
-- **Never wider than the starting credential.** A run started by an API key is bounded by that key's own policies, so it can do no more than the key could. Revoke the key and the run stops acting rather than falling back to its owner's access.
-- **Attributed to the key, not its owner.** A key-started run *names the key* (`key_…`) wherever a record of who acted is kept — [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and the principal a later automation hop inherits — so two keys held by one user stay distinguishable through a background drive. The run-as token is JWT-shaped, and until this held it reported the owning user, quietly collapsing that distinction.
-- **Trigger- and OAuth-started runs record no principal.** Their boundary — the trigger's attached policy, the consented scope — lives in the token rather than in the principal, so re-minting would drop it. Those runs execute inline with the original token, as they always have.
-- **A run with no principal still runs.** Only its platform self-calls are unauthenticated, and they now fail loudly (`TOOL_HTTP_ERROR` carrying the upstream 401) instead of storing the error body as a node artifact.
+- **Identity only, not permissions.** Authorization is evaluated per call against policies as they stand at that moment, so revoking access takes effect on a run already in flight.
+- **Never wider than the starting credential.** A run started by an API key is bounded by that key's own policies; revoke the key and the run stops acting rather than falling back to its owner's access.
+- **Attributed to the key, not its owner.** A key-started run names the key (`key_…`) in [task history](./workflows.md#transition-history), the [audit log](./audit-log.md), and the principal a later automation hop inherits.
+- **Trigger- and OAuth-started runs record no principal.** Their boundary lives in the token (the trigger's attached policy, the consented scope), so they execute inline with the original token. A run with no principal still runs — only its platform self-calls are unauthenticated, and they fail loudly (`TOOL_HTTP_ERROR` carrying the upstream 401).
 
-Nested `loop` and `sub_orchestration` children inherit their parent's identity, so a whole tree of runs acts as one principal.
+Nested `loop` and `sub_orchestration` children inherit their parent's identity, so a whole tree of runs acts as one principal. The same mechanism covers a [workflow](./workflows.md)-dispatched agent, keyed to the task rather than a run.
 
-**The same applies to a workflow-dispatched agent.** A [workflow](./workflows.md) state's `on_enter` dispatch is request-less whichever kind it is, so an agent dispatch re-mints the same run-as token — keyed to the task rather than a run — and an agent holding a [`soat` tool](./tools.md#soat) authenticates as the principal that started the chain, under that principal's boundary. Every point above holds unchanged, including a key-started chain being bounded by — and attributed to — the key itself rather than its owner.
-
-**Queue driver.** The queue is a `run_tasks` table claimed in batches with `SELECT … FOR UPDATE SKIP LOCKED`, so multiple workers never claim the same task and no new infrastructure is required. A claimed task holds a lease; if the worker fails to acknowledge it before the lease expires, the task is redelivered (at-least-once delivery). A task is minted only when there is work to pick up — a `continue` when a run starts or the reaper reclaims an orphan, a `wake` when a parked wait comes due. Parking itself holds no task.
-
-**Pluggable queue drivers.** The queue is reached through a four-operation abstraction (`enqueue` / `claim` / `ack` / `retry`, plus a stats snapshot), so the backend is selected with `ORCHESTRATION_QUEUE_DRIVER` and nothing else in the engine, scheduler, or worker changes. Both drivers are held to one shared conformance suite, so they are interchangeable for at-least-once delivery, lease-based redelivery, delayed availability, and exclusive claim.
+**Queue driver.** The queue is reached through a four-operation abstraction (`enqueue` / `claim` / `ack` / `retry`), selected with `ORCHESTRATION_QUEUE_DRIVER`. Both drivers give at-least-once delivery with lease-based redelivery:
 
 | | `postgres` (default) | `sqs` |
 | --- | --- | --- |
-| Backing store | `orchestration_run_tasks` table | an SQS queue |
-| `enqueue` | `INSERT` (a future `available_at` parks the task) | `SendMessage` (`DelaySeconds`) |
-| `claim` | `SELECT … FOR UPDATE SKIP LOCKED` + lease | `ReceiveMessage`; the visibility timeout **is** the lease |
-| `ack` | `DELETE` the row | `DeleteMessage` |
-| `retry` | clear the claim, set a new `available_at` | `ChangeMessageVisibility` |
-| Repeated failure | redelivered until acked | the queue's redrive policy → DLQ |
-| Delivery counter | `attempts` column | `ApproximateReceiveCount` |
+| Backing store | `orchestration_run_tasks` table (`SELECT … FOR UPDATE SKIP LOCKED` + lease) | an SQS queue (visibility timeout **is** the lease) |
 | Per-project `max_concurrent_runs` | **enforced** at claim time | **not enforced** |
 | `oldest_queued_age_seconds`, `per_project` stats | reported | `null` / empty |
 
-Postgres remains the default and needs no infrastructure beyond the database. Choose `sqs` when a deployment standardizes on a managed queue and accepts the two differences above: per-project concurrency limits are not evaluated (only the per-worker `ORCHESTRATION_WORKER_CONCURRENCY` cap applies), and the operator stats are limited to what `GetQueueAttributes` exposes. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes — the task simply becomes visible early, and the run's own persisted `wake_at` still decides whether there is anything to do.
+Postgres needs no infrastructure beyond the database. Choose `sqs` when a deployment standardizes on a managed queue and accepts the two differences above. A backoff longer than SQS's 15-minute maximum delay becomes 15 minutes — the run's persisted `wake_at` still decides whether there is anything to do. An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails loudly (`QUEUE_DRIVER_MISCONFIGURED`) rather than silently falling back to Postgres.
 
-```bash
-ORCHESTRATION_QUEUE_DRIVER=sqs
-ORCHESTRATION_QUEUE_SQS_QUEUE_URL=https://sqs.us-east-1.amazonaws.com/123456789012/soat-orchestration-tasks
-```
+**Separate worker process.** The worker loop runs inside the API process by default. `node dist/worker.js` starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). On `SIGTERM`/`SIGINT` the worker stops claiming new tasks and finishes claimed ones before exiting; unfinished tasks are left un-acked and redelivered. A standalone worker publishes a heartbeat file after every **successful** queue claim (`ORCHESTRATION_WORKER_HEARTBEAT_FILE`), and `workerHealthcheck.mjs` exits `0` only while that heartbeat is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS` — a worker that can no longer reach the queue goes unhealthy instead of looking alive.
 
-An unrecognized `ORCHESTRATION_QUEUE_DRIVER`, or `sqs` without a queue URL, fails loudly (`QUEUE_DRIVER_MISCONFIGURED`) rather than silently falling back to Postgres.
+**Crash recovery.** While a run is `running` it holds a **lease** (`lease_expires_at`), refreshed after every completed round. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker re-drives them from the last checkpoint — completed nodes are skipped and only the unfinished frontier re-executes.
 
-**Separate worker process.** The worker loop is an extractable module that runs inside the API process by default. `node dist/worker.js` (built from `src/worker.ts`) starts only the scheduler tick + worker loop — no HTTP listener — so the queue can be drained by a dedicated worker with the API tier running request-only (`ORCHESTRATION_WORKER_DISABLED=true`). On `SIGTERM`/`SIGINT` the worker shuts down gracefully: it stops claiming new tasks and waits for tasks it has already claimed to finish before exiting (tasks not finished before the timeout are left un-acked and redelivered, so no work is lost).
+**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated. See [Synchronous vs Asynchronous Execution](../advanced/sync-and-async.md) for the platform-wide contract.
 
-**Worker fleet deployment.** The published image ships both entrypoints, so a fleet is a second service off the same image:
-
-```yaml
-server:
-  environment:
-    ORCHESTRATION_WORKER_DISABLED: 'true' # API tier stays request-only
-
-worker:
-  command: ['node', 'packages/server/dist/worker.mjs']
-  environment:
-    ORCHESTRATION_WORKER_HEARTBEAT_FILE: /tmp/soat-orchestration-worker.heartbeat
-  healthcheck:
-    test: ['CMD', 'node', 'packages/server/dist/workerHealthcheck.mjs']
-```
-
-**Worker healthcheck.** A worker serves no HTTP, so it cannot answer the API's `/health` probe. Instead it republishes a heartbeat file after every **successful** queue claim, and `workerHealthcheck.mjs` exits `0` only while that heartbeat is younger than `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS`. Grading the last successful *claim* rather than the last timer tick is deliberate: a worker whose loop still fires but can no longer reach the queue goes unhealthy instead of looking alive. The API's `GET /health` is unchanged — still a bare `{"status":"ok"}`.
-
-**Crash recovery.** While a run is `running` it holds a **lease** — `lease_expires_at` is set when execution starts and refreshed after every completed round (every checkpoint). If the process driving a run crashes or is redeployed mid-execution, it stops refreshing the lease. A background reaper reclaims runs whose lease has expired and enqueues a `continue` task so a worker **re-drives them from the last checkpoint**, not from scratch: completed nodes are skipped and only the unfinished frontier re-executes. A healthy long run is never reclaimed because it refreshes its lease each round.
+**Lifecycle events** emitted through the [Webhooks](./webhooks.md) module: `orchestration_runs.started`, `orchestration_runs.awaiting_input`, `orchestration_runs.succeeded`, `orchestration_runs.failed`.
 
 #### Idempotency of node execution
 
-At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, where `attempt` is the node **retry** attempt (not the queue delivery counter). The keyed `node_executions` record is inserted `running` **before** the side effect runs and updated in place afterward:
+At-least-once delivery means a node executor must tolerate replay. Each **side-effecting** node execution (`agent`, `tool`, `memory_write`, `emit_event`, `sub_orchestration`, `loop`) is written with a run-scoped idempotency key `{orchestration_run_id}:{node_id}:{attempt}`, inserted `running` **before** the side effect runs and updated in place afterward. A **redelivery** of the same `(run, node, attempt)` finds the key `completed` and reuses the stored output; a **retry** (a new attempt) is a new key and runs for real.
 
-- A **redelivery** of the same task replays the same `(run, node, attempt)` → the key already exists as `completed` → the stored output is reused and the executor is **not** re-invoked. So a redeploy mid-run neither loses the run nor repeats a completed side effect.
-- A **retry** (attempt N failed; the policy schedules attempt N+1) is a *new* key → the executor runs for real, which is what a retry means.
-
-The honest boundary: a worker that crashes *between* firing the side effect and marking the key `completed` leaves a `running` key; the redelivering worker re-executes under the same key. To let downstream services dedupe that window, an `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) have no external side effect and are unkeyed.
-
-**Synchronous (compatibility) mode.** Pass `wait: true` to `start-orchestration-run` to block until the run reaches a terminal (`succeeded`/`failed`) or `awaiting_input` state, sleeping through any delay/poll waits in-process. This preserves the legacy behaviour for callers (and tests) that need the settled run in the response. Nested `loop` and `sub_orchestration` runs always execute synchronously so their output can be aggregated.
-
-**Lifecycle events.** The following events are emitted through the [Webhooks](./webhooks.md) module so callers do not need to poll:
-
-| Event                                | When                                          |
-| ------------------------------------ | --------------------------------------------- |
-| `orchestration_runs.started`         | A run is created and begins executing         |
-| `orchestration_runs.awaiting_input`  | A run pauses on a `human`/`webhook` node      |
-| `orchestration_runs.succeeded`       | A run reaches `succeeded`                      |
-| `orchestration_runs.failed`          | A run reaches `failed`                        |
-
-The scheduler tick (which enqueues `wake` tasks for due `sleeping` runs and `continue` tasks for orphaned `running` runs) and the queue worker loop are configurable:
-
-| Environment Variable | Required | Description |
-| --- | --- | --- |
-| `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
-| `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
-| `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`) — how often the worker drains the queue. |
-| `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). |
-| `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to stop the API process from running the in-process worker loop and its enqueue kicks, so a dedicated `worker.js` process owns draining. |
-| `ORCHESTRATION_WORKER_BATCH` | No | Maximum tasks a worker claims per tick (default `10`). |
-| `ORCHESTRATION_WORKER_CONCURRENCY` | No | Global cap on simultaneously claimed, unacked tasks **per worker process** (unset = no cap, bounded only by the batch size). Each tick claims at most `CONCURRENCY − in-flight`. A fleet of P workers bounds global parallelism at `P × CONCURRENCY`. See [Concurrency limits](#concurrency-limits). |
-| `ORCHESTRATION_QUEUE_DRIVER` | No | Queue backend: `postgres` (default) or `sqs`. An unknown value is rejected at startup. |
-| `ORCHESTRATION_QUEUE_SQS_QUEUE_URL` | With `sqs` | The SQS queue URL tasks are published to and received from. |
-| `ORCHESTRATION_QUEUE_SQS_REGION` | No | Region for the SQS client (falls back to `AWS_REGION`, then `us-east-1`). |
-| `ORCHESTRATION_QUEUE_SQS_ENDPOINT` | No | Override the SQS endpoint (LocalStack / ElasticMQ). Credentials otherwise resolve through the standard AWS provider chain. |
-| `ORCHESTRATION_WORKER_HEARTBEAT_FILE` | No | Where a standalone worker publishes its liveness heartbeat. Unset (the default for the in-API worker) writes nothing. |
-| `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS` | No | How old the heartbeat may be before the worker healthcheck fails (default `30000`). Must exceed `ORCHESTRATION_WORKER_INTERVAL_MS`. |
+The honest boundary: a worker that crashes *between* firing the side effect and marking the key `completed` leaves a `running` key; the redelivering worker re-executes under the same key. To let downstream services dedupe that window, an `http` tool node forwards its key verbatim as an **`Idempotency-Key`** request header. Pure nodes (`condition`, `transform`, `delay`, `human`, `approval`, `webhook`) are unkeyed.
 
 ### Concurrency limits
 
-Parallelism is bounded on two axes so a busy tenant can't starve others and the fleet can't outrun a provider's rate limits.
+Parallelism is bounded on two axes:
 
-- **Per project.** A project's [`max_concurrent_runs`](./projects.md) caps how many of its runs may be **actively driven at once**. It is enforced at queue **claim time**: while the project already has that many runs holding a claimed, lease-valid task, its further tasks stay **queued** (they are never failed and never re-enqueued with a bumped delivery count) until a slot frees. `null` (the default) means unlimited.
-
-  Only actively-driven runs occupy a slot — a run parked on a `delay`/`poll` wait (`sleeping`) or a `human` node (`awaiting_input`) holds **no** task and therefore **no** slot. A run never blocks on itself, so a multi-round run under `max_concurrent_runs: 1` continues normally.
-
-- **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps the tasks a single worker process holds claimed-and-unacked at any instant, across ticks (not merely per claim batch). `ORCHESTRATION_WORKER_BATCH` remains the per-tick claim size beneath it, so the effective claim each tick is `min(BATCH, CONCURRENCY − in-flight)`.
-
-> Per-project limits are enforced by the **Postgres** driver only — its claim is a SQL join over tasks → runs → projects, evaluated in the same transaction that leases the task. Under `ORCHESTRATION_QUEUE_DRIVER=sqs` only the global per-worker cap applies.
+- **Per project.** A project's [`max_concurrent_runs`](./projects.md) caps how many of its runs may be actively driven at once, enforced at queue **claim time**: excess tasks stay `queued` (never failed) until a slot frees. `null` (the default) means unlimited. Only actively-driven runs occupy a slot — a run parked `sleeping` or `awaiting_input` holds no task and no slot, and a run never blocks on itself. Enforced by the **Postgres** driver only.
+- **Global (per worker).** `ORCHESTRATION_WORKER_CONCURRENCY` caps the tasks a single worker process holds claimed-and-unacked at any instant; `ORCHESTRATION_WORKER_BATCH` is the per-tick claim size beneath it, so the effective claim each tick is `min(BATCH, CONCURRENCY − in-flight)`. A fleet of P workers bounds global parallelism at `P × CONCURRENCY`.
 
 ### Queue metrics
 
-`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window, no external metrics stack), and a per-project breakdown. `driver` names the active backend; under `sqs` the depths come from `GetQueueAttributes`, and `oldest_queued_age_seconds` / `per_project` are `null` / empty because SQS exposes neither. It is guarded by the `orchestrations:GetQueueStats` action (intended for admin/operator policies); a project-scoped caller sees only their own projects under `per_project`. This is distinct from the unauthenticated `GET /health` liveness probe, which stays a bare `{"status":"ok"}`.
+`GET /api/v1/orchestrations/queue/stats` returns a point-in-time snapshot of the run queue — waiting vs. claimed task counts, the oldest waiting task's age, recent claim-latency percentiles (computed in-process over a rolling 5-minute window), and a per-project breakdown. `driver` names the active backend; under `sqs`, `oldest_queued_age_seconds` / `per_project` are `null` / empty. Guarded by the `orchestrations:GetQueueStats` action; a project-scoped caller sees only their own projects under `per_project`.
 
 ### State and Mappings
 
 Each node can define:
 
 - **`input_mapping`** — Maps node input keys to values resolved against the run state before execution. Each value is [JSON Logic](https://jsonlogic.com) (see [Input Mapping](#input-mapping-json-logic)).
-- **`state_mapping`** — Projects a node's artifact into state after execution. Each **key** is a state write path and should start with the literal `state.` prefix (e.g. `"state.summary"`); a key without the prefix (e.g. `"summary"`) is normalized to be state-relative, the same convention `loop.collection` already uses. Each **value** is [JSON Logic](https://jsonlogic.com) evaluated against `{ "output": <the node's artifact>, "state": <run state> }` — the same evaluator as `input_mapping`/`transform`/`condition`, just a different context. `{ "summary": { "var": "output.content" } }` writes the artifact's `content` field to `state.summary`; a literal value (string, number, boolean) is written as-is. A **dotted** target such as `"state.proposed.action_id"` builds a nested object (`state.proposed = { action_id: … }`), so a later node reads it back with `{"var": "proposed.action_id"}` — the `var` reader descends dot-paths.
+- **`state_mapping`** — Projects a node's artifact into state after execution. Each **key** is a state write path and should start with the literal `state.` prefix (a key without the prefix is normalized to be state-relative). Each **value** is JSON Logic evaluated against `{ "output": <the node's artifact>, "state": <run state> }` — the same evaluator as `input_mapping`/`transform`/`condition`. A literal value is written as-is; a **dotted** target such as `"state.proposed.action_id"` builds a nested object, read back with `{"var": "proposed.action_id"}`. Since it is JSON Logic, `state_mapping` can also compute derived values — e.g. `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a running total.
 
   ```json
   { "id": "summarise", "type": "agent", "agent_id": "agent_xyz", "state_mapping": { "state.summary": { "var": "output.content" } } }
   ```
 
-  Since it is JSON Logic, `state_mapping` can also compute derived values or read the artifact's own upstream state — e.g. `{ "state.count": { "+": [{ "var": "state.count" }, { "var": "output.delta" }] } }` accumulates a running total across nodes.
+Every JSON Logic expression in a graph is evaluated against the run **state** — the run input (see [Run input](#run-input)), everything upstream nodes wrote via `state_mapping`, and every upstream node's raw artifact under `nodes.<id>`. `transform` and `condition` evaluate their `expression` against the full state; other node types receive only their projected `input_mapping` result; `poll` additionally evaluates its `exit_condition` against state augmented with `response` and `attempt`.
 
 #### The `nodes.<id>` namespace
 
-Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`, whether or not the node declares a `state_mapping` — giving orchestrations the same read-any-upstream-result ergonomics as a pipeline's `steps.<id>` (see [Pipeline Tools](./tools.md#pipeline)). A downstream node reads it with `{ "var": "nodes.<nodeId>.<field>" }` without any explicit wiring on the upstream node:
+Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`, whether or not the node declares a `state_mapping`. A downstream node reads it with `{ "var": "nodes.<nodeId>.<field>" }` without any explicit wiring on the upstream node:
 
 ```json
 [
@@ -414,19 +322,11 @@ Every completed node's full artifact is also recorded at `state.nodes.<nodeId>`,
 ]
 ```
 
-`nodes` is a reserved top-level state key: the engine owns it exclusively, so [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference is checked the same way a `state_mapping`-declared key is — `<id>` must name an earlier (upstream) node in the graph. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node completes with a label rather than an artifact; its namespace entry is `{ "label": "<emitted label>" }`, readable as `{ "var": "nodes.<id>.label" }`. The field names available under `nodes.<id>` are the artifact's own — `nodes.fetch.text` above assumes the `fetch` tool returns a `text` field, since a `tool` node's artifact is its result object verbatim (see [Node artifacts](#node-artifacts)).
-
-#### Evaluation scope
-
-Every JSON Logic expression in a graph is evaluated against the run **state**, which is the single shared context: it holds the run input (see [Run input](#run-input)) plus everything upstream nodes have written via `state_mapping`, plus every upstream node's raw artifact under `nodes.<id>`. What differs between node types is not the scope but what each node *does* with it:
-
-- **`transform` and `condition`** evaluate their `expression` against the full state directly.
-- **`agent`, `tool`, `knowledge`, `memory_write`, `human`, `webhook`, `sub_orchestration`** evaluate each `input_mapping` value against the full state and pass only that projected result to the node (an agent's prompt, a tool's input, etc.) — they do not receive the whole state.
-- **`poll`** evaluates its `input_mapping` against state, then its `exit_condition` against state augmented with `response` (the latest tool result) and `attempt` (see [Polling](#polling)).
+`nodes` is a reserved top-level state key: [static validation](#static-validation) rejects a `state_mapping` write targeting it, and a `{ "var": "nodes.<id>..." }` reference must name an earlier (upstream) node. (An `input_schema` property named `nodes` is allowed: run input is seeded under `state.input`, so it cannot collide.) A `condition` node's namespace entry is `{ "label": "<emitted label>" }`. The field names available under `nodes.<id>` are the artifact's own — see [Node artifacts](#node-artifacts).
 
 #### Input Mapping (JSON Logic)
 
-Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes. This gives one expression language across the whole platform: pass literals, read state, or compute derived values inline, without a dedicated `transform` node.
+Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) against the run state — the same evaluator used by `transform` and `condition` nodes:
 
 | Value | Behaviour |
 | ----- | --------- |
@@ -445,15 +345,11 @@ Each `input_mapping` value is evaluated as [JSON Logic](https://jsonlogic.com) a
 }
 ```
 
+A bare string is a literal value; use `{"var": "key"}` to read `state.key`. To pass a literal object that happens to look like a JSON Logic expression as data, wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
+
 #### Run input
 
-Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state under an `input` namespace, read with `{"var": "input.key"}` — matching the pipeline/formation convention, so run input, pipeline `input.*`, and formation `${...}` all read the same way.
-
-Input keys round-trip **verbatim** (they are not case-transformed), so a key sent as `cycle_task` is read as `{"var": "input.cycle_task"}` — not `{"var": "input.cycleTask"}`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference in an `input_mapping` satisfies [static validation](#static-validation) regardless of the declared `input_schema`; a **flat** `{"var": "<name>"}` reference is never satisfied by run input (only by an upstream node's own `state_mapping` write) — earlier releases also seeded run input flat across top-level state keys, but that alias has been removed.
-
-To pass a literal object that happens to look like a JSON Logic expression — e.g. the JSON Logic object `{"var": "x"}` itself, as data rather than an expression to evaluate — wrap it in `preserve`, which returns its argument unevaluated: `{"preserve": {"var": "x"}}`.
-
-> **Note:** an `input_mapping` bare string is a literal value; use `{"var": "key"}` to read `state.key`. (Earlier releases treated a bare `state.<key>` string as a state path — migrate those to `{"var": "key"}`.)
+Values passed to [`start-orchestration-run`](#examples) via `input` seed the initial state under an `input` namespace, read with `{"var": "input.key"}` — matching the pipeline/formation convention. Input keys round-trip **verbatim** (not case-transformed), so a key sent as `cycle_task` is read as `{"var": "input.cycle_task"}`. Because the `input` namespace is always seeded, a `{"var": "input.<name>"}` reference satisfies [static validation](#static-validation) regardless of the declared `input_schema`; a **flat** `{"var": "<name>"}` reference is never satisfied by run input — only by an upstream node's `state_mapping` write.
 
 ### Parallel Execution
 
@@ -487,7 +383,7 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | Dangling edge | an edge whose `from`/`to` references a node that does not exist |
 | Cycle (no `loop` node present) | `a → b → a` |
 | Unsatisfiable `input_mapping` reference | a `{"var": "x"}` whose `state.x` is never written by an upstream node, in a graph that declares an `input_schema` — declaring `x` in the schema does not help, since run input is only readable as `{"var": "input.x"}` |
-| Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema`, since `nodes` is never part of run input |
+| Unsatisfiable `nodes.<id>` reference | a `{"var": "nodes.ghost..."}` where `ghost` is not an earlier (upstream) node in the graph — checked regardless of `input_schema` |
 | Reserved `nodes` namespace write | a `state_mapping` key (e.g. `"state.nodes.x"`) targets the engine-owned `nodes` state key |
 
 **Warnings (never block):**
@@ -496,7 +392,7 @@ Orchestration graphs are validated **before** they are persisted. `create-orches
 | ----- | ------- |
 | Conditional-branch state read | a node reads `{"var": "branch"}` that an upstream node writes only on one side of a `condition`, so it may be undefined when the node runs |
 
-The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract). Without an `input_schema` the graph stays permissive — a parallel (non-upstream) node's `state_mapping` may legitimately write the key before the reader runs. The check walks the graph's edges to determine which nodes are upstream, and uses dominator analysis to distinguish a key that is guaranteed-written from one written only on a conditional branch. A `{"var": "nodes.<id>..."}` reference is the one exception: since `nodes.<id>` is written exclusively by the referenced node completing, an unwritten reference is always an error, open contract or not.
+The `input_mapping` reachability check only treats an unwritten reference as an **error** when an `input_schema` is declared (a closed input contract); without one the graph stays permissive, since a parallel node's `state_mapping` may legitimately write the key first. A `{"var": "nodes.<id>..."}` reference is the one exception: an unwritten reference is always an error, open contract or not.
 
 ```bash
 soat validate-orchestration \
@@ -508,47 +404,9 @@ soat validate-orchestration \
 
 ### Versioning
 
-An orchestration's graph is versioned by the same append-only archive that backs
-[agent versions](./agents.md#versioning-and-staged-rollout) and
-[guardrail versions](./guardrails.md#versioning). Version 1 is written on create,
-and every subsequent write that **changes** the graph increments `version` and
-archives the new graph as an `OrchestrationVersion`. The versioned surface is
-`nodes`, `edges`, `state_schema` and `input_schema` — the graph the engine
-executes, and nothing else.
+An orchestration's graph is versioned by the same append-only archive that backs [agent versions](./agents.md#versioning-and-staged-rollout) and [guardrail versions](./guardrails.md#versioning). Version 1 is written on create, and every subsequent write that **changes** the graph increments `version` and archives it as an `OrchestrationVersion`. The versioned surface is `nodes`, `edges`, `state_schema` and `input_schema`. Metadata-only edits, structurally-identical rewrites, and restoring the already-live version archive nothing. `version_label` on a create or update annotates the version that write archives; it is not itself part of the config.
 
-**A run executes the version it started on.** `start-orchestration-run` stamps
-the orchestration's current `version` onto the run as `orchestration_version`, and
-every later step of that run — the first drive out of the queue, a wake from
-`sleeping`, a human or approval resume, a redrive after a worker crash — resolves
-its topology from that version rather than from the live orchestration. Editing an
-orchestration therefore never re-shapes a run already in flight, including one
-parked for days on a `delay`, a `poll`, or an `awaiting_input` pause. The live
-columns are a **draft** for runs started from now on.
-
-Before this, every resume path re-read the live row, so deleting a node could
-leave a sleeping run skipping the work it was created to do, and `node_executions`
-could reference node ids from a graph that no longer existed.
-
-Three writes archive nothing, and all three follow from the same rule — a version
-exists to name a distinct graph:
-
-- a metadata-only edit (`name`, `description`);
-- re-writing the graph the orchestration already holds (compared structurally, so
-  key order does not matter);
-- restoring the version that is already live.
-
-`version_label` on a create or update annotates the version that write archives.
-It is not stored on the orchestration and is not part of the config, so labelling
-a change is never itself a change.
-
-| Operation | Endpoint |
-| --- | --- |
-| List versions, newest first | `GET /api/v1/orchestrations/{orchestration_id}/versions` |
-| Fetch one version | `GET /api/v1/orchestrations/{orchestration_id}/versions/{version}` |
-| Roll back to a version | `POST /api/v1/orchestrations/{orchestration_id}/versions/{version}/restore` |
-
-To read the topology a given run actually took, fetch the version its
-`orchestration_version` names:
+**A run executes the version it started on.** `start-orchestration-run` stamps the orchestration's current `version` onto the run as `orchestration_version`, and every later step — a wake, a resume, a redrive — resolves its topology from that version. Editing an orchestration never re-shapes a run already in flight; the live columns are a **draft** for runs started from now on. To read the topology a run actually took, fetch the version its `orchestration_version` names:
 
 ```bash
 soat get-orchestration-run --orchestration-run-id "$RUN_ID"
@@ -557,91 +415,29 @@ soat get-orchestration-run --orchestration-run-id "$RUN_ID"
 soat get-orchestration-version --orchestration-id "$ORCH_ID" --version 3
 ```
 
-**Restore appends, it does not rewind.** Restoring v1 of an orchestration at v2
-writes v1's graph back as **v3**, so a run pinned to v2 still resolves the graph
-it started on. Only the graph rolls back: `name` and `description` are left
-exactly as they are. Runs already in flight are unaffected — a restore is an
-ordinary graph edit, and pinning is what keeps it from reaching them.
+Versions are listed, fetched, and restored via `list-orchestration-versions`, `get-orchestration-version`, and `restore-orchestration-version`.
 
-A restored graph goes through the same static validation as an authored one. Node
-resource references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run
-reaches the node, not when the graph is written, so restoring a graph whose target
-has since been deleted succeeds and surfaces as a failed run — the same place it
-surfaces when the graph is authored that way in the first place.
+**Restore appends, it does not rewind.** Restoring v1 of an orchestration at v2 writes v1's graph back as **v3**, so a run pinned to v2 still resolves the graph it started on. Only the graph rolls back; `name` and `description` are untouched. A restored graph goes through the same static validation as an authored one. Node resource references (`agent_id`, `tool_id`, `orchestration_id`) resolve when a run reaches the node, not when the graph is written, so restoring a graph whose target has since been deleted succeeds and surfaces as a failed run.
 
-Orchestrations have no release/canary layer, unlike agents. A run is pinned for
-its whole life, which can be days; splitting *new* runs across two graphs is a
-coherent idea that nothing has asked for yet.
-
-Pinning is per run, and a `loop` or `sub_orchestration` node starts a **new** run
-of the child orchestration. That child pins the child's current version at the
-moment it starts, not the version its parent was pinned to — so editing a
-sub-orchestration does reach iterations that have not started yet. Version the
-parent and the child together if you need a whole nested pipeline frozen.
+Pinning is per run: a `loop` or `sub_orchestration` node starts a **new** run of the child orchestration, which pins the child's current version at that moment — so editing a sub-orchestration does reach iterations that have not started yet. Version the parent and the child together if you need a whole nested pipeline frozen.
 
 ### Node Executions
 
-Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so a failed run is fully debuggable: `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**, instead of only the final state plus a single error message.
+Every time a node runs, the engine persists an entry in the run's `node_executions` array capturing the resolved `input_mapping` it received, the `output` artifact it produced, its `status`, and — on failure — the structured `error`. The record is written even when a node throws, so `get-orchestration-run` shows **which** node failed, **what** input it received, and **why**.
 
-When a run completes, nodes that were never reached (because they were on an un-traversed condition branch or an activation group that never fired) are recorded with `status: "skipped"`. Their `input`, `output`, `started_at`, and `completed_at` fields are all `null`. This makes every declared node visible in the execution trace regardless of which branches ran. Walk through it end to end in [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration).
-
-```json
-{
-  "status": "failed",
-  "error": { "code": "RESOURCE_NOT_FOUND", "message": "Agent 'agent_x' not found." },
-  "node_executions": [
-    {
-      "node_id": "fetch",
-      "node_type": "tool",
-      "status": "completed",
-      "input": { "url": "https://example.com" },
-      "output": { "result": "..." }
-    },
-    {
-      "node_id": "summarise",
-      "node_type": "agent",
-      "status": "failed",
-      "input": { "prompt": "..." },
-      "output": null,
-      "error": { "code": "RESOURCE_NOT_FOUND", "message": "Agent 'agent_x' not found." }
-    }
-  ]
-}
-```
-
-Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` satisfies the pause, that same record is updated to `status: "completed"` with `output` set to the submitted payload and `completed_at` set to the resume time — it is never left behind as `requires_action` in a finished run. A pause that is re-entered without being satisfied — by `resume-orchestration-run`, a reaper redrive, or a queue redelivery — reuses that same record rather than appending another, so a paused node stays exactly one record per attempt. A node that was never reached is recorded with `status: "skipped"` once the run completes. For a worked example of reading back the accumulated state and per-node output of a finished run, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
+Records are returned by both `get-orchestration-run` and `list-orchestration-runs`, ordered oldest-first. A node that pauses the run for human input is recorded with `status: "requires_action"`; once `submit-human-input` satisfies the pause, that same record is updated to `completed` with `output` set to the submitted payload — a re-entered pause reuses the record rather than appending another. When a run completes, nodes that were never reached (an un-traversed condition branch, an activation group that never fired) are recorded with `status: "skipped"` and `null` `input`/`output`/timestamps — walk through it in [Conditional Branching in Orchestrations](/docs/tutorials/conditional-orchestration). For reading back a finished run's state, see [Orchestrate a Sonnet - Step 9 (Inspect the run state)](/docs/tutorials/orchestrate-a-sonnet#step-9--inspect-the-run-state).
 
 ### Run usage
 
-Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object (`total_input_tokens`, `total_output_tokens`, `total_cached_tokens`, `total_reasoning_tokens`, `total_cost_usd`) summed across the run's generations — "one operating cycle → one action" cost, without a second request. For the full per-event breakdown (line items, price rows, `by_meter_type` split), fetch the run receipt at `GET /api/v1/usage/receipt?orchestration_run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation).
+Every generation an `agent` node dispatches meters against the run: its [usage](./usage.md) event carries the run's `orchestration_run_id` and the dispatching `node_id`. `get-orchestration-run` surfaces the roll-up inline as a `usage` object summed across the run's generations. For the full per-event breakdown, fetch the run receipt at `GET /api/v1/usage/receipt?orchestration_run_id=…` — see [Receipts](./usage.md#receipts-and-reconciliation). When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger (`?trigger_id=`).
 
-When a run is started by a [trigger](./triggers.md), the trigger id is propagated onto every in-run generation's usage event, so run spend also rolls up per trigger via the [usage](./usage.md) event list (`?trigger_id=`).
-
-> **Note:** usage events are metered as each generation settles, so the roll-up is read from `get-orchestration-run`, not from the `start-orchestration-run` response. Even with `wait: true` the start response can carry `usage: null` — the run has settled but its final usage events may not have landed yet. Read the run once more to get the totals.
+> **Note:** usage events are metered as each generation settles, so read the roll-up from `get-orchestration-run`, not the `start-orchestration-run` response — even with `wait: true` the start response can carry `usage: null`.
 
 ### Run Tool Context
 
-`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph or in a node's `input_mapping`.
+`start-orchestration-run` accepts a `tool_context` bag, the same contract as an [agent generation or session](../advanced/tool-context.md): each key/value pair is forwarded as one prefixed context header on every `http`, `mcp` and `soat` tool call an `agent` node of the run makes. This is how a scheduled or orchestrated flow hands a per-user credential to the tools its agents call, without embedding it in the graph.
 
-The bag is stored **on the run** and re-read at every step, which is what makes it survive the ways a run gets driven:
-
-| Situation | Behavior |
-| --- | --- |
-| `wait: true` (inline drive) | forwarded to every `agent` node's generation |
-| `wait: false` (default, queued) | forwarded when a worker claims and drives the run |
-| Parked on a `delay`/`poll` wait (`sleeping`) | forwarded after the scheduler wakes the run |
-| Paused on a `human` node (`awaiting_input`) | forwarded after `human-input` or `resume` — neither request carries a `tool_context` of its own |
-| Paused on an [approval node](#approval-nodes) | forwarded after the approval is resolved |
-| Reclaimed after a driver crash (redrive) | forwarded on the re-drive |
-| `loop` / `sub_orchestration` child run | inherited by the child, so an agent several levels down still carries it |
-
-Rules that carry over from the shared contract:
-
-- The header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) (`X-Soat-Context-` by default) plus the key **verbatim** — no character is re-cased.
-- A key that is not a valid HTTP header name, or two keys that map to the same header, are rejected with `400 INVALID_TOOL_CONTEXT_KEY`. The validation runs at start time, so **no run is created** — important because an async run answers `201` long before its first node executes.
-- The reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped from the caller's bag at generation time and cannot be addressed from here.
-
-`tool_context` reaches the tool calls of **`agent` nodes only**. A `tool` node calls its tool directly, with no generation in between, and forwards no context headers.
+The bag is stored **on the run** and re-read at every step, so it survives every way a run gets driven — queued starts, scheduler wakes, human/approval resumes, crash redrives — and is inherited by `loop` / `sub_orchestration` child runs. Rules that carry over from the shared contract: the header name is the deployment's [context prefix](../advanced/tool-context.md#configuring-the-header-prefix) plus the key **verbatim**; an invalid or colliding key is rejected with `400 INVALID_TOOL_CONTEXT_KEY` at start time, before any run is created; the reserved identity keys (`sessionId`, `actorId`, `actorExternalId`) are stripped. `tool_context` reaches the tool calls of **`agent` nodes only** — a `tool` node calls its tool directly and forwards no context headers.
 
 ```bash
 soat start-orchestration-run \
@@ -664,31 +460,18 @@ When a `human` node is reached, the run pauses and the GET run response includes
 }
 ```
 
-`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both pause reasons are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is currently no separate, independently-authenticated callback endpoint for webhook-receive nodes, so delivering the callback requires the same platform bearer token or API key as any other write to the run.
+`required_action.type` discriminates why the run paused: `human_input` for a `human` node, `webhook_receive` for a `webhook` node in `mode: "receive"`. Both are resumed the same way — `POST /orchestration-runs/{id}/human-input` with the paused node's `node_id` — there is no separate, independently-authenticated callback endpoint for webhook-receive nodes.
 
 ### Approval Nodes
 
-An `approval` node proposes a guarded tool call and pauses the run for a human decision. Unlike a `human` node — which is resumed directly via `human-input` — an approval node files an [ApprovalItem](./approvals.md) at emit time and is resumed **only** by resolving that item through the [Approvals](./approvals.md) queue (`POST /approvals/{id}/approve` or `/reject`), or by server-side expiry.
-
-The run pauses with `required_action.type: "approval"`, carrying the created item:
-
-```json
-{
-  "required_action": {
-    "type": "approval",
-    "node_id": "gate",
-    "approval_id": "apr_x1y2z3a4b5c6d7e8",
-    "expires_at": "2026-07-15T16:00:00.000Z"
-  }
-}
-```
+An `approval` node proposes a guarded tool call and pauses the run for a human decision. Unlike a `human` node, it files an [ApprovalItem](./approvals.md) at emit time and is resumed **only** by resolving that item through the [Approvals](./approvals.md) queue, or by server-side expiry. The run pauses with `required_action.type: "approval"`, carrying `approval_id` and `expires_at`.
 
 The node's `arguments`, `reasoning`, `evidence`, and `predicted_impact` mappings are resolved against run state and **frozen** onto the item at emit time. On resolution the decision (`approved` | `rejected` | `expired`) becomes the node's branch label:
 
-- Edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route by the decision — the counterpart of a `condition` node's labels.
-- An **unlabeled** edge leaving an approval node follows **only on approval**; the rejection and expiry paths must be modeled with explicit labeled edges. If no edge matches a `rejected`/`expired` decision, the run ends at the node.
+- Edges labeled `condition: "approved"` / `"rejected"` / `"expired"` route by the decision.
+- An **unlabeled** edge leaving an approval node follows **only on approval**; if no edge matches a `rejected`/`expired` decision, the run ends at the node.
 
-Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./approvals.md#expiry-is-a-hard-gate)): an expired item can never execute, and the run routes down its `expired` edge.
+Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./approvals.md#expiry-is-a-hard-gate)): an expired item can never execute.
 
 ### Common Errors
 
@@ -697,25 +480,29 @@ Expiry is enforced server-side (see [Approvals — Expiry is a hard gate](./appr
 | `ORCHESTRATION_VALIDATION_FAILED`  | `400`  | `create-orchestration`/`update-orchestration` rejected an invalid graph                       | Read `error.meta.errors`, or call `validate-orchestration` first — see [Static Validation](#static-validation) |
 | `ORCHESTRATION_CYCLE_DETECTED`     | —      | A cycle reached execution (graphs with a cycle are normally rejected at validation time)      | Remove the cycle, or use a `loop` node if the repetition is intentional — see [Cycle Detection](#cycle-detection) |
 | `ORCHESTRATION_NODE_FAILED`        | `422`  | A node could not execute as declared — a missing required field (an `agent` node without `agent_id`, a `delay` without `duration`), or an unsupported result (an `agent` node whose response streamed) | Inspect the failing node's entry in `node_executions` for the exact `error` — see [Node Executions](#node-executions) |
-| _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from `node_executions` — see [Node Executions](#node-executions) |
+| _the underlying code_              | varies | A node threw while executing. The originating error propagates **unchanged** rather than being wrapped — a referenced `agent_id`/`tool_id` that no longer exists surfaces `RESOURCE_NOT_FOUND`, and a failing `http` tool surfaces that tool's own error | Do not key error handling on `ORCHESTRATION_NODE_FAILED` for these; read the failing node's `error.code` from `node_executions` |
 | `ORCHESTRATION_POLL_EXHAUSTED`     | —      | A `poll` node's `max_iterations` was reached with `failOnTimeout: true`                       | Raise `max_iterations`/`interval`, or handle `conditionMet: false` downstream instead of setting `failOnTimeout` — see [Polling](#polling) |
 
-**Debugging a failed run beyond "check the trace":** call `get-orchestration-run` and read `node_executions` — each entry has `node_id`, the resolved `input` the node received, and (on failure) the structured `error`, so you can see exactly which node failed, with what input, and why, without reconstructing state from the trace alone. See [Node Executions](#node-executions).
-
-**A run appears stuck in a non-terminal state:**
-
-- `queued` — the run is enqueued and waiting for a worker to claim its `continue` task; it advances to `running` on the next worker tick. Expected briefly after an async `start-orchestration-run`. If it never advances, confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`) — see [Durable Background Execution](#durable-background-execution).
-- `sleeping` — the run is parked on a `delay`/`poll` wait or a node's retry backoff and holds no worker; it resumes on its own once its scheduled wake (or the node's backoff delay) elapses. `active_nodes` names the node being waited on; the wake time itself is persisted with the run but is not exposed on the API, so use the node's declared `duration`/`interval` to know when to expect it. This is expected, not stuck — see [Durable Background Execution](#durable-background-execution).
-- `awaiting_input` — the run is parked on a `human` node or a `webhook (mode: receive)` node; it stays there until `submit-human-input` is called with the paused node's `node_id` — see [Human Nodes](#human-nodes).
-- `running` for far longer than expected — the process driving it may have crashed or been redeployed mid-execution. The background reaper reclaims any run whose lease (`lease_expires_at`) has expired and resumes it from the last checkpoint; a healthy run refreshes its lease every round, so this self-heals within `ORCHESTRATION_RUN_LEASE_TTL_MS` without intervention — see [Durable Background Execution](#durable-background-execution).
+**A run appears stuck in a non-terminal state:** `queued` means no worker has claimed its task yet — confirm a worker is running (the API process runs one unless `ORCHESTRATION_WORKER_DISABLED=true`). `sleeping` is a parked `delay`/`poll` wait or retry backoff (`active_nodes` names the node) and resumes on its own. `awaiting_input` waits for `submit-human-input`. `running` for far longer than expected self-heals: the reaper reclaims any run whose lease has expired within `ORCHESTRATION_RUN_LEASE_TTL_MS` — see [Durable Background Execution](#durable-background-execution).
 
 ## Configuration
 
 | Environment Variable | Required | Description |
 | --- | --- | --- |
 | `SOAT_RUN_TOKEN_TTL` | No | Lifetime of the run-as token minted for each background drive segment (default `1h`). It covers one drive, not the whole run, so a run sleeping for days never holds a long-lived credential. See [Run identity](#durable-background-execution). |
-| `ORCHESTRATION_QUEUE_DRIVER` | No | `postgres` (default) or `sqs` — see [Pluggable queue drivers](#durable-background-execution). |
-| `ORCHESTRATION_WORKER_DISABLED` | No | `true` keeps the API process request-only, leaving the queue to a dedicated worker. |
+| `ORCHESTRATION_SCHEDULER_INTERVAL_MS` | No | Scheduler tick interval in ms (default `5000`). |
+| `ORCHESTRATION_RUN_LEASE_TTL_MS` | No | How long a `running` run's lease is valid before the reaper may reclaim it, in ms (default `600000`). Must exceed the longest single round of node execution. |
+| `ORCHESTRATION_WORKER_INTERVAL_MS` | No | Worker loop tick interval in ms (default `5000`). |
+| `ORCHESTRATION_TASK_LEASE_TTL_MS` | No | How long a claimed queue task's lease is valid before it may be redelivered, in ms (default `60000`). |
+| `ORCHESTRATION_WORKER_DISABLED` | No | Set to `true` to keep the API process request-only, leaving the queue to a dedicated worker. |
+| `ORCHESTRATION_WORKER_BATCH` | No | Maximum tasks a worker claims per tick (default `10`). |
+| `ORCHESTRATION_WORKER_CONCURRENCY` | No | Global cap on simultaneously claimed, unacked tasks per worker process (unset = no cap). See [Concurrency limits](#concurrency-limits). |
+| `ORCHESTRATION_QUEUE_DRIVER` | No | Queue backend: `postgres` (default) or `sqs`. An unknown value is rejected at startup. |
+| `ORCHESTRATION_QUEUE_SQS_QUEUE_URL` | With `sqs` | The SQS queue URL tasks are published to and received from. |
+| `ORCHESTRATION_QUEUE_SQS_REGION` | No | Region for the SQS client (falls back to `AWS_REGION`, then `us-east-1`). |
+| `ORCHESTRATION_QUEUE_SQS_ENDPOINT` | No | Override the SQS endpoint (LocalStack / ElasticMQ). Credentials otherwise resolve through the standard AWS provider chain. |
+| `ORCHESTRATION_WORKER_HEARTBEAT_FILE` | No | Where a standalone worker publishes its liveness heartbeat. Unset (the default for the in-API worker) writes nothing. |
+| `ORCHESTRATION_WORKER_HEARTBEAT_STALE_MS` | No | How old the heartbeat may be before the worker healthcheck fails (default `30000`). Must exceed `ORCHESTRATION_WORKER_INTERVAL_MS`. |
 
 ## Examples
 
@@ -803,13 +590,13 @@ curl -X POST https://api.example.com/api/v1/orchestrations \
 
 ### Start a run
 
-Returns immediately with `status: "queued"`; a worker claims the run and drives it in the background, moving it to `running`. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
+Returns immediately with `status: "queued"`; a worker claims the run and drives it in the background. Add `wait: true` (`--wait` in the CLI) to block until the run settles (see [Durable Background Execution](#durable-background-execution)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Async (default): returns a "running" run immediately
+# Background (default): returns a queued run immediately
 soat start-orchestration-run \
   --orchestration-id orch_01 \
   --input '{"query": "summarize Q1 revenue"}'
@@ -845,31 +632,21 @@ curl -X POST https://api.example.com/api/v1/orchestration-runs \
 </TabItem>
 </Tabs>
 
-### Parallel fan-out
+### Parallel fan-out and fan-in
 
-Both `branch_a` and `branch_b` run concurrently after `start` completes:
+Both `branch_a` and `branch_b` run concurrently after `start` completes; `merge` runs only after **both** complete because its edges share an `activation_group` with `activation_condition: "all"`:
 
 ```json
 {
   "nodes": [
     { "id": "start", "type": "transform", "expression": { "var": "query" } },
     { "id": "branch_a", "type": "agent", "agent_id": "agent_a", "state_mapping": { "state.a": { "var": "output.content" } } },
-    { "id": "branch_b", "type": "agent", "agent_id": "agent_b", "state_mapping": { "state.b": { "var": "output.content" } } }
+    { "id": "branch_b", "type": "agent", "agent_id": "agent_b", "state_mapping": { "state.b": { "var": "output.content" } } },
+    { "id": "merge", "type": "transform", "expression": { "cat": [{ "var": "a" }, { "var": "b" }] } }
   ],
   "edges": [
     { "from": "start", "to": "branch_a" },
-    { "from": "start", "to": "branch_b" }
-  ]
-}
-```
-
-### Fan-in with `activation_condition: all`
-
-`merge` runs only after **both** branches complete:
-
-```json
-{
-  "edges": [
+    { "from": "start", "to": "branch_b" },
     { "from": "branch_a", "to": "merge", "activation_group": "join", "activation_condition": "all" },
     { "from": "branch_b", "to": "merge", "activation_group": "join", "activation_condition": "all" }
   ]
@@ -900,162 +677,4 @@ A `condition` node emits a string label; edges carry `condition: "<label>"` to s
 
 ### Agent Squad
 
-A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `state_mapping`), exactly as in this module's REST contract. For a full step-by-step build, see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-cat > squad.json << 'EOF'
-{
-  "resources": {
-    "Provider": {
-      "type": "ai_provider",
-      "properties": { "name": "OpenAI", "provider": "openai", "default_model": "gpt-4o" }
-    },
-    "Writer": {
-      "type": "agent",
-      "properties": {
-        "name": "Writer",
-        "ai_provider_id": { "ref": "Provider" },
-        "instructions": "Draft a short article on the given topic."
-      }
-    },
-    "Reviewer": {
-      "type": "agent",
-      "properties": {
-        "name": "Reviewer",
-        "ai_provider_id": { "ref": "Provider" },
-        "instructions": "Tighten and fact-check the draft."
-      }
-    },
-    "ContentSquad": {
-      "type": "orchestration",
-      "properties": {
-        "name": "content-squad",
-        "input_schema": { "type": "object", "properties": { "topic": { "type": "string" } } },
-        "nodes": [
-          {
-            "id": "write",
-            "type": "agent",
-            "agent_id": { "ref": "Writer" },
-            "input_mapping": { "prompt": { "var": "topic" } },
-            "state_mapping": { "state.draft": { "var": "output.content" } }
-          },
-          {
-            "id": "review",
-            "type": "agent",
-            "agent_id": { "ref": "Reviewer" },
-            "input_mapping": { "prompt": { "var": "draft" } },
-            "state_mapping": { "state.final": { "var": "output.content" } }
-          }
-        ],
-        "edges": [{ "from": "write", "to": "review" }]
-      }
-    }
-  },
-  "outputs": {
-    "squad_id": { "ref": "ContentSquad" }
-  }
-}
-EOF
-
-FORMATION=$(soat create-formation \
-  --project-id "$PROJECT_ID" \
-  --name "content-squad" \
-  --template-file squad.json)
-
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
-
-soat start-orchestration-run \
-  --orchestration-id "$SQUAD_ID" \
-  --input '{"topic": "agent squads"}' \
-  --wait
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const template = {
-  resources: {
-    Provider: {
-      type: 'ai_provider',
-      properties: { name: 'OpenAI', provider: 'openai', default_model: 'gpt-4o' },
-    },
-    Writer: {
-      type: 'agent',
-      properties: {
-        name: 'Writer',
-        ai_provider_id: { ref: 'Provider' },
-        instructions: 'Draft a short article on the given topic.',
-      },
-    },
-    Reviewer: {
-      type: 'agent',
-      properties: {
-        name: 'Reviewer',
-        ai_provider_id: { ref: 'Provider' },
-        instructions: 'Tighten and fact-check the draft.',
-      },
-    },
-    ContentSquad: {
-      type: 'orchestration',
-      properties: {
-        name: 'content-squad',
-        input_schema: { type: 'object', properties: { topic: { type: 'string' } } },
-        nodes: [
-          {
-            id: 'write',
-            type: 'agent',
-            agent_id: { ref: 'Writer' },
-            input_mapping: { prompt: { var: 'topic' } },
-            state_mapping: { 'state.draft': { var: 'output.content' } },
-          },
-          {
-            id: 'review',
-            type: 'agent',
-            agent_id: { ref: 'Reviewer' },
-            input_mapping: { prompt: { var: 'draft' } },
-            state_mapping: { 'state.final': { var: 'output.content' } },
-          },
-        ],
-        edges: [{ from: 'write', to: 'review' }],
-      },
-    },
-  },
-  outputs: { squad_id: { ref: 'ContentSquad' } },
-};
-
-const { data: formation } = await soat.formations.createFormation({
-  body: { project_id: 'proj_ABC', name: 'content-squad', template },
-});
-const SQUAD_ID = formation.outputs?.squad_id as string;
-
-const { data: run } = await soat.orchestrations.startOrchestrationRun({
-  body: { orchestration_id: SQUAD_ID, input: { topic: 'agent squads' }, wait: true },
-});
-if (run.error) throw new Error(JSON.stringify(run.error));
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-FORMATION=$(curl -s -X POST https://api.example.com/api/v1/formations \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d "{\"project_id\": \"proj_ABC\", \"name\": \"content-squad\", \"template\": $(cat squad.json)}")
-
-SQUAD_ID=$(printf '%s' "$FORMATION" | jq -r '.outputs.squad_id')
-
-curl -X POST https://api.example.com/api/v1/orchestration-runs \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d "{\"orchestration_id\": \"$SQUAD_ID\", \"input\": {\"topic\": \"agent squads\"}, \"wait\": true}"
-```
-
-</TabItem>
-</Tabs>
-
-Deploying this template creates the provider, both agents, and the orchestration in dependency order. Running it with `{ "topic": "..." }` as input drives `write` then `review` and leaves the final draft at `state.final`.
+A team of agents plus the flow that coordinates them can deploy as a single [Formation](./formations.md) stack, because an orchestration is itself a formation resource type. A node's `agent_id` uses a [`ref` expression](./formations.md#ref-expressions) to bind to an agent created in the same template; SOAT resolves it to the physical `agent_...` ID before the orchestration is created. Node fields are written in snake_case (`agent_id`, `input_mapping`, `state_mapping`), exactly as in this module's REST contract. For a full step-by-step build — the template, deploy, and run — see [Create an Agent Squad](/docs/tutorials/create-an-agent-squad).

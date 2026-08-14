@@ -14,15 +14,9 @@ API call at the moment it should happen.
 ## Overview
 
 A trigger is a first-class, project-scoped resource. It connects one _starter
-type_ to one _target_ and records every activation as an auditable **trigger
-firing**. This delivers a full activation matrix — any starter can activate any
-target:
-
-| Starter ↓ / Target → | Orchestration | Agent | Tool | Eval |
-| -------------------- | ------------- | ----- | ---- | ---- |
-| **Manual** — `POST /api/v1/triggers/{id}/fire` | ✅ | ✅ | ✅ | ✅ |
-| **Webhook** — signed `POST /hooks/triggers/{trigger_id}` | ✅ | ✅ | ✅ | ✅ |
-| **Schedule** — 5-field cron (UTC) | ✅ | ✅ | ✅ | ✅ |
+type_ (manual, webhook, or schedule) to one _target_ (orchestration, agent,
+tool, or eval) — any starter can activate any target — and records every
+activation as an auditable **trigger firing**.
 
 Firings execute in-process: a manual fire is **synchronous** and returns the
 terminal firing; webhook and schedule fires are **fire-and-forget** and the
@@ -83,8 +77,7 @@ firing record is the source of truth for the outcome.
 | `webhook`  | Signed `POST /hooks/triggers/{trigger_id}` (see below) | Has a `secret`; verified with HMAC-SHA256                 |
 | `schedule` | The built-in scheduler on a cron cadence      | Requires `cron`; `next_fire_at` is server-computed in UTC |
 
-The `type` is fixed at creation. To change how a trigger starts, create a new
-one.
+The `type` is fixed at creation.
 
 ### Targets and Input
 
@@ -107,11 +100,10 @@ How the effective input reaches each target:
 - **Tool** → passed as the tool call input, with `trigger.action` forwarded for
   `soat`/`mcp` tools. `client`-type tools cannot execute server-side and are
   rejected at trigger creation time.
-- **Eval** → starts a **queued** run of the [eval](./evaluations.md) (one real
-  agent generation per dataset item, so it is never executed inline on the
-  firing). `input.agent_version` and `input.baseline_run_id` are forwarded to
-  the run; anything else is ignored. The firing's `result.result_id` is the
-  `evrun_…` id to poll, and the run records the trigger in its `trigger_id`.
+- **Eval** → starts a **queued** run; `input.agent_version` and
+  `input.baseline_run_id` are forwarded, anything else is ignored, and the
+  firing's `result.result_id` is the `evrun_…` id to poll. See
+  [scheduled runs](./evaluations.md#scheduled-runs).
 
 Each target type also has a permission: a caller can only bind (or fire) a
 trigger to a target it could start itself — `orchestrations:StartRun`,
@@ -193,15 +185,8 @@ Before wiring this endpoint to a real external system, use
 [`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and verify
 signed deliveries on your local machine.
 
-Verifying a signature on the receiving side mirrors the outbound
-[webhooks](./webhooks.md) convention:
-
-```js
-const crypto = require('crypto');
-
-const sign = (secret, rawBody) =>
-  'sha256=' + crypto.createHmac('sha256', secret).update(rawBody).digest('hex');
-```
+Signature verification on the receiving side mirrors the outbound
+[webhooks](./webhooks.md) convention.
 
 ### Schedules and Misfire Coalescing
 
@@ -233,9 +218,9 @@ unbounded catch-up storm.
 
 For the inbound webhook endpoint's error responses (bad signature, oversized body, inactive trigger, …), see the [table above](#inbound-webhook-endpoint).
 
-**A `schedule` trigger never fires:** confirm `active` is `true`, that `next_fire_at` is set (a `null` value means the trigger isn't schedulable), and that the server wasn't started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`. If the server was down past a fire time, expect at most one coalesced catch-up firing on restart, not one per missed occurrence — see [Schedules and Misfire Coalescing](#schedules-and-misfire-coalescing).
+**A `schedule` trigger never fires:** confirm `active` is `true`, `next_fire_at` is set, and the server wasn't started with `SOAT_TRIGGER_SCHEDULER_DISABLED=true`.
 
-**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings execute fire-and-forget in the background; poll `GET /trigger-firings/{id}` for the terminal `status`. There is no automatic retry of a failed firing — inspect `error.code`/`error.message` on the firing record and re-fire manually (or fix the underlying target) if it failed.
+**A firing's `status` never leaves `pending`/`running`:** webhook and schedule firings execute fire-and-forget; poll `GET /trigger-firings/{id}` for the terminal `status`. There is no automatic retry — inspect `error.code`/`error.message` and re-fire manually.
 
 ### Formation Support
 

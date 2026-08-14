@@ -95,16 +95,7 @@ On **Merge**, writes made during a generation (the `write_memory` tool and autom
 
 See all three outcomes in action in [Agent with Persistent Memory - Step 5 (Write memory entries)](/docs/tutorials/memories-agent#step-5--write-memory-entries).
 
-#### Request Fields
-
-| Field                 | Type     | Default  | Description                                 |
-| --------------------- | -------- | -------- | ------------------------------------------- |
-| `content`             | string   | —        | The fact or observation to write            |
-| `source_type`         | string   | `manual` | How the entry was created: `manual`, `agent`, `extraction`, `orchestration` |
-| `tags`                | string[] | —        | Per-entry labels for entry-granularity tag filtering |
-| `metadata`            | object   | —        | Arbitrary structured metadata attached to the entry |
-| `duplicate_threshold` | number   | `0.95`   | Similarity above which the write is skipped |
-| `update_threshold`    | number   | `0.75`   | Similarity above which entries are merged   |
+The thresholds are per-request fields: `duplicate_threshold` (default `0.95`) and `update_threshold` (default `0.75`).
 
 On a **merge**, the incoming `tags` are unioned into the existing entry's tags and `metadata` is shallow-merged (incoming keys win), so accumulated labels are never lost. `PUT /api/v1/memory-entries/:id` replaces `tags`/`metadata` outright; pass `null` (or `[]` for tags) to clear.
 
@@ -182,8 +173,6 @@ Set `write_memory_id` in the agent's `knowledge_config` to automatically inject 
 }
 ```
 
-You can set `write_memory_id` to the same memory used for retrieval (so the agent reads from and writes to the same pool) or to a separate memory.
-
 #### Automatic Extraction
 
 Set `extraction` alongside `write_memory_id` to have the server extract facts from completed generation turns automatically — no explicit `write_memory` call by the agent is needed. Pass `true` for the defaults, or an object to customize the provider, model, and prompt used for extraction:
@@ -193,19 +182,6 @@ Set `extraction` alongside `write_memory_id` to have the server extract facts fr
   "knowledge_config": {
     "write_memory_id": "mem_alice",
     "extraction": true
-  }
-}
-```
-
-```json
-{
-  "knowledge_config": {
-    "write_memory_id": "mem_alice",
-    "extraction": {
-      "ai_provider_id": "aip_cheap",
-      "model": "gpt-4o-mini",
-      "prompt": "Extract only customer food preferences and dietary restrictions."
-    }
   }
 }
 ```
@@ -240,14 +216,7 @@ The agent-level `extraction` flag decides the default, but a single `POST /agent
 
 - `extract` omitted — follow the agent's stored `extraction` default.
 - `extract: false` — suppress extraction for this turn even when the agent enables it. Use this for operational or tool-listing turns whose facts would only add noise to a curated memory.
-- `extract: true` — force extraction for this turn even when the agent does not enable it by default, provided the agent has a `write_memory_id`. Use this to capture a genuine onboarding turn without leaving extraction on for every turn.
-
-```json
-{
-  "messages": [{ "role": "user", "content": "List the tools you have." }],
-  "extract": false
-}
-```
+- `extract: true` — force extraction for this turn even when the agent does not enable it by default, provided the agent has a `write_memory_id`.
 
 The `extract` flag has no effect on streaming or `requires_action` turns (they never extract), and cannot conjure a target: `extract: true` is still a no-op when the agent has no `write_memory_id`.
 

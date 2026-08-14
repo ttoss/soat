@@ -14,11 +14,9 @@ or rejects it.
 
 ## Overview
 
-Approvals are a producer-agnostic platform module: anything that can propose a
-risky action is a thin producer over the same queue. The queue — not any single
-producer — is the product. One item model, one expiry enforcement path, one
-decision output shape, so every consumer (activity feed, webhooks, UIs) treats an
-item the same regardless of where it came from.
+Approvals are producer-agnostic: anything that can propose a risky action files
+into the same queue, with one item model, one expiry enforcement path, and one
+decision output shape.
 
 Items are **created by the platform only** — there is no public create endpoint.
 Three producers file items today:
@@ -146,11 +144,7 @@ each run pauses exactly once per `approval` node.
 
 When the fresh item follows a **rejected** one with the same `dedup_key`, it is
 admitted rather than suppressed and its `previous_item_id` links back to that
-rejected item, so approvers see the recurrence. Re-proposal is deliberately not
-blocked: a rejection is a feedback signal, and suppressing the recurrence would
-hide the very pattern that tells a human to encode a guardrail rule that stops
-it upstream (and silently block legitimate re-proposals whose context has
-changed).
+rejected item, so approvers see the recurrence.
 
 ### Recurrence view
 
@@ -160,30 +154,16 @@ at least `min_count` times (default `2`), most-recurrent first. Each group
 carries the `agent_id`, `tool_id`, `count`, the ordered item `chain` (the
 `previous_item_id` thread, oldest → newest), and the `reasons` in order.
 
-Because dedup already threads a re-proposal onto the item it recurs from, a
-group is simply the set of items sharing a `dedup_key` — no new model, no
-cluster lifecycle. Reading three rejection reasons side by side **is** the
-curation step: the prompt to encode a [guardrail](./guardrails.md) `deny` that
-stops the pattern upstream.
-
 - `status` (default `rejected`) selects the lifecycle state groups are built
   from — recurring *rejections* are the primary signal.
 - `min_count` (default `2`) is the floor for a group to be returned.
-- Grouping is **exact-key only**. Semantic clustering of paraphrased
-  corrections is deliberately out of scope for this deterministic surface.
+- Grouping is **exact-key only** — no semantic clustering.
 
-A recurring correction has two durable homes, and picking between them is the
-decision the view exists to prompt:
-
-- **It must never happen again** — encode a [guardrail](./guardrails.md) `deny`,
-  so the action is refused before it reaches this queue.
-- **The agent should know better** — put it in the agent's `instructions`, which
-  [agent versions](./agents.md#versioning-and-staged-rollout) archive on every
-  write, so the change is attributable and reversible.
-
-A correction is not a fact about the world, so it does not belong in
-[memories](./memories.md) — see
-[what belongs in a memory](./memories.md#what-belongs-in-a-memory).
+A recurring correction has two durable homes: a [guardrail](./guardrails.md)
+`deny` (it must never happen again) or the agent's `instructions`
+([agent versions](./agents.md#versioning-and-staged-rollout) archive every
+write). It is not a fact about the world, so it does not belong in
+[memories](./memories.md#what-belongs-in-a-memory).
 
 ### Expiry is a hard gate
 
@@ -205,10 +185,7 @@ Evidence goes stale, so expiry is enforced server-side in **both directions**:
 - **Edit-then-approve** replaces the arguments via the `arguments` field on the
   approve call. Edited arguments must be a JSON object; the original proposal is
   preserved in `proposed_action`, and the edit is recorded in `edited_arguments`.
-- **Reject** requires a `reason`, preserved on the item. Rejection reasons and
-  edit diffs are the raw material of the feedback loop: recurring rejections
-  of the same proposal are the signal for graduating the pattern into a
-  guardrail rule.
+- **Reject** requires a `reason`, preserved on the item.
 
 ### Decision output
 
@@ -272,36 +249,6 @@ if (error) throw new Error(JSON.stringify(error));
 
 ```bash
 curl -X GET "https://api.example.com/api/v1/approvals?project_id=proj_ABC&status=pending" \
-  -H "Authorization: Bearer <token>"
-```
-
-</TabItem>
-</Tabs>
-
-### List recurring rejections
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat list-approval-recurrences --project-id proj_ABC --min-count 3
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data, error } = await soat.approvals.listApprovalRecurrences({
-  query: { project_id: 'proj_ABC', min_count: 3 },
-});
-if (error) throw new Error(JSON.stringify(error));
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X GET "https://api.example.com/api/v1/approvals/recurrences?project_id=proj_ABC&min_count=3" \
   -H "Authorization: Bearer <token>"
 ```
 

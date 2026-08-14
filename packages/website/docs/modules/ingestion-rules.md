@@ -62,14 +62,7 @@ When no rule matches, behavior is unchanged: a non-native type is rejected with 
 
 ### PDF Conversion Mode
 
-For PDFs, the `native_extraction` field on the matching `application/pdf` rule controls when the converter runs:
-
-| `native_extraction` | Behavior | Use when |
-|---------------------|----------|----------|
-| `first` (default) | Native `unpdf` extraction runs first; the converter fires only for PDFs with no text layer. | You only want to OCR scanned/image-only PDFs; born-digital PDFs stay on the fast native path. |
-| `skip` | Native extraction is bypassed; **every** matching PDF goes to the converter. | The PDFs' text layer is unreliable or garbled and you want OCR applied to all of them. |
-
-`native_extraction` has no effect on non-native types (images, audio) — there is no native extractor to skip, so their converter always runs.
+For PDFs, `native_extraction` on the matching `application/pdf` rule controls when the converter runs: `first` (default) runs native `unpdf` extraction first and converts only PDFs with no text layer; `skip` bypasses native extraction so **every** matching PDF is converted (use when the text layer is unreliable). It has no effect on non-native types — their converter always runs.
 
 ### Converter: Tool or Agent
 
@@ -84,26 +77,9 @@ An agent whose [AI provider](./ai-providers.md) uses the `openai` provider slug 
 
 ### Building a Tool Converter for a Third-Party API
 
-A tool converter does not require hosting a separate adapter service. An [`http` tool](./tools.md#http) can point its `execute.url` directly at a third-party API (OpenAI, xAI, …); a [`pipeline` tool](./tools.md#pipeline) wrapping it reshapes the request and response using the same [JSON Logic](https://jsonlogic.com) mapping every other pipeline step uses — `cat` to build values like a base64 `data:` URI, `var` to extract a nested response field into the shape below. Point `IngestionRule.tool_id` at the pipeline tool. See [Tools — pipeline](./tools.md#pipeline) for the mapping syntax.
+A tool converter does not require a separate adapter service. An [`http` tool](./tools.md#http) can point `execute.url` directly at a third-party API, and a [`pipeline` tool](./tools.md#pipeline) wrapping it reshapes request and response with the usual JSON Logic mapping; point `IngestionRule.tool_id` at the pipeline tool. Because the [Converter Tool Contract](#converter-tool-contract) accepts a bare string, the pipeline's `output` can be a single `var` expression (e.g. `{ "var": "steps.call.text" }`).
 
-Since the [Converter Tool Contract](#converter-tool-contract) accepts a bare string as its simplest output shape, the wrapping pipeline's `output` can be a single `var` expression rather than an object — it resolves directly to that scalar:
-
-```jsonc
-{
-  "steps": [
-    {
-      "id": "call",
-      "tool_id": "tool_stt_http",
-      "input": { "file": { "var": "input.file" } }
-    }
-  ],
-  "output": { "var": "steps.call.text" } // resolves to a bare string, e.g. "All the extracted text"
-}
-```
-
-Hold the third-party API key in a [Secret](./secrets.md) and embed a [secret reference](./secrets.md#secret-references-secret) in the `http` tool's `execute.headers` — e.g. `{"Authorization": "Bearer {{secret:sec_01HXYZ}}"}`. Never paste the raw key into the tool config: the config is echoed back by `GET /tools/{id}`, while the `{{secret:...}}` token resolves only at call time and the raw value is never returned by any API response.
-
-Not every third-party API accepts JSON. Many audio (speech-to-text) and specialized OCR endpoints require `multipart/form-data` and reject a JSON body outright (e.g. xAI's `POST /v1/stt`). For those, set [`execute.body_mode: "multipart"`](./tools.md#request-body-encoding-body_mode) on the `http` tool: pass the file through as the `{ content_type, filename, data_base64 }` shape ingestion already provides and it is decoded and attached as a real file part, alongside any scalar fields (model name, language, …). This keeps the "no separate adapter service" property — the `http` tool calls the multipart API directly.
+Hold the third-party API key in a [Secret](./secrets.md) and embed a [secret reference](./secrets.md#secret-references-secret) in the `http` tool's `execute.headers` rather than pasting the raw key. For APIs that require `multipart/form-data` (many speech-to-text and OCR endpoints), set [`execute.body_mode: "multipart"`](./tools.md#request-body-encoding-body_mode) on the `http` tool — the `{ content_type, filename, data_base64 }` file shape ingestion provides is decoded and attached as a real file part.
 
 ### Converter Tool Contract
 
@@ -160,7 +136,7 @@ The callback is authorized by a single-use, signed token scoped to that document
 
 If a synchronous ingest request (`?wait=true`) or an agent converter encounters `{ status: "pending" }`, the document fails immediately with `CONVERTER_FAILED` — neither can wait for a callback that may arrive arbitrarily later. Design a tool that might defer to only do so under async ingestion.
 
-A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)). This is the converter-specific counterpart of the [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery) in the documents module — both use the same lazy "recover on next read" mechanism (checked whenever the document is fetched, not a background cron), but the callback path additionally guards against a callback racing the timeout sweeper: the two finish a conversion via an atomic compare-and-set that only one can win, so a legitimate callback that arrives just as the sweeper fires is never silently dropped — it either wins outright or, if the sweeper already won, is rejected with a clear `409` rather than corrupting the failed state.
+A document awaiting a callback for longer than `CONVERSION_STALL_TIMEOUT_MS` is auto-failed with `CONVERSION_TIMEOUT` (see [Configuration](#configuration)) — the converter-specific counterpart of [stuck-ingestion recovery](./documents.md#stuck-ingestion-recovery). A callback racing the timeout is settled by an atomic compare-and-set: it either wins outright or is rejected with `409`, never silently dropped.
 
 ### Failure Reasons
 
@@ -232,109 +208,7 @@ curl -X POST https://api.example.com/api/v1/ingestion-rules \
 </TabItem>
 </Tabs>
 
-### OCR fallback for scanned PDFs (agent converter)
-
-A rule matching `application/pdf` fires only when the native extractor returns no text (a scanned PDF). Point it at a vision **agent** — no external adapter needed. Born-digital PDFs skip it.
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat create-ingestion-rule \
-  --project-id proj_ABC \
-  --content-type-glob "application/pdf" \
-  --agent-id agent_vision \
-  --chunk-strategy whole
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-await soat.ingestionRules.createIngestionRule({
-  body: {
-    project_id: 'proj_ABC',
-    content_type_glob: 'application/pdf',
-    agent_id: 'agent_vision',
-    chunk_strategy: 'whole',
-  },
-});
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X POST https://api.example.com/api/v1/ingestion-rules \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "proj_ABC",
-    "content_type_glob": "application/pdf",
-    "agent_id": "agent_vision",
-    "chunk_strategy": "whole"
-  }'
-```
-
-</TabItem>
-</Tabs>
-
-### Ingest an image using the rule
-
-Once a matching rule exists, ingest a non-native file exactly like any other — ingestion routes it to the converter automatically.
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-# Upload the image, then ingest — the image/* rule handles conversion
-FILE_ID=$(soat upload-file --project-id proj_ABC --file ./scan.png | jq -r '.id')
-
-soat ingest-document \
-  --project-id proj_ABC \
-  --file-id "$FILE_ID" \
-  --path-prefix /scans/
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...' });
-
-const { data, error } = await soat.documents.ingestDocument({
-  body: { project_id: 'proj_ABC', file_id: fileId, path_prefix: '/scans/' },
-});
-if (error) throw new Error(JSON.stringify(error));
-
-// Poll until ready — async converters keep the document in `processing`
-let doc = data;
-while (doc.status === 'pending' || doc.status === 'processing') {
-  await new Promise((r) => setTimeout(r, 500));
-  const { data: polled } = await soat.documents.getDocument({
-    path: { document_id: doc.id },
-  });
-  doc = polled!;
-}
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X POST https://api.example.com/api/v1/documents/ingest \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"project_id\": \"proj_ABC\",
-    \"file_id\": \"$FILE_ID\",
-    \"path_prefix\": \"/scans/\"
-  }"
-```
-
-</TabItem>
-</Tabs>
+To create an agent-converter rule instead, pass `--agent-id` in place of `--tool-id` (e.g. a vision agent on `application/pdf` as an OCR fallback for scanned PDFs). Ingesting a matching file needs nothing special — `POST /documents/ingest` routes it to the converter automatically; see [Documents](./documents.md#file-ingestion-and-chunking).
 
 ### List rules
 

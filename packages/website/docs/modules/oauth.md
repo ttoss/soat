@@ -91,38 +91,20 @@ a limitation to work around.
 
 ### Why
 
-- **Project scope is ambient for the agent.** Because the token fixes the
-  project, an MCP tool call such as `agents:CreateAgent` does not need to carry
-  a `project_id` argument — the server resolves it from the token. A
-  multi-project token would force every REST-derived tool to take a project
-  argument the model must choose correctly on each call, introducing a class of
-  "right action, wrong project" errors.
-- **Minimal blast radius.** A single-project token grants access to exactly one
-  `soat:<project_id>:*:*` resource. A leaked or over-broad token can never reach
-  beyond the project the user consented to, and the resulting policy is trivial
-  to audit.
+- **Project scope is ambient for the agent.** The server resolves the project
+  from the token, so MCP tool calls never carry a `project_id` argument the
+  model could get wrong.
+- **Minimal blast radius.** A leaked token can never reach beyond the one
+  consented project, and the resulting policy is trivial to audit.
 - **Comprehensible consent.** "Grant this client access to *Project X* with
-  these permissions" is a claim a user can evaluate at a glance. A per-project ×
-  per-module permission matrix is not, and consent screens that are not read are
-  not meaningful consent.
+  these permissions" is a claim a user can evaluate at a glance.
 
 ### Working across multiple projects
 
-The single-project model does not block multi-project workflows; it scopes each
-token to one project rather than generalizing every token:
-
-- **One token per project.** Run the consent flow once per project and configure
-  the MCP client with a separate server entry per token (most MCP clients
-  support multiple named servers). Each session stays isolated.
-- **Switch projects by re-issuing.** Re-running the short consent flow mints a
-  token for a different project; the prior token is unaffected.
-
-Generalizing tokens to span multiple projects would touch the consent UI, the
-consent endpoint, the [scope builder](./iam.md), and the token's `prj`
-claim and policy, while giving up the ambient-scope and blast-radius properties
-above. The cost is not justified unless a single agent session must act across
-projects without re-authorizing — a need the per-project token model already
-covers for the common case.
+Run the consent flow once per project and configure the MCP client with a
+separate server entry per token (most MCP clients support multiple named
+servers). Re-running the short consent flow mints a token for a different
+project; the prior token is unaffected.
 
 ## Data model
 

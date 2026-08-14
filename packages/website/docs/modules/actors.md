@@ -65,23 +65,7 @@ When `external_id` is supplied to `POST /actors`, the endpoint uses **find-or-cr
 - If no actor with that `external_id` exists in the project, a new actor is created and `201 Created` is returned.
 - If an actor with that `external_id` already exists, the existing actor is returned as-is with `200 OK`. None of the other request fields (name, instructions, etc.) are applied to the existing actor.
 
-This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message) without risk of duplicate actors or errors.
-
-```http
-POST /api/v1/actors
-Content-Type: application/json
-
-{
-  "project_id": "proj_V1StGXR8Z5jdHi6B",
-  "name": "Alice",
-  "external_id": "+15551234567"
-}
-```
-
-- First call → `201 Created` with the new actor.
-- Subsequent calls with the same `external_id` → `200 OK` with the existing actor.
-
-When `external_id` is **not** supplied, `POST /actors` always creates a new actor and returns `201 Created`.
+This makes actor creation safe to call repeatedly from event-driven pipelines (e.g. a new inbound WhatsApp message). When `external_id` is **not** supplied, `POST /actors` always creates a new actor and returns `201 Created`.
 
 ### Agent and Chat Linking
 
@@ -140,77 +124,15 @@ Pass `null` to `PATCH /actors/:id` to clear the instructions.
 
 ### Filtering
 
-`GET /actors` supports the following query parameters for filtering:
-
-| Parameter     | Description                                                                  |
-| ------------- | ---------------------------------------------------------------------------- |
-| `project_id`  | Limit results to a specific project (required for JWT callers in most cases) |
-| `external_id` | Exact match — use to resolve an external identifier to an `actor_` ID        |
-| `name`        | Partial, case-insensitive match against the actor's display name             |
-| `limit`       | Maximum number of results to return (default: `50`)                          |
-| `offset`      | Number of results to skip for pagination (default: `0`)                      |
-
-The response envelope is:
-
-```json
-{
-  "data": [
-    /* ActorRecord[] */
-  ],
-  "total": 42,
-  "limit": 50,
-  "offset": 0
-}
-```
+`GET /actors` filters by `project_id`, `external_id` (exact match — use it to resolve an external identifier to an `actor_` ID), and `name` (partial, case-insensitive), with `limit`/`offset` pagination in a `{ data, total, limit, offset }` envelope.
 
 ### Project Scope
 
 Project-scoped API keys make `project_id` optional: omit it and the request defaults to the key's project, supply a matching one and it is accepted, and supply a different project's id and the request is rejected with `403`. JWT callers must supply `project_id` explicitly for write operations. See [Implicit project id](./api-keys.md#implicit-project-id) for the full rules.
 
-## Tags
+### Tags
 
-Tags are key-value string pairs attached to an actor. They enable attribute-based access control (ABAC) via IAM condition keys (see [IAM](iam.md#tags)).
-
-```json
-{
-  "tags": {
-    "channel": "whatsapp",
-    "tier": "premium"
-  }
-}
-```
-
-Tags can be managed via the dedicated tag sub-endpoints:
-
-| Method  | Endpoint                  | Description                                             |
-| ------- | ------------------------- | ------------------------------------------------------- |
-| `GET`   | `/api/v1/actors/:id/tags` | Return the actor's current tags                         |
-| `PUT`   | `/api/v1/actors/:id/tags` | Replace all tags (any tags not in the body are removed) |
-| `PATCH` | `/api/v1/actors/:id/tags` | Merge tags (existing tags not in the body are kept)     |
-
-All three respond with the resulting tag map itself (not the actor resource).
-
-All tag endpoints require `actors:UpdateActor` permission.
-
-## SOAT Resource Names
-
-Actors use the `actor` resource type in SRNs:
-
-```
-soat:<project_id>:actor:<actor_id>
-```
-
-Example: `soat:proj_ABC:actor:actor_123`
-
-Use SRN patterns in policy `resource` fields to scope permissions to specific actors or all actors in a project:
-
-```json
-{
-  "effect": "Allow",
-  "action": ["actors:GetActor", "actors:ListActors"],
-  "resource": ["soat:proj_ABC:actor:*"]
-}
-```
+Tags are key-value string pairs attached to an actor, managed via the `tags` field or the tag sub-endpoints, and matched by IAM conditions (`soat:ResourceTag/<key>`). Actors use the `actor` resource type in SRNs (`soat:proj_ABC:actor:actor_123`). See [IAM — Tags](iam.md#tags) and [SRNs](iam.md#soat-resource-names-srns).
 
 ## Examples
 
@@ -264,24 +186,23 @@ curl -X POST https://api.example.com/api/v1/actors \
 </TabItem>
 </Tabs>
 
-### Idempotent actor upsert
+The same call is an idempotent upsert when `external_id` is set — `201` on first contact, `200` with the existing actor thereafter (see [external_id and Idempotent Creation](#external_id-and-idempotent-creation)). For policy examples scoping access to actors (including tag conditions), see [IAM — Examples](iam.md#examples).
 
-Safe to call on every inbound message — creates the actor on first contact, returns the existing record thereafter:
+### Get an actor
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-actor --name Bob --external-id +15559876543
+soat get-actor --actor-id actor_123
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-// SDK — identical call; 201 on create, 200 when the actor already exists
-const { data, error } = await soat.actors.createActor({
-  body: { name: 'Bob', external_id: '+15559876543' },
+const { data, error } = await soat.actors.getActor({
+  path: { actor_id: 'actor_123' },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -290,47 +211,9 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/actors \
-  -H "Authorization: Bearer <project-key>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Bob",
-    "external_id": "+15559876543"
-  }'
+curl https://api.example.com/api/v1/actors/actor_123 \
+  -H "Authorization: Bearer <token>"
 ```
 
 </TabItem>
 </Tabs>
-
-### Allow a user to manage all actors in a project
-
-```json
-{
-  "statement": [
-    {
-      "effect": "Allow",
-      "action": ["actors:*"],
-      "resource": ["soat:proj_ABC:actor:*"]
-    }
-  ]
-}
-```
-
-### Restrict access to actors tagged with a specific channel
-
-```json
-{
-  "statement": [
-    {
-      "effect": "Allow",
-      "action": ["actors:GetActor", "actors:ListActors"],
-      "resource": ["soat:proj_ABC:actor:*"],
-      "condition": {
-        "StringEquals": {
-          "soat:ResourceTag/channel": "whatsapp"
-        }
-      }
-    }
-  ]
-}
-```

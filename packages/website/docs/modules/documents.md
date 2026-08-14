@@ -15,8 +15,8 @@ A Document is backed by a [File](./files.md) and associated with a project. When
 
 Documents can be created in two ways:
 
-- **Plain text** (`POST /documents`) — content is supplied inline. By default it is stored as a single chunk; pass `chunk_strategy` to split it. The response is `201 Created`. See it end to end in [Orchestrate a Sonnet — Step 4 (Create the poem document)](/docs/tutorials/orchestrate-a-sonnet#step-4--create-the-poem-document-and-a-fixed-write-tool).
-- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**. The endpoint returns `202 Accepted` immediately with the new document in `status: pending`. Chunk extraction and embedding run in the background; poll `GET /documents/:id` until `status` is `ready` or `failed`. The source format is detected from the file's content type: PDFs are parsed page by page (`application/pdf`); `text/plain` and `text/markdown` files are read as a single source. Other content types (images, audio) — and scanned PDFs that yield no text — are handled by a converter tool when a matching [Ingestion Rule](./ingestion-rules.md) is configured. How the source is chunked is controlled by `chunk_strategy`.
+- **Plain text** (`POST /documents`) — content is supplied inline; stored as a single chunk unless `chunk_strategy` splits it. Returns `201 Created`.
+- **File ingestion** (`POST /documents/ingest`) — an already-uploaded file is parsed and chunked **asynchronously**; see [Async File Ingestion](#async-file-ingestion) and [File Ingestion and Chunking](#file-ingestion-and-chunking).
 
 Documents are identified by an `id` prefixed with `doc_`. The internal database primary key is never returned.
 
@@ -64,16 +64,7 @@ Each Document has one or more chunks stored in the database. Chunks are not dire
 
 ### Path Field
 
-The `path` field is a logical, project-scoped identifier for a document — similar to a file path in a filesystem. It is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). The combination of `project_id + path` is unique within a project.
-
-Path examples:
-
-```
-/reports/q1.txt
-/datasets/raw/2024-01-01.txt
-```
-
-`PATCH /documents/:id` accepts a `path` field to move a document to a new logical path.
+`path` is optional at creation time; if omitted, the server defaults to `/<filename>`. Paths must be absolute (start with `/`) and are normalized (`.` and `..` are resolved). `project_id + path` is unique within a project. `PATCH /documents/{document_id}` accepts a `path` field to move a document.
 
 ## Key Concepts
 
@@ -182,17 +173,7 @@ See the [IAM Reference](iam.md) for full SRN syntax and policy authoring guidanc
 
 ### Project ID Resolution
 
-For endpoints that accept `project_id`, the field is optional. When omitted, the server resolves the set of accessible projects from the caller's effective policies:
-
-| Caller type | Behavior when `project_id` is omitted                                        |
-| ----------- | ---------------------------------------------------------------------------- |
-| project key | Scoped to the single project the key belongs to                              |
-| JWT admin   | Holds a wildcard policy — no project filter, returns results across all projects |
-| JWT user    | The projects named by the user's attached policies for the required action   |
-
-Authorization is policy-only. The server derives the accessible projects from the project SRNs in the caller's policies (`srn:soat:project/...`) and applies them as the filter — there is no separate project-access check outside the policy layer. A user reaches exactly the projects their policies grant, and a policy scoped to `resource: ["*"]` within a granted project covers every document in it. See [IAM — Authorization Model](iam.md#authorization-model) for the full evaluation flow.
-
-If `project_id` is supplied but the caller's policies do not grant the required action on it, the request returns `403 Forbidden`.
+For endpoints that accept `project_id`, the field is optional: when omitted, the server resolves the accessible projects from the caller's effective policies (an API key is scoped to its own project). If `project_id` is supplied but the caller's policies do not grant the required action on it, the request returns `403 Forbidden`. See [IAM — Authorization Model](iam.md#authorization-model).
 
 ## Configuration
 
@@ -206,24 +187,7 @@ If `project_id` is supplied but the caller's policies do not grant the required 
 | `SYNC_INGESTION_MAX_BYTES` | No   | Max file size (bytes) allowed for synchronous ingestion (`?wait=true`). Larger files return `413`. Defaults to `10485760` (10 MB). |
 | `INGESTION_STALL_TIMEOUT_MS` | No | How long (ms) a document may stay in `pending`/`processing` with no progress before it is auto-failed with `INGESTION_TIMEOUT`. Defaults to `300000` (5 min). |
 
-### Ollama setup example
-
-```bash
-# Pull the embedding model
-ollama pull qwen3-embedding:0.6b
-
-# Verify it's running
-ollama list
-```
-
-Set the server environment variables:
-
-```env
-EMBEDDING_PROVIDER=ollama
-EMBEDDING_MODEL=qwen3-embedding:0.6b
-EMBEDDING_DIMENSIONS=1024
-OLLAMA_BASE_URL=http://localhost:11434
-```
+Ollama setup: `ollama pull qwen3-embedding:0.6b`, then set `EMBEDDING_PROVIDER=ollama`, `EMBEDDING_MODEL=qwen3-embedding:0.6b`, `EMBEDDING_DIMENSIONS=1024`, and (if not local) `OLLAMA_BASE_URL`.
 
 ## Examples
 

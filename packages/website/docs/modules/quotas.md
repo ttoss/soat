@@ -76,8 +76,6 @@ A quota is only accepted for a scope the metric can actually be aggregated by. A
 
 The exclusions follow from where each metric is measured. `requests` is counted by the request middleware, which sees the API key and the project but not the agent or end user behind the call. `tokens` / `cost_usd` aggregate the [usage meter](./usage.md), which carries project, agent, and end-user attribution but no API-key attribution.
 
-Widening this table later is backward-compatible; a precise semantic for a currently-rejected combination can be added without breaking the contract.
-
 ### Token and cost enforcement
 
 `tokens` and `cost_usd` quotas are checked **before a generation starts**. The current window's usage is aggregated directly from the [usage meter](./usage.md) — a `cost_usd` quota sums the priced event cost, a `tokens` quota sums the billable token components (uncached input + output + cached; the non-billable `reasoning_tokens` detail is excluded). If the aggregate is at or over the limit, the new generation is blocked with `429 QUOTA_EXCEEDED` and nothing is metered for it.
@@ -108,7 +106,7 @@ soat create-quota --project-id proj_ABC --scope actor \
 Set a `scope_ref` to cap one named actor instead — e.g. to give a specific user a larger allowance, or to throttle an abusive one.
 
 :::note
-This differs from `agent` scope, where a null `scope_ref` aggregates the whole project. The divergence is deliberate: a project-wide aggregate is already exactly what a `project` quota expresses, so reading a null-ref actor quota as "all actors pooled" would make the combination a duplicate under a misleading name. Per-actor is the only reading that cannot be spelled another way.
+This differs from `agent` scope, where a null `scope_ref` aggregates the whole project — a pooled all-actors total would just duplicate a `project` quota.
 :::
 
 #### Webhook granularity
