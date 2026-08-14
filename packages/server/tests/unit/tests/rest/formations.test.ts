@@ -529,6 +529,182 @@ resources:
       expect(resource.physical_resource_id).toBeNull();
     });
 
+    test('rolls back resources created earlier in the same failed apply', async () => {
+      const memoryName = `rollback-mem-${Date.now()}`;
+      const partiallyFailingTemplate = {
+        resources: {
+          RollbackMemory: {
+            type: 'memory',
+            properties: { name: memoryName },
+          },
+          RollbackProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'rollback-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+              secret_id: 'sec_nonexistent',
+            },
+            depends_on: ['RollbackMemory'],
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `rollback-formation-${Date.now()}`,
+          template: partiallyFailingTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+
+      const memoryResource = res.body.resources.find(
+        (resource: { logical_id: string }) => {
+          return resource.logical_id === 'RollbackMemory';
+        }
+      );
+      // The memory was created before the provider failed, so the apply must
+      // walk it back rather than leave it live and unmanaged.
+      expect(memoryResource.status).toBe('deleted');
+      expect(memoryResource.physical_resource_id).toMatch(/^mem_/);
+      const memory = await db.Memory.findOne({
+        where: { publicId: memoryResource.physical_resource_id },
+      });
+      expect(memory).toBeNull();
+
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${res.body.id}/events`
+      );
+      expect(eventsRes.status).toBe(200);
+      const operation = eventsRes.body.data[0];
+      expect(operation.status).toBe('failed');
+      const actions = operation.events.map(
+        (event: { logical_id: string; action: string; status: string }) => {
+          return [event.logical_id, event.action, event.status];
+        }
+      );
+      // The original failure stays ahead of the unwind it triggered.
+      expect(actions).toEqual([
+        ['RollbackMemory', 'create', 'succeeded'],
+        ['RollbackProvider', 'create', 'failed'],
+        ['RollbackMemory', 'rollback', 'succeeded'],
+      ]);
+    });
+
+    test('a rolled-back resource is re-created by a corrected re-apply', async () => {
+      const name = `rollback-retry-formation-${Date.now()}`;
+      const memoryName = `rollback-retry-mem-${Date.now()}`;
+      const providerName = `rollback-retry-provider-${Date.now()}`;
+      const template = (secretId: string | null) => {
+        return {
+          resources: {
+            RetryMemory: {
+              type: 'memory',
+              properties: { name: memoryName },
+            },
+            RetryProvider: {
+              type: 'ai_provider',
+              properties: {
+                name: providerName,
+                provider: 'openai',
+                default_model: 'gpt-4o',
+                secret_id: secretId,
+              },
+              depends_on: ['RetryMemory'],
+            },
+          },
+        };
+      };
+
+      const failed = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name,
+          template: template('sec_nonexistent'),
+        });
+      expect(failed.status).toBe(201);
+      expect(failed.body.status).toBe('failed');
+
+      const fixed = await authenticatedTestClient(userToken)
+        .put(`/api/v1/formations/${failed.body.id}`)
+        .send({ template: template(null) });
+
+      expect(fixed.status).toBe(200);
+      expect(fixed.body.status).toBe('active');
+      const retriedMemory = fixed.body.resources.find(
+        (resource: { logical_id: string }) => {
+          return resource.logical_id === 'RetryMemory';
+        }
+      );
+      expect(retriedMemory.status).toBe('created');
+      const memory = await db.Memory.findOne({
+        where: { publicId: retriedMemory.physical_resource_id },
+      });
+      expect(memory).not.toBeNull();
+    });
+
+    test('a retained resource survives the rollback and stays managed', async () => {
+      const memoryName = `rollback-retain-mem-${Date.now()}`;
+      const retainTemplate = {
+        resources: {
+          RetainedMemory: {
+            type: 'memory',
+            properties: { name: memoryName },
+            deletion_policy: 'retain',
+          },
+          RetainProvider: {
+            type: 'ai_provider',
+            properties: {
+              name: 'retain-provider',
+              provider: 'openai',
+              default_model: 'gpt-4o',
+              secret_id: 'sec_nonexistent',
+            },
+            depends_on: ['RetainedMemory'],
+          },
+        },
+      };
+
+      const res = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `rollback-retain-formation-${Date.now()}`,
+          template: retainTemplate,
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.status).toBe('failed');
+
+      const retained = res.body.resources.find(
+        (resource: { logical_id: string }) => {
+          return resource.logical_id === 'RetainedMemory';
+        }
+      );
+      // `retain` outranks the unwind: the resource stays alive, and its row
+      // keeps pointing at it so a corrected re-apply adopts it.
+      expect(retained.status).toBe('created');
+      const memory = await db.Memory.findOne({
+        where: { publicId: retained.physical_resource_id },
+      });
+      expect(memory).not.toBeNull();
+
+      const eventsRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${res.body.id}/events`
+      );
+      const skipped = eventsRes.body.data[0].events.find(
+        (event: { action: string }) => {
+          return event.action === 'rollback-skipped';
+        }
+      );
+      expect(skipped.logical_id).toBe('RetainedMemory');
+      expect(skipped.status).toBe('succeeded');
+    });
+
     test('creates a formation with metadata', async () => {
       const res = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')

@@ -360,7 +360,7 @@ Each resource in a formation goes through these statuses:
 | `pending` | Not yet provisioned                         |
 | `created` | Successfully created by a formation deploy  |
 | `updated` | Successfully updated by a subsequent deploy |
-| `deleted` | Deleted when removed from the template      |
+| `deleted` | Deleted when removed from the template, or rolled back after a failed deploy |
 | `failed`  | Last operation failed                       |
 
 Once a resource reaches `deleted`, it is a tombstone kept for audit history —
@@ -369,6 +369,29 @@ Once a resource reaches `deleted`, it is a tombstone kept for audit history —
 removed from the template; a later no-op reconcile never re-lists it.
 `plan-formation` previews the pending removal as a `delete` action, so the two
 always agree on the same set of changes.
+
+### Rollback on a Failed Deploy
+
+A deploy stops at the first resource that fails, and every resource it
+**created** earlier in that same deploy is walked back — in reverse dependency
+order, so a dependency is only removed after its dependents. The stack ends up
+`failed` with nothing new left standing, and a corrected re-deploy re-creates
+those resources from scratch instead of colliding with half-provisioned ones.
+
+Two things are deliberately left alone:
+
+- A resource that was **updated**, not created, keeps its new state. Restoring
+  it would need a pre-update snapshot the deploy does not take.
+- A resource declared `deletion_policy: retain` survives, and its formation
+  record keeps pointing at it, so the next deploy adopts it rather than
+  provisioning a duplicate.
+
+Each unwind is recorded in the operation's `events`, after the failure that
+triggered it: `rollback` (`succeeded` or `failed`) for a resource that was
+walked back, `rollback-skipped` for a retained one. A `rollback` that itself
+fails is reported, never thrown — the original error stays the one the
+operation's `error` field names — and that resource's record stays pointing at
+the physical resource so it can be cleaned up by hand.
 
 The formation stack itself has these statuses:
 
