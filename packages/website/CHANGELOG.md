@@ -3,6 +3,47 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
+
+* feat!: one rule for system content — never a message, on any surface (#995) ([da80f03](https://github.com/ttoss/soat/commit/da80f03c176927e509289ba9db18b808d45ba783)), closes [#995](https://github.com/ttoss/soat/issues/995)
+
+### Bug Fixes
+
+* close three silent-failure gaps found QA-ing the module surface ([#994](https://github.com/ttoss/soat/issues/994)) ([a2ed76a](https://github.com/ttoss/soat/commit/a2ed76aa88653f4822407c86399a5e830142eb74)), closes [#990](https://github.com/ttoss/soat/issues/990) [#991](https://github.com/ttoss/soat/issues/991) [#992](https://github.com/ttoss/soat/issues/992) [#991](https://github.com/ttoss/soat/issues/991) [#991](https://github.com/ttoss/soat/issues/991)
+* enforce chats:CreateChatCompletion on stateless completions ([#1000](https://github.com/ttoss/soat/issues/1000)) ([b037b40](https://github.com/ttoss/soat/commit/b037b404a0d0a35969eab6e51156083ecdeb709c)), closes [#998](https://github.com/ttoss/soat/issues/998) [#996](https://github.com/ttoss/soat/issues/996) [#801](https://github.com/ttoss/soat/issues/801)
+* **evaluations:** make eval failures, spend, and teardown legible ([#987](https://github.com/ttoss/soat/issues/987)) ([4c6d2f9](https://github.com/ttoss/soat/commit/4c6d2f9af8bbecf52d99fd3e4f2a8bb66968e818)), closes [#982](https://github.com/ttoss/soat/issues/982) [#983](https://github.com/ttoss/soat/issues/983) [#984](https://github.com/ttoss/soat/issues/984) [#985](https://github.com/ttoss/soat/issues/985)
+* **server:** make the webhook delivery envelope snake_case ([#986](https://github.com/ttoss/soat/issues/986)) ([42a4546](https://github.com/ttoss/soat/commit/42a4546e587f341bfeeca1aed86e162bc97e87ef))
+* unrecoverable formation teardown, and the doc-example drift the CLI-only check missed ([#1013](https://github.com/ttoss/soat/issues/1013)) ([5920c94](https://github.com/ttoss/soat/commit/5920c948ca2e8cafe334e3d729c9ae5a3340eeb6)), closes [#985](https://github.com/ttoss/soat/issues/985) [#992](https://github.com/ttoss/soat/issues/992)
+* unwind resources a failed formation apply already created ([#999](https://github.com/ttoss/soat/issues/999)) ([#1009](https://github.com/ttoss/soat/issues/1009)) ([840d5e2](https://github.com/ttoss/soat/commit/840d5e29985a0927caeb03431242ba70ee593c8d))
+
+### Features
+
+* **evaluations:** curate dataset items from completed generations ([#1012](https://github.com/ttoss/soat/issues/1012)) ([8faac15](https://github.com/ttoss/soat/commit/8faac1507fb50f6d7f8945e85c930c6277e2ae7e)), closes [#1003](https://github.com/ttoss/soat/issues/1003)
+* fold chat-scoped completions into POST /chat/completions ([#996](https://github.com/ttoss/soat/issues/996)) ([21efa25](https://github.com/ttoss/soat/commit/21efa251abe5f571235ab596ec4b077096968dec))
+
+### BREAKING CHANGES
+
+* `POST /api/v1/chats/{chat_id}/completions` is removed.
+  Callers pass `chat_id` in the body of `POST /api/v1/chat/completions`
+  instead. The SDK's `createChatCompletionForChat`, the CLI's
+  `create-chat-completion-for-chat`, and the derived MCP tool are gone; the
+  `chats:CreateChatCompletionForChat` permission action no longer exists and
+  policies granting it must grant `chats:CreateChatCompletion`.
+* `system_message` is gone from the wire — the Chat
+  resource, `POST /chats` (`--instructions` on the CLI), and both
+  completion request bodies now spell it `instructions`. `POST /chats`
+  rejects the old name via strictFields; the completion endpoints are
+  strict-fields-exempt for LLM passthrough, so an old `system_message`
+  there is ignored rather than refused — update callers.
+* the chat completion endpoints and the conversation
+  add-message endpoint no longer accept role:"system" in caller-supplied
+  messages; send system content in the completion `system_message` field
+  (or the agent's `instructions`) instead. The 400 names the fix.
+* **server:** webhook delivery payloads now use `project_id`, `resource_type`
+  and `resource_id` instead of `projectId`, `resourceType` and `resourceId`.
+  Receivers reading those three envelope fields must be updated; `event`, `data`
+  and `timestamp` are unchanged.
+
 ## [0.22.1](https://github.com/ttoss/soat/compare/v0.22.0...v0.22.1) (2026-08-13)
 
 **Note:** Version bump only for package @soat/website

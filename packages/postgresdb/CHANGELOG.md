@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
+
+### Features
+
+* **evaluations:** curate dataset items from completed generations ([#1012](https://github.com/ttoss/soat/issues/1012)) ([8faac15](https://github.com/ttoss/soat/commit/8faac1507fb50f6d7f8945e85c930c6277e2ae7e)), closes [#1003](https://github.com/ttoss/soat/issues/1003)
+
 ## [0.22.1](https://github.com/ttoss/soat/compare/v0.22.0...v0.22.1) (2026-08-13)
 
 **Note:** Version bump only for package @soat/postgresdb
