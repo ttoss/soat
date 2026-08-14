@@ -129,3 +129,21 @@ export const solutions: Solution[] = [
   asSolution(hermesAgent),
   asSolution(openclaw),
 ];
+
+/**
+ * SOAT is the baseline every other solution is read against, so it leads
+ * the directory and the comparator regardless of the dataset's file order.
+ */
+export const PINNED_SLUG = 'soat';
+
+export const orderSolutions = (entries: Solution[]): Solution[] => {
+  return [...entries].sort((a, b) => {
+    if (a.slug === PINNED_SLUG) {
+      return -1;
+    }
+    if (b.slug === PINNED_SLUG) {
+      return 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+};

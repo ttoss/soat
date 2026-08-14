@@ -115,6 +115,48 @@
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.08);
 }
 
+/**
+ * The baseline card: brand gradient edge (violet → primary) over the page
+ * surface, so SOAT reads as the reference point rather than one entry
+ * among many. Gradient lives in the border box, fill in the padding box.
+ */
+.cardPinned {
+  border-color: transparent;
+  background:
+    linear-gradient(
+        var(--ifm-background-surface-color),
+        var(--ifm-background-surface-color)
+      )
+      padding-box,
+    linear-gradient(135deg, var(--soat-violet, #8e44ad), var(--ifm-color-primary))
+      border-box;
+  border-width: 2px;
+  box-shadow: 0 0 24px
+    color-mix(in srgb, var(--ifm-color-primary) 18%, transparent);
+}
+
+.cardPinned:hover {
+  box-shadow: 0 6px 28px
+    color-mix(in srgb, var(--ifm-color-primary) 28%, transparent);
+}
+
+.baselineTag {
+  margin: 0;
+  font-family: var(--ifm-heading-font-family);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  background: linear-gradient(
+    135deg,
+    var(--soat-violet, #8e44ad),
+    var(--ifm-color-primary)
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 .cardHead {
   display: flex;
   align-items: baseline;

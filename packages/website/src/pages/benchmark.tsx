@@ -8,12 +8,12 @@ import type { Archetype, Rating, Solution } from '../data/solutions';
 import {
   ARCHETYPE_LABELS,
   CLUSTERS,
+  orderSolutions,
+  PINNED_SLUG,
   RATING_LABELS,
   solutions,
 } from '../data/solutions';
 import styles from './benchmark.module.css';
-
-const PINNED_SLUG = 'soat';
 
 const MAX_COMPARED = 4;
 
@@ -49,7 +49,8 @@ const SolutionCard = (props: {
 }) => {
   const { solution } = props;
   return (
-    <article className={styles.card}>
+    <article className={clsx(styles.card, props.isPinned && styles.cardPinned)}>
+      {props.isPinned ? <p className={styles.baselineTag}>Baseline</p> : null}
       <div className={styles.cardHead}>
         <Heading as="h3" className={styles.cardTitle}>
           {solution.name}
@@ -239,7 +240,7 @@ export default function Benchmark(): React.ReactNode {
     return solution.slug === PINNED_SLUG;
   });
 
-  const filtered = solutions.filter((solution) => {
+  const filtered = orderSolutions(solutions).filter((solution) => {
     if (archetype !== 'all' && solution.archetype !== archetype) {
       return false;
     }
@@ -272,7 +273,7 @@ export default function Benchmark(): React.ReactNode {
     });
   };
 
-  const compared = [
+  const compared = orderSolutions([
     ...(pinned ? [pinned] : []),
     ...selected
       .map((slug) => {
@@ -283,7 +284,7 @@ export default function Benchmark(): React.ReactNode {
       .filter((solution): solution is Solution => {
         return Boolean(solution);
       }),
-  ];
+  ]);
 
   return (
     <Layout
