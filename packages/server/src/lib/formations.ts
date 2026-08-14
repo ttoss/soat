@@ -8,12 +8,7 @@ import {
 } from 'src/lib/pagination';
 
 import { DomainError } from '../errors';
-import {
-  applyFormationTemplate,
-  buildDeleteOrder,
-  performResourceDeletions,
-  throwDeletionFailure,
-} from './formationsApply';
+import { applyFormationTemplate } from './formationsApply';
 import {
   buildDependencyGraph,
   buildResolvedParamsMap,
@@ -40,7 +35,10 @@ import { makeResourceAccessor } from './resourceAccessor';
 const log = createDebug('soat:formations');
 
 export { getMissingParams } from './formationsHelpers';
+// Teardown lives in its own module; re-exported so callers keep one entry point
+// for the formation surface.
 export { detectStaticMetadataViolations } from './formationsMetadata';
+export { deleteFormation } from './formationsTeardown';
 export type {
   FormationEvent,
   FormationTemplate,
@@ -359,60 +357,6 @@ export const updateFormation = async (args: {
   const refreshed = await formations.reload(formation);
 
   return mapFormation(refreshed, true);
-};
-
-/**
- * Tears the stack down in reverse dependency order.
- *
- * Resolves only when every resource is gone; a resource that could not be
- * deleted throws `FORMATION_DELETE_FAILED` naming it, leaving the formation in
- * `delete_failed` so the operator can resolve the blocker and delete again.
- */
-export const deleteFormation = async (args: {
-  id: string;
-}): Promise<{ success: true }> => {
-  const formation = await db.Formation.findOne({
-    where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
-  });
-  if (!formation)
-    throw new DomainError(
-      'RESOURCE_NOT_FOUND',
-      `Formation '${args.id}' not found.`
-    );
-
-  await formation.update({ status: 'deleting' });
-
-  const operation = await db.FormationOperation.create({
-    formationId: formation.id as number,
-    operationType: 'delete',
-    status: 'running',
-    events: null,
-    plan: null,
-    error: null,
-  });
-
-  const existingResources = await db.FormationResource.findAll({
-    where: { formationId: formation.id as number },
-  });
-
-  const orderedResources = buildDeleteOrder(
-    formation.template as FormationTemplate | null,
-    existingResources
-  );
-  const { events, hasError } = await performResourceDeletions(orderedResources);
-
-  if (hasError) {
-    await operation.update({ status: 'failed', events });
-    await formation.update({ status: 'delete_failed' });
-    throwDeletionFailure({ formationId: args.id, events });
-  }
-
-  await operation.update({ status: 'succeeded', events });
-  await formation.update({
-    status: 'deleted',
-    name: `${formation.name}__deleted__${formation.publicId}`,
-  });
-  return { success: true };
 };
 
 export const listFormationEvents = async (args: {

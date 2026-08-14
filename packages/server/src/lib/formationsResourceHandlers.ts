@@ -45,6 +45,36 @@ export const applyUpdateResource = async (args: {
   });
 };
 
+/**
+ * Asks a resource type why deleting it would refuse, before anything is deleted.
+ *
+ * Answers `null` — "no predictable refusal" — for an unregistered type, a type
+ * that declares no blocker, and a blocker that could not be evaluated at all. A
+ * resource deleted out of band is the common last case: the lookup throws
+ * "not found", which is not a refusal but the delete's own already-gone path.
+ *
+ * Swallowing rather than propagating is the deliberate contract. The pre-flight
+ * exists only to report refusals it is sure of; the delete attempt stays
+ * authoritative, so a pre-flight that cannot answer must never be the thing that
+ * fails a teardown which would otherwise have succeeded.
+ */
+export const findResourceDeletionBlocker = async (args: {
+  resourceType: string;
+  physicalResourceId: string;
+}): Promise<string | null> => {
+  const formationModule = getFormationModule({
+    resourceType: args.resourceType,
+  });
+  if (!formationModule?.findDeletionBlocker) return null;
+  try {
+    return await formationModule.findDeletionBlocker({
+      physicalResourceId: args.physicalResourceId,
+    });
+  } catch {
+    return null;
+  }
+};
+
 export const applyDeleteResource = async (args: {
   resourceType: string;
   physicalResourceId: string;

@@ -1,5 +1,5 @@
 import { db } from '../../db';
-import { deleteAgent } from '../agentDelete';
+import { deleteAgent, findAgentDeletionBlocker } from '../agentDelete';
 import {
   denormalizeKnowledgeConfig,
   normalizeKnowledgeConfig,
@@ -232,6 +232,16 @@ export const agentsFormationModule = defineFormationModule({
 
   remove: ({ physicalResourceId }) => {
     return deleteAgent({ id: physicalResourceId });
+  },
+
+  // An agent that has ever generated is the one teardown blocker an operator
+  // actually hits (an eval run is *defined* as one generation per dataset item),
+  // and the platform deliberately never force-deletes it on their behalf. Left
+  // to be discovered by the delete itself, that refusal lands after the dataset,
+  // its items and the eval are already gone — so the stack the agent belongs to
+  // is destroyed around it. Answering here fails the teardown intact instead.
+  deletionBlocker: ({ physicalResourceId }) => {
+    return findAgentDeletionBlocker({ id: physicalResourceId });
   },
 
   fetch: ({ physicalResourceId }) => {

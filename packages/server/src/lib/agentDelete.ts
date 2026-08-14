@@ -118,6 +118,45 @@ const forceDeleteAgentWithDependents = async (args: {
   );
 };
 
+const countAgentDependents = async (
+  agentId: number
+): Promise<{ generationCount: number; traceCount: number }> => {
+  const [generationCount, traceCount] = await Promise.all([
+    db.Generation.count({ where: { agentId } }),
+    db.Trace.count({ where: { agentId } }),
+  ]);
+  return { generationCount, traceCount };
+};
+
+/**
+ * Why an unforced `deleteAgent` would refuse, or `null` when it would succeed.
+ *
+ * Exported so a caller that deletes an agent as one step of a larger, ordered
+ * teardown — formation stack deletion — can learn the answer *before* it starts
+ * destroying anything. Reaching the refusal by attempting the delete is too
+ * late there: the resources ordered ahead of the agent are already gone by then,
+ * which is the partial teardown #985 reported.
+ *
+ * The count logic is shared with `deleteAgent` rather than restated, so the
+ * pre-flight can never disagree with the delete it predicts.
+ */
+export const findAgentDeletionBlocker = async (args: {
+  projectIds?: number[];
+  id: string;
+}): Promise<string | null> => {
+  const agent = await agents.getByPublicId(args);
+  const { generationCount, traceCount } = await countAgentDependents(
+    agent.id as number
+  );
+
+  if (generationCount === 0 && traceCount === 0) return null;
+
+  return (
+    `Agent '${args.id}' has ${String(generationCount)} dependent generation(s) ` +
+    `and ${String(traceCount)} trace(s), so it cannot be deleted.`
+  );
+};
+
 export const deleteAgent = async (args: {
   projectIds?: number[];
   id: string;
@@ -129,10 +168,7 @@ export const deleteAgent = async (args: {
 
   const agentId = agent.id as number;
 
-  const [generationCount, traceCount] = await Promise.all([
-    db.Generation.count({ where: { agentId } }),
-    db.Trace.count({ where: { agentId } }),
-  ]);
+  const { generationCount, traceCount } = await countAgentDependents(agentId);
 
   if (generationCount > 0 || traceCount > 0) {
     if (!args.force) {

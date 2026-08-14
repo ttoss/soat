@@ -406,15 +406,29 @@ The formation stack itself has these statuses:
 | `delete_failed` | Stack teardown encountered failures                      |
 
 Deletion is idempotent: a managed resource already removed outside the
-formation is treated as already gone. A teardown that hits an unexpected error
-answers `409 FORMATION_DELETE_FAILED` and names every blocking resource in
+formation is treated as already gone. A teardown that cannot finish answers
+`409 FORMATION_DELETE_FAILED` and names every blocking resource in
 `error.meta.failures`, each as `{ logical_id, resource_type, error }`.
-Resources removed before the blocker stay removed — teardown does not roll
-back — leaving the stack in `delete_failed`; resolve the blockers and delete
-again. The common blocker is an **agent with generation or trace history**,
+
+**A predictable blocker is caught before anything is deleted.** Teardown
+pre-flights the resources it is about to remove, so a refusal it can foresee
+fails the whole operation having destroyed nothing: the stack stays `active` and
+intact, and the same `delete-formation` succeeds once the blocker is resolved.
+The one such blocker today is an **agent with generation or trace history**,
 which the platform never force-deletes on its own — that stays an explicit
-operator decision via `DELETE /api/v1/agents/{agent_id}?force=true`. Declare
-the agent with `deletion_policy: retain` if the stack should leave it standing.
+operator decision via `DELETE /api/v1/agents/{agent_id}?force=true`. Declare the
+agent with `deletion_policy: retain` if the stack should leave it standing; a
+retained resource is never deleted, so it never blocks.
+
+This matters most for the stacks the docs recommend. An eval run is *defined* as
+one generation per dataset item, so a template shipping an agent together with
+the eval that verifies it has a history-bearing agent the moment the suite runs
+— see [Gate a Canary Promotion on an Eval](../tutorials/gate-a-canary-promotion-on-an-eval.md).
+
+An **unforeseeable** error — one no pre-flight can predict — still surfaces
+mid-teardown. There, resources removed before the blocker stay removed
+(teardown does not roll back) and the stack is left in `delete_failed`; the
+error message says which case you are in. Resolve the blockers and delete again.
 
 ### Plan Diff
 

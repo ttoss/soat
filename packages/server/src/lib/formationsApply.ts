@@ -1,12 +1,12 @@
 import createDebug from 'debug';
 import { db } from 'src/db';
-import { DomainError } from 'src/errors';
 
 import {
   applyCreateChange,
   applyUpdateChange,
   failFormationOperation,
   isResourceAlreadyGone,
+  markResourceDeleted,
   rollbackCreatedResources,
 } from './formationsApplyHelpers';
 import {
@@ -29,22 +29,6 @@ import type {
 } from './formationsTypes';
 
 const log = createDebug('soat:formations');
-
-const markResourceDeleted = async (args: {
-  resource: InstanceType<(typeof db)['FormationResource']>;
-  events: FormationEvent[];
-}): Promise<void> => {
-  const { resource, events } = args;
-  await resource.update({ status: 'deleted' });
-  events.push({
-    timestamp: new Date().toISOString(),
-    logicalId: resource.logicalId,
-    resourceType: resource.resourceType,
-    action: 'delete',
-    status: 'succeeded',
-    physicalResourceId: resource.physicalResourceId ?? undefined,
-  });
-};
 
 export const handleOrphanedDeletes = async (args: {
   template: FormationTemplate;
@@ -341,107 +325,4 @@ export const applyFormationTemplate = async (args: {
     resolvedIds,
   });
   log('applyFormationTemplate: succeeded formationId=%s', formation.publicId);
-};
-
-export const buildDeleteOrder = (
-  template: FormationTemplate | null,
-  existingResources: InstanceType<(typeof db)['FormationResource']>[]
-): InstanceType<(typeof db)['FormationResource']>[] => {
-  let deleteOrder: string[] = [];
-  if (template?.resources) {
-    const graph = buildDependencyGraph(template);
-    const sorted = topologicalSort(graph);
-    if (sorted) deleteOrder = [...sorted].reverse();
-  }
-
-  const resourceMap = new Map(
-    existingResources.map((r) => {
-      return [r.logicalId, r];
-    })
-  );
-  const ordered: InstanceType<(typeof db)['FormationResource']>[] = [];
-
-  for (const logicalId of deleteOrder) {
-    const r = resourceMap.get(logicalId);
-    if (r) ordered.push(r);
-  }
-  for (const r of existingResources) {
-    if (!deleteOrder.includes(r.logicalId)) ordered.push(r);
-  }
-
-  return ordered;
-};
-
-export const performResourceDeletions = async (
-  orderedResources: InstanceType<(typeof db)['FormationResource']>[]
-): Promise<{ events: FormationEvent[]; hasError: boolean }> => {
-  const events: FormationEvent[] = [];
-  let hasError = false;
-
-  for (const resource of orderedResources) {
-    if (!resource.physicalResourceId) continue;
-    try {
-      if (resource.deletionPolicy !== 'retain') {
-        await applyDeleteResource({
-          resourceType: resource.resourceType,
-          physicalResourceId: resource.physicalResourceId,
-        });
-      }
-      await markResourceDeleted({ resource, events });
-    } catch (error) {
-      if (isResourceAlreadyGone(error)) {
-        await markResourceDeleted({ resource, events });
-        continue;
-      }
-      hasError = true;
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      events.push({
-        timestamp: new Date().toISOString(),
-        logicalId: resource.logicalId,
-        resourceType: resource.resourceType,
-        action: 'delete',
-        status: 'failed',
-        error: errorMsg,
-      });
-    }
-  }
-
-  return { events, hasError };
-};
-
-/**
- * Reports a teardown that could not finish, naming every resource that blocked.
- *
- * A partial teardown is the case that most needs an explanation: the resources
- * already deleted are gone, so a bare `success: false` left the operator with no
- * way to learn which resource blocked — nor that resolving it and deleting again
- * is all that stands between them and a clean stack.
- */
-export const throwDeletionFailure = (args: {
-  formationId: string;
-  events: FormationEvent[];
-}): never => {
-  const failures = args.events
-    .filter((event) => {
-      return event.status === 'failed';
-    })
-    .map((event) => {
-      return {
-        logical_id: event.logicalId,
-        resource_type: event.resourceType,
-        error: event.error ?? null,
-      };
-    });
-
-  const named = failures
-    .map((failure) => {
-      return `${failure.logical_id} (${failure.resource_type})`;
-    })
-    .join(', ');
-
-  throw new DomainError(
-    'FORMATION_DELETE_FAILED',
-    `Formation '${args.formationId}' could not be fully deleted; ${String(failures.length)} resource(s) could not be removed: ${named}. The formation is left in 'delete_failed'; resolve these and delete it again.`,
-    { failures }
-  );
 };

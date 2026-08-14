@@ -1,4 +1,5 @@
 import { db } from 'src/db';
+import { saveTrace } from 'src/lib/traces';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
 
@@ -89,6 +90,10 @@ describe('Formations', () => {
                 'evaluations:DeleteEval',
                 'evaluations:ListEvals',
                 'evaluations:ListDatasets',
+                'agents:CreateAgent',
+                'agents:GetAgent',
+                'agents:DeleteAgent',
+                'memories:GetMemory',
               ],
             },
           ],
@@ -1231,6 +1236,182 @@ resources:
       );
       expect(getRes.status).toBe(200);
       expect(getRes.body.status).toBe('delete_failed');
+    });
+
+    // The blocker an operator actually hits: an agent that has generated. The
+    // evaluations docs tell them to declare an agent and the eval that verifies
+    // it in one stack, and running the suite — the whole point — gives the agent
+    // history. Teardown is ordered and not transactional, so discovering the
+    // refusal by attempting the delete destroyed everything ordered ahead of the
+    // agent and left the stack wedged in `delete_failed` (#985). A predictable
+    // refusal must be found before the first delete.
+    test('an agent with generation history blocks teardown before anything is deleted', async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `preflight-provider-${Date.now()}`,
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+      expect(aiProvRes.status).toBe(201);
+
+      const memoryName = `preflight-mem-${Date.now()}`;
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `preflight-formation-${Date.now()}`,
+          template: {
+            resources: {
+              HistoricAgent: {
+                type: 'agent',
+                properties: {
+                  name: `preflight-agent-${Date.now()}`,
+                  ai_provider_id: aiProvRes.body.id,
+                },
+              },
+              // Depends on the agent, so teardown removes this one *first* and
+              // the agent last — the ordering that made the old failure
+              // unrecoverable.
+              CompanionMemory: {
+                type: 'memory',
+                properties: { name: memoryName },
+                depends_on: ['HistoricAgent'],
+              },
+            },
+            outputs: {
+              agentId: { ref: 'HistoricAgent' },
+              memoryId: { ref: 'CompanionMemory' },
+            },
+          },
+        });
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.status).toBe('active');
+
+      const preflightFormationId = createRes.body.id as string;
+      const agentId = createRes.body.outputs.agentId as string;
+      const memoryId = createRes.body.outputs.memoryId as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      // A trace is history the same way a generation is, and it is what an eval
+      // run leaves behind — `saveTrace` is the real write path for it.
+      await saveTrace({
+        traceId: `trc_preflight_${Date.now()}`,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${preflightFormationId}`
+      );
+
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('FORMATION_DELETE_FAILED');
+      expect(res.body.error.message).toMatch(/HistoricAgent/);
+      expect(res.body.error.message).toMatch(/No resource was deleted/);
+      expect(res.body.error.meta.failures).toEqual([
+        expect.objectContaining({
+          logical_id: 'HistoricAgent',
+          resource_type: 'agent',
+          error: expect.stringContaining('trace'),
+        }),
+      ]);
+
+      // The point of the pre-flight: the stack is whole, not half torn down.
+      const getRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/formations/${preflightFormationId}`
+      );
+      expect(getRes.status).toBe(200);
+      expect(getRes.body.status).toBe('active');
+
+      const memoryRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/memories/${memoryId}`
+      );
+      expect(memoryRes.status).toBe(200);
+      expect(memoryRes.body.name).toBe(memoryName);
+
+      const agentRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${agentId}`
+      );
+      expect(agentRes.status).toBe(200);
+
+      // And it stays retryable: force-deleting the agent out of band clears the
+      // blocker, and the same teardown then completes.
+      const forceRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/agents/${agentId}?force=true`
+      );
+      expect(forceRes.status).toBe(204);
+
+      const retryRes = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${preflightFormationId}`
+      );
+      expect(retryRes.body).toEqual({ success: true });
+      expect(retryRes.status).toBe(200);
+    });
+
+    // `retain` is the declared escape hatch for a resource the stack should leave
+    // standing, so it must not be pre-flighted — a retained resource is never
+    // deleted, and blocking teardown over one would make the hatch useless.
+    test('a retained agent with history does not block teardown', async () => {
+      const aiProvRes = await authenticatedTestClient(adminToken)
+        .post('/api/v1/ai-providers')
+        .send({
+          project_id: projectId,
+          name: `retain-provider-${Date.now()}`,
+          provider: 'ollama',
+          default_model: 'llama3.2',
+        });
+
+      const createRes = await authenticatedTestClient(userToken)
+        .post('/api/v1/formations')
+        .send({
+          project_id: projectId,
+          name: `retain-formation-${Date.now()}`,
+          template: {
+            resources: {
+              RetainedAgent: {
+                type: 'agent',
+                deletion_policy: 'retain',
+                properties: {
+                  name: `retain-agent-${Date.now()}`,
+                  ai_provider_id: aiProvRes.body.id,
+                },
+              },
+            },
+            outputs: { agentId: { ref: 'RetainedAgent' } },
+          },
+        });
+      expect(createRes.status).toBe(201);
+      const retainFormationId = createRes.body.id as string;
+      const retainedAgentId = createRes.body.outputs.agentId as string;
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      await saveTrace({
+        traceId: `trc_retain_${Date.now()}`,
+        projectId: project!.id as number,
+        projectPublicId: projectId,
+        agentId: retainedAgentId,
+        steps: [{ type: 'text-delta', text: 'hello' }],
+      });
+
+      const res = await authenticatedTestClient(userToken).delete(
+        `/api/v1/formations/${retainFormationId}`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+
+      // Retained means still there.
+      const agentRes = await authenticatedTestClient(userToken).get(
+        `/api/v1/agents/${retainedAgentId}`
+      );
+      expect(agentRes.status).toBe(200);
     });
   });
 
