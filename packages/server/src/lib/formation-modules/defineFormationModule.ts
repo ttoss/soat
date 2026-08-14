@@ -107,6 +107,14 @@ export type FormationModuleDefinition<TResource> = {
   }) => Promise<unknown>;
   remove: (args: { physicalResourceId: string }) => Promise<unknown>;
   /**
+   * Why `remove` would refuse, or `null` when it would succeed. Declare it only
+   * where the refusal is predictable and worth pre-flighting — see
+   * `FormationModule.findDeletionBlocker`.
+   */
+  deletionBlocker?: (args: {
+    physicalResourceId: string;
+  }) => Promise<string | null>;
+  /**
    * Loads the live resource. Any throw, and a `null`/`undefined` result, mean
    * "gone" — the factory reports drift rather than failing the plan.
    */
@@ -268,9 +276,14 @@ const buildOperations = <TResource>(args: {
 const buildOptionalMembers = <TResource>(
   definition: FormationModuleDefinition<TResource>
 ): Partial<FormationModule> => {
-  const { warnChecks, sanitizeLastAppliedProperties, getAttributes } =
-    definition;
+  const {
+    warnChecks,
+    sanitizeLastAppliedProperties,
+    getAttributes,
+    deletionBlocker,
+  } = definition;
   return {
+    ...(deletionBlocker ? { findDeletionBlocker: deletionBlocker } : {}),
     ...(warnChecks
       ? {
           warnProperties: ({ properties, basePath }) => {

@@ -10,6 +10,14 @@
 //   3. A stale-term denylist: renamed permission actions / soat-tool actions and
 //      the wrong public-ID prefixes fixed by WS2. Runtime prefixes live in
 //      packages/postgresdb/src/utils/publicId.ts.
+//   4. A documented `soat <cmd> --flag` naming no real CLI parameter.
+//   5. A documented SDK or curl request-body field naming no real body property.
+//
+// Checks 4 and 5 are existence checks against the in-repo sources of truth, and
+// they cover all three tabs every module example ships. Guarding one language is
+// what let three of the four examples #992 reported stay broken after the fix:
+// the CLI tab was corrected, and the SDK and curl tabs of the same example kept
+// the field name no endpoint accepts.
 //
 // Denylist entries are removed here once a term is legitimately reintroduced.
 //
@@ -19,6 +27,7 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 const DOCS_DIR = join(ROOT, 'packages/website/docs');
@@ -48,7 +57,10 @@ const CHECKS = [
   // A TypeScript cast ends with a terminator (`)`, `.`, `;`, `,`, `]`, `}`, `>`,
   // backtick, or end of line), so "as any other write" (English prose) is not
   // flagged while `(x as any).foo` and `foo as unknown;` are.
-  { label: 'forbidden cast (as any / as unknown)', re: /\bas\s+(any|unknown)\s*([).,;\]}>`]|$)/ },
+  {
+    label: 'forbidden cast (as any / as unknown)',
+    re: /\bas\s+(any|unknown)\s*([).,;\]}>`]|$)/,
+  },
   // Only flag `:camelCase` route-style path params, not every colon. The
   // lookbehind exempts the two double-curly template tokens, whose key is not a
   // path param and is legitimately camelCase (`{{context:ocaToken}}` — context
@@ -57,18 +69,34 @@ const CHECKS = [
     label: 'camelCase path param (use snake_case)',
     re: /(?<!\{\{(?:context|secret)):[a-z]+[A-Z][a-zA-Z]*/,
   },
-  { label: 'stale action: documents:SearchDocuments', re: /documents:SearchDocuments|\bSearchDocuments\b/ },
-  { label: 'stale soat-tool action: search-documents', re: /\bsearch-documents\b/ },
+  {
+    label: 'stale action: documents:SearchDocuments',
+    re: /documents:SearchDocuments|\bSearchDocuments\b/,
+  },
+  {
+    label: 'stale soat-tool action: search-documents',
+    re: /\bsearch-documents\b/,
+  },
   // Vocabulary reclaim (workflows PRD D1a): the two senses of "workflow" must
   // never cross. An orchestration is a pipeline that ends; a workflow is a
   // state graph a task lives in. So "orchestration workflow" and "workflow
   // pipeline" are both forbidden.
-  { label: "forbidden term: 'orchestration workflow' (an orchestration is a pipeline)", re: /orchestration workflows?/i },
-  { label: "forbidden term: 'workflow pipeline' (keep the two senses separate)", re: /workflow pipelines?/i },
+  {
+    label:
+      "forbidden term: 'orchestration workflow' (an orchestration is a pipeline)",
+    re: /orchestration workflows?/i,
+  },
+  {
+    label: "forbidden term: 'workflow pipeline' (keep the two senses separate)",
+    re: /workflow pipelines?/i,
+  },
   // The sync/async execution toggle is `wait` everywhere (documents, sessions,
   // orchestrations, evaluations). The retired `?async=` query parameter must
   // not be documented again in any form.
-  { label: "stale toggle: '?async=' (the sync/async toggle is 'wait')", re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/ },
+  {
+    label: "stale toggle: '?async=' (the sync/async toggle is 'wait')",
+    re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/,
+  },
   // Fields removed for v1 (#997, #1005). `\btool_ids\b` does not match
   // `active_tool_ids`, which is still a real field — `_` is a word character, so
   // there is no boundary before `tool_ids` there. The `tools` shorthand gets no
@@ -243,7 +271,7 @@ const collectInvocations = (lines) => {
   return out;
 };
 
-const checkCliFlags = (commandFlags) => {
+const checkCliFlags = (files, commandFlags) => {
   const found = [];
 
   for (const file of files) {
@@ -252,7 +280,9 @@ const checkCliFlags = (commandFlags) => {
 
     for (const { text, line } of collectInvocations(lines)) {
       // Skip any global flag sitting before the command name.
-      const m = text.match(/soat\s+(?:--[a-zA-Z0-9_-]+(?:[ =]\S+)?\s+)*([a-z][a-z0-9-]*)/);
+      const m = text.match(
+        /soat\s+(?:--[a-zA-Z0-9_-]+(?:[ =]\S+)?\s+)*([a-z][a-z0-9-]*)/
+      );
       if (!m) continue;
       const command = m[1];
       if (NATIVE_COMMANDS.has(command)) continue;
@@ -270,6 +300,278 @@ const checkCliFlags = (commandFlags) => {
         if (GLOBAL_FLAGS.has(flag) || allowed.has(flag)) continue;
         found.push(
           `${rel}:${line}  [unknown CLI flag]  soat ${command} --${f[1]}`
+        );
+      }
+    }
+  }
+
+  return found;
+};
+
+// ── Check 5: documented SDK / curl body fields must exist ───────────────────
+//
+// Check 4 covers CLI tabs only, which is exactly how three of the four examples
+// #992 reported stayed broken after being "fixed": the CLI tab was corrected and
+// the SDK and curl tabs of the same example kept the field name no endpoint
+// accepts (`prompt` for `messages`, `content` for `message`). Every module
+// example ships all three languages, so checking one of them leaves two thirds
+// of the surface unguarded — and a reader on the SDK tab has no working tab to
+// fall back to.
+//
+// `strictFields` answers `400 VALIDATION_FAILED` for these at runtime, so the
+// examples fail on copy-paste exactly like the CLI ones did. Nothing executes
+// them: the tutorials runner extracts `<TabItem value="cli">` blocks only.
+//
+// Scope is deliberately the **top-level** field names of a JSON request body,
+// which is where every reported instance lived. Nested objects are not checked —
+// the CLI manifest flattens a body to its top-level flags, so a nested schema is
+// not available from the same static source.
+
+const OPENAPI_DIR = join(ROOT, 'packages/server/src/rest/openapi/v1');
+
+/** operationId -> Set of canonical top-level body field names. */
+const buildBodyFields = () => {
+  const manifest = readFileSync(
+    join(CLI_DIR, 'src/generated/routes.ts'),
+    'utf-8'
+  );
+  const byOperation = new Map();
+
+  for (const line of manifest.split('\n')) {
+    const op = line.match(/operationId:\s*'([A-Za-z0-9]+)'/);
+    if (!op) continue;
+
+    // Pair each `"name"` with the `"in"` that follows it, rather than matching a
+    // whole flag object: a flag `description` may itself contain braces, which
+    // makes any `\{...\}` pattern skip exactly the richest flags (`tool_bindings`
+    // among them).
+    const flags = sliceArray(line, 'flags');
+    const fields = new Set();
+    for (const f of flags.matchAll(/"name":"([^"]+)"/g)) {
+      const next = flags.slice(f.index).match(/"in":"(path|query|body)"/);
+      if (next?.[1] === 'body') fields.add(canonical(f[1]));
+    }
+    byOperation.set(op[1], fields);
+  }
+
+  return byOperation;
+};
+
+/**
+ * `METHOD /api/v1/path/{param}` -> operationId, read from the specs that are the
+ * source of truth for every generated client. Needed only by the curl check: a
+ * curl snippet names a URL where the SDK names the operation outright.
+ */
+const buildRouteIndex = () => {
+  const index = [];
+
+  for (const entry of readdirSync(OPENAPI_DIR)) {
+    if (!entry.endsWith('.yaml')) continue;
+    let path = null;
+    let method = null;
+    for (const line of readFileSync(join(OPENAPI_DIR, entry), 'utf-8').split(
+      '\n'
+    )) {
+      const pathMatch = line.match(/^ {2}(\/\S+):\s*$/);
+      if (pathMatch) {
+        path = pathMatch[1];
+        method = null;
+        continue;
+      }
+      const methodMatch = line.match(/^ {4}(get|post|put|patch|delete):\s*$/);
+      if (methodMatch) {
+        method = methodMatch[1];
+        continue;
+      }
+      const opMatch = line.match(/^ {6}operationId:\s*(\S+)\s*$/);
+      if (opMatch && path && method) {
+        // A path template becomes a regex so a concrete example URL
+        // (`/agents/agent_01/generate`) matches its declared shape.
+        index.push({
+          method,
+          re: new RegExp(
+            `^${path.replace(/\{[^}]+\}/g, '[^/]+').replace(/\//g, '\\/')}$`
+          ),
+          operationId: opMatch[1],
+        });
+      }
+    }
+  }
+
+  return index;
+};
+
+/**
+ * The top-level entries of the brace-delimited object starting at `from`, each as
+ * `{ key, valueStart }`. Null when that position is not an object literal (a
+ * variable was passed instead of a literal — nothing to check) or the object is
+ * unterminated.
+ *
+ * Bounded to the object it is given: reading the *next* `body:` anywhere in the
+ * file instead would attribute a later example's fields to this call, which is
+ * how the first draft of this check reported 180 phantom violations.
+ */
+export const objectEntriesAt = (text, from) => {
+  const open = text.indexOf('{', from);
+  if (open === -1 || text.slice(from, open).trim() !== '') return null;
+
+  const entries = [];
+  let depth = 0;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i];
+
+    // Read string and template literals as one unit, so a value never reads as
+    // structure: without this, `url: 'https://…'` reports a field named `https`
+    // and any prose containing a colon becomes a key. A quoted string *is* a key
+    // when a colon follows it — which is how every JSON key is spelled.
+    if (ch === '"' || ch === "'" || ch === '`') {
+      const from = i;
+      i++;
+      while (i < text.length && text[i] !== ch) {
+        if (text[i] === '\\') i++;
+        i++;
+      }
+      const after = text.slice(i + 1).match(/^\s*:/);
+      if (depth === 1 && after) {
+        const name = text.slice(from + 1, i);
+        if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+          entries.push({
+            key: name,
+            valueStart: i + 1 + after[0].length,
+          });
+        }
+      }
+      continue;
+    }
+
+    if (ch === '{' || ch === '[') depth++;
+    else if (ch === '}' || ch === ']') {
+      depth--;
+      if (depth === 0) return entries;
+    } else if (depth === 1) {
+      const key = text.slice(i).match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:/);
+      if (key && /[{,\s]/.test(text[i - 1] ?? '')) {
+        entries.push({ key: key[1], valueStart: i + key[0].length });
+      }
+    }
+  }
+  return null;
+};
+
+const objectKeysAt = (text, from) => {
+  return (
+    objectEntriesAt(text, from)?.map((entry) => {
+      return entry.key;
+    }) ?? null
+  );
+};
+
+const checkSdkBodyFields = (files, bodyFields, serviceSegments) => {
+  const found = [];
+
+  for (const file of files) {
+    const rel = file.slice(ROOT.length);
+    const text = readFileSync(file, 'utf-8');
+    const lineAt = (index) => {
+      return text.slice(0, index).split('\n').length;
+    };
+
+    for (const call of text.matchAll(
+      /\b[A-Za-z_$][\w$]*\.([A-Za-z][A-Za-z0-9]*)\.([A-Za-z][A-Za-z0-9]*)\(\{/g
+    )) {
+      const [service, operationId] = [call[1], call[2]];
+      if (!serviceSegments.has(service)) continue;
+
+      const allowed = bodyFields.get(operationId);
+      if (!allowed) {
+        found.push(
+          `${rel}:${lineAt(call.index)}  [unknown SDK operation]  ${service}.${operationId}`
+        );
+        continue;
+      }
+      // An empty set means the manifest describes no body for this operation —
+      // `upload-file` is `multipart/form-data`, which the flag generator does not
+      // flatten. That is "unknown", not "nothing allowed", so there is nothing to
+      // check against.
+      if (allowed.size === 0) continue;
+
+      // `body` among this call's own argument keys. A call with no body (a GET)
+      // has nothing to check.
+      const args = objectEntriesAt(text, call.index + call[0].length - 1);
+      const body = args?.find((entry) => {
+        return entry.key === 'body';
+      });
+      if (!body) continue;
+
+      const keys = objectKeysAt(text, body.valueStart);
+      if (!keys) continue;
+
+      for (const key of keys) {
+        if (allowed.has(canonical(key))) continue;
+        found.push(
+          `${rel}:${lineAt(call.index)}  [unknown SDK body field]  ${operationId} body.${key}`
+        );
+      }
+    }
+  }
+
+  return found;
+};
+
+const checkCurlBodyFields = (files, bodyFields, routeIndex) => {
+  const found = [];
+
+  for (const file of files) {
+    const rel = file.slice(ROOT.length);
+    const lines = readFileSync(file, 'utf-8').split('\n');
+
+    // Join shell line-continuations, the same way `collectInvocations` does, so
+    // the URL and the `-d` payload of one curl are seen together.
+    const commands = [];
+    let buf = null;
+    let startLine = 0;
+    lines.forEach((line, idx) => {
+      const trimmed = line.trimEnd();
+      if (buf !== null) {
+        buf += ` ${trimmed.replace(/\\$/, '')}`;
+        if (!trimmed.endsWith('\\')) {
+          commands.push({ text: buf, line: startLine });
+          buf = null;
+        }
+        return;
+      }
+      if (!/^\s*curl\s/.test(trimmed)) return;
+      startLine = idx + 1;
+      if (trimmed.endsWith('\\')) buf = trimmed.replace(/\\$/, '');
+      else commands.push({ text: trimmed, line: startLine });
+    });
+
+    for (const { text, line } of commands) {
+      const payload = text.match(/-d\s+'([\s\S]*)'/);
+      if (!payload) continue;
+
+      const url = text.match(/https?:\/\/[^\s'"]+/);
+      if (!url) continue;
+      const pathname = url[0].replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+      const method = (text.match(/-X\s+([A-Z]+)/)?.[1] ?? 'POST').toLowerCase();
+
+      const route = routeIndex.find((r) => {
+        return r.method === method && r.re.test(pathname);
+      });
+      if (!route) continue;
+
+      const allowed = bodyFields.get(route.operationId);
+      if (!allowed || allowed.size === 0) continue;
+
+      // A payload carrying a shell variable or a `<placeholder>` is not JSON;
+      // its keys are still readable structurally.
+      const keys = objectKeysAt(payload[1], 0);
+      if (!keys) continue;
+
+      for (const key of keys) {
+        if (allowed.has(canonical(key))) continue;
+        found.push(
+          `${rel}:${line}  [unknown curl body field]  ${route.operationId} body.${key}`
         );
       }
     }
@@ -324,30 +626,67 @@ const dropGenerated = (paths) => {
   });
 };
 
-const files = dropGenerated(collectDocs(DOCS_DIR));
-const violations = [];
+/** Every check, over the authored docs. Returns the violation lines. */
+const runChecks = () => {
+  const files = dropGenerated(collectDocs(DOCS_DIR));
+  const violations = [];
 
-for (const file of files) {
-  const rel = file.slice(ROOT.length);
-  const lines = readFileSync(file, 'utf-8').split('\n');
-  lines.forEach((line, i) => {
-    for (const check of CHECKS) {
-      if (check.re.test(line)) {
-        violations.push(`${rel}:${i + 1}  [${check.label}]  ${line.trim()}`);
-      }
-    }
-  });
-}
+  for (const file of files) {
+    const rel = file.slice(ROOT.length);
+    readFileSync(file, 'utf-8')
+      .split('\n')
+      .forEach((line, i) => {
+        for (const check of CHECKS) {
+          if (check.re.test(line)) {
+            violations.push(
+              `${rel}:${i + 1}  [${check.label}]  ${line.trim()}`
+            );
+          }
+        }
+      });
+  }
 
-violations.push(...checkCliFlags(buildCommandFlags()));
+  violations.push(...checkCliFlags(files, buildCommandFlags()));
 
-if (violations.length > 0) {
-  console.error(`docs-lint: ${violations.length} violation(s) found:\n`);
-  for (const v of violations) console.error(`  ${v}`);
-  console.error(
-    '\nFix the offending docs. Runtime ID prefixes: packages/postgresdb/src/utils/publicId.ts'
+  const bodyFields = buildBodyFields();
+  const serviceSegments = new Set(
+    [
+      ...readFileSync(
+        join(CLI_DIR, 'src/generated/routes.ts'),
+        'utf-8'
+      ).matchAll(/serviceClass:\s*'([A-Za-z]+)'/g),
+    ].map((m) => {
+      // `AIProviders` -> `aiProviders`, `Agents` -> `agents`: the SDK's own
+      // service-property naming.
+      return m[1]
+        .replace(/^[A-Z]+(?=[A-Z][a-z])/, (run) => {
+          return run.toLowerCase();
+        })
+        .replace(/^[A-Z]/, (c) => {
+          return c.toLowerCase();
+        });
+    })
   );
-  process.exit(1);
-}
 
-console.log(`docs-lint: OK (${files.length} files scanned, no violations).`);
+  violations.push(...checkSdkBodyFields(files, bodyFields, serviceSegments));
+  violations.push(...checkCurlBodyFields(files, bodyFields, buildRouteIndex()));
+
+  return { files, violations };
+};
+
+// Guarded so the helpers above can be imported by `tests/harness/` without the
+// lint running as an import side effect.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const { files, violations } = runChecks();
+
+  if (violations.length > 0) {
+    console.error(`docs-lint: ${violations.length} violation(s) found:\n`);
+    for (const v of violations) console.error(`  ${v}`);
+    console.error(
+      '\nFix the offending docs. Runtime ID prefixes: packages/postgresdb/src/utils/publicId.ts'
+    );
+    process.exit(1);
+  }
+
+  console.log(`docs-lint: OK (${files.length} files scanned, no violations).`);
+}

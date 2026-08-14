@@ -437,7 +437,7 @@ const { data, error } = await soat.agents.createAgentGeneration({
   path: { agent_id: 'agent_01' },
   query: { wait: true },
   body: {
-    prompt: 'Raise the campaign budget to 450',
+    messages: [{ role: 'user', content: 'Raise the campaign budget to 450' }],
     guardrail_context: { max_daily_budget: 500, cost_ceiling: 1000 },
   },
 });
@@ -452,7 +452,7 @@ curl -X POST https://api.example.com/api/v1/agents/agent_01/generate?wait=true \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "Raise the campaign budget to 450",
+    "messages": [{ "role": "user", "content": "Raise the campaign budget to 450" }],
     "guardrail_context": { "max_daily_budget": 500, "cost_ceiling": 1000 }
   }'
 ```

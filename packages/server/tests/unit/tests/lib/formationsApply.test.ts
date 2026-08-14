@@ -1,11 +1,13 @@
 import { db } from 'src/db';
 import {
-  buildDeleteOrder,
   handleOrphanedDeletes,
-  performResourceDeletions,
   processResourceChange,
 } from 'src/lib/formationsApply';
 import { resolveFormationOutputs } from 'src/lib/formationsResolve';
+import {
+  buildDeleteOrder,
+  performResourceDeletions,
+} from 'src/lib/formationsTeardown';
 import type {
   FormationEvent,
   FormationTemplate,

@@ -343,10 +343,18 @@ paths:
         A resource the platform refuses to delete on its own — most often an
         agent that has generation or trace history — fails the teardown with
         `409 FORMATION_DELETE_FAILED`, naming every blocking resource in
-        `error.meta.failures`. Resources deleted before the blocker stay deleted
-        and the formation is left in `delete_failed`: resolve the blockers (for
-        an agent, `DELETE /api/v1/agents/{agent_id}?force=true` also removes its
-        generations and traces) and delete the formation again.
+        `error.meta.failures`. Resolve the blockers (for an agent, `DELETE
+        /api/v1/agents/{agent_id}?force=true` also removes its generations and
+        traces, and `deletion_policy: retain` exempts it from teardown entirely)
+        and delete the formation again.
+
+
+        A refusal the platform can foresee is found by a pre-flight, before the
+        first delete: nothing is removed, and the formation stays `active` and
+        intact for the retry. An unforeseeable error surfaces mid-teardown
+        instead, where resources deleted before the blocker stay deleted and the
+        formation is left in `delete_failed`. The error message states which
+        happened.
       operationId: deleteFormation
       parameters:
         - name: formation_id
@@ -377,7 +385,9 @@ paths:
           description: >
             One or more resources could not be deleted
             (`FORMATION_DELETE_FAILED`). `error.meta.failures` lists each one as
-            `{ logical_id, resource_type, error }`.
+            `{ logical_id, resource_type, error }`. The `message` says whether
+            the pre-flight caught it (nothing deleted, formation still `active`)
+            or it surfaced mid-teardown (formation left in `delete_failed`).
 
   /api/v1/formations/{formation_id}/events:
     get:

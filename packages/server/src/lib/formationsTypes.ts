@@ -72,6 +72,19 @@ export type FormationModule = {
   }) => Promise<void>;
   delete: (args: { physicalResourceId: string }) => Promise<void>;
   /**
+   * Why `delete` would refuse for this resource, or `null` when it would
+   * succeed. Declared only by resource types that have a *predictable* refusal
+   * (an agent with generation history); a type without one contributes no
+   * pre-flight answer and is simply attempted.
+   *
+   * Teardown deletes in dependency order, so a refusal discovered by attempting
+   * the delete arrives after everything ordered ahead of it is already gone.
+   * Consulting this first lets the whole teardown fail having destroyed nothing.
+   */
+  findDeletionBlocker?: (args: {
+    physicalResourceId: string;
+  }) => Promise<string | null>;
+  /**
    * Read the current live state of a resource and return its properties in
    * the same snake_case format used by the formation template. Returns null
    * if the resource no longer exists (drift).

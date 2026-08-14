@@ -615,7 +615,9 @@ soat create-agent-generation --wait true \
 const { data, error } = await soat.agents.createAgentGeneration({
   path: { agent_id: 'agent_01' },
   query: { wait: true },
-  body: { prompt: 'What is the capital of France?' },
+  body: {
+    messages: [{ role: 'user', content: 'What is the capital of France?' }],
+  },
 });
 if (error) throw new Error(JSON.stringify(error));
 ```
@@ -627,7 +629,7 @@ if (error) throw new Error(JSON.stringify(error));
 curl -X POST https://api.example.com/api/v1/agents/agent_01/generate?wait=true \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"prompt": "What is the capital of France?"}'
+  -d '{"messages": [{"role": "user", "content": "What is the capital of France?"}]}'
 ```
 
 </TabItem>

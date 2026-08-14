@@ -27,6 +27,27 @@ export const isResourceAlreadyGone = (error: unknown): boolean => {
   return error instanceof DomainError && error.code === 'RESOURCE_NOT_FOUND';
 };
 
+/**
+ * Records one resource as removed. Shared by the two paths that remove
+ * resources — a template update orphaning one, and a full teardown — so both
+ * write the same ledger status and the same event.
+ */
+export const markResourceDeleted = async (args: {
+  resource: InstanceType<(typeof db)['FormationResource']>;
+  events: FormationEvent[];
+}): Promise<void> => {
+  const { resource, events } = args;
+  await resource.update({ status: 'deleted' });
+  events.push({
+    timestamp: new Date().toISOString(),
+    logicalId: resource.logicalId,
+    resourceType: resource.resourceType,
+    action: 'delete',
+    status: 'succeeded',
+    physicalResourceId: resource.physicalResourceId ?? undefined,
+  });
+};
+
 const sanitize = (
   resourceType: string,
   properties: Record<string, unknown>

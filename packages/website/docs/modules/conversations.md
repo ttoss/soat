@@ -169,7 +169,7 @@ const { data: conv } = await soat.conversations.createConversation({
 
 const { data: msg } = await soat.conversations.addConversationMessage({
   path: { conversation_id: conv.id },
-  body: { content: 'Hello, I need help.', role: 'user' },
+  body: { message: 'Hello, I need help.', role: 'user' },
 });
 ```
 
@@ -185,7 +185,7 @@ curl -X POST https://api.example.com/api/v1/conversations \
 curl -X POST https://api.example.com/api/v1/conversations/conv_01/messages \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
-  -d '{"content": "Hello, I need help.", "role": "user"}'
+  -d '{"message": "Hello, I need help.", "role": "user"}'
 ```
 
 </TabItem>
