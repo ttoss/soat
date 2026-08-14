@@ -3,6 +3,7 @@ import type { Context } from 'src/Context';
 import {
   createDataset,
   createDatasetItem,
+  createDatasetItemFromGeneration,
   deleteDataset,
   deleteDatasetItem,
   getDataset,
@@ -176,6 +177,45 @@ evaluationsRouter.post('/datasets/:dataset_id/items', async (ctx: Context) => {
     metadata: body.metadata,
   });
 });
+
+/**
+ * @openapi
+ * /api/v1/datasets/{dataset_id}/items/from-generation:
+ *   post:
+ *     $ref: 'openapi/v1/evaluations.yaml#/paths/~1api~1v1~1datasets~1{dataset_id}~1items~1from-generation/post'
+ */
+evaluationsRouter.post(
+  '/datasets/:dataset_id/items/from-generation',
+  async (ctx: Context) => {
+    const projectIds = await requireProjectAccess({
+      ctx,
+      action: 'evaluations:CreateDataset',
+      resourceType: 'dataset',
+    });
+
+    // Curating copies a generation's content into a dataset item, so the caller
+    // must be allowed to read that generation as well as to write items —
+    // otherwise `evaluations:CreateDataset` alone would be a way to read turns a
+    // principal cannot fetch through `GET /generations/{id}`. Both checks resolve
+    // the same scope; only the action differs.
+    await requireProjectAccess({
+      ctx,
+      action: 'generations:GetGeneration',
+      resourceType: 'generation',
+    });
+
+    const body = ctx.request.body as Record<string, unknown>;
+
+    ctx.status = 201;
+    ctx.body = await createDatasetItemFromGeneration({
+      projectIds,
+      datasetId: ctx.params.dataset_id,
+      generationId: body.generation_id,
+      expectedOutput: body.expected_output,
+      metadata: body.metadata,
+    });
+  }
+);
 
 /**
  * @openapi

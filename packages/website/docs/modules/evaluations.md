@@ -51,7 +51,7 @@ Deleting a dataset deletes its items **and** the evals bound to it.
 | `input` | array | `{ role, content }` messages, replayed verbatim as the generation's input |
 | `expected_output` | string | Reference answer for `exact_match` and `llm_judge`; may be `null` |
 | `metadata` | object | Free-form tags (e.g. `{"topic": "billing"}`), opaque to the platform and readable from `json_logic` scorers |
-| `source_generation_id` | string | Reserved for server-side curation from a generation; always `null` today. Record provenance for client-curated items in `metadata` |
+| `source_generation_id` | string | The generation this item was curated from (see [Curating items from production](#curating-items-from-production)); `null` for a hand-authored item, and `null` again once that generation is deleted |
 | `created_at` / `updated_at` | string | ISO 8601 timestamps |
 
 ### Eval
@@ -166,6 +166,42 @@ Each result carries its own copy of the item's `input` and `expected_output`, ta
 time, so editing or deleting an item between two runs cannot make their scores
 incomparable. Deleting an item nulls `dataset_item_id` on past results and changes nothing
 else.
+
+### Curating items from production
+
+A hand-authored dataset drifts away from the traffic it is supposed to represent, which is
+the traffic a canary actually has to survive. `create-dataset-item-from-generation`
+promotes a real turn instead:
+
+```bash
+soat create-dataset-item-from-generation \
+  --dataset_id "$DATASET_ID" \
+  --generation_id "$GENERATION_ID"
+```
+
+The generation's stored input messages become the item's `input`, and its own answer
+becomes `expected_output` — pass `--expected_output` to override it, or `null` to store the
+item with no reference answer. `source_generation_id` records where the item came from.
+
+What the item stores is a **copy**, not a view. It keeps working after the source
+generation's content is purged, and if that generation is deleted `source_generation_id`
+simply goes null — consistent with the rest of the module, where a purge can never quietly
+stop a suite from being runnable.
+
+Two rules bound what can be promoted:
+
+- **Only a completed generation.** A paused (`requires_action`) or failed turn has no
+  finished answer, so it is refused with `409 GENERATION_NOT_COMPLETED` rather than turned
+  into a fixture that scores whatever the agent does next.
+- **Only while its content is available.** Replay needs the input that
+  [content retention](#retention-and-erasure) exists to withhold, so an agent or project
+  running with `trace_content_mode: none` never stored it, and a purged or expired
+  generation no longer has it. Both answer `409 GENERATION_CONTENT_UNAVAILABLE`, as do
+  generations produced before input recording existed.
+
+The call copies content out of a generation, so it requires `generations:GetGeneration` in
+addition to `evaluations:CreateDataset`. The generation must also belong to the same
+project as the dataset.
 
 ### Version pinning
 
@@ -333,7 +369,10 @@ eval'd agent's tools at a staging target.
 content — directly, or through its trace — also clears the copy. Scores, `passed`, and the
 frozen `input` / `expected_output` survive. Datasets are operator-owned test fixtures: a
 content purge never deletes or mutates a dataset item — an erasure covering curated
-content requires deleting the item explicitly.
+content requires deleting the item explicitly. That applies to items curated with
+[`create-dataset-item-from-generation`](#curating-items-from-production) too: promoting a
+turn copies its content into a fixture that outlives the source, which is what keeps a
+suite runnable, and also what makes deleting the item the only way to erase it.
 
 ## Examples
 

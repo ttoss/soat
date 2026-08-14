@@ -47,6 +47,16 @@ export const ERROR_CODES = {
     description:
       'The generation does not exist or is not in a pending state for tool output submission.',
   },
+  GENERATION_NOT_COMPLETED: {
+    httpStatus: 409,
+    description:
+      'The generation has not completed, so it has no finished turn to promote. Only a completed generation can be curated into a dataset item.',
+  },
+  GENERATION_CONTENT_UNAVAILABLE: {
+    httpStatus: 409,
+    description:
+      "The generation's content was never stored (the agent or project runs with trace_content_mode 'none') or has since been purged, so the turn cannot be replayed or curated.",
+  },
   SINGLE_SESSION_CONFLICT: {
     httpStatus: 409,
     description:

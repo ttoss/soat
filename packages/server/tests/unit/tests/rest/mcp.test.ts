@@ -2,7 +2,10 @@ import { db } from 'src/db';
 import { emitActivityEntry } from 'src/lib/activity';
 import { flushAuditQueue } from 'src/lib/auditQueue';
 import { fileException } from 'src/lib/exceptions';
-import { createGenerationRecord } from 'src/lib/generations';
+import {
+  createGenerationRecord,
+  updateGenerationRecord,
+} from 'src/lib/generations';
 import * as pdfModule from 'src/lib/pdf';
 import { saveTrace } from 'src/lib/traces';
 
@@ -2215,6 +2218,61 @@ describe('MCP tools - happy path', () => {
       });
       expect(items.status).toBe(200);
       expect(parseResult(items).total).toBe(1);
+    });
+
+    test('create-dataset-item-from-generation curates a completed turn', async () => {
+      // Its own dataset, so the item-count assertion above stays about the
+      // fixtures it authored. The generation is seeded rather than run, matching
+      // how the Generations tools above are exercised without a live AI service.
+      const curatedDataset = parseResult(
+        await mcpCall('create-dataset', {
+          project_id: projectId,
+          name: 'MCP Curated Dataset',
+        })
+      );
+
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+      const generationPublicId = `gen_mcpcur_${Date.now()}`;
+      const tracePublicId = `trc_mcpcur_${Date.now()}`;
+      const input = [{ role: 'user', content: 'When is my invoice issued?' }];
+
+      await createGenerationRecord({
+        publicId: generationPublicId,
+        projectId: project!.id,
+        agentId: evalAgentId,
+        traceId: tracePublicId,
+        inputMessages: input,
+      });
+      await saveTrace({
+        traceId: tracePublicId,
+        projectId: project!.id,
+        projectPublicId: projectId,
+        agentId: evalAgentId,
+        steps: [
+          { content: [{ type: 'text', text: 'On the first of each month.' }] },
+        ],
+      });
+      await updateGenerationRecord({
+        publicId: generationPublicId,
+        status: 'completed',
+        completedAt: new Date(),
+      });
+
+      const res = await mcpCall('create-dataset-item-from-generation', {
+        dataset_id: curatedDataset.id,
+        generation_id: generationPublicId,
+      });
+
+      expect(res.status).toBe(200);
+      const item = parseResult(res);
+      expect(item.id).toMatch(/^dsit_/);
+      // Path and body arguments reach the tool under the spec's own names, and
+      // the response is the REST body with nothing rewritten.
+      expect(item.input).toEqual(input);
+      expect(item.expected_output).toBe('On the first of each month.');
+      expect(item.source_generation_id).toBe(generationPublicId);
     });
 
     test('create-eval binds an agent, a dataset, and scorers', async () => {

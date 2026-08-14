@@ -134,6 +134,10 @@ export const createGenerationRecord = async (
     // derived from it (see resolveEndUserAttribution), never passed separately.
     sessionId?: string | null;
     metadata?: Record<string, unknown> | null;
+    // The turn's resolved input messages, recorded so the generation can later
+    // be promoted into an eval dataset item. Content, so zero-retention refuses
+    // it exactly as it refuses `metadata`.
+    inputMessages?: unknown[] | null;
   }
 ) => {
   const [agent, initiatorGeneration] = await Promise.all([
@@ -158,12 +162,13 @@ export const createGenerationRecord = async (
     sessionId: args.sessionId,
   });
 
-  // Zero-retention (#838): `metadata` is caller content, so it is refused at
-  // creation rather than written and purged later. The row itself is still
-  // created — the skeleton is what metering and audit read.
+  // Zero-retention (#838): `metadata` and `inputMessages` are content, so they
+  // are refused at creation rather than written and purged later. The row itself
+  // is still created — the skeleton is what metering and audit read.
   const contentColumns = await buildCreateContentColumns({
     agentDbId: agent.id as number,
     metadata: args.metadata,
+    inputMessages: args.inputMessages,
   });
 
   const gen = await commitGenerationWithTrace({

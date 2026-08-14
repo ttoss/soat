@@ -37,6 +37,11 @@
       "description": "Add a test case to a dataset"
     },
     {
+      "operationId": "createDatasetItemFromGeneration",
+      "action": "evaluations:CreateDataset",
+      "description": "Curate a completed generation into a dataset item (also requires generations:GetGeneration)"
+    },
+    {
       "operationId": "updateDatasetItem",
       "action": "evaluations:CreateDataset",
       "description": "Update a test case in a dataset"
