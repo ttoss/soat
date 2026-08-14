@@ -1,0 +1,81 @@
+{
+  "name": "OpenClaw",
+  "slug": "openclaw",
+  "archetype": "framework",
+  "summary": "Open-source personal AI assistant framework: a local gateway control plane connecting AI models to WhatsApp, Telegram, Slack, Discord, Signal, and iMessage, with tools, skills, MCP, scheduling, and optional sandboxed execution — built for a single operator who owns their data.",
+  "website": "https://openclaw.ai",
+  "license": "MIT",
+  "deployment": ["self-hosted"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Gateway-managed sessions running AI-driven workflows with tools and skills.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "orchestration": {
+      "rating": "partial",
+      "note": "Scheduling for unattended automations; no declarative DAG/workflow engine.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Session and contextual memory managed by the gateway across channels.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Tools, skills, plugins, and MCP integrations distributed through ClawHub.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Pairing controls and access management for a single operator — not multi-tenant IAM, policies, quotas, or approvals.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "observability": {
+      "rating": "absent",
+      "note": "No structured trace, usage, or audit model beyond gateway session logs."
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store."
+    },
+    "evaluation": {
+      "rating": "absent",
+      "note": "No built-in datasets, scorers, or eval runs."
+    },
+    "channels": {
+      "rating": "native",
+      "note": "First-class gateways for WhatsApp, Telegram, Slack, Discord, Google Chat, Signal, and iMessage — its headline feature.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Optional isolated (sandboxed) execution environments for tool runs.",
+      "evidence": "https://github.com/openclaw/openclaw"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "The gateway broadcasts an approval-requested event that pauses the command while operator clients resolve it, with ask modes and a deny or allowlist fallback on timeout.",
+      "evidence": "https://docs.openclaw.ai/tools/exec-approvals"
+    },
+    "multi-tenancy": {
+      "rating": "absent",
+      "note": "The security model is one trusted operator per gateway; isolation means running a separate gateway process and state tree per trust domain, not tenant scoping inside one deployment."
+    },
+    "declarative-deployment": {
+      "rating": "absent",
+      "note": "Agents are declared in gateway config files and deployed with Docker Compose, but there is no dependency-graph provisioning of agent resources with plan/apply."
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "No immutable agent definition versions, aliases, canary rollout, or rollback; skills carry a version field but agents themselves are unversioned."
+    },
+    "skill-learning": {
+      "rating": "partial",
+      "note": "The Skill Workshop has the agent draft a proposal when it spots reusable work rather than writing skills directly, and a human reviews and approves before changes land.",
+      "evidence": "https://docs.openclaw.ai/tools/skills"
+    }
+  }
+}

@@ -201,6 +201,11 @@ const config: Config = {
           label: 'Reference',
         },
         {
+          to: '/benchmark',
+          label: 'Benchmark',
+          position: 'left',
+        },
+        {
           href: 'https://github.com/ttoss/soat',
           label: 'GitHub',
           position: 'right',

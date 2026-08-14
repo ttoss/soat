@@ -246,6 +246,13 @@ const FinalCta = () => {
             Read the docs
           </Link>
         </div>
+        <p className={styles.finalNote}>
+          Weighing your options?{' '}
+          <Link to="/benchmark">
+            See how SOAT compares to other agent solutions
+          </Link>
+          .
+        </p>
       </div>
     </section>
   );

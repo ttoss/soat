@@ -1,0 +1,85 @@
+{
+  "name": "Dify",
+  "slug": "dify",
+  "archetype": "infrastructure",
+  "summary": "Open-source LLM application platform providing a visual workflow canvas, RAG knowledge bases, agent nodes, and a plugin marketplace, served by a self-hostable Docker Compose stack with PostgreSQL, Redis, Celery workers, a pluggable vector database, and a sandbox service. Applications publish as web apps, REST APIs, MCP servers, or reusable tools.",
+  "website": "https://dify.ai",
+  "license": "Dify Open Source License (Apache-2.0 with added conditions)",
+  "deployment": ["self-hosted", "managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Runs chat, agent, and workflow applications server-side with function-calling and ReAct agent strategies, persisting conversations and run records.",
+      "evidence": "https://github.com/langgenius/dify"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Visual workflow canvas with multi-node pipelines plus schedule, webhook, and plugin trigger nodes.",
+      "evidence": "https://docs.dify.ai/en/cloud/use-dify/nodes/trigger/overview"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Built-in RAG pipeline covering document ingestion, embedding, and retrieval, backed by a configurable vector database such as Weaviate, Qdrant, Milvus, or pgvector.",
+      "evidence": "https://docs.dify.ai/en/self-host/deploy/configuration/environments"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Ships 50+ built-in tools with hundreds of model providers, MCP server publishing, HTTP request nodes, and webhook triggers, extensible through the plugin marketplace.",
+      "evidence": "https://github.com/langgenius/dify"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Workspaces have Owner/Admin/Editor/Normal roles with per-knowledge-base visibility, but audit log and enterprise governance are not in the Community Edition.",
+      "evidence": "https://docs.dify.ai/en/guides/management/team-members-management"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Per-run logs with node-by-node traces, token totals, and status, plus integrations with external tools such as Langfuse, Opik, and Arize Phoenix.",
+      "evidence": "https://docs.dify.ai/en/cloud/use-dify/monitor/logs"
+    },
+    "data-secrets": {
+      "rating": "native",
+      "note": "Managed file storage via OpenDAL, S3, Azure Blob, or GCS, with a server key encrypting session tokens and stored provider credentials.",
+      "evidence": "https://docs.dify.ai/en/self-host/deploy/configuration/environments"
+    },
+    "evaluation": {
+      "rating": "absent",
+      "note": "No dataset, scorer, or eval-run subsystem; quality tooling is limited to logs and manual annotation."
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "Applications publish as a hosted web app chat UI, while Slack, Telegram, and Discord bots require marketplace or custom plugins rather than a built-in gateway.",
+      "evidence": "https://docs.dify.ai/en/cloud/use-dify/nodes/start"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "The Code node runs Python or JavaScript in the DifySandbox service, an isolated environment with a syscall whitelist blocking file, network, and shell access.",
+      "evidence": "https://docs.dify.ai/en/use-dify/nodes/code"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "The Human Input node pauses a workflow and emits an event carrying a form token, delivers a form via web app or email, routes execution by the decision taken, and follows a timeout branch.",
+      "evidence": "https://docs.dify.ai/en/use-dify/nodes/human-input"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Workspaces isolate apps, knowledge bases, members, and model configuration under four roles, but the self-hosted Community Edition gets one workspace and multiple workspaces require Enterprise.",
+      "evidence": "https://docs.dify.ai/en/self-host/use-dify/workspace/readme"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "Dify DSL exports one app's configuration to YAML and recreates it on import with a compatibility check, but there is no dependency graph, plan/apply, or multi-resource provisioning.",
+      "evidence": "https://docs.dify.ai/en/guides/management/app-management"
+    },
+    "agent-versioning": {
+      "rating": "partial",
+      "note": "A version control panel publishes drafts as named versions and restores previous ones, but offers no aliases, canary rollout, traffic splitting, or eval-gated promotion.",
+      "evidence": "https://docs.dify.ai/en/use-dify/build/version-control"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "Apps, workflows, tools, and knowledge bases are authored by humans in the studio; no mechanism has the agent create or refine reusable skills from its own runs."
+    }
+  }
+}

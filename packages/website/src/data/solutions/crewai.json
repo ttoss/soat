@@ -1,0 +1,84 @@
+{
+  "name": "CrewAI",
+  "slug": "crewai",
+  "archetype": "framework",
+  "summary": "Python framework for orchestrating role-based autonomous agents, combining Crews (agent teams with task delegation) and Flows (event-driven, state-managed workflows). A separate commercial product, CrewAI AMP, adds managed deployment, a trace dashboard, and webhook automations.",
+  "website": "https://crewai.com",
+  "license": "MIT",
+  "deployment": ["self-hosted", "managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agents execute a tool-calling loop over assigned tasks within a Crew, with configurable retry limits and execution hooks.",
+      "evidence": "https://docs.crewai.com/en/introduction"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Flows provide event-driven workflows with state persistence and conditional branching; Crews provide multi-agent task delegation.",
+      "evidence": "https://docs.crewai.com/en/introduction"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "A unified Memory class backed by LanceDB plus Knowledge sources (text, PDF, CSV, Excel, JSON) embedded into ChromaDB or Qdrant with query-rewritten search.",
+      "evidence": "https://docs.crewai.com/en/concepts/knowledge"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Tool calling with a built-in tool library and native MCP server support over stdio, SSE, and streamable HTTP.",
+      "evidence": "https://docs.crewai.com/en/mcp/overview"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Task guardrails (function-based and model-based) and human-in-the-loop input are built in, but the framework has no multi-tenant IAM, quota, or audit-log layer.",
+      "evidence": "https://docs.crewai.com/en/concepts/tasks"
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "Built-in tracing captures execution time, token usage, and cost, but traces are viewed in the commercial CrewAI AMP dashboard.",
+      "evidence": "https://docs.crewai.com/en/observability/tracing"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store; credentials are supplied through environment variables."
+    },
+    "evaluation": {
+      "rating": "partial",
+      "note": "The crewai test command scores crew runs across iterations, but it is OpenAI-only and has no dataset or reusable scorer abstraction.",
+      "evidence": "https://docs.crewai.com/en/concepts/testing"
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "Channels run a Crew or Flow as a Slack or Discord bot, but the adapters are third-party CopilotKit packages rather than CrewAI-owned gateways.",
+      "evidence": "https://docs.crewai.com/en/guides/frontend/channels"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Setting allow_code_execution gives an agent an internal CodeInterpreterTool that runs generated Python and feeds errors back for retries.",
+      "evidence": "https://docs.crewai.com/en/learn/coding-agents"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Tasks set human_input to pause a crew in a pending state; execution resumes through an endpoint taking the execution, task, feedback, and approval decision.",
+      "evidence": "https://docs.crewai.com/en/learn/human-in-the-loop"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Only the commercial AMP platform provides an organization boundary with feature-level roles and entity-level permissions; the open-source library has no tenant scoping primitive.",
+      "evidence": "https://docs-platform.crewai.com/platform/en/features/rbac.md"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "YAML agent and task config declaratively defines one project, but there is no resource dependency graph, plan/apply cycle, or infrastructure provisioning.",
+      "evidence": "https://docs.crewai.com/en/concepts/agents"
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "Updating a deployed crew rebuilds and redeploys from source with no immutable versions, aliases, staged rollout, or rollback."
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "The Memory class stores and retrieves scoped memories with recency and importance weighting, but does not synthesize reusable procedures from the agent's own trajectories."
+    }
+  }
+}

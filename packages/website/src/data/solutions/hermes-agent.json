@@ -1,0 +1,82 @@
+{
+  "name": "Hermes Agent",
+  "slug": "hermes-agent",
+  "archetype": "framework",
+  "summary": "Open-source agent runtime from Nous Research with a built-in learning loop (skills from experience), agent-curated memory, 40+ tools plus MCP, and a multi-platform gateway (Telegram, Discord, Slack, WhatsApp, Signal, CLI).",
+  "website": "https://github.com/nousresearch/hermes-agent",
+  "license": "MIT",
+  "deployment": ["self-hosted"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agent loop with subagent spawning, skill learning, and 300+ LLMs via multiple providers.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "orchestration": {
+      "rating": "partial",
+      "note": "Cron scheduler for unattended automations and parallel subagents; no declarative DAG/workflow engine.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Agent-curated memory, persistent user profiles, cross-session recall, and full-text search over past conversations.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "40+ built-in tools, MCP server support, and seven terminal/sandbox backends.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "identity-governance": {
+      "rating": "absent",
+      "note": "Single-operator model; no multi-tenant IAM, policies, quotas, approvals, or audit log."
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "Batch trajectory generation and research-focused evaluation tooling; no structured trace/usage/audit model.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store."
+    },
+    "evaluation": {
+      "rating": "partial",
+      "note": "Batch trajectory generation for model training and research eval tools; not a dataset/scorer eval product.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "channels": {
+      "rating": "native",
+      "note": "Single gateway to Telegram, Discord, Slack, WhatsApp, Signal, and CLI with cross-platform conversation continuity.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Seven terminal backends: local, Docker, SSH, Singularity, Modal, Daytona, and Vercel Sandbox.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "Commands matching a dangerous-pattern list pause for explicit operator approval with once, session, always, and deny responses, plus code-based pairing approval.",
+      "evidence": "https://hermes-agent.nousresearch.com/docs/user-guide/security"
+    },
+    "multi-tenancy": {
+      "rating": "absent",
+      "note": "Single-operator design scoped to a working directory, with no projects, workspaces, or org-level scoping of resources and permissions."
+    },
+    "declarative-deployment": {
+      "rating": "absent",
+      "note": "Ships Docker and Nix files for installing the runtime, but no declarative provisioning of agent resources with a dependency graph or plan/apply."
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "Only a binary update command; no immutable agent definition versions, aliases, staged rollout, or rollback."
+    },
+    "skill-learning": {
+      "rating": "native",
+      "note": "A skill management tool creates and patches skill files after complex tasks or error recovery, and a background review stages further skill changes after a session.",
+      "evidence": "https://hermes-agent.nousresearch.com/docs/user-guide/features/skills"
+    }
+  }
+}

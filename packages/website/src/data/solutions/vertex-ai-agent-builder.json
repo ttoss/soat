@@ -1,0 +1,86 @@
+{
+  "name": "Vertex AI Agent Builder",
+  "slug": "vertex-ai-agent-builder",
+  "archetype": "managed-platform",
+  "summary": "Google Cloud's managed platform for building and deploying agents: Agent Development Kit, managed Agent Engine runtime, RAG Engine, and Google Cloud IAM, billing, and observability.",
+  "website": "https://cloud.google.com/products/agent-builder",
+  "license": "Proprietary (ADK is Apache-2.0)",
+  "deployment": ["managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agent Development Kit plus the managed Agent Engine runtime with sessions.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/overview"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "Multi-agent composition in ADK (sequential, parallel, loop agents); broader pipelines lean on other Google Cloud services.",
+      "evidence": "https://google.github.io/adk-docs/agents/multi-agents/"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "RAG Engine and Vertex AI Search for grounding; Memory Bank for session memory.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/rag-overview"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Function tools, MCP support, and prebuilt connectors to Google and third-party systems.",
+      "evidence": "https://google.github.io/adk-docs/tools/"
+    },
+    "identity-governance": {
+      "rating": "partial",
+      "note": "Google Cloud IAM, quotas, and audit logging — cloud-level, not agent-action-level; no built-in guardrail/approval queue for tool calls.",
+      "evidence": "https://cloud.google.com/vertex-ai/docs/general/access-control"
+    },
+    "observability": {
+      "rating": "native",
+      "note": "Cloud Trace/Logging integration and Agent Engine tracing of agent runs.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/agent-engine/manage/tracing"
+    },
+    "data-secrets": {
+      "rating": "partial",
+      "note": "Via adjacent Google Cloud services (Cloud Storage, Secret Manager) rather than the agent platform itself.",
+      "evidence": "https://cloud.google.com/secret-manager/docs/overview"
+    },
+    "evaluation": {
+      "rating": "native",
+      "note": "Vertex AI evaluation service with agent-specific evaluation flows.",
+      "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/models/evaluation-overview"
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "Chat-platform delivery through Conversational Agents (Dialogflow) channel integrations, adjacent to Agent Builder itself.",
+      "evidence": "https://cloud.google.com/dialogflow/cx/docs/concept/integrations"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Built-in code execution tooling in ADK and the Vertex AI code interpreter extension.",
+      "evidence": "https://google.github.io/adk-docs/tools/built-in-tools/"
+    },
+    "human-in-loop": {
+      "rating": "partial",
+      "note": "Agents on Agent Engine can pause through framework-level checkpoint breakpoints and resume on the same thread, but the platform provides no managed approval queue or tool-call gate.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/use-a-langgraph-agent"
+    },
+    "multi-tenancy": {
+      "rating": "partial",
+      "note": "Isolation comes from generic Google Cloud project-level and per-resource IAM bindings, with no agent-specific tenant, workspace, or namespace construct.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/machine-learning/general/access-control"
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "Agent deployment is documented as suitable for generic tools such as Terraform, but there is no first-party agent template format with its own plan/apply and dependency graph.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/deploy-an-agent"
+    },
+    "agent-versioning": {
+      "rating": "native",
+      "note": "Updating versioned fields creates an immutable revision with active and deprecated states, and traffic percentages can be split across active revisions for canary rollout and rollback.",
+      "evidence": "https://docs.cloud.google.com/gemini-enterprise-agent-platform/scale/runtime/manage-revisions-and-traffic"
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "No first-party mechanism for an agent to author or refine reusable skills from its own experience."
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "name": "DeepSeek Harness",
+  "slug": "deepseek-harness",
+  "archetype": "framework",
+  "summary": "Plugin-based open-source agent framework from DeepSeek AI (\"everything is a plugin\") built on the Cordis composable plugin system, with a web UI and CLI for building and running custom agents.",
+  "website": "https://github.com/deepseek-ai/deepseek-harness",
+  "license": "MIT",
+  "deployment": ["self-hosted"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Core agent loop and web UI for agent interaction.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "orchestration": {
+      "rating": "plugin",
+      "note": "No built-in DAG/workflow engine; composition is expressed through the plugin architecture.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "knowledge-memory": {
+      "rating": "plugin",
+      "note": "No built-in document store, embeddings, or memory — provided by plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "The plugin system is the tool/extension surface; capabilities are added as Cordis plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "identity-governance": {
+      "rating": "absent",
+      "note": "No multi-tenant IAM, policies, quotas, approvals, or audit log."
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "Run visibility through the web UI; no structured trace/usage/audit model.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store."
+    },
+    "evaluation": {
+      "rating": "absent",
+      "note": "No built-in datasets, scorers, or eval runs."
+    },
+    "channels": {
+      "rating": "plugin",
+      "note": "Web UI is built in; messaging-platform gateways arrive as Cordis plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "code-execution": {
+      "rating": "plugin",
+      "note": "No first-party sandbox; execution environments are provided by plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "human-in-loop": {
+      "rating": "native",
+      "note": "An approval package supplies a fail-closed approval service that gates each tool call under a per-session ask or never policy, plus a seam for free-form questions to the user.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness/blob/master/docs/subsystems/approval.md"
+    },
+    "multi-tenancy": {
+      "rating": "absent",
+      "note": "Workspaces are local user directories holding session membership, and the identity package states its values do not represent an authenticated account, so no tenant-scoped permission model exists."
+    },
+    "declarative-deployment": {
+      "rating": "partial",
+      "note": "An agent preset declaratively composes a session's tools, persona, and prompt sections, but it is per-session composition with no plan/apply, dependency graph, or resource provisioning.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness/blob/master/packages/preset/README.md"
+    },
+    "agent-versioning": {
+      "rating": "absent",
+      "note": "No versioned agent definitions, aliases, canary rollout, or rollback appear in the packages or subsystem documentation."
+    },
+    "skill-learning": {
+      "rating": "absent",
+      "note": "The skill family only discovers pre-authored skills through filesystem providers and exposes a read-only catalog and loader; there is no write path for the agent to author a skill."
+    }
+  }
+}
