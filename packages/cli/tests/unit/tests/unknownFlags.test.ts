@@ -6,9 +6,11 @@ import { createCliTestClient } from '../testClient';
  * `--limitt 1` returned every row instead of one — the filter failed **open**,
  * with exit 0 and no warning.
  *
- * Request bodies already fail closed on the server (`strictFields` answers
- * `400 VALIDATION_FAILED` naming the unknown field), but a query param the spec
- * never declared cannot be caught there, so the client has to.
+ * The gate is deliberately limited to that case. Request bodies already fail
+ * closed on the server (`strictFields` answers `400 VALIDATION_FAILED` naming the
+ * unknown field), and that check is the authority on body contents — so an
+ * unrecognized flag on a write is still forwarded, and the tests below pin both
+ * halves.
  */
 describe('unknown flags are rejected instead of silently forwarded', () => {
   const cliTestClient = createCliTestClient();
@@ -54,19 +56,25 @@ describe('unknown flags are rejected instead of silently forwarded', () => {
     expect(output).toContain('--limit');
   });
 
-  test('an unknown body flag is caught locally too', async () => {
-    const output = await expectExit1([
-      'create-agent',
-      '--project_id',
-      'proj_1',
-      '--name',
-      'a',
-      '--notarealfield',
-      'x',
+  /**
+   * The server owns this verdict, so the flag must reach it. `strictFields`
+   * answers `400 VALIDATION_FAILED` naming the field, and
+   * `tests/smoke-tests.sh` asserts exactly that for `update-agent --reasoning`
+   * — a client-side refusal would turn that response into a usage error the
+   * assertion cannot read, and would make an older CLI refuse a field a newer
+   * server accepts.
+   */
+  test('an unrecognized flag on a write is still forwarded, for the server to reject', async () => {
+    const requests = await cliTestClient.call([
+      'update-agent',
+      '--agent_id',
+      'agent_1',
+      '--reasoning',
+      '{"effort":"low"}',
     ]);
 
-    expect(cliTestClient.fetchMock).toHaveBeenCalledTimes(0);
-    expect(output).toContain('notarealfield');
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.body).toMatchObject({ reasoning: { effort: 'low' } });
   });
 
   test('a declared query param is still sent', async () => {

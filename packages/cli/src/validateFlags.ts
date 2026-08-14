@@ -4,6 +4,7 @@ type RouteFlags = {
   flags: readonly { name: string }[];
   pathParams: readonly string[];
   queryParams: readonly string[];
+  httpMethod: string;
 };
 
 /** Accepted on any command: Commander globals plus the generic id alias. */
@@ -42,16 +43,23 @@ const suggestionFor = (args: { flag: string; known: Set<string> }): string => {
 };
 
 /**
- * Reject a flag that matches no parameter of this command, rather than
- * forwarding it.
+ * Reject an unrecognized flag **only where the server cannot catch it** — a flag
+ * the CLI would otherwise append to the query string.
  *
- * An unknown flag in a request *body* would at least come back as a `400` from
- * the server's `strictFields` check, but an undeclared *query* param never
- * reaches a check — the server ignores what it does not know — so
- * `list-agents --limitt 1` returned every row instead of one. A mistyped filter
- * that fails open, with exit 0, is worse than one that fails: the caller acts on
- * a superset it never asked for. Only the client can catch that, because the
- * name never survives the request.
+ * An undeclared query param never reaches a check: the server ignores what it
+ * does not know, so `list-agents --limitt 1` returned every row instead of one.
+ * The filter failed **open**, with exit 0 and no warning, and the caller acted on
+ * a superset it never asked for. The name does not survive the request, so only
+ * the client can catch it.
+ *
+ * An unrecognized flag on a **write** is deliberately still forwarded. The server
+ * already answers `400 VALIDATION_FAILED` naming the field (`strictFields`), and
+ * that check is the authority on what a body may contain — rejecting locally
+ * would front-run it, hide the real error, and make an older CLI refuse a field a
+ * newer server accepts. It would also make the behavior untestable through the
+ * CLI: `tests/smoke-tests.sh` asserts precisely that the server rejects
+ * `update-agent --reasoning` with a 400, which a client-side refusal turns into a
+ * usage error the assertion cannot read.
  *
  * Returns the error lines to print; empty when every flag is recognized.
  */
@@ -60,6 +68,11 @@ export const findUnknownFlags = (args: {
   route: RouteFlags;
   flagKeys: string[];
 }): string[] => {
+  // Mirrors the routing below in `index.ts`: on a GET an unmatched flag becomes a
+  // query param (GETs carry no body), and that is the case with no server-side
+  // check behind it. Anything else lands in the body, where `strictFields` rules.
+  if (args.route.httpMethod !== 'get') return [];
+
   const known = knownFlagsFor(args.route);
   const unknown = args.flagKeys.filter((flagKey) => {
     if (ALWAYS_ALLOWED.has(flagKey)) return false;
