@@ -36,8 +36,6 @@ export type TypedAgent = {
   instructions: string | null;
   model: string | null;
   toolBindings?: unknown;
-  toolIds: unknown;
-  tools: unknown;
   maxSteps: unknown;
   toolChoice: unknown;
   stopConditions: unknown;
@@ -116,8 +114,6 @@ export const fromAgentConfig = (pending: PendingGeneration): TypedAgent => {
   return {
     instructions: pending.agentConfig.instructions,
     model: null,
-    toolIds: null,
-    tools: null,
     maxSteps: pending.agentConfig.maxSteps,
     toolChoice: pending.agentConfig.toolChoice,
     stopConditions: pending.agentConfig.stopConditions,

@@ -216,12 +216,14 @@ const parseHeaders = (args: {
 export const parseHttpExecuteConfig = (
   execute: TypedHttpTool['execute']
 ): HttpExecuteConfig | null => {
-  const parsedExecute: unknown =
-    typeof execute === 'string' ? JSON.parse(execute) : execute;
-
-  if (!isPlainObject(parsedExecute)) {
+  // Widened before narrowing: the declared union's object member lists only
+  // `url`/`method`/`headers`, so narrowing it directly would hide `body_mode`
+  // and `auth`.
+  const candidate: unknown = execute;
+  if (!isPlainObject(candidate)) {
     return null;
   }
+  const parsedExecute = candidate;
 
   const url = parsedExecute.url;
   if (typeof url !== 'string' || !url) {
@@ -230,10 +232,7 @@ export const parseHttpExecuteConfig = (
 
   const method = parsedExecute.method;
 
-  // `body_mode` is the wire and template spelling. The `bodyMode` fallback
-  // reads rows persisted before single-casing, when the request middleware
-  // camelCased nested keys before they were stored.
-  const rawBodyMode = parsedExecute.bodyMode ?? parsedExecute.body_mode;
+  const rawBodyMode = parsedExecute.body_mode;
 
   return {
     url,

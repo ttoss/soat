@@ -917,30 +917,23 @@ describe('resolveAgentTools', () => {
     fetchMock.mockRestore();
   });
 
-  test('http tool execute supports legacy execute config stored as JSON string', async () => {
-    const legacyToolRes = await authenticatedTestClient(adminToken)
+  // An `execute` persisted as a JSON string was tolerated for rows written
+  // before single-casing. A string is no longer a valid config: it is reported
+  // as invalid rather than silently parsed.
+  test('http tool execute stored as a JSON string is rejected as invalid', async () => {
+    const stringExecuteRes = await authenticatedTestClient(adminToken)
       .post('/api/v1/tools')
       .send({
         project_id: projectId,
-        name: 'myLegacyHttpTool',
+        name: 'myStringExecuteHttpTool',
         type: 'http',
-        description: 'Legacy stored execute payload',
+        description: 'execute persisted as a JSON string',
         parameters: { type: 'object', properties: {} },
         execute: {
           url: 'https://example.com/api/users/{user_id}',
           method: 'GET',
         },
       });
-
-    await db.Tool.update(
-      {
-        execute: {
-          url: 'https://example.com/api/users/{user_id}',
-          method: 'GET',
-        },
-      },
-      { where: { publicId: legacyToolRes.body.id } }
-    );
 
     await db.sequelize.query(
       'UPDATE tools SET execute = to_jsonb($1::text) WHERE public_id = $2',
@@ -950,31 +943,26 @@ describe('resolveAgentTools', () => {
             url: 'https://example.com/api/users/{user_id}',
             method: 'GET',
           }),
-          legacyToolRes.body.id,
+          stringExecuteRes.body.id,
         ],
       }
     );
 
-    const fetchMock = jest
-      .spyOn(global, 'fetch')
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ ok: true }), { status: 200 })
-      );
+    const fetchMock = jest.spyOn(global, 'fetch');
 
-    const tools = await resolveAgentTools({ toolIds: [legacyToolRes.body.id] });
-    const legacyTool = tools.myLegacyHttpTool;
+    const tools = await resolveAgentTools({
+      toolIds: [stringExecuteRes.body.id],
+    });
+    const tool = tools.myStringExecuteHttpTool;
 
-    if ('execute' in legacyTool && typeof legacyTool.execute === 'function') {
-      await legacyTool.execute(
-        { user_id: 'u_01', include: 'projects' },
-        {} as never
-      );
+    expect('execute' in tool && typeof tool.execute === 'function').toBe(true);
+    if ('execute' in tool && typeof tool.execute === 'function') {
+      await expect(
+        tool.execute({ user_id: 'u_01' }, {} as never)
+      ).rejects.toThrow(/Invalid HTTP tool execute config/);
     }
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://example.com/api/users/u_01?include=projects',
-      expect.objectContaining({ method: 'GET' })
-    );
+    // The request is never attempted — the config is refused, not guessed at.
+    expect(fetchMock).not.toHaveBeenCalled();
 
     fetchMock.mockRestore();
   });

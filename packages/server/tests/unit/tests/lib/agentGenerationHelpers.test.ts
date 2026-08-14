@@ -164,8 +164,6 @@ describe('findPendingClientTools', () => {
 const mockAgent: TypedAgent = {
   instructions: null,
   model: 'test-model',
-  toolIds: null,
-  tools: null,
   maxSteps: 5,
   toolChoice: 'auto',
   stopConditions: null,
@@ -763,7 +761,7 @@ describe('runStreamGeneration', () => {
         typedAgent: {
           ...mockAgent,
           stepRules: [
-            { step: 1, toolChoice: { type: 'tool', toolName: 'myTool' } },
+            { step: 1, tool_choice: { type: 'tool', tool_name: 'myTool' } },
           ],
         },
         generationId: 'gen_steprules',

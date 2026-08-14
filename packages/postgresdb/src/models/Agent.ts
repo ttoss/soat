@@ -84,20 +84,11 @@ export class Agent extends Model {
   @Column({ type: DataType.STRING, allowNull: true })
   declare model: string | null;
 
-  // Canonical agent↔tool attachment: array of binding objects
-  // `{ toolId | tool }`. Single source of truth once written;
-  // the legacy `toolIds`/`tools` columns below remain only so rows created
-  // before this column existed keep reading (normalized lazily at read time).
+  // The agent↔tool attachment: array of binding objects `{ toolId | tool }`.
+  // The pre-`toolBindings` `toolIds`/`tools` columns are gone; a row that held
+  // only those reads as having no tools.
   @Column({ type: DataType.JSONB, allowNull: true })
   declare toolBindings: object[] | null;
-
-  // Deprecated: pre-toolBindings storage. Not written by new code paths.
-  @Column({ type: DataType.JSONB, allowNull: true })
-  declare toolIds: string[] | null;
-
-  // Deprecated: pre-toolBindings storage. Not written by new code paths.
-  @Column({ type: DataType.JSONB, allowNull: true })
-  declare tools: object[] | null;
 
   @Column({ type: DataType.INTEGER, allowNull: true, defaultValue: 20 })
   declare maxSteps: number | null;
