@@ -9,6 +9,18 @@ export type GenerationInputMessage = {
   content: ResolvableMessageContent | unknown;
 };
 
+/**
+ * Resolves the messages of an agent generation, whoever assembled them.
+ *
+ * Note this is **not** the request boundary: internal callers reach it with
+ * system content they built themselves and legitimately own — a session
+ * generation arrives through `conversationGeneration`, which prepends the actor
+ * persona as a `role: "system"` message. Refusing system content here would
+ * reject those flows, so the check that an agent's system prompt is only its
+ * `instructions` field lives at the REST boundary
+ * (`assertNoSystemMessage` in `rest/v1/agentGeneration.ts`), where the array is
+ * known to have come from the request.
+ */
 export const resolveGenerationInputMessages = async (args: {
   projectIds?: number[];
   messages: GenerationInputMessage[];

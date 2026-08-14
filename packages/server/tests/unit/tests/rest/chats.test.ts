@@ -133,13 +133,13 @@ describe('Chats', () => {
           ai_provider_id: aiProviderId,
           project_id: projectId,
           name: 'My Chat',
-          system_message: 'You are a helpful assistant',
+          instructions: 'You are a helpful assistant',
           model: 'llama3.2',
         });
 
       expect(response.status).toBe(201);
       expect(response.body.name).toBe('My Chat');
-      expect(response.body.system_message).toBe('You are a helpful assistant');
+      expect(response.body.instructions).toBe('You are a helpful assistant');
       expect(response.body.model).toBe('llama3.2');
     });
   });
@@ -328,7 +328,7 @@ describe('Chats', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
       const chatId = res.body.id;
 
@@ -479,7 +479,7 @@ describe('Chats', () => {
         .send({
           ai_provider_id: aiProviderId,
           project_id: projectId,
-          system_message: 'You are a helpful assistant.',
+          instructions: 'You are a helpful assistant.',
         });
       chatWithSystemId = res2.body.id;
     });
@@ -523,8 +523,9 @@ describe('Chats', () => {
       expect(response.headers['content-type']).toMatch(/text\/event-stream/);
     });
 
-    test('streams SSE response when messages include a system message', async () => {
-      // Exercises the systemFromRequest branch inside streamChatCompletionForChat
+    test('a system message in messages is refused with 400, even when streaming', async () => {
+      // The guard runs before the SSE headers are written, so the caller gets
+      // a proper JSON error instead of an error frame inside a 200 stream.
       const response = await authenticatedTestClient(userToken)
         .post(`/api/v1/chats/${chatId}/completions`)
         .send({
@@ -535,8 +536,9 @@ describe('Chats', () => {
           stream: true,
         });
 
-      expect(response.status).toBe(200);
-      expect(response.headers['content-type']).toMatch(/text\/event-stream/);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 
@@ -582,10 +584,23 @@ describe('Chats', () => {
     });
 
     test('non-streaming request reaches createChatCompletion (propagates AI error status)', async () => {
-      // createChatCompletion runs its system/non-system message split before
-      // calling generateText, which throws because this suite has no live
-      // Ollama server (only the smoke/tutorials CI jobs set one up) — the
-      // connection failure surfaces as an unhandled error, i.e. 500.
+      // createChatCompletion reaches generateText, which throws because this
+      // suite has no live Ollama server (only the smoke/tutorials CI jobs set
+      // one up) — the connection failure surfaces as an unhandled error, i.e. 500.
+      const response = await authenticatedTestClient(userToken)
+        .post('/api/v1/chat/completions')
+        .send({
+          ai_provider_id: aiProviderId,
+          instructions: 'Be concise.',
+          messages: [{ role: 'user', content: 'Hello' }],
+        });
+
+      expect(response.status).toBe(500);
+    });
+
+    test('a system message in messages is refused with 400', async () => {
+      // System content travels only in the `instructions` field — one rule on
+      // every surface, mirroring the AI SDK's allowSystemInMessages: false.
       const response = await authenticatedTestClient(userToken)
         .post('/api/v1/chat/completions')
         .send({
@@ -596,7 +611,9 @@ describe('Chats', () => {
           ],
         });
 
-      expect(response.status).toBe(500);
+      expect(response.status).toBe(400);
+      expect(response.body.error.code).toBe('SYSTEM_MESSAGE_NOT_ALLOWED');
+      expect(response.body.error.message).toMatch(/instructions/);
     });
   });
 

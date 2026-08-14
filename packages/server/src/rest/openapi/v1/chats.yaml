@@ -43,12 +43,12 @@ paths:
                 summary: Minimal chat
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
-              with_system:
-                summary: Chat with system message
+              with_instructions:
+                summary: Chat with instructions
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   name: Support Bot
-                  system_message: You are a helpful support assistant.
+                  instructions: You are a helpful support assistant.
                   model: gpt-4o
       responses:
         '201':
@@ -211,9 +211,13 @@ paths:
       summary: Create a chat completion for a stored chat
       description: >
         Runs a completion using the AI provider and settings stored in the chat.
-        Pass `stream: true` for SSE streaming. A system message in `messages`
-        overrides the chat's stored system message for this call only.
-        Messages may use `documentId` instead of `content`.
+        Pass `stream: true` for SSE streaming. System content travels only in
+        the `instructions` field — a `role: "system"` entry in `messages` is
+        refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. A request
+        `instructions` replaces the chat's stored one for this call only; the
+        stored value applies when the request carries none. It is sent to the
+        provider as its `instructions` argument, never as a message. Messages
+        may use `document_id` instead of `content`.
       operationId: createChatCompletionForChat
       parameters:
         - name: chat_id
@@ -243,9 +247,8 @@ paths:
               with_system_override:
                 summary: Override system message
                 value:
+                  instructions: Answer in French only.
                   messages:
-                    - role: system
-                      content: Answer in French only.
                     - role: user
                       content: Hello
       responses:
@@ -309,9 +312,8 @@ paths:
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   model: gpt-4o
+                  instructions: You are a helpful assistant.
                   messages:
-                    - role: system
-                      content: You are a helpful assistant.
                     - role: user
                       content: What files do I have?
                   stream: true
@@ -378,7 +380,7 @@ components:
           nullable: true
           description: Optional human-readable name
           example: Support Bot
-        system_message:
+        instructions:
           type: string
           nullable: true
           description: Optional system message sent with every completion
@@ -418,7 +420,7 @@ components:
           type: string
           description: Optional human-readable name
           example: Support Bot
-        system_message:
+        instructions:
           type: string
           description: Optional system message applied to all completions on this chat
           example: You are a helpful support assistant.
@@ -434,8 +436,9 @@ components:
       properties:
         role:
           type: string
+          # No `system`: system content travels only in `instructions`; a
+          # system entry here is refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED.
           enum:
-            - system
             - user
             - assistant
           example: user
@@ -465,6 +468,17 @@ components:
           type: string
           description: Override the chat's default model for this call
           example: gpt-4o-mini
+        instructions:
+          type: string
+          description: >
+            System instructions for this call only, replacing the chat's stored
+            `instructions`. Sent as the provider's `instructions` argument —
+            the only channel for system content; a `role: "system"` entry in
+            `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. The
+            chat's stored value applies only when the request carries none; the
+            two are never merged, which would produce a prompt neither the chat
+            nor the caller wrote.
+          example: Just this once, answer in one sentence.
         stream:
           type: boolean
           default: false
@@ -478,8 +492,9 @@ components:
       properties:
         role:
           type: string
+          # No `system`: system content travels only in `instructions`; a
+          # system entry here is refused with 400 SYSTEM_MESSAGE_NOT_ALLOWED.
           enum:
-            - system
             - user
             - assistant
           description: Role of the message author
@@ -506,6 +521,16 @@ components:
             Model identifier. Overrides the provider's `default_model` when
             specified.
           example: gpt-4o
+        instructions:
+          type: string
+          description: >
+            System instructions for this call. Sent to the provider as its
+            `instructions` argument rather than as a message, which is the only
+            place the AI SDK accepts system content (`allowSystemInMessages`
+            defaults to false). This field is the only channel — a
+            `role: "system"` entry in `messages` is refused with
+            `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+          example: You are a helpful assistant.
         messages:
           type: array
           minItems: 1

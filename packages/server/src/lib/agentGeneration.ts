@@ -26,7 +26,10 @@ import { runStreamGeneration } from './agentStreamGeneration';
 import { type GenerationInputMessage } from './generationInputMessages';
 import { recordGenerationFailure } from './generationLifecycle';
 import { createGenerationRecord } from './generations';
-import { findSystemInstructions, withoutSystemMessages } from './modelMessages';
+import {
+  collectSystemInstructions,
+  withoutSystemMessages,
+} from './modelMessages';
 import { resolveStartingPrincipal } from './orchestrationRunToken';
 import { assertStreamingSupportsOutputSchema } from './outputSchema';
 import { startedByPrincipalColumns } from './principals';
@@ -470,7 +473,7 @@ export const submitToolOutputs = async (args: {
     ...toolResultMessages,
     ...syntheticMessages,
   ];
-  const system = findSystemInstructions(pending.messages);
+  const system = collectSystemInstructions(pending.messages);
   const nonSystemMessages = withoutSystemMessages(allMessages);
 
   const result = await runToolOutputsGeneration({

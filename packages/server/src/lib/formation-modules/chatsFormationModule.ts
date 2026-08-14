@@ -16,7 +16,7 @@ export const chatsFormationModule = defineFormationModule({
       // Absent means the chat inherits the project's default model route.
       aiProviderId: toOptionalString(properties.ai_provider_id) ?? undefined,
       name: toOptionalString(properties.name) ?? undefined,
-      systemMessage: toNullableString(properties.system_message) ?? undefined,
+      instructions: toNullableString(properties.instructions) ?? undefined,
       model: toNullableString(properties.model) ?? undefined,
     });
   },
