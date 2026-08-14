@@ -252,11 +252,14 @@ First upload the file via `POST /api/v1/files/upload`, then call `POST /api/v1/d
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-# Step 1: upload the file (PDF, .txt, or .md)
-FILE_ID=$(soat upload-file \
+# Step 1: upload the file (PDF, .txt, or .md). The CLI sends the bytes
+# base64-encoded; for a large file, use the presigned-token flow instead
+# (see the Files module).
+FILE_ID=$(soat upload-file-base64 \
   --project-id proj_ABC \
-  --file ./report.pdf \
-  --jq '.id')
+  --content "$(base64 -w0 ./report.pdf)" \
+  --filename report.pdf \
+  --content-type application/pdf | jq -r '.id')
 
 # Step 2: ingest — one chunk per page (default)
 soat ingest-document \

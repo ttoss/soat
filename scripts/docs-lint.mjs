@@ -16,7 +16,8 @@
 // Usage: node scripts/docs-lint.mjs
 // Exits non-zero (and prints every offending line) when any check fails.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -74,7 +75,239 @@ const CHECKS = [
   },
 ];
 
-const files = collectDocs(DOCS_DIR);
+// ── Check 4: documented CLI flags must exist ────────────────────────────────
+//
+// A documented `soat <cmd> --flag` that names no real parameter fails the moment
+// a reader copy-pastes it. Nothing else catches this: the tutorials runner
+// executes only `docs/tutorials/`, so `docs/modules/` CLI tabs are never run,
+// and the regex checks above are about vocabulary, not existence. That is how
+// `--content_base64` — a field no endpoint has ever accepted — survived in all
+// three tabs of one page.
+//
+// The allowlist is derived from the two in-repo sources of truth, so this stays
+// a static check with no server and no dependencies:
+//   - packages/cli/src/generated/routes.ts   (generated from the OpenAPI specs)
+//   - packages/cli/src/cli-wrappers/wrappers (flags a wrapper adds by hand)
+
+const CLI_DIR = join(ROOT, 'packages/cli');
+
+/** Canonicalize a flag/param name so snake, kebab, and camel spellings match —
+ * the CLI's own parser is lenient the same way (see `toCanonical` in index.ts). */
+const canonical = (s) => {
+  return s.replace(/[-_]([a-z0-9])/g, (_, c) => {
+    return c.toUpperCase();
+  });
+};
+
+/** Slice `key: [ ... ]` out of a line, counting brackets so a nested array
+ * inside a flag description does not end the match early. */
+const sliceArray = (line, key) => {
+  const start = line.indexOf(`${key}: [`);
+  if (start === -1) return '';
+  let depth = 0;
+  const from = line.indexOf('[', start);
+  for (let i = from; i < line.length; i++) {
+    if (line[i] === '[') depth++;
+    else if (line[i] === ']') {
+      depth--;
+      if (depth === 0) return line.slice(from, i + 1);
+    }
+  }
+  return '';
+};
+
+/** command name -> Set of canonical flag names it accepts. */
+const buildCommandFlags = () => {
+  const manifestPath = join(CLI_DIR, 'src/generated/routes.ts');
+
+  // The manifest is generated from the OpenAPI specs and gitignored, so it is
+  // absent in a fresh clone. `pnpm run docs-lint` generates it first; a bare
+  // `node scripts/docs-lint.mjs` may not have. Fail loudly with the fix rather
+  // than an ENOENT stack trace — and never skip the check, since a check that
+  // quietly no-ops is the exact failure this one exists to catch.
+  if (!existsSync(manifestPath)) {
+    console.error(
+      'docs-lint: the CLI route manifest is missing, so documented flags cannot be checked.\n' +
+        `  expected: ${manifestPath.slice(ROOT.length)}\n` +
+        '  generate it with: pnpm --filter @soat/cli generate\n' +
+        '  (or run the whole check via: pnpm run docs-lint)'
+    );
+    process.exit(1);
+  }
+
+  const manifest = readFileSync(manifestPath, 'utf-8');
+  const commands = new Map();
+
+  // The generator emits exactly one line per route, which is what makes this
+  // line-oriented parse reliable.
+  for (const line of manifest.split('\n')) {
+    const m = line.match(/^\s*'([a-z0-9-]+)':\s*\{/);
+    if (!m) continue;
+    const allowed = new Set();
+    for (const f of sliceArray(line, 'flags').matchAll(/"name":"([^"]+)"/g)) {
+      allowed.add(canonical(f[1]));
+    }
+    for (const key of ['queryParams', 'pathParams']) {
+      for (const p of sliceArray(line, key).matchAll(/"([^"]+)"/g)) {
+        allowed.add(canonical(p[1]));
+      }
+    }
+    // Accepted on every command that takes a path param, plus the global flags.
+    allowed.add('id');
+    commands.set(m[1], allowed);
+  }
+
+  // Wrapper-added flags: real, but absent from the generated manifest.
+  const wrappersDir = join(CLI_DIR, 'src/cli-wrappers/wrappers');
+  for (const entry of readdirSync(wrappersDir)) {
+    const src = readFileSync(join(wrappersDir, entry), 'utf-8');
+    const extra = new Set();
+    // `const TEMPLATE_FILE_FLAG = 'template-file';` — includes aliases that
+    // never appear in `helpFlags`.
+    for (const f of src.matchAll(/_FLAG\s*=\s*'([^']+)'/g)) {
+      extra.add(canonical(f[1]));
+    }
+    for (const f of src.matchAll(/name:\s*'([^']+)'/g)) {
+      extra.add(canonical(f[1]));
+    }
+    const commandList = src.match(/COMMANDS\s*=\s*\[([\s\S]*?)\]/);
+    if (!commandList) continue;
+    for (const c of commandList[1].matchAll(/'([a-z0-9-]+)'/g)) {
+      const set = commands.get(c[1]);
+      if (set) for (const f of extra) set.add(f);
+    }
+  }
+
+  return commands;
+};
+
+// Flags Commander accepts before or after any command.
+const GLOBAL_FLAGS = new Set(
+  ['help', 'profile', 'base-url', 'token', 'output', 'json'].map(canonical)
+);
+
+// CLI-native commands with no REST route behind them.
+const NATIVE_COMMANDS = new Set([
+  'configure',
+  'list-commands',
+  'mcp',
+  'login',
+  'logout',
+  'version',
+  'listen',
+]);
+
+/**
+ * Join shell line-continuations so a multi-line invocation is checked as one
+ * command, and only start one at a command position (line start, `$(`, `|`,
+ * `&&`) so prose mentioning `soat` is not parsed as an invocation.
+ */
+const collectInvocations = (lines) => {
+  const out = [];
+  let buf = null;
+  let startLine = 0;
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trimEnd();
+    if (buf !== null) {
+      buf += ` ${trimmed.replace(/\\$/, '')}`;
+      if (!trimmed.endsWith('\\')) {
+        out.push({ text: buf, line: startLine });
+        buf = null;
+      }
+      return;
+    }
+    if (!/(^|\$\(|\|\s*|&&\s*)\s*soat\s+[a-z0-9-]+/.test(trimmed)) return;
+    startLine = idx + 1;
+    if (trimmed.endsWith('\\')) buf = trimmed.replace(/\\$/, '');
+    else out.push({ text: trimmed, line: startLine });
+  });
+
+  return out;
+};
+
+const checkCliFlags = (commandFlags) => {
+  const found = [];
+
+  for (const file of files) {
+    const rel = file.slice(ROOT.length);
+    const lines = readFileSync(file, 'utf-8').split('\n');
+
+    for (const { text, line } of collectInvocations(lines)) {
+      // Skip any global flag sitting before the command name.
+      const m = text.match(/soat\s+(?:--[a-zA-Z0-9_-]+(?:[ =]\S+)?\s+)*([a-z][a-z0-9-]*)/);
+      if (!m) continue;
+      const command = m[1];
+      if (NATIVE_COMMANDS.has(command)) continue;
+
+      const allowed = commandFlags.get(command);
+      if (!allowed) {
+        found.push(`${rel}:${line}  [unknown CLI command]  soat ${command}`);
+        continue;
+      }
+
+      // Stop at a pipe: `| jq -r --arg t ...` belongs to jq, not to soat.
+      const ownArgs = text.split('|')[0];
+      for (const f of ownArgs.matchAll(/\s--([a-zA-Z0-9_-]+)/g)) {
+        const flag = canonical(f[1]);
+        if (GLOBAL_FLAGS.has(flag) || allowed.has(flag)) continue;
+        found.push(
+          `${rel}:${line}  [unknown CLI flag]  soat ${command} --${f[1]}`
+        );
+      }
+    }
+  }
+
+  return found;
+};
+
+/**
+ * Drop generated pages, keeping only authored docs.
+ *
+ * `docs/api/`, `docs/cli/commands/`, `docs/sdk/services/`, `docs/mcp/tools/` and
+ * `docs/formations-types/` are written by generators and gitignored, so whether
+ * they exist depends on whether anyone has run a generator or a website build in
+ * this checkout. Linting them would make the result differ between a fresh CI
+ * clone and a local tree — and would report lines nobody wrote (a `{paramName}`
+ * example inside a tool description, or `upload-file --file` emitted from the
+ * spec's multipart route).
+ *
+ * The ignore rules are asked directly rather than restated here: a hand-kept
+ * list of generated directories is exactly the kind of skip list that drifts.
+ */
+const dropGenerated = (paths) => {
+  if (paths.length === 0) return paths;
+
+  let ignored = '';
+  try {
+    ignored = execFileSync('git', ['check-ignore', '--stdin'], {
+      cwd: ROOT,
+      input: paths.join('\n'),
+      encoding: 'utf-8',
+    });
+  } catch (error) {
+    // `git check-ignore` exits 1 when nothing matched, which is not a failure.
+    // Any other status (no git, not a repo) leaves every path in place: linting
+    // a generated page is noisy, silently linting nothing is worse.
+    if (error.status !== 1) return paths;
+    ignored = error.stdout ?? '';
+  }
+
+  const skip = new Set(
+    ignored
+      .split('\n')
+      .map((line) => {
+        return line.trim();
+      })
+      .filter(Boolean)
+  );
+
+  return paths.filter((p) => {
+    return !skip.has(p) && !skip.has(p.slice(ROOT.length));
+  });
+};
+
+const files = dropGenerated(collectDocs(DOCS_DIR));
 const violations = [];
 
 for (const file of files) {
@@ -88,6 +321,8 @@ for (const file of files) {
     }
   });
 }
+
+violations.push(...checkCliFlags(buildCommandFlags()));
 
 if (violations.length > 0) {
   console.error(`docs-lint: ${violations.length} violation(s) found:\n`);

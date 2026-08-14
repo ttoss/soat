@@ -20,35 +20,8 @@ import {
 } from './cli-wrappers/index.js';
 import { resolveClient, writeProfile } from './config.js';
 import { routes } from './generated/routes.js';
-
-/**
- * Normalize kebab-case, snake_case, or camelCase to camelCase for param matching.
- * e.g. agent-id → agentId, actor_id → actorId, agentId → agentId
- */
-const toCanonical = (s: string) => {
-  return s.replace(/[-_]([a-z0-9])/g, (_, c: string) => {
-    return c.toUpperCase();
-  });
-};
-
-/** Convert kebab-case to snake_case for body/query keys (e.g. project-id → project_id). */
-const kebabToSnake = (s: string) => {
-  return s.replace(/-/g, '_');
-};
-
-/**
- * Convert snake_case or camelCase to kebab-case for flag *display* in --help
- * (e.g. project_id → project-id). Kebab-case is the documented canonical CLI
- * flag convention (see the generated docs pages and tutorials); the parser is
- * lenient and accepts snake/kebab/camel alike via `toCanonical`, so this only
- * affects how flags are printed (#610).
- */
-const toKebab = (s: string) => {
-  return s
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/_/g, '-')
-    .toLowerCase();
-};
+import { kebabToSnake, toCanonical, toKebab } from './naming.js';
+import { findUnknownFlags } from './validateFlags.js';
 
 /**
  * Renders a command's payload for stdout.
@@ -353,6 +326,18 @@ program
         return [toCanonical(f.name), f.type];
       })
     );
+
+    // A flag naming no parameter of this command is an error, not something to
+    // forward — see `findUnknownFlags` for why the server cannot catch it.
+    const unknownFlagErrors = findUnknownFlags({
+      commandName,
+      route,
+      flagKeys: Object.keys(flags),
+    });
+    if (unknownFlagErrors.length > 0) {
+      for (const line of unknownFlagErrors) console.error(line);
+      process.exit(1);
+    }
 
     // Split flags into path / query / body
     const pathArgs: Record<string, unknown> = {};

@@ -160,7 +160,7 @@ services:
 ```bash
 soat upload-file-base64 \
   --project-id proj_ABC \
-  --content-base64 "iVBORw0KGgo..." \
+  --content "iVBORw0KGgo..." \
   --prefix /assets \
   --filename logo.png
 ```
@@ -175,7 +175,7 @@ const soat = new SoatClient({ baseUrl: 'https://api.example.com', token: 'sk_...
 const { data, error } = await soat.files.uploadFileBase64({
   body: {
     project_id: 'proj_ABC',
-    content_base64: 'iVBORw0KGgo...',
+    content: 'iVBORw0KGgo...',
     prefix: '/assets',
     filename: 'logo.png',
   },
@@ -192,7 +192,7 @@ curl -X POST https://api.example.com/api/v1/files/upload-base64 \
   -H "Content-Type: application/json" \
   -d '{
     "project_id": "proj_ABC",
-    "content_base64": "iVBORw0KGgo...",
+    "content": "iVBORw0KGgo...",
     "prefix": "/assets",
     "filename": "logo.png"
   }'

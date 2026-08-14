@@ -397,7 +397,6 @@ Approving resolves the [item](/docs/modules/approvals#approve-reject-edit-then-a
 soat approve-approval --approval-id "$APPROVAL_ID" | jq '{status, resolved_by}'
 
 soat get-orchestration-run \
-  --orchestration-id "$ORCHESTRATION_ID" \
   --orchestration-run-id "$RUN_ID" | jq '{status, outcome: .state.outcome}'
 ```
 
@@ -463,7 +462,6 @@ soat reject-approval --approval-id "$APPROVAL2_ID" --reason "Exceeds monthly bud
   | jq '{status, resolution_reason}'
 
 soat get-orchestration-run \
-  --orchestration-id "$ORCHESTRATION_ID" \
   --orchestration-run-id "$RUN2_ID" | jq '{status, outcome: .state.outcome}'
 ```
 

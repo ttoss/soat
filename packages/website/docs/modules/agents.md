@@ -596,7 +596,7 @@ curl -X POST https://api.example.com/api/v1/agents \
 ```bash
 soat create-agent-generation --wait true \
   --agent-id agent_01 \
-  --prompt "What is the capital of France?"
+  --messages '[{"role":"user","content":"What is the capital of France?"}]'
 ```
 
 </TabItem>

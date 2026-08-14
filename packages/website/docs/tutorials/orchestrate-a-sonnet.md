@@ -767,7 +767,6 @@ Use `get-orchestration-run` to inspect the accumulated [orchestration](/docs/mod
 
 ```bash
 soat get-orchestration-run \
-  --orchestration-id "$ORCHESTRATION_ID" \
   --orchestration-run-id "$RUN_ID" | jq '{status, state, output}'
 ```
 

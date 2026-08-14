@@ -172,8 +172,10 @@ curl -X POST https://api.example.com/api/v1/chats/chat_01/completions \
 ```bash
 soat create-chat-completion \
   --ai-provider-id aip_abc123 \
-  --system-message "You are a helpful assistant." \
-  --messages '[{"role":"user","content":"Hello!"}]'
+  --messages '[
+    {"role":"system","content":"You are a helpful assistant."},
+    {"role":"user","content":"Hello!"}
+  ]'
 ```
 
 </TabItem>
@@ -183,8 +185,10 @@ soat create-chat-completion \
 const { data, error } = await soat.chats.createChatCompletion({
   body: {
     ai_provider_id: 'aip_abc123',
-    system_message: 'You are a helpful assistant.',
-    messages: [{ role: 'user', content: 'Hello!' }],
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'Hello!' },
+    ],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -199,8 +203,10 @@ curl -X POST https://api.example.com/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "ai_provider_id": "aip_abc123",
-    "system_message": "You are a helpful assistant.",
-    "messages": [{ "role": "user", "content": "Hello!" }]
+    "messages": [
+      { "role": "system", "content": "You are a helpful assistant." },
+      { "role": "user", "content": "Hello!" }
+    ]
   }'
 ```
 
