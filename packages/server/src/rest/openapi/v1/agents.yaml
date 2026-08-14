@@ -955,7 +955,7 @@ components:
           nullable: true
           items:
             type: string
-          description: Subset of toolIds active per step
+          description: Subset of the bound tools that are active
         guardrail_ids:
           x-soat-ref: guardrails
           type: array

@@ -182,12 +182,6 @@ export const getMcpTypeLabel = (args: {
   return resolved.nullable ? `${label} | null` : label;
 };
 
-export const camelize = (name: string): string => {
-  return name.replace(/[_-]([a-z])/g, (_, letter) => {
-    return letter.toUpperCase();
-  });
-};
-
 /**
  * MCP tool name: naive camelCase→kebab-case (no digit boundary split), matching
  * `operationIdToToolName` in the server. e.g. `downloadFileBase64` →
@@ -217,7 +211,6 @@ export const restPageSlug = (operationId: string): string => {
 
 export interface OperationParam {
   name: string;
-  camelName: string;
   in: 'path' | 'query';
   required: boolean;
   type: string;
@@ -236,7 +229,6 @@ export const getOperationParams = (args: {
     .map((p) => {
       return {
         name: p.name,
-        camelName: camelize(p.name),
         in: p.in as 'path' | 'query',
         required: p.in === 'path' ? true : Boolean(p.required),
         type: getMcpTypeLabel({ schema: p.schema, spec }),
@@ -247,7 +239,6 @@ export const getOperationParams = (args: {
 
 export interface BodyProp {
   snakeName: string;
-  camelName: string;
   required: boolean;
   type: string;
   description: string;
@@ -298,7 +289,6 @@ export const getBodyProps = (args: {
       const resolved = resolveSchemaRef({ schema: raw, spec });
       return {
         snakeName: name,
-        camelName: camelize(name),
         required: required.has(name),
         type: getMcpTypeLabel({ schema: raw, spec }),
         description: resolved.description ?? raw.description ?? '',
