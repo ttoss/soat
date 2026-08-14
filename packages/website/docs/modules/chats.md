@@ -52,9 +52,26 @@ Each message in the `messages` array sent to the completions endpoint:
 
 ## Key Concepts
 
-### System Message Override
+### System Instructions
 
-When running `POST /chats/{chat_id}/completions`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `system_message` for that call only — the Chat record is not modified.
+System content never travels as a message. Both completion endpoints send it to the provider as its `instructions` argument, which is the only place the underlying [AI SDK](https://ai-sdk.dev/docs/reference/ai-sdk-core/generate-text) accepts it — `allowSystemInMessages` defaults to `false` there, because a system message inside a caller-supplied array is a prompt-injection vector.
+
+Two spellings reach the same place, and both are accepted on a completion:
+
+| Supplied as | Effect |
+| --- | --- |
+| `system_message` (request field) | Sent as `instructions`. The clearer form. |
+| `role: "system"` entry in `messages` | Lifted out of `messages` and sent as `instructions`. |
+
+**Nothing is discarded when several are supplied.** The `instructions` argument carries an ordered list, so every system message is sent, in order — the `system_message` field first, then any in-array entries in their original positions. There is no precedence rule to remember and no silent truncation.
+
+> Agents are different: an agent's system prompt is its `instructions` field, and a `role: "system"` entry in an agent generation's `messages` is refused with `400 SYSTEM_MESSAGE_NOT_ALLOWED`. See [Agents](./agents.md#instructions).
+
+#### Per-chat override
+
+A Chat stores a `system_message` applied to every completion on it. A single call replaces it by supplying its own system content — the `system_message` field, a `role: "system"` entry, or both. The Chat record is not modified.
+
+The stored prompt applies only when the request carries **no** system content at all. The two are never merged: combining them would produce a prompt neither the chat nor the caller wrote.
 
 ### AI Provider Resolution
 
@@ -172,10 +189,8 @@ curl -X POST https://api.example.com/api/v1/chats/chat_01/completions \
 ```bash
 soat create-chat-completion \
   --ai-provider-id aip_abc123 \
-  --messages '[
-    {"role":"system","content":"You are a helpful assistant."},
-    {"role":"user","content":"Hello!"}
-  ]'
+  --system-message "You are a helpful assistant." \
+  --messages '[{"role":"user","content":"Hello!"}]'
 ```
 
 </TabItem>
@@ -185,10 +200,8 @@ soat create-chat-completion \
 const { data, error } = await soat.chats.createChatCompletion({
   body: {
     ai_provider_id: 'aip_abc123',
-    messages: [
-      { role: 'system', content: 'You are a helpful assistant.' },
-      { role: 'user', content: 'Hello!' },
-    ],
+    system_message: 'You are a helpful assistant.',
+    messages: [{ role: 'user', content: 'Hello!' }],
   },
 });
 if (error) throw new Error(JSON.stringify(error));
@@ -203,10 +216,8 @@ curl -X POST https://api.example.com/api/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "ai_provider_id": "aip_abc123",
-    "messages": [
-      { "role": "system", "content": "You are a helpful assistant." },
-      { "role": "user", "content": "Hello!" }
-    ]
+    "system_message": "You are a helpful assistant.",
+    "messages": [{ "role": "user", "content": "Hello!" }]
   }'
 ```
 

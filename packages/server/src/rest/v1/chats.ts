@@ -165,6 +165,7 @@ const handleStreamingCompletion = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
+  systemMessage?: string;
 }): Promise<void> => {
   args.ctx.respond = false;
   args.ctx.res.writeHead(200, {
@@ -178,6 +179,7 @@ const handleStreamingCompletion = async (args: {
       chatId: args.chatId,
       messages: args.messages,
       model: args.model,
+      systemMessage: args.systemMessage,
       authUser: args.ctx.authUser!,
     });
 
@@ -201,10 +203,16 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
   requireAuth(ctx);
   const { chat_id: chatId } = ctx.params;
 
-  const { messages, model, stream } = ctx.request.body as {
+  const {
+    messages,
+    model,
+    stream,
+    system_message: systemMessage,
+  } = ctx.request.body as {
     messages?: unknown;
     model?: string;
     stream?: boolean;
+    system_message?: string;
   };
 
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -246,6 +254,7 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
       chatId,
       messages: chatMessages,
       model,
+      systemMessage,
     });
     return;
   }
@@ -254,6 +263,7 @@ chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
     chatId,
     messages: chatMessages,
     model,
+    systemMessage,
     authUser: ctx.authUser!,
   });
 
@@ -288,6 +298,7 @@ const handleStatelessStreamingCompletion = async (args: {
   aiProviderId: string;
   messages: ChatMessage[];
   model?: string;
+  systemMessage?: string;
 }): Promise<void> => {
   args.ctx.respond = false;
   args.ctx.res.writeHead(200, {
@@ -300,6 +311,7 @@ const handleStatelessStreamingCompletion = async (args: {
     const textStream = await streamChatCompletion({
       aiProviderId: args.aiProviderId,
       model: args.model,
+      systemMessage: args.systemMessage,
       messages: args.messages,
     });
 
@@ -326,11 +338,13 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     model,
     messages,
     stream,
+    system_message: systemMessage,
   } = ctx.request.body as {
     ai_provider_id?: string;
     model?: string;
     messages?: unknown;
     stream?: boolean;
+    system_message?: string;
   };
 
   const chatMessages = validateMessages(messages);
@@ -351,6 +365,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
       aiProviderId,
       messages: chatMessages,
       model,
+      systemMessage,
     });
     return;
   }
@@ -359,6 +374,7 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
     const result = await createChatCompletion({
       aiProviderId,
       model,
+      systemMessage,
       messages: chatMessages,
     });
 

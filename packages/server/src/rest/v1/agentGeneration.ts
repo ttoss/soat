@@ -20,6 +20,7 @@ import {
   type ExtractionMessage,
   fireMemoryExtraction,
 } from 'src/lib/memoryExtraction';
+import { hasSystemMessage } from 'src/lib/modelMessages';
 
 import { requireAuth, resolveReadProjectIds } from './helpers';
 
@@ -121,6 +122,33 @@ const validateGenerateBody = (body: {
   return null;
 };
 
+/**
+ * An agent's system prompt is its `instructions` field, so a `role: "system"`
+ * entry in a generation request is refused rather than accommodated.
+ *
+ * This is deliberately at the REST boundary: `messages` here came from the
+ * request, whereas internal callers legitimately build system content of their
+ * own — a session generation reaches the same agent path through
+ * `conversationGeneration`, which prepends the actor persona as a system
+ * message. A guard further down would reject those flows too.
+ *
+ * It used to be resolved by position rather than by rule: `instructions` was
+ * taken from the *first* system message of the combined history, so a caller's
+ * system message won on an agent whose `instructions` was empty and was silently
+ * dropped on one where it was set. Refusing it mirrors the AI SDK, which defaults
+ * `allowSystemInMessages` to false because a system message inside a
+ * caller-supplied array is a prompt-injection vector.
+ */
+const assertNoSystemMessage = (messages: unknown): void => {
+  if (!Array.isArray(messages)) return;
+  if (!hasSystemMessage(messages)) return;
+
+  throw new DomainError(
+    'SYSTEM_MESSAGE_NOT_ALLOWED',
+    "A system message is not accepted in `messages`. An agent's system prompt is its `instructions` field \u2014 set it with `update-agent --instructions`, or create a separate agent."
+  );
+};
+
 export const agentGenerationRouter = new Router<Context>();
 
 type GenerateRequestBody = {
@@ -206,6 +234,7 @@ agentGenerationRouter.post(
     if (bodyError) {
       throw new DomainError('VALIDATION_FAILED', bodyError);
     }
+    assertNoSystemMessage(body.messages);
 
     const generationArgs = buildGenerationArgs({ ctx, body, projectIds });
 

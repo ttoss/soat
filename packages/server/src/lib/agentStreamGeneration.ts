@@ -19,7 +19,10 @@ import {
   resolveAgentStepRuleToolIdToName,
 } from './agentStepRules';
 import { updateGenerationRecord } from './generations';
-import { findSystemInstructions, withoutSystemMessages } from './modelMessages';
+import {
+  collectSystemInstructions,
+  withoutSystemMessages,
+} from './modelMessages';
 import { routedMaxRetries } from './modelRouteExecutor';
 import { saveRoutingMetadata } from './modelRouteMetadata';
 import { isPlainObject } from './plainObject';
@@ -149,7 +152,7 @@ export const runStreamGeneration = async (args: {
   parentTraceId?: string | null;
   rootTraceId?: string | null;
 }): Promise<ReadableStream> => {
-  const system = findSystemInstructions(args.allMessages);
+  const system = collectSystemInstructions(args.allMessages);
   const nonSystemMessages = withoutSystemMessages(args.allMessages);
   const prepareStep = buildPrepareStep({
     stepRules: args.typedAgent.stepRules,

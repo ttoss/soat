@@ -169,6 +169,11 @@ export const ERROR_CODES = {
     httpStatus: 400,
     description: 'The request body failed validation.',
   },
+  SYSTEM_MESSAGE_NOT_ALLOWED: {
+    httpStatus: 400,
+    description:
+      "A system message was supplied in `messages` on a surface that owns its own system prompt. An agent's system prompt is its `instructions` field; accepting one from the request would let a caller replace it. Mirrors the AI SDK, whose `allowSystemInMessages` defaults to false for the same reason.",
+  },
   TOOL_CALL_NOT_SUPPORTED: {
     httpStatus: 422,
     description:

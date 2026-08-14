@@ -15,6 +15,11 @@ import {
 import { resolveMessageContent } from './messageContent';
 import type { ResourceIncludes } from './modelIncludes';
 import {
+  collectSystemInstructions,
+  type Instructions,
+  withoutSystemMessages,
+} from './modelMessages';
+import {
   assertModelBindingResolvable,
   resolveConsumerModelRoute,
   routedMaxRetries,
@@ -211,9 +216,32 @@ const resolveMessages = async (args: {
   return resolved;
 };
 
+/**
+ * Every piece of system content a completion request carries, as the AI SDK's
+ * `instructions` value.
+ *
+ * Two spellings reach here and both are legitimate on a completion — the caller
+ * is the operator, not an end user. The `system_message` field comes first
+ * because it reads as the header, then any `role: "system"` entries in
+ * `messages`, in their original order. Nothing is dropped: `Instructions`
+ * accepts an ordered array, so more than one needs no merge and no winner.
+ */
+const requestInstructions = (args: {
+  systemMessage?: string;
+  messages: ChatMessage[];
+}): Instructions | undefined => {
+  return collectSystemInstructions([
+    ...(args.systemMessage
+      ? [{ role: 'system', content: args.systemMessage }]
+      : []),
+    ...args.messages,
+  ]);
+};
+
 export const createChatCompletion = async (args: {
   aiProviderId: string;
   model?: string;
+  systemMessage?: string;
   messages: ChatMessage[];
 }) => {
   const resolved = await resolveChatModel({
@@ -221,16 +249,15 @@ export const createChatCompletion = async (args: {
     model: args.model,
   });
 
-  const system = args.messages.find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = args.messages.filter((m) => {
-    return m.role !== 'system';
+  const instructions = requestInstructions({
+    systemMessage: args.systemMessage,
+    messages: args.messages,
   });
+  const nonSystemMessages = withoutSystemMessages(args.messages);
 
   const result = await generateText({
     model: resolved.model,
-    instructions: system,
+    instructions,
     messages: nonSystemMessages as ModelMessage[],
   });
 
@@ -247,6 +274,7 @@ export const createChatCompletion = async (args: {
 export const streamChatCompletion = async (args: {
   aiProviderId: string;
   model?: string;
+  systemMessage?: string;
   messages: ChatMessage[];
 }) => {
   const resolved = await resolveChatModel({
@@ -254,16 +282,15 @@ export const streamChatCompletion = async (args: {
     model: args.model,
   });
 
-  const system = args.messages.find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = args.messages.filter((m) => {
-    return m.role !== 'system';
+  const instructions = requestInstructions({
+    systemMessage: args.systemMessage,
+    messages: args.messages,
   });
+  const nonSystemMessages = withoutSystemMessages(args.messages);
 
   const result = streamText({
     model: resolved.model,
-    instructions: system,
+    instructions,
     messages: nonSystemMessages as ModelMessage[],
     // Token counts only arrive once the provider closes the stream, so a
     // streamed completion meters at the end rather than up front. A stream the
@@ -315,33 +342,35 @@ const resolveChatScopedModel = async (args: {
   });
 };
 
-const buildChatFinalMessages = (
-  resolvedMessages: ChatMessage[],
-  systemMessage: string | null
-): ChatMessage[] => {
-  const userAssistantMessages = resolvedMessages.filter((m) => {
-    return m.role !== 'system';
+/**
+ * The `instructions` a chat-scoped completion runs with.
+ *
+ * A chat carries a stored `system_message` for every completion on it, and a
+ * single call may replace it — the documented "overrides the chat's stored system
+ * message for this call only". So the request wins *as a whole* when it supplies
+ * any system content (the `system_message` field, a `role: "system"` entry, or
+ * both, all kept in order); the stored prompt applies only when the request
+ * supplies none. Mixing the two would silently produce a prompt neither the chat
+ * nor the caller wrote.
+ */
+const chatScopedInstructions = (args: {
+  systemMessage?: string;
+  resolvedMessages: ChatMessage[];
+  storedSystemMessage: string | null;
+}): Instructions | undefined => {
+  const fromRequest = requestInstructions({
+    systemMessage: args.systemMessage,
+    messages: args.resolvedMessages,
   });
 
-  return systemMessage
-    ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
-    : userAssistantMessages;
-};
-
-const getChatSystemMessage = (
-  resolvedMessages: ChatMessage[],
-  defaultSystemMessage: string | null
-): string | null => {
-  const systemFromRequest = resolvedMessages.find((m) => {
-    return m.role === 'system';
-  });
-  return systemFromRequest?.content ?? defaultSystemMessage;
+  return fromRequest ?? args.storedSystemMessage ?? undefined;
 };
 
 export const createChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
+  systemMessage?: string;
   authUser: AuthUser;
 }): Promise<{ model: string; content: string; finishReason: string }> => {
   const typedChat = await chats.getByPublicId({
@@ -353,11 +382,11 @@ export const createChatCompletionForChat = async (args: {
     messages: args.messages,
     authUser: args.authUser,
   });
-  const systemMessage = getChatSystemMessage(
+  const instructions = chatScopedInstructions({
+    systemMessage: args.systemMessage,
     resolvedMessages,
-    typedChat.systemMessage
-  );
-  const finalMessages = buildChatFinalMessages(resolvedMessages, systemMessage);
+    storedSystemMessage: typedChat.systemMessage,
+  });
 
   const resolvedModel = await resolveChatScopedModel({
     typedChat,
@@ -366,10 +395,8 @@ export const createChatCompletionForChat = async (args: {
 
   const result = await generateText({
     model: resolvedModel.model,
-    instructions: systemMessage ?? undefined,
-    messages: finalMessages.filter((m) => {
-      return m.role !== 'system';
-    }) as ModelMessage[],
+    instructions,
+    messages: withoutSystemMessages(resolvedMessages) as ModelMessage[],
     // A routed model owns every attempt itself (see `routedMaxRetries`).
     maxRetries: routedMaxRetries(resolvedModel.model),
   });
@@ -388,6 +415,7 @@ export const streamChatCompletionForChat = async (args: {
   chatId: string;
   messages: ChatMessageInput[];
   model?: string;
+  systemMessage?: string;
   authUser: AuthUser;
 }) => {
   const typedChat = await chats.getByPublicId({
@@ -400,13 +428,10 @@ export const streamChatCompletionForChat = async (args: {
     authUser: args.authUser,
   });
 
-  const systemFromRequest = resolvedMessages.find((m) => {
-    return m.role === 'system';
-  });
-  const systemMessage = systemFromRequest?.content ?? typedChat.systemMessage;
-
-  const userAssistantMessages = resolvedMessages.filter((m) => {
-    return m.role !== 'system';
+  const instructions = chatScopedInstructions({
+    systemMessage: args.systemMessage,
+    resolvedMessages,
+    storedSystemMessage: typedChat.systemMessage,
   });
 
   const resolvedModel = await resolveChatScopedModel({
@@ -416,8 +441,8 @@ export const streamChatCompletionForChat = async (args: {
 
   const result = streamText({
     model: resolvedModel.model,
-    instructions: systemMessage ?? undefined,
-    messages: userAssistantMessages as ModelMessage[],
+    instructions,
+    messages: withoutSystemMessages(resolvedMessages) as ModelMessage[],
     maxRetries: routedMaxRetries(resolvedModel.model),
     // See `streamChatCompletion`: usage is only known at stream end.
     onEnd: ({ usage }) => {

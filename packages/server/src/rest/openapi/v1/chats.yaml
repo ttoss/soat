@@ -211,9 +211,12 @@ paths:
       summary: Create a chat completion for a stored chat
       description: >
         Runs a completion using the AI provider and settings stored in the chat.
-        Pass `stream: true` for SSE streaming. A system message in `messages`
-        overrides the chat's stored system message for this call only.
-        Messages may use `documentId` instead of `content`.
+        Pass `stream: true` for SSE streaming. System content supplied on the
+        request — the `system_message` field, a `role: "system"` entry in
+        `messages`, or both — replaces the chat's stored system message for this
+        call only; the stored value applies when the request carries none. All of
+        it is sent as the provider's `instructions` argument, never as a message.
+        Messages may use `document_id` instead of `content`.
       operationId: createChatCompletionForChat
       parameters:
         - name: chat_id
@@ -465,6 +468,17 @@ components:
           type: string
           description: Override the chat's default model for this call
           example: gpt-4o-mini
+        system_message:
+          type: string
+          description: >
+            System instructions for this call only, replacing the chat's stored
+            `system_message`. Sent as the provider's `instructions` argument. A
+            `role: "system"` entry in `messages` does the same and both are kept,
+            in order — this field first. The chat's stored value applies only
+            when the request carries no system content at all; the two are never
+            merged, which would produce a prompt neither the chat nor the caller
+            wrote.
+          example: Just this once, answer in one sentence.
         stream:
           type: boolean
           default: false
@@ -506,6 +520,16 @@ components:
             Model identifier. Overrides the provider's `default_model` when
             specified.
           example: gpt-4o
+        system_message:
+          type: string
+          description: >
+            System instructions for this call. Sent to the provider as its
+            `instructions` argument rather than as a message, which is the only
+            place the AI SDK accepts system content (`allowSystemInMessages`
+            defaults to false). A `role: "system"` entry in `messages` is
+            accepted too and both are kept, in order — this field first. Nothing
+            is discarded when several are supplied.
+          example: You are a helpful assistant.
         messages:
           type: array
           minItems: 1
