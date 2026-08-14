@@ -52,11 +52,15 @@ const deliverWebhook = async (args: {
   webhook: InstanceType<(typeof db)['Webhook']>;
   event: SoatEvent;
 }) => {
+  // The envelope is a wire payload, so it is snake_case like every other SOAT
+  // surface (`.claude/rules/case-convention.md`). `data` stays an opaque value:
+  // it is already snake_case because it comes from a lib mapper, and nothing
+  // here reads or rewrites a key of it.
   const payload = JSON.stringify({
     event: args.event.type,
-    projectId: args.event.projectPublicId,
-    resourceType: args.event.resourceType,
-    resourceId: args.event.resourceId,
+    project_id: args.event.projectPublicId,
+    resource_type: args.event.resourceType,
+    resource_id: args.event.resourceId,
     data: args.event.data,
     timestamp: args.event.timestamp,
   });
