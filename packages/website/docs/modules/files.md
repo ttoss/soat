@@ -36,7 +36,7 @@ Files are associated with a project and persisted through the configured storage
 | `created_at`   | string                   | ISO 8601 creation timestamp                                                                                         |
 | `updated_at`   | string                   | ISO 8601 last-updated timestamp                                                                                     |
 
-You address a file with two write fields, mirroring an S3 object: a **`prefix`** (the directory, like an S3 prefix — defaults to `/`) and a **`filename`** (the leaf name, like the tail of an S3 key). The server combines them into the read-only **`path`** = `prefix` + `/` + `filename` — the file's full key (akin to an S3 object key). `path` is normalized at write time, and `project_id + path` is unique within a project; it is the file's identity and the target of path-based policy SRNs. To **move** a file, change its `prefix`; to **rename** it, change its `filename` — either rebuilds `path`. Creating or uploading a file at a `prefix` + `filename` that already resolves to an existing `path` in the project returns `409 NAME_CONFLICT`. Storage backend selection (`local`/`s3`/`gcs`) and the physical on-disk location are system-managed and not exposed through the API — see [Configuration](#configuration).
+`path` is normalized at write time and unique per project; it is the file's identity and the target of path-based policy SRNs. To **move** a file, change its `prefix`; to **rename** it, change its `filename` — either rebuilds `path`. Writing to a `prefix` + `filename` that resolves to an existing `path` in the project returns `409 NAME_CONFLICT`.
 
 ## Key Concepts
 
@@ -97,24 +97,16 @@ The token is invalidated after a single successful upload. Subsequent uploads re
 
 ### Downloading from a tool
 
-`GET /api/v1/files/{file_id}/download` streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response.
-
-The same payload consideration as uploads applies in reverse: a large file returned as a base64 tool-call result is subject to the client's payload limit, so for large files an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
+`GET /api/v1/files/{file_id}/download` streams the raw bytes and is a REST/SDK/CLI operation only — raw bytes have no JSON form, so it is not offered as an MCP or `soat` tool action. Use `download-file-base64`, which returns the same content as a base64 string in a normal JSON response. Large files are subject to the client's tool-call payload limit, so an agent should fetch the download URL out-of-band with whatever HTTP capability its runtime provides.
 
 #### Large files via MCP
 
-This flow is what makes large uploads possible through MCP. The `upload-file-base64` tool requires the full base64 content as a single tool-call parameter, and payloads larger than ~100 KB are truncated before they reach the agent's tool call. With upload tokens, step 1 (`create-presigned-url`) is a small request with a small response that always fits.
-
-Both steps are exposed as MCP tools (`create-presigned-url` and `upload-file-with-token`). However, the MCP payload limit still applies to step 2 when the bytes travel as a tool-call argument — so for large files the agent should perform step 2 **out-of-band** instead, using whatever non-MCP HTTP capability its runtime provides — **a shell (e.g. `curl`), a `fetch`/HTTP tool, or a direct SDK call**. The bytes then travel over plain HTTP and never become a tool-call argument, so the MCP payload limit never applies.
-
-For large files, use `multipart/form-data` and stream the file straight from disk so it is never held as one big in-memory string — do **not** use the base64 `content` field, which would just reintroduce a large payload:
+MCP tool-call payloads larger than ~100 KB are truncated, so `upload-file-base64` cannot carry a large file. Use the token flow instead: step 1 (`create-presigned-url`, exposed as an MCP tool) is always small; perform step 2 **out-of-band** — via a shell (`curl`), a `fetch`/HTTP tool, or a direct SDK call — using `multipart/form-data` streamed from disk, not the base64 `content` field:
 
 ```bash
 # Step 1 returned upload_url = /api/v1/files/upload/upt_xxx
 curl -F "file=@/path/to/large-report.pdf" "$BASE_URL/api/v1/files/upload/upt_xxx"
 ```
-
-> An agent whose runtime has **no** out-of-band HTTP path (a pure LLM with only MCP tools and no shell, fetch, or SDK) cannot perform step 2 — but such an agent has no way to move a large file through any mechanism regardless. The token flow assumes the agent can make an ordinary HTTP request outside of MCP.
 
 ## Configuration
 

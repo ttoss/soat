@@ -91,19 +91,7 @@ A generation starts as `in_progress`. It transitions to:
 
 ### Error Recording
 
-When a generation fails, the failure is persisted on both the generation record and its trace:
-
-```json
-{
-  "id": "gen_abc123",
-  "status": "failed",
-  "stop_reason": "error",
-  "error": {
-    "code": "AI_PROVIDER_ERROR",
-    "message": "Provider returned 402: insufficient credits"
-  }
-}
-```
+When a generation fails, the failure is persisted on both the generation record and its trace: `status` becomes `failed`, `stop_reason` is `error`, and `error` carries `{ code, message }`.
 
 The `error` object always contains `message`. `code` is set for mapped errors — most notably `AI_PROVIDER_ERROR`, which is used when the upstream AI provider returns an error (e.g. exhausted credits, rate limit) or is unreachable.
 
@@ -138,43 +126,13 @@ Callers can write metadata two ways:
 
 Both paths require the `generations:UpdateGeneration` action for PATCH and `agents:CreateAgentGeneration` for the create path.
 
-**No key is reserved.** Every piece of state the server owns is a field of its own on the generation, so nothing written into `metadata` can reach it. A caller key that happens to be spelled `action_id` is just an annotation; it does not affect the `action_id` field.
-
-| Server-owned field      | Written by                                                        |
-| ----------------------- | ----------------------------------------------------------------- |
-| `action_id`             | The logical action label supplied on the generate request          |
-| `trigger_id`            | Set when a trigger initiated the generation                        |
-| `orchestration_run_id`  | Orchestration run attribution (usage rollup)                       |
-| `node_id`               | Orchestration node attribution (usage rollup)                      |
-| `agent_version`         | The agent config version that served the generation                |
-| `routing`               | What the [model route](./model-routes.md) did for this generation  |
-| `extraction`            | The memory-extraction summary (see below)                          |
+**No key is reserved.** Every piece of state the server owns (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`, `extraction`) is a field of its own on the generation, so nothing written into `metadata` can reach it. A caller key that happens to be spelled `action_id` is just an annotation; it does not affect the `action_id` field.
 
 Internal recovery state (used to resume a `requires_action` generation after a server restart) is stored in its own column and is never exposed through the API under any name.
 
 #### `extraction` — memory-extraction summary
 
-When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary describing what the auto-extraction pass did with the turn:
-
-```json
-{
-  "extraction": {
-    "candidates": 3,
-    "created": 2,
-    "updated": 1,
-    "skipped": 0
-  }
-}
-```
-
-| Field        | Description                                             |
-| ------------ | -------------------------------------------------------- |
-| `candidates` | Number of extraction candidates considered from the turn |
-| `created`    | Number of new memory entries created                     |
-| `updated`    | Number of existing memory entries updated                |
-| `skipped`    | Number of candidates skipped (e.g. duplicates)           |
-
-See [Knowledge](./knowledge.md) for how `write_memory_id` and `extraction` are configured on an agent.
+When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction) for how it is configured.
 
 ### Content Purge
 
@@ -275,7 +233,7 @@ curl https://api.example.com/api/v1/generations/gen_abc123 \
 
 ### Attach audit metadata
 
-Merge caller-supplied metadata onto a generation for per-run audit attribution. Reserved server-owned keys are rejected.
+Merge caller-supplied metadata onto a generation for per-run audit attribution.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

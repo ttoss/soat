@@ -69,19 +69,7 @@ To grant a user access to all projects, use a wildcard project segment:
 - **API key callers** scoped to a project see only that project.
 - **Regular users** see only the projects covered by the SRN patterns in their attached policies.
 
-### Authorization Model
-
-Authorization is policy-only. All access decisions are evaluated through the policy engine against the requested action and the resource SRN. See [IAM](./iam.md) for details.
-
-To grant a user access to a single project, attach a [Policy](./policies.md) scoped to that project's SRN. A project-scoped grant is honored by every project endpoint, including `GET /projects/{id}`:
-
-```json
-{
-  "statement": [
-    { "effect": "Allow", "action": ["*"], "resource": ["soat:proj_ABC:*:*"] }
-  ]
-}
-```
+Authorization is policy-only: all access decisions are evaluated through the policy engine against the requested action and resource SRN, and a project-scoped grant is honored by every project endpoint, including `GET /projects/{id}`. See [IAM](./iam.md) for details.
 
 ### Default Model Route
 
@@ -95,23 +83,17 @@ The route must belong to this project. An explicit binding on a consumer always 
 
 ### Deletion
 
-By default, deleting a project that has any dependent resource (agents, AI providers, tools, conversations, chats, formations, memories, actors, webhooks, secrets, sessions, files, traces, generations, orchestrations, [usage](./usage.md) history, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all of those dependent resources along with the project itself, inside a single transaction.
-
-Usage history counts as a dependent for the same reason as every other resource above: `force=true` is the explicit acknowledgment that billing history for the project is being destroyed, not a silent side effect of an unrelated cleanup.
-
-Deleting the project's [files](./files.md) — including trace content and uploaded documents — also removes their stored bytes from the active storage backend, not just their database rows, so a force-deleted project leaves nothing behind in storage.
+Deleting a project that has any dependent resource (agents, AI providers, tools, conversations, files, traces, [usage](./usage.md) history, etc.) returns `409 Conflict` with error code `PROJECT_HAS_DEPENDENTS`. Pass `?force=true` to delete all dependents along with the project in a single transaction — including the billing/usage history, and the stored bytes of the project's [files](./files.md), so a force-deleted project leaves nothing behind in storage.
 
 ### Common Errors
 
 | Status | Body                                            | Cause                                                                                                   | What to do                                                                                             |
 | ------ | ------------------------------------------------ | ----------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `403`  | `{ "error": "Forbidden" }`                       | Caller isn't the `admin` role — creating, renaming, and deleting a project are admin-only               | Authenticate as the admin user, or have an admin perform the operation                                   |
-| `403`  | `{ "error": "Forbidden" }`                       | `GET /projects/{id}` (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `soat:<this-project-id>:*:*`, or use a key scoped to this project — see [Authorization Model](#authorization-model) |
+| `403`  | `{ "error": "Forbidden" }`                       | `GET /projects/{id}` (or a nested resource route) with a policy/API key that doesn't cover this project's SRN — e.g. a project key created for a **different** project | Check the caller's attached policies cover `soat:<this-project-id>:*:*`, or use a key scoped to this project — see [Project Access via Policies](#project-access-via-policies) |
 | `404`  | —                                                | The project ID doesn't exist, or the caller can't see it because no policy grants access to it (existence isn't leaked) | Verify the ID; if it should exist, confirm a policy grants visibility — see [Visibility Rules](#visibility-rules) |
 | `409`  | `{ "error": { "code": "PROJECT_HAS_DEPENDENTS" } }` | Deleting a project that still has dependent resources                                                  | Pass `?force=true`, or delete the dependent resources first — see [Deletion](#deletion)                   |
 | `409`  | `{ "error": { "code": "PROJECT_DEFAULT_ROUTE_INHERITED" } }` | Clearing `default_model_route_id` while consumers that bind nothing inherit it — they would be left with no resolvable model | Bind those consumers explicitly (`meta.sample` names some), or repoint the default to another route, which is always allowed — see [Project default route](./model-routes.md#project-default-route) |
-
-Project-scoped access is entirely policy-driven (there is no membership list), so a `403` on a project route almost always means the caller's current policies don't include an `Allow` statement covering that project's SRN — see [Project Access via Policies](#project-access-via-policies).
 
 ## Examples
 
@@ -180,40 +162,6 @@ if (error) throw new Error(JSON.stringify(error));
 ```bash
 curl https://api.example.com/api/v1/projects/proj_ABC \
   -H "Authorization: Bearer <token>"
-```
-
-</TabItem>
-</Tabs>
-
-### Rename a project
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat update-project --project-id proj_ABC --name "Renamed Project"
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-// SDK
-const { data, error } = await soat.projects.updateProject({
-  path: { project_id: 'proj_ABC' },
-  body: { name: 'Renamed Project' },
-});
-if (error) throw new Error(JSON.stringify(error));
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X PATCH https://api.example.com/api/v1/projects/proj_ABC \
-  -H "Authorization: Bearer <admin-token>" \
-  -H "Content-Type: application/json" \
-  -d '{"name": "Renamed Project"}'
 ```
 
 </TabItem>

@@ -80,15 +80,9 @@ The `bedrock` provider supports two authentication modes, determined by the shap
 { "apiKey": "ABSK..." }
 ```
 
-> **Important:** Store the secret value as a **JSON object** (shown above) — this is the canonical form and the only one that supports IAM credentials. As a convenience, a bare `ABSK…` string (with no JSON wrapper) is also accepted: the server tries to parse the value as JSON first, and if that fails but the value starts with `ABSK` it is treated as `{ "apiKey": "<value>" }`. IAM credentials (`accessKeyId` / `secretAccessKey`) must always use the JSON object form.
+> **Important:** Store the secret value as a **JSON object** (shown above) — the only form that supports IAM credentials. As a convenience, a bare `ABSK…` string is also accepted and treated as `{ "apiKey": "<value>" }`.
 
-If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`.
-
-You can also pass the API key directly in the provider's `config` object as `apiKey` (without linking a secret). This is useful for quick testing but the secret-linked approach is recommended for production.
-
-```json
-{ "apiKey": "ABSK..." }
-```
+If neither field is present the default AWS credential chain (environment variables, instance profile, etc.) is used. The `region` field in the provider's `config` object defaults to `us-east-1`. An `apiKey` in `config` (without a linked secret) also works — useful for quick testing; link a secret in production.
 
 ### Vertex AI authentication
 
@@ -113,16 +107,9 @@ Like `bedrock`, the authentication mode is determined by the shape of the linked
 
 #### Federating an AWS identity (SOAT on ECS or EC2)
 
-ADC also covers the case where SOAT runs on **AWS** and reaches Vertex through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds), so no service-account key is stored. Point `GOOGLE_APPLICATION_CREDENTIALS` at the configuration `gcloud iam workload-identity-pools create-cred-config --aws` writes — it holds no secret material — and SOAT exchanges the task's own AWS identity for a Google access token.
+ADC also covers SOAT running on **AWS** reaching Vertex through [workload identity federation](https://cloud.google.com/iam/docs/workload-identity-federation-with-other-clouds): point `GOOGLE_APPLICATION_CREDENTIALS` at the configuration `gcloud iam workload-identity-pools create-cred-config --aws` writes (it holds no secret material) and SOAT exchanges the task's own AWS identity for a Google access token. SOAT supplies the AWS half from the **AWS default credential chain** rather than the file's `credential_source`, so an ECS task role (delivered on the container credentials endpoint, which `google-auth-library` cannot read) works and is not silently replaced by the EC2 instance role.
 
-SOAT supplies the AWS half of that exchange from the **AWS default credential chain** rather than from the `credential_source` in the file. That matters on ECS: `google-auth-library` reads AWS credentials only from the `AWS_ACCESS_KEY_ID` environment variables or EC2 IMDS, and a task role is delivered on neither — it arrives on the container credentials endpoint named by `AWS_CONTAINER_CREDENTIALS_RELATIVE_URI`. Left to the stock configuration, a task either finds no credentials or, where IMDS is reachable, authenticates as the **EC2 instance role** instead; a pool provider scoped to the task role then rejects the exchange with `unauthorized_client`.
-
-Requirements:
-
-- `AWS_REGION` (or `AWS_DEFAULT_REGION`) must be set on the server process — it signs the `GetCallerIdentity` call that proves the identity. Without it, generations fail with `AI_PROVIDER_MISCONFIGURED`.
-- The pool provider's attribute condition must admit whichever role the credential chain resolves to. On ECS with a task role, that is the task role.
-
-This applies only to the ADC path, and only when the file is an AWS-sourced `external_account` configuration. A linked service-account secret, express mode, a non-AWS external account, and every other ADC source behave exactly as before.
+Requirements: `AWS_REGION` (or `AWS_DEFAULT_REGION`) must be set on the server process — without it, generations fail with `AI_PROVIDER_MISCONFIGURED` — and the pool provider's attribute condition must admit whichever role the credential chain resolves to (on ECS, the task role). This applies only to the ADC path with an AWS-sourced `external_account` configuration; every other mode behaves as before.
 
 The provider's `config` object accepts two fields:
 
@@ -141,11 +128,9 @@ An `apiKey` in `config` is accepted as an express-mode fallback when no secret i
 
 ### Listing the models a provider can run
 
-`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own credentials and configuration, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry.
+`GET /api/v1/ai-providers/{ai_provider_id}/models` asks the provider which models it can run, using that provider record's own credentials and configuration, and returns provider-native ids — the same strings `default_model` and an agent's `model` carry. Which models are reachable is a property of the **credential**, not of the slug (two providers of the same slug can return different lists), which is why the listing hangs off a provider.
 
-Which models are reachable is a property of the **credential**, not of the provider type: a `vertex` provider sees only the publisher models its Google Cloud project and location serve, and a `bedrock` provider only the foundation models enabled in its region. Two providers of the same slug in the same project can legitimately return different lists, which is why the listing hangs off a provider rather than off a slug. Reading it is how a caller avoids pinning a model that fails at generation time with a 404 that reads like an auth failure.
-
-Each entry carries what the provider reports and omits what it does not: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves today but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id rather than the bare model id.
+Each entry carries what the provider reports: `id`, and optionally `display_name`, `vendor`, `input_modalities`, `output_modalities`, `streaming`, `lifecycle` (`active` / `legacy` / `deprecated`) and `inference_types`. A `lifecycle` other than `active` still serves but should not be pinned by anything new. A Bedrock model whose `inference_types` offers only `inference_profile` must be invoked through a cross-region profile id.
 
 Not every provider type can answer:
 
@@ -167,7 +152,7 @@ A project can price its own provider instances without a global admin. A **per-p
 - `GET /api/v1/ai-providers/{ai_provider_id}/prices` — list this provider's overrides
 - `PUT /api/v1/ai-providers/{ai_provider_id}/prices` — upsert them, keyed on `(model, effective_from)`
 
-Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates — unlike the global price book, which lists defaults only. The `provider` slug is taken from the AI provider itself (an override matches only when its slug equals the provider's), so you supply just the model, rates, and `effective_from`. `effective_from` must be in the future; past prices are immutable, so ship corrections as new future-dated rows. See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
+Both are authorized by the caller's access to the provider's own project (`ai-providers:GetAiProviderPrices` / `ai-providers:ManageAiProviderPrices`), so one project never sees another's negotiated rates. The `provider` slug is taken from the AI provider itself — you supply just the model, rates, and `effective_from`, which must be in the future (past prices are immutable; ship corrections as new future-dated rows). See [Usage - Pricing](./usage.md#pricing) for how the effective price is chosen and frozen onto each meter.
 
 ### Deleting a provider
 
@@ -252,60 +237,6 @@ curl -X POST https://api.example.com/api/v1/ai-providers \
     "provider": "openai",
     "default_model": "gpt-4o",
     "secret_id": "sec_01"
-  }'
-```
-
-</TabItem>
-</Tabs>
-
-### Create a Google Vertex AI provider
-
-Assumes `sec_01` holds a service-account key file. See [Vertex AI authentication](#vertex-ai-authentication) for the other two modes.
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat create-ai-provider \
-  --project-id proj_ABC \
-  --name "Vertex Gemini" \
-  --provider vertex \
-  --default-model gemini-2.0-flash \
-  --secret-id sec_01 \
-  --config '{"location":"europe-west4"}'
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data, error } = await soat.aiProviders.createAiProvider({
-  body: {
-    project_id: 'proj_ABC',
-    name: 'Vertex Gemini',
-    provider: 'vertex',
-    default_model: 'gemini-2.0-flash',
-    secret_id: 'sec_01',
-    config: { location: 'europe-west4' },
-  },
-});
-if (error) throw new Error(JSON.stringify(error));
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X POST https://api.example.com/api/v1/ai-providers \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "proj_ABC",
-    "name": "Vertex Gemini",
-    "provider": "vertex",
-    "default_model": "gemini-2.0-flash",
-    "secret_id": "sec_01",
-    "config": { "location": "europe-west4" }
   }'
 ```
 

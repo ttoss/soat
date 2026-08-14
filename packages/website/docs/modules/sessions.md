@@ -93,16 +93,7 @@ Delete these resources explicitly beforehand if you need a full cleanup.
 
 When `auto_generate` is `true`, `POST .../messages` saves the user message **and** automatically triggers LLM generation in the same request. The response body contains the assistant reply instead of just the saved user message.
 
-This collapses the three-call flow into two calls: create a session, then send messages.
-
-`auto_generate` defaults to `false`. It can be set at session creation or toggled at any time:
-
-```http
-PATCH /sessions/:session_id
-Content-Type: application/json
-
-{ "auto_generate": false }
-```
+This collapses the three-call flow into two calls: create a session, then send messages. `auto_generate` defaults to `false` and can be set at creation or toggled at any time via `PATCH /sessions/{session_id}`.
 
 The explicit `POST .../generate` endpoint continues to work regardless of this setting. With `auto_generate` enabled, `POST .../messages` returns as soon as the message is saved and the triggered generation runs in the background.
 
@@ -110,19 +101,7 @@ The explicit `POST .../generate` endpoint continues to work regardless of this s
 
 When `message_delay_seconds` is set, `POST .../messages` does **not** trigger LLM generation immediately. A timer starts and resets with each new message. The LLM is only called after the configured delay elapses with no new messages.
 
-```http
-POST /sessions
-Content-Type: application/json
-
-{ "agent_id": "agent_01", "auto_generate": true, "message_delay_seconds": 3 }
-```
-
-With the above:
-
-- User sends "What's the" → timer starts (3 s)
-- User sends "weather in" → timer resets (3 s)
-- User sends "Paris?" → timer resets (3 s)
-- 3 seconds of silence → LLM is called with all three messages in context
+With `message_delay_seconds: 3`, three rapid messages ("What's the" / "weather in" / "Paris?") each reset the timer; after 3 seconds of silence the LLM is called once with all three messages in context.
 
 `POST .../messages` always returns immediately with the saved user message, regardless of the delay setting. Generation fires asynchronously after the delay elapses.
 
@@ -155,19 +134,9 @@ Sessions can expire automatically after a period of inactivity using `inactivity
 - **`0` (default)** — the session never expires.
 - **Positive integer** — the session expires if no user message has been added for that many seconds since `last_activity_at`.
 
-When a session exceeds its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, `POST .../generate` returns `410 Gone` with error code `SESSION_EXPIRED`. Open a fresh session to continue.
+When a session exceeds its TTL, its `status` is lazily updated to `expired` the next time it is fetched or listed. Once expired, `POST .../generate` returns `410 Gone` with error code `SESSION_EXPIRED` — open a fresh session to continue.
 
-The TTL is stored server-side at session creation and persists without requiring the client to re-send it. It can also be updated at any time via `PATCH .../sessions/:session_id` — the inactivity clock continues from the last `last_activity_at` timestamp, so changing the TTL takes effect on the next fetch.
-
-```json
-HTTP 410 Gone
-{
-  "error": {
-    "code": "SESSION_EXPIRED",
-    "message": "The session has expired due to inactivity."
-  }
-}
-```
+The TTL can be updated at any time via `PATCH .../sessions/{session_id}` — the inactivity clock continues from the last `last_activity_at` timestamp, so changing the TTL takes effect on the next fetch.
 
 ### Tool Context
 
@@ -198,15 +167,6 @@ When a new generation request arrives while a previous one is still in-flight, t
 ### Debugging (Session, Generation, Trace)
 
 Each call to `POST .../generate` returns `generation_id` and `trace_id`. Store these alongside `session_id` for debugging:
-
-```json
-{
-  "session_id": "sess_...",
-  "generation_id": "gen_...",
-  "trace_id": "trace_...",
-  "created_at": "2026-06-01T12:34:56.000Z"
-}
-```
 
 - `GET .../sessions/{session_id}/messages` returns the conversation timeline — see [Debug Session, Generation, and Trace History - Step 4 (Retrieve the full session message timeline)](/docs/tutorials/debug-session-generation-trace-history#step-4---retrieve-the-full-session-message-timeline).
 - `GET /api/v1/traces/{trace_id}` returns the execution trace.

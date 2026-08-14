@@ -98,9 +98,7 @@ Entries are never updated or deleted through the API; the model layer rejects up
 - The response streams and pages internally, so exporting a large project holds neither the server nor the client at full size in memory.
 - It is authorized by its own action, `audit:ExportAuditEntries` — bulk egress is granted separately from `audit:ListAuditEntries`.
 
-Entries arrive oldest-first so that a row written during the export is appended after the cursor rather than shifting rows the consumer already read.
-
-The export is a REST/SDK/CLI operation and is deliberately **not** an MCP or `soat` tool action. Its response is a stream, which has no single-value form a tool result could carry, and it is unbounded by design — the properties that make it right for archival make it wrong for a caller that must materialize the whole thing. Read the log from a tool with `list-audit-entries`, which is paged and takes the same filters.
+The export is a REST/SDK/CLI operation and is deliberately **not** an MCP or `soat` tool action — its response is an unbounded stream. Read the log from a tool with `list-audit-entries`, which is paged and takes the same filters.
 
 ### `audit.entry_created` webhook
 
@@ -187,32 +185,3 @@ curl -X GET "https://api.example.com/api/v1/audit-log/export?project_id=proj_ABC
 </TabItem>
 </Tabs>
 
-### Get a single entry
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat get-audit-entry --entry-id audit_01HXYZ
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-const { data, error } = await soat.audit.getAuditEntry({
-  path: { entry_id: 'audit_01HXYZ' },
-});
-if (error) throw new Error(JSON.stringify(error));
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X GET https://api.example.com/api/v1/audit-log/audit_01HXYZ \
-  -H "Authorization: Bearer <token>"
-```
-
-</TabItem>
-</Tabs>

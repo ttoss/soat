@@ -74,13 +74,11 @@ The `POST /knowledge/search` endpoint accepts the following filters. At least on
 | `document_paths` | `string[]` | Filter document results to paths starting with these prefixes                              |
 | `document_ids`   | `string[]` | Filter document results to specific document IDs                                           |
 
-When `query` is set, results include a `similarity_score` field and are ordered by descending relevance. `min_score` and `limit` apply additional controls. For a walkthrough that passes both `memory_ids` and `document_paths` and inspects the interleaved, scored results, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
+When `query` is set, results include a `similarity_score` field and are ordered by descending relevance; `min_score` and `limit` apply additional controls. For a walkthrough, see [Agent with Persistent Memory — Step 12 (Query the knowledge layer directly)](/docs/tutorials/memories-agent#step-12--query-the-knowledge-layer-directly).
 
-Which sources a request searches follows from which filters it carries, and the single endpoint can span both at once. Document results are included whenever you pass a `query`, `document_paths`, or `document_ids`; memory entries are included whenever you pass `memory_ids` or `memory_tags`. To search both sources simultaneously and get the interleaved, source-tagged list described in the [Overview](#overview), pass a `query` **together with** `memory_ids` or `memory_tags` — the two source sets are then merged and, when `query` is set, ranked together by descending similarity before `limit` is applied.
+Which sources a request searches follows from its filters: document results are included whenever `query`, `document_paths`, or `document_ids` is passed; memory entries whenever `memory_ids` or `memory_tags` is passed. Passing a `query` together with a memory filter searches both sources at once — the result sets are merged and ranked together by descending similarity before `limit` is applied. `memory_ids` and `memory_tags` combine with union semantics.
 
-`memory_ids` and `memory_tags` can be combined — the search includes entries from memories matching **either** (union semantics).
-
-`memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs (container-level — every entry in that memory) or when the entry's own `tags` match (only that entry). Tagging entries individually (see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering)) lets one memory hold many roles/sources and retrieve just the relevant slice.
+`memory_tags` matches at **entry granularity**: an entry is returned when its parent memory's tags match the globs or when the entry's own `tags` match — see [Memories — Entry-Level Tag Filtering](./memories.md#entry-level-tag-filtering).
 
 ### Project Scoping
 
@@ -151,110 +149,7 @@ curl -X POST https://api.example.com/api/v1/knowledge/search \
 </TabItem>
 </Tabs>
 
-### Memory-only search by tag
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat search-knowledge \
-  --project-id proj_ABC \
-  --query "customer communication" \
-  --memory-tags "customer*"
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
-
-const { data, error } = await soat.knowledge.searchKnowledge({
-  body: {
-    project_id: 'proj_ABC',
-    query: 'customer communication',
-    memory_tags: ['customer*'],
-  },
-});
-if (error) throw new Error(JSON.stringify(error));
-console.log(data.results);
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X POST https://api.example.com/api/v1/knowledge/search \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "proj_ABC",
-    "query": "customer communication",
-    "memory_tags": ["customer*"]
-  }'
-```
-
-</TabItem>
-</Tabs>
-
-### Document-scoped retrieval
-
-<Tabs groupId="client">
-<TabItem value="cli" label="CLI" default>
-
-```bash
-soat search-knowledge \
-  --project-id proj_ABC \
-  --query "quarterly revenue" \
-  --document-ids doc_xyz \
-  --limit 5
-```
-
-</TabItem>
-<TabItem value="sdk" label="SDK">
-
-```ts
-import { SoatClient } from '@soat/sdk';
-const soat = new SoatClient({
-  baseUrl: 'https://api.example.com',
-  token: 'sk_...',
-});
-
-const { data, error } = await soat.knowledge.searchKnowledge({
-  body: {
-    project_id: 'proj_ABC',
-    query: 'quarterly revenue',
-    document_ids: ['doc_xyz'],
-    limit: 5,
-  },
-});
-if (error) throw new Error(JSON.stringify(error));
-console.log(data.results);
-```
-
-</TabItem>
-<TabItem value="curl" label="curl">
-
-```bash
-curl -X POST https://api.example.com/api/v1/knowledge/search \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project_id": "proj_ABC",
-    "query": "quarterly revenue",
-    "document_ids": ["doc_xyz"],
-    "limit": 5
-  }'
-```
-
-</TabItem>
-</Tabs>
-
-### Path-scoped document retrieval
+### Path-scoped document retrieval (no query)
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

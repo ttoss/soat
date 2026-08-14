@@ -58,22 +58,7 @@ The pair `(conversation_id, position)` is uniquely indexed. See [Message orderin
 
 ### Actors, Agents, and Chats
 
-`Actor`, `Agent`, and `Chat` are independent resources. See [Actors](./actors.md), [Agents](./agents.md), and [Chats](./chats.md) for their full data models.
-
-- An **Actor** is a stable participant identity (name, `instructions`, tags). Always project-scoped.
-- An **Agent** / **Chat** is an AI configuration (provider, model, base instructions, tools).
-- An Actor **may** reference an `Agent` **or** a `Chat` (mutually exclusive) via `agent_id` / `chat_id`. Actors without either are plain human/external participants.
-
-Actors are used to track _who_ wrote a message (authorship). Generation is triggered separately by passing `agent_id` directly to `POST /conversations/:id/generate` — no actor is required to drive generation.
-
-#### Deletion rules
-
-- Deleting an `Agent` or `Chat` sets `agent_id` / `chat_id` on referencing actors to `null`. The actor and its historical messages are preserved.
-- Deleting an `Actor` is **blocked** if any conversation message references it. Remove the actor's messages (or delete the containing conversations) first.
-
-#### Associating an actor with an agent or chat
-
-To pre-link an actor to an Agent or a Chat, create the actor with `agent_id` or `chat_id` set (they are mutually exclusive). See [Agent and Chat Linking](./actors.md#agent-and-chat-linking) on the Actors page for the full flow.
+[Actors](./actors.md) track _who_ wrote a message (authorship); generation is triggered separately by passing `agent_id` directly to `POST /conversations/:id/generate` — no actor is required. For actor↔agent/chat linking and deletion rules, see [Agent and Chat Linking](./actors.md#agent-and-chat-linking). Deleting an Actor is **blocked** while any conversation message references it — remove its messages (or delete the containing conversations) first.
 
 ### Messages
 
@@ -140,19 +125,7 @@ With `"stream": true`, the response is a `text/event-stream` emitting incrementa
 
 ### Tool Context
 
-`POST /api/v1/conversations/:id/generate` accepts an optional `tool_context` field in the request body. The context is forwarded to the underlying agent generation exactly as described in the [Tool Context reference](../advanced/tool-context.md).
-
-```json
-{
-  "agent_id": "agent_...",
-  "tool_context": {
-    "userId": "user_abc123",
-    "tenantId": "tenant_xyz"
-  }
-}
-```
-
-Keys are used verbatim, so the tool calls in that generation receive `X-Soat-Context-userId` and `X-Soat-Context-tenantId`. A `user_id` key would instead produce `X-Soat-Context-user_id`.
+`POST /api/v1/conversations/:id/generate` accepts an optional `tool_context` field in the request body, forwarded verbatim to the underlying agent generation — see the [Tool Context reference](../advanced/tool-context.md).
 
 ### Filtering by Actor
 

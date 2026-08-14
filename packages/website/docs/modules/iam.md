@@ -17,6 +17,8 @@ The IAM module covers:
 - **Policy Engine** — evaluation logic that resolves allow/deny decisions at request time
 - **Authorization Model** — how policies are resolved for each caller type (see [Authorization Model](#authorization-model) below)
 
+> See the [Permissions Reference](../permissions.md) for the IAM action strings for this module.
+
 ## Related Tutorials
 
 - [Permissions in Practice - Step 4 (Create policies)](/docs/tutorials/permissions#step-4--create-policies)
@@ -166,13 +168,9 @@ Conditions add attribute-based constraints to statements. A condition block maps
 | `soat:ResourceTag/<key>` | Resource tags | Tag value on the target resource        |
 | `soat:ResourceType`      | Request       | The type of the resource being accessed |
 
-Condition operators and condition keys are matched **by exact string**, and both
-are stored exactly as written — no case conversion is applied to a `condition`
-block or to a resource's `tags`, unlike ordinary API fields. So
-`soat:ResourceTag/cost_center` selects the tag `cost_center` and **not**
-`costCenter`: they are two different tags, and a policy naming one does not match
-a resource carrying the other. Write the tag key and the condition key the same
-way and they always agree.
+Condition operators and condition keys are matched **by exact string** — no case
+conversion is applied to a `condition` block or to a resource's `tags` (see
+[Tag keys are stored verbatim](#tag-keys-are-stored-verbatim)).
 
 ## Authorization Model
 
@@ -301,32 +299,6 @@ Grants read access to a specific project's resources. Attach this to a user or A
         "files:ListFiles"
       ],
       "resource": ["soat:proj_ABC:*:*"]
-    }
-  ]
-}
-```
-
-### Read-only Across All Modules (Global)
-
-Grants read access to documents, files, actors, and conversations across all projects. Attach to users who need broad read access.
-
-```json
-{
-  "statement": [
-    {
-      "effect": "Allow",
-      "action": [
-        "documents:GetDocument",
-        "documents:ListDocuments",
-        "knowledge:SearchKnowledge",
-        "files:GetFile",
-        "files:DownloadFile",
-        "actors:ListActors",
-        "actors:GetActor",
-        "conversations:ListConversations",
-        "conversations:GetConversation"
-      ],
-      "resource": ["*"]
     }
   ]
 }
