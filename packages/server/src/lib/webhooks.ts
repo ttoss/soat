@@ -3,7 +3,7 @@ import { db } from 'src/db';
 import { paginatedList } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
 import {
-  decryptMaybeLegacySecret,
+  decryptStoredSecret,
   encryptValue,
   generateSecretValue,
 } from './secrets';
@@ -11,7 +11,7 @@ import {
 const generateSecret = generateSecretValue;
 
 export const decryptWebhookSecret = (stored: string): string => {
-  return decryptMaybeLegacySecret({ stored, label: 'decryptWebhookSecret' });
+  return decryptStoredSecret({ stored, label: 'decryptWebhookSecret' });
 };
 
 type WebhookRow = InstanceType<(typeof db)['Webhook']> & {

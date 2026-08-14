@@ -97,6 +97,11 @@ export const ERROR_CODES = {
     description:
       "A tool_context key cannot be used as an HTTP header name. Keys are forwarded verbatim as <prefix><key> headers, where the prefix is the deployment's TOOL_CONTEXT_HEADER_PREFIX (X-Soat-Context- by default), so a key may only contain letters, digits and the characters !#$%&'*+-.^_`|~, and two keys must not map to the same header name (header names are case-insensitive).",
   },
+  SECRET_NOT_DECRYPTABLE: {
+    httpStatus: 500,
+    description:
+      'A stored trigger or webhook secret could not be decrypted — it predates secret-at-rest encryption, or SECRETS_ENCRYPTION_KEY has changed since it was written. Rotating the secret replaces it; restoring the original key recovers every secret written under it.',
+  },
   SECRET_HAS_DEPENDENTS: {
     httpStatus: 409,
     description:

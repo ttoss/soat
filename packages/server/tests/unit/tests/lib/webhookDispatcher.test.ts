@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { emitEvent } from 'src/lib/eventBus';
 
 import { authenticatedTestClient, loginAs, testClient } from '../../testClient';
@@ -390,6 +391,57 @@ describe('webhookDispatcher', () => {
     });
 
     expect(callsToUrl('https://example.com/hook-retry-fail')).toHaveLength(3);
+  });
+
+  test('an undecryptable secret records a failed delivery instead of vanishing', async () => {
+    // `deliverWebhook` is fired and forgotten behind a `.catch()` whose comment
+    // promises "delivery failures are recorded in the database". Signing happens
+    // before the request, so a secret that cannot be decrypted — a row written
+    // before secret-at-rest encryption, or a changed SECRETS_ENCRYPTION_KEY —
+    // must still leave a `failed` delivery row. Otherwise the webhook goes
+    // quiet with nothing in the log to say why, which is the one outcome that
+    // comment must not be allowed to become false about.
+    const created = await createWebhook({
+      project_id: projectId,
+      name: 'Undecryptable Secret Webhook',
+      url: 'https://example.com/hook-bad-secret',
+      events: ['files.created'],
+    });
+
+    // Unreachable through the API, which always encrypts on write.
+    const row = await db.Webhook.findOne({
+      where: { publicId: created.body.id },
+    });
+    await row!.update({ secret: 'not-valid-ciphertext' });
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_bad_secret',
+      data: {},
+      timestamp: new Date().toISOString(),
+    });
+
+    await waitFor(async () => {
+      const delivery = await db.WebhookDelivery.findOne({
+        where: { webhookId: row!.id },
+      });
+      return delivery?.status === 'failed';
+    });
+
+    const delivery = await db.WebhookDelivery.findOne({
+      where: { webhookId: row!.id },
+    });
+    // Never attempted, so it is distinguishable from an HTTP failure: no
+    // attempts, no status code, and a reason an operator can act on.
+    expect(delivery!.attempts).toBe(0);
+    expect(delivery!.statusCode).toBeNull();
+    expect(delivery!.responseBody).toMatch(/rotate/i);
+    // The request itself must never have been made — an unsigned delivery is
+    // worse than none.
+    expect(callsToUrl('https://example.com/hook-bad-secret')).toHaveLength(0);
   });
 
   test('dispatcher clears the per-attempt delivery timeout even when fetch rejects', async () => {
