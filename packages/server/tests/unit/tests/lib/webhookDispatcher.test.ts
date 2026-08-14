@@ -151,6 +151,47 @@ describe('webhookDispatcher', () => {
     expect(init.headers['X-Soat-Event']).toBe('files.created');
   });
 
+  test('delivery envelope is snake_case, like every other SOAT surface', async () => {
+    const url = 'https://example.com/hook-envelope';
+    await createWebhook({
+      project_id: projectId,
+      name: 'Envelope Webhook',
+      url,
+      events: ['files.created'],
+    });
+
+    const timestamp = new Date().toISOString();
+
+    emitEvent({
+      type: 'files.created',
+      projectId: projectInternalId ?? 1,
+      projectPublicId: projectId,
+      resourceType: 'file',
+      resourceId: 'fil_envelope123',
+      data: { filename: 'envelope.txt' },
+      timestamp,
+    });
+
+    await waitFor(() => {
+      return callsToUrlForEvent(url, 'files.created').length > 0;
+    });
+
+    const [, init] = callsToUrlForEvent(url, 'files.created')[0] as [
+      string,
+      { body: string },
+    ];
+    const payload = JSON.parse(init.body) as Record<string, unknown>;
+
+    expect(payload).toEqual({
+      event: 'files.created',
+      project_id: projectId,
+      resource_type: 'file',
+      resource_id: 'fil_envelope123',
+      data: { filename: 'envelope.txt' },
+      timestamp,
+    });
+  });
+
   test('dispatcher delivers webhook for wildcard event match', async () => {
     await createWebhook({
       project_id: projectId,
@@ -207,7 +248,7 @@ describe('webhookDispatcher', () => {
 
     type AuditPayload = {
       event: string;
-      resourceType: string;
+      resource_type: string;
       data: Record<string, unknown>;
     };
 
@@ -234,7 +275,7 @@ describe('webhookDispatcher', () => {
 
     const payload = createEntry()!;
     expect(payload.event).toBe('audit.entry_created');
-    expect(payload.resourceType).toBe('audit');
+    expect(payload.resource_type).toBe('audit');
     // The payload is the full snake_case entry, so a subscriber needs no
     // follow-up GET.
     expect(payload.data.action).toBe('webhooks:CreateWebhook');

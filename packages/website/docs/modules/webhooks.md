@@ -85,6 +85,36 @@ Deliveries are retried up to three times. Each attempt and its outcome are recor
 
 Before pointing `url` at a real endpoint, use [`soat listen`](../cli/usage.md#testing-webhooks-locally) to receive and inspect deliveries on your local machine.
 
+### Event Payload
+
+The request body is a JSON envelope wrapping the resource payload. Like every other SOAT surface, it is **snake_case**:
+
+| Field           | Type   | Description                                                       |
+| --------------- | ------ | ----------------------------------------------------------------- |
+| `event`         | string | Event type, e.g. `files.created`                                  |
+| `project_id`    | string | Public ID of the project the event belongs to                     |
+| `resource_type` | string | Type of the resource that changed, e.g. `file`                    |
+| `resource_id`   | string | Public ID of the resource that changed                            |
+| `data`          | object | The resource payload, in the same shape the REST API returns it   |
+| `timestamp`     | string | ISO 8601 timestamp of the event                                   |
+
+```json
+{
+  "event": "files.created",
+  "project_id": "proj_a1b2c3d4",
+  "resource_type": "file",
+  "resource_id": "file_e5f6g7h8",
+  "data": {
+    "id": "file_e5f6g7h8",
+    "project_id": "proj_a1b2c3d4",
+    "filename": "report.pdf"
+  },
+  "timestamp": "2026-01-31T12:00:00.000Z"
+}
+```
+
+`data` is carried through verbatim from the same mapper the REST API uses, so a subscriber never needs a follow-up `GET` to read the resource, and no key inside it is rewritten.
+
 ### Secret and Signature Verification
 
 Every webhook has a secret generated at creation time. The secret is returned in the response body on create or secret rotation. You can also retrieve it explicitly via `GET /api/v1/webhooks/{webhook_id}/secret` (requires `webhooks:GetWebhookSecret`).
