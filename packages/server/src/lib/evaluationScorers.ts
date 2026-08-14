@@ -73,8 +73,16 @@ const asRecord = (value: unknown): Record<string, unknown> | null => {
   return isPlainObject(value) ? value : null;
 };
 
-const isScorerType = (value: string): value is ScorerType => {
-  return (SCORER_TYPES as readonly string[]).includes(value);
+const SCORER_TYPE_SET: ReadonlySet<unknown> = new Set(SCORER_TYPES);
+
+/**
+ * Takes `unknown` rather than `string` because it guards two callers: the
+ * validator, which reads a type off an untyped template, and {@link scoreOne},
+ * which reads one off a stored Eval. The latter used to reach its dispatch
+ * through an `as ScorerType` cast (#1001).
+ */
+const isScorerType = (value: unknown): value is ScorerType => {
+  return SCORER_TYPE_SET.has(value);
 };
 
 type ScorerCheck = (args: {
@@ -377,8 +385,16 @@ const scoreOne = async (args: {
   runJudge?: JudgeRunner;
 }): Promise<ScorerOutcome> => {
   const { scorer } = args;
+  const scorerType = scorer.type;
 
-  switch (scorer.type as ScorerType) {
+  if (!isScorerType(scorerType)) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `Unhandled scorer type: ${String(scorerType)}.`
+    );
+  }
+
+  switch (scorerType) {
     case 'exact_match':
       return scoreExactMatch({
         output: args.output,
@@ -407,12 +423,21 @@ const scoreOne = async (args: {
       });
     }
     case 'output_schema':
-    default:
       return scoreOutputSchema({
         scorer,
         output: args.output,
         agentOutputSchema: args.agentOutputSchema,
       });
+    default: {
+      /* A new entry in SCORER_TYPES is a type error here until it is dispatched
+         — the compile-time half of the guarantee, matching the one SCORER_FIELDS
+         and SCORER_CHECKS already give validation. */
+      const unhandled: never = scorerType;
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `Unhandled scorer type: ${String(unhandled)}.`
+      );
+    }
   }
 };
 

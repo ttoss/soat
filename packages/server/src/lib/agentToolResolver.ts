@@ -855,6 +855,30 @@ const resolvePipelineTool = (
   });
 };
 
+/**
+ * Every tool kind {@link resolveToolByType} dispatches, and — pinned by
+ * `agentToolTypeContract.test.ts` — every kind the OpenAPI spec publishes.
+ *
+ * `AgentToolRow.type` stays `string`, because that is what the column is: a
+ * plain `STRING(…)` with no database enum, so a row carrying an unrecognised
+ * value is storable and must be handled at read time rather than assumed away.
+ */
+export const AGENT_TOOL_TYPES = [
+  'http',
+  'client',
+  'pipeline',
+  'mcp',
+  'soat',
+] as const;
+
+export type AgentToolType = (typeof AGENT_TOOL_TYPES)[number];
+
+const AGENT_TOOL_TYPE_SET: ReadonlySet<string> = new Set(AGENT_TOOL_TYPES);
+
+const isAgentToolType = (value: string): value is AgentToolType => {
+  return AGENT_TOOL_TYPE_SET.has(value);
+};
+
 const resolveToolByType = async (
   typedTool: AgentToolRow,
   args: {
@@ -868,7 +892,23 @@ const resolveToolByType = async (
     remainingDepth?: number;
   }
 ): Promise<Record<string, Tool>> => {
-  switch (typedTool.type) {
+  const toolType = typedTool.type;
+
+  if (!isAgentToolType(toolType)) {
+    // A stored type this server does not know (an older or newer writer, a
+    // hand-edited row). The tool is still dropped rather than failing the whole
+    // generation — but it is no longer dropped *silently*, which is what made
+    // #1002 surface as "the agent ignored my tool" with nothing to grep for.
+    log(
+      'resolveToolByType: dropping tool with unhandled type id=%s name=%s type=%s',
+      typedTool.publicId,
+      typedTool.name,
+      toolType
+    );
+    return {};
+  }
+
+  switch (toolType) {
     case 'http':
       return { [typedTool.name]: resolveHttpTool(typedTool, args.toolContext) };
     case 'client':
@@ -897,8 +937,17 @@ const resolveToolByType = async (
         isSoatActionAllowedByBoundary,
         logToolCallingError,
       });
-    default:
-      return {};
+    default: {
+      /* A new entry in AGENT_TOOL_TYPES is a type error here until it is
+         dispatched. The guard above already handled every unrecognised runtime
+         value, so this arm is unreachable — it exists to make the omission fail
+         at compile time rather than at a user's agent. */
+      const unhandled: never = toolType;
+      throw new DomainError(
+        'VALIDATION_FAILED',
+        `Unhandled tool type: ${String(unhandled)}.`
+      );
+    }
   }
 };
 
