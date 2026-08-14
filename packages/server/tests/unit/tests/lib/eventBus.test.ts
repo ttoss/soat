@@ -1,3 +1,4 @@
+import { db } from 'src/db';
 import { emitCustomEvent, eventBus, onEvent } from 'src/lib/eventBus';
 import { isSoatEventType, SOAT_EVENT_TYPES } from 'src/lib/soatEvents';
 
@@ -102,6 +103,47 @@ describe('eventBus', () => {
         await drain();
         expect(seen).toEqual(['order.shipped']);
       } finally {
+        eventBus.removeAllListeners('soat:event');
+      }
+    });
+  });
+
+  describe('project lookup failure', () => {
+    /**
+     * The emit path resolves the project public id through a real DB read when
+     * the caller does not already hold one, and swallows a failure there: an
+     * event is best-effort, and an unhandled rejection would terminate the
+     * process long after the write it belonged to had committed (#903).
+     *
+     * A real DB read does not fail on demand, so this is the sanctioned
+     * force-failure stub for a `.catch()` resilience branch
+     * (`.claude/rules/tests.md`) — the only way to drive the swallow. Every
+     * other test here runs the lookup for real.
+     */
+    test('a failed project lookup drops the event instead of rejecting', async () => {
+      const seen: string[] = [];
+      const handler = (event: { type: string }) => {
+        seen.push(event.type);
+      };
+
+      const findByPk = jest
+        .spyOn(db.Project, 'findByPk')
+        .mockRejectedValueOnce(new Error('connection reset'));
+
+      onEvent({ handler });
+
+      try {
+        emitCustomEvent({
+          type: 'order.shipped',
+          projectId: 1,
+          resourceType: 'orchestration_run',
+          resourceId: 'orun_dropped',
+          data: {},
+        });
+        await drain();
+        expect(seen).toEqual([]);
+      } finally {
+        findByPk.mockRestore();
         eventBus.removeAllListeners('soat:event');
       }
     });
