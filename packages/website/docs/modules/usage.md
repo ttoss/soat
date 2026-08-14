@@ -166,6 +166,12 @@ Like every other dimension, `source` is set by the platform at the metering chok
 copied from the generation's own column, so a caller cannot bill eval spend as production or
 the reverse.
 
+Like the end-user dimensions below, `source` both filters
+(`GET /api/v1/usage/meters?source=eval`) and groups (`group_by=source`), so a project that
+evaluates can price its verification spend without scanning raw rows client-side. Ordinary
+traffic carries no source and collapses into the single `null` bucket, so the groups still sum
+to the project total.
+
 ### End-user attribution
 
 An event carries the [actor](./actors.md) and [session](./sessions.md) it was produced for, so spend can be answered per end user rather than only per agent. Both are copied from the generation at write time and **frozen** there, the same rule as `cost_usd`: renaming an actor, closing a session, or deleting either never rewrites recorded spend — the row survives with a `null` dimension instead of vanishing from the project's totals.
@@ -202,7 +208,7 @@ Prices can also be **declared in a formation** with the `project_price` resource
 
 ### Aggregation
 
-`GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), `meter_type`, `actor`, or `session`. Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`, or any non-session work under `group_by=actor`) collapses into a group with a `null` `key`, so the groups always sum to the project total. Requires `usage:GetUsage` on the project.
+`GET /api/v1/usage?project_id=…&group_by=…` rolls a project's usage up over an optional `[from, to]` window (inclusive ISO-8601 bounds on the event `created_at`; omit either for an open bound), bucketed by a single dimension — `model`, `agent`, `run`, `day` (the event's UTC calendar day), `meter_type`, `actor`, `session`, or [`source`](#workload-source). Each group and the grand `totals` carry summed token counts (`input_tokens` is uncached input + cached, mirroring the receipt) and `cost_usd` (`null` when no event in the bucket was priced). This is the per-project cost-by-range/by-category query — a monthly figure without scanning raw meter rows client-side. A bucket whose dimension does not apply to an event (e.g. a standalone generation under `group_by=run`, or any non-session work under `group_by=actor`) collapses into a group with a `null` `key`, so the groups always sum to the project total. Requires `usage:GetUsage` on the project.
 
 #### Measured quantities, not just tokens
 

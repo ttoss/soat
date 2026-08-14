@@ -64,6 +64,10 @@ export type PersistedUsageEvent = {
   trigger_id: string | null;
   action_id: string | null;
   meter_type: string;
+  // The workload behind the spend (`eval`, `eval_judge`, `chat`, a memory pass);
+  // null for ordinary agent traffic. This is what makes verification spend
+  // separable from the traffic serving real users.
+  source: string | null;
   provider: string;
   model: string;
   cost_usd: number | null;
@@ -124,6 +128,7 @@ const mapUsageEvent = (
     trigger_id: event.triggerId,
     action_id: event.actionId,
     meter_type: event.meterType,
+    source: event.source ?? null,
     provider: event.provider,
     model: event.model,
     cost_usd: event.costUsd === null ? null : Number(event.costUsd),
@@ -230,6 +235,7 @@ export const listUsageEvents = async (args: {
   triggerId?: string;
   actionId?: string;
   meterType?: string;
+  source?: string;
   limit?: number;
   offset?: number;
 }) => {
@@ -244,6 +250,7 @@ export const listUsageEvents = async (args: {
   if (args.triggerId !== undefined) where.triggerId = args.triggerId;
   if (args.actionId !== undefined) where.actionId = args.actionId;
   if (args.meterType !== undefined) where.meterType = args.meterType;
+  if (args.source !== undefined) where.source = args.source;
 
   const resolved = await applyUsageScopeFilters(where, {
     agentId: args.agentId,

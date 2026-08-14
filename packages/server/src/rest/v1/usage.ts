@@ -44,8 +44,8 @@ type UpsertPricesBody = {
  * GET /api/v1/usage/meters
  * operationId: listUsageMeters
  * Lists raw usage-meter rows the caller can access, optionally filtered by
- * agent_id, generation_id, trace_id, actor_id, and session_id. One row is
- * recorded per completed generation with the provider's reported
+ * agent_id, generation_id, trace_id, actor_id, session_id, and source. One row
+ * is recorded per completed generation with the provider's reported
  * input/output/cached/reasoning token counts.
  */
 usageRouter.get('/usage/meters', async (ctx: Context) => {
@@ -66,6 +66,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     trigger_id: triggerId,
     action_id: actionId,
     meter_type: meterType,
+    source,
     limit,
     offset,
   } = ctx.query as Record<string, string | undefined>;
@@ -80,6 +81,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
     triggerId,
     actionId,
     meterType,
+    source,
     limit: limit ? Number(limit) : undefined,
     offset: offset ? Number(offset) : undefined,
   });
@@ -93,7 +95,7 @@ usageRouter.get('/usage/meters', async (ctx: Context) => {
  * operationId: getUsage
  * Returns a project's usage rolled up over an optional [from, to] window,
  * bucketed by one dimension
- * (group_by=model|agent|run|day|meter_type|actor|session) and optionally
+ * (group_by=model|agent|run|day|meter_type|actor|session|source) and optionally
  * narrowed to a single meter_type. Each group and the grand total carry summed
  * token counts, a measured quantity per component, and cost_usd. Requires
  * usage:GetUsage on the project.

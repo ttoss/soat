@@ -21,6 +21,7 @@ export const USAGE_GROUP_BY = [
   'meter_type',
   'actor',
   'session',
+  'source',
 ] as const;
 
 export type UsageGroupBy = (typeof USAGE_GROUP_BY)[number];
@@ -123,6 +124,12 @@ const GROUP_KEY_EXTRACTORS: {
   },
   meter_type: (event) => {
     return event.meterType;
+  },
+  // What the spend was incurred *for*: `eval` / `eval_judge` mark verification
+  // spend, so it can be priced apart from the traffic serving real users.
+  // Ordinary traffic carries no source and buckets under the single null key.
+  source: (event) => {
+    return event.source;
   },
   agent: (event) => {
     return event.agent?.publicId ?? null;

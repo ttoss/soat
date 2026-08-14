@@ -12,6 +12,7 @@ import {
   applyFormationTemplate,
   buildDeleteOrder,
   performResourceDeletions,
+  throwDeletionFailure,
 } from './formationsApply';
 import {
   buildDependencyGraph,
@@ -360,9 +361,16 @@ export const updateFormation = async (args: {
   return mapFormation(refreshed, true);
 };
 
+/**
+ * Tears the stack down in reverse dependency order.
+ *
+ * Resolves only when every resource is gone; a resource that could not be
+ * deleted throws `FORMATION_DELETE_FAILED` naming it, leaving the formation in
+ * `delete_failed` so the operator can resolve the blocker and delete again.
+ */
 export const deleteFormation = async (args: {
   id: string;
-}): Promise<{ success: boolean }> => {
+}): Promise<{ success: true }> => {
   const formation = await db.Formation.findOne({
     where: { publicId: args.id, status: { [Op.ne]: 'deleted' } },
   });
@@ -396,7 +404,7 @@ export const deleteFormation = async (args: {
   if (hasError) {
     await operation.update({ status: 'failed', events });
     await formation.update({ status: 'delete_failed' });
-    return { success: false };
+    throwDeletionFailure({ formationId: args.id, events });
   }
 
   await operation.update({ status: 'succeeded', events });

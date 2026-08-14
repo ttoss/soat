@@ -402,3 +402,40 @@ export const performResourceDeletions = async (
 
   return { events, hasError };
 };
+
+/**
+ * Reports a teardown that could not finish, naming every resource that blocked.
+ *
+ * A partial teardown is the case that most needs an explanation: the resources
+ * already deleted are gone, so a bare `success: false` left the operator with no
+ * way to learn which resource blocked — nor that resolving it and deleting again
+ * is all that stands between them and a clean stack.
+ */
+export const throwDeletionFailure = (args: {
+  formationId: string;
+  events: FormationEvent[];
+}): never => {
+  const failures = args.events
+    .filter((event) => {
+      return event.status === 'failed';
+    })
+    .map((event) => {
+      return {
+        logical_id: event.logicalId,
+        resource_type: event.resourceType,
+        error: event.error ?? null,
+      };
+    });
+
+  const named = failures
+    .map((failure) => {
+      return `${failure.logical_id} (${failure.resource_type})`;
+    })
+    .join(', ');
+
+  throw new DomainError(
+    'FORMATION_DELETE_FAILED',
+    `Formation '${args.formationId}' could not be fully deleted; ${String(failures.length)} resource(s) could not be removed: ${named}. The formation is left in 'delete_failed'; resolve these and delete it again.`,
+    { failures }
+  );
+};

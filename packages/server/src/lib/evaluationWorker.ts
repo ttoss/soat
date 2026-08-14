@@ -28,6 +28,7 @@ import {
   executeAndRecordItem,
   failEvalRun,
   finalizeIfUnclaimed,
+  recountEvalRunProgress,
 } from './evaluationRunExecution';
 import { scorerList } from './evaluationScorers';
 import { createScheduler } from './scheduler';
@@ -215,6 +216,16 @@ const handleEvalItemTask = async (args: {
     scorers,
     item,
   });
+
+  // The run may have been canceled while this item was in flight: the claim
+  // happened before the cancel, so the liveness check above let it through and
+  // the result landed after the run had already settled. Reconcile the counters
+  // with what actually ran — a canceled run publishes no `aggregate_scores`, so
+  // these counts are its only record of the work that was really paid for.
+  await run.reload();
+  if (!isLive(run.status)) {
+    await recountEvalRunProgress({ run });
+  }
 };
 
 /**

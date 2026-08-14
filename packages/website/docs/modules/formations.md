@@ -437,6 +437,21 @@ teardown treats it as already gone rather than failing the stack. Only
 unexpected errors mark the operation `failed` and leave the stack in
 `delete_failed`.
 
+A teardown that hits such an error answers `409 FORMATION_DELETE_FAILED` and
+names every blocking resource in `error.meta.failures`, each as
+`{ logical_id, resource_type, error }`. Resources removed before the blocker
+stay removed — teardown does not roll back — so the stack is left partially torn
+down in `delete_failed`; resolve the blockers and delete it again.
+
+The common blocker is a resource the platform deliberately refuses to delete on
+its own. An **agent that has generation or trace history** is the one most stacks
+meet, because anything that exercises the agent — including an
+[eval](./evaluations.md) run declared in the same template — gives it that
+history. Teardown never forces this: deleting an agent's generations and traces
+destroys observability records, so it stays an explicit operator decision via
+`DELETE /api/v1/agents/{agent_id}?force=true`. Declare the agent with
+`deletion_policy: retain` if the stack should leave it standing instead.
+
 ### Plan Diff
 
 Each entry in `plan-formation`'s `changes[]` array carries a `diff` object

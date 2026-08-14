@@ -62,15 +62,25 @@ const generationDbIdOf = async (publicId: string): Promise<number | null> => {
   return row ? (row.id as number) : null;
 };
 
+/**
+ * An item that could not be scored.
+ *
+ * `output` is whatever the agent actually produced, which is `null` only when
+ * there genuinely is none — the generation threw, or did not complete. A scorer
+ * that failed *after* a good generation passes the real text: the answer exists,
+ * it cost money, and it is the one thing needed to debug why the scorer choked
+ * on it. The item is still errored, never scored 0.
+ */
 const erroredOutcome = (
   error: string,
-  generationDbId: number | null
+  generationDbId: number | null,
+  output: string | null = null
 ): ItemOutcome => {
   return {
     scores: [],
     passed: false,
     errored: true,
-    output: null,
+    output,
     error,
     generationDbId,
   };
@@ -159,11 +169,13 @@ export const runEvalItem = async (args: {
   } catch (error) {
     // A scorer that could not produce a verdict (a judge call failing, a
     // malformed judge reply) is an item error — the agent's answer was never
-    // graded, so recording 0 would fabricate a regression. The generation is
-    // still linked: it happened and cost money.
+    // graded, so recording 0 would fabricate a regression. The generation and
+    // its output are both kept: they happened and cost money, and the output is
+    // what the failed scorer was looking at.
     return erroredOutcome(
       `Scoring failed: ${errorMessage(error)}`,
-      generationDbId
+      generationDbId,
+      output.content
     );
   }
 
@@ -240,6 +252,31 @@ export const executeAndRecordItem = async (args: {
   }
 
   return outcome;
+};
+
+/**
+ * Recomputes a run's `completedCount` / `erroredCount` from its persisted
+ * results.
+ *
+ * Derived from the rows rather than incremented, which makes it idempotent:
+ * several workers finishing at once, or a redelivered task, converge on the same
+ * numbers instead of double-counting.
+ */
+export const recountEvalRunProgress = async (args: {
+  run: EvalRunRowInstance;
+}): Promise<void> => {
+  const results = await db.EvalResult.findAll({
+    where: { evalRunId: args.run.id as number },
+    attributes: ['error'],
+  });
+  const erroredCount = results.filter((row) => {
+    return row.error !== null;
+  }).length;
+
+  await args.run.update({
+    completedCount: results.length - erroredCount,
+    erroredCount,
+  });
 };
 
 // ── Finalization ───────────────────────────────────────────────────────────
