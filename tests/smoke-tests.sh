@@ -5668,6 +5668,53 @@ if ! printf '%s\n' "$DATASET_ITEMS_RESP" | jq -e '.total == 1' >/dev/null 2>&1; 
   exit 1
 fi
 
+# Curating a real turn into a fixture. Uses its own dataset so the eval run
+# below still scores exactly the hand-authored item it was written for.
+echo "--- Curating a dataset item from generation $GEN_ID ---"
+CURATED_DATASET_RESP=$($SOAT_CLI create-dataset \
+  --project_id "$PROJECT_PUBLIC_ID" \
+  --name "smoke-curated-dataset" \
+  --description "Items promoted from production turns")
+CURATED_DATASET_ID=$(printf '%s\n' "$CURATED_DATASET_RESP" | jq -r '.id')
+if ! printf '%s\n' "$CURATED_DATASET_ID" | grep -q '^dset_'; then
+  echo "ERROR: curated dataset id expected to start with 'dset_', got '$CURATED_DATASET_ID'" >&2
+  printf '%s\n' "$CURATED_DATASET_RESP" >&2
+  exit 1
+fi
+
+CURATED_ITEM_RESP=$($SOAT_CLI create-dataset-item-from-generation \
+  --dataset_id "$CURATED_DATASET_ID" \
+  --generation_id "$GEN_ID" | sanitize_json)
+# The turn's input is replayed into `input` and its own answer becomes the
+# reference output; neither is asserted for content, since the model's wording
+# is not deterministic. What must hold is the provenance link and that a
+# non-empty message array came back.
+if ! printf '%s\n' "$CURATED_ITEM_RESP" | jq -e \
+  --arg gen "$GEN_ID" \
+  '.source_generation_id == $gen and (.input | type == "array" and length > 0) and (.input[0].role | type == "string")' >/dev/null 2>&1; then
+  echo "ERROR: create-dataset-item-from-generation did not curate the generation's turn" >&2
+  printf '%s\n' "$CURATED_ITEM_RESP" | jq . >&2
+  exit 1
+fi
+echo "Curated dataset item: OK"
+
+echo "--- Curating with an explicit expected_output ---"
+CURATED_OVERRIDE_RESP=$($SOAT_CLI create-dataset-item-from-generation \
+  --dataset_id "$CURATED_DATASET_ID" \
+  --generation_id "$GEN_ID" \
+  --expected_output "a fixed reference answer" \
+  --metadata '{"topic":"curated"}' | sanitize_json)
+if ! printf '%s\n' "$CURATED_OVERRIDE_RESP" | jq -e \
+  '.expected_output == "a fixed reference answer" and .metadata.topic == "curated"' >/dev/null 2>&1; then
+  echo "ERROR: caller-supplied expected_output/metadata did not win over the derived ones" >&2
+  printf '%s\n' "$CURATED_OVERRIDE_RESP" | jq . >&2
+  exit 1
+fi
+
+echo "--- Curating from a missing generation fails ---"
+expect_cli_error_status 404 create-dataset-item-from-generation \
+  --dataset_id "$CURATED_DATASET_ID" --generation_id "gen_doesnotexist000"
+
 # Eval
 echo "--- Creating eval ---"
 # A json_logic scorer that only asserts the agent produced *some* text: the

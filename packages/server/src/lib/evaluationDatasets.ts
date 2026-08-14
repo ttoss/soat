@@ -19,6 +19,7 @@ import {
   validateDatasetItemInput,
   validateItemMetadata,
 } from './evaluationValidation';
+import { getGenerationTurn } from './generationTurn';
 import type { ResourceIncludes } from './modelIncludes';
 import { paginatedList, type PaginatedResult } from './pagination';
 import { makeResourceAccessor } from './resourceAccessor';
@@ -55,9 +56,9 @@ export const mapDatasetItem = (item: DatasetItemRow) => {
     input: item.input,
     expected_output: item.expectedOutput,
     metadata: item.metadata,
-    // Always null in Phase 1 — the `from-generation` curation route that sets
-    // it ships with Phase 2. Declared now so neither the column nor the wire
-    // shape has to change when it does.
+    // Set by the `from-generation` curation route; null for a hand-authored
+    // item, and null again if the source generation is later deleted (the FK is
+    // `SET NULL` on purpose — the fixture outlives its provenance).
     source_generation_id: item.sourceGeneration?.publicId ?? null,
     created_at: item.createdAt,
     updated_at: item.updatedAt,
@@ -268,6 +269,94 @@ export const createDatasetItem = async (args: {
     expectedOutput:
       requireOptionalText(args.expectedOutput, 'expected_output') ?? null,
     metadata: (args.metadata as object | null | undefined) ?? null,
+  });
+
+  return mapDatasetItem(
+    await findItem({
+      projectIds: args.projectIds,
+      datasetId: args.datasetId,
+      itemId: item.publicId,
+    })
+  );
+};
+
+/**
+ * Curates a real, completed generation into a dataset item (#1003).
+ *
+ * The platform already stored everything a fixture needs — what the turn was
+ * asked and what it answered — but only as observability records. This is the
+ * one operation that makes them addressable as a replayable unit, so an
+ * evaluation set can be built from production traffic instead of from
+ * imagination.
+ *
+ * The item is a **copy**, not a view: it keeps working after the generation's
+ * content is purged, exactly as an `EvalResult` keeps its own frozen copy of the
+ * item. `source_generation_id` records the provenance and goes null if the
+ * generation is deleted, so a purge can never quietly stop a suite from running
+ * — the same guarantee the datasets half already made.
+ */
+export const createDatasetItemFromGeneration = async (args: {
+  projectIds?: number[];
+  datasetId: string;
+  generationId: unknown;
+  expectedOutput?: unknown;
+  metadata?: unknown;
+}): Promise<ReturnType<typeof mapDatasetItem>> => {
+  if (
+    typeof args.generationId !== 'string' ||
+    args.generationId.trim() === ''
+  ) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'generation_id is required and must be a non-empty string.'
+    );
+  }
+
+  log(
+    'createDatasetItemFromGeneration: datasetId=%s generationId=%s',
+    args.datasetId,
+    args.generationId
+  );
+
+  const dataset = await datasets.getByPublicId({
+    id: args.datasetId,
+    projectIds: args.projectIds,
+  });
+
+  const turn = await getGenerationTurn({
+    generationId: args.generationId,
+    projectIds: args.projectIds,
+  });
+
+  // A dataset is project-scoped, so a fixture from another project would be
+  // invisible to everyone who can run the suite. Checked explicitly because
+  // `projectIds` is `undefined` for an unscoped principal — for whom both
+  // lookups above legitimately succeed across projects.
+  if (turn.projectDbId !== dataset.projectId) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      `Generation '${args.generationId}' belongs to a different project than dataset '${args.datasetId}'.`
+    );
+  }
+
+  assertValid(validateDatasetItemInput(turn.inputMessages));
+  assertValid(validateItemMetadata(args.metadata));
+
+  // The caller's reference answer wins; otherwise the turn's own answer becomes
+  // the baseline a scorer compares future runs against. `null` is a deliberate
+  // "no reference answer", so only `undefined` falls through to the derived one.
+  const expectedOutput = requireOptionalText(
+    args.expectedOutput,
+    'expected_output'
+  );
+
+  const item = await db.DatasetItem.create({
+    datasetId: dataset.id as number,
+    input: turn.inputMessages,
+    expectedOutput:
+      expectedOutput === undefined ? turn.outputText : expectedOutput,
+    metadata: (args.metadata as object | null | undefined) ?? null,
+    sourceGenerationId: turn.generationDbId,
   });
 
   return mapDatasetItem(

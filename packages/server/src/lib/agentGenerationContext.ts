@@ -30,6 +30,17 @@ export type GenerationContext = {
   model: LanguageModel;
   resolvedTools: Record<string, Tool>;
   allMessages: Array<{ role: string; content: unknown }>;
+  /**
+   * The caller's messages after content resolution, without the agent's
+   * instructions or its knowledge injections — the replayable half of
+   * {@link GenerationContext.allMessages}.
+   *
+   * This is what gets persisted on the generation, so a promoted dataset item
+   * replays the turn's real input against whichever agent it is later run on,
+   * and picks up that agent's own instructions and knowledge rather than a copy
+   * of the original's.
+   */
+  inputMessages: Array<{ role: string; content: unknown }>;
   generationId: string;
   toolContext?: Record<string, string> | null;
   remainingDepth?: number | null;
@@ -208,6 +219,7 @@ export const buildGenerationContext = async (args: {
     model,
     resolvedTools,
     allMessages,
+    inputMessages: resolvedMessages,
     generationId,
     toolContext: toolContext ?? null,
     remainingDepth: args.remainingDepth ?? null,

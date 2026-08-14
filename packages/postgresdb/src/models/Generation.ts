@@ -227,6 +227,20 @@ export class Generation extends Model {
   @Column({ type: DataType.JSONB, allowNull: true })
   declare metadata: Record<string, unknown> | null;
 
+  // The messages this turn was asked to answer, resolved (file and document
+  // references already inlined) but without the agent's own instructions or its
+  // knowledge injections — those are config, recoverable from `agentVersion`,
+  // and replaying them as messages would double them up.
+  //
+  // Recorded so a real turn can be promoted into an eval dataset item
+  // (`POST /datasets/{id}/items/from-generation`). Before this column the input
+  // survived only in `pendingState`, and only while a run was paused on a client
+  // tool, so a completed generation kept no record of what it was asked. Content
+  // rather than skeleton: listed in `GENERATION_CONTENT_FIELDS`, so
+  // zero-retention never writes it and a purge clears it.
+  @Column({ type: DataType.JSONB, allowNull: true })
+  declare inputMessages: unknown[] | null;
+
   // Content-purge marker. When set, the generation's content fields (`metadata`,
   // `error`, `extraction`, `pendingState`) have been cleared. The skeleton the
   // billing/audit ledger depends on survives: ids, timestamps, status, counters

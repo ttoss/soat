@@ -134,9 +134,23 @@ Internal recovery state (used to resume a `requires_action` generation after a s
 
 When an agent is configured with `knowledge_config.extraction` and `write_memory_id`, a completed generation writes an `extraction` summary — `{ "candidates": 3, "created": 2, "updated": 1, "skipped": 0 }` — describing what the auto-extraction pass did with the turn. See [Memories — Automatic Extraction](./memories.md#automatic-extraction) for how it is configured.
 
+### Recorded input
+
+A generation also stores the messages it was asked to answer, resolved (file and document
+references already inlined) but without the agent's own instructions or knowledge
+injections — those are config, recoverable from `agent_version`.
+
+The record is not part of the API response; it exists so a real turn can be promoted into
+an evaluation fixture with
+[`create-dataset-item-from-generation`](./evaluations.md#curating-items-from-production).
+It is **content**, not skeleton, so it follows the same rules as everything below: never
+written under zero-retention, cleared by a purge, and swept by retention. A generation
+whose input is gone can no longer be curated, and says so with
+`409 GENERATION_CONTENT_UNAVAILABLE`.
+
 ### Content Purge
 
-`DELETE /generations/{generation_id}/content` clears the generation's content — `metadata`, `error`, `extraction`, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
+`DELETE /generations/{generation_id}/content` clears the generation's content — `metadata`, `error`, `extraction`, the recorded input messages, and the internal recovery state of a paused run — and stamps `content_redacted_at`. It requires the `generations:PurgeGenerationContent` action.
 
 The usage and audit skeleton is preserved on purpose: ids, timestamps, status, stop reason, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`). A billing ledger has to outlive a tenant's erasure of the content, so a purged generation reads back as that skeleton rather than as a 404.
 

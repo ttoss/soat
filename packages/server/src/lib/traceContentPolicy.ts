@@ -101,9 +101,10 @@ export const validateTraceContentRetentionDays = (
  * The generation columns that hold content rather than skeleton.
  *
  * `metadata` and `error` are caller/provider content, `extraction` is a summary
- * derived from that content, and `pendingState` holds the full message history
- * of a paused run. Everything the billing and audit ledger reads — ids,
- * timestamps, status, stop reason, usage attribution — is deliberately absent.
+ * derived from that content, `pendingState` holds the full message history of a
+ * paused run, and `inputMessages` holds the messages the turn was asked to
+ * answer. Everything the billing and audit ledger reads — ids, timestamps,
+ * status, stop reason, usage attribution — is deliberately absent.
  *
  * Defined here, once, because two features must agree on it exactly: the purge
  * path clears these columns (#836/#837) and zero-retention refuses to write
@@ -116,6 +117,7 @@ export const GENERATION_CONTENT_FIELDS = [
   'error',
   'extraction',
   'pendingState',
+  'inputMessages',
 ] as const;
 
 /** The same set as a null-map, for a bulk `UPDATE`. */
@@ -124,6 +126,7 @@ export const PURGED_GENERATION_CONTENT = {
   error: null,
   extraction: null,
   pendingState: null,
+  inputMessages: null,
 } as const;
 
 /** Trace columns that hold content. `fileId` drops the pointer to the steps

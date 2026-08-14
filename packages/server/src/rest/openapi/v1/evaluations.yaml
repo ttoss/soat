@@ -342,6 +342,95 @@ paths:
           description: Forbidden
         '404':
           description: Dataset not found
+  /api/v1/datasets/{dataset_id}/items/from-generation:
+    post:
+      tags:
+        - Evaluations
+      summary: Curate a dataset item from a generation
+      description: >-
+        Promotes a real, completed generation into a test case: its input
+        messages become the item's `input`, and its own answer becomes
+        `expected_output` unless you supply one. Use it to build an evaluation
+        set out of production traffic rather than hand-authoring fixtures.
+
+
+        The item is a **copy**, not a view. It keeps working after the source
+        generation's content is purged, and `source_generation_id` goes null if
+        that generation is deleted — a purge can never quietly stop a suite from
+        being runnable.
+
+
+        Requires both `evaluations:CreateDataset` and
+        `generations:GetGeneration`: the call copies content out of a generation,
+        so a principal that may not read that generation may not curate it
+        either.
+
+
+        Only a **completed** generation can be promoted (`409
+        GENERATION_NOT_COMPLETED`), and only while its content is still
+        available: an agent or project running with `trace_content_mode: none`
+        never stored the input, and a purged or expired generation no longer has
+        it (`409 GENERATION_CONTENT_UNAVAILABLE`). Generations that predate input
+        recording answer the same way.
+      operationId: createDatasetItemFromGeneration
+      parameters:
+        - name: dataset_id
+          in: path
+          required: true
+          description: Dataset ID
+          schema:
+            type: string
+            example: dset_V1StGXR8Z5jdHi6B
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - generation_id
+              properties:
+                generation_id:
+                  type: string
+                  description: >-
+                    The completed generation to promote. Must belong to the same
+                    project as the dataset.
+                  example: gen_V1StGXR8Z5jdHi6B
+                expected_output:
+                  type: string
+                  nullable: true
+                  description: >-
+                    Reference answer. Omit to use the generation's own answer;
+                    pass `null` to store the item with no reference answer.
+                  example: Your invoice is issued on the first of each month.
+                metadata:
+                  type: object
+                  nullable: true
+                  additionalProperties: true
+                  description: Free-form tags, opaque to the platform
+                  example:
+                    topic: billing
+      responses:
+        '201':
+          description: Dataset item created from the generation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatasetItem'
+        '400':
+          description: >-
+            Bad request (generation_id missing, or the generation belongs to a
+            different project than the dataset)
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden
+        '404':
+          description: Dataset or generation not found
+        '409':
+          description: >-
+            The generation has not completed, or its content was never stored
+            or has been purged
   /api/v1/datasets/{dataset_id}/items/{item_id}:
     put:
       tags:

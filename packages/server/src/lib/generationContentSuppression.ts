@@ -65,8 +65,12 @@ export const suppressContentWrites = async (args: {
 export const buildCreateContentColumns = async (args: {
   agentDbId: number;
   metadata?: Record<string, unknown> | null;
+  inputMessages?: unknown[] | null;
 }): Promise<Record<string, unknown>> => {
-  const columns: Record<string, unknown> = { metadata: args.metadata ?? null };
+  const columns: Record<string, unknown> = {
+    metadata: args.metadata ?? null,
+    inputMessages: args.inputMessages ?? null,
+  };
   await suppressContentWrites({
     agentDbId: args.agentDbId,
     alreadyRedacted: false,
