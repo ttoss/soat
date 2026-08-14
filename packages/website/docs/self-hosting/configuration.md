@@ -72,6 +72,18 @@ Any non-positive-integer value (non-numeric, `0`, negative, fractional, empty) f
 Keep this value **larger than a legitimate migration's duration.** A task that is merely waiting for a live peer's `sync` to finish should wait it out rather than abort. Align it with your deployment's health-check grace period. Lower it only if your migrations are known to be fast and you want boots to fail sooner when a lock is genuinely stuck.
 :::
 
+#### One-time data backfills
+
+Some releases also need to **move data** before the schema changes — `sync({ alter: true })` drops a column the models stopped declaring and takes its contents with it, so a value that has to survive into a new column must be copied first.
+
+Those backfills run inside the same advisory-locked critical section, immediately before the DDL. Three consequences worth knowing:
+
+- **The first boot on a new release can take longer than usual**, proportional to the number of rows still in the old shape. It is counted against `SCHEMA_SYNC_LOCK_TIMEOUT_MS` on the *waiting* peers, which is another reason to keep that bound generous.
+- **Every later boot is a no-op.** A backfill selects only rows still holding the old shape, so once a deployment has booted on the release there is nothing left to match.
+- **A failing backfill fails the boot, deliberately.** Starting anyway would run the DDL with rows unmigrated and drop the data the backfill exists to preserve. Refusing to start is the recoverable outcome — fix the cause and boot again.
+
+Enable `DEBUG=soat:backfill` to log what each one touched.
+
 :::note[Indexes are never dropped by the sync]
 
 `sync({ alter: true })` is additive where indexes are concerned: it creates what the current schema declares and never drops what an earlier version declared. When a SOAT release renames an index, the previous one stays in your database, and a release that _widens_ a unique index leaves its narrower predecessor in place — still enforcing the old constraint.

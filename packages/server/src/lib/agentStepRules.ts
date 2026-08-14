@@ -19,25 +19,17 @@ import { resolveToolIdsToNames } from './agentToolSelection';
 
 const log = createDebug('soat:generation');
 
-/**
- * One persisted rule. Both casings are read: `tool_choice` / `active_tool_ids`
- * is what every caller sends today, the camelCase pair is what rows written
- * before single-casing hold.
- */
+/** One persisted rule, in the wire spelling every caller sends and stores. */
 export type StepRule = {
   step: number;
   tool_choice?: unknown;
-  toolChoice?: unknown;
   active_tool_ids?: unknown;
-  activeToolIds?: unknown;
 };
 
 // `tool_choice` (agent-level and inside `step_rules`) is stored verbatim from
 // the request body, so the object form arrives wire-shaped:
 // { type: "tool", tool_name: "..." }. The AI SDK expects
 // { type: "tool", toolName: "..." } — this is the single translation point.
-// The legacy camelCase key is still accepted for agents stored before the
-// wire shape worked.
 export const normalizeToolChoice = (
   value: unknown
 ):
@@ -50,21 +42,9 @@ export const normalizeToolChoice = (
     return value;
   }
   if (value && typeof value === 'object') {
-    const record = value as {
-      type?: unknown;
-      tool_name?: unknown;
-      toolName?: unknown;
-    };
-    if (record.type === 'tool') {
-      const toolName =
-        typeof record.tool_name === 'string'
-          ? record.tool_name
-          : typeof record.toolName === 'string'
-            ? record.toolName
-            : undefined;
-      if (toolName) {
-        return { type: 'tool', toolName };
-      }
+    const record = value as { type?: unknown; tool_name?: unknown };
+    if (record.type === 'tool' && typeof record.tool_name === 'string') {
+      return { type: 'tool', toolName: record.tool_name };
     }
   }
   return undefined;
@@ -80,7 +60,7 @@ export const collectStepRuleActiveToolIds = (stepRules: unknown): string[] => {
   if (!Array.isArray(stepRules)) return [];
   const ids = new Set<string>();
   for (const rule of stepRules as StepRule[]) {
-    const ruleIds = rule?.active_tool_ids ?? rule?.activeToolIds;
+    const ruleIds = rule?.active_tool_ids;
     if (!Array.isArray(ruleIds)) continue;
     for (const id of ruleIds) {
       if (typeof id === 'string') ids.add(id);
@@ -207,11 +187,9 @@ export const buildPrepareStep = (args: {
     );
 
     const result = resolvePrepareStepResult({
-      ruleToolChoice: normalizeToolChoice(
-        rule?.tool_choice ?? rule?.toolChoice
-      ),
+      ruleToolChoice: normalizeToolChoice(rule?.tool_choice),
       ruleActiveTools: resolveStepActiveTools({
-        activeToolIds: rule?.active_tool_ids ?? rule?.activeToolIds,
+        activeToolIds: rule?.active_tool_ids,
         toolIdToName,
       }),
     });

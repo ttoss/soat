@@ -1539,38 +1539,6 @@ describe('Agents', () => {
       expect(getRes.body.tool_bindings).toEqual([{ tool_id: clientToolId }]);
     });
 
-    test('agent row created before tool_bindings existed still reads as bindings', async () => {
-      // Pre-upgrade rows have only the legacy columns populated. Unreachable
-      // through the API (which always writes toolBindings), so seed directly.
-      const project = await db.Project.findOne({
-        where: { publicId: projectId },
-      });
-      const provider = await db.AiProvider.findOne({
-        where: { publicId: aiProviderId },
-      });
-      const legacy = await db.Agent.create({
-        projectId: project!.id,
-        aiProviderId: provider!.id,
-        name: 'legacy-agent',
-        toolIds: [httpToolId],
-        tools: [
-          {
-            name: 'legacy-inline',
-            type: 'http',
-            execute: { url: 'https://example.com/legacy' },
-          },
-        ],
-      });
-
-      const res = await authenticatedTestClient(userToken).get(
-        `/api/v1/agents/${legacy.publicId}`
-      );
-
-      expect(res.status).toBe(200);
-      expect(res.body.tool_bindings).toHaveLength(2);
-      expect(res.body.tool_bindings[0]).toEqual({ tool_id: httpToolId });
-      expect(res.body.tool_bindings[1].tool.name).toBe('legacy-inline');
-    });
   });
 
   // ── Generation ───────────────────────────────────────────────────────────

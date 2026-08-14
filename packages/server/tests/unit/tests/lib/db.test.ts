@@ -1,5 +1,6 @@
 import {
   buildDatabaseConfig,
+  db,
   getSchemaSyncLockTimeoutMs,
   isConcurrentExtensionCreationError,
   logDatabaseConnectionError,
@@ -108,6 +109,46 @@ describe('schema sync reboot idempotency', () => {
 });
 
 describe('syncSchemaWithAdvisoryLock', () => {
+  test('backfills the pre-toolBindings columns before the sync drops them', async () => {
+    // The ordering guarantee this whole mechanism exists for.
+    //
+    // `sync({ alter: true })` drops a column the models stopped declaring and
+    // takes its contents with it, so `backfillAgentToolBindings` has to read
+    // `tool_ids`/`tools` *before* the DDL and inside the same advisory lock —
+    // which is why it runs from a `beforeBulkSync` hook rather than from a line
+    // before this call. If that hook is ever removed or reordered, this test
+    // fails with the agent's tools gone, which is exactly the production
+    // outcome it stands for.
+    await sequelize.query(
+      'ALTER TABLE agents ADD COLUMN IF NOT EXISTS tool_ids jsonb, ADD COLUMN IF NOT EXISTS tools jsonb'
+    );
+
+    const project = await db.Project.create({ name: 'boot-backfill-project' });
+    const agent = await db.Agent.create({
+      projectId: project.id,
+      name: 'boot-backfill-agent',
+    });
+    await sequelize.query(
+      `UPDATE agents
+          SET tool_ids = '["tool_boot"]'::jsonb, tool_bindings = NULL
+        WHERE id = :id`,
+      { replacements: { id: agent.id } }
+    );
+
+    await syncSchemaWithAdvisoryLock({ sequelize });
+
+    // The DDL ran: the columns are gone.
+    const [columns] = await sequelize.query(
+      `SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'agents' AND column_name IN ('tool_ids', 'tools')`
+    );
+    expect(columns).toEqual([]);
+
+    // And the data survived it, as bindings.
+    await agent.reload();
+    expect(agent.toolBindings).toEqual([{ toolId: 'tool_boot' }]);
+  });
+
   test('serializes concurrent boot syncs on SOAT’s advisory lock key', async () => {
     // Two tasks booting at once both run sync({ alter: true }); without a lock
     // the ALTER TABLE steps race on the same DB and can deadlock or corrupt the

@@ -39,10 +39,13 @@ describe('normalizeToolChoice', () => {
     ).toEqual({ type: 'tool', toolName: 'get_weather' });
   });
 
-  test('keeps supporting the legacy camelCase object ({ toolName })', () => {
+  // The camelCase spellings were tolerated for rows written before the wire
+  // shape worked. `backfillAgentStepRules` rewrote those rows, so a stored
+  // camelCase key can no longer reach here and is no longer read.
+  test('ignores the retired camelCase object ({ toolName })', () => {
     expect(
       normalizeToolChoice({ type: 'tool', toolName: 'get_weather' })
-    ).toEqual({ type: 'tool', toolName: 'get_weather' });
+    ).toBeUndefined();
   });
 
   test('returns undefined for objects without a usable tool name', () => {
@@ -59,14 +62,20 @@ describe('collectStepRuleActiveToolIds', () => {
     expect(collectStepRuleActiveToolIds('nope')).toEqual([]);
   });
 
-  test('collects and dedupes tool ids across rules and key casings', () => {
+  test('collects and dedupes tool ids across rules', () => {
     const ids = collectStepRuleActiveToolIds([
       { step: 1, active_tool_ids: ['tool_a', 'tool_b'] },
-      { step: 2, activeToolIds: ['tool_b', 'tool_c'] },
+      { step: 2, active_tool_ids: ['tool_b', 'tool_c'] },
       { step: 3, tool_choice: 'required' },
     ]);
 
     expect(ids.sort()).toEqual(['tool_a', 'tool_b', 'tool_c']);
+  });
+
+  test('ignores the retired camelCase activeToolIds spelling', () => {
+    expect(
+      collectStepRuleActiveToolIds([{ step: 1, activeToolIds: ['tool_a'] }])
+    ).toEqual([]);
   });
 });
 
@@ -115,7 +124,7 @@ describe('buildPrepareStep', () => {
   test('buildPrepareStep returns forced tool config for matching step', () => {
     const prepareStep = buildPrepareStep({
       stepRules: [
-        { step: 2, toolChoice: { type: 'tool', toolName: 'lookup' } },
+        { step: 2, tool_choice: { type: 'tool', tool_name: 'lookup' } },
       ],
       logContext: 'non_stream',
     });
@@ -125,6 +134,23 @@ describe('buildPrepareStep', () => {
       toolChoice: { type: 'tool', toolName: 'lookup' },
       activeTools: ['lookup'],
     });
+    expect(prepareStep!({ stepNumber: 0 })).toEqual({});
+  });
+
+  test('buildPrepareStep ignores the retired camelCase rule keys', () => {
+    const prepareStep = buildPrepareStep({
+      stepRules: [
+        {
+          step: 1,
+          toolChoice: { type: 'tool', toolName: 'lookup' },
+          activeToolIds: ['tool_abc'],
+        },
+      ],
+      logContext: 'non_stream',
+      toolIdToName: { tool_abc: 'search' },
+    });
+
+    expect(prepareStep).toBeDefined();
     expect(prepareStep!({ stepNumber: 0 })).toEqual({});
   });
 

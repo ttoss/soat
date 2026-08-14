@@ -67,12 +67,10 @@ const buildTypedAgentFromConfig = (args: {
   return {
     instructions: configString(config.instructions),
     model: configString(config.model),
-    // Bindings only. A version archived before the `tool_ids`/`tools`
-    // shorthands were removed still carries them, but they were derived views
-    // of this same list — replaying them too would double every tool.
+    // A version archived before the `tool_ids`/`tools` shorthands were removed
+    // still carries them, but they were derived views of this same list, so
+    // only `tool_bindings` is replayed.
     toolBindings: configToolBindings(config.tool_bindings),
-    toolIds: null,
-    tools: null,
     maxSteps: configNumber(config.max_steps),
     toolChoice: configStringOrObject(config.tool_choice),
     stopConditions: configArray<object>(config.stop_conditions),

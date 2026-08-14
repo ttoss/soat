@@ -672,9 +672,7 @@ describe('buildKnowledgeTools — formation-deployed agent casing regression', (
     return {
       instructions: null,
       model: null,
-      toolIds: null,
-      tools: null,
-      maxSteps: null,
+              maxSteps: null,
       toolChoice: null,
       stopConditions: null,
       activeToolIds: null,

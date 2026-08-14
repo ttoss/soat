@@ -1189,35 +1189,6 @@ describe('Tools', () => {
       expect(res.body.error.message).toContain('multipart');
     });
 
-    test('aws_sigv4 with the legacy camelCase bodyMode multipart also returns 400', async () => {
-      // `parseHttpExecuteConfig` honors `bodyMode` as a fallback, so validation
-      // must reject it too or the tool would be signed against a payload hash
-      // that does not match the multipart body actually sent.
-      const res = await authenticatedTestClient(adminToken)
-        .post('/api/v1/tools')
-        .send({
-          project_id: projectId,
-          name: 'sigv4-legacy-multipart-tool',
-          type: 'http',
-          execute: {
-            url: 'https://example.com',
-            method: 'POST',
-            bodyMode: 'multipart',
-            auth: {
-              type: 'aws_sigv4',
-              region: 'us-east-1',
-              service: 's3',
-              access_key_id: 'AKIA',
-              secret_access_key: 'shh',
-            },
-          },
-        });
-
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe('VALIDATION_FAILED');
-      expect(res.body.error.message).toContain('multipart');
-    });
-
     test('updating a tool to an invalid auth config returns 400', async () => {
       const createRes = await authenticatedTestClient(adminToken)
         .post('/api/v1/tools')

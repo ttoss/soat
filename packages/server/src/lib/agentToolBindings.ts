@@ -27,37 +27,23 @@ export type AgentToolBinding = {
 /** The subset of an Agent row the binding helpers read. */
 type AgentToolColumns = {
   toolBindings?: unknown;
-  toolIds?: unknown;
-  tools?: unknown;
 };
 
 // ── Read / derive ─────────────────────────────────────────────────────────
 
 /**
- * Reads an agent row's tool bindings. Rows written since `toolBindings` exists
- * carry that column; rows created before it (the pre-`toolBindings` `toolIds` /
- * `tools` columns only) are normalized lazily here — reference entries first,
- * inline entries after, the only stable order the two-array storage ever
- * implied — so no data migration is needed.
+ * Reads an agent row's tool bindings.
+ *
+ * This used to normalize the pre-`toolBindings` `toolIds` / `tools` columns on
+ * every read. Those columns are gone — `backfillAgentToolBindings` folded them
+ * into this one — so there is a single place bindings come from.
  */
 export const readAgentToolBindings = (
   row: AgentToolColumns
 ): AgentToolBinding[] | null => {
-  if (Array.isArray(row.toolBindings)) {
-    return row.toolBindings as AgentToolBinding[];
-  }
-  const refs = ((row.toolIds as string[] | null) ?? []).map(
-    (toolId): AgentToolBinding => {
-      return { toolId };
-    }
-  );
-  const inline = ((row.tools as InlineToolDefinition[] | null) ?? []).map(
-    (tool): AgentToolBinding => {
-      return { tool };
-    }
-  );
-  const bindings = [...refs, ...inline];
-  return bindings.length > 0 ? bindings : null;
+  return Array.isArray(row.toolBindings)
+    ? (row.toolBindings as AgentToolBinding[])
+    : null;
 };
 
 /**

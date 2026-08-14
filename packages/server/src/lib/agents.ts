@@ -39,7 +39,6 @@ export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 // ── Map Functions ────────────────────────────────────────────────────────
 
 const mapAgent = (agent: AgentRow): MappedAgent => {
-  // Pre-`toolBindings` rows normalize lazily on read.
   const toolBindings = readAgentToolBindings(agent);
 
   return {
@@ -107,8 +106,8 @@ type AgentVersionAuthorship = {
   versionLabel?: string | null;
 };
 
-// `toolBindings`/`toolIds`/`tools` are handled by the binding-normalization
-// path, not copied verbatim.
+// `toolBindings` is handled by the binding-normalization path, not copied
+// verbatim.
 const AGENT_SCALAR_FIELDS = [
   'name',
   'instructions',
@@ -195,10 +194,7 @@ export const createAgent = async (
   const agent = await db.Agent.create({
     ...AGENT_CREATE_DEFAULTS,
     ...buildAgentUpdates(args),
-    // Canonical storage only — the legacy columns stay null on new rows.
     toolBindings,
-    toolIds: null,
-    tools: null,
     projectId: args.projectId,
     aiProviderId,
     modelRouteId,
@@ -368,10 +364,6 @@ export const updateAgent = async (
   const updates = buildAgentUpdates(args);
   if (bindingsUpdate !== undefined) {
     updates.toolBindings = bindingsUpdate;
-    // Pre-`toolBindings` columns are cleared on any binding write, so a
-    // normalized row never disagrees with the row it was normalized from.
-    updates.toolIds = null;
-    updates.tools = null;
   }
 
   await applyModelBindingUpdates({ agent, args, updates });
