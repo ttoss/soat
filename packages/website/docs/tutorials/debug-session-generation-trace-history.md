@@ -15,20 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Debug Session, Generation, and Trace History
 
-This tutorial teaches a practical debugging workflow for first-time SOAT users. You will build a traceable conversation and keep a deterministic mapping between:
-
-- session_id
-- generation_id
-- trace_id
-
-By the end, you will be able to:
-
-1. Start from a session and retrieve all messages.
-2. Track every generation ID for that session.
-3. Inspect each trace and trace tree.
-4. Reverse lookup from trace_id to generation_id and session_id using your debug ledger.
-
-This workflow uses [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
+This tutorial builds a traceable conversation and keeps a deterministic mapping between session_id, generation_id, and trace_id — retrieving all messages and generations for a session, inspecting each trace and trace tree, and reverse-looking-up from trace_id back to generation and session. It uses [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files examples](/docs/modules/files#examples).
 
 ## Prerequisites
 
@@ -492,15 +479,8 @@ jq '.' /tmp/debug-links.json
 </TabItem>
 </Tabs>
 
-## What you achieved
+## Next Steps
 
-You now have a deterministic debugging workflow for:
-
-- session -> all messages
-- session -> all generation IDs
-- generation -> trace ID
-- trace -> generation IDs
-- trace -> raw steps and trace tree
-- trace -> session via your debug ledger
-
-For direct module references, see [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace), [Agent traces](/docs/modules/traces), [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session), and [Files key concepts](/docs/modules/files#key-concepts).
+- [Sessions debugging links](/docs/modules/sessions#debugging-session-generation-trace)
+- [Trace debugging joins](/docs/modules/traces#debugging-joins-trace-generation-session)
+- [Files key concepts](/docs/modules/files#key-concepts)

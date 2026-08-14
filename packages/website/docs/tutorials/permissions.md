@@ -14,17 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Permissions in Practice
 
-This tutorial walks through a realistic permissions setup from scratch. You will:
-
-1. Log in as admin.
-2. Create two regular users — `alice` (project lead) and `bob` (read-only analyst).
-3. Create a project called **Analytics**.
-4. Define two policies: one that grants full access to the project, and one that only allows read operations.
-5. Attach policies to each user.
-6. Create project-scoped API keys for both users, each with its own policy constraint.
-7. Verify what each key can and cannot do.
-
-By the end you will understand how policies, users, and API keys compose together to produce fine-grained access control.
+This tutorial builds a realistic permissions setup from scratch: two users (`alice`, project lead; `bob`, read-only analyst), an **Analytics** project, a full-access and a read-only policy, and project-scoped API keys for each — then verifies what each key can and cannot do.
 
 ## Prerequisites
 
@@ -580,7 +570,7 @@ echo "Bob key  : $BOB_API_KEY"
 </Tabs>
 
 :::warning
-Store the key value. The raw `sk_…` key is returned **only once**. Store it in a secret manager or environment variable immediately. There is no way to retrieve it again — if lost, delete the key and create a new one.
+The raw `sk_…` key is returned **only once** — store it in a secret manager immediately. If lost, delete the key and create a new one.
 :::
 
 ---
@@ -778,18 +768,6 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 </Tabs>
 
 ---
-
-## What you learned
-
-| Concept                      | Takeaway                                                                                    |
-| ---------------------------- | ------------------------------------------------------------------------------------------- |
-| **Bootstrap**                | The first user is created via a special one-shot endpoint.                                  |
-| **Admin vs. regular user**   | Admins bypass the policy engine. Regular users need explicit `Allow` statements.            |
-| **Policies are global**      | Policies live outside projects. SRNs carry the project ID to scope access.                  |
-| **User → policy attachment** | Attach one or more policies to a user; all are evaluated together.                          |
-| **API key scoping**          | A key with `project_id` is hard-locked to that project.                                     |
-| **Intersection semantics**   | A key's `policy_ids` narrow permissions — they can never exceed the owning user's policies. |
-| **One-time key**             | The raw `sk_…` key is returned only on creation. Store it immediately.                      |
 
 ## Next steps
 

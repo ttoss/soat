@@ -14,18 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Create an Agent Squad
 
-An **agent squad** is a team of agents plus the flow that coordinates them, deployed as a single [Formation](/docs/modules/formations) stack — see the [Agent Squad example](/docs/modules/orchestrations#agent-squad). This tutorial builds a small marketing content squad end to end: a researcher gathers facts, a writer and a reviewer work in parallel from those facts, a human reviewer approves the result, and only then does it "publish".
-
-You will:
-
-1. Design the squad: member roles, instructions, and the flow that connects them.
-2. Write a formation template declaring the agents and the squad [orchestration](/docs/modules/orchestrations) in one document, using `{ "ref": ... }` to cross-reference resources declared in the same template.
-3. Validate the template and preview the deployment plan.
-4. Deploy the stack and read the `squad_id` output.
-5. Run the squad and inspect which node is waiting on you.
-6. Resume the `human` approval node and read the published result.
-7. Add a member to the squad and redeploy.
-8. Tear down the stack.
+An **agent squad** is a team of agents plus the flow that coordinates them, deployed as a single [Formation](/docs/modules/formations) stack — see the [Agent Squad example](/docs/modules/orchestrations#agent-squad). This tutorial builds a small marketing content squad end to end: a researcher gathers facts, a writer and a reviewer work in parallel from those facts, a human approves the result, and only then does it "publish". You will design the squad, declare it in one formation template, validate and deploy it, run it through the human approval, add a member, and tear it down.
 
 ## Prerequisites
 
@@ -153,7 +142,7 @@ The squad has three [agents](/docs/modules/agents) plus a human checkpoint, wire
 | `approve`   | human   | Pauses the run so a person can approve the draft before it "publishes"          |
 | `publish`   | transform | Combines the approved draft into the final artifact                          |
 
-`research` fans out to `write` and `review`, which fan back in at `approve` using an [activation group](/docs/modules/orchestrations#activation-groups-fan-in) — `approve` only activates once **both** finish. This is the [Agent Squad](/docs/modules/orchestrations#agent-squad) pattern: because an orchestration is a formation resource type, the three agents and the orchestration that coordinates them are declared and deployed together in the next step.
+`research` fans out to `write` and `review`, which fan back in at `approve` using an [activation group](/docs/modules/orchestrations#activation-groups-fan-in) — `approve` only activates once **both** finish. Because an orchestration is a formation resource type, the agents and the orchestration are declared and deployed together in the next step.
 
 ---
 
@@ -916,15 +905,7 @@ standing.
 
 ---
 
-## Summary
+## Next steps
 
-| Concept                  | What you did                                                                            |
-| ------------------------ | ---------------------------------------------------------------------------------------- |
-| Agent squad               | Declared a team of 3 agents plus the coordinating orchestration in a single template     |
-| `{ "ref": ... }`          | Wired `ai_provider_id` and `agent_id` across resources in the same template               |
-| Fan-out / fan-in          | `research` fanned out to `write` and `review`; an `activation_group` fanned them back in |
-| Human node                | Paused the run at `approve` and resumed it with `submit-human-input`                     |
-| Validate and plan         | Checked the template and previewed create/update actions before deploying                |
-| Deploy                    | Created the provider, agents, and orchestration in one call                              |
-| Update                    | Added a `Proofreader` agent and a new fan-in edge; SOAT applied only the diff             |
-| Delete                    | Removed all managed resources in reverse dependency order                                |
+- [Formations](/docs/modules/formations)
+- [Orchestrations](/docs/modules/orchestrations)

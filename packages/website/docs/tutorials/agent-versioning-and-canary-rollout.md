@@ -19,16 +19,7 @@ An agent's `instructions` are production code — they decide what every user ge
 
 SOAT versions the config instead. Every write that changes an [agent](/docs/modules/agents) archives an immutable snapshot, and a **release** can serve two archived versions side by side so a change is tried on a slice of traffic before it reaches everyone. Assignment is deterministic per end user, so nobody flip-flops between two personas mid-conversation.
 
-You will:
-
-1. Create an agent and see version `1` archived on create.
-2. Edit it, tag the change with a label, and read the archived config back.
-3. Confirm that a write which changes nothing creates no version.
-4. Start a **canary release**: 50% of traffic on the new config, 50% on the old.
-5. Prove assignment is **sticky per end user** and read which version served each generation.
-6. Keep editing during the rollout — live edits are drafts, the split is untouched.
-7. **Promote** the canary, then handle the `409` when there is no release to end.
-8. **Restore** an old version as a new one, so history stays append-only.
+You will version an agent, run a 50/50 canary release, verify sticky assignment, then promote and roll back.
 
 ## Prerequisites
 
@@ -462,11 +453,7 @@ curl -s "$SOAT_BASE_URL/api/v1/generations/$ADA_GEN_ID" \
 </TabItem>
 </Tabs>
 
-`agent_version` is a server-owned field on the [generation](/docs/modules/generations) record, not a `metadata` key a caller could set — so "which config produced this answer?" is answerable after the fact, from the [trace](/docs/modules/traces) or from a usage export.
-
-:::note
-Requests with neither an actor nor a session — anonymous one-shot generations — are split randomly. Two agent fields are always read from the **live** agent even during a rollout, because they are consumed outside the generation path: `single_session_per_actor` (evaluated when a session is created) and `max_context_messages` (applied before dispatch). Neither changes what the model is told to be.
-:::
+`agent_version` is a server-owned field on the [generation](/docs/modules/generations) record, so "which config produced this answer?" is answerable after the fact. For assignment edge cases (anonymous requests, live-read fields), see [Agents — Staged Rollout](/docs/modules/agents#staged-rollout).
 
 ---
 
@@ -551,7 +538,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-Both `promote` and `abort` **write the winning version's config** before clearing the pointer, rather than just clearing it. Clearing alone would serve whatever draft the live row happened to hold — which, during an abort, is the very config being rolled back. The version 3 draft from Step 7 stays in history as an unreleased version; it is neither promoted by accident nor left serving traffic.
+Both `promote` and `abort` write the winning version's config before clearing the pointer, so the version 3 draft from Step 7 stays in history as an unreleased version — neither promoted by accident nor left serving traffic.
 
 Ending a rollout that is not running is a conflict, not a silent no-op:
 
@@ -631,15 +618,6 @@ Two properties make restore safe to reach for under pressure:
 
 ---
 
-## What you built
-
-| Need | Mechanism |
-| --- | --- |
-| "What did this prompt say last week?" | `list-agent-versions` / `get-agent-version` |
-| "Try the new prompt on 10% of users" | `set-agent-release --canary-percent 10` |
-| "Don't flip users between personas" | Deterministic assignment by actor, then session |
-| "Which config produced this answer?" | `agent_version` on the generation record |
-| "Ship it" / "Get it off production" | `promote-agent-release` / `abort-agent-release` |
-| "Go back to the version from Tuesday" | `restore-agent-version` — as a new version |
+## What's next
 
 Read next: [Agents — Versioning and Staged Rollout](/docs/modules/agents#versioning-and-staged-rollout), [Generations](/docs/modules/generations), and [Debug Session, Generation, and Trace History](/docs/tutorials/debug-session-generation-trace-history) for tracing a specific answer back to the config that produced it.

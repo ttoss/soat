@@ -28,22 +28,10 @@ layers meet:
 - The **sign-off** is a human decision recorded for audit — an
   [approval](/docs/modules/approvals).
 
-The single most important design choice here is *where the model sits*. Every
-routing decision in the graph is arithmetic evaluated by
-[JSON Logic](https://jsonlogic.com) — whether a variance clears tolerance is a
-subtraction and a comparison, not a judgement. The [agent](/docs/modules/agents)
-is used for exactly one thing the arithmetic cannot do: writing the controller a
-readable note about what to investigate. The books never depend on what a model
-decides.
-
-You will:
-
-1. Build a reconciliation orchestration whose branch is decided by arithmetic.
-2. Run it clean, then run it against books that do not balance.
-3. Put it on a monthly schedule with a trigger.
-4. Model the close period as a workflow with a backward transition.
-5. Close the period behind a guard **and** a human approval, then read the audit
-   trail.
+The key design choice is *where the model sits*: every routing decision is
+arithmetic evaluated by [JSON Logic](https://jsonlogic.com); the
+[agent](/docs/modules/agents) only writes the controller a readable note. The
+books never depend on what a model decides.
 
 This tutorial assumes you already know how a graph is wired. If you do not, read
 [Conditional Branching](/docs/tutorials/conditional-orchestration) and
@@ -173,14 +161,9 @@ echo "PROJECT_ID: $PROJECT_ID"
 ## Step 3 — Create the AI provider and the variance-memo agent
 
 One [AI provider](/docs/modules/ai-providers#examples) and one
-[agent](/docs/modules/agents#examples). The agent's whole job is to turn a number
-into a sentence a controller can act on — it never decides whether the books
-balance.
-
-Note what the agent does **not** have: an `output_schema`. Nothing downstream
-parses its text, so a weaker model cannot break the graph. That is the general
-rule for putting a model inside a deterministic process — give it the last word
-on wording, never on control flow.
+[agent](/docs/modules/agents#examples). The agent turns a number into a sentence
+a controller can act on — it never decides whether the books balance, and it has
+no `output_schema` because nothing downstream parses its text.
 
 This tutorial uses a local Ollama provider so it can run without external
 credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see
@@ -283,15 +266,11 @@ Two things to notice in the JSON Logic. First, JSON Logic has no absolute-value
 operator, so each reconciliation uses `if` to pick whichever subtraction order is
 positive. Second, **run input and run state are different namespaces**: read
 input as `{"var": "input.tolerance"}`, and read a state key an upstream node
-wrote as a bare `{"var": "total_variance"}`. A flat reference is never satisfied
-by run input, which is why the two forms are not interchangeable.
+wrote as a bare `{"var": "total_variance"}`.
 
-`validate-orchestration` statically checks the graph — unique ids, edges that
-resolve, acyclicity, and every `{"var": ...}` reference reachable from an
-upstream writer — without persisting anything. Run it before you create, and
-again in CI whenever a graph changes. See
-[Orchestrations](/docs/modules/orchestrations#node-types) for the full node
-reference.
+`validate-orchestration` statically checks the graph without persisting
+anything. See [Orchestrations](/docs/modules/orchestrations#node-types) for the
+full node reference.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -699,9 +678,6 @@ cash of `128450.25`. `bank_recon` returns `1250`, the total exceeds the
 tolerance of `1`, and `gate_check` routes down `exception` — so the
 [agent](/docs/modules/agents#examples) runs and writes the memo. This time
 `clean_summary` is the skipped node.
-
-The variance is computed, not judged. Change the tolerance or the figures and the
-branch changes with them, identically on every run.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1134,16 +1110,11 @@ does not try to close the period. They fire `request_rework`, which moves it
 **backward** into `reconciling`. The team finds the missing deposit, the
 corrected pass ties out, and the card goes forward again with `reconciled: true`.
 
-Order matters here, and not for the reason you might expect. A `guard` and
-`requires_approval` on the same transition are **not** checked at the same
-moment: firing an approval-gated transition parks an approval item first and
+Order matters: an approval-gated transition parks an approval item first and
 evaluates the guard when that item **resolves** (see
-[Approval-gated transitions](/docs/modules/workflows#approval-gated-transitions)).
-So firing `close_period` now would not be rejected — it would park a decision
-against books that do not tie out, and the guard would only refuse later, at
-resolution. While an approval is pending the task also exposes
-`pending_transition` and **no other transition may fire**, so the rework move has
-to happen before the sign-off is requested, not after.
+[Approval-gated transitions](/docs/modules/workflows#approval-gated-transitions)),
+and while an approval is pending no other transition may fire — so the rework
+move must happen before the sign-off is requested.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1218,16 +1189,10 @@ a pending item in the [Approvals](/docs/modules/approvals#examples) queue, and t
 task exposes `pending_transition` until someone resolves it.
 
 The guard is then re-evaluated **at resolution time**, as the `approval`
-principal. That ordering is worth internalising: the human decision is collected
-first and the deterministic check is applied last, so a sign-off cannot be
-banked while the books tie out and then cashed after they stop tying out. The
-approval is a request to close; the guard decides whether closing is still
-legal.
-
-This is the same queue, the same endpoints, and the same audit trail that an
-orchestration [`approval` node](/docs/tutorials/approval-gate) uses. Each item
-carries an `origin`, so a reviewer works one queue regardless of which layer
-raised the request.
+principal — the approval is a request to close; the guard decides whether
+closing is still legal. It is the same queue and audit trail that an
+orchestration [`approval` node](/docs/tutorials/approval-gate) uses; each item
+carries an `origin`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1360,43 +1325,6 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" \
 </Tabs>
 
 ---
-
-## How It Works
-
-- **The model never decides control flow.** Every branch is JSON Logic over
-  numbers, so the same books always produce the same route. The agent writes one
-  memo on one branch, declares no `output_schema`, and nothing downstream parses
-  it. A slower or weaker model changes the prose and nothing else.
-- **A pipeline that ends, and an entity that lives.** The reconciliation pass is
-  an [orchestration](/docs/modules/orchestrations) because it starts, fans out,
-  converges, and terminates. The period is a
-  [workflow](/docs/modules/workflows) because it persists across days and moves
-  backward. Trying to model the second as a DAG is what forces people into glue
-  code; `request_rework` is the transition that makes the distinction concrete.
-- **Two gates, and the human is asked first.** On an approval-gated transition
-  the `requires_approval` park happens at fire time and the `guard` is evaluated
-  when the item resolves — not the other way round. The consequence is the useful
-  part: a sign-off cannot be collected while the books balance and then applied
-  after they stop balancing, because the deterministic check runs last. If you
-  want a cheap check to run *before* anyone is paged, it belongs on the
-  transition that reaches the review state, or in the graph — not on the gated
-  transition itself.
-- **A run is asynchronous.** `start-orchestration-run` enqueues and returns
-  `queued` with an empty `state`; a worker drives it. Anything that reads
-  `state`, `output`, or `node_executions` has to poll `get-orchestration-run`
-  until the run is terminal. A trigger firing is the exception — it runs the
-  target synchronously and hands back the finished record.
-- **Joins are explicit.** `activation_group` with `activation_condition: "all"`
-  is what makes `total_variance` wait for all three reconciliations. Without it,
-  it would run as soon as the first one finished and sum whatever had landed.
-- **Input and state are separate namespaces.** `{"var": "input.tolerance"}` reads
-  run input; a bare `{"var": "total_variance"}` reads a state key an upstream node
-  wrote. A flat reference is never satisfied from run input, and
-  `validate-orchestration` catches the mistake before a run does.
-- **One approvals queue, several producers.** The item here came from a workflow
-  transition; in [Approval Gates](/docs/tutorials/approval-gate) an equivalent
-  item comes from an orchestration node. Consumers read `origin` instead of
-  branching on the producer.
 
 ## Next Steps
 

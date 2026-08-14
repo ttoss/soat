@@ -17,19 +17,9 @@ import TabItem from '@theme/TabItem';
 
 Every time you reword an instruction, swap a model, or add a tool, you ship a change whose effect you cannot see. [Traces](/docs/modules/traces) tell you what one run did. They cannot tell you whether the *distribution* of runs got better or worse — which is the only question that matters when the prompt you just edited serves production traffic.
 
-An [evaluation](/docs/modules/evaluations) answers it. A **dataset** holds test cases, an **eval** binds an agent to that dataset plus a list of **scorers**, and a **run** executes the real agent against every case and scores the outputs.
+An [evaluation](/docs/modules/evaluations) answers it. A **dataset** holds test cases, an **eval** binds an agent to that dataset plus a list of **scorers**, and a **run** executes the real agent against every case and scores the outputs. You will build a small suite, run it, fix the prompt, and measure the fix against the first run as a baseline.
 
-You will:
-
-1. Create an agent with a deliberately vague prompt.
-2. Build a **dataset** of three billing questions, tagged with metadata.
-3. Bind an **eval** with two deterministic scorers and a pass threshold.
-4. Run it and read the verdict, then the per-item results.
-5. Fix the prompt and re-run **against the first run as a baseline** — the delta is the answer to "did that help?".
-6. Edit a test case and see that past results kept their **frozen** copy of it.
-7. Read what the aggregate numbers do and do not mean.
-
-Everything here is deterministic apart from the model's own wording: the scorers are string and JSON Logic assertions, with no judge model in the evaluation path. For grading open-ended answers, see [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
+Everything here is deterministic apart from the model's own wording — no judge model in the evaluation path. For grading open-ended answers, see [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers).
 
 ## Prerequisites
 
@@ -336,7 +326,7 @@ EVAL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/evals" \
 </TabItem>
 </Tabs>
 
-A `json_logic` expression is evaluated over five variables — `input`, `output`, `object` (the structured output, absent unless the agent declares an `output_schema`), `expected`, and `item.metadata`. It runs on the same engine as [orchestration](/docs/modules/orchestrations) mappings, so an assertion means the same thing everywhere in SOAT. See [Evaluations — Scorers](/docs/modules/evaluations#scorers) for the other three types.
+A `json_logic` expression is evaluated over `input`, `output`, `object`, `expected`, and `item.metadata` — see [Evaluations — Scorers](/docs/modules/evaluations#scorers) for the details and the other scorer types.
 
 ---
 
@@ -558,7 +548,7 @@ Expected shape — a positive `pass_rate_delta` is the prompt change paying off:
 
 :::
 
-Positive deltas mean this run scored **higher** than the baseline. Every number is computed over the **item intersection** — the cases present and scorable in both runs — and recomputed from both sides rather than subtracting the two runs' stored aggregates. `added_item_count` and `removed_item_count` report the divergence instead of averaging it in, and a scorer only one of the runs ran is omitted rather than compared against nothing.
+Positive deltas mean this run scored **higher** than the baseline. Every number is computed over the **item intersection** — the cases present and scorable in both runs; see [Evaluations](/docs/modules/evaluations) for the full comparison rules.
 
 ---
 
@@ -621,41 +611,22 @@ curl -s "$SOAT_BASE_URL/api/v1/evals/$EVAL_ID/runs/$BASELINE_RUN_ID/results" \
 </TabItem>
 </Tabs>
 
-The old result still reads back the wording it was actually scored on. Without that copy, editing a case between two runs would silently make their scores incomparable — and a baseline delta would report **dataset drift as agent regression**, which is the exact failure this module exists to prevent. Deleting an item nulls `dataset_item_id` on past results and changes nothing else.
+The old result still reads back the wording it was actually scored on, so a baseline delta can never report dataset drift as agent regression. Deleting an item nulls `dataset_item_id` on past results and changes nothing else.
 
 ---
 
 ## Step 8 — What the numbers mean
 
-Three levels, each derived from the one below — the full rules live in [Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics):
-
-| Level | Rule |
-| --- | --- |
-| Per scorer, per item | A binary scorer passes when its score is 1; an `llm_judge` scorer passes at its own `pass_threshold` |
-| Per item | `passed` is the **AND** over that item's per-scorer flags |
-| Per run | `passed` is `null` without a `pass_threshold`; otherwise true when the **pass rate** — passed items over non-errored items — is at least the threshold |
-
-The verdict gates on the pass rate, never on a pooled mean: averaging 0/1 binaries together with 0–1 judge fractions produces a unit-less number whose meaning shifts the moment you add a scorer. `aggregate_scores` still reports per-scorer means, so the continuous signal is there — it just does not decide the verdict.
-
-One rule is worth internalizing before you trust a suite:
+Per-scorer, per-item, and per-run pass rules are defined in [Evaluations — Pass semantics](/docs/modules/evaluations#pass-semantics). In short: an item passes when all its scorers pass, and the run's verdict gates on the **pass rate** against `pass_threshold`, never on a pooled mean.
 
 :::info[Errors are not zeros]
 
-An item whose generation did not complete is recorded as an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. The common case is an agent with [client tools](/docs/tutorials/client-tools) pausing for tool outputs — it produced nothing to grade, and scoring that 0 would report a behavioral regression that did not happen. The same holds for a scorer that could not reach a verdict. A run that scored nothing at all does not pass.
+An item whose generation did not complete is recorded as an **error**: excluded from `aggregate_scores`, counted in `errored_count`, never scored 0. A run that scored nothing at all does not pass.
 
 :::
 
 ---
 
-## What you built
-
-| Need | Mechanism |
-| --- | --- |
-| "Keep the cases we keep breaking" | A `dataset` of items, each replayed verbatim |
-| "Grade without a model in the loop" | `contains` / `json_logic` / `exact_match` / `output_schema` scorers |
-| "Did my change help?" | A second run with `baseline_run_id`, compared over the item intersection |
-| "Which case broke?" | `list-eval-results` — per item, per scorer, with the `generation_id` |
-| "Don't let a fixture edit look like a regression" | Frozen `input` / `expected_output` on every result |
-| "Is this release good enough to ship?" | `pass_threshold` → the run's `passed` verdict |
+## What's next
 
 Read next: [Judge Open-Ended Answers](/docs/tutorials/judge-open-ended-answers) for grading answers that have no single right string, [Gate a Canary Promotion on an Eval](/docs/tutorials/gate-a-canary-promotion-on-an-eval) to make a rollout wait for a green suite, and [Evaluations](/docs/modules/evaluations) for the full data model.

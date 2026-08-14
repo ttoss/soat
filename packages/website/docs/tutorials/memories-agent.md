@@ -14,18 +14,12 @@ import TabItem from '@theme/TabItem';
 
 # Agent with Persistent Memory
 
-This tutorial shows how to give an agent a long-term memory that persists across sessions. You will:
-
-1. Create a [Memory](/docs/modules/memories#key-concepts) container and tag it for filtering.
-2. Write memory entries and observe the three deduplication outcomes: **created**, **skipped**, and **updated**.
-3. Upload a [Document](/docs/modules/documents#examples) with structured reference information.
-4. Create an [agent](/docs/modules/agents#examples) that retrieves from both memories and the document via `knowledge_config`, with `write_memory_id` enabled so the agent can persist new facts it learns.
-5. Run a generation and observe the model answering accurately from injected context — with no RAG logic in the prompt.
-6. Observe the agent writing a new fact to memory with `source: "agent"`.
-7. Enable automatic extraction so facts are captured from every completed turn — even when the model never calls `write_memory`.
-8. Query the knowledge layer directly to see memory entries and document chunks side by side.
-
-By the end you will understand how Memories, Documents, and the Knowledge search layer compose with agents to build stateful, context-aware AI assistants.
+This tutorial gives an agent long-term memory that persists across sessions: you
+create a [Memory](/docs/modules/memories#key-concepts), write entries and observe
+the deduplication outcomes, combine memory with a
+[Document](/docs/modules/documents#examples) via `knowledge_config`, let the agent
+write facts back with `write_memory_id`, enable automatic extraction, and query the
+knowledge layer directly.
 
 ## Prerequisites
 
@@ -261,11 +255,10 @@ echo "MEMORY_ID: $MEMORY_ID"
 
 ## Step 5 — Write memory entries
 
-[Memory entries](/docs/modules/memories#write-algorithm) are the individual facts stored inside a memory. Every write request goes through a semantic deduplication algorithm that compares the new content against existing entries:
-
-- **`created`** (HTTP 201) — no similar entry exists; the new fact is stored.
-- **`skipped`** (HTTP 200) — a near-identical entry already exists (similarity ≥ `duplicate_threshold`, default 0.95); the new content is discarded.
-- **`updated`** (HTTP 200) — an entry is similar but not identical (similarity ≥ `update_threshold`, default 0.75 and < `duplicate_threshold`); the existing entry is replaced with the richer version.
+Every write goes through the semantic deduplication described in
+[Memories — Write Algorithm](/docs/modules/memories#write-algorithm), producing one of
+three outcomes: **`created`** (201, new fact stored), **`skipped`** (200, near-identical
+entry exists), or **`updated`** (200, similar entry replaced with the richer version).
 
 ### 5a — First entry (action: created)
 
@@ -312,7 +305,7 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ### 5b — Near-duplicate (action: skipped)
 
-The content is almost identical to 5a. The similarity score exceeds `duplicate_threshold` (0.95), so the write is silently ignored and the existing entry is unchanged.
+Almost identical to 5a, so the write is ignored.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -352,7 +345,7 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ### 5c — Improved version (action: updated)
 
-The content is related but adds new detail (similarity between 0.75 and 0.95). The existing entry is replaced with the richer version, keeping memory clean and up to date.
+Related content with new detail — the existing entry is replaced with the richer version.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -395,7 +388,7 @@ curl -s -X POST "$SOAT_URL/api/v1/memory-entries" \
 
 ### 5d — Second distinct fact (action: created)
 
-An unrelated fact is added. No existing entry is similar, so it is stored as a new entry.
+An unrelated fact is stored as a new entry.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -479,9 +472,9 @@ curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
 
 ## Step 7 — Upload a support-policy document
 
-A [Document](/docs/modules/documents#examples) is a text file indexed for semantic search. Here we store Alice's account support policy — structured reference material that the agent should consult alongside the memory entries written in Step 5.
-
-The `path` field gives the document a logical location inside the project (similar to a file path). We will use `/alice/support-policy.txt` so we can later filter the entire `/alice/` subtree with a single `document_paths` prefix.
+Store Alice's support policy as a [Document](/docs/modules/documents#examples). The
+`path` `/alice/support-policy.txt` lets us later filter the whole `/alice/` subtree
+with a single `document_paths` prefix.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -529,21 +522,7 @@ echo "DOC_ID: $DOC_ID"
 
 ## Step 8 — Create an agent with `knowledge_config`
 
-The `knowledge_config` field on an [agent](/docs/modules/agents#examples) tells SOAT which memories and documents to search before every generation. The search query is automatically derived from the last user message — no explicit RAG logic needed in the prompt.
-
-The fields you can set in `knowledge_config`:
-
-| Field             | Description                                                                                            |
-| ----------------- | ------------------------------------------------------------------------------------------------------ |
-| `memory_ids`      | Search specific memories by ID                                                                         |
-| `memory_tags`     | Search memories whose tags match (supports glob patterns)                                              |
-| `document_paths`  | Include chunks from documents whose path starts with the given prefix                                  |
-| `document_ids`    | Include chunks from specific documents by ID                                                           |
-| `min_score`       | Minimum cosine similarity (0–1) for a result to be injected                                            |
-| `limit`           | Maximum number of results to inject                                                                    |
-| `write_memory_id` | ID of a memory the agent can write to; enables the `write_memory` tool automatically during generation |
-
-Here we combine the memory from Step 4 with the document uploaded in Step 7 so the agent can draw on both personal customer facts and the structured support policy.
+The `knowledge_config` field on an [agent](/docs/modules/agents#examples) tells SOAT which memories and documents to search before every generation; the query is derived from the last user message automatically. See [Agents](/docs/modules/agents#examples) for the full field list. Here we combine the memory from Step 4 with the document from Step 7, and set `write_memory_id` so the agent gets a `write_memory` tool.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -600,7 +579,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 9 — Run a generation
 
-Send a user message that requires combining personal customer facts (from memory) with the support policy (from the document). Before calling the model, SOAT searches both sources using the user message as the query and injects all matching results as a `system` message.
+Send a user message that requires both customer facts (from memory) and the support policy (from the document). SOAT searches both sources and injects matching results as a `system` message before calling the model.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -621,12 +600,7 @@ Expected shape:
 }
 ```
 
-The model combines two distinct knowledge sources:
-
-- **From memory** — Alice prefers email; she checks it twice a day.
-- **From the document** — P1 incidents require a response within 2 hours; outages over 4 hours trigger automatic refunds.
-
-Neither fact appeared in the user message.
+The model combines facts from memory (email preference) and the document (2-hour P1 response) — neither appeared in the user message.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -669,9 +643,7 @@ curl -s -X POST "$SOAT_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 ## Step 10 — Observe the agent writing to memory
 
-When `write_memory_id` is set on the agent's `knowledge_config`, SOAT automatically makes a `write_memory` tool available during generation. If the model decides to call it (for example, because the user reveals new information), the fact is persisted via the same deduplication algorithm used for manual writes.
-
-Send a message that introduces a new fact not yet in memory:
+If the model decides to call the `write_memory` tool, the fact is persisted via the same deduplication algorithm as manual writes. Send a message that introduces a new fact:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -751,15 +723,13 @@ curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
 </TabItem>
 </Tabs>
 
-If the model called `write_memory`, you will see an entry with `"source": "agent"` containing the timezone fact. The write goes through the same deduplication algorithm — subsequent mentions of Alice's timezone will be deduplicated automatically.
+If the model called `write_memory`, you will see an entry with `"source": "agent"` containing the timezone fact.
 
 ---
 
 ## Step 11 — Enable automatic extraction
 
-The `write_memory` tool depends on the model *deciding* to call it — a smaller model may simply answer and move on, and the fact is lost. [Automatic extraction](/docs/modules/memories#automatic-extraction) removes that dependency: after every completed turn, the server runs a separate extraction step that pulls atomic facts from the transcript and writes them through the same deduplication algorithm, tagged with `source: "extraction"`.
-
-Enable it by adding `extraction` to the agent's `knowledge_config`:
+The `write_memory` tool depends on the model *deciding* to call it. [Automatic extraction](/docs/modules/memories#automatic-extraction) removes that dependency: after every completed turn the server extracts atomic facts from the transcript and writes them with `source: "extraction"`. Enable it by adding `extraction` to the agent's `knowledge_config`:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -802,17 +772,7 @@ curl -s -X PUT "$SOAT_URL/api/v1/agents/$AGENT_ID" \
 </TabItem>
 </Tabs>
 
-`extraction: true` uses the agent's own provider and model with a built-in extraction prompt. The object form customizes all three — useful for running extraction on a cheaper model:
-
-```json
-{
-  "extraction": {
-    "ai_provider_id": "aip_cheap",
-    "model": "llama3.2:1b",
-    "prompt": "Extract only durable facts about the customer: preferences, deadlines, and account details."
-  }
-}
-```
+`extraction: true` uses the agent's own provider and model with a built-in prompt; the [object form](/docs/modules/memories#automatic-extraction) customizes provider, model, and prompt — useful for running extraction on a cheaper model.
 
 Now send a message that reveals a new fact, without asking the agent to remember anything:
 
@@ -881,7 +841,7 @@ curl -s "$SOAT_URL/api/v1/memory-entries?memory_id=$MEMORY_ID" \
 </TabItem>
 </Tabs>
 
-You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"`. Unlike Step 10, this did not rely on the model choosing to call a tool — the server captured the fact unconditionally. The extraction summary (`{ candidates, created, updated, skipped }`) is recorded on the generation's `extraction` field for debugging via the [Generations](/docs/modules/generations) API.
+You should see an entry like `"Alice signed a 2-year contract renewal"` with `"source": "extraction"` — captured without the model choosing to call a tool. The extraction summary is recorded on the generation's `extraction` field ([Generations](/docs/modules/generations)).
 
 ---
 
@@ -909,7 +869,7 @@ Expected output — note the two different `source_type` values:
 { "similarity_score": 0.50, "source_type": "memory", "content": "Alice's fiscal year ends in March; she starts renewal discussions in January" }
 ```
 
-Each result shows a `similarity_score` (cosine similarity) so you can tune `min_score` and `limit` on `knowledge_config` with confidence.
+Each result's `similarity_score` (cosine similarity) helps tune `min_score` and `limit` on `knowledge_config`.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -951,8 +911,5 @@ curl -s -X POST "$SOAT_URL/api/v1/knowledge/search" \
 
 ## What's next
 
-- **Cheaper extraction** — use the [extraction object form](/docs/modules/memories#automatic-extraction) to run fact extraction on a smaller, cheaper model than the one answering, and tailor the extraction prompt to your domain.
-- **Tag-based filtering** — create separate memories per customer (e.g. `tags: ["bob"]`) and set `memory_tags: ["alice"]` on the agent to ensure each agent only retrieves the right customer's facts.
-- **Agent-sourced entries** — set `source: "agent"` when writing entries programmatically from an agent's output to distinguish automated facts from manually curated ones.
-- **Document subtrees** — use `document_paths` prefixes like `/alice/` to scope retrieval to one customer's documents, keeping context focused and token-efficient.
-- **Adjust dedup thresholds** — lower `update_threshold` to be more aggressive about replacing stale facts, or raise `duplicate_threshold` to allow more near-duplicate entries to coexist.
+- **Tag-based filtering** — separate memories per customer and `memory_tags` on the agent scope retrieval per customer.
+- **Adjust dedup thresholds** — tune `update_threshold` / `duplicate_threshold`; see [Memories](/docs/modules/memories#write-algorithm).

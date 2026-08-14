@@ -15,21 +15,13 @@ import TabItem from '@theme/TabItem';
 # Write a Sonnet with a Workflow
 
 The [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) tutorial builds
-a **pipeline that ends** — a DAG that runs forward and terminates. This tutorial
-builds the same sonnet, but as a **[workflow](/docs/modules/workflows) a
-[task](/docs/modules/workflows) lives in**: a card that moves through a chain of
-named states, that an agent advances on its own, that a human reviews, and that
-can move **backward** for a revision — the case a DAG rejects by design.
-
-Rather than draft the whole poem in one shot, the card is built **one stanza at a
-time**: a state per stanza, each dispatching the agent to append the next
-quatrain — a Shakespearean sonnet is three quatrains and a closing couplet, four
-stanzas in all. Every state hands the poem-so-far to the next through the task
-payload, so the card carries the growing sonnet as it advances itself.
-
-> An orchestration is a pipeline that ends. A workflow is a state graph a task
-> lives in. When a task enters a state, that state may _dispatch_ an agent (or an
-> orchestration) to do its work, then route the card onward.
+a DAG that runs forward and terminates. This tutorial builds the same sonnet as a
+**[workflow](/docs/modules/workflows) a [task](/docs/modules/workflows) lives
+in**: a card that moves through named states, that an agent advances on its own,
+that a human reviews, and that can move **backward** for a revision — the case a
+DAG rejects by design. The poem is composed one stanza at a time — a state per
+stanza, each dispatching the agent to append the next quatrain, handing the
+poem-so-far forward through the task payload.
 
 You will:
 
@@ -205,27 +197,17 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
 
 ## Step 3 — Define the workflow
 
-Eight states model the card's life. The four composing states — `create_text` and
-`stanza_1`…`stanza_4` — each carry `on_enter` automation: when the task enters one,
-the workflow **dispatches the agent**, and on completion routes the card to the
-next state. `create_text` turns the theme into a short plan; each stanza reads the
-**poem-so-far** from `task.last_result.content` and asks the agent to
-append the next quatrain, returning the whole poem — so the card carries the
-growing sonnet forward. (An `on_enter` dispatch writes its output to
-`last_result`; see [Workflows & Tasks](/docs/modules/workflows) for the
-automation model.)
-
-Each composing state also declares `on_failure`. Without it, a generation that
-errors leaves the card parked in that state with no route out — the card simply
-stops, and a reader waiting on forward progress has nothing to observe. Naming a
-transition makes the failure a **move** instead of a stall: here every dispatch
-state falls back to `abandon_to_review`, so a failed generation lands the card in
-front of a human rather than nowhere.
+Eight states model the card's life. The composing states — `create_text` and
+`stanza_1`…`stanza_4` — each carry `on_enter` automation: entering one dispatches
+the agent, whose output lands in `task.last_result`, and `on_complete` routes the
+card onward (see [Workflows & Tasks](/docs/modules/workflows) for the automation
+model). Each also declares `on_failure: abandon_to_review`, so a failed
+generation lands the card in front of a human instead of stalling with no route
+out.
 
 `review` is a `human` state — the card parks there until a person acts.
-`published` is `terminal`, so entering it closes the task.
-
-The `publish` transition carries a **guard**: the card can only be published once
+`published` is `terminal`, so entering it closes the task. The `publish`
+transition carries a **guard**: the card can only be published once
 `payload.approved` is `true`.
 
 <Tabs groupId="client">
@@ -521,26 +503,16 @@ The card is `open` in `triage`.
 
 ## Step 5 — Advance the card; the agent composes the sonnet
 
-Firing `start` moves the card into `create_text`, whose `on_enter` **dispatches the
-agent**. From there the card walks the chain on its own: each state's `on_complete`
-rule fires the next transition **as the `automation` principal**, re-entering a new
-state that dispatches the agent again. While a generation runs the card shows
-`automation_status: running`; the poem-so-far accumulates in `last_result`
-until the card lands in `review`. See
+Firing `start` moves the card into `create_text`. From there the card walks the
+chain on its own: each state's `on_complete` rule fires the next transition **as
+the `automation` principal**. While a generation runs the card shows
+`automation_status: running`; the poem-so-far accumulates in `last_result` until
+the card lands in `review`. See
 [Per-state automation](/docs/modules/workflows#per-state-automation-on_enter).
 
-Five generations run back to back, so the card takes a while to arrive. Rather
-than hand-roll a polling loop, assert the destination and let the tutorial runner
-retry: `# → retry N` re-runs the command until it exits `0`, up to `N` attempts a
-second apart. `jq -e` supplies the exit code — non-zero until `.state` is
-actually `review`.
-
-Size `N` from measurement, not optimism. On the CI sandbox (`qwen2.5:0.5b`, CPU
-only, output capped at 256 tokens) the five generations took **32s, 72s, 36s,
-22s and 16s — 179s end to end**, and each poll attempt costs its one-second sleep
-plus the CLI round trip. The budget below is roughly double the observed total so
-ordinary variance does not fail the run; it is a ceiling, not a cost, since the
-loop exits as soon as the card lands.
+Five generations run back to back, so the card takes a while to arrive — poll
+until `.state` is `review` (the `# → retry 240` budget is roughly double the
+~179s the five generations measured on the CI sandbox).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -608,15 +580,10 @@ time — no application-side state, no glue code between the stages.
 ## Step 6 — Send it backward for a revision
 
 The reviewer wants a different ending. `review → stanza_4` is a **backward move** —
-exactly the cycle a DAG rejects. Firing `revise` re-enters `stanza_4`, which
-dispatches the agent once for a new closing couplet and routes the card back to
-`review` through the same `to_review` transition it used the first time.
-
-Note what a workflow makes cheap here: the revision re-enters the chain **at the
-step that needs redoing**, not at the beginning. Pointing `revise` at
-`create_text` instead would be equally valid and would recompose the whole poem —
-five generations rather than one. Which state a rework transition targets is a
-modelling decision, and it is the difference between a fast loop and a slow one.
+exactly the cycle a DAG rejects. Firing `revise` re-enters `stanza_4` for a new
+closing couplet, then routes back to `review` through the same `to_review`
+transition. The revision re-enters the chain at the step that needs redoing —
+one generation, not five.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -768,14 +735,10 @@ curl -s "$SOAT_BASE_URL/api/v1/tasks/$TASK_ID/history" -H "Authorization: Bearer
 </TabItem>
 </Tabs>
 
-You will see the full trail, including the `automation`-principal stanza chain
-(`create_text → stanza_1 → … → stanza_4 → review`) and the backward
-`review → stanza_4` — the entity's whole life, audited.
-
 ## The board query
 
-The workflow's states are the columns of a kanban board, and each task is a card.
-One query renders a column, with no application-side state — see
+The workflow's states are kanban columns and each task a card — one query renders
+a column, with no application-side state. See
 [Tasks](/docs/modules/workflows#task):
 
 <Tabs groupId="client">

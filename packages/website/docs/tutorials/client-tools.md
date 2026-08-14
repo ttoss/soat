@@ -16,16 +16,9 @@ import TabItem from '@theme/TabItem';
 
 # Execute Agent Tool Calls in Your Own App (Client Tools)
 
-Most agent tools run on the SOAT server — an [`http` tool](/docs/modules/tools#http) calls an external endpoint, a [`soat` tool](/docs/modules/tools#soat) calls the platform itself. But some functions can only run inside **your** application: a lookup in your private database, a call to an internal service behind your firewall, an action that needs to happen in the user's browser.
+A [client tool](/docs/modules/tools#client) declares a function's contract so the model can decide to call it — but SOAT never executes it. The generation pauses with status `requires_action`, hands the pending tool calls to your app, and resumes when you submit the results — the same loop as function calling with the OpenAI or Anthropic APIs, with configuration, history, and traces managed server-side.
 
-That is what a **client tool** is for. It declares the function's contract (name, description, JSON Schema parameters) so the model can decide to call it — but SOAT never executes it. Instead, the generation pauses with status `requires_action`, hands the pending tool calls to your app, and resumes when you submit the results. If you have used function calling with the OpenAI or Anthropic APIs, this is the same loop — with the agent's configuration, history, and traces managed server-side.
-
-In this tutorial you build an order-support agent for a store. The order database belongs to your app, not to SOAT, so the agent's `get_order_status` function is a client tool:
-
-1. The user asks the agent about an order.
-2. The agent pauses at `requires_action` with a `get_order_status` tool call.
-3. Your app looks the order up and submits the result.
-4. The agent resumes and answers with real data.
+In this tutorial you build an order-support agent whose `get_order_status` function is a client tool: the agent pauses at `requires_action`, your app looks the order up and submits the result, and the agent resumes with real data.
 
 ## Prerequisites
 
@@ -255,9 +248,9 @@ echo "Tool: $TOOL_ID"
 
 Attach the tool through [`tool_bindings`](/docs/modules/agents#tool-bindings), the canonical attachment field. Two settings make the pause-and-resume loop predictable:
 
-- [`tool_choice`](/docs/modules/agents#tool-choice) `{ "type": "tool", "tool_name": "get_order_status" }` forces the first model call to invoke the function instead of guessing an answer. The force applies to the call that produces the pause; after you submit the output, the run continues with `"auto"` so the model can answer from the result. Leave `tool_choice` at its default `"auto"` when you want the model to decide whether the function is needed.
+- [`tool_choice`](/docs/modules/agents#tool-choice) `{ "type": "tool", "tool_name": "get_order_status" }` forces the first model call to invoke the function; after you submit the output, the run continues with `"auto"`.
 
-  Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, which means a local Ollama agent falls back to `"auto"` no matter what you set — a small model then answers directly as often as it calls the function. OpenAI, Anthropic, and xAI all honor it.
+  Forcing is passed through to the provider, so it works only where the provider implements it. [Ollama's OpenAI-compatible API](https://docs.ollama.com/api/openai-compatibility) does **not** support `tool_choice` and ignores the field, so a local Ollama agent falls back to `"auto"`. OpenAI, Anthropic, and xAI all honor it.
 - `max_steps` bounds the agent loop.
 
 <Tabs groupId="client">
@@ -320,7 +313,7 @@ echo "Agent: $AGENT_ID"
 
 ## Step 6 — Ask about an order: the generation pauses
 
-Start a generation the same way as for any [agent](/docs/modules/agents#examples). Because the model calls a client tool, the response comes back with `status: "requires_action"` instead of a final answer, and `required_action.tool_calls` lists what your app must execute — each entry has an `id`, the `tool_name`, and the model-supplied `args` (with your authored parameter casing intact).
+Start a generation as for any [agent](/docs/modules/agents#examples). Because the model calls a client tool, the response comes back with `status: "requires_action"`, and `required_action.tool_calls` lists what your app must execute — each entry has an `id`, the `tool_name`, and the model-supplied `args`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -403,7 +396,7 @@ Nothing is executing anywhere at this point. The generation is suspended server-
 
 ## Step 7 — Execute the function in your app and submit the output
 
-Your application now runs the real function — a query against its own order database — and posts the result back with the matching `tool_call_id`. The `output` can be any JSON value. The agent resumes its loop with the tool result in context and produces the final answer. See [Tools — client](/docs/modules/tools#client) for the full flow.
+Your application runs the real function and posts the result back with the matching `tool_call_id`. The `output` can be any JSON value; the agent resumes with the tool result in context. See [Tools — client](/docs/modules/tools#client) for the full flow.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -479,7 +472,7 @@ If the model had requested several client calls in one step, `tool_calls` would 
 
 ## Step 8 — Inspect the pause and resume in the trace
 
-Every generation writes a [trace](/docs/modules/traces#examples). For a client-tool run the trace records the whole exchange — the forced tool call, your submitted output, and the final text — which makes it the fastest way to debug an integration that submits the wrong shape. The trace's `step_count` covers both halves of the run, and `file_id` points to the [file](/docs/modules/files) holding the full serialized steps.
+Every generation writes a [trace](/docs/modules/traces#examples). For a client-tool run it records the whole exchange — the forced tool call, your submitted output, and the final text. `step_count` covers both halves of the run, and `file_id` points to the [file](/docs/modules/files) holding the full serialized steps.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

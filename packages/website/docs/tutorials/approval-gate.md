@@ -14,17 +14,9 @@ import TabItem from '@theme/TabItem';
 
 # Approval Gates: Human-in-the-Loop with the `approval` Node
 
-An [`approval` node](/docs/modules/orchestrations#approval-nodes) pauses an orchestration run and files a human-decision item in the [Approvals](/docs/modules/approvals) queue. A person then **approves**, **rejects**, or lets it **expire**, and the run resumes down the matching decision edge. This is the manage-by-exception pattern: the agent proposes a risky action, a human decides, and the run continues automatically.
+An [`approval` node](/docs/modules/orchestrations#approval-nodes) pauses an orchestration run and files a human-decision item in the [Approvals](/docs/modules/approvals) queue. A person then **approves**, **rejects**, or lets it **expire**, and the run resumes down the matching decision edge.
 
-You will:
-
-1. Create a project.
-2. Create the [SOAT tool](/docs/modules/tools) whose call the approval gates.
-3. Define an [orchestration](/docs/modules/orchestrations) whose `approval` node branches to `approved` / `rejected` / `expired` edges.
-4. Start a run and watch it pause with a pending approval item.
-5. Approve one run and reject another, and see each resume down the right branch.
-
-Everything here is deterministic — **no AI provider is required**.
+You will define an [orchestration](/docs/modules/orchestrations) whose `approval` node branches to `approved` / `rejected` / `expired` edges, start runs that pause with pending approval items, then approve one and reject another. Everything here is deterministic — **no AI provider is required**.
 
 ## Prerequisites
 
@@ -532,10 +524,7 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN2_ID" \
 
 ## How It Works
 
-- **Snapshot at emit time.** The node's `arguments`, `reasoning`, `evidence`, and `predicted_impact` are resolved against run state and frozen onto the [approval item](/docs/modules/approvals#snapshot-at-emit-time) when the run pauses. Later state changes never alter what the approver sees.
-- **Decision routing.** The decision (`approved` / `rejected` / `expired`) becomes the paused node's branch label. Labeled edges select the branch, exactly like a [`condition` node](/docs/modules/orchestrations#node-types). An unlabeled edge from an approval node follows **only on approval**, so the rejection and expiry paths must be modeled with explicit labeled edges.
-- **Expiry is a hard gate.** `expires_in` sets how long the item stays actionable. A background sweeper flips overdue items to `expired` and resumes the run down its `expired` edge; the resolution path re-checks expiry too, so a stale proposal can never execute. See [Expiry is a hard gate](/docs/modules/approvals#expiry-is-a-hard-gate).
-- **Producer-agnostic queue.** The same queue, endpoints, and events serve any producer. Every item carries an `origin` (`node` here) so consumers never branch on where it came from.
+Approval items are [snapshotted at emit time](/docs/modules/approvals#snapshot-at-emit-time), [expiry is a hard gate](/docs/modules/approvals#expiry-is-a-hard-gate) enforced by a background sweeper, and the queue is producer-agnostic (every item carries an `origin`). One routing rule worth restating: an **unlabeled** edge from an approval node follows only on approval, so rejection and expiry paths must be modeled with explicit labeled edges.
 
 ## Next Steps
 

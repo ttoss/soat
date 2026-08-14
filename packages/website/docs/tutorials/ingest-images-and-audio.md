@@ -19,45 +19,27 @@ PDFs and text files into searchable [Documents](/docs/modules/documents#examples
 This tutorial extends it to **images and audio** by routing each unsupported
 `content_type` to a converter through an
 [Ingestion Rule](/docs/modules/ingestion-rules#examples) — and demonstrates the
-**two converter kinds** side by side, each used for what it's naturally good at:
+**two converter kinds** side by side:
 
 - **Images and scanned PDFs → an [agent converter](/docs/modules/ingestion-rules#converter-tool-or-agent)**
-  backed by an [OpenAI](https://platform.openai.com/docs) vision model. SOAT
-  feeds the file to the model with a fixed "extract all text" instruction and
-  stores its output — zero plumbing, no request/response mapping to write.
+  backed by an [OpenAI](https://platform.openai.com/docs) vision model — no
+  request/response mapping to write (Part A).
 - **Audio → a [tool converter](/docs/modules/ingestion-rules#converter-tool-or-agent)**
-  calling [xAI](https://docs.x.ai/docs/overview)'s real speech-to-text REST API
-  directly. That API isn't chat-completions-shaped — it's a dedicated
-  `multipart/form-data` endpoint, so an LLM agent can't call it at all. This is
-  exactly the case a tool converter is for: a plain [`http` tool](/docs/modules/tools#http)
-  wrapped in a [`pipeline` tool](/docs/modules/tools#pipeline) to reshape the
-  response, with the API key held as a [secret reference](/docs/modules/secrets#secret-references-secret)
-  rather than a raw value.
+  calling [xAI](https://docs.x.ai/docs/overview)'s speech-to-text REST API — a
+  dedicated `multipart/form-data` endpoint an LLM agent can't call: an
+  [`http` tool](/docs/modules/tools#http) wrapped in a
+  [`pipeline` tool](/docs/modules/tools#pipeline), with the API key held as a
+  [secret reference](/docs/modules/secrets#secret-references-secret) (Part B).
 
 Both routes reuse the same chunk + embed pipeline, so the converted text ends up
-searchable like any other document, and nothing is hosted outside SOAT either way.
-
-It maps onto the feature's building blocks:
-
-| Building block | Where in this tutorial |
-| -------------- | ----------------------- |
-| **Agent converter** — a multimodal model extracts text, no plumbing | Part A |
-| **Tool converter** — an `http` tool calls a real REST API directly, a `pipeline` tool reshapes its response | Part B |
-| **Ingestion rules** — `content_type` → converter routing | Steps 6, 7, 12 |
-| **Automatic routing** — ingest without naming a converter | Steps 8, 13 |
-| **Secret references** — a tool's API key never appears in `GET`/`LIST` responses | Step 10 |
-| **`body_mode: multipart`** — calling a non-JSON third-party API directly | Step 10 |
+searchable like any other document.
 
 :::tip[Runs against mock providers — no keys needed]
 Every provider/tool call is directed at a `base_url` you configure, so the flow
 can run against stand-in servers instead of the real APIs. The tutorials test
-runner does exactly this: `tests/docker-compose.tutorials.yml` starts a
-`mock-providers` service (`tests/mocks/mock-providers.mjs`) that answers the
-OpenAI Responses API (image OCR) and a mock xAI speech-to-text endpoint (audio
-transcription) with canned text — but only after checking that the bytes it
-received match the fixture files checked into this tutorial
-(`fixtures/receipt.png`, `fixtures/meeting.mp3`) byte-for-byte, so a broken
-tutorial fails loudly in CI instead of silently passing on the wrong input.
+runner does exactly this via the `mock-providers` service in
+`tests/docker-compose.tutorials.yml`, which answers with canned text after
+verifying the received bytes match the checked-in fixtures byte-for-byte.
 :::
 
 ## Prerequisites
@@ -72,14 +54,11 @@ tutorial fails loudly in CI instead of silently passing on the wrong input.
   model (`gpt-4o` or similar), and an [xAI API key](https://docs.x.ai/docs/overview)
   with access to its [speech-to-text endpoint](https://docs.x.ai/developers/model-capabilities/audio/speech-to-text).
   For provider setup patterns see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
-  No other infrastructure required — and neither key is needed when running
-  against the mock providers described above.
-- The fixture files this tutorial uploads are checked into the repo at
-  `packages/website/docs/tutorials/fixtures/` (`receipt.png`, `meeting.mp3`).
-  The commands below `base64`-encode them straight off disk, so run this
-  tutorial from a clone of the [SOAT repo](https://github.com/ttoss/soat) with
-  its working directory at the repo root — `$FIXTURES_DIR` below points there
-  by default.
+  Neither key is needed when running against the mock providers described above.
+- The fixture files (`receipt.png`, `meeting.mp3`) are checked into the repo at
+  `packages/website/docs/tutorials/fixtures/`. Run this tutorial from a clone of
+  the [SOAT repo](https://github.com/ttoss/soat) at the repo root — `$FIXTURES_DIR`
+  below points there by default.
 
 ```bash
 export SOAT_BASE_URL=http://localhost:5047   # CLI, SDK, and curl — do NOT append /api/v1
@@ -443,11 +422,9 @@ Upload an image as a [File](/docs/modules/files#examples), then ingest it exactl
 a PDF or text file. Nothing about the call names the agent or the rule —
 `POST /documents/ingest` resolves the matching rule from the file's `content_type`
 automatically. Uploading via base64 lets us set `content_type` explicitly to
-`image/png`, which is what drives routing. `$FIXTURES_DIR/receipt.png` is the real
-fixture checked into this tutorial at
-[`fixtures/receipt.png`](https://github.com/ttoss/soat/blob/main/packages/website/docs/tutorials/fixtures/receipt.png) —
-a small receipt image with real text for the model to OCR — read straight off disk
-and base64-encoded at call time.
+`image/png`, which is what drives routing.
+[`$FIXTURES_DIR/receipt.png`](https://github.com/ttoss/soat/blob/main/packages/website/docs/tutorials/fixtures/receipt.png)
+is a small receipt image with real text for the model to OCR.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -524,33 +501,29 @@ curl -s "$SOAT_BASE_URL/api/v1/documents/$IMAGE_DOC_ID/status" \
 </TabItem>
 </Tabs>
 
-That is the whole image path: a secret, a provider, an agent, and one rule — no JSON
-Logic, no request/response mapping. For most OCR and vision workloads this is all you
-need. (Against a **real** OpenAI account the model occasionally needs a retry — like
-any LLM call, an agent converter generation can intermittently return a non-answer
-instead of acting on the input; re-ingest with `soat reingest-document` if `.status`
-comes back `failed`.)
+That is the whole image path: a secret, a provider, an agent, and one rule.
+(Against a **real** OpenAI account the model occasionally returns a non-answer;
+re-ingest with `soat reingest-document` if `.status` comes back `failed`.)
 
 ---
 
 ## Part B — Audio via an xAI tool converter
 
-xAI exposes a real, dedicated [speech-to-text REST API](https://docs.x.ai/developers/model-capabilities/audio/speech-to-text)
-(`POST /v1/stt`) — not a chat-completions endpoint, so no agent can call it. This is
-exactly the case [tool converters](/docs/modules/ingestion-rules#converter-tool-or-agent)
-are for: an [`http` tool](/docs/modules/tools#http) points `execute.url` directly at
-the API, and a [`pipeline` tool](/docs/modules/tools#pipeline) wraps it to turn xAI's
-JSON response into the bare-string shape [ingestion rules expect](/docs/modules/ingestion-rules#converter-tool-contract).
-See [Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api)
-for the general pattern this tutorial follows.
+xAI's [speech-to-text REST API](https://docs.x.ai/developers/model-capabilities/audio/speech-to-text)
+(`POST /v1/stt`) is not a chat-completions endpoint, so no agent can call it — the
+case [tool converters](/docs/modules/ingestion-rules#converter-tool-or-agent) are
+for: an [`http` tool](/docs/modules/tools#http) calls the API and a
+[`pipeline` tool](/docs/modules/tools#pipeline) reshapes the response into the
+bare-string shape [ingestion rules expect](/docs/modules/ingestion-rules#converter-tool-contract).
+The general pattern is documented in
+[Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api).
 
 ## Step 9 — Store the xAI key as a secret
 
-Same pattern as Step 3. Keeping the key in a [Secret](/docs/modules/secrets#examples)
-means it is encrypted at rest — and unlike an agent's `AiProvider.secret_id`, a tool's
-`execute.headers` can only reference it through a
-[secret reference](/docs/modules/secrets#secret-references-secret) token, never a raw
-value (see Step 10).
+Same pattern as Step 3. A tool's `execute.headers` references the
+[Secret](/docs/modules/secrets#examples) through a
+[secret reference](/docs/modules/secrets#secret-references-secret) token, never a
+raw value (see Step 10).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -597,18 +570,14 @@ echo "XAI_SECRET_ID: $XAI_SECRET_ID"
 ## Step 10 — Create the speech-to-text tool
 
 Create an [`http` tool](/docs/modules/tools#http) pointed directly at xAI's `/stt`
-endpoint (overridden to the mock in CI via `$XAI_BASE_URL`). Two things make this work
-against a real, non-chat REST API:
+endpoint (overridden to the mock in CI via `$XAI_BASE_URL`). Two things make this work:
 
-- **`{{secret:...}}` in `execute.headers`** — the raw key is never stored on the tool;
-  `GET`/`LIST` echo back the `{{secret:...}}` token, and it resolves to the decrypted
-  value only right before the outbound request. See
+- **`{{secret:...}}` in `execute.headers`** — the raw key is never stored on the tool
+  and resolves only right before the outbound request. See
   [Secrets — Secret References](/docs/modules/secrets#secret-references-secret).
-- **`execute.body_mode: "multipart"`** — xAI's `/stt` endpoint requires
-  `multipart/form-data` and rejects a JSON body outright. With `body_mode: multipart`,
-  the `file` field (the `{ content_type, filename, data_base64 }` shape an ingestion
-  rule passes) is base64-decoded and attached as a real file part; scalar fields become
-  plain form fields. See [Tools — Request Body Encoding](/docs/modules/tools#request-body-encoding-body_mode).
+- **`execute.body_mode: "multipart"`** — the endpoint requires `multipart/form-data`;
+  the `file` field is base64-decoded and attached as a real file part. See
+  [Tools — Request Body Encoding](/docs/modules/tools#request-body-encoding-body_mode).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -669,18 +638,14 @@ echo "STT_TOOL_ID: $STT_TOOL_ID"
 
 ## Step 11 — Wrap it in a pipeline to extract the transcript
 
-xAI's `/stt` response is `{ "text": "...", "language": "...", "duration": ..., "words": [...] }`
-— an object, not the bare string an
-[ingestion rule tool converter](/docs/modules/ingestion-rules#converter-tool-contract)
-requires. A [`pipeline` tool](/docs/modules/tools#pipeline) calls the `http` tool as its
-one step and its `output` resolves straight to `steps.call.text` — a single `var`
-expression as the whole `output` mapping resolves to that bare scalar directly, per
-[Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api).
+xAI's `/stt` response is an object (`{ "text": "...", ... }`), not the bare string a
+[tool converter](/docs/modules/ingestion-rules#converter-tool-contract) requires. The
+pipeline's `output` of `{ "var": "steps.call.text" }` resolves to that bare scalar
+directly.
 
-> An `http` tool's [`output_mapping`](/docs/modules/tools#output-mapping) field can express this
-> same `{ "var": "output.text" }` extraction directly on the `xai-stt` tool from Step 10, without
-> a separate `pipeline` tool. The two-tool version below is kept as the illustration of chaining
-> multiple tools together, which `output_mapping` alone cannot do.
+> An `http` tool's [`output_mapping`](/docs/modules/tools#output-mapping) could express
+> this extraction directly on the `xai-stt` tool; the two-tool version below illustrates
+> chaining tools, which `output_mapping` alone cannot do.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -798,12 +763,11 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/ingestion-rules" \
 
 ## Step 13 — Ingest audio the same way
 
-Same call shape as the image, different file. The `audio/*` rule from Step 12 routes it
-to the tool converter via `POST /documents/ingest` — the caller never names a tool. See
-[Documents](/docs/modules/documents#examples). `$FIXTURES_DIR/meeting.mp3` is the real
-fixture checked into this tutorial at
-[`fixtures/meeting.mp3`](https://github.com/ttoss/soat/blob/main/packages/website/docs/tutorials/fixtures/meeting.mp3) —
-a few seconds of real speech, read straight off disk and base64-encoded at call time.
+Same call shape as the image; the `audio/*` rule from Step 12 routes it to the tool
+converter — the caller never names a tool. See
+[Documents](/docs/modules/documents#examples).
+[`$FIXTURES_DIR/meeting.mp3`](https://github.com/ttoss/soat/blob/main/packages/website/docs/tutorials/fixtures/meeting.mp3)
+is a few seconds of real speech.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -954,33 +918,15 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/knowledge/search" \
 
 ---
 
-## What you built
+## Next steps
 
-- **An agent converter** — an OpenAI vision agent routed to by `image/*` and scanned
-  `application/pdf` rules. Its key lives in a [Secret](/docs/modules/secrets#examples)
-  referenced by the [AI provider](/docs/modules/ai-providers#examples)'s `secret_id`.
-  Zero plumbing: the highest-level way to OCR images with an LLM.
-- **A tool converter** — an `http` tool calling xAI's real speech-to-text REST API
-  directly (`body_mode: multipart`, key held as a `{{secret:...}}` reference in
-  `execute.headers`), wrapped in a `pipeline` tool that reshapes the response into a
-  bare string. Routed to by `audio/*`. This is the pattern for wrapping any real,
-  non-chat third-party API — see
-  [Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api).
-- **Two ingestion rules** routing `image/*` and `audio/*` to those converters (plus the
-  optional scanned-PDF fallback), and **fully automatic ingestion** —
-  `POST /documents/ingest` never names a converter; the matching rule is resolved from
-  `content_type` every time.
+Reach for an **agent converter** first when a multimodal LLM can do the job directly;
+reach for a **tool converter** for a dedicated non-LLM API or an
+[async-callback](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)
+background job. To support another modality (e.g. video), add one rule pointing at a
+converter — no server changes.
 
-Reach for an **agent converter** first when a multimodal LLM can do the job directly —
-it's the simplest path and keeps credentials in a secret with zero request mapping.
-Reach for a **tool converter** when you need a dedicated non-LLM API (a specialized
-OCR/STT engine, like this tutorial's xAI example) or an async job — tool converters also
-support a [`{ status: "pending" }` async-callback](/docs/modules/ingestion-rules#synchronous-vs-async-callback-conversion)
-contract for background jobs that an agent converter can't defer to.
-
-To support another modality (e.g. video), add one rule pointing at a converter — no
-server changes, no new deployment, ever. To provision this whole pipeline declaratively
-instead of one API call at a time, see
-[Deploy a Multi-Agent App with Agent Formation](/docs/tutorials/formations) — the
-`ingestion_rule` resource type ([reference](/docs/formations-types/ingestion-rule))
-works the same way as every other resource shown there.
+- [Ingestion Rules — Building a Tool Converter for a Third-Party API](/docs/modules/ingestion-rules#building-a-tool-converter-for-a-third-party-api)
+- [Deploy a Multi-Agent App with Agent Formation](/docs/tutorials/formations) — the
+  [`ingestion_rule` resource type](/docs/formations-types/ingestion-rule) provisions
+  this pipeline declaratively.

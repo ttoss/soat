@@ -14,21 +14,9 @@ import TabItem from '@theme/TabItem';
 
 # Multi-Agent Sonnet with Nested Agent Calls
 
-This tutorial demonstrates how to build a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/tools#soat). If you want the same sonnet workflow with the [Orchestrations](/docs/modules/orchestrations#examples) module calling each agent directly, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet). This nested-agent pattern applies to any workflow that can be decomposed into sequential or parallel sub-tasks — content pipelines, data processing, multi-step analysis, code generation, report assembly, and more.
+This tutorial builds a **nested-agent** pipeline where one agent coordinates multiple sub-agents using [SOAT tools](/docs/modules/tools#soat). For the same sonnet workflow driven by the [Orchestrations](/docs/modules/orchestrations#examples) module instead, see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet).
 
-As a concrete example, you will build a system that composes a sonnet: an orchestrator agent creates the poem title itself and then delegates each stanza to a specialized sub-agent, all collaborating through a shared document. The same architecture works for any scenario where:
-
-1. A **coordinator agent** receives a request, performs initial work, and breaks the rest into sub-tasks.
-2. **Worker agents** each have tools to read shared state and write their results.
-3. The coordinator calls workers in sequence (or in parallel), accumulating results.
-4. A [trace](/docs/modules/traces) captures the full execution tree for observability.
-
-By the end you will understand:
-
-- How to wire agent-to-agent calls via SOAT tools (the orchestration primitive)
-- How tool calls are resolved and executed server-side without client round-trips
-- How traces provide end-to-end observability across nested agent calls
-- How documents serve as shared state between agents in a pipeline
+You will build a sonnet composer: an orchestrator agent delegates each stanza to a specialized sub-agent, all collaborating through a shared document, with a [trace](/docs/modules/traces) capturing the full execution tree. The coordinator → workers → shared-state pattern generalizes to any workflow decomposable into sub-tasks.
 
 ## Prerequisites
 
@@ -922,7 +910,7 @@ curl -s "$SOAT_URL/api/v1/documents/$POEM_DOC_ID" \
 
 ## Step 11 — Inspect the trace
 
-The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the total step count and a `file_id` pointing to the full JSON steps stored on disk. This is intentional — the metadata record is small and fast to query; the full step content (model calls, tool calls, tool results) is stored as a File and retrieved separately.
+The [trace](/docs/modules/traces#examples) endpoint returns **metadata only**: the step count and a `file_id` pointing to the full step JSON, retrieved separately.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -955,14 +943,7 @@ To see the full execution steps (all model calls, tool invocations, and tool res
 soat download-file --file-id "$FILE_ID" | jq '.'
 ```
 
-The downloaded file is a JSON array of step objects. Each step includes the tool name, inputs, and outputs — including the `trace_id` of any nested agent that was spawned.
-
-Key observations:
-
-- `get-trace` returns **metadata only** — not a bug. The full steps are in the file.
-- The orchestrator has `step_count: 2` — it completed 2 reasoning steps before finishing.
-- Each nested agent call creates its **own separate trace** (visible in Step 13). The parent trace's step content references the child's `trace_id` as a tool call result.
-- A final `read-final-poem_get-document` step returns the poem as `.output.content` in the generation response.
+The downloaded file is a JSON array of step objects (tool name, inputs, outputs — including the `trace_id` of any nested agent that was spawned). Each nested agent call creates its **own separate trace** (visible in Step 13); the parent trace's steps reference the child's `trace_id` as a tool call result.
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
@@ -998,7 +979,7 @@ curl -s "$SOAT_URL/api/v1/files/$FILE_ID/download" \
 
 ## Step 12 — Inspect the trace tree
 
-The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace. Each node is a [trace](/docs/modules/traces#examples) record, and its `children` array contains the traces spawned by sub-agent tool calls. This gives you end-to-end observability across all nested agent calls in a single response.
+The `/tree` endpoint returns the full execution tree rooted at the orchestrator trace: each node is a [trace](/docs/modules/traces#examples) record with the traces spawned by sub-agent tool calls in `children`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1103,58 +1084,8 @@ curl -s "$SOAT_URL/api/v1/traces?project_id=$PROJECT_ID" \
 
 ---
 
-## How It Works — The Nested-Agent Pattern
+## Next Steps
 
-The architecture you built follows a general **coordinator → workers → shared state** pattern:
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      Coordinator Agent                               │
-│  Tools: call-stanza-1..4, read-final-poem                            │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  1. Call Worker Agent 1 (writes title + first quatrain)             │
-│  2. Call Worker Agent 2 ──► reads state ──► writes result 2         │
-│  3. Call Worker Agent 3 ──► reads state ──► writes result 3         │
-│  4. Call Worker Agent 4 ──► reads state ──► writes result 4         │
-│  5. Read final poem and return it as final output                   │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-                              │
-                              ▼
-                 ┌────────────────────────┐
-                 │  Shared State          │
-                 │  (Document, File, DB)  │
-                 │                        │
-                 │  (accumulates results) │
-                 └────────────────────────┘
-```
-
-The trace captures this entire flow:
-
-1. **Coordinator** makes sequential fixed calls through `call-stanza-1_create-agent-generation` to `call-stanza-4_create-agent-generation`.
-2. The first worker writes the title plus first quatrain; subsequent workers append their stanzas.
-3. Each **worker agent** uses `poem-read_get-document` and `poem-write_update-document`.
-4. **Coordinator** calls `read-final-poem_get-document` and returns the poem text.
-5. All nested agent executions share the same `trace_id`, creating a unified execution tree.
-
-This pattern is not limited to creative writing. You can apply it to:
-
-- **Data pipelines** — each worker agent processes one stage (extract, transform, validate, load)
-- **Report generation** — workers gather data from different sources; coordinator assembles the final report
-- **Code generation** — workers handle different modules; coordinator integrates and validates
-- **Multi-step analysis** — workers perform independent analyses; coordinator synthesizes conclusions
-
----
-
-## Summary
-
-In this tutorial you learned how to:
-
-| Concept                    | What you did                                                                         |
-| -------------------------- | ------------------------------------------------------------------------------------ |
-| Agent-to-agent calls       | Used fixed SOAT tools with `create-agent-generation` and preset `agentId` per worker |
-| SOAT tools                 | Created fixed `get-document` and `update-document` tools with preset `documentId`    |
-| Shared state via documents | Used a single document as a coordination mechanism between agents                    |
-| Traces                     | Fetched individual traces, the full tree (`/tree`), and listed all project traces    |
-| Orchestration pattern      | Built a deterministic pipeline where the final generation output is the poem         |
+- [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) — the same workflow via the Orchestrations module
+- [Tools — SOAT](/docs/modules/tools#soat) — agent-to-agent calls and preset parameters
+- [Traces](/docs/modules/traces) — trace ancestry and the `/tree` endpoint

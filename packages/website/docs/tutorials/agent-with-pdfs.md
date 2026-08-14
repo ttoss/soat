@@ -299,17 +299,13 @@ each chunk, and stores **one Document with many `DocumentChunk` rows**. The
 `--path-prefix` organizes the documents under a common path so you can scope an agent
 to the whole subtree later with a single `document_paths` prefix.
 
-Ingestion is **asynchronous by default**: the endpoint returns `202 Accepted` with
-`status: pending` and processing runs in the background (see
-[Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion)). Here
-we pass `--wait true` so the call blocks until the document is `ready` — that way the
-next steps can search the chunks immediately without polling. The final `chunk_count` is
-read separately from [`GET /documents/:id/status`](/docs/modules/documents#polling-ingestion-status),
-which reports live ingestion progress rather than the document's own (caller-owned)
-`metadata`.
-
-The default `page` chunk strategy produces **one chunk per page** — these PDFs are one
-page each, so `chunk_count` is `1`.
+Ingestion is asynchronous by default (see
+[Documents — Async File Ingestion](/docs/modules/documents#async-file-ingestion));
+`--wait true` blocks until the document is `ready` so the next steps can search
+immediately. `chunk_count` comes from
+[`GET /documents/:id/status`](/docs/modules/documents#polling-ingestion-status). The
+default `page` chunk strategy produces one chunk per page — these PDFs are one page
+each, so `chunk_count` is `1`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -735,16 +731,12 @@ question needs the agent to break it down and search in its own words.
 
 ## Step 12 — Give the agent a knowledge tool (Plan D)
 
-Step 11 reformulated the query, but *you* still made the call — the agent never saw
-`search-knowledge`. This step wraps the same operation as a
-[`soat` tool](/docs/modules/tools#soat) and attaches it directly to an agent, so the
-model decides for itself, mid-reasoning, when to search and what query to write.
-
-`preset_parameters` locks the tool to this project and to the `/manuals/` subtree —
-those fields are hidden from the model — leaving only `query` (and optionally `limit`)
-for it to fill in. Without a preset `projectId`, a tool-driven search runs with the
-caller's own scope instead of the agent's, so pinning it here keeps retrieval bounded to
-the manuals library no matter who talks to the agent.
+This step wraps the same operation as a [`soat` tool](/docs/modules/tools#soat) and
+attaches it to an agent, so the model decides for itself, mid-reasoning, when to search
+and what query to write. `preset_parameters` pins the tool to this project and the
+`/manuals/` subtree — those fields are hidden from the model, leaving only `query` (and
+optionally `limit`) for it to fill in, and retrieval stays bounded to the manuals
+library no matter who talks to the agent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -910,13 +902,6 @@ mid-reasoning with a sharper, self-written query when the first pass wasn't enou
 ---
 
 ## What you built
-
-- **A. Ingested** two PDFs into chunked, embedded Documents under `/manuals/`, with a
-  choice of `page` (citations) or `size` (sharper recall) chunking.
-- **B. Scoped** an agent to that subtree with one `knowledge_config` prefix.
-- **C. Retrieved** three ways — automatic injection, an explicit reformulated
-  `search-knowledge` query, and a `soat` tool the agent calls itself mid-reasoning.
-- **D. Cited** answers down to `document_id` + `page`.
 
 To grow the library, upload more PDFs and ingest them under the same `/manuals/` prefix
 — the agent picks them up automatically with no config change. For organizing larger

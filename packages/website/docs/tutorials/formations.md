@@ -16,16 +16,7 @@ import TabItem from '@theme/TabItem';
 
 This tutorial builds the same **multi-agent orchestration** pipeline from [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — an orchestrator agent that delegates sonnet stanzas to four specialized sub-agents — but deploys the entire system with a **single [Agent Formation](/docs/modules/formations#key-concepts) template** instead of many ordered API calls.
 
-You will:
-
-1. Write a formation template that describes all 14 resources: an AI provider, a shared poem document, agent tools, four stanza workers, and an orchestrator.
-2. Validate and preview the template before deploying.
-3. Deploy the entire system in one call, with SOAT resolving all `{ "ref": ... }` cross-resource references automatically.
-4. Run the orchestrator and read the finished poem.
-5. Update the formation to change a resource.
-6. Delete the formation and all its managed resources.
-
-By the end you will understand how [Agent Formation](/docs/modules/formations#key-concepts) turns a complex multi-step workflow into one reproducible, declarative operation.
+You will write a template describing all 14 resources, validate and preview it, deploy it in one call, run the orchestrator, update the formation, and delete it.
 
 ## Prerequisites
 
@@ -150,17 +141,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Write the formation template
 
-A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This single template defines all 14 resources of the sonnet pipeline. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order so `tool_ids`, `ai_provider_id`, and nested `preset_parameters.agentId` are all wired automatically — no manual ID tracking required.
-
-The template defines:
-
-- **`provider`** — Ollama AI provider (no dependencies)
-- **`poemDoc`** — shared poem document (no dependencies)
-- **`poemReadTool` / `poemWriteTool`** — fixed document tools for stanza agents (depend on `poemDoc`)
-- **`stanza1Agent` … `stanza4Agent`** — worker agents with fixed step rules (depend on `provider`, `poemReadTool`, `poemWriteTool`)
-- **`callStanza1Tool` … `callStanza4Tool`** — fixed orchestrator tools with `preset_parameters.agentId` wired to each stanza agent via `ref` (depend on respective stanza agents)
-- **`readFinalPoemTool`** — orchestrator's final read tool (depends on `poemDoc`)
-- **`orchestrator`** — coordinates the full pipeline (depends on `provider` and all five orchestrator tools)
+A [formation template](/docs/modules/formations#key-concepts) is a JSON object with a `resources` map and an optional `outputs` map. This template defines all 14 resources of the sonnet pipeline — an Ollama provider, a shared poem document, read/write tools, four stanza agents, five orchestrator tools, and the orchestrator. SOAT resolves `{ "ref": "logicalId" }` expressions in dependency order, so `tool_ids`, `ai_provider_id`, and nested `preset_parameters.agentId` are wired automatically.
 
 This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
@@ -949,7 +930,7 @@ curl -s -X POST "$SOAT_URL/api/v1/formations/plan" \
 
 ## Step 6 — Deploy the formation
 
-Create the formation. SOAT provisions all 14 resources in dependency order and resolves every `ref` expression. The `outputs` section surfaces the orchestrator ID and poem document ID so you don't need to track them manually. See [Formations](/docs/modules/formations#key-concepts).
+Create the formation. SOAT provisions all 14 resources in dependency order; the `outputs` section surfaces the orchestrator and poem document IDs. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1225,7 +1206,7 @@ curl -s "$SOAT_URL/api/v1/traces/$TRACE_ID/tree" \
 
 ## Step 10 — Update the formation
 
-Update the formation by supplying a modified template. SOAT diffs the new template against the current state and applies only the required changes. Here we update the orchestrator's instructions to change the sonnet theme prompt. See [Formations](/docs/modules/formations#key-concepts).
+Supply a modified template; SOAT diffs it against the current state and applies only the required changes. Here we update the orchestrator's instructions. See [Formations](/docs/modules/formations#key-concepts).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -1371,40 +1352,7 @@ leave it standing instead.
 
 ---
 
-## How It Works — Formation Dependency Resolution
+## Next Steps
 
-The dependency graph for the sonnet formation is resolved in five waves:
-
-```
-Wave 1 (no deps):       provider       poemDoc
-                           │               │
-Wave 2 (depend on Wave 1): └──poemReadTool─┘  poemWriteTool
-                                   │               │
-Wave 3 (depend on Wave 2):  stanza1Agent  stanza2Agent  stanza3Agent  stanza4Agent
-                                │               │               │               │
-Wave 4 (depend on Wave 3): callStanza1  callStanza2  callStanza3  callStanza4   │
-                                │               │               │               │
-                            readFinalPoemTool (depends on poemDoc, from Wave 1) │
-                                │                                               │
-Wave 5 (depend on Waves 4+1):                orchestrator
-```
-
-Without formations, reproducing this pipeline requires **14 ordered API calls**, manual ID tracking between each, and a custom script to encode the dependencies. With formations, you write the template once and SOAT handles the rest — including updates (diff) and teardown (reverse order).
-
----
-
-## Summary
-
-In this tutorial you deployed the same multi-agent sonnet pipeline as [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), but collapsed all resource creation into a single declarative template.
-
-| Concept                           | What you did                                                                         |
-| --------------------------------- | ------------------------------------------------------------------------------------ |
-| Formation template                | Wrote a single JSON template describing all 14 resources                             |
-| `{ "ref": ... }` cross-references | Wired `ai_provider_id`, `tool_ids`, and `preset_parameters.agentId` across resources |
-| Validate and plan                 | Checked the template structure and previewed 14 `create` actions before deploying    |
-| Deploy                            | Created all 14 resources in dependency order with one API call                       |
-| Outputs                           | Retrieved `ORCHESTRATOR_ID` and `POEM_DOC_ID` directly from the formation outputs    |
-| Run the orchestrator              | Triggered the same multi-agent sonnet pipeline with a single generation call         |
-| Trace tree                        | Inspected the full nested execution across the orchestrator and four stanza workers  |
-| Update                            | Changed the orchestrator instructions; SOAT applied only the `update` diff           |
-| Delete                            | Removed all 14 resources in reverse dependency order with one call                   |
+- [Formations](/docs/modules/formations#key-concepts) — dependency resolution, updates, and teardown details
+- [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration) — the same pipeline built step by step

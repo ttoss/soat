@@ -14,19 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Chat with an LLM
 
-This tutorial walks through the full flow of having a back-and-forth conversation with an LLM. You will:
-
-1. Log in as admin.
-2. Create a project.
-3. Create a local AI provider backed by Ollama.
-4. Create an agent.
-5. Open a session.
-6. Send messages and receive replies from the model.
-7. View the conversation history.
-8. Run async generation.
-9. Capture generation lifecycle events via webhook.
-
-By the end you will understand how [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), [Sessions](/docs/modules/sessions#examples), and [Webhooks](/docs/modules/webhooks#examples) compose together to drive both sync and async LLM conversations.
+This tutorial builds a back-and-forth conversation with an LLM, showing how [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), [Sessions](/docs/modules/sessions#examples), and [Webhooks](/docs/modules/webhooks#examples) compose to drive both sync and background LLM conversations.
 
 ## Prerequisites
 
@@ -157,11 +145,7 @@ echo "PROJECT_ID: $PROJECT_ID"
 
 ## Step 3 — Create a local AI provider
 
-For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required.
-
-## Step 3 — Create a local AI provider
-
-For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required. This tutorial uses a local Ollama provider so it can run without external credentials. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
+For local development and tutorial tests, the simplest setup is an [AI provider](/docs/modules/ai-providers#examples) backed by Ollama. It uses the server's `OLLAMA_BASE_URL`, so no secret is required. To connect xAI, OpenAI, Anthropic, or Amazon Bedrock instead, see [Connect Third-Party LLMs](/docs/tutorials/connect-third-party-llms).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>

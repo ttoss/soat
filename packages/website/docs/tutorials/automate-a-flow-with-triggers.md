@@ -17,18 +17,10 @@ import TabItem from '@theme/TabItem';
 A [Trigger](/docs/modules/triggers) binds a **starter** — `manual`, `webhook`, or
 `schedule` — to an **executable target** — an orchestration, agent, or tool. Every
 firing is recorded as an auditable [firing record](/docs/modules/triggers#data-model),
-and runs under a confined run-as identity derived from the trigger's creator. In this
-tutorial you will:
-
-1. Log in as admin.
-2. Create a project.
-3. Create a small orchestration to activate.
-4. Bind a **manual** trigger to it and fire it, then inspect the firing record.
-5. Schedule the same flow with a **cron** trigger.
-6. Create a **webhook** trigger and read its signing secret.
-
-By the end you will understand how one trigger resource activates any target from any
-of the three starters.
+and runs under a confined run-as identity derived from the trigger's creator. You will
+bind a small orchestration to all three starters: fire a **manual** trigger and inspect
+the firing record, schedule the same flow with **cron**, and create a **webhook** trigger
+with its signing secret.
 
 ## Prerequisites
 
@@ -477,13 +469,7 @@ the SOAT CLI — it carries no bearer token and is authenticated solely by the
 
 ---
 
-## Recap
-
-You bound one orchestration to three different starters:
-
-- a **manual** trigger you fired on demand and audited via its firing record;
-- a **schedule** trigger the built-in poller fires on a cron cadence;
-- a **webhook** trigger an external system fires with an HMAC-signed inbound request.
+## Next Steps
 
 The same pattern works with `target_type: agent` and `target_type: tool`. To ship a trigger
 alongside the resource it activates as a single deployable stack, declare it as a `trigger`

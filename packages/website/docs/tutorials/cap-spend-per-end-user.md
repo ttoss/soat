@@ -16,15 +16,10 @@ import TabItem from '@theme/TabItem';
 
 A per-user product needs a per-user budget: _"no single user costs me more than X a month"_, enforced no matter which agent they talk to. SOAT gets there in two moves — [Actors](/docs/modules/actors) give each end user an identity that [usage events](/docs/modules/usage) are billed to, and one actor-scoped [Quota](/docs/modules/quotas) turns that ledger into a hard cap.
 
-You will:
-
-1. Create an agent, then two [actors](/docs/modules/actors) standing in for two end users.
-2. Bind a [session](/docs/modules/sessions) to an actor and run a turn — the session path is what makes attribution possible.
-3. Read spend **per end user** out of the usage meter.
-4. Cap every end user with a **single** quota, and watch one user get blocked with `429` while the other keeps working.
-5. Raise the cap, and see the blocked user resume.
-6. Discover the one case where a cost cap silently protects nothing — and the [exception](/docs/modules/exceptions) the platform files about it.
-7. Switch a quota to **monitor** mode to observe a breach without blocking it.
+You will bind [sessions](/docs/modules/sessions) to two actors, read spend per end
+user, cap every user with a single quota (one blocked with `429`, one unaffected),
+raise the cap, see the one case where a cost cap silently protects nothing (and the
+[exception](/docs/modules/exceptions) it files), and finish with **monitor** mode.
 
 ## Prerequisites
 
@@ -208,7 +203,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 4 — Create an actor per end user
 
-An [Actor](/docs/modules/actors) is the platform's identity for someone outside it — a customer, a WhatsApp contact, a signed-in app user. `external_id` is how you correlate it with your own system, and creation with an `external_id` is **idempotent**: posting the same one again returns the existing actor (`200` instead of `201`) rather than creating a duplicate. That is what lets an inbound-message webhook call `create-actor` on every message without bookkeeping.
+An [Actor](/docs/modules/actors) is the platform's identity for an end user. Creation with an `external_id` is **idempotent**: posting the same one again returns the existing actor (`200` instead of `201`), so an inbound-message webhook can call `create-actor` on every message without bookkeeping.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -429,9 +424,9 @@ curl -s "$SOAT_BASE_URL/api/v1/usage/meters?actor_id=$ADA_ID" \
 
 ## Step 7 — One quota, one budget per end user
 
-Here is the part worth reading twice. For `actor` scope, a **null `scope_ref` means one budget per actor** — not one pooled total shared across all of them. So a single quota expresses _"every end user gets N tokens a month"_, and one user exhausting theirs never blocks anyone else.
+For `actor` scope, a **null `scope_ref` means one budget per actor** — not one pooled total. A single quota expresses _"every end user gets N tokens a month"_, and one user exhausting theirs never blocks anyone else.
 
-The limit below is deliberately tiny (30 tokens) so that the single short turn from Step 5 already crosses it — the prompt alone costs more than that in input tokens. In production this would be `100000` or more.
+The limit below is deliberately tiny (30 tokens) so Step 5's single turn already crosses it; in production this would be `100000` or more.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -489,10 +484,10 @@ curl -s "$SOAT_BASE_URL/api/v1/quotas/$QUOTA_ID" \
 </Tabs>
 
 :::note
-`current_usage` reads `null` on a `tokens` or `cost_usd` quota. Those metrics aggregate the [usage meter](/docs/modules/usage) directly at check time rather than keeping a separate counter, which is why a quota and the usage report can never disagree. Only the `requests` metric keeps a window counter.
+`current_usage` reads `null` on a `tokens` or `cost_usd` quota — those metrics aggregate the [usage meter](/docs/modules/usage) at check time rather than keeping a counter. Only `requests` keeps a window counter.
 :::
 
-A quota is also only accepted for a scope its metric can actually be aggregated by. `requests` is counted by the request middleware, which sees the API key but not the end user behind the call — so `actor` + `requests` is rejected outright rather than stored as a silent no-op:
+A quota is only accepted for a scope its metric can be aggregated by — `actor` + `requests` is rejected outright rather than stored as a silent no-op:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -547,9 +542,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/quotas" \
 
 ## Step 8 — One user is blocked, the other is not
 
-Ada's Step 5 turn already put her over the 30-token cap, so her next turn is refused **before the generation starts** with `429 QUOTA_EXCEEDED` — nothing is metered for a blocked call.
-
-Blake, under the very same quota, is at zero. His first turn runs normally. That is the per-actor budget doing its job.
+Ada's Step 5 turn already put her over the 30-token cap, so her next turn is refused **before the generation starts** with `429 QUOTA_EXCEEDED`. Blake, under the same quota, is at zero and runs normally.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -666,14 +659,14 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/sessions/$BLAKE_SESSION_ID/generate?wait=
 </Tabs>
 
 :::note
-A generation already **in flight is never killed** — its tokens are spent and will be billed — so a budget can overshoot by at most one generation. That is why Ada's Step 5 turn completed and *then* left her over the cap: the check compares the window's recorded usage before a generation starts, never mid-stream.
+A generation already **in flight is never killed**, so a budget can overshoot by at most one generation — the check runs before a generation starts, never mid-stream.
 :::
 
 ---
 
 ## Step 9 — Raise the cap
 
-`limit` and `mode` are the only mutable fields on a [quota](/docs/modules/quotas#data-model); scope, metric, and window are immutable, because changing them would silently redefine what the historical breaches meant. Raise the limit and Ada resumes immediately — the check reads the meter live, so there is no counter to reset.
+`limit` and `mode` are the only mutable fields on a [quota](/docs/modules/quotas#data-model). Raise the limit and Ada resumes immediately — the check reads the meter live, so there is no counter to reset.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -729,9 +722,7 @@ To give one named user a different allowance instead of the shared per-actor bud
 
 ## Step 10 — A cost cap with no prices protects nothing
 
-This is the one place a quota fails **open**, and the platform refuses to stay quiet about it. A `cost_usd` quota sums the priced cost of the window's events — but an event with no [price-book](/docs/modules/usage#pricing) row carries `cost_usd: null` and contributes `0`. On a project with no prices (like this one), a `cost_usd` cap therefore never breaches and never blocks.
-
-So when a cost check finds metered usage but nothing priced, it files a `quota_unpriced` [exception](/docs/modules/exceptions#severity), deduped on the quota — one dead cap is one triage item, and its `occurrence_count` is the number of generations that ran unprotected.
+A `cost_usd` quota sums priced costs — an event with no [price-book](/docs/modules/usage#pricing) row contributes `0`, so on a project with no prices (like this one) a `cost_usd` cap fails **open**: it never breaches. When a cost check finds metered usage but nothing priced, it files a `quota_unpriced` [exception](/docs/modules/exceptions#severity), deduped on the quota.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -829,7 +820,7 @@ curl -s "$SOAT_BASE_URL/api/v1/exceptions?project_id=$PROJECT_ID&kind=quota_unpr
 
 ## Step 11 — Observe before you enforce
 
-Dropping a hard cap onto live traffic is how you find out your estimate was wrong at the worst moment. `mode: monitor` runs the identical check and records the breach — firing the `quota.exceeded` [webhook](/docs/modules/webhooks) and writing a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries) — but lets the request through.
+`mode: monitor` runs the identical check and records the breach — firing the `quota.exceeded` [webhook](/docs/modules/webhooks) and writing a `quotas:MonitorBreach` [audit entry](/docs/modules/audit-log#system-originated-entries) — but lets the request through.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -929,14 +920,6 @@ curl -s "$SOAT_BASE_URL/api/v1/audit-log?project_id=$PROJECT_ID&action=quotas:Mo
 </Tabs>
 
 ---
-
-## How It Works
-
-- **Three modules, three questions.** [Usage](/docs/modules/usage) answers _"what did this cost?"_. A [Quota](/docs/modules/quotas) answers _"has this scope exceeded its aggregate cap?"_. A [Guardrail](/docs/modules/guardrails) answers _"may this one tool call execute?"_. A quota is cost control, not authorization — an over-budget caller gets `429`, never `403`.
-- **The actor comes from the session, never the request.** A caller cannot bill someone else's budget by passing an actor id or writing to `tool_context`; the session owns the actor link, so the actor a quota is enforced against is always the actor the resulting usage event is billed to.
-- **Quotas read the meter, not a counter.** `tokens` and `cost_usd` aggregate usage events at check time, which is why a quota and the usage report can never disagree, why raising a limit takes effect instantly, and why `current_usage` is `null` for them.
-- **Per-actor is the only reading of a null `scope_ref` that isn't already spellable.** A project-wide aggregate is exactly what a `project` quota expresses, so treating a null-ref actor quota as "all actors pooled" would make it a duplicate under a misleading name.
-- **Fail-open is announced.** The one case where a quota does not protect you — a cost cap over unpriced usage — files an exception instead of looking healthy through the API.
 
 ## Next Steps
 

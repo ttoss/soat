@@ -15,13 +15,7 @@ import TabItem from '@theme/TabItem';
 
 This tutorial shows how to build a branching orchestration using [condition nodes](/docs/modules/orchestrations#node-types). When a run completes, every node that was not reached is recorded with `status: "skipped"` — giving you a complete execution trace regardless of which path ran.
 
-You will:
-
-1. Create a project.
-2. Define an orchestration with a `condition` node that routes to one of two `transform` branches based on run input.
-3. Start two runs — one for each branch — and inspect the `node_executions` to confirm which nodes ran and which were skipped.
-
-No AI provider is required — this tutorial uses only `condition` and `transform` nodes.
+You will define an orchestration whose `condition` node routes to one of two `transform` branches, then run both branches and inspect `node_executions`. No AI provider is required.
 
 ## Prerequisites
 
@@ -361,21 +355,6 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/orchestration-runs" \
 
 ---
 
-## What you built
-
-A branching orchestration where a single `condition` node decides which downstream path executes:
-
-```
-input
-  └─▶ route (condition)
-        ├─▶ send_alert  (condition: "alert")  ← runs when urgent = true
-        └─▶ queue_task  (condition: "queue")  ← runs when urgent = false
-```
-
-Key takeaways:
-
-- A `condition` node evaluates a [JSON Logic](https://jsonlogic.com) expression and emits a string label. Downstream edges carry `condition: "<label>"` to match that label.
-- Nodes whose incoming edges are never traversed are recorded as `skipped` once the run completes — every declared node is always visible in the `node_executions` trace.
-- The branching logic lives in the graph definition, not inside each individual node. Nodes stay single-responsibility.
+## Next Steps
 
 To apply this pattern to a real pipeline, replace the `transform` nodes with `agent` nodes pointing at specialized agents for each branch. See [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet) and [Multi-Agent Orchestration](/docs/tutorials/multi-agent-orchestration) for examples that wire agents into an orchestration graph.

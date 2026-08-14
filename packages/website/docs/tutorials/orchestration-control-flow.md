@@ -14,15 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Orchestration Control Flow: Delay, Poll, and Loop
 
-This tutorial focuses on the **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module — the ones that pace, wait, repeat, and branch a run rather than call an LLM. You will build one orchestration that uses, in order, a `delay`, a `poll`, a `loop` (which runs a sub-orchestration per item), and a `condition` that routes to a terminal `transform`.
-
-You will:
-
-1. Create a project.
-2. Create a small **sub-orchestration** that the loop runs once per item.
-3. Create a [SOAT tool](/docs/modules/tools) the `poll` node calls each attempt.
-4. Define the main [orchestration](/docs/modules/orchestrations) wiring `delay → poll → loop → condition → transform`.
-5. Run it and inspect the per-node executions.
+This tutorial focuses on the **control-flow nodes** of the [Orchestrations](/docs/modules/orchestrations) module — the ones that pace, wait, repeat, and branch a run rather than call an LLM. You will build a sub-orchestration, a [SOAT tool](/docs/modules/tools) for the `poll` node, and a main orchestration wiring `delay → poll → loop → condition → transform`, then run it and inspect the per-node executions.
 
 Everything here is deterministic — **no AI provider is required**. For `agent` nodes (LLM calls), see [Orchestrate a Sonnet](/docs/tutorials/orchestrate-a-sonnet); a [reference table](#every-node-type) at the end maps every node type to where it is demonstrated.
 
@@ -483,11 +475,11 @@ curl -s "$SOAT_BASE_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## How It Works
 
-- **`delay`** holds the run for its `duration` before activating the next node. It runs inside the synchronous run loop, so keep durations short and bounded.
-- **`poll`** calls its tool, evaluates `exit_condition` against `{ ...state, response, attempt }`, and either stops (truthy) or waits `interval` and retries — up to `max_iterations`. On exhaustion it completes with `condition_met: false` unless `fail_on_timeout: true`. Each polled call should be safe to repeat.
-- **`loop`** fans out over `collection`, running `orchestration_id` once per item with the element bound to `item_variable`, and collects each sub-run's output into `{ results: [...] }`.
-- **`condition`** turns a JSON Logic result into a string label; edges pick the matching branch with `condition`. Unselected branches are recorded as `skipped`.
-- **`transform`** computes a value (or, as here, returns a literal) and writes it to state via `state_mapping`.
+Each node type's full semantics are documented in
+[Orchestrations — Node Types](/docs/modules/orchestrations#node-types). Two details
+worth calling out here: `poll` exhausts `max_iterations` by completing with
+`condition_met: false` unless `fail_on_timeout: true`, and `condition` records the
+unselected branch as `skipped`.
 
 To see the `none` branch, run again with `--input '{"items":[]}'`: the empty collection makes `loop` produce `[]`, the `condition` evaluates to `none`, and `summary-none` runs instead.
 

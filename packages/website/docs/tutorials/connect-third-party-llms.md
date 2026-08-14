@@ -15,16 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Connect Third-Party LLMs
 
-This tutorial shows how to connect SOAT to hosted LLM providers such as xAI, OpenAI, Anthropic, and Amazon Bedrock. You will:
-
-1. Log in as admin.
-2. Create a project.
-3. Store provider credentials as secrets.
-4. Create provider records for third-party LLMs.
-5. Create an agent backed by one of those providers.
-6. Start a conversation and inspect the result.
-
-By the end you will understand how [Secrets](/docs/modules/secrets#examples), [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), and [Sessions](/docs/modules/sessions#examples) work together for externally hosted models.
+This tutorial connects SOAT to hosted LLM providers such as xAI, OpenAI, Anthropic, and Amazon Bedrock, showing how [Secrets](/docs/modules/secrets#examples), [AI Providers](/docs/modules/ai-providers#examples), [Agents](/docs/modules/agents#examples), and [Sessions](/docs/modules/sessions#examples) work together for externally hosted models.
 
 ## Prerequisites
 
