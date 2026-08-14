@@ -72,9 +72,20 @@ The stored prompt applies only when the request carries none. The two are never 
 
 For per-chat completions the AI provider is taken from the Chat record. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
 
-For stateless `POST /chat/completions` the provider is passed directly in the request body and stays **required** — that call belongs to no chat and no project of its own, so there is no default to inherit.
+For a stateless completion `ai_provider_id` is passed directly in the request body and is **required** — that call belongs to no chat, so there is no chat binding and no default to inherit. It is still scoped to a project: the provider's own — see [Authorization](#authorization).
 
 See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
+
+### Authorization
+
+Both targets are gated on the same action, `chats:CreateChatCompletion`, each checked against the project the call belongs to:
+
+| Target | Project the check runs against |
+| --- | --- |
+| `chat_id` | the chat's project |
+| `ai_provider_id` | the AI provider's project |
+
+A caller without the action on that project gets `403`, before any provider call and before an SSE stream is opened — a refused streaming request is a JSON `403`, never an error frame inside a `200` stream. An `ai_provider_id` that does not exist is still `404`, which is resolved before the permission check.
 
 ### Streaming
 
