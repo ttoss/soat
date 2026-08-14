@@ -9,8 +9,9 @@
  *   - operations flagged `x-soat-mcp-exclude` are not exposed as tools;
  *   - request-body fields flagged `x-soat-server-managed` are not tool inputs.
  *
- * MCP tool names and argument names are camelCase (the MCP endpoint is not
- * processed by the snake_case caseTransform middleware).
+ * MCP tool names are kebab-case (from `operationId`); argument names are the
+ * spec's snake_case property names verbatim, exactly as the runtime
+ * `inputSchema` exposes them (`.claude/rules/case-convention.md`).
  *
  * Run with: pnpm tsx scripts/generateMcpToolsDocs.ts
  */
@@ -52,7 +53,7 @@ interface ToolEntry {
 
 const paramToArgument = (param: OperationParam): ToolArgument => {
   return {
-    name: param.camelName,
+    name: param.name,
     type: param.type,
     required: param.required,
     description: param.description,
@@ -61,7 +62,7 @@ const paramToArgument = (param: OperationParam): ToolArgument => {
 
 const bodyPropToArgument = (prop: BodyProp): ToolArgument => {
   return {
-    name: prop.camelName,
+    name: prop.snakeName,
     type: prop.type,
     required: prop.required,
     description: prop.description,
@@ -208,7 +209,7 @@ const main = (): void => {
     '',
     'Every MCP tool exposed by the SOAT server, grouped by module. Each tool name maps directly to the MCP `tools/call` method name, and its arguments are the tool `inputSchema` fields.',
     '',
-    'Tool and argument names are **camelCase** — the MCP endpoint is not processed by the snake_case case-transform applied to the REST API.',
+    'Tool names are **kebab-case**; argument names are **snake_case** — the same names as the REST API, taken verbatim from the OpenAPI specs the tool surface is derived from.',
     '',
     '## Modules',
     '',
