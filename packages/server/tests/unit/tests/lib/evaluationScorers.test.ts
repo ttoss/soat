@@ -450,6 +450,46 @@ describe('evaluation scorers', () => {
     });
   });
 
+  // ── unhandled scorer type ────────────────────────────────────────────────
+
+  describe('a scorer type the dispatch does not handle', () => {
+    /**
+     * `scoreOutput` used to end its switch on `case 'output_schema': default:`,
+     * so any type it did not recognise was scored *as* `output_schema` — and
+     * reported under that name. Nothing surfaced the substitution: the run
+     * reached a terminal status carrying scores that were never computed from
+     * the requested criterion, and `resolveRunPassed` fed that verdict to
+     * eval-gated promotion.
+     *
+     * `validateScorers` rejects an unknown type at Eval create, so this is
+     * reachable only from a stored Eval whose scorer type the running server
+     * does not know — an older or newer writer, or a hand-edited row. Failing
+     * closed is the safe half of that trade: `runEvalItem` catches the throw
+     * and records an item **error**, which is excluded from the aggregates
+     * rather than counted as a 0, so an unscorable item can never look like a
+     * regression (`evaluationRunExecution.ts`).
+     */
+    test('fails the scorer instead of silently scoring it as output_schema', async () => {
+      await expect(
+        runOne({
+          scorer: { type: 'regex_match', pattern: '^bill' },
+          content: '{"category":"billing"}',
+          object: { category: 'billing' },
+          agentOutputSchema: { type: 'object' },
+        })
+      ).rejects.toThrow(/unhandled scorer type/i);
+    });
+
+    test('names the offending type so a stored Eval can be found', async () => {
+      await expect(
+        runOne({
+          scorer: { type: 'regex_match' },
+          content: 'anything',
+        })
+      ).rejects.toThrow(/regex_match/);
+    });
+  });
+
   // ── aggregation ──────────────────────────────────────────────────────────
 
   describe('aggregateScores', () => {
