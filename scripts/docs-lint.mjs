@@ -16,7 +16,8 @@
 // Usage: node scripts/docs-lint.mjs
 // Exits non-zero (and prints every offending line) when any check fails.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
@@ -117,10 +118,24 @@ const sliceArray = (line, key) => {
 
 /** command name -> Set of canonical flag names it accepts. */
 const buildCommandFlags = () => {
-  const manifest = readFileSync(
-    join(CLI_DIR, 'src/generated/routes.ts'),
-    'utf-8'
-  );
+  const manifestPath = join(CLI_DIR, 'src/generated/routes.ts');
+
+  // The manifest is generated from the OpenAPI specs and gitignored, so it is
+  // absent in a fresh clone. `pnpm run docs-lint` generates it first; a bare
+  // `node scripts/docs-lint.mjs` may not have. Fail loudly with the fix rather
+  // than an ENOENT stack trace — and never skip the check, since a check that
+  // quietly no-ops is the exact failure this one exists to catch.
+  if (!existsSync(manifestPath)) {
+    console.error(
+      'docs-lint: the CLI route manifest is missing, so documented flags cannot be checked.\n' +
+        `  expected: ${manifestPath.slice(ROOT.length)}\n` +
+        '  generate it with: pnpm --filter @soat/cli generate\n' +
+        '  (or run the whole check via: pnpm run docs-lint)'
+    );
+    process.exit(1);
+  }
+
+  const manifest = readFileSync(manifestPath, 'utf-8');
   const commands = new Map();
 
   // The generator emits exactly one line per route, which is what makes this
@@ -246,7 +261,53 @@ const checkCliFlags = (commandFlags) => {
   return found;
 };
 
-const files = collectDocs(DOCS_DIR);
+/**
+ * Drop generated pages, keeping only authored docs.
+ *
+ * `docs/api/`, `docs/cli/commands/`, `docs/sdk/services/`, `docs/mcp/tools/` and
+ * `docs/formations-types/` are written by generators and gitignored, so whether
+ * they exist depends on whether anyone has run a generator or a website build in
+ * this checkout. Linting them would make the result differ between a fresh CI
+ * clone and a local tree — and would report lines nobody wrote (a `{paramName}`
+ * example inside a tool description, or `upload-file --file` emitted from the
+ * spec's multipart route).
+ *
+ * The ignore rules are asked directly rather than restated here: a hand-kept
+ * list of generated directories is exactly the kind of skip list that drifts.
+ */
+const dropGenerated = (paths) => {
+  if (paths.length === 0) return paths;
+
+  let ignored = '';
+  try {
+    ignored = execFileSync('git', ['check-ignore', '--stdin'], {
+      cwd: ROOT,
+      input: paths.join('\n'),
+      encoding: 'utf-8',
+    });
+  } catch (error) {
+    // `git check-ignore` exits 1 when nothing matched, which is not a failure.
+    // Any other status (no git, not a repo) leaves every path in place: linting
+    // a generated page is noisy, silently linting nothing is worse.
+    if (error.status !== 1) return paths;
+    ignored = error.stdout ?? '';
+  }
+
+  const skip = new Set(
+    ignored
+      .split('\n')
+      .map((line) => {
+        return line.trim();
+      })
+      .filter(Boolean)
+  );
+
+  return paths.filter((p) => {
+    return !skip.has(p) && !skip.has(p.slice(ROOT.length));
+  });
+};
+
+const files = dropGenerated(collectDocs(DOCS_DIR));
 const violations = [];
 
 for (const file of files) {
