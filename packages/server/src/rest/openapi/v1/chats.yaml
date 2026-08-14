@@ -312,9 +312,8 @@ paths:
                 value:
                   ai_provider_id: aip_V1StGXR8Z5jdHi6B
                   model: gpt-4o
+                  system_message: You are a helpful assistant.
                   messages:
-                    - role: system
-                      content: You are a helpful assistant.
                     - role: user
                       content: What files do I have?
                   stream: true
