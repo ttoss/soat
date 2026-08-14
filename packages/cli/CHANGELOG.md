@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# [0.23.0](https://github.com/ttoss/soat/compare/v0.22.1...v0.23.0) (2026-08-14)
+
+### Bug Fixes
+
+* close three silent-failure gaps found QA-ing the module surface ([#994](https://github.com/ttoss/soat/issues/994)) ([a2ed76a](https://github.com/ttoss/soat/commit/a2ed76aa88653f4822407c86399a5e830142eb74)), closes [#990](https://github.com/ttoss/soat/issues/990) [#991](https://github.com/ttoss/soat/issues/991) [#992](https://github.com/ttoss/soat/issues/992) [#991](https://github.com/ttoss/soat/issues/991) [#991](https://github.com/ttoss/soat/issues/991)
+
 ## [0.22.1](https://github.com/ttoss/soat/compare/v0.22.0...v0.22.1) (2026-08-13)
 
 **Note:** Version bump only for package @soat/cli
