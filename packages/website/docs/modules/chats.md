@@ -11,10 +11,12 @@ LLM completions with optional persistent configuration, supporting both stateles
 
 ## Overview
 
-Chats provide two ways to call the completions API:
+All completions run through a single endpoint, `POST /chat/completions`, which names exactly one target:
 
-- **Stateless** (`POST /chat/completions`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
-- **Per-chat** (`POST /chats/{chat_id}/completions`) — create a Chat resource once to store the AI provider, default system message, and model; then pass only the `messages` array per request.
+- **Stateless** (`ai_provider_id`) — OpenAI-compatible; pass the full provider configuration on every request. No setup required.
+- **Per-chat** (`chat_id`) — create a Chat resource once to store the AI provider, default system message, and model; then pass only `chat_id` and the `messages` array per request.
+
+The two are mutually exclusive, and a request naming neither — or both — is rejected with `400`.
 
 Both endpoints support SSE streaming via `stream: true`. To see a completion driven end to end through a provider-backed flow, follow [Connect Third-Party LLMs - Step 6 (Start a conversation)](/docs/tutorials/connect-third-party-llms#step-6--start-a-conversation).
 
@@ -54,13 +56,13 @@ Each message in the `messages` array sent to the completions endpoint:
 
 ### System Message Override
 
-When running `POST /chats/{chat_id}/completions`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `system_message` for that call only — the Chat record is not modified.
+When running a completion with `chat_id`, if a message with `role: system` is included in the `messages` array it replaces the Chat's stored `system_message` for that call only — the Chat record is not modified.
 
 ### AI Provider Resolution
 
-For per-chat completions the AI provider is taken from the Chat record. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
+For `chat_id` completions the AI provider is taken from the Chat record. A chat created **without** `ai_provider_id` pins none and resolves through its project's [`default_model_route_id`](./model-routes.md#project-default-route) instead, which gives its completions ordered provider failover; `model` cannot be combined with that (each route target names its own), and omitting the provider returns `400` when the project has no default.
 
-For stateless `POST /chat/completions` the provider is passed directly in the request body and stays **required** — that call belongs to no chat and no project of its own, so there is no default to inherit.
+For a stateless completion `ai_provider_id` is passed directly in the request body and is **required** — that call belongs to no chat and no project of its own, so there is no default to inherit.
 
 See [AI Providers](./ai-providers.md) for the full list of supported providers and how secrets are resolved. For a worked example of creating a provider the Chat can reference, see [Chat with an LLM - Step 3 (Create a local AI provider)](/docs/tutorials/chat-with-llm#step-3--create-a-local-ai-provider).
 
@@ -125,14 +127,16 @@ curl -X POST https://api.example.com/api/v1/chats \
 
 ### Run a per-chat completion
 
-Once a Chat is stored, run completions against it by passing only the `messages` array — the AI provider, system message, and model come from the Chat record.
+Once a Chat is stored, run completions against it by passing `chat_id` and the `messages` array — the AI provider, system message, and model come from the Chat record.
+
+A Chat stores configuration, not conversation history: no message sent to or returned from a completion is persisted, so send the full `messages` array on every call.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat create-chat-completion-for-chat \
-  --chat-id chat_01 \
+soat create-chat-completion \
+  --chat_id chat_01 \
   --messages '[{"role":"user","content":"What can you help me with?"}]'
 ```
 
@@ -140,9 +144,9 @@ soat create-chat-completion-for-chat \
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data, error } = await soat.chats.createChatCompletionForChat({
-  path: { chat_id: 'chat_01' },
+const { data, error } = await soat.chats.createChatCompletion({
   body: {
+    chat_id: 'chat_01',
     messages: [{ role: 'user', content: 'What can you help me with?' }],
   },
 });
@@ -153,10 +157,11 @@ if (error) throw new Error(JSON.stringify(error));
 <TabItem value="curl" label="curl">
 
 ```bash
-curl -X POST https://api.example.com/api/v1/chats/chat_01/completions \
+curl -X POST https://api.example.com/api/v1/chat/completions \
   -H "Authorization: Bearer <token>" \
   -H "Content-Type: application/json" \
   -d '{
+    "chat_id": "chat_01",
     "messages": [{ "role": "user", "content": "What can you help me with?" }]
   }'
 ```

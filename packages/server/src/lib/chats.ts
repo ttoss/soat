@@ -211,71 +211,6 @@ const resolveMessages = async (args: {
   return resolved;
 };
 
-export const createChatCompletion = async (args: {
-  aiProviderId: string;
-  model?: string;
-  messages: ChatMessage[];
-}) => {
-  const resolved = await resolveChatModel({
-    aiProviderId: args.aiProviderId,
-    model: args.model,
-  });
-
-  const system = args.messages.find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = args.messages.filter((m) => {
-    return m.role !== 'system';
-  });
-
-  const result = await generateText({
-    model: resolved.model,
-    instructions: system,
-    messages: nonSystemMessages as ModelMessage[],
-  });
-
-  const model = result.response?.modelId ?? args.model ?? '';
-  meterChatCompletion({ resolved, model, usage: result.usage });
-
-  return {
-    model,
-    content: result.text,
-    finishReason: result.finishReason,
-  };
-};
-
-export const streamChatCompletion = async (args: {
-  aiProviderId: string;
-  model?: string;
-  messages: ChatMessage[];
-}) => {
-  const resolved = await resolveChatModel({
-    aiProviderId: args.aiProviderId,
-    model: args.model,
-  });
-
-  const system = args.messages.find((m) => {
-    return m.role === 'system';
-  })?.content;
-  const nonSystemMessages = args.messages.filter((m) => {
-    return m.role !== 'system';
-  });
-
-  const result = streamText({
-    model: resolved.model,
-    instructions: system,
-    messages: nonSystemMessages as ModelMessage[],
-    // Token counts only arrive once the provider closes the stream, so a
-    // streamed completion meters at the end rather than up front. A stream the
-    // client abandons never reaches `onEnd` and is not metered.
-    onEnd: ({ usage }) => {
-      meterChatCompletion({ resolved, model: args.model, usage });
-    },
-  });
-
-  return result.textStream;
-};
-
 /**
  * The model a chat-scoped completion runs on, following the chat's own binding:
  * its pinned provider, else its project's `default_model_route_id`. Shared by
@@ -315,19 +250,6 @@ const resolveChatScopedModel = async (args: {
   });
 };
 
-const buildChatFinalMessages = (
-  resolvedMessages: ChatMessage[],
-  systemMessage: string | null
-): ChatMessage[] => {
-  const userAssistantMessages = resolvedMessages.filter((m) => {
-    return m.role !== 'system';
-  });
-
-  return systemMessage
-    ? [{ role: 'system', content: systemMessage }, ...userAssistantMessages]
-    : userAssistantMessages;
-};
-
 const getChatSystemMessage = (
   resolvedMessages: ChatMessage[],
   defaultSystemMessage: string | null
@@ -338,43 +260,99 @@ const getChatSystemMessage = (
   return systemFromRequest?.content ?? defaultSystemMessage;
 };
 
-export const createChatCompletionForChat = async (args: {
-  chatId: string;
+/**
+ * A completion names exactly one target: an AI provider directly, or a stored
+ * chat that supplies the provider, model and system message. Shared by the REST
+ * handler and any other caller so both reject the same combinations.
+ */
+export const validateChatCompletionTarget = (args: {
+  aiProviderId?: unknown;
+  chatId?: unknown;
+}): string | null => {
+  if (args.aiProviderId && args.chatId) {
+    return 'ai_provider_id and chat_id are mutually exclusive';
+  }
+  if (!args.aiProviderId && !args.chatId) {
+    return 'ai_provider_id or chat_id is required';
+  }
+  return null;
+};
+
+type ChatCompletionArgs = {
+  aiProviderId?: string;
+  chatId?: string;
   messages: ChatMessageInput[];
   model?: string;
   authUser: AuthUser;
-}): Promise<{ model: string; content: string; finishReason: string }> => {
-  const typedChat = await chats.getByPublicId({
-    id: args.chatId,
-    errorCode: 'CHAT_NOT_FOUND',
+};
+
+/**
+ * Everything a completion needs before the provider call, resolved the same way
+ * for both targets: the chat (when one is named), the messages with any
+ * `documentId` references expanded, the effective system message, and the model.
+ */
+const prepareChatCompletion = async (args: ChatCompletionArgs) => {
+  const targetError = validateChatCompletionTarget({
+    aiProviderId: args.aiProviderId,
+    chatId: args.chatId,
   });
+  if (targetError) {
+    throw new DomainError('VALIDATION_FAILED', targetError);
+  }
+
+  const typedChat = args.chatId
+    ? await chats.getByPublicId({
+        id: args.chatId,
+        errorCode: 'CHAT_NOT_FOUND',
+      })
+    : null;
 
   const resolvedMessages = await resolveMessages({
     messages: args.messages,
     authUser: args.authUser,
   });
+
+  // A system message in the request overrides the chat's stored one for this
+  // call only; a stateless completion has nothing to fall back to.
   const systemMessage = getChatSystemMessage(
     resolvedMessages,
-    typedChat.systemMessage
+    typedChat?.systemMessage ?? null
   );
-  const finalMessages = buildChatFinalMessages(resolvedMessages, systemMessage);
 
-  const resolvedModel = await resolveChatScopedModel({
-    typedChat,
-    model: args.model,
-  });
+  const resolvedModel = typedChat
+    ? await resolveChatScopedModel({ typedChat, model: args.model })
+    : await resolveChatModel({
+        // No chat means `validateChatCompletionTarget` above accepted an
+        // `aiProviderId`, which TypeScript cannot infer from that check.
+        aiProviderId: args.aiProviderId as string,
+        model: args.model,
+      });
+
+  return {
+    fallbackModel: args.model ?? typedChat?.model ?? undefined,
+    messages: resolvedMessages.filter((m) => {
+      return m.role !== 'system';
+    }) as ModelMessage[],
+    resolvedModel,
+    systemMessage,
+  };
+};
+
+export const createChatCompletion = async (
+  args: ChatCompletionArgs
+): Promise<{ model: string; content: string; finishReason: string }> => {
+  const { fallbackModel, messages, resolvedModel, systemMessage } =
+    await prepareChatCompletion(args);
 
   const result = await generateText({
     model: resolvedModel.model,
     instructions: systemMessage ?? undefined,
-    messages: finalMessages.filter((m) => {
-      return m.role !== 'system';
-    }) as ModelMessage[],
+    messages,
     // A routed model owns every attempt itself (see `routedMaxRetries`).
     maxRetries: routedMaxRetries(resolvedModel.model),
   });
 
-  const model = result.response?.modelId ?? args.model ?? typedChat.model ?? '';
+  const model = result.response?.modelId ?? fallbackModel ?? '';
   meterChatCompletion({ resolved: resolvedModel, model, usage: result.usage });
 
   return {
@@ -384,46 +362,22 @@ export const createChatCompletionForChat = async (args: {
   };
 };
 
-export const streamChatCompletionForChat = async (args: {
-  chatId: string;
-  messages: ChatMessageInput[];
-  model?: string;
-  authUser: AuthUser;
-}) => {
-  const typedChat = await chats.getByPublicId({
-    id: args.chatId,
-    errorCode: 'CHAT_NOT_FOUND',
-  });
-
-  const resolvedMessages = await resolveMessages({
-    messages: args.messages,
-    authUser: args.authUser,
-  });
-
-  const systemFromRequest = resolvedMessages.find((m) => {
-    return m.role === 'system';
-  });
-  const systemMessage = systemFromRequest?.content ?? typedChat.systemMessage;
-
-  const userAssistantMessages = resolvedMessages.filter((m) => {
-    return m.role !== 'system';
-  });
-
-  const resolvedModel = await resolveChatScopedModel({
-    typedChat,
-    model: args.model,
-  });
+export const streamChatCompletion = async (args: ChatCompletionArgs) => {
+  const { fallbackModel, messages, resolvedModel, systemMessage } =
+    await prepareChatCompletion(args);
 
   const result = streamText({
     model: resolvedModel.model,
     instructions: systemMessage ?? undefined,
-    messages: userAssistantMessages as ModelMessage[],
+    messages,
     maxRetries: routedMaxRetries(resolvedModel.model),
-    // See `streamChatCompletion`: usage is only known at stream end.
+    // Token counts only arrive once the provider closes the stream, so a
+    // streamed completion meters at the end rather than up front. A stream the
+    // client abandons never reaches `onEnd` and is not metered.
     onEnd: ({ usage }) => {
       meterChatCompletion({
         resolved: resolvedModel,
-        model: args.model ?? typedChat.model ?? undefined,
+        model: fallbackModel,
         usage,
       });
     },

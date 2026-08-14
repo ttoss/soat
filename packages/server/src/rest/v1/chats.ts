@@ -1,17 +1,16 @@
 import { Router } from '@ttoss/http-server';
 import type { Context } from 'src/Context';
 import { DomainError } from 'src/errors';
-import type { ChatMessage, ChatMessageInput, MappedChat } from 'src/lib/chats';
+import type { ChatMessageInput, MappedChat } from 'src/lib/chats';
 import {
   createChat,
   createChatCompletion,
-  createChatCompletionForChat,
   deleteChat,
   findChat,
   getChat,
   listChats,
   streamChatCompletion,
-  streamChatCompletionForChat,
+  validateChatCompletionTarget,
 } from 'src/lib/chats';
 import { buildSrn } from 'src/lib/iam';
 
@@ -158,11 +157,40 @@ chatsRouter.delete('/chats/:chat_id', async (ctx: Context) => {
 });
 
 /**
+ * Parses the wire `messages` array into lib inputs, expanding the `document_id`
+ * form into the internal `documentId` one.
+ */
+const parseChatMessages = (messages: unknown): ChatMessageInput[] => {
+  if (!Array.isArray(messages) || messages.length === 0) {
+    throw new DomainError(
+      'VALIDATION_FAILED',
+      'messages is required and must be a non-empty array'
+    );
+  }
+
+  return (messages as Record<string, unknown>[]).map(
+    (message): ChatMessageInput => {
+      if (typeof message.document_id === 'string') {
+        return {
+          role: message.role as 'user' | 'assistant',
+          documentId: message.document_id,
+        };
+      }
+      return {
+        role: message.role as 'user' | 'assistant' | 'system',
+        content: message.content as string,
+      };
+    }
+  );
+};
+
+/**
  * Handles streaming chat completion response
  */
 const handleStreamingCompletion = async (args: {
   ctx: Context;
-  chatId: string;
+  aiProviderId?: string;
+  chatId?: string;
   messages: ChatMessageInput[];
   model?: string;
 }): Promise<void> => {
@@ -174,7 +202,8 @@ const handleStreamingCompletion = async (args: {
   });
 
   try {
-    const textStream = await streamChatCompletionForChat({
+    const textStream = await streamChatCompletion({
+      aiProviderId: args.aiProviderId,
       chatId: args.chatId,
       messages: args.messages,
       model: args.model,
@@ -197,158 +226,47 @@ const handleStreamingCompletion = async (args: {
   }
 };
 
-chatsRouter.post('/chats/:chat_id/completions', async (ctx: Context) => {
-  requireAuth(ctx);
-  const { chat_id: chatId } = ctx.params;
-
-  const { messages, model, stream } = ctx.request.body as {
-    messages?: unknown;
-    model?: string;
-    stream?: boolean;
-  };
-
-  if (!Array.isArray(messages) || messages.length === 0) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'messages is required and must be a non-empty array'
-    );
-  }
-
-  const chatMessages = (messages as Record<string, unknown>[]).map(
-    (message): ChatMessageInput => {
-      if (typeof message.document_id === 'string') {
-        return {
-          role: message.role as 'user' | 'assistant',
-          documentId: message.document_id,
-        };
-      }
-      return {
-        role: message.role as 'user' | 'assistant' | 'system',
-        content: message.content as string,
-      };
-    }
-  );
-
-  // An unknown chatId is left to createChatCompletionForChat / the streaming
-  // handler below, which already produce the established 400 / SSE-error
-  // behavior for a missing chat. Only a chat that exists is permission-checked.
-  const chat = await findChat({ id: chatId });
-  if (
-    chat &&
-    !(await checkChatPermission(ctx, chat, 'chats:CreateChatCompletionForChat'))
-  ) {
-    return;
-  }
-
-  if (stream) {
-    await handleStreamingCompletion({
-      ctx,
-      chatId,
-      messages: chatMessages,
-      model,
-    });
-    return;
-  }
-
-  const result = await createChatCompletionForChat({
-    chatId,
-    messages: chatMessages,
-    model,
-    authUser: ctx.authUser!,
-  });
-
-  ctx.body = {
-    object: 'chat.completion',
-    model: result.model,
-    choices: [
-      {
-        index: 0,
-        message: { role: 'assistant', content: result.content },
-        finish_reason: result.finishReason,
-      },
-    ],
-  };
-});
-
-/**
- * Validates messages parameter
- */
-const validateMessages = (messages: unknown): ChatMessage[] | null => {
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return null;
-  }
-  return messages as ChatMessage[];
-};
-
-/**
- * Handles streaming stateless chat completion response
- */
-const handleStatelessStreamingCompletion = async (args: {
-  ctx: Context;
-  aiProviderId: string;
-  messages: ChatMessage[];
-  model?: string;
-}): Promise<void> => {
-  args.ctx.respond = false;
-  args.ctx.res.writeHead(200, {
-    'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
-    Connection: 'keep-alive',
-  });
-
-  try {
-    const textStream = await streamChatCompletion({
-      aiProviderId: args.aiProviderId,
-      model: args.model,
-      messages: args.messages,
-    });
-
-    for await (const chunk of textStream) {
-      args.ctx.res.write(
-        `data: ${JSON.stringify({ choices: [{ delta: { content: chunk } }] })}\n\n`
-      );
-    }
-
-    args.ctx.res.write('data: [DONE]\n\n');
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Internal server error';
-    args.ctx.res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
-  } finally {
-    args.ctx.res.end();
-  }
-};
-
 chatsRouter.post('/chat/completions', async (ctx: Context) => {
   requireAuth(ctx);
   const {
     ai_provider_id: aiProviderId,
+    chat_id: chatId,
     model,
     messages,
     stream,
   } = ctx.request.body as {
     ai_provider_id?: string;
+    chat_id?: string;
     model?: string;
     messages?: unknown;
     stream?: boolean;
   };
 
-  const chatMessages = validateMessages(messages);
-  if (!chatMessages) {
-    throw new DomainError(
-      'VALIDATION_FAILED',
-      'messages is required and must be a non-empty array'
-    );
+  const chatMessages = parseChatMessages(messages);
+
+  const targetError = validateChatCompletionTarget({ aiProviderId, chatId });
+  if (targetError) {
+    throw new DomainError('VALIDATION_FAILED', targetError);
   }
 
-  if (!aiProviderId || typeof aiProviderId !== 'string') {
-    throw new DomainError('VALIDATION_FAILED', 'ai_provider_id is required');
+  // An unknown chat_id is left to the lib, which already produces the
+  // established 400 / SSE-error behavior for a missing chat. Only a chat that
+  // exists is permission-checked.
+  if (chatId) {
+    const chat = await findChat({ id: chatId });
+    if (
+      chat &&
+      !(await checkChatPermission(ctx, chat, 'chats:CreateChatCompletion'))
+    ) {
+      return;
+    }
   }
 
   if (stream) {
-    await handleStatelessStreamingCompletion({
+    await handleStreamingCompletion({
       ctx,
       aiProviderId,
+      chatId,
       messages: chatMessages,
       model,
     });
@@ -358,8 +276,10 @@ chatsRouter.post('/chat/completions', async (ctx: Context) => {
   try {
     const result = await createChatCompletion({
       aiProviderId,
-      model,
+      chatId,
       messages: chatMessages,
+      model,
+      authUser: ctx.authUser!,
     });
 
     ctx.body = {

@@ -989,8 +989,7 @@ describe('MCP tools - happy path', () => {
       expect(res.status).toBe(200);
     });
 
-    // create-chat-completion and create-chat-completion-for-chat are skipped
-    // because they require a live AI service.
+    // create-chat-completion is skipped because it requires a live AI service.
   });
 
   // ── Tools ───────────────────────────────────────────────────────────────

@@ -144,14 +144,11 @@ describe('Usage — chat completion metering', () => {
     return res.body.id;
   };
 
-  // `body` carries `ai_provider_id` only for the stateless route, which has no
-  // chat row to read the provider from.
-  const readStream = async (
-    path: string,
-    body: Record<string, unknown> = {}
-  ): Promise<void> => {
+  // `body` names the completion target: `ai_provider_id` for a stateless call,
+  // `chat_id` to run against a stored chat.
+  const readStream = async (body: Record<string, unknown>): Promise<void> => {
     const res = await authenticatedTestClient(userToken)
-      .post(path)
+      .post('/api/v1/chat/completions')
       .send({
         ...body,
         messages: [{ role: 'user', content: 'Hello' }],
@@ -168,7 +165,6 @@ describe('Usage — chat completion metering', () => {
       policyActions: [
         'chats:CreateChat',
         'chats:CreateChatCompletion',
-        'chats:CreateChatCompletionForChat',
         'usage:ListUsageMeters',
       ],
       createNoPermUser: false,
@@ -223,8 +219,11 @@ describe('Usage — chat completion metering', () => {
     const chatId = await createChat();
 
     const res = await authenticatedTestClient(userToken)
-      .post(`/api/v1/chats/${chatId}/completions`)
-      .send({ messages: [{ role: 'user', content: 'Hello' }] });
+      .post('/api/v1/chat/completions')
+      .send({
+        chat_id: chatId,
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
     expect(res.status).toBe(200);
 
     const rows = await waitForMeters(2);
@@ -233,9 +232,7 @@ describe('Usage — chat completion metering', () => {
   });
 
   test('a streamed stateless completion meters once the stream finishes', async () => {
-    await readStream('/api/v1/chat/completions', {
-      ai_provider_id: aiProviderId,
-    });
+    await readStream({ ai_provider_id: aiProviderId });
 
     const rows = await waitForMeters(3);
     expect(rows).toHaveLength(3);
@@ -245,7 +242,7 @@ describe('Usage — chat completion metering', () => {
   test('a streamed chat-scoped completion meters once the stream finishes', async () => {
     const chatId = await createChat();
 
-    await readStream(`/api/v1/chats/${chatId}/completions`);
+    await readStream({ chat_id: chatId });
 
     const rows = await waitForMeters(4);
     expect(rows).toHaveLength(4);
