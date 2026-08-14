@@ -67,7 +67,7 @@ const { error: createError } = await soat.documents.createDocument({
 if (createError) throw new Error(JSON.stringify(createError));
 
 const { data: results, error: searchError } =
-  await soat.documents.searchDocuments({
+  await soat.knowledge.searchKnowledge({
     body: { query: 'revenue growth', limit: 5 },
   });
 
@@ -81,14 +81,14 @@ Multi-turn conversations with AI-generated replies. → [Full Conversations API]
 ```ts
 const { data: conv, error: convError } =
   await soat.conversations.createConversation({
-    body: { title: 'Support thread' },
+    body: { name: 'Support thread' },
   });
 
 if (convError) throw new Error(JSON.stringify(convError));
 
 const { error: msgError } = await soat.conversations.addConversationMessage({
   path: { conversation_id: conv.id },
-  body: { role: 'user', content: 'How do I reset my password?' },
+  body: { role: 'user', message: 'How do I reset my password?' },
 });
 
 if (msgError) throw new Error(JSON.stringify(msgError));
@@ -97,7 +97,7 @@ const { data: reply, error: genError } =
   await soat.conversations.generateConversationMessage({
     path: { conversation_id: conv.id },
     query: { wait: true },
-    body: { actor_id: 'act_...' },
+    body: { agent_id: 'agent_...' },
   });
 
 if (genError) throw new Error(JSON.stringify(genError));
@@ -180,7 +180,7 @@ Participants (human or AI) that can be attached to conversations. → [Full Acto
 
 ```ts
 const { data: actor, error } = await soat.actors.createActor({
-  body: { name: 'Support Bot', type: 'ai' },
+  body: { name: 'Support Bot' },
 });
 
 if (error) throw new Error(JSON.stringify(error));

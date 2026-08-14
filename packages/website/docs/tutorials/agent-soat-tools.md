@@ -303,7 +303,7 @@ const aliceId = alice!.id;
 const { data: policy } = await adminSoat.policies.createPolicy({
   body: {
     name: 'alice-agent-soat-tools-notes-policy',
-    policy: {
+    document: {
       statement: [
         { effect: 'Allow', action: ['agents:CreateAgentGeneration'] },
         { effect: 'Allow', action: ['documents:ListDocuments'] },
