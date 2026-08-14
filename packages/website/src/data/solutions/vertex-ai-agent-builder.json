@@ -48,6 +48,16 @@
       "rating": "native",
       "note": "Vertex AI evaluation service with agent-specific evaluation flows.",
       "evidence": "https://cloud.google.com/vertex-ai/generative-ai/docs/models/evaluation-overview"
+    },
+    "channels": {
+      "rating": "partial",
+      "note": "Chat-platform delivery through Conversational Agents (Dialogflow) channel integrations, adjacent to Agent Builder itself.",
+      "evidence": "https://cloud.google.com/dialogflow/cx/docs/concept/integrations"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Built-in code execution tooling in ADK and the Vertex AI code interpreter extension.",
+      "evidence": "https://google.github.io/adk-docs/tools/built-in-tools/"
     }
   }
 }

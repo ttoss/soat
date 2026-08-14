@@ -46,6 +46,16 @@
       "rating": "partial",
       "note": "Batch trajectory generation for model training and research eval tools; not a dataset/scorer eval product.",
       "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "channels": {
+      "rating": "native",
+      "note": "Single gateway to Telegram, Discord, Slack, WhatsApp, Signal, and CLI with cross-platform conversation continuity.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
+    },
+    "code-execution": {
+      "rating": "native",
+      "note": "Seven terminal backends: local, Docker, SSH, Singularity, Modal, Daytona, and Vercel Sandbox.",
+      "evidence": "https://github.com/nousresearch/hermes-agent"
     }
   }
 }

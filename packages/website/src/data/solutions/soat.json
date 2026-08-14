@@ -48,6 +48,14 @@
       "rating": "native",
       "note": "Datasets, scorers, and scored runs; eval-gated promotion of agent versions.",
       "evidence": "https://soat.ttoss.dev/docs/modules/evaluations"
+    },
+    "channels": {
+      "rating": "absent",
+      "note": "Surfaces are REST, MCP, CLI, and SDK — no built-in gateways to messaging platforms like Slack, WhatsApp, or Telegram."
+    },
+    "code-execution": {
+      "rating": "absent",
+      "note": "Tool types are HTTP, MCP, client, and agent-to-agent — no built-in sandboxed code or terminal runtime."
     }
   }
 }

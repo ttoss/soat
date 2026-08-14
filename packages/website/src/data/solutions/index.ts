@@ -9,6 +9,8 @@
  */
 import deepseekHarness from './deepseek-harness.json';
 import hermesAgent from './hermes-agent.json';
+import langchain from './langchain.json';
+import openclaw from './openclaw.json';
 import soat from './soat.json';
 import vertexAiAgentBuilder from './vertex-ai-agent-builder.json';
 
@@ -84,6 +86,16 @@ export const CLUSTERS: Cluster[] = [
     label: 'Evaluation',
     description: 'Datasets, scorers, and eval-gated improvement.',
   },
+  {
+    id: 'channels',
+    label: 'Channels',
+    description: 'Built-in gateways to messaging platforms and UIs.',
+  },
+  {
+    id: 'code-execution',
+    label: 'Code execution',
+    description: 'Sandboxed code or terminal runtimes for agents.',
+  },
 ];
 
 export const ARCHETYPE_LABELS: Record<Archetype, string> = {
@@ -112,6 +124,8 @@ const asSolution = (value: {
 export const solutions: Solution[] = [
   asSolution(soat),
   asSolution(vertexAiAgentBuilder),
+  asSolution(langchain),
   asSolution(deepseekHarness),
   asSolution(hermesAgent),
+  asSolution(openclaw),
 ];

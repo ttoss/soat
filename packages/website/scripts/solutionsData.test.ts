@@ -26,6 +26,8 @@ const CLUSTER_IDS = [
   'observability',
   'data-secrets',
   'evaluation',
+  'channels',
+  'code-execution',
 ];
 
 const DEPLOYMENTS = ['self-hosted', 'managed'];
@@ -45,6 +47,8 @@ test('solutions dataset exists and contains at least the four seed solutions', (
   for (const expected of [
     'deepseek-harness.json',
     'hermes-agent.json',
+    'langchain.json',
+    'openclaw.json',
     'soat.json',
     'vertex-ai-agent-builder.json',
   ]) {

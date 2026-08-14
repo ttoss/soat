@@ -45,6 +45,16 @@
     "evaluation": {
       "rating": "absent",
       "note": "No built-in datasets, scorers, or eval runs."
+    },
+    "channels": {
+      "rating": "plugin",
+      "note": "Web UI is built in; messaging-platform gateways arrive as Cordis plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
+    },
+    "code-execution": {
+      "rating": "plugin",
+      "note": "No first-party sandbox; execution environments are provided by plugins.",
+      "evidence": "https://github.com/deepseek-ai/deepseek-harness"
     }
   }
 }

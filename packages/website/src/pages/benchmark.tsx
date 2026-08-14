@@ -296,9 +296,10 @@ export default function Benchmark(): React.ReactNode {
           <Heading as="h1">How SOAT compares.</Heading>
           <p className={styles.lead}>
             Solutions are clustered by archetype — managed platforms, agent
-            frameworks, and infrastructure layers — and rated across eight
-            capability clusters. Filter the directory, pick up to {MAX_COMPARED}{' '}
-            solutions, and compare them side by side with SOAT.
+            frameworks, and infrastructure layers — and rated across{' '}
+            {CLUSTERS.length} capability clusters. Filter the directory, pick up
+            to {MAX_COMPARED} solutions, and compare them side by side with
+            SOAT.
           </p>
         </header>
 

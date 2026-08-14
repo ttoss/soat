@@ -1,0 +1,61 @@
+{
+  "name": "LangChain",
+  "slug": "langchain",
+  "archetype": "framework",
+  "summary": "The most widely adopted open-source framework for LLM applications: standardized model interfaces, a huge integration library, LangGraph for controllable agent orchestration, and the commercial LangSmith platform for observability and evals.",
+  "website": "https://www.langchain.com",
+  "repository": "https://github.com/langchain-ai/langchain",
+  "license": "MIT (LangSmith is commercial)",
+  "deployment": ["self-hosted", "managed"],
+  "last_verified": "2026-08-14",
+  "capabilities": {
+    "agent-runtime": {
+      "rating": "native",
+      "note": "Agent abstractions in LangChain plus low-level, stateful agent graphs in LangGraph.",
+      "evidence": "https://github.com/langchain-ai/langchain"
+    },
+    "orchestration": {
+      "rating": "native",
+      "note": "LangGraph provides graph-based multi-agent workflows with persistence and human-in-the-loop interrupts.",
+      "evidence": "https://github.com/langchain-ai/langgraph"
+    },
+    "knowledge-memory": {
+      "rating": "native",
+      "note": "Vector store, retriever, and embedding abstractions with a large integration catalog; memory via LangGraph checkpointers.",
+      "evidence": "https://python.langchain.com/docs/integrations/vectorstores/"
+    },
+    "tools-integration": {
+      "rating": "native",
+      "note": "Tool-calling abstractions, MCP adapters, and hundreds of third-party integrations.",
+      "evidence": "https://python.langchain.com/docs/integrations/tools/"
+    },
+    "identity-governance": {
+      "rating": "absent",
+      "note": "A library, not a server — no IAM, policies, quotas, approvals, or audit log; governance is the host application's job."
+    },
+    "observability": {
+      "rating": "partial",
+      "note": "Deep tracing and monitoring via LangSmith — a separate, commercial companion service, not part of the OSS framework.",
+      "evidence": "https://docs.smith.langchain.com"
+    },
+    "data-secrets": {
+      "rating": "absent",
+      "note": "No managed file storage or encrypted secrets store; delegated to the host application."
+    },
+    "evaluation": {
+      "rating": "partial",
+      "note": "Datasets, evaluators, and experiment tracking via LangSmith (commercial) and the open-source openevals utilities.",
+      "evidence": "https://docs.smith.langchain.com/evaluation"
+    },
+    "channels": {
+      "rating": "plugin",
+      "note": "No built-in messaging gateway; Slack/Discord/etc. are wired up through community integrations or the host application.",
+      "evidence": "https://python.langchain.com/docs/integrations/providers/"
+    },
+    "code-execution": {
+      "rating": "plugin",
+      "note": "Sandboxed execution through integrations (e.g. Riza, Bearly, E2B code interpreter tools), not a first-party runtime.",
+      "evidence": "https://python.langchain.com/docs/integrations/tools/"
+    }
+  }
+}
