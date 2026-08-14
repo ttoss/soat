@@ -343,8 +343,3 @@ topology problem.
 4. **Add a graph only when a specific pain unlocks it** — a human gate, an audit
    requirement, a parallel join, or durable resume. Then go to
    [Choosing an Automation Model](./choosing-an-automation-model.md).
-
-The differentiator in production has rarely been the model, and it is not the diagram
-either. It is whether the agent can reach what it needs, whether anything in the system
-can prove it did the job, and whether the next change can be shown to be an improvement
-before it reaches anyone.

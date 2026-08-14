@@ -23,8 +23,6 @@ You will:
 4. Define an [orchestration](/docs/modules/orchestrations#examples) whose `agent` nodes call those agents in sequence.
 5. Run the orchestration with a theme and inspect both the persisted document and the run state.
 
-By the end you will understand how orchestration state, direct agent nodes, transform nodes, and tool nodes compose into a deterministic content pipeline.
-
 ## Prerequisites
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to bring the stack up with Docker Compose.
@@ -806,10 +804,7 @@ curl -s "$SOAT_URL/api/v1/orchestration-runs/$RUN_ID" \
 
 ## How It Works
 
-- `agent` nodes call the five agents directly. No agent needs a tool that creates another agent generation.
-- `state_mapping` writes each agent result into orchestration state under `state.title`, `state.stanza1`, and so on.
-- The `transform` node assembles the poem deterministically with JSON Logic.
-- The `tool` node persists the result to the shared document using a fixed `documentId`.
-- The terminal `return-poem` node makes the final poem easy to read from the run output while the persisted document gives you durable storage.
+- `agent` nodes call the five agents directly; `state_mapping` writes each result into orchestration state (`state.title`, `state.stanza1`, …).
+- The `transform` node assembles the poem deterministically with JSON Logic; the `tool` node persists it using a fixed `documentId`; the terminal `return-poem` node exposes it in the run output.
 
-Compared with [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), this pattern moves routing, sequencing, and state accumulation into the [Orchestrations](/docs/modules/orchestrations#examples) engine instead of leaving them to an orchestrator agent.
+Compared with [Multi-Agent Sonnet with Nested Agent Calls](/docs/tutorials/multi-agent-orchestration), routing, sequencing, and state accumulation live in the [Orchestrations](/docs/modules/orchestrations#examples) engine instead of an orchestrator agent.

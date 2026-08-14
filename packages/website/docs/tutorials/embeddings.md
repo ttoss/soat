@@ -14,14 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Generating Embeddings
 
-This tutorial shows how to use the SOAT [Embeddings](/docs/modules/embeddings) endpoint to convert text into numeric vectors and compute cosine similarity between them. You will:
-
-1. Authenticate and call the endpoint with a single text input.
-2. Embed a batch of texts in one request.
-3. Implement a cosine similarity function in TypeScript.
-4. Find the most semantically similar text in a collection.
-
-By the end you will know how to generate embeddings via SOAT and wire them into any similarity-based feature — semantic search, recommendation, clustering, or a dedicated search engine like [Meilisearch](https://www.meilisearch.com/).
+This tutorial shows how to use the SOAT [Embeddings](/docs/modules/embeddings) endpoint to convert text into numeric vectors and compute cosine similarity between them: single and batch embedding, a cosine similarity function in TypeScript, and ranking a collection against a query.
 
 ## Prerequisites
 

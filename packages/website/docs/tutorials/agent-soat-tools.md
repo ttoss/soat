@@ -14,27 +14,7 @@ import TabItem from '@theme/TabItem';
 
 # Agent SOAT Tools and Preset Parameters
 
-This tutorial shows how to give an agent access to platform documents using **soat tools** — and how to use **preset parameters** to lock a tool to a specific document ID so the model never has to guess it.
-
-You will:
-
-1. Log in as admin.
-2. Create a project and an Ollama AI provider.
-3. Create two documents: a **public** note and a **private** note.
-4. Create a user **alice** with a policy that restricts her to the public document path.
-5. Create three soat tools:
-   - `docs_list-documents` — lists documents in the project.
-   - `docs_get-document` — reads any document by ID (model supplies the ID).
-   - `docs_update-document` — updates the public document (ID is **preset**; model never sees it).
-6. Create an agent that uses these tools and attach it to alice's project.
-7. Run a generation as alice and observe the agent updating the correct document without being told its ID.
-8. Verify that alice cannot read or update the private document (permissions enforcement).
-
-By the end you will understand:
-
-- How to wire agent-side document tooling.
-- How `preset_parameters` eliminates the probabilistic risk of the model choosing the wrong ID.
-- How IAM policies are enforced even when an agent calls platform APIs on behalf of a user.
+This tutorial shows how to give an agent access to platform documents using **soat tools** — and how to use **preset parameters** to lock a tool to a specific document ID so the model never has to guess it. You will create a public and a private note, a restricted user **alice**, three soat tools (`docs_list-documents`, `docs_get-document`, and `docs_update-document` with the public document's ID preset), and an agent that uses them — then verify the agent updates the right document and that alice's IAM policy blocks the private one.
 
 ## Prerequisites
 
@@ -384,7 +364,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/policies/attach-user" \
 
 ## Step 6 — Create soat tools
 
-Create three [tools](/docs/modules/tools#examples). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses **camelCase** (`documentId`) because soat tool schemas use camelCase property names internally. The model will never see the `documentId` field; it will be injected automatically at call time.
+Create three [tools](/docs/modules/tools#examples). Notice the third tool — `docs-write` — has `preset_parameters` containing the public document's ID. The key uses the parameter's wire name — **snake_case** (`document_id`). The model will never see the `document_id` field; it will be injected automatically at call time.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -487,7 +467,7 @@ WRITE_TOOL_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/tools" \
     \"name\": \"docs\",
     \"type\": \"soat\",
     \"actions\": [\"update-document\"],
-    \"preset_parameters\": {\"documentId\": \"$PUBLIC_DOC_ID\"}
+    \"preset_parameters\": {\"document_id\": \"$PUBLIC_DOC_ID\"}
   }" | jq -r '.id')
 
 echo "List:  $LIST_TOOL_ID"
@@ -859,7 +839,7 @@ The server merges `preset_parameters` into the call before dispatching — alice
 
 1. **Tool creation with `preset_parameters`**: When you created `docs-write`, you stored `{ "document_id": "<public doc id>" }` alongside the tool. The server stripped `document_id` from the schema before registering the tool with the model (preset keys use the parameter name exactly as the tool declares it — **snake_case**, the same spelling everywhere on the wire).
 
-2. **Model's view**: The model saw `docs_update-document` accepting only `content`, `title`, `path`, `metadata`, and `tags` — no `documentId` in sight. This eliminates the risk of the model supplying a wrong or hallucinated ID.
+2. **Model's view**: The model saw `docs_update-document` accepting only `content`, `title`, `path`, `metadata`, and `tags` — no `document_id` in sight. This eliminates the risk of the model supplying a wrong or hallucinated ID.
 
 3. **Execution**: When the model called `docs_update-document`, the server merged the preset `document_id` back in before dispatching the `PATCH /api/v1/documents/{document_id}` request.
 

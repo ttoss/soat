@@ -5,7 +5,7 @@ sidebar_position: 2
 
 # Key Concepts
 
-This page explains the mental model behind SOAT and how its core resources fit together. Read it once and the rest of the documentation will feel obvious.
+This page explains the mental model behind SOAT and how its core resources fit together.
 
 ## Projects
 

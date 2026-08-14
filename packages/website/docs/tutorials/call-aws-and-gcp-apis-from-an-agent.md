@@ -20,17 +20,7 @@ An HTTP [tool](/docs/modules/tools) with an `Authorization` header covers every 
 - **AWS** expects a Signature Version 4 HMAC computed **per request**, over that request's method, URL, headers and body.
 - **Google** expects a short-lived OAuth 2.0 access token, minted from a signed service account assertion and expiring in about an hour.
 
-Neither is expressible as a static header, so a `{{secret:...}}` reference in `headers` would send a constant where the target requires a per-request value. The usual workaround is a bespoke proxy service that holds the credential and re-signs — one more deployment to run, secure and page someone about.
-
-`execute.auth` removes it. It is an authentication strategy on the existing `http` transport, so `parameters`, path placeholders, `body_mode`, `output_mapping`, `preset_parameters`, [guardrails](/docs/modules/guardrails), [approvals](/docs/modules/approvals), pipeline steps and error mapping all behave exactly as they do for any other HTTP tool.
-
-You will:
-
-1. Store cloud credentials as [secrets](/docs/modules/secrets), never as literals in a tool config.
-2. Build an **AWS SigV4** tool that reads an S3 object, and call it.
-3. Hand it to an agent so the model can call it mid-conversation.
-4. Build a **GCP service account** tool that submits a BigQuery job.
-5. Learn the failure modes and the one combination that is refused on write.
+Neither is expressible as a static header. `execute.auth` handles both: it is an authentication strategy on the existing `http` transport, so every other HTTP tool feature ([guardrails](/docs/modules/guardrails), [approvals](/docs/modules/approvals), `body_mode`, `output_mapping`, …) behaves exactly as usual. You will build a SigV4-signed S3 tool and a GCP service-account BigQuery tool, hand one to an agent, and read the failure modes.
 
 ## Prerequisites
 
@@ -274,7 +264,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/tools/$S3_TOOL_ID/call" \
 </TabItem>
 </Tabs>
 
-What SOAT sends: `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, and `X-Amz-Content-Sha256` where applicable. Signing happens **last** — over the final method, URL, headers and body — so nothing is added to the request after the signature is computed. Only headers SOAT itself controls are signed (`host`, `content-type`, `x-amz-*`); [context headers](/docs/modules/tools#context-headers-x-soat-context-) and `Idempotency-Key` are injected afterwards and stay unsigned, which AWS permits because verification covers only the `SignedHeaders` set.
+SOAT sends `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, and `X-Amz-Content-Sha256` where applicable, signing last over the final request. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth) for exactly which headers are signed.
 
 ---
 
@@ -555,28 +545,10 @@ A tool's `input` becomes the request body **verbatim** — SOAT does not rewrite
 
 ## Step 8 — Read the failure modes
 
-When something goes wrong, the error code tells you which side failed — which is the difference between paging a cloud on-call and rotating a key.
-
-| Code | Status | Meaning |
-| --- | --- | --- |
-| `TOOL_AUTH_FAILED` | `502` | The credential itself could not be produced: malformed service account JSON, an unusable private key, or a token endpoint that rejected the assertion. The request never reached the target. When the token endpoint responded, its status and body are in `meta.upstream_status` / `meta.upstream_body`. |
-| `TOOL_HTTP_ERROR` | `502` | The credential was produced and sent; the **target** rejected or failed the call. |
-| `VALIDATION_FAILED` | `400` | The `auth` config is malformed — caught on write, not at call time. |
-
-Two more behaviors worth knowing before you debug a signature:
-
-- **`service` and `region` are part of the signature,** not just routing. A `service` that does not match the host (say `s3` against a Lambda endpoint) produces a signature the target rejects, with no hint about why.
-- **Path encoding follows the service.** Path segments are URI-encoded twice for every service except `s3`, which expects a single encoding, matching the SigV4 specification.
+The error code tells you which side failed: `502 TOOL_AUTH_FAILED` means the credential itself could not be produced (the request never reached the target), `502 TOOL_HTTP_ERROR` means the target rejected the call, and `400 VALIDATION_FAILED` means a malformed `auth` config was caught on write. See [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth) for the full failure semantics, including signature and path-encoding gotchas.
 
 ---
 
-## What you built
-
-| Target | `auth.type` | What is sent |
-| --- | --- | --- |
-| S3, DynamoDB, Lambda, any SigV4 API | `aws_sigv4` | `Authorization: AWS4-HMAC-SHA256 …`, `X-Amz-Date`, `X-Amz-Security-Token`, `X-Amz-Content-Sha256` |
-| BigQuery, Cloud Storage, any Google API | `gcp_service_account` | `Authorization: Bearer <minted, cached access token>` |
-
-`auth` is a slot on the HTTP transport, not a tool type — so a future strategy (`azure_ad`, `oauth2_client_credentials`) lands in the same place, and every tool feature keeps working across all of them.
+## What's next
 
 Read next: [Tools — Computed credentials](/docs/modules/tools#computed-credentials-executeauth), [Secrets](/docs/modules/secrets), and [Gate a Tool with Guardrails](/docs/tutorials/gate-a-tool-with-guardrails) to require an approval before an agent is allowed to call one of these.

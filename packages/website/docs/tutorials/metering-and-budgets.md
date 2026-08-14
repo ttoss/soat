@@ -29,9 +29,6 @@ will:
 7. Set a **budget threshold** and subscribe a webhook to the
    `usage.threshold_crossed` alert.
 
-By the end you will understand SOAT's "meter now, price forward" model and how
-to wire proactive budget alerts.
-
 ## Prerequisites
 
 - SOAT running locally. Follow the [Quick Start](/docs/getting-started) guide to
@@ -308,9 +305,7 @@ curl -s "$SOAT_URL/api/v1/usage/receipt?generation_id=$GENERATION_ID" \
 ## Step 6 — Aggregate the project's usage
 
 `get-usage` rolls the whole project up over an optional `[from, to]` window,
-bucketed by one dimension: `model`, `agent`, `run`, `day`, or `meter_type`. This
-is the per-project figure you would show on a dashboard — no client-side scan of
-raw meter rows.
+bucketed by one dimension: `model`, `agent`, `run`, `day`, or `meter_type`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -355,10 +350,8 @@ Each group and the grand `totals` carry summed token counts and `cost_usd`
 
 Cost is computed **at write time** from the price effective when a generation
 runs, and prices are **immutable and non-retroactive** — `effective_from` must
-be in the future, so a recorded cost is always explainable by the row that
-produced it. Register a rate for the Ollama SKU; every generation from
-`effective_from` onward will carry a `cost_usd`, while today's already-metered
-usage stays frozen at `null`.
+be in the future. Generations from `effective_from` onward carry a `cost_usd`;
+already-metered usage stays frozen at `null`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -507,18 +500,6 @@ Thresholds are immutable apart from deletion — to change one, delete and
 recreate it, which resets its fire state.
 
 ---
-
-## What you learned
-
-- Every completed generation is metered into an append-only usage event with
-  per-dimension token **components**; `cost_usd` is `null` until a price covers
-  the SKU.
-- **Receipts** reconcile a generation (or a whole run) against a provider
-  invoice; **`get-usage`** rolls a project up by model/agent/run/day/meter type.
-- Prices are **write-time and forward-only** — you register rates that apply to
-  future usage, and historical costs never change.
-- **Thresholds** push a `usage.threshold_crossed` webhook when a project crosses
-  a token or cost budget, with once-per-window / 10% re-arm hysteresis.
 
 See the [Usage module](/docs/modules/usage) for the full data model, pricing
 tiers, and permissions.

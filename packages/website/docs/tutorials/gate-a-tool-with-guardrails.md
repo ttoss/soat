@@ -14,19 +14,11 @@ import TabItem from '@theme/TabItem';
 
 # Gate a Dangerous Tool with Guardrails
 
-A [guardrail](/docs/modules/guardrails) answers a question IAM cannot: not _"may this caller reach this endpoint?"_ but _"may this **specific action, with these arguments** run on its own — or must a human sign off?"_. It classifies every gated tool call into an action class — **A** (always execute), **B** (execute only if a guard passes), **C** (human sign-off), **D** (forbidden) — using deterministic JSON Logic expressions with no LLM anywhere in the evaluation path.
+A [guardrail](/docs/modules/guardrails) classifies every gated tool call into an action class — **A** (always execute), **B** (execute if a guard passes), **C** (human sign-off), **D** (forbidden) — with deterministic JSON Logic, no LLM in the evaluation path. See [Guardrails](/docs/modules/guardrails) for the full model.
 
-You will build one guardrail over a budget-update tool and watch all three of its outcomes:
+You will build one guardrail over a budget-update tool, dry-run it, drive it from an [orchestration](/docs/modules/orchestrations) tool node to see all three outcomes (autonomous execute, park for sign-off, tripwire), read the governance trail ([approvals](/docs/modules/approvals), [exceptions](/docs/modules/exceptions), [audit log](/docs/modules/audit-log)), and finally tighten the whole project with a second guardrail.
 
-1. Create a project and the tool the guardrail gates.
-2. Write a guardrail: class **B** below a threshold, class **C** at or above it, with a guard on the amount.
-3. **Dry-run** all three decisions before attaching anything.
-4. Attach the guardrail to the tool and drive it from an [orchestration](/docs/modules/orchestrations) tool node.
-5. See a passing class **B** execute autonomously, a class **C** park the run for sign-off, and a failing guard **tripwire** into a routable hard stop.
-6. Read the governance trail the platform wrote — [approvals](/docs/modules/approvals), [exceptions](/docs/modules/exceptions), and the [audit log](/docs/modules/audit-log).
-7. Raise the floor for the whole project with a second guardrail, and see stricter-wins composition tighten a call that used to be autonomous.
-
-Everything here is deterministic — **no AI provider is required**. The gate is driven from an orchestration `tool` node, which is evaluated exactly like an agent tool call but with no model in the loop.
+Everything here is deterministic — **no AI provider is required**.
 
 ## Prerequisites
 
@@ -196,13 +188,7 @@ echo "BUDGET_TOOL_ID: $BUDGET_TOOL_ID"
 
 ## Step 4 — Write the guardrail
 
-A [guardrail document](/docs/modules/guardrails#classification) has three parts:
-
-- **`class`** — a literal (`A`/`B`/`C`/`D`) or a single JSON Logic expression returning one. Here: **B** below 500, **C** at or above.
-- **`guard`** — a single JSON Logic expression that must be truthy for a class-**B** call to execute autonomously. Here: the amount must be under 200.
-- **`default_class`** — applied when the `class` expression returns anything invalid. It defaults to **C**, so anything nobody classified needs a human. That fail-closed default is the whole point: a misconfigured document never grants autonomy.
-
-Between them, the three amounts `150`, `900`, and `450` exercise every outcome the guardrail can produce.
+A [guardrail document](/docs/modules/guardrails#classification) has three parts — `class`, `guard`, and the fail-closed `default_class`. Here: class **B** below 500, **C** at or above, with a guard requiring the amount under 200. The three amounts `150`, `900`, and `450` exercise every outcome.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -260,7 +246,7 @@ The document is validated on write: every `var` must resolve to the `args.*`, `c
 
 ## Step 5 — Dry-run every decision before attaching
 
-Attaching a `default_class: C` guardrail to a busy tool without rehearsing it floods the approvals queue. [Dry-run evaluation](/docs/modules/guardrails#dry-run-evaluation) runs the real pipeline — the `class` expression, the guard, live `soat.*` resolution — against arguments you supply and returns the exact evaluation record a real call would produce. Nothing executes, no approval is filed, no activity is written.
+[Dry-run evaluation](/docs/modules/guardrails#dry-run-evaluation) runs the real evaluation pipeline against arguments you supply and returns the exact record a real call would produce — nothing executes, no approval is filed.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -376,9 +362,9 @@ Attach is cheap, detach is gated: adding an id needs only `tools:UpdateTool`, be
 
 ## Step 7 — Drive the tool from an orchestration
 
-An [orchestration](/docs/modules/orchestrations#node-types) `tool` node is gated at dispatch exactly like an agent tool call, minus the model — which makes it the deterministic way to watch a guardrail work. With no agent in scope it composes the **project + tool** scopes only.
+An [orchestration](/docs/modules/orchestrations#node-types) `tool` node is gated at dispatch exactly like an agent tool call, minus the model. With no agent in scope it composes the **project + tool** scopes only.
 
-The `apply` node feeds the run's `amount` into the tool call, and that value becomes the guardrail's `args.amount`. Three edges cover the outcomes: the unlabeled edge is the success path, and the `blocked` / `tripwire` edges catch a guardrail refusal — a refusal is a **routable outcome**, not a run failure, so an unlabeled success edge does not auto-follow it.
+The `apply` node feeds the run's `amount` into the tool call as the guardrail's `args.amount`. The unlabeled edge is the success path; the `blocked` / `tripwire` edges catch a guardrail refusal, which is a routable outcome, not a run failure.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -465,7 +451,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 8 — Class B with a passing guard: the call just runs
 
-Start a [run](/docs/modules/orchestrations#examples) with `amount: 150`. The guardrail classifies **B**, the guard passes, and the tool dispatches with no human involved. This is the case that matters most in production — a guardrail's job is to stay out of the way until it shouldn't.
+Start a [run](/docs/modules/orchestrations#examples) with `amount: 150`. The guardrail classifies **B**, the guard passes, and the tool dispatches with no human involved.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -638,7 +624,7 @@ On approval the tool is re-dispatched with the frozen (or edited) arguments and 
 
 ## Step 10 — A failing guard: the tripwire
 
-`amount: 450` classifies **B** — but fails the `< 200` guard. By default a failing class-B guard is a [tripwire](/docs/modules/guardrails#tripwires-and-escalate): it aborts the action outright rather than quietly downgrading it. That is what stops a runaway loop with a hard, non-LLM decision.
+`amount: 450` classifies **B** — but fails the `< 200` guard. By default a failing class-B guard is a [tripwire](/docs/modules/guardrails#tripwires-and-escalate): it aborts the action outright.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -734,7 +720,7 @@ Add `"escalate": true` to the document to soften this: a failing guard then rout
 
 ## Step 11 — Read the governance trail
 
-Every evaluation writes a `guardrail_evaluation` record. Those that **changed the call's outcome** — `route_to_approval`, `blocked`, `tripwire`, but not a plain `execute` — are also mirrored into the [audit log](/docs/modules/audit-log#system-originated-entries) as platform-originated entries, so governance decisions are queryable on the same substrate as "who deleted that secret".
+Every evaluation writes a `guardrail_evaluation` record. Those that **changed the call's outcome** — `route_to_approval`, `blocked`, `tripwire`, but not a plain `execute` — are also mirrored into the [audit log](/docs/modules/audit-log#system-originated-entries) as platform-originated entries.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -992,13 +978,7 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/guardrails/$GUARDRAIL_ID" \
 
 ---
 
-## How It Works
-
-- **A different layer than IAM.** An [IAM policy](/docs/modules/policies) decides whether a caller may invoke an endpoint, at request time. A guardrail decides whether *this call, with these arguments* may run on its own, at the tool-execution boundary — after the arguments exist and before anything touches the outside world. Guardrails deliberately do not touch policies.
-- **Fail-closed at both ends.** At write time a `var` outside the three namespaces is rejected with `400`. At evaluation time an unresolvable `context.*` key, a context-tool timeout, or an invalid `class` result resolves to `default_class` (**C** by default) in `class`, and counts as a **failed guard** in `guard`. Forgetting to supply context tightens the posture; it never loosens it.
-- **Stricter-wins composition.** Every guardrail that applies — project, agent, and tool scope — evaluates, and the strictest decision wins, ordered `blocked` > `tripwire` > `route_to_approval` > `execute`. Class **A** is the identity, so a guardrail that returns `"A"` simply defers to the others. Composition is order-independent and can only tighten.
-- **A refusal is routable.** A class-**D** block or a tripwire on an orchestration tool node records a `{ status, reason }` artifact and branches by label rather than failing the run, so a fallback path can handle it. An unlabeled success edge never auto-follows a blocked node.
-- **No LLM in the path.** `class` and `guard` are JSON Logic, evaluated by the same engine orchestration mappings use. A model can propose an action but can never influence its classification.
+The classification model, fail-closed evaluation rules, and stricter-wins composition are documented in [Guardrails](/docs/modules/guardrails).
 
 ## Next Steps
 

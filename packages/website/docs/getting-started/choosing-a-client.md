@@ -29,4 +29,4 @@ Every SOAT operation is exposed through four interchangeable client surfaces. Th
 
 ## Field naming
 
-The REST API and SDK use `snake_case` for body fields and path parameters (`project_id`, `{agent_id}`). MCP tool schemas use `camelCase` (`projectId`). The CLI uses kebab-case flags (`--project-id`).
+The REST API and SDK use `snake_case` for body fields and path parameters (`project_id`, `{agent_id}`). MCP tool schemas use the same `snake_case` names (`project_id`); only the tool names themselves are kebab-case. The CLI uses kebab-case flags (`--project-id`).

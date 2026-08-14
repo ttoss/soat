@@ -10,8 +10,6 @@ import TabItem from '@theme/TabItem';
 
 **SOAT is the infrastructure layer for production-ready AI agents.** It bundles IAM, file and document storage, vector search, conversational memory, agent orchestration, multi-agent workflows, retrieval-augmented generation, declarative stack deployment, and a full MCP server into a single self-hostable Node.js service backed by PostgreSQL.
 
-If you have ever shipped an AI product, you know the pattern: half the codebase is plumbing — users, API keys, embeddings, conversation history, tool calling, traces. SOAT solves all of it once, exposes it through four equivalent client surfaces, and gets out of your way.
-
 The platform is organized around the [four layers of an agent system](/docs/getting-started/agent-system-layers): the **harness** (what an agent can reach), the **loop** (what proves a run did the job), the **graph** (what happens next), and the **ratchet** (what proves a change was an improvement). The first three are shipped in depth; the ratchet is the active build front — see [Where SOAT is going](#where-soat-is-going).
 
 ## What you get out of the box

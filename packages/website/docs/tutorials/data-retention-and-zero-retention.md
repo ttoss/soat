@@ -16,19 +16,17 @@ import TabItem from '@theme/TabItem';
 
 # Data Retention and Zero-Retention
 
-Two questions block most AI rollouts inside a regulated company: _"what happens to the prompt after the call?"_ and _"can you prove you deleted it?"_. Self-hosting answers the first only halfway — the content is on your infrastructure, but it is still written, and an erasure request still has to be satisfiable per record.
-
-SOAT separates **content** from **skeleton**. Content is what a person said and what the model answered: the [trace](/docs/modules/traces) steps, a generation's `metadata`, `error` and `extraction`. Skeleton is everything a ledger needs: ids, timestamps, `status`, `stop_reason`, token counts, cost, and every usage-attribution field. Every mechanism in this tutorial destroys — or never writes — the first while preserving the second, so an erasure never costs you a billing record.
+SOAT separates **content** (the [trace](/docs/modules/traces) steps, a generation's `metadata`, `error` and `extraction`) from **skeleton** (ids, timestamps, `status`, `stop_reason`, token counts, cost, and usage-attribution fields). Every mechanism in this tutorial destroys — or never writes — the first while preserving the second, so an erasure never costs you a billing record.
 
 You will:
 
-1. Run a turn and confirm the content really is stored.
-2. **Purge one trace on request** and watch the bytes leave storage while the row survives as a provable skeleton.
-3. Purge a single [generation](/docs/modules/generations)'s content, and learn why that is not enough on its own.
+1. Run a turn and confirm the content is stored.
+2. Purge one trace on request; the row survives as a provable skeleton.
+3. Purge a single [generation](/docs/modules/generations)'s content.
 4. Prove the usage and cost ledger is untouched by a purge.
-5. **Automate it** with a project retention window and a daily sweep.
-6. Turn on **zero-retention** for one agent — content is never written in the first place.
-7. Make it a project-wide mandate and watch an agent fail to opt back out.
+5. Automate it with a project retention window.
+6. Turn on zero-retention for one agent — content is never written at all.
+7. Make it a project-wide mandate that agents cannot opt out of.
 
 ## Prerequisites
 
@@ -333,10 +331,10 @@ Expected output:
 }
 ```
 
-Three things happened, and each is deliberate:
+Three things happened:
 
-- **The row survived as a skeleton.** A `404` would prove nothing — it is indistinguishable from a resource that never existed. A purged trace still reads back, carrying `content_redacted_at`, so the erasure is _provable_ to an auditor.
-- **The bytes are gone, not orphaned.** The steps object was deleted from storage, and the `File` row with it. Fetching it now fails:
+- **The row survived as a skeleton** carrying `content_redacted_at`, so the erasure is provable to an auditor (a `404` would be indistinguishable from a resource that never existed).
+- **The bytes are gone, not orphaned.** The steps object and its `File` row were deleted from storage. Fetching it now fails:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -380,7 +378,7 @@ curl -s -X DELETE "$SOAT_BASE_URL/api/v1/traces/$TRACE_ID/content" \
 </TabItem>
 </Tabs>
 
-- **It cascaded.** Every descendant trace was purged too, along with all of their generations. A nested agent call writes its own steps object covering the same run, so purging only the named trace would leave that content readable by another path.
+- **It cascaded.** Every descendant trace and its generations were purged too — a nested agent call writes its own steps object, which would otherwise stay readable.
 
 ---
 
@@ -429,7 +427,7 @@ A generation purge does **not** delete the parent trace's steps object, which ho
 
 ## Step 6 — Confirm the ledger survived
 
-This is the property that makes erasure adoptable: you can satisfy a deletion request without losing the record that the spend happened. The [usage](/docs/modules/usage) meter for the purged generation is intact.
+The [usage](/docs/modules/usage) meter for the purged generation is intact — a deletion request never costs the record that the spend happened.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -473,9 +471,7 @@ curl -s "$SOAT_BASE_URL/api/v1/generations/$GENERATION_ID" \
 </TabItem>
 </Tabs>
 
-Ids, timestamps, `status`, `stop_reason`, token counts, cost, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`) are preserved on purpose. A billing and audit ledger has to outlive a tenant's erasure of the content.
-
-`cost_usd` is `null` above only because this local model has no price rows — see [Metering and Budgets](/docs/tutorials/metering-and-budgets) to price a model and get currency figures. The purge does not touch that number either way.
+Ids, timestamps, `status`, `stop_reason`, token counts, cost, and every attribution field (`action_id`, `trigger_id`, `orchestration_run_id`, `node_id`, `agent_version`, `routing`) are preserved on purpose. `cost_usd` is `null` above only because this local model has no price rows — see [Metering and Budgets](/docs/tutorials/metering-and-budgets); the purge does not touch that number either way.
 
 ---
 
@@ -518,12 +514,12 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID" \
 
 What the sweep guarantees:
 
-- **Opt-in.** `null` is the default and disables retention entirely, so enabling the feature destroys nothing a project already stored.
-- **One purge implementation.** The sweep calls the same code path Step 4 did — same cascade, same storage-aware byte deletion, same `content_redacted_at` semantics, same audit entries and `traces.content_purged` events. There is no second implementation to drift.
-- **A run is purged as a unit.** The sweep selects root traces; when a root crosses the window, its whole subtree goes with it, including children written minutes later.
-- **Auditable, not anonymous.** Sweep-driven purges are stamped `content_redacted_by_principal_type: "system"` and `content_redacted_by_principal_id: "retention_sweep"`, so an automated erasure is distinguishable from a requested one.
+- **Opt-in.** `null` is the default and disables retention entirely.
+- **One purge implementation.** The sweep calls the same code path as Step 4 — same cascade, byte deletion, `content_redacted_at` semantics, audit entries and `traces.content_purged` events.
+- **A run is purged as a unit.** The sweep selects root traces; the whole subtree goes with the root.
+- **Auditable.** Sweep purges are stamped `content_redacted_by_principal_type: "system"` / `content_redacted_by_principal_id: "retention_sweep"`, distinguishable from a requested erasure.
 
-The sweep's schedule is server configuration, not a project field — see [Traces — Configuration](/docs/modules/traces#configuration) for `CONTENT_RETENTION_SWEEP_INTERVAL_MS` and `CONTENT_RETENTION_SWEEP_DISABLED`.
+The sweep's schedule is server configuration — see [Traces — Configuration](/docs/modules/traces#configuration) for `CONTENT_RETENTION_SWEEP_INTERVAL_MS` and `CONTENT_RETENTION_SWEEP_DISABLED`.
 
 Clear the window with `null` to go back to keeping content until it is purged on demand:
 
@@ -562,9 +558,7 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/projects/$PROJECT_ID" \
 
 ## Step 8 — Zero-retention for one agent
 
-Retention deletes content after the fact. **Zero-retention never writes it.** For a regulated tenant, "we never stored it" is a stronger claim than "we deleted it": content that was never written cannot leak, cannot be missed by a sweep, and cannot sit in a backup.
-
-Create a second agent for the regulated flow and opt it in with `trace_content_mode: none`.
+Retention deletes content after the fact; **zero-retention never writes it** — content that was never written cannot leak, be missed by a sweep, or sit in a backup. Create a second agent and opt it in with `trace_content_mode: none`.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -708,9 +702,7 @@ Expected output — the marker is set from the moment the row exists:
 }
 ```
 
-Reusing the purge marker means every existing reader already handles "content is unavailable here". The principal id is what distinguishes **never stored** (`zero_retention`) from **stored, then erased** (a user, an API key, or `retention_sweep`).
-
-What is still written is the skeleton, unchanged — which means metering is unaffected:
+The principal id distinguishes **never stored** (`zero_retention`) from **stored, then erased** (a user, an API key, or `retention_sweep`). The skeleton is still written unchanged, so metering is unaffected:
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -842,18 +834,8 @@ curl -s -X PATCH "$SOAT_BASE_URL/api/v1/agents/$REGULATED_AGENT_ID" \
 </TabItem>
 </Tabs>
 
-Without that rule, a project-wide mandate could be escaped simply by creating a new agent under it. An agent's `null` (the default) inherits the project, and resolution **fails closed**: an unrecognised stored mode resolves to `none` rather than to permission to write content.
+An agent's `null` (the default) inherits the project, and resolution **fails closed**: an unrecognised stored mode resolves to `none`.
 
 ---
-
-## What you built
-
-| Need | Mechanism | Where it lives |
-| --- | --- | --- |
-| "Delete this person's conversation" | `purge-trace-content` | On demand, per run, cascades to descendants |
-| "Delete this one generation's payload" | `purge-generation-content` | On demand, per generation |
-| "Nothing older than N days" | `trace_content_retention_days` | Project, daily sweep |
-| "Never store it at all" | `trace_content_mode: none` | Project (floor) or agent (tighten only) |
-| "But keep the invoice" | Skeleton preserved by all four | Ids, status, usage, cost, attribution |
 
 Read next: [Traces — Content Purge, Retention Policy, Zero-Retention](/docs/modules/traces#content-purge), [Generations — Content Purge](/docs/modules/generations#content-purge), [Projects](/docs/modules/projects), and [Audit Log](/docs/modules/audit-log) for the entries every purge writes.

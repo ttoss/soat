@@ -15,9 +15,7 @@ import TabItem from '@theme/TabItem';
 
 # Gate a Canary Promotion on an Eval
 
-[Canary rollouts](/docs/tutorials/agent-versioning-and-canary-rollout) answer "how do I try a new prompt on 10% of traffic?". They do not answer the question that follows: **who decides it is good enough to promote?** Left to a human eyeballing a few conversations, the answer is "whoever is impatient".
-
-A **promotion gate** makes the decision evidential. A release names an [eval](/docs/modules/evaluations), and `promote-agent-release` refuses until that eval has a run which finished `completed`, with `passed: true`, **pinned to the canary version**. This is the ratchet: the system can only move in the direction the measurements allow.
+A **promotion gate** makes a [canary rollout](/docs/tutorials/agent-versioning-and-canary-rollout) decision evidential: a release names an [eval](/docs/modules/evaluations), and `promote-agent-release` refuses until that eval has a run that finished `completed`, with `passed: true`, **pinned to the canary version**.
 
 You will:
 
@@ -121,9 +119,7 @@ PROJECT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/projects" \
 
 ## Step 2 — Ship the agent and its suite in one template
 
-Datasets, their items, and evals are all [formation](/docs/modules/formations) resource types, so the suite that verifies an agent lives in the same template as the agent. A checkout that has the agent always has the cases it must still pass.
-
-Note that test cases are their own resource rather than a list inside the dataset — the same shape as [memory entries](/docs/modules/memories). An item curated by hand through the API is therefore never collateral of a formation apply, and each declared case has its own physical id.
+Datasets, their items, and evals are all [formation](/docs/modules/formations) resource types, so the suite that verifies an agent lives in the same template as the agent. Test cases are their own resource rather than a list inside the dataset — see [Memories](/docs/modules/memories) for the same shape.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -528,9 +524,7 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/release/promote" \
 </TabItem>
 </Tabs>
 
-A passing run, and the gate stays shut. This is the heart of the feature: **a green run against another version is not evidence about the canary.**
-
-Pinning is not a convenience either. Release assignment keys on the [session](/docs/modules/sessions)'s [actor](/docs/modules/actors), and an eval generation has no session — so an *unpinned* run under a release that had no stable version to fall back on would bucket each item independently and blend two configs into one score. A run resolves exactly one version at start, stamps it on `agent_version`, and every item executes against it.
+A passing run, and the gate stays shut: **a green run against another version is not evidence about the canary.** A run resolves exactly one version at start, stamps it on `agent_version`, and every item executes against it — see [Evaluations — Version pinning](/docs/modules/evaluations#version-pinning) for why unpinned runs resolve to the stable version.
 
 ---
 
@@ -594,7 +588,7 @@ Expected output — the promoted version records **which run cleared it**:
 ]
 ```
 
-That field is the audit trail a gated rollout is worth having: months later, "why was version 2 promoted?" has an answer with per-item scores behind it.
+That `eval_run_id` field is the audit trail: "why was version 2 promoted?" has an answer with per-item scores behind it.
 
 :::note[The gate cannot be argued with, only satisfied]
 
@@ -680,7 +674,7 @@ TRIGGER_ID=$(curl -s -X PUT "$SOAT_BASE_URL/api/v1/formations/$FORMATION_ID" \
 </TabItem>
 </Tabs>
 
-Rather than waiting until 03:00, fire it now. Every starter works — manual, webhook, and `schedule` — and the firing always starts a **queued** run: a suite is one real generation per item, so blocking a scheduler tick on it is exactly the case [sync vs async](/docs/advanced/sync-and-async) rules out. The firing's `result.result_id` is the `evrun_…` to poll.
+Rather than waiting until 03:00, fire it now. A firing always starts a **queued** run (see [sync vs async](/docs/advanced/sync-and-async)); its `result.result_id` is the `evrun_…` to poll.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -737,9 +731,7 @@ curl -s "$SOAT_BASE_URL/api/v1/webhooks/deliveries?webhook_id=$WEBHOOK_ID" \
 </TabItem>
 </Tabs>
 
-The run records where it came from in `trigger_id`, and keeps it even if that trigger is later deleted — a run is a historical measurement, so nothing after the fact rewrites its origin.
-
-The delivered payload carries the verdict **inline**:
+The run records where it came from in `trigger_id`, and keeps it even if that trigger is later deleted. The delivered payload carries the verdict **inline**:
 
 ```json
 {
@@ -754,7 +746,7 @@ The delivered payload carries the verdict **inline**:
 }
 ```
 
-That is not a convenience. This event **is** the promotion gate for anything automating the next step, and a gate that has to make a second call to learn its own answer is a gate that can fail open when that call does. Exactly one event fires per terminal run, from the single finalize path both run modes share.
+Exactly one event fires per terminal run, so anything automating the next step can act on this payload alone.
 
 :::note[The URL above is deliberately unroutable]
 
@@ -766,16 +758,6 @@ The trigger's `input` may also carry `agent_version` and `baseline_run_id`, whic
 
 ---
 
-## What you built
-
-| Need | Mechanism |
-| --- | --- |
-| "The suite ships with the agent" | `dataset` / `dataset_item` / `eval` / `trigger` in one formation template |
-| "Nobody promotes on a hunch" | `set-agent-release --promotion-gate <eval>` |
-| "Refuse, don't warn" | `409 PROMOTION_GATE_UNMET`, rollout left running |
-| "Measure the canary, not the incumbent" | `start-eval-run --agent-version <canary>` |
-| "Why was this promoted?" | `eval_run_id` on the version that went live |
-| "Keep measuring after the rollout" | A `schedule` trigger with `target_type: eval` |
-| "Tell my pipeline the verdict" | `eval_run.completed` / `eval_run.failed`, verdict inline |
+## Next steps
 
 Read next: [Agent Versioning and Canary Rollout](/docs/tutorials/agent-versioning-and-canary-rollout) for the rollout mechanics this builds on, [Formations](/docs/tutorials/formations) for declarative stacks, and [Evaluations](/docs/modules/evaluations) for the module reference.

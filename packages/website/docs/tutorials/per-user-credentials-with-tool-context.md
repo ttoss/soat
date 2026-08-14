@@ -15,17 +15,15 @@ import TabItem from '@theme/TabItem';
 
 # Pass Per-User Credentials to Tools with Tool Context
 
-A scheduled or orchestrated flow often acts *on behalf of a user*: a cron starts a run for Alice, and the tools the run's agents call must authenticate as Alice — not as the platform. [`tool_context`](/docs/advanced/tool-context) is the channel for that: a flat key/value bag attached to the run, forwarded as request headers on every tool call the run's agents make.
+A scheduled or orchestrated flow often acts *on behalf of a user*: the tools a run's agents call must authenticate as that user, not as the platform. [`tool_context`](/docs/advanced/tool-context) is the channel for that — a flat key/value bag attached to the run, forwarded as request headers on every tool call.
 
-You will build the whole path and watch every guarantee that makes it safe:
+You will:
 
-1. Create an `http` tool whose `Authorization` header is a [`{{context:userToken}}`](/docs/advanced/expressions-and-templating#context-references-context) token — the **tool** declares the header shape, the **caller** only supplies the value.
-2. Confine the credential with [`context_keys`](/docs/modules/tools#scoping-which-context-keys-reach-a-tool), so the raw token is never forwarded as a context header.
-3. Start an [orchestration run](/docs/modules/orchestrations#run-tool-context) with a `tool_context`, watch the run **pause at a human node** and resume — the bag is stored on the run, so it survives the pause with no request to travel in.
-4. Inspect the exact headers that reached the endpoint: the real bearer header, the allowlisted context key, and the **absence** of the raw token header.
-5. See the fail-closed path: a calling path that carries no context fails with `MISSING_TOOL_CONTEXT_KEY` instead of sending an empty `Authorization: Bearer `.
+1. Create an `http` tool whose `Authorization` header is a [`{{context:userToken}}`](/docs/advanced/expressions-and-templating#context-references-context) token, confined with [`context_keys`](/docs/modules/tools#scoping-which-context-keys-reach-a-tool).
+2. Start an [orchestration run](/docs/modules/orchestrations#run-tool-context) with a `tool_context`, pause at a human node, and resume.
+3. Inspect the exact headers that reached the endpoint, and see the fail-closed `MISSING_TOOL_CONTEXT_KEY` path.
 
-The tool endpoint is a header-echo listener you run locally, so the tutorial needs no external services. One small local model call is involved (the agent that makes the tool call), served by Ollama.
+The tool endpoint is a local header-echo listener, so no external services are needed beyond Ollama.
 
 ## Prerequisites
 
@@ -272,8 +270,8 @@ ECHO_PID=$!
 
 This one [tool definition](/docs/modules/tools#examples) carries both halves of the credential story:
 
-- **`Authorization: Bearer {{context:userToken}}`** — a [context reference](/docs/advanced/expressions-and-templating#context-references-context). At call time the server substitutes the `userToken` key of the run's `tool_context` into this header. The tool knows the header shape its endpoint expects; the caller never has to.
-- **`context_keys: ["tenant"]`** — the [containment allowlist](/docs/modules/tools#scoping-which-context-keys-reach-a-tool). Only `tenant` is forwarded as a prefixed `X-Soat-Context-*` header. In particular, the **raw `userToken` context header is not sent** — the credential reaches this endpoint only inside the header the tool declared, and reaches no other tool at all.
+- **`Authorization: Bearer {{context:userToken}}`** — a [context reference](/docs/advanced/expressions-and-templating#context-references-context): at call time the server substitutes the `userToken` key of the run's `tool_context` into this header.
+- **`context_keys: ["tenant"]`** — the [containment allowlist](/docs/modules/tools#scoping-which-context-keys-reach-a-tool): only `tenant` is forwarded as a prefixed `X-Soat-Context-*` header, so the raw `userToken` context header is never sent.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -366,7 +364,7 @@ curl -s "$SOAT_BASE_URL/api/v1/tools/$ORDER_TOOL_ID" \
 
 :::note[Why not put the token in `tool_context` under the key `Authorization`?]
 
-It would not work, on purpose. A `tool_context` key always lands under the deployment's context prefix (`X-Soat-Context-` by default) — a caller-supplied key can never name a standard header, because then it could overwrite a credential the tool definition configured. The `{{context:...}}` token keeps the authority split: the tool declares the header, the caller supplies only the value. See [Placing a value in a real header](/docs/advanced/tool-context#placing-a-value-in-a-real-header).
+A `tool_context` key always lands under the context prefix, so a caller-supplied key can never name (or overwrite) a standard header. See [Placing a value in a real header](/docs/advanced/tool-context#placing-a-value-in-a-real-header).
 
 :::
 
@@ -431,9 +429,7 @@ echo "AGENT_ID: $AGENT_ID"
 
 ## Step 7 — Create the orchestration: a pause before the tool call
 
-Two nodes: a [`human` node](/docs/modules/orchestrations#human-nodes) that parks the run, then the `agent` node that makes the tool call. The pause is the point — a paused run has **no request in flight** that could carry a `tool_context`, so the run resuming with the bag intact proves it is stored on the run itself, exactly as [Run Tool Context](/docs/modules/orchestrations#run-tool-context) promises for `awaiting_input`, `sleeping`, worker redrives, and child runs alike.
-
-Note what is *not* here: the token appears nowhere in the graph — not in a node, not in an `input_mapping`. The graph is reusable for every user; the credential arrives per run.
+Two nodes: a [`human` node](/docs/modules/orchestrations#human-nodes) that parks the run, then the `agent` node that makes the tool call. A paused run has no request in flight that could carry a `tool_context`, so resuming with the bag intact proves it is stored on the run itself ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). The token appears nowhere in the graph — the graph is reusable for every user; the credential arrives per run.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -497,7 +493,7 @@ echo "ORCHESTRATION_ID: $ORCHESTRATION_ID"
 
 ## Step 8 — Start the run with the user's credential
 
-This is the caller's whole job: pass `tool_context` when starting the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). In production this caller is a cron, a webhook handler, or a backend acting for a signed-in user — whoever holds the per-user token. With `--wait`, the call returns as soon as the run parks at the `confirm` node.
+Pass `tool_context` when starting the run ([Run Tool Context](/docs/modules/orchestrations#run-tool-context)). In production the caller is whoever holds the per-user token. With `--wait`, the call returns as soon as the run parks at the `confirm` node.
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -681,9 +677,7 @@ The `X-Soat-Context-` prefix is deployment configuration: set [`TOOL_CONTEXT_HEA
 
 ## Step 11 — The fail-closed path: a call with no context at all
 
-When substitution has no `userToken` to resolve, the tool call **fails** with `MISSING_TOOL_CONTEXT_KEY` — naming the key and the header — instead of sending `Authorization: Bearer ` with no value to the endpoint, which would come back as an opaque upstream `401` several steps from the actual mistake.
-
-The shortest way to see it is a calling path that carries no `tool_context` by construction: [`call-tool`](/docs/modules/tools#examples) invokes a tool directly, with no generation and no run behind it. An orchestration `tool` node behaves the same way, for the same reason — see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header). Both are deterministic: no model is involved.
+When substitution has no `userToken` to resolve, the tool call **fails** with `MISSING_TOOL_CONTEXT_KEY` — naming the key and the header — instead of sending an empty `Authorization: Bearer `. The shortest way to see it is [`call-tool`](/docs/modules/tools#examples), which invokes a tool directly with no run behind it and therefore no `tool_context` (an orchestration `tool` node behaves the same — see the [rules table](/docs/advanced/tool-context#placing-a-value-in-a-real-header)).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
@@ -759,19 +753,9 @@ kill $ECHO_PID
 
 ---
 
-## What you built
-
-| Guarantee | Where you saw it |
-| --- | --- |
-| A per-user credential rides the run, not the graph | `tool_context` on `start-orchestration-run`; the orchestration definition never mentions it |
-| The bag survives a pause with no request to travel in | Run parked `awaiting_input` at the human node, resumed, and the tool call still carried the credential |
-| The credential lands in the header the target expects | `Authorization: Bearer alice-token-123`, declared by the tool as `{{context:userToken}}` |
-| The raw credential egresses only where allowlisted | `context_keys: ["tenant"]` — `x-soat-context-tenant` arrived, `x-soat-context-usertoken` did not |
-| A missing key fails closed | `call-tool`, which carries no context, → `MISSING_TOOL_CONTEXT_KEY`, never an empty `Authorization` header |
-
 ## Where to go next
 
-- [Tool Context](/docs/advanced/tool-context) — the canonical contract: key→header rule, auto-populated session identity keys, precedence, validation, and the security notes (verify the caller; mind what egresses).
-- [Expressions & Templating](/docs/advanced/expressions-and-templating) — how `{{context:...}}` and `{{secret:...}}` compose, and why substitution is single-pass.
-- [Run Tool Context](/docs/modules/orchestrations#run-tool-context) — every way a run gets driven (queued, sleeping, redriven, child runs) and why the bag survives each one.
-- [Cap spend per end user](/docs/tutorials/cap-spend-per-end-user) — sessions and actors, where the identity keys in `tool_context` are auto-populated for you.
+- [Tool Context](/docs/advanced/tool-context) — the canonical contract and security notes.
+- [Expressions & Templating](/docs/advanced/expressions-and-templating) — how `{{context:...}}` and `{{secret:...}}` compose.
+- [Run Tool Context](/docs/modules/orchestrations#run-tool-context) — why the bag survives every way a run is driven.
+- [Cap spend per end user](/docs/tutorials/cap-spend-per-end-user) — sessions and actors, where identity keys in `tool_context` are auto-populated.
