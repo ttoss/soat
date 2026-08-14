@@ -1203,7 +1203,7 @@ describe('conversationsFormationModule', () => {
 // ── agent tool bindings ─────────────────────────────────────────────────────
 
 describe('agentsFormationModule tool_bindings', () => {
-  test('create with tool_bindings persists references and read returns both views', async () => {
+  test('create with tool_bindings persists references and read returns them', async () => {
     const agentPhysId = await applyCreateResource({
       resourceType: 'agent',
       projectId: internalProjectId,
@@ -1222,42 +1222,22 @@ describe('agentsFormationModule tool_bindings', () => {
     const read = await readModule('agent').read?.({
       physicalResourceId: agentPhysId,
     });
-    // Canonical view carries only the reference (any stray policy dropped)...
+    // Canonical view carries only the reference (any stray policy dropped).
     expect(read).toMatchObject({
       tool_bindings: [
         { tool_id: converterToolId },
         { tool_id: converterToolId },
       ],
-      // ...and the derived deprecated view lists each referenced tool.
-      tool_ids: [converterToolId, converterToolId],
     });
+    expect(read).not.toHaveProperty('tool_ids');
   });
 
-  test('create with the deprecated tool_ids shorthand derives bare bindings', async () => {
-    const agentPhysId = await applyCreateResource({
-      resourceType: 'agent',
-      projectId: internalProjectId,
-      resolvedProperties: {
-        ai_provider_id: aiProviderId,
-        name: 'FM Shorthand Agent',
-        tool_ids: [converterToolId],
-      },
-    });
-
-    const read = await readModule('agent').read?.({
-      physicalResourceId: agentPhysId,
-    });
-    expect(read).toMatchObject({
-      tool_bindings: [{ tool_id: converterToolId }],
-      tool_ids: [converterToolId],
-    });
-  });
-
-  test('validateProperties rejects tool_bindings combined with tool_ids', () => {
+  // `tool_ids` was removed for v1. `formations.yaml` is the sole allowlist for
+  // template properties, so dropping it there makes the field an unknown one.
+  test('validateProperties rejects the removed tool_ids field', () => {
     const errors = readModule('agent').validateProperties?.({
       properties: {
         ai_provider_id: aiProviderId,
-        tool_bindings: [{ tool_id: converterToolId }],
         tool_ids: [converterToolId],
       },
       basePath: 'resources.<agent>.properties',
@@ -1265,7 +1245,7 @@ describe('agentsFormationModule tool_bindings', () => {
     expect(errors?.length).toBeGreaterThan(0);
     expect(
       errors?.some((e) => {
-        return /cannot be combined/i.test(e.message);
+        return /unknown/i.test(e.message) && /tool_ids/.test(e.message);
       })
     ).toBe(true);
   });

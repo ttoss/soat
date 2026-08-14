@@ -335,7 +335,7 @@ STANZA1_AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 1 - First Quatrain" \
   --instructions "You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza." \
-  --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$READ_POEM_TOOL_ID\"},{\"tool_id\":\"$WRITE_STANZA_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA1_AGENT_ID: $STANZA1_AGENT_ID"
@@ -345,7 +345,7 @@ STANZA2_AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 2 - Second Quatrain" \
   --instructions "You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza." \
-  --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$READ_POEM_TOOL_ID\"},{\"tool_id\":\"$WRITE_STANZA_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA2_AGENT_ID: $STANZA2_AGENT_ID"
@@ -355,7 +355,7 @@ STANZA3_AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 3 - Third Quatrain" \
   --instructions "You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza." \
-  --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$READ_POEM_TOOL_ID\"},{\"tool_id\":\"$WRITE_STANZA_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA3_AGENT_ID: $STANZA3_AGENT_ID"
@@ -365,7 +365,7 @@ STANZA4_AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Stanza 4 - Final Couplet" \
   --instructions "You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet." \
-  --tool-ids "[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$READ_POEM_TOOL_ID\"},{\"tool_id\":\"$WRITE_STANZA_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"poem-read_get-document"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"poem-write_update-document"}}]' \
   --max-steps 5 | jq -r '.id')
 echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
@@ -406,7 +406,7 @@ for (const config of stanzaConfigs) {
       ai_provider_id: AI_PROVIDER_ID,
       name: config.name,
       instructions: config.instructions,
-      tool_ids: [READ_POEM_TOOL_ID, WRITE_STANZA_TOOL_ID],
+      tool_bindings: [{ tool_id: READ_POEM_TOOL_ID }, { tool_id: WRITE_STANZA_TOOL_ID }],
       step_rules: [
         {
           step: 1,
@@ -437,28 +437,28 @@ const [STANZA1_AGENT_ID, STANZA2_AGENT_ID, STANZA3_AGENT_ID, STANZA4_AGENT_ID] =
 STANZA1_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 1 - First Quatrain\",\"instructions\":\"You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 1 - First Quatrain\",\"instructions\":\"You are deterministic stanza worker 1. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the poem title on the first line, add a blank line, then write the FIRST quatrain (4 lines) using ABAB. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_bindings\":[{ \"tool_id\": \"$READ_POEM_TOOL_ID\" }, { \"tool_id\": \"$WRITE_STANZA_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA1_AGENT_ID: $STANZA1_AGENT_ID"
 
 STANZA2_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 2 - Second Quatrain\",\"instructions\":\"You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 2 - Second Quatrain\",\"instructions\":\"You are deterministic stanza worker 2. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the SECOND quatrain (4 lines) using CDCD. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_bindings\":[{ \"tool_id\": \"$READ_POEM_TOOL_ID\" }, { \"tool_id\": \"$WRITE_STANZA_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA2_AGENT_ID: $STANZA2_AGENT_ID"
 
 STANZA3_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 3 - Third Quatrain\",\"instructions\":\"You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 3 - Third Quatrain\",\"instructions\":\"You are deterministic stanza worker 3. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the THIRD quatrain (4 lines) using EFEF. In poem-write, set content to the full poem-so-far including your stanza.\",\"tool_bindings\":[{ \"tool_id\": \"$READ_POEM_TOOL_ID\" }, { \"tool_id\": \"$WRITE_STANZA_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA3_AGENT_ID: $STANZA3_AGENT_ID"
 
 STANZA4_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 4 - Final Couplet\",\"instructions\":\"You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.\",\"tool_ids\":[\"$READ_POEM_TOOL_ID\",\"$WRITE_STANZA_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Stanza 4 - Final Couplet\",\"instructions\":\"You are deterministic stanza worker 4. Do exactly two tool calls: first poem-read, then poem-write. Never ask follow-up questions. Write the FINAL couplet (2 lines) using GG. In poem-write, set content to the full poem-so-far including your couplet.\",\"tool_bindings\":[{ \"tool_id\": \"$READ_POEM_TOOL_ID\" }, { \"tool_id\": \"$WRITE_STANZA_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-read_get-document\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"poem-write_update-document\"}}],\"max_steps\":5}" \
   | jq -r '.id')
 echo "STANZA4_AGENT_ID: $STANZA4_AGENT_ID"
 ```
@@ -678,7 +678,7 @@ ORCHESTRATOR_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Sonnet Orchestrator" \
   --instructions "Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text." \
-  --tool-ids "[\"$CALL_STANZA1_TOOL_ID\",\"$CALL_STANZA2_TOOL_ID\",\"$CALL_STANZA3_TOOL_ID\",\"$CALL_STANZA4_TOOL_ID\",\"$READ_FINAL_POEM_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$CALL_STANZA1_TOOL_ID\"},{\"tool_id\":\"$CALL_STANZA2_TOOL_ID\"},{\"tool_id\":\"$CALL_STANZA3_TOOL_ID\"},{\"tool_id\":\"$CALL_STANZA4_TOOL_ID\"},{\"tool_id\":\"$READ_FINAL_POEM_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"call-stanza-1_create-agent-generation"}},{"step":2,"tool_choice":{"type":"tool","tool_name":"call-stanza-2_create-agent-generation"}},{"step":3,"tool_choice":{"type":"tool","tool_name":"call-stanza-3_create-agent-generation"}},{"step":4,"tool_choice":{"type":"tool","tool_name":"call-stanza-4_create-agent-generation"}},{"step":5,"tool_choice":{"type":"tool","tool_name":"read-final-poem_get-document"}}]' \
   --max-steps 8 | jq -r '.id')
 echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
@@ -695,12 +695,12 @@ const { data: orchestrator } = await adminSoat.agents.createAgent({
     name: 'Sonnet Orchestrator',
     instructions:
       'Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.',
-    tool_ids: [
-      CALL_STANZA1_TOOL_ID,
-      CALL_STANZA2_TOOL_ID,
-      CALL_STANZA3_TOOL_ID,
-      CALL_STANZA4_TOOL_ID,
-      READ_FINAL_POEM_TOOL_ID,
+    tool_bindings: [
+      { tool_id: CALL_STANZA1_TOOL_ID },
+      { tool_id: CALL_STANZA2_TOOL_ID },
+      { tool_id: CALL_STANZA3_TOOL_ID },
+      { tool_id: CALL_STANZA4_TOOL_ID },
+      { tool_id: READ_FINAL_POEM_TOOL_ID }
     ],
     step_rules: [
       {
@@ -752,7 +752,7 @@ const ORCHESTRATOR_ID = orchestrator.id;
 ORCHESTRATOR_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Sonnet Orchestrator\",\"instructions\":\"Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.\",\"tool_ids\":[\"$CALL_STANZA1_TOOL_ID\",\"$CALL_STANZA2_TOOL_ID\",\"$CALL_STANZA3_TOOL_ID\",\"$CALL_STANZA4_TOOL_ID\",\"$READ_FINAL_POEM_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-1_create-agent-generation\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-2_create-agent-generation\"}},{\"step\":3,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-3_create-agent-generation\"}},{\"step\":4,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-4_create-agent-generation\"}},{\"step\":5,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"read-final-poem_get-document\"}}],\"max_steps\":8}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Sonnet Orchestrator\",\"instructions\":\"Call tools in this exact order: call-stanza-1, call-stanza-2, call-stanza-3, call-stanza-4, then read-final-poem. Do not ask follow-up questions. Return ONLY the poem text.\",\"tool_bindings\":[{ \"tool_id\": \"$CALL_STANZA1_TOOL_ID\" }, { \"tool_id\": \"$CALL_STANZA2_TOOL_ID\" }, { \"tool_id\": \"$CALL_STANZA3_TOOL_ID\" }, { \"tool_id\": \"$CALL_STANZA4_TOOL_ID\" }, { \"tool_id\": \"$READ_FINAL_POEM_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-1_create-agent-generation\"}},{\"step\":2,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-2_create-agent-generation\"}},{\"step\":3,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-3_create-agent-generation\"}},{\"step\":4,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"call-stanza-4_create-agent-generation\"}},{\"step\":5,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"read-final-poem_get-document\"}}],\"max_steps\":8}" \
   | jq -r '.id')
 echo "ORCHESTRATOR_ID: $ORCHESTRATOR_ID"
 ```

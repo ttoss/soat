@@ -466,7 +466,7 @@ export const testSpec: OpenApiSpec = {
           name: { type: 'string' },
           model: { type: 'string' },
           project_id: { type: 'string', 'x-soat-ref': 'projects' },
-          tool_ids: {
+          active_tool_ids: {
             type: 'array',
             items: { type: 'string' },
             'x-soat-ref': 'tools',

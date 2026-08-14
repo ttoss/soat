@@ -11,11 +11,12 @@ import {
 import type { AiProvider } from './types';
 
 type NamedRecord = { id: string; name?: string; type?: string };
+type ToolBinding = { tool_id?: string };
 type AgentRecord = {
   id: string;
   name?: string;
   ai_provider_id?: string;
-  tool_ids?: string[];
+  tool_bindings?: ToolBinding[];
 };
 
 export type ProvisionResult =
@@ -141,7 +142,7 @@ export const provisionGuide = async (args: {
         ai_provider_id: args.providerId,
         name: GUIDE_AGENT_NAME,
         instructions,
-        tool_ids: [toolId],
+        tool_bindings: [{ tool_id: toolId }],
       },
     });
     return created.ok
@@ -150,9 +151,13 @@ export const provisionGuide = async (args: {
   }
 
   // Re-bind the provider / tool when the selection drifted from the stored agent.
-  const toolIds = existing.tool_ids ?? [];
-  const needsUpdate =
-    existing.ai_provider_id !== args.providerId || !toolIds.includes(toolId);
+  // `tool_bindings` replaces the whole list, so the render tool is appended to
+  // whatever the agent already carries rather than sent on its own.
+  const bindings = existing.tool_bindings ?? [];
+  const hasTool = bindings.some((binding) => {
+    return binding.tool_id === toolId;
+  });
+  const needsUpdate = existing.ai_provider_id !== args.providerId || !hasTool;
   if (needsUpdate) {
     await apiFetch<AgentRecord>({
       url: `/api/v1/agents/${encodeURIComponent(existing.id)}`,
@@ -161,7 +166,7 @@ export const provisionGuide = async (args: {
       body: {
         ai_provider_id: args.providerId,
         instructions,
-        tool_ids: toolIds.includes(toolId) ? toolIds : [...toolIds, toolId],
+        tool_bindings: hasTool ? bindings : [...bindings, { tool_id: toolId }],
       },
     });
   }

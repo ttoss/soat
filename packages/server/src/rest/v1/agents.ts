@@ -4,7 +4,6 @@ import { db } from 'src/db';
 import { DomainError } from 'src/errors';
 import { deleteAgent } from 'src/lib/agentDelete';
 import { normalizeKnowledgeConfig } from 'src/lib/agentKnowledge';
-import type { InlineToolDefinition } from 'src/lib/agents';
 import { createAgent, getAgent, listAgents, updateAgent } from 'src/lib/agents';
 import { parseWireToolBindings } from 'src/lib/agentToolBindings';
 import { buildSrn } from 'src/lib/iam';
@@ -17,7 +16,6 @@ import {
   parseGuardrailIds,
 } from './guardrailAttach';
 import { parsePagination, requireAuth, resolveReadProjectIds } from './helpers';
-import { coerceToJsonObject } from './tools';
 
 export const agentsRouter = new Router<Context>();
 
@@ -30,8 +28,6 @@ type CreateAgentBody = {
   instructions?: unknown;
   model?: unknown;
   tool_bindings?: unknown;
-  tool_ids?: unknown;
-  tools?: unknown;
   max_steps?: unknown;
   tool_choice?: unknown;
   stop_conditions?: unknown;
@@ -50,77 +46,6 @@ type CreateAgentBody = {
   version_label?: unknown;
 };
 
-/**
- * Parses one inline tool definition from a request body (`CreateAgentRequest`
- * / `UpdateAgentRequest`'s `tools` array). Returns `null` when the value is
- * not an object or is missing a string `name`, so the caller can return 400.
- */
-const parseInlineToolDefinition = (
-  value: unknown
-): InlineToolDefinition | null => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
-  }
-
-  const {
-    name,
-    type,
-    description,
-    parameters,
-    execute,
-    mcp,
-    actions,
-    preset_parameters: presetParameters,
-    pipeline,
-    output_mapping: outputMapping,
-  } = value as Record<string, unknown>;
-
-  if (!name || typeof name !== 'string') return null;
-
-  try {
-    return {
-      name,
-      type: typeof type === 'string' ? type : undefined,
-      description: typeof description === 'string' ? description : undefined,
-      parameters: coerceToJsonObject(parameters) as object | undefined,
-      execute: coerceToJsonObject(execute) as object | undefined,
-      mcp: coerceToJsonObject(mcp) as object | undefined,
-      actions: Array.isArray(actions) ? (actions as string[]) : undefined,
-      presetParameters: coerceToJsonObject(presetParameters) as
-        object | undefined,
-      pipeline: coerceToJsonObject(pipeline) as object | undefined,
-      outputMapping: coerceToJsonObject(outputMapping) as object | undefined,
-    };
-  } catch {
-    return null;
-  }
-};
-
-const INLINE_TOOLS_ERROR =
-  'tools must be an array of tool definition objects with a name';
-
-/**
- * Parses the `tools` array of inline tool definitions. Returns `undefined`
- * when absent (leave as-is), `null` when explicitly cleared, `'invalid'` when
- * malformed (not an array, or an entry without a string `name`), or the
- * parsed definitions otherwise.
- */
-const parseInlineTools = (
-  value: unknown
-): InlineToolDefinition[] | null | undefined | 'invalid' => {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-  if (!Array.isArray(value)) return 'invalid';
-
-  const parsed: InlineToolDefinition[] = [];
-  for (const item of value) {
-    const def = parseInlineToolDefinition(item);
-    if (!def) return 'invalid';
-    parsed.push(def);
-  }
-  return parsed;
-};
-
 const parseNullableString = (v: unknown): string | null | undefined => {
   if (v === null) return null;
   if (typeof v === 'string') return v;
@@ -135,10 +60,7 @@ const parseNumber = (v: unknown): number | undefined => {
   return typeof v === 'number' ? v : undefined;
 };
 
-const parseUpdateAgentBody = (
-  body: Record<string, unknown>,
-  tools: InlineToolDefinition[] | null | undefined
-) => {
+const parseUpdateAgentBody = (body: Record<string, unknown>) => {
   return {
     aiProviderId: parseNullableString(body.ai_provider_id),
     modelRouteId: parseNullableString(body.model_route_id),
@@ -146,8 +68,6 @@ const parseUpdateAgentBody = (
     instructions: parseNullableString(body.instructions),
     model: parseNullableString(body.model),
     toolBindings: parseWireToolBindings(body.tool_bindings),
-    toolIds: parseOptional<string[] | null>(body.tool_ids),
-    tools,
     maxSteps: parseOptional<number | null>(body.max_steps),
     toolChoice: parseOptional<string | object | null>(body.tool_choice),
     stopConditions: parseOptional<object[] | null>(body.stop_conditions),
@@ -213,10 +133,9 @@ const parseModelBinding = (body: CreateAgentBody) => {
 const buildCreateAgentArgs = (args: {
   projectId: number;
   body: CreateAgentBody;
-  tools: InlineToolDefinition[] | undefined;
   createdByUserId?: number;
 }): Parameters<typeof createAgent>[0] => {
-  const { projectId, body, tools, createdByUserId } = args;
+  const { projectId, body, createdByUserId } = args;
   return {
     projectId,
     createdByUserId,
@@ -227,8 +146,6 @@ const buildCreateAgentArgs = (args: {
       typeof body.instructions === 'string' ? body.instructions : undefined,
     model: typeof body.model === 'string' ? body.model : undefined,
     toolBindings: parseWireToolBindings(body.tool_bindings),
-    toolIds: Array.isArray(body.tool_ids) ? body.tool_ids : undefined,
-    tools,
     maxSteps: parseNumber(body.max_steps),
     toolChoice: body.tool_choice as string | object | undefined,
     stopConditions: Array.isArray(body.stop_conditions)
@@ -263,12 +180,7 @@ const runAgentUpdate = async (args: {
   const { ctx, projectIds } = args;
   const body = ctx.request.body as Record<string, unknown>;
 
-  const tools = parseInlineTools(body.tools);
-  if (tools === 'invalid') {
-    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
-  }
-
-  const parsed = parseUpdateAgentBody(body, tools);
+  const parsed = parseUpdateAgentBody(body);
 
   if (parsed.guardrailIds !== undefined) {
     const current = await getAgent({ projectIds, id: ctx.params.agent_id });
@@ -294,11 +206,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
 
   const reqBody = ctx.request.body as CreateAgentBody;
 
-  const tools = parseInlineTools(reqBody.tools);
-  if (tools === 'invalid') {
-    throw new DomainError('VALIDATION_FAILED', INLINE_TOOLS_ERROR);
-  }
-
   const targetProjectId = await resolveAgentProjectId(ctx, reqBody.project_id);
 
   if (targetProjectId === 403) {
@@ -314,7 +221,6 @@ agentsRouter.post('/agents', async (ctx: Context) => {
     buildCreateAgentArgs({
       projectId: targetProjectId,
       body: reqBody,
-      tools: tools ?? undefined,
       createdByUserId: ctx.authUser.id,
     })
   );

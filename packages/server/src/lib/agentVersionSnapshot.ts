@@ -80,8 +80,9 @@ export const buildAgentConfigSnapshot = (
 /**
  * Reads the archived `tool_bindings` as canonical bindings.
  *
- * Only this field is replayed — the archived `tool_ids` / `tools` are derived
- * views of the same list, mutually exclusive with it on every write path.
+ * Versions archived before the `tool_ids` / `tools` shorthands were removed
+ * still carry them, but only `tool_bindings` is replayed: they were always
+ * derived views of the same list, so replaying them too would duplicate a tool.
  */
 export const configToolBindings = (
   value: unknown

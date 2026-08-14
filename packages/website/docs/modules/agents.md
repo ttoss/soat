@@ -38,8 +38,6 @@ Agents differ from [Chats](./chats.md) in that they can call tools, observe resu
 | `instructions`             | string        | System instructions guiding agent behavior                                                                                       |
 | `model`                    | string        | Model identifier (falls back to AI provider default)                                                                             |
 | `tool_bindings`            | array         | Tools attached to this agent, one binding object per tool — see [Tool Bindings](#tool-bindings)                                  |
-| `tool_ids`                 | array         | **Deprecated** shorthand for reference-only bindings — see [Deprecated: `tool_ids` and `tools`](#deprecated-tool_ids-and-tools) |
-| `tools`                    | array         | **Deprecated** shorthand for inline-only bindings — see [Deprecated: `tool_ids` and `tools`](#deprecated-tool_ids-and-tools)    |
 | `max_steps`                | number        | Maximum reasoning steps before stopping (default: `20`)                                                                          |
 | `tool_choice`              | string/object | How the model selects tools — see [Tool Choice](#tool-choice)                                                                    |
 | `stop_conditions`          | array         | Additional stop conditions — see [Stop Conditions](#stop-conditions)                                                             |
@@ -155,10 +153,6 @@ Each entry in `tool_bindings` is an object:
 ```
 
 An entry must contain exactly one of `tool_id` or `tool` (`400 VALIDATION_FAILED` otherwise). On update, `tool_bindings` replaces the whole list. `active_tool_ids` and `step_rules[].active_tool_ids` reference **persisted** tools only — the `tool_id` of a binding; inline entries have no ID and cannot be targeted.
-
-#### Deprecated: `tool_ids` and `tools`
-
-`tool_ids` (array of tool IDs) and `tools` (array of inline definitions) are **deprecated input shorthands** for `tool_bindings`, normalized server-side into `{ "tool_id": … }` / `{ "tool": … }` bindings. Responses return the canonical `tool_bindings` and continue to echo derived `tool_ids` / `tools` during the deprecation window. A request may use either the canonical field or the shorthands, not both (`400 VALIDATION_FAILED`). The shorthands keep their historical update semantics: updating `tool_ids` replaces only the reference bindings, updating `tools` only the inline ones. New integrations should write `tool_bindings`.
 
 #### Inline (Ephemeral) Tool Definitions
 

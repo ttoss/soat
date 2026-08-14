@@ -625,7 +625,7 @@ describe('Agent Generation Routes', () => {
           ai_provider_id: aiProvRes.body.id,
           project_id: projectPublicId,
           name: 'Stub Pausing Agent',
-          tool_ids: [toolRes.body.id],
+          tool_bindings: [{ tool_id: toolRes.body.id }],
         });
       pausingAgentId = pausingAgentRes.body.id;
     });
@@ -928,7 +928,7 @@ describe('Agent Generation Routes', () => {
             ai_provider_id: aiProviderId,
             project_id: projectPublicId,
             name: 'Stub Schema Agent',
-            tool_ids: [showDialogToolId],
+            tool_bindings: [{ tool_id: showDialogToolId }],
             output_schema: {
               type: 'object',
               required: ['name'],

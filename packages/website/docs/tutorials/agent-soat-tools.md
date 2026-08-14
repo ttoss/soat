@@ -501,7 +501,7 @@ AGENT_ID=$(soat create-agent \
   --ai-provider-id "$PROVIDER_ID" \
   --name "Notes Agent" \
   --instructions "You are a note-taking assistant. Use your tools to list, read, and update documents." \
-  --tool-ids "[\"$LIST_TOOL_ID\", \"$READ_TOOL_ID\", \"$WRITE_TOOL_ID\"]" | jq -r '.id')
+  --tool-bindings "[{\"tool_id\":\"$LIST_TOOL_ID\"},{\"tool_id\":\"$READ_TOOL_ID\"},{\"tool_id\":\"$WRITE_TOOL_ID\"}]" | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```
 
@@ -516,7 +516,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
     name: 'Notes Agent',
     instructions:
       'You are a note-taking assistant. Use your tools to list, read, and update documents.',
-    tool_ids: [listToolId, readToolId, writeToolId],
+    tool_bindings: [{ tool_id: listToolId }, { tool_id: readToolId }, { tool_id: writeToolId }],
   },
 });
 const agentId = agent!.id;
@@ -534,7 +534,7 @@ AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
     \"ai_provider_id\": \"$PROVIDER_ID\",
     \"name\": \"Notes Agent\",
     \"instructions\": \"You are a note-taking assistant. Use your tools to list, read, and update documents.\",
-    \"tool_ids\": [\"$LIST_TOOL_ID\", \"$READ_TOOL_ID\", \"$WRITE_TOOL_ID\"]
+    \"tool_bindings\": [{ \"tool_id\": \"$LIST_TOOL_ID\" }, { \"tool_id\": \"$READ_TOOL_ID\" }, { \"tool_id\": \"$WRITE_TOOL_ID\" }]
   }" | jq -r '.id')
 echo "Agent: $AGENT_ID"
 ```

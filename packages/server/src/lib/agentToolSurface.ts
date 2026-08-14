@@ -15,10 +15,7 @@ import type { Tool } from 'ai';
 
 import type { TypedAgent } from './agentGenerationTypes';
 import { buildKnowledgeTools } from './agentKnowledge';
-import {
-  deriveLegacyToolFields,
-  readAgentToolBindings,
-} from './agentToolBindings';
+import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { buildResolverGuardrailContext } from './agentToolGuardrail';
 import { resolveAgentTools } from './agentToolResolver';
 import { narrowToActiveTools } from './agentToolSelection';
@@ -50,21 +47,19 @@ export const resolveAgentToolSurface = async (args: {
 }): Promise<Record<string, Tool>> => {
   const projectId = args.typedAgent.project.id as number;
 
-  // Canonical bindings (legacy rows normalize lazily); no branch on presence —
-  // resolveAgentTools no-ops on empty input, so this covers "no tools at all".
-  const legacyViews = deriveLegacyToolFields(
-    readAgentToolBindings(args.typedAgent)
-  );
+  // No branch on presence — resolveAgentTools no-ops on empty input, so this
+  // covers "no tools at all".
+  const bound = splitToolBindings(readAgentToolBindings(args.typedAgent));
 
   const resolvedTools = await resolveAgentTools({
     // `active_tool_ids` narrows the bound set before resolution — filtering ids
     // here rather than resolved tools afterwards avoids needing an id→name map
     // on this path. A resumed run is restricted exactly like the run it resumes.
     toolIds: narrowToActiveTools({
-      toolIds: legacyViews.toolIds ?? [],
+      toolIds: bound.toolIds,
       activeToolIds: args.typedAgent.activeToolIds,
     }),
-    tools: legacyViews.tools,
+    tools: bound.tools,
     projectId,
     projectIds: args.projectIds,
     boundaryPolicy: args.typedAgent.boundaryPolicy,

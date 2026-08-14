@@ -14,10 +14,7 @@ import {
 } from './agentKnowledge';
 import { resolveAgentModel } from './agentModelResolution';
 import { resolveServedAgentVersion } from './agentServedVersion';
-import {
-  deriveLegacyToolFields,
-  readAgentToolBindings,
-} from './agentToolBindings';
+import { readAgentToolBindings, splitToolBindings } from './agentToolBindings';
 import { resolveAgentToolSurface } from './agentToolSurface';
 import { resolveServerToolContextIdentity } from './generationAttribution';
 import {
@@ -162,7 +159,7 @@ export const buildGenerationContext = async (args: {
     pinnedVersion: args.pinnedAgentVersion,
   });
 
-  const boundToolIds = deriveLegacyToolFields(
+  const boundToolIds = splitToolBindings(
     readAgentToolBindings(typedAgent)
   ).toolIds;
   const resolvedMessages = await resolveGenerationInputMessages({
@@ -170,7 +167,7 @@ export const buildGenerationContext = async (args: {
     messages: args.messages,
     authHeader: args.authHeader,
     authUser: args.authUser,
-    allowedToolIds: boundToolIds ?? undefined,
+    allowedToolIds: boundToolIds,
     agentBoundaryPolicy: typedAgent.boundaryPolicy,
   });
   const { model } = await resolveGenerationModel({

@@ -67,8 +67,9 @@ const buildTypedAgentFromConfig = (args: {
   return {
     instructions: configString(config.instructions),
     model: configString(config.model),
-    // Canonical bindings only: the archived `tool_ids`/`tools` are derived views
-    // of the same list, so replaying them too would double every tool.
+    // Bindings only. A version archived before the `tool_ids`/`tools`
+    // shorthands were removed still carries them, but they were derived views
+    // of this same list — replaying them too would double every tool.
     toolBindings: configToolBindings(config.tool_bindings),
     toolIds: null,
     tools: null,

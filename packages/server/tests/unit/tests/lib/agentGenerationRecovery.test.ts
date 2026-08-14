@@ -79,7 +79,7 @@ describe('recoverPendingFromDb (real DB)', () => {
         name: 'Recovery Agent With Tools',
         instructions: 'Be helpful',
         model: 'gpt-4o',
-        tool_ids: [toolRes.body.id],
+        tool_bindings: [{ tool_id: toolRes.body.id }],
         temperature: 0.7,
       });
     agentWithToolsId = agentWithToolsRes.body.id;
@@ -153,7 +153,7 @@ describe('recoverPendingFromDb (real DB)', () => {
     expect(result!.pendingToolCalls[0].toolCallId).toBe('tc_1');
     expect(result!.pendingToolCalls[0].toolName).toBe('clientTool');
     expect(result!.resolvedModel).toBeDefined();
-    // The client tool referenced by tool_ids is resolved from the real DB.
+    // The client tool referenced by a binding is resolved from the real DB.
     expect(Object.keys(result!.resolvedTools)).toContain('clientTool');
     expect(result!.agentConfig.instructions).toBe('Be helpful');
     expect(result!.agentConfig.temperature).toBe(0.7);
@@ -180,7 +180,7 @@ describe('recoverPendingFromDb (real DB)', () => {
   // A generation that pauses for a client tool keeps its tool surface in the
   // pending map; recovering the same generation from the DB after a restart
   // must rebuild the *same* surface. `write_memory` is derived from the agent's
-  // `knowledge_config` rather than from `tool_ids`, so it is the field that
+  // `knowledge_config` rather than from `tool_bindings`, so it is the field that
   // exposes whether the two paths still agree — a resumed run that silently
   // lost it would answer without the memory tool the agent is configured with.
   test('rebuilds the knowledge-derived tools, not only the bound ones', async () => {

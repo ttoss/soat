@@ -8,7 +8,6 @@ import {
 import { denormalizeKnowledgeConfig } from './agentKnowledge';
 import {
   type AgentToolBinding,
-  deriveLegacyToolFields,
   readAgentToolBindings,
   resolveBindingsForCreate,
   resolveBindingsForUpdate,
@@ -40,10 +39,8 @@ export type { AgentToolBinding, InlineToolDefinition, MappedAgent };
 // ── Map Functions ────────────────────────────────────────────────────────
 
 const mapAgent = (agent: AgentRow): MappedAgent => {
-  // Canonical bindings (legacy rows normalize lazily); the deprecated
-  // `toolIds`/`tools` views are derived from them for the response echo.
+  // Pre-`toolBindings` rows normalize lazily on read.
   const toolBindings = readAgentToolBindings(agent);
-  const legacyViews = deriveLegacyToolFields(toolBindings);
 
   return {
     id: agent.publicId,
@@ -54,8 +51,6 @@ const mapAgent = (agent: AgentRow): MappedAgent => {
     instructions: agent.instructions,
     model: agent.model,
     tool_bindings: toolBindings ? toolBindings.map(toWireToolBinding) : null,
-    tool_ids: legacyViews.toolIds,
-    tools: legacyViews.tools,
     max_steps: agent.maxSteps,
     tool_choice: agent.toolChoice,
     stop_conditions: agent.stopConditions,
@@ -87,8 +82,6 @@ type AgentUpdateFields = {
   instructions?: string | null;
   model?: string | null;
   toolBindings?: AgentToolBinding[] | null;
-  toolIds?: string[] | null;
-  tools?: InlineToolDefinition[] | null;
   maxSteps?: number | null;
   toolChoice?: string | object | null;
   stopConditions?: object[] | null;
@@ -171,8 +164,6 @@ export const createAgent = async (
     instructions?: string;
     model?: string;
     toolBindings?: AgentToolBinding[] | null;
-    toolIds?: string[];
-    tools?: InlineToolDefinition[];
     maxSteps?: number;
     toolChoice?: string | object;
     stopConditions?: object[];
@@ -371,15 +362,14 @@ export const updateAgent = async (
 
   const bindingsUpdate = await resolveBindingsForUpdate({
     projectId: agent.projectId,
-    current: readAgentToolBindings(agent),
     toolBindings: args.toolBindings,
-    toolIds: args.toolIds,
-    tools: args.tools,
   });
 
   const updates = buildAgentUpdates(args);
   if (bindingsUpdate !== undefined) {
     updates.toolBindings = bindingsUpdate;
+    // Pre-`toolBindings` columns are cleared on any binding write, so a
+    // normalized row never disagrees with the row it was normalized from.
     updates.toolIds = null;
     updates.tools = null;
   }

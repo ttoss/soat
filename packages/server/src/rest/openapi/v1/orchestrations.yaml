@@ -397,8 +397,7 @@ paths:
         (orchestration_runs.started/awaiting_input/succeeded/failed). Delay and
         poll waits park the run as "sleeping" and are woken by a background
         scheduler, surviving restarts. Pass wait=true to block until the run
-        reaches a terminal or awaiting_input state (the legacy synchronous
-        behaviour).
+        reaches a terminal or awaiting_input state.
       operationId: startOrchestrationRun
       requestBody:
         required: true

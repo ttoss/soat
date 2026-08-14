@@ -383,7 +383,7 @@ AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Order Clerk" \
   --instructions "You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions." \
-  --tool-ids "[\"$ORDER_TOOL_ID\"]" \
+  --tool-bindings "[{\"tool_id\":\"$ORDER_TOOL_ID\"}]" \
   --step-rules '[{"step":1,"tool_choice":{"type":"tool","tool_name":"record_order"}}]' \
   --max-steps 3 | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
@@ -400,7 +400,7 @@ const { data: agent } = await adminSoat.agents.createAgent({
     name: 'Order Clerk',
     instructions:
       'You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.',
-    tool_ids: [ORDER_TOOL_ID],
+    tool_bindings: [{ tool_id: ORDER_TOOL_ID }],
     step_rules: [
       { step: 1, tool_choice: { type: 'tool', tool_name: 'record_order' } },
     ],
@@ -417,7 +417,7 @@ const AGENT_ID = agent.id;
 AGENT_ID=$(curl -s -X POST "$SOAT_BASE_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Order Clerk\",\"instructions\":\"You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.\",\"tool_ids\":[\"$ORDER_TOOL_ID\"],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"record_order\"}}],\"max_steps\":3}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Order Clerk\",\"instructions\":\"You record orders. Call the record_order tool exactly once, then reply with a one-line confirmation. Never ask follow-up questions.\",\"tool_bindings\":[{ \"tool_id\": \"$ORDER_TOOL_ID\" }],\"step_rules\":[{\"step\":1,\"tool_choice\":{\"type\":\"tool\",\"tool_name\":\"record_order\"}}],\"max_steps\":3}" \
   | jq -r '.id')
 echo "AGENT_ID: $AGENT_ID"
 ```

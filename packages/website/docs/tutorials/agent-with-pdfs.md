@@ -799,7 +799,7 @@ TOOL_AGENT_ID=$(soat create-agent \
   --ai-provider-id "$AI_PROVIDER_ID" \
   --name "Manuals Agent (Tool-Driven)" \
   --instructions "You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible." \
-  --tool-ids '["'"$KNOWLEDGE_TOOL_ID"'"]' \
+  --tool-bindings '[{"tool_id": "'"$KNOWLEDGE_TOOL_ID"'"}]' \
   | jq -r '.id')
 echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
 ```
@@ -815,7 +815,7 @@ const { data: toolAgent } = await adminSoat.agents.createAgent({
     name: 'Manuals Agent (Tool-Driven)',
     instructions:
       'You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible.',
-    tool_ids: [KNOWLEDGE_TOOL_ID],
+    tool_bindings: [{ tool_id: KNOWLEDGE_TOOL_ID }],
   },
 });
 const TOOL_AGENT_ID = toolAgent.id;
@@ -828,7 +828,7 @@ const TOOL_AGENT_ID = toolAgent.id;
 TOOL_AGENT_ID=$(curl -s -X POST "$SOAT_URL/api/v1/agents" \
   -H "Authorization: Bearer $ADMIN_TOKEN" \
   -H "Content-Type: application/json" \
-  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Manuals Agent (Tool-Driven)\",\"instructions\":\"You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible.\",\"tool_ids\":[\"$KNOWLEDGE_TOOL_ID\"]}" \
+  -d "{\"project_id\":\"$PROJECT_ID\",\"ai_provider_id\":\"$AI_PROVIDER_ID\",\"name\":\"Manuals Agent (Tool-Driven)\",\"instructions\":\"You are a product support assistant. Always call the manuals_search-knowledge tool with a short search query before answering a product question. Be concise and cite the document and page when possible.\",\"tool_bindings\":[{ \"tool_id\": \"$KNOWLEDGE_TOOL_ID\" }]}" \
   | jq -r '.id')
 echo "TOOL_AGENT_ID: $TOOL_AGENT_ID"
 ```
