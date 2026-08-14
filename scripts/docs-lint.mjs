@@ -69,6 +69,23 @@ const CHECKS = [
   // orchestrations, evaluations). The retired `?async=` query parameter must
   // not be documented again in any form.
   { label: "stale toggle: '?async=' (the sync/async toggle is 'wait')", re: /[?&]async=|--async\b|\basync:\s*(true|false)\b/ },
+  // Fields removed for v1 (#997, #1005). `\btool_ids\b` does not match
+  // `active_tool_ids`, which is still a real field — `_` is a word character, so
+  // there is no boundary before `tool_ids` there. The `tools` shorthand gets no
+  // entry: the word is far too common to denylist, and a documented `--tools`
+  // flag is already caught by the CLI-flag check below.
+  {
+    label: "removed field: 'tool_ids' (agents attach tools via tool_bindings)",
+    re: /\btool_ids\b/,
+  },
+  // Stored shapes that are no longer read (#1005): the camelCase spellings of
+  // step-rule keys, a forced tool's name, and an http tool's body mode. The wire
+  // — and documented — spellings are tool_choice / active_tool_ids / tool_name /
+  // body_mode.
+  {
+    label: 'retired camelCase spelling (use the snake_case wire name)',
+    re: /\b(toolChoice|activeToolIds|toolName|bodyMode)\b/,
+  },
   {
     label: 'wrong public-ID prefix (see publicId.ts)',
     re: /\b(agt_|trc_|actr_|act_[0-9A-Za-z]|tol_|fl_[0-9A-Za-z]|af_[0-9A-Za-z]|afr_|afo_|prj_|usr_|cht_|fil_|me_[0-9A-Za-z])/,
