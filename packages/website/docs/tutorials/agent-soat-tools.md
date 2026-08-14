@@ -633,6 +633,8 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
 
 You can also start a generation with [Agents](/docs/modules/agents#tool-output-message-content) message content of type `tool_output`. The server executes the referenced tool first, applies `output_path`, and feeds the extracted value into the model as the user message.
 
+A generation's `messages` carries user and assistant turns only. To steer how the agent reads that input, set the agent's [`instructions`](/docs/modules/agents#instructions) — a `role: "system"` entry here is rejected with `400 SYSTEM_MESSAGE_NOT_ALLOWED`.
+
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
@@ -640,7 +642,6 @@ You can also start a generation with [Agents](/docs/modules/agents#tool-output-m
 TOOL_OUTPUT_RESULT=$(soat create-agent-generation --wait true \
   --agent-id "$AGENT_ID" \
   --messages '[
-    {"role":"system","content":"Repeat the user message exactly."},
     {
       "role":"user",
       "content": {
@@ -666,7 +667,6 @@ const { data: toolOutputGeneration } =
     query: { wait: true },
     body: {
       messages: [
-        { role: 'system', content: 'Repeat the user message exactly.' },
         {
           role: 'user',
           content: {
@@ -694,7 +694,6 @@ curl -s -X POST "$SOAT_BASE_URL/api/v1/agents/$AGENT_ID/generate?wait=true" \
   -H "Content-Type: application/json" \
   -d '{
     "messages": [
-      {"role": "system", "content": "Repeat the user message exactly."},
       {
         "role": "user",
         "content": {
