@@ -1002,7 +1002,11 @@ resources:
   });
 
   describe('DELETE /api/v1/formations/:formation_id — resource deletion failure', () => {
-    test('returns success: false and marks the formation delete_failed when a resource cannot be deleted', async () => {
+    // A teardown that stops partway is the worst thing to report as a bare
+    // boolean: the resources already deleted are gone, and the operator has no
+    // way to learn which one blocked or what to do about it. The reason is
+    // recorded on the operation either way — this is about handing it back.
+    test('fails with the blocking resource named when one cannot be deleted', async () => {
       const createRes = await authenticatedTestClient(userToken)
         .post('/api/v1/formations')
         .send({
@@ -1033,8 +1037,18 @@ resources:
         `/api/v1/formations/${deleteFailureFormationId}`
       );
 
-      expect(res.status).toBe(200);
-      expect(res.body.success).toBe(false);
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('FORMATION_DELETE_FAILED');
+      // The logical id is what the operator addresses in their template, so it
+      // is the half that makes the message actionable.
+      expect(res.body.error.message).toMatch(/CorruptedResource/);
+      expect(res.body.error.meta.failures).toEqual([
+        expect.objectContaining({
+          logical_id: 'CorruptedResource',
+          resource_type: 'unsupported_resource_type',
+          error: expect.any(String),
+        }),
+      ]);
 
       const getRes = await authenticatedTestClient(userToken).get(
         `/api/v1/formations/${deleteFailureFormationId}`

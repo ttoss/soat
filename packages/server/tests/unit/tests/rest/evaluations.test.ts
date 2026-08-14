@@ -1389,6 +1389,60 @@ describe('Evaluations', () => {
       );
     });
 
+    // The in-flight race: a worker that already claimed its batch is past the
+    // liveness check, so it keeps executing and writing results after the cancel
+    // settles the run. Counters frozen at the cancel instant therefore
+    // under-report what ran — and `aggregate_scores` is deliberately null on a
+    // canceled run, so they are the only remaining signal of what was paid for.
+    test('counters reconcile with results written after the cancel', async () => {
+      const run = await startQueued();
+      const runRow = await db.EvalRun.findOne({ where: { publicId: run.id } });
+      const runDbId = runRow!.id as number;
+
+      let releaseGeneration!: () => void;
+      let signalStarted!: () => void;
+      const started = new Promise<void>((resolve) => {
+        signalStarted = resolve;
+      });
+
+      mockCreateGeneration.mockImplementationOnce(() => {
+        signalStarted();
+        return new Promise((resolve) => {
+          releaseGeneration = () => {
+            resolve(completedGeneration('gen_c9', 'Paris'));
+          };
+        });
+      });
+
+      // Claim and begin one item, then cancel while it is still in flight.
+      const draining = drainEvalQueueOnce({ limit: 1 });
+      await started;
+
+      const res = await asUser().post(
+        `/api/v1/evals/${evalId}/runs/${run.id}/cancel`
+      );
+      expect(res.status).toBe(200);
+      expect(res.body.completed_count).toBe(0);
+
+      releaseGeneration();
+      await draining;
+
+      // The in-flight item finished and wrote its result after the cancel.
+      expect(await db.EvalResult.count({ where: { evalRunId: runDbId } })).toBe(
+        1
+      );
+
+      const after = await asUser().get(
+        `/api/v1/evals/${evalId}/runs/${run.id}`
+      );
+      expect(after.body.status).toBe('canceled');
+      // Still no verdict — a partial roll-up must not read as a whole-dataset one.
+      expect(after.body.aggregate_scores).toBeNull();
+      // But the counts must describe what actually ran.
+      expect(after.body.completed_count).toBe(1);
+      expect(after.body.errored_count).toBe(0);
+    });
+
     test('a finished run cannot be canceled', async () => {
       mockCreateGeneration
         .mockResolvedValueOnce(completedGeneration('gen_c2', 'x'))
@@ -2077,6 +2131,10 @@ describe('Evaluations', () => {
       // Excluded from the aggregates rather than depressing them.
       expect(run.aggregate_scores.scored_item_count).toBe(0);
       expect(run.aggregate_scores.pass_rate).toBeNull();
+      // The generation completed and produced an answer; only the scorer failed.
+      // Keeping the output is what makes that failure debuggable — it is the one
+      // thing you need to see to understand what the judge choked on.
+      expect(result.output).toBe('Paris');
     });
 
     test('an out-of-range judge score errors the item rather than being clamped', async () => {

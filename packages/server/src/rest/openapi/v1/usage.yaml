@@ -34,9 +34,9 @@ paths:
       summary: List usage meters
       description: >
         Returns the raw usage-meter rows the caller can access, most recent
-        first, optionally filtered by agent, generation, trace, actor, or
-        session. Each row is the per-generation token usage as reported by the
-        provider, for audit and reconciliation.
+        first, optionally filtered by agent, generation, trace, actor, session,
+        or `source`. Each row is the per-generation token usage as reported by
+        the provider, for audit and reconciliation.
       operationId: listUsageMeters
       parameters:
         - name: agent_id
@@ -93,6 +93,18 @@ paths:
             `api_request`, `storage`)
           schema:
             type: string
+        - name: source
+          in: query
+          required: false
+          description: >
+            Filter by what the spend was incurred for. `eval` is an eval run's
+            item generations and `eval_judge` an `llm_judge` scorer's own
+            completion, so verification spend is `source` in (`eval`,
+            `eval_judge`). Ordinary agent traffic carries no source and is
+            matched by neither.
+          schema:
+            type: string
+            example: eval
         - name: limit
           in: query
           required: false
@@ -162,10 +174,13 @@ paths:
           required: true
           description: >
             Dimension to bucket by. `day` buckets on the event's UTC calendar
-            day; the others bucket on the matching column.
+            day; the others bucket on the matching column. `source` buckets by
+            what the spend was incurred for (`eval`, `eval_judge`), which is how
+            verification spend is priced apart from the traffic serving real
+            users; unlabelled traffic collapses into the single `null` bucket.
           schema:
             type: string
-            enum: [model, agent, run, day, meter_type, actor, session]
+            enum: [model, agent, run, day, meter_type, actor, session, source]
         - name: from
           in: query
           required: false
@@ -611,6 +626,16 @@ components:
           description: >
             What the event measures: `llm_tokens`, `compute_execution`,
             `api_request`, or `storage`.
+        source:
+          type: string
+          nullable: true
+          description: >
+            What the spend was incurred for. `eval` is an eval run's item
+            generations and `eval_judge` an `llm_judge` scorer's own completion,
+            so verification spend is `source` in (`eval`, `eval_judge`) and the
+            two are distinct so running a suite can be priced apart from grading
+            it. Null for ordinary agent traffic.
+          example: eval
         provider:
           type: string
           description: >
@@ -714,7 +739,7 @@ components:
           description: Upper bound applied, echoed back; null when unbounded
         group_by:
           type: string
-          enum: [model, agent, run, day, meter_type, actor, session]
+          enum: [model, agent, run, day, meter_type, actor, session, source]
         meter_type:
           type: string
           nullable: true

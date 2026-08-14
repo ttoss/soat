@@ -338,6 +338,15 @@ paths:
       description: >
         Deletes the formation stack and all its managed resources in reverse
         dependency order.
+
+
+        A resource the platform refuses to delete on its own — most often an
+        agent that has generation or trace history — fails the teardown with
+        `409 FORMATION_DELETE_FAILED`, naming every blocking resource in
+        `error.meta.failures`. Resources deleted before the blocker stay deleted
+        and the formation is left in `delete_failed`: resolve the blockers (for
+        an agent, `DELETE /api/v1/agents/{agent_id}?force=true` also removes its
+        generations and traces) and delete the formation again.
       operationId: deleteFormation
       parameters:
         - name: formation_id
@@ -364,6 +373,11 @@ paths:
           description: Forbidden
         '404':
           description: Not Found
+        '409':
+          description: >
+            One or more resources could not be deleted
+            (`FORMATION_DELETE_FAILED`). `error.meta.failures` lists each one as
+            `{ logical_id, resource_type, error }`.
 
   /api/v1/formations/{formation_id}/events:
     get:

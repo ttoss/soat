@@ -100,8 +100,8 @@ naming the field — the resource may well exist, it is the request that is wron
 | `baseline_run_id` | string | A terminal run of the same eval, or `null` |
 | `trigger_id` | string | The [trigger](./triggers.md) that started this run, or `null` for a run started through the API. Kept even after that trigger is deleted |
 | `aggregate_scores` | object | Per-scorer `mean` / `pass_rate`, the run `pass_rate`, `scored_item_count`, and — when the run named a baseline — a `baseline` [comparison](#baseline-deltas). `null` until the run is terminal, and on a canceled run |
-| `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold` |
-| `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored |
+| `passed` | boolean | The verdict; `null` when the eval declares no `pass_threshold`, and on a canceled run — which reached no verdict to report |
+| `item_count` / `completed_count` / `errored_count` | integer | Items attempted, scored, and errored. On a [canceled](#canceling-a-run) run the last two count what actually ran |
 | `started_at` / `finished_at` | string | ISO 8601 timestamps, `null` until set |
 | `created_at` | string | ISO 8601 creation timestamp |
 
@@ -117,7 +117,7 @@ One row per dataset item per run.
 | `input` | array | **Frozen copy** of the item's input at run time |
 | `expected_output` | string | **Frozen copy** of the item's expected output at run time |
 | `generation_id` | string | The generation that produced the output, or `null` |
-| `output` | string | The agent's final output text; cleared when the linked generation's content is [purged](#retention-and-erasure) |
+| `output` | string | The agent's final output text. `null` only when there is none — the generation failed or never completed — or once the linked generation's content is [purged](#retention-and-erasure). An item errored by a **scorer** keeps the output it was graded on |
 | `scores` | array | `[{ scorer, score, passed, reasoning? }]`, one entry per scorer in the order the eval declares them. `reasoning` is present for `llm_judge` only |
 | `passed` | boolean | AND over the per-scorer `passed` flags |
 | `error` | string | Item-level failure reason; set instead of scoring, never alongside it |
@@ -267,6 +267,11 @@ or answering something unparseable. The agent's answer was never graded, so reco
 fabricate a regression. The generation stays linked on the result either way: it happened,
 and it cost money.
 
+The two cases differ in one respect. When the **generation** produced nothing, `output` is
+`null` because there is nothing to record. When a **scorer** failed over a good generation,
+the result keeps that generation's `output` alongside the `error` — the answer exists, and it
+is what you need to see to work out why the scorer choked on it.
+
 ### Synchronous and queued runs
 
 `wait` selects how a run executes. Both modes share **one** execution and finalize path, so a
@@ -322,6 +327,12 @@ really paid for, and `completed_count` / `errored_count` report what ran. `aggre
 is deliberately left `null`, for the same reason the synchronous cap exists — a partial
 roll-up in the field a completed run uses would read as a whole-dataset verdict. A canceled
 run fires no lifecycle event: it produced no verdict.
+
+Cancellation drops *outstanding* tasks, but an item a worker had already claimed is past its
+liveness check and runs to completion, writing its result after the run has settled. Each of
+those late writes recounts the run, so `completed_count` / `errored_count` converge on what
+actually ran rather than freezing at the cancel instant — which matters precisely because
+`aggregate_scores` is null here, leaving the counts as the only record of the spend.
 
 ### Scheduled runs
 
@@ -408,6 +419,13 @@ removing the resource from the template deletes it. `dataset_id` is immutable on
 `dataset_item` — a template that moves an item to another dataset is rejected rather than
 silently applying the rest.
 
+One consequence is worth knowing before you tear such a stack down: running the suite gives
+the agent under test generation history, and an agent with history is never deleted
+implicitly. Deleting the formation therefore fails with `409 FORMATION_DELETE_FAILED` naming
+that agent — see [formation teardown](./formations.md#resource-lifecycle). Force-delete the
+agent (`DELETE /api/v1/agents/{agent_id}?force=true`) and delete the formation again, or
+declare the agent with `deletion_policy: retain`.
+
 ### Baseline deltas
 
 Pass `baseline_run_id` (a terminal run of the **same** eval; a run of another eval is a
@@ -458,7 +476,12 @@ Every item is a real generation, and `llm_judge` doubles the calls — so eval
 
 Verification spend is therefore `source IN ('eval','eval_judge')`, and the two labels are
 distinct so a rollup can price *running* a suite apart from *grading* it. Ordinary agent
-traffic carries no `source`. A run also inherits the platform's ordinary cost controls —
+traffic carries no `source`.
+
+The label is readable, not just recorded: filter the raw rows with
+`GET /api/v1/usage/meters?source=eval`, or roll a project up with
+`GET /api/v1/usage?group_by=source` to see verification spend beside the traffic serving real
+users. A run also inherits the platform's ordinary cost controls —
 [quotas](./quotas.md) and usage thresholds still apply — but a very large dataset is a
 footgun until per-run item limits are tuned.
 

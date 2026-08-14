@@ -24,6 +24,7 @@ import {
   executeAndRecordItem,
   failEvalRun,
   finalizeEvalRun,
+  recountEvalRunProgress,
 } from './evaluationRunExecution';
 import {
   type EvalRunRow,
@@ -399,20 +400,13 @@ export const cancelEvalRun = async (args: {
 
   await discardEvalItemTasks({ evalRunId: run.id as number });
 
-  const results = await db.EvalResult.findAll({
-    where: { evalRunId: run.id as number },
-    attributes: ['error'],
-  });
-  const erroredCount = results.filter((row) => {
-    return row.error !== null;
-  }).length;
+  await run.update({ status: 'canceled', finishedAt: new Date() });
 
-  await run.update({
-    status: 'canceled',
-    completedCount: results.length - erroredCount,
-    erroredCount,
-    finishedAt: new Date(),
-  });
+  // Counts what has landed so far. Items already claimed by a worker are past
+  // its liveness check and keep writing results after this point; each of those
+  // late writes recounts, so the numbers converge on what really ran instead of
+  // freezing at the cancel instant.
+  await recountEvalRunProgress({ run });
 
   return mapEvalRun(await reloadEvalRun(run as EvalRunRow));
 };

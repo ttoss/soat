@@ -216,6 +216,9 @@ describe('Usage', () => {
       expect(event.orchestration_run_id).toBeNull();
       expect(event.trigger_id).toBeNull();
       expect(event.action_id).toBeNull();
+      // Ordinary agent traffic is unlabelled; `eval` / `eval_judge` mark the
+      // spend that only verification incurs.
+      expect(event.source).toBeNull();
 
       const c = componentsByName(event);
       // uncached input = prompt 10 - cached 4
@@ -228,6 +231,47 @@ describe('Usage', () => {
       expect(c.reasoning_tokens.billable).toBe(false);
       // no price seeded yet for this SKU in this test's timeline
       expect(event.cost_usd).toBeNull();
+    });
+
+    test('filters by source', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      await recordCompletionUsage({
+        source: 'memory_extraction',
+        projectId: project?.id as number,
+        provider: 'ollama',
+        aiProviderId: null,
+        model: 'stub-model',
+        usage: {
+          inputTokens: 2,
+          outputTokens: 1,
+          totalTokens: 3,
+          inputTokenDetails: {
+            noCacheTokens: undefined,
+            cacheReadTokens: undefined,
+            cacheWriteTokens: undefined,
+          },
+          outputTokenDetails: {
+            textTokens: undefined,
+            reasoningTokens: undefined,
+          },
+        },
+      });
+
+      const match = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?source=memory_extraction'
+      );
+      expect(match.status).toBe(200);
+      expect(match.body.total).toBe(1);
+      expect(match.body.data[0].source).toBe('memory_extraction');
+
+      const none = await authenticatedTestClient(userToken).get(
+        '/api/v1/usage/meters?source=eval'
+      );
+      expect(none.status).toBe(200);
+      expect(none.body.total).toBe(0);
     });
 
     test('filters by meter_type', async () => {
@@ -1092,6 +1136,59 @@ describe('Usage', () => {
       });
       expect(llm).toBeDefined();
       expect(llm.output_tokens).toBeGreaterThanOrEqual(20);
+    });
+
+    // Verification spend has to be separable from production spend: an eval run
+    // is one real generation per dataset item and an `llm_judge` scorer doubles
+    // the calls, so a project that evaluates cannot read its own bill without
+    // this dimension. The two eval labels stay distinct so *running* a suite can
+    // be priced apart from *grading* it.
+    test('groups by source, separating verification spend from production', async () => {
+      const project = await db.Project.findOne({
+        where: { publicId: projectId },
+      });
+
+      await recordCompletionUsage({
+        source: 'eval_judge',
+        projectId: project?.id as number,
+        provider: 'ollama',
+        aiProviderId: null,
+        model: 'judge-model',
+        usage: {
+          inputTokens: 7,
+          outputTokens: 3,
+          totalTokens: 10,
+          inputTokenDetails: {
+            noCacheTokens: undefined,
+            cacheReadTokens: undefined,
+            cacheWriteTokens: undefined,
+          },
+          outputTokenDetails: {
+            textTokens: undefined,
+            reasoningTokens: undefined,
+          },
+        },
+      });
+
+      const res = await authenticatedTestClient(userToken).get(
+        `/api/v1/usage?project_id=${projectId}&group_by=source`
+      );
+      expect(res.status).toBe(200);
+
+      const judge = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === 'eval_judge';
+      });
+      expect(judge).toBeDefined();
+      expect(judge.input_tokens).toBe(7);
+      expect(judge.output_tokens).toBe(3);
+
+      // Ordinary agent traffic carries no source and buckets under null rather
+      // than being dropped, so the groups still sum to the project total.
+      const unsourced = res.body.groups.find((g: { key: string | null }) => {
+        return g.key === null;
+      });
+      expect(unsourced).toBeDefined();
+      expect(unsourced.output_tokens).toBeGreaterThan(0);
     });
 
     test('groups by agent', async () => {

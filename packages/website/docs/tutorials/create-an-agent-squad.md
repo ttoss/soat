@@ -872,23 +872,30 @@ curl -s -X PUT "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
 
 ## Step 10 — Tear down
 
-Deleting a formation removes managed resources in reverse dependency order. See [Formations — Key Concepts](/docs/modules/formations#resource-lifecycle).
+Deleting a formation removes managed resources in reverse dependency order — but not resources the platform guards on their own. The run above put every squad member to work, so each agent now has generation history and teardown stops rather than destroying it implicitly: the delete fails `409 FORMATION_DELETE_FAILED` with the blocking agents named in `error.meta.failures`, leaving the stack in `delete_failed`. See [Formations — Resource Lifecycle](/docs/modules/formations#resource-lifecycle).
 
 <Tabs groupId="client">
 <TabItem value="cli" label="CLI" default>
 
 ```bash
-soat delete-formation --formation-id "$FORMATION_ID" | jq '.'
+# → expect-fail
+soat delete-formation --formation-id "$FORMATION_ID"
+
+soat get-formation --formation-id "$FORMATION_ID" | jq '{id, status}'
 ```
 
 </TabItem>
 <TabItem value="sdk" label="SDK">
 
 ```ts
-const { data: deletion } = await authClient.formations.deleteFormation({
-  path: { formation_id: FORMATION_ID },
-});
-console.log('delete success:', deletion?.success);
+try {
+  await authClient.formations.deleteFormation({
+    path: { formation_id: FORMATION_ID },
+  });
+} catch (error) {
+  // 409 FORMATION_DELETE_FAILED — meta.failures names each blocking agent.
+  console.log('blocked by:', error);
+}
 ```
 
 </TabItem>
@@ -896,11 +903,16 @@ console.log('delete success:', deletion?.success);
 
 ```bash
 curl -s -X DELETE "$SOAT_URL/api/v1/formations/$FORMATION_ID" \
-  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.'
+  -H "Authorization: Bearer $ADMIN_TOKEN" | jq '.error.meta.failures'
 ```
 
 </TabItem>
 </Tabs>
+
+To finish the teardown, discard each agent's history explicitly
+(`soat delete-agent --agent-id "$AGENT_ID" --force true`) and delete the formation
+again — or declare the agents with `deletion_policy: retain` so the stack leaves them
+standing.
 
 ---
 

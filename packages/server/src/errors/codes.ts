@@ -196,6 +196,11 @@ export const ERROR_CODES = {
     description:
       'The formation template declares one or more required parameters (no default, not satisfied by use_previous_value) that were not supplied or were provided as an empty string.',
   },
+  FORMATION_DELETE_FAILED: {
+    httpStatus: 409,
+    description:
+      "One or more of the formation's resources could not be deleted, so the stack is left in `delete_failed`. `meta.failures` names each blocking resource (its logical id, type, and the underlying error) — the common case is a resource the platform refuses to delete on its own, such as an agent that has generation or trace history. Resolve those, then delete the formation again.",
+  },
   FORMATION_INVALID_METADATA: {
     httpStatus: 400,
     description:
